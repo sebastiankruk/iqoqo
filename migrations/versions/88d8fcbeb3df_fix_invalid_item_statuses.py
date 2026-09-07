@@ -35,6 +35,12 @@ depends_on = None
 def upgrade():
     # Reflection for the required tables
     bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if not insp.has_table('items', schema='inventory'):
+        return
+    item_cols = {c['name'] for c in insp.get_columns('items', schema='inventory')}
+    if 'collection_status' not in item_cols:
+        return
     meta = sa.MetaData()
     
     # Define tables with their schemas

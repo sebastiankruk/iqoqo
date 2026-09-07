@@ -21,6 +21,7 @@ import { Check, X, Plus, Disc, BookOpen, Film, Gamepad2, BookmarkPlus } from "lu
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import type { IsbnMeta, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
@@ -75,6 +76,7 @@ export function SuccessCard({
     return "book";
   };
 
+  const t = useTranslations("scanner");
   const [adding, setAdding] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState(normalizeFormat(meta.format || meta.Format || "book"));
   const router = useRouter();
@@ -180,11 +182,11 @@ export function SuccessCard({
         }
       } else {
         if (data.action === "cataloged" || collectionStatus === "catalog") {
-          toast.success(`"${title}" added to Catalog!`);
+          toast.success(t("successCard.addedToCatalog", { title }));
         } else if (data.action === "added_to_wishlist" || collectionStatus === "wish_list") {
-          toast.success(`"${title}" added to your Wishlist!`);
+          toast.success(t("successCard.addedToWishlist", { title }));
         } else {
-          toast.success(`"${title}" added to your Library!`);
+          toast.success(t("successCard.addedToShelf", { title }));
         }
       }
 
@@ -218,7 +220,7 @@ export function SuccessCard({
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/20">
               <Check className="h-5 w-5" />
             </div>
-            <h2 className="text-xl font-bold font-serif">Successfully Found!</h2>
+            <h2 className="text-xl font-bold font-serif">{t("successCard.found")}</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onDismiss} className="rounded-full" aria-label="Close">
             <X className="h-5 w-5" />
@@ -353,7 +355,7 @@ export function SuccessCard({
                         disabled={adding}
                         onClick={() => handleAdd("catalog")}
                       >
-                        {adding ? "Adding..." : "Add to Catalog"}
+                        {adding ? t("successCard.adding") : t("successCard.addToCatalog")}
                       </Button>
                     ) : policy === "wishlist" ? (
                       <Button
@@ -362,7 +364,7 @@ export function SuccessCard({
                         disabled={adding}
                         onClick={() => handleAdd("wish_list")}
                       >
-                        {adding ? "Adding..." : "Add to Wishlist"}
+                        {adding ? t("successCard.adding") : t("successCard.addToWishlist")}
                       </Button>
                     ) : (
                       <>
@@ -373,11 +375,11 @@ export function SuccessCard({
                           onClick={() => handleAdd("available")}
                         >
                           {adding ? (
-                            "Adding..."
+                            t("successCard.adding")
                           ) : (
                             <>
                               <Plus className="w-4 h-4 mr-2" strokeWidth={3} />
-                              Add to Library
+                              {t("successCard.addToShelf")}
                             </>
                           )}
                         </Button>
@@ -388,11 +390,11 @@ export function SuccessCard({
                           onClick={() => handleAdd("wish_list")}
                         >
                           {adding ? (
-                            "Adding..."
+                            t("successCard.adding")
                           ) : (
                             <>
                               <BookmarkPlus className="w-4 h-4 mr-2" strokeWidth={2.5} />
-                              Add to Wishlist
+                              {t("successCard.addToWishlist")}
                             </>
                           )}
                         </Button>
@@ -403,9 +405,9 @@ export function SuccessCard({
                       variant="outline"
                       className="flex-1 min-w-[140px] h-12 rounded-xl"
                       onClick={onScanAnother ?? onDismiss}
-                      aria-label="Scan Another"
+                      aria-label={t("successCard.scanAnother")}
                     >
-                      Scan Another
+                      {t("successCard.scanAnother")}
                     </Button>
                   </>
                 )}
@@ -416,7 +418,7 @@ export function SuccessCard({
                     className="w-full sm:w-auto h-12 rounded-xl text-muted-foreground hover:text-foreground"
                     onClick={() => onShowManualForm?.(identifier || rawIdentifier)}
                   >
-                    Wrong item? Enter Manually
+                    {t("successCard.wrongItemEnterManually")}
                   </Button>
                 </div>
               </div>

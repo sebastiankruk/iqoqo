@@ -195,7 +195,7 @@ class ScanBarcodeSchema(BaseModel):
     @field_validator("policy")
     @classmethod
     def validate_policy(cls, v: str | None) -> str | None:
-        valid_policies = {"inventory", "wishlist", "catalog"}
+        valid_policies = {"inventory", "wishlist", "catalog", "catalog_only"}
         if v is not None and v not in valid_policies:
             raise ValueError(f"Invalid policy: '{v}'. Must be one of {valid_policies}")
         return v

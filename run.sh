@@ -328,7 +328,7 @@ terminate_from_pidfile() {
 }
 
 # 3. Stop Command Dispatch
-PID_DIR=".pids"
+PID_DIR="$(pwd)/.pids"
 
 if [ "$STOP" = true ]; then
     echo "🛑 Stopping iqoqo in '$MODE' mode..."
@@ -468,7 +468,7 @@ if [ "$MODE" == "dev" ]; then
 
         # Wait for OpenObserve readiness and fetch the dynamic RUM client token
         echo "📊 Waiting for OpenObserve to be ready..."
-        auth_header="Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ="
+        auth_header="Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz"
         if [ -n "$OPENOBSERVE_ROOT_USER" ] && [ -n "$OPENOBSERVE_ROOT_PASSWORD" ]; then
             encoded=$(python3 -c "import base64; print(base64.b64encode(b'${OPENOBSERVE_ROOT_USER}:${OPENOBSERVE_ROOT_PASSWORD}').decode('utf-8'))" 2>/dev/null)
             if [ -n "$encoded" ]; then
@@ -504,7 +504,7 @@ if [ "$MODE" == "dev" ]; then
     done
 
     # PID Management & Cleanup
-    PID_DIR=".pids"
+    PID_DIR="$(pwd)/.pids"
     mkdir -p "$PID_DIR"
 
     # terminate_from_pidfile is defined globally above
@@ -523,52 +523,47 @@ if [ "$MODE" == "dev" ]; then
     terminate_from_pidfile "$PID_DIR/next_dev.pid" "Legacy Next.js (New naming)"
 
     # Ensure ports are free (aggressive cleanup for common ports)
-    for port in "$WEB_PORT" 3000; do
-        port_pid=$(lsof -t -i:"$port" 2>/dev/null)
-        if [ -n "$port_pid" ]; then
-            echo "⚠️  Port $port still occupied by PID $port_pid. Killing..."
-            kill -9 "$port_pid" 2>/dev/null
+    for port in "$WEB_PORT" "${FRONTEND_PORT:-3000}"; do
+        port_pids=$(lsof -t -i:"$port" 2>/dev/null || ss -tulpn "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 || true)
+        if [ -n "$port_pids" ]; then
+            echo "⚠️  Port $port still occupied by PID(s) $port_pids. Killing..."
+            for pid in $port_pids; do
+                kill -9 "$pid" 2>/dev/null || true
+            done
         fi
     done
 
     # Next.js Stale Lock Detection
     for LOCK in "frontend/.next/lock" "frontend/.next/dev/lock"; do
         if [ -f "$LOCK" ]; then
-            echo "⚠️  Stale Next.js lock file detected: $LOCK"
-            if [ -t 0 ]; then
-                printf "Do you want to fix this (kill zombie processes and clear cache)? [y/N] "
-                read -n 1 -r REPLY
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    ZOMBIE_PIDS=$(lsof -t -i :3000 2>/dev/null || true)
-                    if [ -n "$ZOMBIE_PIDS" ]; then
+            ZOMBIE_PIDS=$(lsof -t -i :3000 2>/dev/null || true)
+            if [ -z "$ZOMBIE_PIDS" ]; then
+                echo "⚠️  Stale Next.js lock file found with no running process: $LOCK (removing)..."
+                rm -f "$LOCK"
+            else
+                echo "⚠️  Stale Next.js lock file detected: $LOCK with active process(es): $ZOMBIE_PIDS"
+                if [ -t 0 ]; then
+                    printf "Do you want to fix this (kill zombie processes and clear cache)? [y/N] "
+                    read -n 1 -r REPLY
+                    echo
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
                         echo "⚠️  Killing zombie process(es) on port 3000 (PIDs: $ZOMBIE_PIDS)..."
                         kill -9 "$ZOMBIE_PIDS" 2>/dev/null || true
+                        echo "🧹 Clearing corrupted Next.js cache..."
+                        rm -rf "frontend/.next"
+                        echo "✅ Cleanup complete."
+                    else
+                        echo "❌ Exiting. Please remove the lock file manually."
+                        exit 1
                     fi
-                    echo "🧹 Clearing corrupted Next.js cache..."
-                    rm -rf "frontend/.next"
-                    echo "✅ Cleanup complete."
                 else
-                    echo "❌ Exiting. Please remove the lock file manually."
-                    exit 1
+                    echo "⚠️  Auto-clearing stale lock and cache in non-interactive mode..."
+                    kill -9 "$ZOMBIE_PIDS" 2>/dev/null || true
+                    rm -rf "frontend/.next"
                 fi
-            else
-                 echo "❌ Lock file exists and script is non-interactive. Please remove $LOCK manually."
-                 exit 1
             fi
         fi
     done
-
-    # Termination Helper
-    cleanup() {
-        echo -e "\n🛑 Stopping servers..."
-        terminate_from_pidfile "$PID_DIR/flask.pid" "Flask API server"
-        terminate_from_pidfile "$PID_DIR/celery.pid" "Celery worker"
-        terminate_from_pidfile "$PID_DIR/next.pid" "Next.js dev server"
-        rm -rf "$PID_DIR"
-        exit 0
-    }
-    trap cleanup INT TERM
 
     # 4. Install frontend dependencies if needed
     if [ -d "frontend" ] && [ ! -d "frontend/node_modules" ]; then
@@ -582,6 +577,7 @@ if [ "$MODE" == "dev" ]; then
     flask db upgrade
 
     # 5. Run Flask API (background) + Next.js frontend
+    set -m
     export FLASK_APP=run.py
     export FLASK_DEBUG=1
     WEB_PORT=${WEB_PORT:-5000}
@@ -591,9 +587,9 @@ if [ "$MODE" == "dev" ]; then
         OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
         OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
         OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
-        opentelemetry-instrument flask run --port "$WEB_PORT" &
+        nohup opentelemetry-instrument flask run --port "$WEB_PORT" >> "$PID_DIR/flask.log" 2>&1 &
     else
-        flask run --port "$WEB_PORT" &
+        nohup flask run --port "$WEB_PORT" >> "$PID_DIR/flask.log" 2>&1 &
     fi
     echo $! > "$PID_DIR/flask.pid"
 
@@ -609,9 +605,9 @@ if [ "$MODE" == "dev" ]; then
         OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
         OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
         OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
-        opentelemetry-instrument celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
+        nohup opentelemetry-instrument celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
     else
-        .venv/bin/celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info &
+        nohup .venv/bin/celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
     fi
     echo $! > "$PID_DIR/celery.pid"
 
@@ -635,8 +631,9 @@ if [ "$MODE" == "dev" ]; then
          NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-true}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION="${OPENOBSERVE_RUM_API_VERSION:-v1}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL="${OPENOBSERVE_RUM_PRIVACY_LEVEL:-allow}" \
-         npm run dev) &
+         nohup npx next dev -p "${FRONTEND_PORT:-3000}" >> "$PID_DIR/next.log" 2>&1 & \
          echo $! > "$PID_DIR/next.pid"
+        )
     fi
 
 
@@ -649,10 +646,13 @@ if [ "$MODE" == "dev" ]; then
     else
         echo "  Local URL  → http://localhost:3000"
     fi
-    echo "  Press Ctrl+C to stop all servers"
+    echo "  Use 'make stop' to stop all servers"
     echo "════════════════════════════════════════════════"
     echo ""
-    wait
+
+    # Disown background jobs so they survive script exit and terminal close
+    disown -a 2>/dev/null || true
+    exit 0
 
 else
     # --- FULL DOCKER MODE ---
@@ -801,6 +801,12 @@ except Exception:
     if [ ! -f ".allegro_token.json" ]; then
         rm -rf ".allegro_token.json"
         printf '{}\n' > ".allegro_token.json"
+    fi
+
+    # Ensure rclone.conf is a regular file before bind-mounting
+    if [ ! -f "$HOME/.config/rclone/rclone.conf" ]; then
+        mkdir -p "$HOME/.config/rclone"
+        touch "$HOME/.config/rclone/rclone.conf"
     fi
 
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."

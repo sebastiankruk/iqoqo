@@ -47,6 +47,7 @@ This skill governs codebase changes. It handles provided code OR generates requi
 10. **Don't Mute Returns**: Do not suppress return-value warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`. Handle or propagate return values properly.
 11. **Preserve Docs**: When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip or replace them.
 12. **Non-English UI Casing**: Always use sentence case (not Title Case) for non-English localizations (e.g., Polish strings in `frontend/messages/pl.json`). Only capitalize the first word and proper nouns (e.g., "Zarządzaj kolekcjami", "Tryb konserwacji aktywny").
+13. **Prohibit Heredoc / `cat << EOF` Editing**: NEVER create or edit codebase files using `cat << EOF`, `cat << 'EOF'`, or shell redirection in bash commands. Always use structured agent file manipulation tools (`replace_file_content` or dedicated file tools).
 
 ## Implementation Workflow
 

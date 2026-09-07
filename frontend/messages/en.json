@@ -386,6 +386,44 @@
     "skipAndEnterManually": "Skip and enter manually"
   },
   "scanner": {
+    "topBar": {
+      "title": "Scan New Item",
+      "subtitle": "Position barcode or cover within the frame",
+      "backAria": "Go back to library",
+      "flashToggleAria": "Toggle flash",
+      "policyShelf": "Shelf",
+      "policyWishlist": "Wishlist",
+      "policyCatalog": "Catalog Only",
+      "policyShelfHint": "Adding directly to your personal shelf",
+      "policyWishlistHint": "Adding to your wishlist",
+      "policyCatalogHint": "Adding to shared catalog without adding to shelf"
+    },
+    "formats": {
+      "book": "Book",
+      "audiobook": "Audiobook",
+      "music": "Music",
+      "movie": "Movie",
+      "board_game": "Board Game",
+      "puzzle": "Puzzle"
+    },
+    "disambiguation": {
+      "title": "Which one did you mean?",
+      "inCollection": "In Collection",
+      "footerHint": "Found multiple matches in your local database. Please pick one to continue.",
+      "closeAria": "Close"
+    },
+    "successCard": {
+      "found": "Successfully Found!",
+      "addToShelf": "Add to Shelf",
+      "addToWishlist": "Add to Wishlist",
+      "addToCatalog": "Add to Catalog",
+      "adding": "Adding...",
+      "scanAnother": "Scan Another",
+      "wrongItemEnterManually": "Wrong item? Enter Manually",
+      "addedToShelf": "\"{title}\" added to your library!",
+      "addedToWishlist": "\"{title}\" added to your Wishlist!",
+      "addedToCatalog": "\"{title}\" added to Catalog!"
+    },
     "cameraCapture": {
       "snapCover": "Snap Cover",
       "taskTimedOut": "Task timed out. Please try again or enter manually.",

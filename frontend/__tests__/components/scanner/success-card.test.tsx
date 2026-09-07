@@ -62,6 +62,15 @@ const SAMPLE_META: IsbnMeta = {
 describe("SuccessCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useQueryClient).mockReturnValue({
+      clear: vi.fn(),
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      removeQueries: vi.fn(),
+      resetQueries: vi.fn(),
+      cancelQueries: vi.fn(),
+      getQueryData: vi.fn(),
+      setQueryData: vi.fn(),
+    } as unknown as ReturnType<typeof useQueryClient>);
     vi.mocked(useRouter).mockReturnValue({
       push: mockPush,
       replace: vi.fn(),
@@ -102,14 +111,11 @@ describe("SuccessCard", () => {
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
-  it("calls apiClient.post to /scan and shows success toast when 'Add to Library' succeeds", async () => {
+  it("calls apiClient.post to /scan and shows success toast when 'Add to Shelf' succeeds", async () => {
     mockApiPost.mockResolvedValueOnce({ data: { success: true, data: { item_id: 99, manifestation_id: 100 } } });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="inventory" onDismiss={vi.fn()} />);
 
-    // Explicitly clear mock to avoid interference from earlier renders in this file
-    mockApiPost.mockClear();
-
-    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to (shelf|library)/i }));
 
     await waitFor(() => {
       expect(mockApiPost).toHaveBeenCalledWith("/scan", {
@@ -119,16 +125,16 @@ describe("SuccessCard", () => {
         collection_status: "available",
         policy: "inventory",
       });
-      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Library!');
+      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your library!');
       expect(mockPush).toHaveBeenCalledWith("/item/99");
     });
   });
 
-  it("shows an error toast when 'Add to Library' fails", async () => {
+  it("shows an error toast when 'Add to Shelf' fails", async () => {
     mockApiPost.mockRejectedValueOnce(new Error("Network error"));
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to (shelf|library)/i }));
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("Network error");
@@ -141,10 +147,7 @@ describe("SuccessCard", () => {
     });
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="wishlist" onDismiss={vi.fn()} />);
 
-    // Explicitly clear mock to avoid interference from earlier renders
-    mockApiPost.mockClear();
-
-    fireEvent.click(screen.getByRole("button", { name: /add to.*wishlist/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to wishlist/i }));
 
     await waitFor(() => {
       expect(mockApiPost).toHaveBeenCalledWith("/scan", {
@@ -156,6 +159,26 @@ describe("SuccessCard", () => {
       });
       expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to your Wishlist!');
       expect(mockPush).toHaveBeenCalledWith("/manifestation/102");
+    });
+  });
+
+  it("calls apiClient.post to /scan and shows success toast when 'Add to Catalog' succeeds in catalog policy", async () => {
+    mockApiPost.mockResolvedValueOnce({
+      data: { success: true, data: { manifestation_id: 103, action: "cataloged" } },
+    });
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} policy="catalog" onDismiss={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add to catalog/i }));
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith("/scan", {
+        barcode: "9780441013593",
+        format: "book",
+        manifestation_id: undefined,
+        collection_status: "available",
+        policy: "catalog",
+      });
+      expect(mockToastSuccess).toHaveBeenCalledWith('"Dune" added to Catalog!');
     });
   });
 
@@ -278,7 +301,7 @@ describe("SuccessCard", () => {
 
     render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /add to.*library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add to (shelf|library)/i }));
 
     await waitFor(() => {
       expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["items"] }));

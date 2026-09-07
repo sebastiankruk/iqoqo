@@ -1,0 +1,90 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+
+services:
+  sandbox-egress-proxy:
+    image: python:3.11-slim
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: ["python3", "/workspace/deploy/sandbox_proxy/proxy.py"]
+    volumes:
+      - ./deploy/sandbox_proxy:/workspace/deploy/sandbox_proxy:ro
+    networks:
+      - sandbox-internal
+      - sandbox-egress
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 3128), timeout=1); s.close()"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+
+  mykg-agy-daemon:
+    image: python:3.11-slim
+    # 1. Drop Root Privileges & Capabilities
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # 2. Resource Exhaustion Protection
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    # 3. Read-Only Filesystem with strict ephemeral tmpfs
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/appuser:uid=1000,gid=1000,mode=0700
+    # 4. Strict, Minimal Volume Mounts
+    volumes:
+      - ./mykg_sessions:/workspace/mykg_sessions:rw  
+      - ./.agents:/workspace/.agents:ro              
+      # SURGICAL CREDENTIAL MOUNT: Mount ONLY the single OAuth token file into read-only secret path
+      - ~/.gemini/antigravity-cli/antigravity-oauth-token:/run/secrets/antigravity-oauth-token:ro
+    environment:
+      - HOME=/home/appuser
+      - HTTP_PROXY=http://sandbox-egress-proxy:3128
+      - HTTPS_PROXY=http://sandbox-egress-proxy:3128
+      - http_proxy=http://sandbox-egress-proxy:3128
+      - https_proxy=http://sandbox-egress-proxy:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+    networks:
+      - sandbox-internal
+    depends_on:
+      sandbox-egress-proxy:
+        condition: service_healthy
+    working_dir: /workspace
+
+networks:
+  sandbox-internal:
+    internal: true
+  sandbox-egress:
+    driver: bridge
+

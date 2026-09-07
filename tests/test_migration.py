@@ -480,3 +480,40 @@ def test_escalation_permission_migration_downgrade(app) -> None:
             assert not _role_permission_exists(
                 conn, "custodian", "escalate:resolve"
             ), "custodian role should not have escalate:resolve after downgrade"
+
+
+# ── Alembic DAG & Revision Length Invariants ──────────────────────────
+
+
+def test_all_alembic_revisions_fit_varchar_32() -> None:
+    """Enforce architectural rule: all Alembic revision identifiers MUST NOT exceed 32 characters.
+
+    PostgreSQL default alembic_version.version_num is VARCHAR(32); longer revisions cause
+    StringDataRightTruncation errors during flask db upgrade.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    repo_root = Path(__file__).parent.parent
+    config = Config(str(repo_root / "migrations" / "alembic.ini"))
+    config.set_main_option("script_location", str(repo_root / "migrations"))
+    script = ScriptDirectory.from_config(config)
+
+    long_revisions = [(rev.revision, len(rev.revision)) for rev in script.walk_revisions() if len(rev.revision) > 32]
+    assert not long_revisions, f"Found Alembic revisions exceeding 32 chars: {long_revisions}"
+
+
+def test_alembic_single_head_and_unbroken_lineage() -> None:
+    """Ensure Alembic migration tree has exactly one head and no orphaned revisions."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    repo_root = Path(__file__).parent.parent
+    config = Config(str(repo_root / "migrations" / "alembic.ini"))
+    config.set_main_option("script_location", str(repo_root / "migrations"))
+    script = ScriptDirectory.from_config(config)
+
+    heads = script.get_heads()
+    assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
+    revisions = list(script.walk_revisions())
+    assert len(revisions) > 0, "No revisions found in migration history"

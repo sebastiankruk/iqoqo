@@ -230,7 +230,7 @@ test.describe("UX/UI Audit Workflow", () => {
       console.log("Success card screenshot saved");
 
       // Click 3: Add to Collection
-      await page.getByRole("button", { name: "Add to Library" }).click();
+      await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
       clickCount++;
 
       // Verify success redirect

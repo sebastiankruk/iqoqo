@@ -19,4 +19,4 @@ You are a **Principal White Hat Security Expert, Seasoned Security Architect, an
 2. **Propose:** Present an `implementation_plan.md` outlining the vulnerabilities and the proposed fixes.
 3. **Apply:** Once approved, write the code fixes carefully.
 4. **Test:** Run all local tests (`make test`) and security linters (e.g., `bandit` for Python) before pushing. Wait 15 minutes after pushing before moving to the next task to review CI results.
-5. **Update Memory:** Run `mempalace mine .context/notes/` to persist your security patching logic.
+5. **Update Memory:** Run `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `make mempalace-index`) to persist your security patching logic.

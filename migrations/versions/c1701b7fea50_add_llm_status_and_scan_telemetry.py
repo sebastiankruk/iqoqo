@@ -73,7 +73,10 @@ def upgrade():
     # server_default, so this ALTER would fail with "column does not exist" on
     # PostgreSQL when the column was never given a default to begin with.
     cols = {c["name"]: c for c in inspector.get_columns("items", schema="inventory")}
-    if "collection_status" in cols and cols["collection_status"].get("default") is not None:
+    if "collection_status" not in cols:
+        with op.batch_alter_table("items", schema="inventory") as batch_op:
+            batch_op.add_column(sa.Column("collection_status", sa.String(length=50), nullable=True))
+    elif cols["collection_status"].get("default") is not None:
         with op.batch_alter_table("items", schema="inventory") as batch_op:
             batch_op.alter_column("collection_status", existing_type=sa.VARCHAR(length=50), server_default=None, existing_nullable=True)
 

@@ -130,7 +130,7 @@ test.describe("Phase 1 Ingestion Hardening - Allegro Strategy Cascade", () => {
     await expect(page.getByText("Scientific Publishers")).toBeVisible();
 
     // Click Add to Collection / Add to Library
-    await page.getByRole("button", { name: "Add to Library" }).click();
+    await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
 
     // Verify success message toast
     await expect(page.getByText(/"Cascaded Book Title" added to your library!/i)).toBeVisible();

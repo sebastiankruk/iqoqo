@@ -228,4 +228,8 @@ for dir in "covers" "gallery"; do
     fi
 done
 
+# Ensure destination directories have write permissions for non-root container user (appuser UID 10001)
+echo "🔑 Ensuring write permissions for application container on static assets and exports..."
+chmod -R a+rwX "${DST_DIR}/app/static" "${DST_DIR}/exports" 2>/dev/null || true
+
 echo "🎉 Data clone complete from '$SRC_NAME' to '$DST_NAME'!"

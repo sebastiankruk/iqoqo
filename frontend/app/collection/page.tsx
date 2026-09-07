@@ -124,7 +124,11 @@ function CollectionContent() {
   ];
 
   const initialViewMode = (searchParams?.get("view") || "items") as
-    "items" | "manifestations" | "works" | "expressions" | "roadmap";
+    | "items"
+    | "manifestations"
+    | "works"
+    | "expressions"
+    | "roadmap";
   const initialQuery = searchParams?.get("q") ?? "";
   const initialMissingCover = searchParams?.get("missing_cover") === "true";
   const initialMissingId = searchParams?.get("missing_id") === "true";

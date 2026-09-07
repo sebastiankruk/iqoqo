@@ -15,6 +15,42 @@
 #
 """Cache configuration."""
 
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from flask_caching import Cache
 
-cache = Cache(config={"CACHE_TYPE": "SimpleCache"})  # Default to memory, but app init will override with Redis
+_local_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _get_local_lock(name: str) -> threading.Lock:
+    with _locks_guard:
+        if name not in _local_locks:
+            _local_locks[name] = threading.Lock()
+        return _local_locks[name]
+
+
+class AppCache(Cache):
+    """Custom Cache class with distributed/local lock support."""
+
+    @contextmanager
+    def lock(self, name: str, timeout: int = 30) -> Iterator[None]:
+        """Acquire a distributed lock via Redis if available, else fallback to a local lock."""
+        client = None
+        try:
+            backend = getattr(self, "cache", None)
+            client = getattr(backend, "_client", None)
+        except (AttributeError, RuntimeError):
+            client = None
+
+        if client and hasattr(client, "lock"):
+            with client.lock(name, timeout=timeout):
+                yield
+        else:
+            with _get_local_lock(name):
+                yield
+
+
+cache = AppCache(config={"CACHE_TYPE": "SimpleCache"})  # Default to memory, but app init will override with Redis

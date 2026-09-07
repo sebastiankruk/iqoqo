@@ -51,6 +51,24 @@ export function FeedbackModal({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
+  const MAX_SCREENSHOTS = 5;
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+  const handleFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length > MAX_SCREENSHOTS) {
+      setError(`Maximum ${MAX_SCREENSHOTS} screenshots allowed per ticket.`);
+      return;
+    }
+    const oversized = files.find(f => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized) {
+      setError(`"${oversized.name}" exceeds the 10MB limit.`);
+      return;
+    }
+    setError("");
+    setScreenshots(files);
+  };
+
   const handleClose = () => {
     onOpenChange(false);
     // Reset state after dialog animation completes
@@ -64,6 +82,15 @@ export function FeedbackModal({
 
   const submit = async () => {
     if (!description.trim()) return;
+    if (screenshots.length > MAX_SCREENSHOTS) {
+      setError(`Maximum ${MAX_SCREENSHOTS} screenshots allowed per ticket.`);
+      return;
+    }
+    const oversized = screenshots.find(f => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized) {
+      setError(`"${oversized.name}" exceeds the 10MB limit.`);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -71,7 +98,10 @@ export function FeedbackModal({
       form.set("type", type);
       form.set("description", description.trim());
       screenshots.forEach(file => form.append("screenshots", file));
-      await apiClient.post("/feedback", form, { headers: { "Content-Type": "multipart/form-data" } });
+      await apiClient.post("/feedback", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 120_000,
+      });
       setSubmitted(true);
       if (onSuccess) {
         onSuccess();
@@ -152,14 +182,25 @@ export function FeedbackModal({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase">Attachments (optional)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">
+                    Attachments (optional)
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">Max 5 files, up to 10MB each</span>
+                </div>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   multiple
                   className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-2 file:text-xs file:font-semibold file:text-foreground hover:file:bg-muted/80"
-                  onChange={event => setScreenshots(Array.from(event.target.files ?? []))}
+                  onChange={handleFilesChange}
                 />
+                {screenshots.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {screenshots.length} file{screenshots.length > 1 ? "s" : ""} selected (
+                    {(screenshots.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(1)} MB total)
+                  </p>
+                )}
               </div>
             </div>
             <DialogFooter>

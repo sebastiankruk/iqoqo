@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status memory-presync knowledge-sync version
 
 SHELL := /bin/bash
 
@@ -75,6 +75,23 @@ else
 PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
 endif
 
+# AiOps / Terse mode flags and banner suppression
+ifdef IQOQO_AI_MODE
+RUFF_FLAGS    ?= --output-format=concise
+PYLINT_FLAGS  ?= --msg-template='{path}:{line}: {msg} ({symbol})'
+MYPY_FLAGS    ?= --no-error-summary
+AI_ECHO       := @:
+else
+RUFF_FLAGS    ?=
+PYLINT_FLAGS  ?=
+MYPY_FLAGS    ?=
+AI_ECHO       := @echo
+endif
+
+# Auto-detect project version from package.json or pyproject.toml without requiring host python
+IQOQO_VERSION ?= $(shell (grep -m 1 '"version":' package.json 2>/dev/null | cut -d '"' -f 4) || (grep -m 1 'version = ' pyproject.toml 2>/dev/null | cut -d '"' -f 2) || echo "unknown")
+PREBUILT_TAG ?= $(if $(APP_VERSION),$(APP_VERSION),$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,latest)))
+
 help:
 	@echo "Available targets:"
 	@echo ""
@@ -104,6 +121,8 @@ help:
 	@echo "Deployment:"
 	@echo "  start          - Start development environment (DB, Flask API, Next.js frontend)"
 	@echo "  stop           - Stop all development servers and containers"
+	@echo "  docker-build   - Build backend, frontend, and nginx Docker images locally (TAG=...)"
+	@echo "  docker-build-preview - Build all images locally tagged for preview environment"
 	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
@@ -135,6 +154,10 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
+	@echo ""
+	@echo "Knowledge Sync:"
+	@echo "  knowledge-sync - Full memory sync: session + graphify/mykg/mempalace/codegraph (parallel)"
+	@echo "  memory-presync - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -144,6 +167,122 @@ sync-version: .venv/bin/activate
 generate-taxonomy: .venv/bin/activate
 	@echo "Generating taxonomies from YAML..."
 	@.venv/bin/python scripts/generate_taxonomy.py
+
+# Knowledge graph & MemPalace targets
+mempalace-scope: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/scan_scope.py
+
+mempalace-index: .venv/bin/activate
+	$(AI_ECHO) "Mining scoped codebase and notes into MemPalace..."
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py $(if $(ARGS),$(ARGS),)
+
+mempalace-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py
+
+# CodeGraph targets
+codegraph-sync:
+	@codegraph sync
+
+codegraph-index:
+	@codegraph index
+
+codegraph-status:
+	@codegraph status
+
+# myKG targets
+MYKG_DEFAULT_MODEL ?= gemini-3.8-flash-low
+MYKG_DEFAULT_EFFORT ?= low
+
+mykg-scope: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
+
+mykg-update: .venv/bin/activate
+	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
+	@SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
+		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
+		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
+		print(str(sessions[0])) if sessions else sys.exit(0)"); \
+	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
+		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
+		if [ -n "$$AGY_BIN" ]; then \
+			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
+				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
+				mykg-agy-daemon \
+				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
+				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
+	EXIT_CODE=$$?; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+	fi; \
+	exit $$EXIT_CODE
+
+mykg-index: .venv/bin/activate
+	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		mkdir -p "mykg_sessions"; \
+		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
+		if [ -n "$$AGY_BIN" ]; then \
+			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
+				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
+				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
+				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
+				mykg-agy-daemon \
+				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+				"mykg_sessions" \
+				"mykg_sessions" >/dev/null 2>&1 || true; \
+		fi; \
+	fi; \
+	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
+	EXIT_CODE=$$?; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+	fi; \
+	exit $$EXIT_CODE
+
+mykg-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
+
+# Graphify targets
+graphify-update: .venv/bin/activate
+	$(AI_ECHO) "Running autonomous graphify update..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_update.py
+
+graphify-index: .venv/bin/activate
+	$(AI_ECHO) "Running full graphify index..."
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/run_index.py
+
+graphify-status: .venv/bin/activate
+	@.venv/bin/python .agents/skills/iqoqo-graphify/scripts/get_status.py
+
+# Session sync: converts agy JSONL transcripts to Markdown before knowledge tools mine them.
+# Single-loop: scans brain dirs, filters to VERSION-matching sessions only, converts to MD.
+# Also auto-patches .iqoqo-mykg-scope.yaml so the ai-memory version pin stays current.
+# No external tools required — script lives in scripts/sync_agy_memory.sh.
+memory-presync:
+	$(AI_ECHO) "Syncing agy session transcripts → .context/ai-memory/$(IQOQO_VERSION)..."
+	@bash scripts/sync_agy_memory.sh $(IQOQO_VERSION)
+	$(AI_ECHO) "Patching .iqoqo-mykg-scope.yaml ai-memory version → $(IQOQO_VERSION)..."
+	@sed -i 's|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/$(IQOQO_VERSION)|g' .iqoqo-mykg-scope.yaml
+
+# Full knowledge sync: session presync followed by all 4 engines in parallel.
+# Replaces the manual: aimemsync + /iqoqo-graphify update + /iqoqo-mykg update
+#                    + /iqoqo-mempalace update + /iqoqo-codegraph update
+knowledge-sync: memory-presync
+	$(AI_ECHO) "Syncing all knowledge engines in parallel..."
+	@$(MAKE) -j4 codegraph-sync graphify-update mempalace-index mykg-update
+	$(AI_ECHO) "All knowledge engines synced."
+
 
 bump-version: .venv/bin/activate
 	@if [ -z "$(v)" ]; then \
@@ -194,14 +333,36 @@ clone:
 	fi
 	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
+ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
 start:
-	@mkdir -p $(HOME)/.config/rclone
+	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
+	@echo "Project version: $(IQOQO_VERSION)"
+	@echo "Prebuilt tag: $(PREBUILT_TAG)"
+	@docker image prune -f --filter "dangling=true"
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+else
+start:
+	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Starting $(MODE) environment..."
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
+endif
+
+version:
+	@echo "Project version: $(IQOQO_VERSION)"
+	@echo "Prebuilt tag: $(PREBUILT_TAG)"
 
 stop:
 	@echo "Stopping $(MODE) environment..."
 	@./run.sh $(MODE) --stop
+
+.PHONY: docker-build docker-build-preview
+docker-build: ## Build backend, frontend, and nginx Docker images locally (TAG defaults to pyproject.toml version)
+	@./scripts/build_docker_images.sh $(if $(TAG),--tag $(TAG),) $(if $(PREFIX),--prefix $(PREFIX),)
+
+docker-build-preview: ## Build all images locally tagged for preview environment (preview tag)
+	@./scripts/build_docker_images.sh --tag preview $(if $(PREFIX),--prefix $(PREFIX),)
 
 # monitoring-start and monitoring-stop removed — the monitoring stack is now
 # always composed together with the main stack via run.sh (line 751-754).
@@ -209,29 +370,29 @@ stop:
 
 
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),))))
+	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(filter dev,$(MAKECMDGOALS)),--stack dev,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),--stack $(MODE))))))
 
 # Linting targets
 lint-python: .venv/bin/activate
-	@echo "Running ruff..."
-	.venv/bin/ruff check app/ tests/ scripts/
-	@echo "Running mypy..."
+	$(AI_ECHO) "Running ruff..."
+	.venv/bin/ruff check $(RUFF_FLAGS) app/ tests/ scripts/
+	$(AI_ECHO) "Running mypy..."
 	rm -rf .mypy_cache || true
-	.venv/bin/mypy app/ tests/
-	@echo "Running pylint..."
-	.venv/bin/pylint app/ tests/ scripts/
+	.venv/bin/mypy $(MYPY_FLAGS) app/ tests/
+	$(AI_ECHO) "Running pylint..."
+	.venv/bin/pylint $(PYLINT_FLAGS) app/ tests/ scripts/
 
 lint-format: .venv/bin/activate
-	@echo "Checking Python formatting..."
+	$(AI_ECHO) "Checking Python formatting..."
 	.venv/bin/black --check app/ tests/ scripts/
 	.venv/bin/isort --check-only app/ tests/ scripts/
 
 lint-js:
-	@echo "Running eslint..."
+	$(AI_ECHO) "Running eslint..."
 	@cd frontend && $(NPM) run lint
 
 lint-ts:
-	@echo "Running TypeScript type checks..."
+	$(AI_ECHO) "Running TypeScript type checks..."
 	@cd frontend && $(NPX) tsc --noEmit
 
 lint-frontend: lint-js lint-ts
@@ -241,24 +402,24 @@ build-frontend:
 	@cd frontend && npm run build
 
 lint-license:
-	@echo "Checking copyright headers..."
+	$(AI_ECHO) "Checking copyright headers..."
 	./scripts/check_license.sh
 
 lint-css:
-	@echo "Running stylelint..."
+	$(AI_ECHO) "Running stylelint..."
 	$(NPX) stylelint --allow-empty-input "frontend/app/**/*.css" "frontend/components/**/*.css"
 
 lint-markdown:
-	@echo "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#context" "#graphify-out"
+	$(AI_ECHO) "Running markdownlint..."
+	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.context" "#graphify-out" "#openspec/changes"
 
 validate-yaml: .venv/bin/activate
-	@echo "Checking YAML configuration files..."
+	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
 
 # Run all linting checks (stops on first failure)
 lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license validate-yaml
-	@echo "All linting checks passed!"
+	$(AI_ECHO) "All linting checks passed!"
 
 # Formatting targets
 format-python: .venv/bin/activate
@@ -275,7 +436,7 @@ format: format-python format-js
 
 # Testing
 test-backend: .venv/bin/activate
-	@echo "Running backend tests..."
+	$(AI_ECHO) "Running backend tests..."
 	.venv/bin/pytest tests/
 
 test-backend-pg: .venv/bin/activate
@@ -295,11 +456,11 @@ test-backend-pg: .venv/bin/activate
 	.venv/bin/pytest tests/integration/db/ -v
 
 test-frontend:
-	@echo "Running frontend unit tests (Vitest)..."
+	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test
 
 test-scripts-bash:
-	@echo "Running BATS script tests..."
+	$(AI_ECHO) "Running BATS script tests..."
 	@if command -v bats >/dev/null 2>&1; then \
 		bats tests/bash/; \
 	elif [ -f node_modules/.bin/bats ]; then \
@@ -310,7 +471,7 @@ test-scripts-bash:
 	fi
 
 test-scripts-python: .venv/bin/activate
-	@echo "Running Python script logic tests..."
+	$(AI_ECHO) "Running Python script logic tests..."
 	.venv/bin/pytest tests/test_scripts.py tests/test_script_utilities.py
 
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
@@ -385,7 +546,7 @@ _test-e2e-run:
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e
-	@echo "All tests completed!"
+	$(AI_ECHO) "All tests completed!"
 
 # Clean
 clean:

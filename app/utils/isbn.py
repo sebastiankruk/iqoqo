@@ -270,19 +270,19 @@ def _lookup_google_books(isbn: str) -> dict[str, Any] | None:
     return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
 
 
-def fetch_google_books_candidates(query: str, max_results: int = 5) -> list[dict]:
+def fetch_google_books_candidates(query: str, max_results: int = 10) -> list[dict]:
     """Search Google Books by text query and return candidates.
 
     Args:
         query: Free-text search term (e.g. title).
-        max_results: Maximum number of results to return.
+        max_results: Maximum number of results to return (default 10).
 
     Returns:
         List of normalised metadata dicts, possibly empty.
     """
     api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
     url = "https://www.googleapis.com/books/v1/volumes"
-    params: dict[str, Any] = {"q": query, "maxResults": max_results}
+    params: dict[str, Any] = {"q": query, "maxResults": min(max_results, 40)}
     if api_key:
         params["key"] = api_key
 

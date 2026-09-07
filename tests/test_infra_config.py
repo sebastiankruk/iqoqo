@@ -32,7 +32,7 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.16"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "0.7.17"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"

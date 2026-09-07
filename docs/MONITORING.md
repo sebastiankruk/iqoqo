@@ -52,7 +52,7 @@ docker compose -f docker-compose.monitoring.yml up -d
 | Interface          | URL                                                   |
 |--------------------|-------------------------------------------------------|
 | **OpenObserve UI** | `http://localhost:5080` (or `$OPENOBSERVE_HOST_PORT`) |
-| **Login**          | `admin@iqoqo.local` / `supersecret`                   |
+| **Login**          | `admin@iqoqo.local` / `SuperSecret!123`               |
 | **SQL REST API**   | `POST http://localhost:5080/api/default/_search`      |
 | **OTLP gRPC**      | `localhost:4317` (or `$OTEL_GRPC_HOST_PORT`)          |
 | **OTLP HTTP**      | `localhost:4318` (or `$OTEL_HTTP_HOST_PORT`)          |
@@ -145,7 +145,7 @@ Because OpenObserve uses standard ANSI SQL, AI agents and SREs can execute queri
 
 ```bash
 curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
-  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz" \
   -H "Content-Type: application/json" \
   -d '{
     "query": {
@@ -158,7 +158,7 @@ curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
 
 ```bash
 curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
-  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz" \
   -H "Content-Type: application/json" \
   -d '{
     "query": {

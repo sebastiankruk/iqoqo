@@ -26,3 +26,10 @@ class LookupStrategy(ABC):
         Returns a tuple of (metadata_dict, provider_name).
         """
         pass
+
+    def lookup_candidates(self, query: str, max_results: int = 10) -> list[dict]:
+        """
+        Look up multiple candidate metadata dictionaries for a title or query string.
+        Returns a list of candidate dictionaries.
+        """
+        return []

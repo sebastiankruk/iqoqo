@@ -43,7 +43,7 @@ test.describe("OpenObserve RUM Integration & Telemetry Validation", () => {
     await page.waitForTimeout(5000);
 
     const openobserveUrl = "http://localhost:5080";
-    const basicAuth = "Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=";
+    const basicAuth = "Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz";
 
     // Check if OpenObserve is reachable
     let isReachable = false;

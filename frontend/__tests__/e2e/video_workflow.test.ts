@@ -130,7 +130,7 @@ test.describe("Video Media Ingestion Workflow", () => {
     await expect(page.getByText("Leonardo DiCaprio")).toBeVisible();
 
     // 10. Click Add to Collection
-    await page.getByRole("button", { name: "Add to Library" }).click();
+    await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();
 
     // 11. Verify dynamic success message toast
     await expect(page.getByText(/"Inception" added to your library!/i)).toBeVisible();

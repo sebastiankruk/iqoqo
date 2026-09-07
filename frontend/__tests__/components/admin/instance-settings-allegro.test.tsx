@@ -185,4 +185,19 @@ describe("InstanceSettings - Allegro Device Flow", () => {
       expect(screen.getByText(/Authorization failed or denied./i)).toBeDefined();
     });
   });
+
+  it("renders Authorize Allegro button inside Allegro credential group", async () => {
+    render(<InstanceSettings category="external_apis" showApiKeys={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Allegro Integration")).toBeDefined();
+    });
+
+    const allegroHeading = screen.getByText("Allegro Integration");
+    const allegroSection = allegroHeading.closest("div.space-y-4");
+    expect(allegroSection).not.toBeNull();
+
+    const authorizeBtn = screen.getByRole("button", { name: /Authorize Allegro Account/i });
+    expect(allegroSection?.contains(authorizeBtn)).toBe(true);
+  });
 });

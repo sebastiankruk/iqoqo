@@ -60,6 +60,16 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
 
+      - name: Extract metadata (tags) for Nginx
+        id: meta-nginx
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/iqoqo-nginx
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+
       - name: Build and push Backend image
         uses: docker/build-push-action@v7
         with:
@@ -77,6 +87,15 @@ jobs:
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+
+      - name: Build and push Nginx image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./deploy/Dockerfile.nginx
+          push: true
+          tags: ${{ steps.meta-nginx.outputs.tags }}
+          labels: ${{ steps.meta-nginx.outputs.labels }}
 
   deploy-preview:
     needs: build-and-push

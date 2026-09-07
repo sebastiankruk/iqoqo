@@ -15,8 +15,8 @@
 #
 """Merge token_blocklist and operation_type branches
 
-Revision ID: 20260331_merge_token_and_telemetry_branches
-Revises: d2be8499d439, 20260330_add_operation_type_to_llm_telemetry
+Revision ID: 20260331_merge_token_telemetry
+Revises: d2be8499d439, 20260330_llm_telemetry_op_type
 Create Date: 2026-03-31 10:00:00.000000
 
 """
@@ -24,8 +24,8 @@ Create Date: 2026-03-31 10:00:00.000000
 from alembic import op  # noqa: F401
 
 # revision identifiers, used by Alembic.
-revision = "20260331_merge_token_and_telemetry_branches"
-down_revision = ("d2be8499d439", "20260330_add_operation_type_to_llm_telemetry")
+revision = "20260331_merge_token_telemetry"
+down_revision = ("d2be8499d439", "20260330_llm_telemetry_op_type")
 branch_labels = None
 depends_on = None
 

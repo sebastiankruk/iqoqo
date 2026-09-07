@@ -51,6 +51,9 @@ data/keys/
 # Virtual Env
 .venv*
 
+# uv lockfile (generated, not source of truth)
+uv.lock
+
 # AI
 .context
 
@@ -88,3 +91,13 @@ entities.json
 
 # AI tools
 graphify-out
+
+# iqoqo-mykg & iqoqo-mempalace runtime state (config files ARE committed)
+.iqoqo-mykg/
+.iqoqo-mempalace/
+.tmp/
+
+# mykg sessions (symlink to Dropbox, not committed)
+mykg_sessions
+.mykg_sessions
+.mykg_work

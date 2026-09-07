@@ -15,8 +15,8 @@
 #
 """Move core FRBR tables from public to catalog schema
 
-Revision ID: 20260331_move_frbr_to_catalog_schema
-Revises: 20260331_merge_token_and_telemetry_branches
+Revision ID: 20260331_frbr_catalog_schema
+Revises: 20260331_merge_token_telemetry
 Create Date: 2026-03-31 11:00:00.000000
 
 Moves works, expressions, manifestations, and items from the default
@@ -33,8 +33,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260331_move_frbr_to_catalog_schema"
-down_revision = "20260331_merge_token_and_telemetry_branches"
+revision = "20260331_frbr_catalog_schema"
+down_revision = "20260331_merge_token_telemetry"
 branch_labels = None
 depends_on = None
 

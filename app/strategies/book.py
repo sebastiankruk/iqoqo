@@ -13,17 +13,38 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import copy
+import logging
+
 import requests
 
 from app.strategies.base import LookupStrategy
-from app.utils.allegro import fetch_allegro_metadata
+from app.utils.allegro import fetch_allegro_candidates, fetch_allegro_metadata
 from app.utils.discogs import fetch_discogs_metadata
-from app.utils.isbn import canonicalize_isbn, fetch_isbn_metadata
+from app.utils.isbn import canonicalize_isbn, fetch_google_books_candidates, fetch_isbn_metadata
 from app.utils.musicbrainz import fetch_audio_metadata
+
+logger = logging.getLogger(__name__)
 
 
 class BookLookupStrategy(LookupStrategy):
-    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
+    """Lookup strategy for Books / Text media format."""
+
+    def lookup_candidates(self, query: str, max_results: int = 10) -> list[dict]:
+        """Aggregate candidate books from Google Books and Allegro up to max_results."""
+        candidates: list[dict] = []
+        try:
+            gb_candidates = fetch_google_books_candidates(query, max_results=max_results)
+            candidates.extend(gb_candidates)
+            if len(candidates) < max_results:
+                allegro_candidates = fetch_allegro_candidates(query, max_results=max_results - len(candidates))
+                candidates.extend(allegro_candidates)
+        except (requests.RequestException, ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as exc:
+            logger.error(f"Book strategy candidates lookup failed: {exc}")
+
+        return candidates[:max_results]
+
+    def lookup(self, barcode: str, query: str | None = None, max_results: int = 10) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         try:
             canonical = canonicalize_isbn(barcode)
@@ -32,6 +53,14 @@ class BookLookupStrategy(LookupStrategy):
                 if meta:
                     meta["data_source"] = meta.get("Source", "google_books").lower().replace(" ", "_")
                     provider = "isbn"
+
+            if not meta and not canonical:
+                search_term = query or barcode
+                candidates = self.lookup_candidates(search_term, max_results=max_results)
+                if candidates:
+                    meta = copy.deepcopy(candidates[0])
+                    meta["candidates"] = candidates
+                    provider = meta.get("data_source", "google_books")
 
             if not meta:
                 meta = fetch_allegro_metadata(barcode)
@@ -51,8 +80,6 @@ class BookLookupStrategy(LookupStrategy):
                     meta["data_source"] = "musicbrainz"
                     provider = "musicbrainz"
         except (requests.RequestException, ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as exc:
-            import logging
-
-            logging.getLogger(__name__).error(f"Strategy lookup failed: {exc}")
+            logger.error(f"Strategy lookup failed: {exc}")
 
         return meta, provider

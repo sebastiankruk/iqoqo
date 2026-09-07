@@ -76,3 +76,26 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *"--interactive"* ]]
 }
+
+@test "Makefile lint-python in standard mode outputs echo commands" {
+  run env -u IQOQO_AI_MODE make -n lint-python IQOQO_AI_MODE=
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"echo \"Running ruff...\""* ]]
+  [[ "$output" == *"echo \"Running mypy...\""* ]]
+  [[ "$output" == *"echo \"Running pylint...\""* ]]
+}
+
+@test "Makefile lint-python in AI mode suppresses echo commands and adds terse flags" {
+  run make -n lint-python IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"echo \"Running ruff...\""* ]]
+  [[ "$output" == *"--output-format=concise"* ]]
+  [[ "$output" == *"--no-error-summary"* ]]
+  [[ "$output" == *"--msg-template="* ]]
+}
+
+@test "Makefile test-backend in AI mode suppresses echo commands" {
+  run make -n test-backend IQOQO_AI_MODE=1
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"echo \"Running backend tests...\""* ]]
+}

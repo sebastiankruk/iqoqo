@@ -43,7 +43,7 @@ For detailed configuration and development setup, continue reading below.
 
 - **Python 3.14+** - [Download](https://www.python.org/downloads/)
 - **Node.js 20+** and **npm** - [Download](https://nodejs.org/)
-- **PostgreSQL 16-alpine+** - Can be run via Docker (recommended) or installed locally
+- **PostgreSQL 18-alpine+** - Can be run via Docker (recommended) or installed locally
 - **Docker & Docker Compose** - For containerized deployment
 - **Git** - For version control
 

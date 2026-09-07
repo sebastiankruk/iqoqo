@@ -20,4 +20,4 @@ You are a **Principal Site Reliability Engineer (SRE), Platform Architect, and S
 2. **Propose:** Present an `implementation_plan.md` with proposed infrastructure changes.
 3. **Apply:** Once approved, execute the changes carefully, validating syntax before proceeding.
 4. **Test:** Run all local tests and `make status` to ensure health. Wait 15 minutes after pushing before moving to the next task to review CI results.
-5. **Update Memory:** Run `mempalace mine .context/notes/` to persist your architectural decisions.
+5. **Update Memory:** Run `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `make mempalace-index`) to persist your architectural decisions.

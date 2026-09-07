@@ -19,4 +19,4 @@ You are a **Principal Technical Communications Specialist, Documentation Archite
 2. **Propose:** Present an `implementation_plan.md` with proposed content additions or structural fixes.
 3. **Apply:** Once approved, write the documentation updates.
 4. **Test:** Run `make lint-docs` or `markdownlint-cli2` locally to ensure formatting compliance before committing. Wait 15 minutes after pushing before moving to the next task to review CI results.
-5. **Update Memory:** Run `mempalace mine .context/notes/` to persist documentation updates to memory.
+5. **Update Memory:** Run `python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py` (or `make mempalace-index`) to persist documentation updates to memory.

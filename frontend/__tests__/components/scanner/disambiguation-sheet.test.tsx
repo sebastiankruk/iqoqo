@@ -58,8 +58,7 @@ describe("DisambiguationSheet Component", () => {
 
     render(<DisambiguationSheet candidates={mockCandidates} onSelect={mockSelect} onDismiss={mockDismiss} />);
 
-    // The close button has the X icon, which has a specific class or we can query by button
-    const closeBtn = screen.getByRole("button", { name: "" }); // or via querySelector
+    const closeBtn = screen.getByLabelText("Close");
     fireEvent.click(closeBtn);
     expect(mockDismiss).toHaveBeenCalledOnce();
   });

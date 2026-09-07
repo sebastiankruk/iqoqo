@@ -125,6 +125,14 @@ def run_init_auth(app: Flask | None = None) -> None:
             db.session.add(admin_user)
             db.session.commit()
             print(f"Created admin user: {admin_email}")
+        else:
+            admin_password = str(app.config.get("ADMIN_PASSWORD") or "")
+            if admin_password:
+                admin_user.set_password(admin_password)
+                if admin_role is not None and admin_role not in admin_user.roles:
+                    admin_user.roles.append(admin_role)
+                db.session.commit()
+                print(f"Synchronized admin user password: {admin_email}")
 
         # 4. Migrate items to Admin UUID (including those of the legacy system user)
         legacy_items = db.session.execute(db.select(Item)).scalars().all()
