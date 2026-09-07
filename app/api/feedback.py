@@ -128,7 +128,7 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     if not matching_tickets:
         return jsonify({"success": False, "error": "Screenshot not found"}), 404
 
-    # Require read authorization for ALL tickets referencing this file to prevent collision IDOR
+    # Enforce authorization across ALL tickets to prevent collision bypass
     if not all(_can_read_ticket(user, it) for it in matching_tickets):
         return jsonify({"success": False, "error": "Forbidden"}), 403
 

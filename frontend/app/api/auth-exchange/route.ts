@@ -51,9 +51,9 @@ export async function GET(request: Request) {
   const effectiveHost =
     rawForwardedHost && isAllowedHost(rawForwardedHost)
       ? rawForwardedHost
-      : rawHostHeader && isAllowedHost(rawHostHeader)
+      : isAllowedHost(rawHostHeader)
         ? rawHostHeader
-        : fallbackHost;
+        : fallbackHost; // Fail closed; do not reflect poisoned url.host
 
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const effectiveProto =
