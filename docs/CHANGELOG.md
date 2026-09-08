@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Session-Agnostic myKG Query Target**: Added `make mykg-ask Q="..."` target and `.agents/skills/iqoqo-mykg/scripts/ask.py` auto-resolving the latest session in `mykg_sessions/` for zero-friction CLI querying.
+- **Decoupled Full Knowledge Sync Target**: Introduced `make knowledge-sync-full` for scheduled/manual off-peak execution of heavy batch indexing (`mempalace-index` and `mykg-update`).
+
 ### Changed
+
+- **Decoupled Fast Knowledge Sync**: Streamlined `make knowledge-sync` to execute only lightweight AST-based engines (`codegraph-sync` and `graphify-update`) in parallel (<45s, 0 LLM tokens). Excluded 15-minute MemPalace hallway traversal and myKG LLM daemon from routine interactive developer sessions.
+- **Agent Memory & Navigation Standards**: Updated `.agent/rules/iqoqo-standards.md` to designate CodeGraph (`codegraph node` and `codegraph impact`) as the mandatory first-stop symbol navigation protocol before raw grep scans, and strictly prohibited automated execution of full memory syncs during interactive sessions.
+- **Deterministic Virtualenv Executable Paths**: Hardcoded `.venv/bin/` paths across `iqoqo-graphify`, `iqoqo-mykg`, and `iqoqo-mempalace` skills to prevent `exit 127` subshell execution errors.
+- **MemPalace Retrieval & Ingestion Hardening**: Documented MiniLM keyword search best practices (prohibiting `head` truncation and stderr redirection) and added pre-mining credential and path sanitization (`.env*`, `*.key`, `*.pem`, `antigravity-oauth-token*`) to `.iqoqo-mempalace-scope.yaml`, `scan_scope.py`, and `run_mine.py`.
 
 ### Fixed
 

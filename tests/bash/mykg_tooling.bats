@@ -30,10 +30,24 @@
   run make -n mykg-update
   [ "$status" -eq 0 ]
   [[ "$output" == *"run_update.py"* ]]
+
+  run make -n mykg-ask Q="test"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ask.py"* ]]
 }
 
 @test "Makefile has knowledge-sync target" {
   run make -n knowledge-sync
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"codegraph sync"* ]] || [[ "$output" == *"codegraph-sync"* ]]
+  [[ "$output" == *"graphify-update"* ]] || [[ "$output" == *"run_update.py"* ]]
+  # Fast sync must not include heavy targets
+  [[ "$output" != *"mempalace-index"* ]]
+  [[ "$output" != *"mykg-update"* ]]
+}
+
+@test "Makefile has knowledge-sync-full target" {
+  run make -n knowledge-sync-full
   [ "$status" -eq 0 ]
   [[ "$output" == *"codegraph sync"* ]] || [[ "$output" == *"codegraph-sync"* ]]
   [[ "$output" == *"run_mine.py"* ]] || [[ "$output" == *"mempalace-index"* ]]

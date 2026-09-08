@@ -57,9 +57,15 @@ DEFAULT_EXCLUDES = [
     "**/app/static/covers/**",
     "**/app/static/gallery/**",
     "**/screenshots/**",
-    "**/images/**",
     "**/.DS_Store",
     "**/Thumbs.db",
+    "**/*.log",
+    "**/.env*",
+    "**/*.key",
+    "**/*.pem",
+    "**/antigravity-oauth-token*",
+    "**/*.token*",
+    "**/*secret*",
 ]
 
 
