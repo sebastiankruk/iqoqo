@@ -128,4 +128,50 @@ When the human asks questions about code (via agy, opencode, or Gemini App):
 2. **Layer context:** Each chunk represents an architectural layer. Start the review with a 2-3 sentence orientation of what the layer does.
 3. **No fixing:** This is a READ-ONLY review. Do NOT modify code. Findings are logged for a follow-up fix plan.
 4. **Collect, don't act:** All findings are collected into the review markdown. A consolidated fix-plan openspec change will be created after all chunks are complete.
-5. **CodeGraph first:** Before tracing symbol dependencies, use `codegraph node <Symbol>` or `codegraph callers <Symbol>` to understand call chains.
+5. **Knowledge tools first:** Before tracing symbol dependencies or architectural relationships, use the knowledge indexing tools (see below).
+
+## Knowledge Tool Integration
+
+The iqoqo project maintains four knowledge graphs that provide different lenses for code review:
+
+| Tool | Command | Use Case |
+|---|---|---|
+| **CodeGraph** | `codegraph node <Symbol>` | Symbol definitions, callers/callees, blast radius |
+| | `codegraph impact <Symbol>` | Downstream dependents (routes, models, UI) |
+| | `codegraph affected <file>` | Which tests to run after changes |
+| **Graphify** | `graphify query "<question>"` | Natural language codebase exploration |
+| | `graphify path A B` | Shortest path between two concepts |
+| | `graphify explain <node>` | Plain-language explanation of a node |
+| **mykg** | MCP tools: `search_nodes`, `get_node`, `get_neighbors` | Domain ontology entities (Work, Expression, Manifestation) |
+| | `query_graph` | BFS from natural language (weaker than CodeGraph) |
+| **MemPalace** | `mempalace search "<keywords>" --wing iqoqo` | Conversation history, architectural decisions, past bugs |
+
+### Pre-Review Checklist (per chunk)
+
+1. **CodeGraph impact** — For each major symbol in the chunk, run `codegraph impact <Symbol>` to understand blast radius
+2. **Graphify query** — Run `graphify query "<chunk topic>"` to find related nodes across the codebase
+3. **mykg search** — Search for domain entities: `search_nodes` with type filters (e.g., `SecurityVulnerability`, `PlatformLayer`)
+4. **MemPalace search** — Check conversation history for past decisions: `mempalace search "<topic>" --wing iqoqo`
+
+### During Review
+
+- **Trace call chains:** Use `codegraph callers <fn>` and `codegraph callees <fn>` instead of grep
+- **Find affected tests:** Use `codegraph affected <file>` to identify which tests to verify
+- **Cross-reference architecture:** Use `graphify query "<concept>"` to find related files
+- **Check historical context:** Use `mempalace search` for past discussions about similar issues
+- **Verify domain model:** Use mykg `get_neighbors` on FRBR entities to understand relationships
+
+### Example Workflow
+
+```bash
+# Before reviewing chunk-01-db-models.md
+codegraph impact Manifestation          # 393 affected symbols
+codegraph impact Work                   # Downstream dependents
+graphify query "FRBR ontology"          # Related files across codebase
+mempalace search "FRBR board games" --wing iqoqo  # Past decisions
+
+# During review of core.py
+codegraph node Work                     # Definition + members
+codegraph callers Work.expressions      # Who uses this relationship?
+codegraph affected app/db/core.py       # Which tests to run?
+```
