@@ -44,13 +44,26 @@ For **every file** under review, assess through these five lenses (skip any that
 
 | Rating | Emoji | Meaning | Timeline |
 |---|---|---|---|
-| **CRITICAL** | 🔴 | Must fix before 0.8.0 | Immediate |
+| **CLEAN** | ✅ | No issues found — file looks good | — |
+| **LOW** | 🟢 | Minor nit / nice-to-have, no real risk | Backlog |
 | **MODERATE** | 🟡 | Should fix, schedule in 0.8.x | Near-term |
-| **LOW** | 🟢 | Nice to have, backlog | When convenient |
+| **CRITICAL** | 🔴 | Must fix before 0.8.0 | Immediate |
+
+> The **VERDICT** on each file header always reflects the **worst** finding in that file. A file with zero findings gets `✅ CLEAN`. A file with only backlog nits gets `🟢 LOW`.
 
 ### Output Format Per File
 
 For each file reviewed, produce a block like:
+
+```markdown
+### `path/to/file.py` — VERDICT: ✅ CLEAN
+
+**What it does:** One-sentence explanation of the file's purpose.
+
+**Findings:** None.
+
+**Human note:** This file handles X cleanly. If you want to understand Y, follow the call chain to Z.
+```
 
 ```markdown
 ### `path/to/file.py` — VERDICT: 🟡 MODERATE
@@ -74,7 +87,7 @@ Each chunk review is saved as a markdown file in `.context/notes/review/0.7.18/`
 
 **Reviewed:** YYYY-MM-DD
 **Files:** N files
-**Summary verdict:** 🔴/🟡/🟢 (worst finding in chunk)
+**Summary verdict:** ✅/🟢/🟡/🔴 (worst finding across all files in chunk)
 
 ## Overview
 
@@ -91,12 +104,14 @@ Each chunk review is saved as a markdown file in `.context/notes/review/0.7.18/`
 | 🔴 CRITICAL | N |
 | 🟡 MODERATE | N |
 | 🟢 LOW | N |
+| ✅ CLEAN | N |
 
 ## Action Items (for fix-plan consolidation)
 
 - [ ] 🔴 [brief description] — `file.py:NN`
 - [ ] 🟡 [brief description] — `file.py:NN`
 ```
+
 
 ## Answering Human Questions
 

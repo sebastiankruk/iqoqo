@@ -38,7 +38,17 @@ Paste code or mention a filename, and ask:
 
 ### Review Mode
 
-When asked to "review" a file or code block, produce a brief verdict:
+When asked to "review" a file or code block, produce a brief verdict. Use **VERDICT** to reflect the worst finding:
+
+```
+### `path/to/file.py` — VERDICT: ✅ CLEAN
+
+**What it does:** One-sentence explanation.
+
+**Findings:** None.
+
+**Human note:** Context for understanding this file cleanly.
+```
 
 ```
 ### `path/to/file.py` — VERDICT: 🟡 MODERATE
@@ -55,9 +65,15 @@ When asked to "review" a file or code block, produce a brief verdict:
 
 ### Severity Ratings
 
-- 🔴 **CRITICAL** — must fix before 0.8.0
-- 🟡 **MODERATE** — should fix, schedule in 0.8.x
-- 🟢 **LOW** — nice to have, backlog
+| Rating | Emoji | Meaning | When to use |
+|---|---|---|---|
+| **CLEAN** | ✅ | No issues found | File has zero findings |
+| **LOW** | 🟢 | Minor nit, no real risk | Backlog only |
+| **MODERATE** | 🟡 | Should fix soon | Schedule in 0.8.x |
+| **CRITICAL** | 🔴 | Must fix before 0.8.0 | Immediate action |
+
+The verdict on each file header always reflects the **worst** finding in that file.
+
 
 ## Key Architecture Concepts
 
