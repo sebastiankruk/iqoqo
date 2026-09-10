@@ -8,5 +8,10 @@ description: Load iqoqo project-specific instructions and personas
 4. **Assume Persona**:
    - Default: Senior full-stack architect.
    - On request: Switch to the precise mode in [.github/agents/junior-dev.agent.md](.github/agents/junior-dev.agent.md).
-// turbo
 5. **Enforce QA**: Never conclude a task without running `make lint` and `make test`.
+6. **Knowledge Tools First**: Before grep/find, use the knowledge indexing tools:
+   - **CodeGraph** (`codegraph node/impact/callers/affected`): Symbol-level code intelligence, blast radius, call hierarchy
+   - **Graphify** (`graphify query/explain/path`): Natural language exploration, shortest paths, community detection
+   - **mykg** (MCP tools: `search_nodes`, `get_node`, `get_neighbors`): Domain ontology entities (Work, Expression, Manifestation, Item)
+   - **MemPalace** (`mempalace search "<keywords>" --wing iqoqo`): Conversation history, architectural decisions, past bugs
+7. **Review Workflow**: For code reviews, load the `code-reviewer` skill which integrates all four knowledge tools.

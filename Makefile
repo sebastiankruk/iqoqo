@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status graphify-update graphify-index graphify-status memory-presync knowledge-sync version
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version
 
 SHELL := /bin/bash
 
@@ -157,8 +157,10 @@ help:
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
 	@echo ""
 	@echo "Knowledge Sync:"
-	@echo "  knowledge-sync - Full memory sync: session + graphify/mykg/mempalace/codegraph (parallel)"
-	@echo "  memory-presync - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
+	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
+	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
+	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
+	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -200,7 +202,17 @@ mykg-scope: .venv/bin/activate
 mykg-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-	@SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
+	@cleanup() { \
+		EXIT_CODE=$$?; \
+		trap - EXIT INT TERM; \
+		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+		fi; \
+		exit $$EXIT_CODE; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
 		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
 		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
 		print(str(sessions[0])) if sessions else sys.exit(0)"); \
@@ -208,6 +220,7 @@ mykg-update: .venv/bin/activate
 		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
@@ -220,19 +233,26 @@ mykg-update: .venv/bin/activate
 	fi; \
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-	fi; \
 	exit $$EXIT_CODE
 
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+	@cleanup() { \
+		EXIT_CODE=$$?; \
+		trap - EXIT INT TERM; \
+		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+		fi; \
+		exit $$EXIT_CODE; \
+	}; \
+	trap cleanup EXIT INT TERM; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		mkdir -p "mykg_sessions"; \
 		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
 		if [ -n "$$AGY_BIN" ]; then \
+			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
 				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
 				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
@@ -245,14 +265,17 @@ mykg-index: .venv/bin/activate
 	fi; \
 	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-		docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-	fi; \
 	exit $$EXIT_CODE
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
+
+mykg-ask: .venv/bin/activate
+	@if [ -z "$(Q)" ]; then \
+		echo "Usage: make mykg-ask Q=\"<question>\""; \
+		exit 1; \
+	fi
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/ask.py "$(Q)"
 
 # Graphify targets
 graphify-update: .venv/bin/activate
@@ -276,13 +299,19 @@ memory-presync:
 	$(AI_ECHO) "Patching .iqoqo-mykg-scope.yaml ai-memory version → $(IQOQO_VERSION)..."
 	@sed -i 's|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/$(IQOQO_VERSION)|g' .iqoqo-mykg-scope.yaml
 
-# Full knowledge sync: session presync followed by all 4 engines in parallel.
-# Replaces the manual: aimemsync + /iqoqo-graphify update + /iqoqo-mykg update
-#                    + /iqoqo-mempalace update + /iqoqo-codegraph update
+# Fast knowledge sync: session presync followed by fast local engines only (<45s, 0 LLM tokens).
+# Safe to run automatically during interactive sessions and post-commit hooks.
 knowledge-sync: memory-presync
-	$(AI_ECHO) "Syncing all knowledge engines in parallel..."
-	@$(MAKE) -j4 codegraph-sync graphify-update mempalace-index mykg-update
-	$(AI_ECHO) "All knowledge engines synced."
+	$(AI_ECHO) "Syncing fast knowledge engines in parallel (CodeGraph + Graphify)..."
+	@$(MAKE) -j2 codegraph-sync graphify-update
+	$(AI_ECHO) "Fast knowledge sync complete. (Full MemPalace & myKG sync available via 'make knowledge-sync-full')."
+
+# Full knowledge sync: fast sync followed by heavy MemPalace (~15 min hallway walk) and myKG LLM daemon.
+# For scheduled release CI or manual off-peak execution. Strictly prohibited from automated session calls.
+knowledge-sync-full: knowledge-sync
+	$(AI_ECHO) "Running heavy knowledge engines in parallel (MemPalace + myKG)..."
+	@$(MAKE) -j2 mempalace-index mykg-update
+	$(AI_ECHO) "All knowledge engines fully synced."
 
 
 bump-version: .venv/bin/activate

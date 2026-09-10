@@ -59,6 +59,19 @@ def mine_scope(mempalace_bin: str, target: str, mode: str, wing: str = "iqoqo", 
     return run_cmd(cmd)
 
 
+def is_sensitive_target(target_path: Path) -> bool:
+    """Check if target path matches sensitive file or credential patterns."""
+    name = target_path.name.lower()
+    path_str = str(target_path).lower()
+    if name.startswith(".env") or ".env." in name:
+        return True
+    if any(name.endswith(ext) for ext in [".key", ".pem", ".pfx", ".pkcs12", ".crt"]):
+        return True
+    if any(secret_kw in path_str for secret_kw in ["antigravity-oauth-token", "id_rsa", "id_ed25519"]):
+        return True
+    return False
+
+
 def main() -> None:
     """Main CLI entry point for run_mine."""
     parser = argparse.ArgumentParser(description="Mine scoped iQoQo assets into MemPalace")
@@ -76,6 +89,10 @@ def main() -> None:
         target_path = Path(args.target)
         if not target_path.exists():
             print(f"Error: Target path does not exist: {args.target}", file=sys.stderr)
+            sys.exit(1)
+
+        if is_sensitive_target(target_path):
+            print(f"Error: Target contains sensitive credentials/keys and is blocked from MemPalace mining: {args.target}", file=sys.stderr)
             sys.exit(1)
 
         # Detect mode if not specified

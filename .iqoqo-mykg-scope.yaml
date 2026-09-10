@@ -46,7 +46,7 @@ scopes:
   # --- Versioned AI Memory (.context/ai-memory/<version> via symlink) ---
   # Note: specify the version explicitly, or use auto-detection by omitting
   #       (auto-detect reads version from package.json)
-  - .context/ai-memory/0.7.17
+  - .context/ai-memory/0.7.18
 
   # --- Application Code ---
   - app

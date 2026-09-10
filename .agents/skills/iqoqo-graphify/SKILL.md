@@ -23,12 +23,12 @@ Trigger this skill when the user types `/iqoqo-graphify <command>` or when codeb
 
 ## Commands
 
-| Command | Action |
-|---------|--------|
-| `/iqoqo-graphify index` | Full rebuild: `IQOQO_AI_MODE=1 make graphify-index` |
-| `/iqoqo-graphify update` | Incremental: `IQOQO_AI_MODE=1 make graphify-update` |
-| `/iqoqo-graphify query "<question>"` | Query the graph: `.venv/bin/graphify query "<question>"` |
-| `/iqoqo-graphify status` | Show graph stats: `make graphify-status` |
+| Command | Action | CLI Invocation |
+|---------|--------|----------------|
+| `/iqoqo-graphify index` | Full rebuild | `IQOQO_AI_MODE=1 make graphify-index` |
+| `/iqoqo-graphify update` | Incremental | `IQOQO_AI_MODE=1 make graphify-update` |
+| `/iqoqo-graphify query "<question>"` | Query the graph | `.venv/bin/graphify query "<question>"` |
+| `/iqoqo-graphify status` | Show graph stats | `make graphify-status` |
 
 ## Execution Architecture
 
@@ -79,7 +79,7 @@ make graphify-status
 ## Integration with Agent Rules
 
 The `iqoqo-standards.md` rule file contains the agent-facing directive:
-- Agents RECOMMEND using graphify for codebase questions
+- Agents RECOMMEND using `.venv/bin/graphify query` for codebase questions
 - Agents RECOMMEND running sync after commit/push (`make knowledge-sync` or `make graphify-update`)
 - Version-scoped ai-memory is managed automatically
 
