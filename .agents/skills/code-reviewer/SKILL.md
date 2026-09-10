@@ -80,7 +80,7 @@ For each file reviewed, produce a block like:
 
 ### Output Format Per Chunk
 
-Each chunk review is saved as a markdown file in `.context/notes/review/0.7.18/` with this structure:
+Each chunk review is saved as a markdown file in `.context/notes/review/<version>/` (e.g., `.context/notes/review/0.7.18/`) with this structure:
 
 ```markdown
 # Chunk NN: <Layer Name>
@@ -88,6 +88,8 @@ Each chunk review is saved as a markdown file in `.context/notes/review/0.7.18/`
 **Reviewed:** YYYY-MM-DD
 **Files:** N files
 **Summary verdict:** ✅/🟢/🟡/🔴 (worst finding across all files in chunk)
+
+> **Note:** This review incorporates findings from both the Principal Code Reviewer and the Gemini Code Review Partner gem. Key disagreements and complementary findings are documented below. *(Include this note if Gemini review was ingested)*
 
 ## Overview
 
@@ -110,7 +112,30 @@ Each chunk review is saved as a markdown file in `.context/notes/review/0.7.18/`
 
 - [ ] 🔴 [brief description] — `file.py:NN`
 - [ ] 🟡 [brief description] — `file.py:NN`
+
+## Review Comparison: Principal Reviewer vs Gemini *(include if Gemini review ingested)*
+
+### ✅ Where We Agreed
+
+| Finding | Principal | Gemini |
+|---------|-----------|--------|
+| Brief description | Severity & Lens | Reference/Rating |
+
+### 🔴 What Principal Found That Gemini Missed
+
+Detailed explanation of critical bugs, ontology violations, or logic errors caught by Principal but missed or misunderstood by Gemini.
+
+### 🟡 What Gemini Found That Principal Missed
+
+Defensive checks, edge cases, or performance considerations highlighted by Gemini that Principal adopted.
+
+### 📊 Final Verdict Alignment
+
+| File | Principal | Gemini | Final |
+|------|-----------|--------|-------|
+| `path/to/file.py` | Verdict | Verdict | Reconciled Worst Verdict |
 ```
+
 
 
 ## Answering Human Questions
@@ -129,13 +154,19 @@ When the human asks questions about code (via agy, opencode, or Gemini App):
 3. **No fixing:** This is a READ-ONLY review. Do NOT modify code. Findings are logged for a follow-up fix plan.
 4. **Collect, don't act:** All findings are collected into the review markdown. A consolidated fix-plan openspec change will be created after all chunks are complete.
 5. **Knowledge tools first:** Before tracing symbol dependencies or architectural relationships, use the knowledge indexing tools (see below).
+6. **Gemini Gem Review Ingestion:** Before reviewing a chunk, check for prior Gemini review notes:
+   - **Version & Path Resolution:** Determine `$current-version` from `package.json` (e.g., `0.7.18`). Normalize chunk index `$X` to 2 digits (e.g., `8` -> `08`). Locate `.context/notes/review/$current-version/chunk-$X-gem-review.md` (e.g., `.context/notes/review/0.7.18/chunk-08-gem-review.md`), with fallback to unpadded `chunk-$X-gem-review.md`.
+   - **Ingest Before Review:** When informed that a Gemini review exists or the file is present, read and parse the Gemini findings first.
+   - **Verify, Do Not Trust Blindly:** Gemini can hallucinate syntax subtleties (e.g. operator precedence bugs), make invalid library assumptions, or miss repo conventions. Always verify every Gemini claim against actual code using CodeGraph, Graphify, and AST inspection.
+   - **Synthesize & Reconcile:** Identify shared findings, unique catches from each reviewer, and reconcile verdicts to the worst finding across both. Include the comparative section in the final chunk report.
 
 ## Knowledge Tool Integration
 
-The iqoqo project maintains four knowledge graphs that provide different lenses for code review:
+The iqoqo project maintains four knowledge graphs and review artifacts that provide different lenses for code review:
 
-| Tool | Command | Use Case |
+| Tool | Command / Source | Use Case |
 |---|---|---|
+| **Gemini Gem Review** | `.context/notes/review/$current-version/chunk-$X-gem-review.md` | Prior AI review from Gemini Code Review Partner gem for cross-verification & synthesis |
 | **CodeGraph** | `codegraph node <Symbol>` | Symbol definitions, callers/callees, blast radius |
 | | `codegraph impact <Symbol>` | Downstream dependents (routes, models, UI) |
 | | `codegraph affected <file>` | Which tests to run after changes |
@@ -148,10 +179,11 @@ The iqoqo project maintains four knowledge graphs that provide different lenses 
 
 ### Pre-Review Checklist (per chunk)
 
-1. **CodeGraph impact** — For each major symbol in the chunk, run `codegraph impact <Symbol>` to understand blast radius
-2. **Graphify query** — Run `graphify query "<chunk topic>"` to find related nodes across the codebase
-3. **mykg search** — Search for domain entities: `search_nodes` with type filters (e.g., `SecurityVulnerability`, `PlatformLayer`)
-4. **MemPalace search** — Check conversation history for past decisions: `mempalace search "<topic>" --wing iqoqo`
+1. **Gemini Gem review check** — Check for `.context/notes/review/$current-version/chunk-$X-gem-review.md`. Ingest findings, concerns, and flagged files if present
+2. **CodeGraph impact** — For each major symbol in the chunk, run `codegraph impact <Symbol>` to understand blast radius
+3. **Graphify query** — Run `graphify query "<chunk topic>"` to find related nodes across the codebase
+4. **mykg search** — Search for domain entities: `search_nodes` with type filters (e.g., `SecurityVulnerability`, `PlatformLayer`)
+5. **MemPalace search** — Check conversation history for past decisions: `mempalace search "<topic>" --wing iqoqo`
 
 ### During Review
 
