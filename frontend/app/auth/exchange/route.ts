@@ -13,4 +13,5 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-declare module "*.css";
+// frontend/app/auth/exchange/route.ts
+export { GET, POST } from "@/app/api/auth-exchange/route";

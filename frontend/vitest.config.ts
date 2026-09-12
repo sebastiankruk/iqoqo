@@ -41,8 +41,8 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
 
     // Pick up all unit/component test files; exclude e2e/ which is run by Playwright.
-    include: ["__tests__/**/*.test.{ts,tsx}"],
-    exclude: ["__tests__/e2e/**"],
+    include: ["__tests__/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
+    exclude: ["__tests__/e2e/**", "tests/e2e/**"],
 
     coverage: {
       provider: "v8",

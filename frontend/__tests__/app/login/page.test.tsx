@@ -78,15 +78,25 @@ describe("LoginPage", () => {
   });
 
   it("handles successful local login and redirects", async () => {
-    (global.fetch as Mock).mockResolvedValueOnce({
-      ok: true,
-      /**
-       * Mock for json response.
-       *
-       * @returns {Promise<{token: string}>} The mocked json response.
-       */
-      json: async () => ({ token: "mock-jwt-token" }),
-    });
+    (global.fetch as Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        /**
+         * Mock for json response.
+         *
+         * @returns {Promise<{token: string}>} The mocked json response.
+         */
+        json: async () => ({ token: "mock-jwt-token" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        /**
+         * Mock for exchange json response.
+         *
+         * @returns {Promise<{redirectUrl: string}>} The mocked json response.
+         */
+        json: async () => ({ redirectUrl: "/" }),
+      });
 
     renderWithQueryClient(<LoginPage />);
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "test@iqoqo.local" } });

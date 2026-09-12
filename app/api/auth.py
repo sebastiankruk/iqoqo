@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.decorators import admin_required, require_auth
 from app.config import Config
+from app.core.limiter import limiter
 from app.db.models import InstanceSettings, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 
@@ -147,6 +148,7 @@ def google_callback():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def local_login():
     data = request.get_json()
     email = data.get("email")
@@ -166,6 +168,7 @@ def local_login():
 
 
 @auth_bp.route("/register", methods=["POST"])
+@limiter.limit("5 per minute")
 def local_register():
     data = request.get_json()
     email = data.get("email")
@@ -215,8 +218,10 @@ def logout():
         try:
             payload = pyjwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
             jti = payload.get("jti")
+            exp = payload.get("exp")
+            expires_at = datetime.fromtimestamp(exp, UTC) if exp else None
             if jti:
-                db.session.add(TokenBlocklist(jti=jti))
+                db.session.add(TokenBlocklist(jti=jti, expires_at=expires_at))
                 db.session.commit()
         except IntegrityError:
             db.session.rollback()

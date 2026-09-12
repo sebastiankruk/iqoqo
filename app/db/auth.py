@@ -69,11 +69,41 @@ class TokenBlocklist(db.Model):  # type: ignore[name-defined]
     """JWT token revocation blocklist."""
 
     __tablename__ = "token_blocklist"
-    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
+    __table_args__ = (
+        (
+            db.Index("ix_auth_token_blocklist_expires_at", "expires_at"),
+            {"schema": _AUTH},
+        )
+        if _AUTH
+        else (db.Index("ix_auth_token_blocklist_expires_at", "expires_at"),)
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     jti = db.Column(db.String(36), nullable=False, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+    @classmethod
+    def prune_expired(cls) -> int:
+        """Prune tokens where expires_at < now to reclaim database storage."""
+        now = datetime.now(UTC)
+        stmt = db.delete(cls).where(cls.expires_at.is_not(None), cls.expires_at < now)
+        res = db.session.execute(stmt)
+        db.session.commit()
+        count = getattr(res, "rowcount", 0)
+        return int(count) if count is not None else 0
+
+    @classmethod
+    def is_revoked(cls, jti: str | None) -> bool:
+        """Check if a token jti is present in the blocklist using constant-time comparison."""
+        if not jti:
+            return False
+        import hmac
+
+        entry = db.session.execute(db.select(cls).filter_by(jti=jti)).scalar_one_or_none()
+        if entry and entry.jti:
+            return hmac.compare_digest(entry.jti, jti)
+        return False
 
 
 # ---------------------------------------------------------------------------
