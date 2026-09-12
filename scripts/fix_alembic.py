@@ -69,9 +69,9 @@ def fix_alembic_version():
 
         # Reconcile renamed migration revision identifiers and legacy heads
         migration_rename_map = {
-            "f65648a6aaf4": "v0_7_18_baseline",
-            "20260818_add_expansion_links": "v0_7_18_baseline",
-            "20260818_add_expansion_links_and_mechanics": "v0_7_18_baseline",
+            "f65648a6aaf4": "v0_7_17_baseline",
+            "20260818_add_expansion_links": "v0_7_17_baseline",
+            "20260818_add_expansion_links_and_mechanics": "v0_7_17_baseline",
             "20260814_add_comments_column_to_feedback": "20260814_feedback_comments",
             "20260330_add_operation_type_to_llm_telemetry": "20260330_llm_telemetry_op_type",
             "20260331_merge_token_and_telemetry_branches": "20260331_merge_token_telemetry",
@@ -84,26 +84,6 @@ def fix_alembic_version():
             )
             if cur.rowcount > 0:
                 print(f"  Reconciled legacy migration identifier: {old_rev} -> {new_rev}")
-
-        # Ensure config schema exists and instance_settings is moved from catalog if present
-        cur.execute(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'catalog' AND table_name = 'instance_settings');"
-        )
-        if cur.fetchone()[0]:
-            print("  Moving catalog.instance_settings to config schema...")
-            cur.execute("CREATE SCHEMA IF NOT EXISTS config;")
-            cur.execute("ALTER TABLE catalog.instance_settings SET SCHEMA config;")
-
-        # Ensure inventory.items has collection_status column if the table exists
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'inventory' AND table_name = 'items');")
-        if cur.fetchone()[0]:
-            cur.execute("ALTER TABLE inventory.items ADD COLUMN IF NOT EXISTS collection_status VARCHAR(50);")
-
-        # Ensure auth.token_blocklist has expires_at column if the table exists
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'token_blocklist');")
-        if cur.fetchone()[0]:
-            cur.execute("ALTER TABLE auth.token_blocklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;")
-            cur.execute("CREATE INDEX IF NOT EXISTS ix_auth_token_blocklist_expires_at ON auth.token_blocklist (expires_at);")
 
         print("✅ Fix applied successfully!")
 

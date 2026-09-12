@@ -288,22 +288,32 @@ def test_full_migration_integration(app):
 
 
 # ---------------------------------------------------------------------------
-# Consolidated Baseline & Migration Bridge (v0_7_18_baseline)
+# Consolidated Baseline & Incremental Fixes (v0_7_17_baseline -> v0_7_18_fixes)
 # ---------------------------------------------------------------------------
 
 
-def test_v0_7_18_baseline_metadata() -> None:
-    """Verify v0_7_18_baseline migration metadata and linear origin."""
+def test_v0_7_17_baseline_metadata() -> None:
+    """Verify v0_7_17_baseline migration metadata and linear origin."""
     from importlib import import_module
 
-    baseline = import_module("migrations.versions.v0_7_18_baseline")
-    assert baseline.revision == "v0_7_18_baseline"
+    baseline = import_module("migrations.versions.v0_7_17_baseline")
+    assert baseline.revision == "v0_7_17_baseline"
     assert baseline.down_revision is None
     assert len(baseline.revision) <= 32
 
 
+def test_v0_7_18_fixes_metadata() -> None:
+    """Verify v0_7_18_fixes migration metadata and dependency on v0_7_17_baseline."""
+    from importlib import import_module
+
+    fixes = import_module("migrations.versions.v0_7_18_fixes")
+    assert fixes.revision == "v0_7_18_fixes"
+    assert fixes.down_revision == "v0_7_17_baseline"
+    assert len(fixes.revision) <= 32
+
+
 def test_migration_bridge_f65648a6aaf4(app) -> None:
-    """Test automated bridge: database at clean 0.7.17 head f65648a6aaf4 is stamped to v0_7_18_baseline."""
+    """Test automated bridge: database at clean 0.7.17 head f65648a6aaf4 is stamped to v0_7_17_baseline."""
     import sqlalchemy as sa
 
     from app.db import db
@@ -325,18 +335,18 @@ def test_migration_bridge_f65648a6aaf4(app) -> None:
             legacy_heads = {"f65648a6aaf4", "20260818_add_expansion_links", "20260818_add_expansion_links_and_mechanics"}
             if row[0] in legacy_heads:
                 conn.execute(
-                    sa.text("UPDATE alembic_version SET version_num = 'v0_7_18_baseline' WHERE version_num = :old_rev"),
+                    sa.text("UPDATE alembic_version SET version_num = 'v0_7_17_baseline' WHERE version_num = :old_rev"),
                     {"old_rev": row[0]},
                 )
                 conn.commit()
 
-            # Verify stamped to v0_7_18_baseline
+            # Verify stamped to v0_7_17_baseline
             stamped = conn.execute(sa.text("SELECT version_num FROM alembic_version")).fetchone()
-            assert stamped is not None and stamped[0] == "v0_7_18_baseline"
+            assert stamped is not None and stamped[0] == "v0_7_17_baseline"
 
 
 def test_baseline_upgrade_idempotent_on_existing_tables(app) -> None:
-    """Verify v0_7_18_baseline upgrade() does not crash or recreate tables when run on populated database."""
+    """Verify v0_7_17_baseline upgrade() does not crash or recreate tables when run on populated database."""
     from importlib import import_module
     from typing import Any, cast
 
@@ -345,7 +355,7 @@ def test_baseline_upgrade_idempotent_on_existing_tables(app) -> None:
 
     from app.db import db
 
-    baseline = import_module("migrations.versions.v0_7_18_baseline")
+    baseline = import_module("migrations.versions.v0_7_17_baseline")
 
     with app.app_context():
         engine = db.engine
@@ -355,6 +365,29 @@ def test_baseline_upgrade_idempotent_on_existing_tables(app) -> None:
 
             # Running upgrade on already created schema should safely return early
             baseline.upgrade()
+
+
+def test_v0_7_18_fixes_upgrade_and_downgrade(app) -> None:
+    """Verify v0_7_18_fixes upgrade() and downgrade() execute cleanly."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+
+    fixes = import_module("migrations.versions.v0_7_18_fixes")
+
+    with app.app_context():
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, fixes).op = Operations(ctx)
+
+            # Run upgrade and downgrade cycles
+            fixes.upgrade()
+            fixes.downgrade()
 
 
 # ── Alembic DAG & Revision Length Invariants ──────────────────────────
@@ -390,5 +423,7 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    revisions = list(script.walk_revisions())
-    assert len(revisions) > 0, "No revisions found in migration history"
+    assert heads[0] == "v0_7_18_fixes"
+
+    revisions = [rev.revision for rev in script.walk_revisions()]
+    assert revisions == ["v0_7_18_fixes", "v0_7_17_baseline"]

@@ -193,10 +193,6 @@ fi
 
 echo "✅ Database cloned successfully!"
 
-# Post-clone schema reconciliation (safely apply new columns for destination environment)
-echo "🔧 Reconciling schema for destination database..."
-docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB" -c \
-  "ALTER TABLE auth.token_blocklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE; CREATE INDEX IF NOT EXISTS ix_auth_token_blocklist_expires_at ON auth.token_blocklist (expires_at);" || true
 
 # Sync static assets (covers and gallery)
 echo "🖼️ Syncing images (covers and gallery)..."

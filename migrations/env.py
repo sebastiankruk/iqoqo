@@ -126,16 +126,10 @@ def run_migrations_online():
                 legacy_heads = {"f65648a6aaf4", "20260818_add_expansion_links", "20260818_add_expansion_links_and_mechanics"}
                 for row in rows:
                     if row[0] in legacy_heads:
-                        logger.info("Alembic bridge: detected legacy revision %s; stamping v0_7_18_baseline.", row[0])
+                        logger.info("Alembic bridge: detected legacy revision %s; stamping v0_7_17_baseline.", row[0])
                         connection.execute(
-                            sa_text("UPDATE alembic_version SET version_num = 'v0_7_18_baseline' WHERE version_num = :old_rev"),
+                            sa_text("UPDATE alembic_version SET version_num = 'v0_7_17_baseline' WHERE version_num = :old_rev"),
                             {"old_rev": row[0]},
-                        )
-                        connection.execute(
-                            sa_text("ALTER TABLE auth.token_blocklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE")
-                        )
-                        connection.execute(
-                            sa_text("CREATE INDEX IF NOT EXISTS ix_auth_token_blocklist_expires_at ON auth.token_blocklist (expires_at)")
                         )
                         connection.commit()
         except Exception as e:

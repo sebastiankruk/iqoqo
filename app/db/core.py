@@ -64,6 +64,9 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
+#: Allowed statuses for UserWorkIntent (progress statuses plus fulfilled).
+WORK_INTENT_STATUSES: tuple[str, ...] = (*PROGRESS_STATUSES, "fulfilled")
+
 #: Controlled vocabulary for :attr:`Expression.kind`.
 #:
 #: ``live_performance`` — a concert / gig / live-recorded realization of a Work,
@@ -452,7 +455,7 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
         (
             db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
             db.CheckConstraint(
-                f"status IN ({', '.join(repr(s) for s in PROGRESS_STATUSES)})",
+                f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
                 name="ck_user_work_intents_status",
             ),
             {"schema": _INVENTORY},
@@ -461,7 +464,7 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
         else (
             db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
             db.CheckConstraint(
-                f"status IN ({', '.join(repr(s) for s in PROGRESS_STATUSES)})",
+                f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
                 name="ck_user_work_intents_status",
             ),
         )

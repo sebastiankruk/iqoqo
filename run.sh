@@ -730,9 +730,9 @@ except Exception:
     fi
 
     if [ "$CURRENT_MIGRATION" = "f65648a6aaf4" ]; then
-        echo "🌉 Clean v0.7.17 head detected ($CURRENT_MIGRATION). Upgrading bridge to ${EXPECTED_VERSION:-v0_7_18_baseline}..."
-        $COMPOSE_BASE exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -c "UPDATE alembic_version SET version_num = '${EXPECTED_VERSION:-v0_7_18_baseline}' WHERE version_num = 'f65648a6aaf4';" 2>/dev/null || true
-        CURRENT_MIGRATION="${EXPECTED_VERSION:-v0_7_18_baseline}"
+        echo "🌉 Clean v0.7.17 head detected ($CURRENT_MIGRATION). Upgrading bridge to v0_7_17_baseline..."
+        $COMPOSE_BASE exec -T db psql -U "${POSTGRES_USER:-iqoqo}" -d "${POSTGRES_DB:-iqoqo}" -c "UPDATE alembic_version SET version_num = 'v0_7_17_baseline' WHERE version_num = 'f65648a6aaf4';" 2>/dev/null || true
+        CURRENT_MIGRATION="v0_7_17_baseline"
     fi
 
     if [ -n "$CURRENT_MIGRATION" ] && [ -n "$EXPECTED_VERSION" ]; then
