@@ -42,3 +42,12 @@ teardown() {
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Error: Destination directory" ]]
 }
+
+@test "clone.sh accepts --skip-upgrade as 5th argument and validates directories" {
+  local src_dir="${TEST_TEMP_DIR}/src"
+  mkdir -p "${src_dir}"
+  run bash scripts/clone.sh "${src_dir}" prod "/nonexistent/dst" preview --skip-upgrade
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Error: Destination directory" ]]
+}
+
