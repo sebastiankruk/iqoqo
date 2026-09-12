@@ -99,6 +99,12 @@ def fix_alembic_version():
         if cur.fetchone()[0]:
             cur.execute("ALTER TABLE inventory.items ADD COLUMN IF NOT EXISTS collection_status VARCHAR(50);")
 
+        # Ensure auth.token_blocklist has expires_at column if the table exists
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'token_blocklist');")
+        if cur.fetchone()[0]:
+            cur.execute("ALTER TABLE auth.token_blocklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;")
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_auth_token_blocklist_expires_at ON auth.token_blocklist (expires_at);")
+
         print("✅ Fix applied successfully!")
 
         cur.close()
