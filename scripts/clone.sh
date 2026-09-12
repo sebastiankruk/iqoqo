@@ -29,11 +29,6 @@ SRC_NAME="$2"
 DST_DIR="$3"
 DST_NAME="$4"
 SRC_HOST="${5:-}"
-SKIP_UPGRADE="${SKIP_UPGRADE:-false}"
-if [ "$SRC_HOST" = "--skip-upgrade" ]; then
-    SRC_HOST=""
-    SKIP_UPGRADE="true"
-fi
 
 # Validate directories
 if [ -n "$SRC_HOST" ]; then
@@ -237,54 +232,5 @@ done
 # Ensure destination directories have write permissions for non-root container user (appuser UID 10001)
 echo "🔑 Ensuring write permissions for application container on static assets and exports..."
 chmod -R a+rwX "${DST_DIR}/app/static" "${DST_DIR}/exports" 2>/dev/null || true
-
-# Reconcile database schema and refresh destination application containers
-if [ "${SKIP_UPGRADE}" = "true" ]; then
-    echo "⏭️ Skipping post-clone schema migration (SKIP_UPGRADE is true)."
-else
-    echo "🔍 Checking destination application container status..."
-    DST_WEB_RUNNING=$(
-        cd "$DST_DIR"
-        export ENV_FILE=".env.${DST_NAME}"
-        docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" ps --status running -q web 2>/dev/null || true
-    )
-
-    if [ -n "$DST_WEB_RUNNING" ]; then
-        DST_WORKER_RUNNING=$(
-            cd "$DST_DIR"
-            export ENV_FILE=".env.${DST_NAME}"
-            docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" ps --status running -q worker 2>/dev/null || true
-        )
-        RESTART_SVCS="web"
-        if [ -n "$DST_WORKER_RUNNING" ]; then
-            RESTART_SVCS="web worker"
-        fi
-
-        echo "🔄 Destination web service is running. Restarting $RESTART_SVCS to apply schema migrations and refresh connection pools..."
-        (
-            cd "$DST_DIR"
-            export ENV_FILE=".env.${DST_NAME}"
-            if [ -f "docker-compose.prebuilt.yml" ]; then
-                docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" -f docker-compose.prebuilt.yml restart $RESTART_SVCS
-            else
-                docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" restart $RESTART_SVCS
-            fi
-        )
-        echo "✅ Destination services restarted; migrations applied."
-    else
-        echo "📦 Destination web service is not running. Applying schema migrations to destination database..."
-        (
-            cd "$DST_DIR"
-            export ENV_FILE=".env.${DST_NAME}"
-            if [ -f "docker-compose.prebuilt.yml" ]; then
-                docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" -f docker-compose.prebuilt.yml run --rm --no-deps web sh -c \
-                    "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py"
-            else
-                docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" run --rm --no-deps web sh -c \
-                    "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py"
-            fi
-        ) || echo "ℹ️ Note: Migrations will execute automatically when web service is started."
-    fi
-fi
 
 echo "🎉 Data clone complete from '$SRC_NAME' to '$DST_NAME'!"
