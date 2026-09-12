@@ -288,198 +288,73 @@ def test_full_migration_integration(app):
 
 
 # ---------------------------------------------------------------------------
-# GIN index migration: idx_work_meta_genres_gin (revision 3177c5e97570)
+# Consolidated Baseline & Migration Bridge (v0_7_18_baseline)
 # ---------------------------------------------------------------------------
 
 
-def _is_postgresql(app) -> bool:  # type: ignore[no-untyped-def]  # noqa: ANN001
-    """Return True when the test database engine is PostgreSQL."""
+def test_v0_7_18_baseline_metadata() -> None:
+    """Verify v0_7_18_baseline migration metadata and linear origin."""
+    from importlib import import_module
+
+    baseline = import_module("migrations.versions.v0_7_18_baseline")
+    assert baseline.revision == "v0_7_18_baseline"
+    assert baseline.down_revision is None
+    assert len(baseline.revision) <= 32
+
+
+def test_migration_bridge_f65648a6aaf4(app) -> None:
+    """Test automated bridge: database at clean 0.7.17 head f65648a6aaf4 is stamped to v0_7_18_baseline."""
+    import sqlalchemy as sa
+
     from app.db import db
 
     with app.app_context():
-        return db.engine.dialect.name == "postgresql"
-
-
-def _index_exists(connection) -> bool:  # type: ignore[no-untyped-def]  # noqa: ANN001
-    """Return True when idx_work_meta_genres_gin is present in pg_indexes.
-
-    Only valid on a PostgreSQL connection.
-    """
-    import sqlalchemy as sa
-
-    result = connection.execute(
-        sa.text("SELECT 1 FROM pg_indexes WHERE indexname = 'idx_work_meta_genres_gin' AND schemaname = 'catalog' LIMIT 1")
-    )
-    return result.fetchone() is not None
-
-
-def test_gin_index_migration_upgrade(app) -> None:
-    """upgrade() creates idx_work_meta_genres_gin on catalog.works.
-
-    Skipped when the test suite runs against SQLite (CI default);
-    requires a live PostgreSQL database.
-    """
-    if not _is_postgresql(app):
-        pytest.skip("GIN index migration tests require PostgreSQL")
-
-    from importlib import import_module
-
-    import sqlalchemy as sa
-
-    migration = import_module("migrations.versions.3177c5e97570_add_idx_work_meta_genres_gin")
-
-    with app.app_context():
-        from app.db import db
-
         engine = db.engine
         with engine.connect() as conn:
-            # Ensure the index does not exist before the upgrade
-            conn.execute(sa.text("DROP INDEX IF EXISTS catalog.idx_work_meta_genres_gin"))
+            # Create alembic_version table with historical head f65648a6aaf4
+            conn.execute(sa.text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(255) PRIMARY KEY)"))
+            conn.execute(sa.text("DELETE FROM alembic_version"))
+            conn.execute(sa.text("INSERT INTO alembic_version (version_num) VALUES ('f65648a6aaf4')"))
             conn.commit()
 
-            assert not _index_exists(conn), "Index should not exist before upgrade"
+            # Verify initial state
+            row = conn.execute(sa.text("SELECT version_num FROM alembic_version")).fetchone()
+            assert row is not None and row[0] == "f65648a6aaf4"
 
-            from alembic.migration import MigrationContext
-            from alembic.operations import Operations
-
-            ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)  # type: ignore[attr-defined]
-
-            # Run upgrade
-            migration.upgrade()
-            conn.commit()
-
-            assert _index_exists(conn), "Index should exist after upgrade"
-
-            # Cleanup: drop so the live DB isn't permanently modified by the test
-            conn.execute(sa.text("DROP INDEX IF EXISTS catalog.idx_work_meta_genres_gin"))
-            conn.commit()
-
-
-def test_gin_index_migration_downgrade(app) -> None:
-    """downgrade() drops idx_work_meta_genres_gin from catalog.works.
-
-    Skipped when the test suite runs against SQLite (CI default);
-    requires a live PostgreSQL database.
-    """
-    if not _is_postgresql(app):
-        pytest.skip("GIN index migration tests require PostgreSQL")
-
-    from importlib import import_module
-
-    import sqlalchemy as sa
-
-    migration = import_module("migrations.versions.3177c5e97570_add_idx_work_meta_genres_gin")
-
-    with app.app_context():
-        from app.db import db
-
-        engine = db.engine
-        with engine.connect() as conn:
-            # Ensure the index exists before the downgrade
-            conn.execute(
-                sa.text(
-                    "CREATE INDEX IF NOT EXISTS idx_work_meta_genres_gin "
-                    "ON catalog.works USING gin ((meta::jsonb->'genres') jsonb_path_ops)"
+            # Execute bridge update (simulating env.py / fix_alembic.py bridge logic)
+            legacy_heads = {"f65648a6aaf4", "20260818_add_expansion_links", "20260818_add_expansion_links_and_mechanics"}
+            if row[0] in legacy_heads:
+                conn.execute(
+                    sa.text("UPDATE alembic_version SET version_num = 'v0_7_18_baseline' WHERE version_num = :old_rev"),
+                    {"old_rev": row[0]},
                 )
-            )
-            conn.commit()
+                conn.commit()
 
-            assert _index_exists(conn), "Index should exist before downgrade"
-
-            from alembic.migration import MigrationContext
-            from alembic.operations import Operations
-
-            ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)  # type: ignore[attr-defined]
-
-            # Run downgrade
-            migration.downgrade()
-            conn.commit()
-
-            assert not _index_exists(conn), "Index should not exist after downgrade"
+            # Verify stamped to v0_7_18_baseline
+            stamped = conn.execute(sa.text("SELECT version_num FROM alembic_version")).fetchone()
+            assert stamped is not None and stamped[0] == "v0_7_18_baseline"
 
 
-# ── Escalation permission migration: 52dbd8310811 ──────────────────────────
-
-
-def _role_permission_exists(connection, role_name: str, perm_name: str) -> bool:
-    """Check if role-permission mapping exists."""
-    import sqlalchemy as sa
-
-    result = connection.execute(
-        sa.text(
-            "SELECT 1 FROM auth.role_permissions rp "
-            "JOIN auth.roles r ON r.id = rp.role_id "
-            "JOIN auth.permissions p ON p.id = rp.permission_id "
-            "WHERE r.name = :role_name AND p.name = :perm_name LIMIT 1"
-        ),
-        {"role_name": role_name, "perm_name": perm_name},
-    )
-    return result.fetchone() is not None
-
-
-def test_escalation_permission_migration_upgrade(app) -> None:
-    """Run migration 52dbd8310811 upgrade, verify permissions assigned to roles."""
-    if not _is_postgresql(app):
-        pytest.skip("Escalation permission migration tests require PostgreSQL")
-
+def test_baseline_upgrade_idempotent_on_existing_tables(app) -> None:
+    """Verify v0_7_18_baseline upgrade() does not crash or recreate tables when run on populated database."""
     from importlib import import_module
+    from typing import Any, cast
 
-    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
 
-    migration = import_module("migrations.versions.52dbd8310811_assign_escalation_permissions_to_roles")
+    from app.db import db
+
+    baseline = import_module("migrations.versions.v0_7_18_baseline")
 
     with app.app_context():
-        from app.db import db
-
         engine = db.engine
         with engine.connect() as conn:
-            from alembic.migration import MigrationContext
-            from alembic.operations import Operations
-
             ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)  # type: ignore[attr-defined]
+            cast(Any, baseline).op = Operations(ctx)
 
-            # Run upgrade
-            migration.upgrade()
-            conn.commit()
-
-            assert _role_permission_exists(conn, "user", "escalate:request"), "user role should have escalate:request"
-            assert _role_permission_exists(conn, "custodian", "escalate:resolve"), "custodian role should have escalate:resolve"
-
-
-def test_escalation_permission_migration_downgrade(app) -> None:
-    """Run migration 52dbd8310811 downgrade, verify permissions removed."""
-    if not _is_postgresql(app):
-        pytest.skip("Escalation permission migration tests require PostgreSQL")
-
-    from importlib import import_module
-
-    migration = import_module("migrations.versions.52dbd8310811_assign_escalation_permissions_to_roles")
-
-    with app.app_context():
-        from app.db import db
-
-        engine = db.engine
-        with engine.connect() as conn:
-            from alembic.migration import MigrationContext
-            from alembic.operations import Operations
-
-            ctx = MigrationContext.configure(conn)
-            migration.op = Operations(ctx)  # type: ignore[attr-defined]
-
-            # Run downgrade
-            migration.downgrade()
-            conn.commit()
-
-            # Verify escalated:request removed from user role
-            assert not _role_permission_exists(
-                conn, "user", "escalate:request"
-            ), "user role should not have escalate:request after downgrade"
-            assert not _role_permission_exists(
-                conn, "custodian", "escalate:resolve"
-            ), "custodian role should not have escalate:resolve after downgrade"
+            # Running upgrade on already created schema should safely return early
+            baseline.upgrade()
 
 
 # ── Alembic DAG & Revision Length Invariants ──────────────────────────

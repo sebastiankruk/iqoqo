@@ -67,7 +67,7 @@ def init_database(seed_file: Path | None = None, reset: bool = False):
         if db.engine.dialect.name == "postgresql":
             from sqlalchemy import text
 
-            for schema_name in ("auth", "catalog", "inventory", "social"):
+            for schema_name in ("auth", "catalog", "inventory", "social", "config"):
                 db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
             db.session.commit()
 
