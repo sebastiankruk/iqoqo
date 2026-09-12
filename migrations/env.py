@@ -131,14 +131,20 @@ def run_migrations_online():
                             sa_text("UPDATE alembic_version SET version_num = 'v0_7_17_baseline' WHERE version_num = :old_rev"),
                             {"old_rev": row[0]},
                         )
-                        connection.commit()
+                if connection.in_transaction():
+                    connection.commit()
         except Exception as e:
             logger.warning("Could not execute Alembic upgrade bridge: %s", e)
+            if connection.in_transaction():
+                connection.rollback()
 
         context.configure(connection=connection, target_metadata=target_metadata, **conf_args)
 
         with context.begin_transaction():
             context.run_migrations()
+
+        if connection.in_transaction():
+            connection.commit()
 
 
 if context.is_offline_mode():
