@@ -319,3 +319,42 @@ def test_admin_settings_update(client, app, admin_headers):
         setting = InstanceSettings.query.filter_by(key="instance_name").first()
         assert setting is not None
         assert setting.value == "Test Federation Library"
+
+
+def test_sensitive_settings_encrypted_at_rest(client, app, admin_headers):
+    """Ensure sensitive API keys and token data are encrypted at rest and decrypted on read."""
+    payload = {
+        "OPENAI_API_KEY": "sk-real-secret-key-12345678",
+        "ALLEGRO_TOKEN_DATA": {"access_token": "token-xyz-123", "refresh_token": "refresh-abc"},
+        "instance_name": "Open Library",
+    }
+    res = client.put("/api/v1/admin/settings", json=payload, headers=admin_headers)
+    assert res.status_code == 200
+
+    with app.app_context():
+        # 1. Non-sensitive setting stored plaintext
+        name_setting = InstanceSettings.query.filter_by(key="instance_name").first()
+        assert name_setting is not None
+        assert name_setting.value == "Open Library"
+
+        # 2. Sensitive key stored as encrypted envelope
+        key_setting = InstanceSettings.query.filter_by(key="OPENAI_API_KEY").first()
+        assert key_setting is not None
+        assert isinstance(key_setting.value, dict)
+        assert key_setting.value.get("_encrypted") is True
+        assert "ciphertext" in key_setting.value
+        assert "sk-real-secret-key-12345678" not in json.dumps(key_setting.value)
+
+        # 3. Sensitive token dict stored encrypted
+        token_setting = InstanceSettings.query.filter_by(key="ALLEGRO_TOKEN_DATA").first()
+        assert token_setting is not None
+        assert isinstance(token_setting.value, dict)
+        assert token_setting.value.get("_encrypted") is True
+        assert "token-xyz-123" not in json.dumps(token_setting.value)
+
+        # 4. InstanceSettings.get_value transparently decrypts
+        assert InstanceSettings.get_value("OPENAI_API_KEY") == "sk-real-secret-key-12345678"
+        token_val = InstanceSettings.get_value("ALLEGRO_TOKEN_DATA")
+        assert isinstance(token_val, dict)
+        assert token_val["access_token"] == "token-xyz-123"
+        assert token_val["refresh_token"] == "refresh-abc"

@@ -220,7 +220,7 @@ export async function updateInstanceSettings(
  * @returns The unmasked value
  */
 export async function revealSettingValue(key: string): Promise<{ value: string }> {
-  const res = await apiClient.get<ApiResponse<{ value: string }>>(`/v1/admin/settings/reveal?key=${key}`);
+  const res = await apiClient.post<ApiResponse<{ value: string }>>(`/v1/admin/settings/reveal`, { key });
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to reveal setting");
   }

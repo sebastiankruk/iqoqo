@@ -87,3 +87,45 @@ def test_protected_route_without_token(client):
     response = client.delete("/api/items/1")
     assert response.status_code == 401
     assert b"Token missing" in response.data
+
+
+def test_token_blocklist_expires_at_and_pruning(client, app):
+    """Ensure TokenBlocklist records expires_at on logout and prune_expired cleans up old entries."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import TokenBlocklist
+
+    # Register and login to obtain token
+    client.post("/api/auth/register", json={"email": "logout_exp@iqoqo.local", "password": "mypassword"})
+    login_res = client.post("/api/auth/login", json={"email": "logout_exp@iqoqo.local", "password": "mypassword"})
+    token = json.loads(login_res.data)["token"]
+
+    # Logout
+    client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token}"})
+
+    with app.app_context():
+        # Check that token was recorded with expires_at
+        entry = TokenBlocklist.query.first()
+        assert entry is not None
+        assert entry.expires_at is not None
+        exp_dt = entry.expires_at if entry.expires_at.tzinfo else entry.expires_at.replace(tzinfo=UTC)
+        assert exp_dt > datetime.now(UTC)
+
+        # Verify constant-time revocation check
+        assert TokenBlocklist.is_revoked(entry.jti) is True
+        assert TokenBlocklist.is_revoked("unknown-jti") is False
+        assert TokenBlocklist.is_revoked(None) is False
+
+        # Add an expired entry
+        past_time = datetime.now(UTC) - timedelta(hours=1)
+        expired_entry = TokenBlocklist(jti="expired-jti-12345", expires_at=past_time)
+        db.session.add(expired_entry)
+        db.session.commit()
+
+        # Prune expired tokens
+        deleted_count = TokenBlocklist.prune_expired()
+        assert deleted_count >= 1
+
+        # Expired token was deleted, valid token remains
+        assert TokenBlocklist.query.filter_by(jti="expired-jti-12345").first() is None
+        assert TokenBlocklist.query.filter_by(jti=entry.jti).first() is not None

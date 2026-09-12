@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import hmac
 import json
 import os
 from io import BytesIO
@@ -99,7 +100,7 @@ def health_check():
         deploy_token = request.headers.get("X-Deploy-Token")
         expected_token = getattr(Config, "DEPLOY_TOKEN", None) or os.environ.get("DEPLOY_TOKEN")
 
-        if not deploy_token or not expected_token or deploy_token != expected_token:
+        if not deploy_token or not expected_token or not hmac.compare_digest(deploy_token, expected_token):
             return jsonify({"error": "Unauthorized to perform drift check", "code": 401}), 401
 
         drift_info = DataManager.verify_column_meta_drift()
