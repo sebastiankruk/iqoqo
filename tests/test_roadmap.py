@@ -132,6 +132,34 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
     assert reorder_roadmap is not None
     assert [item["id"] for item in reorder_roadmap["items"]] == [item3_id, item1_id, item2_id]
 
+    # Move item 3 back to position 3 (shift down)
+    response_down = client.patch(
+        f"/api/v1/roadmaps/items/{item3_id}/position",
+        json={"position": 3},
+        headers=normal_user_headers,
+    )
+    assert response_down.status_code == 200
+
+    with app.app_context():
+        i1 = db.session.get(RoadmapItem, item1_id)
+        i2 = db.session.get(RoadmapItem, item2_id)
+        i3 = db.session.get(RoadmapItem, item3_id)
+
+        assert i1 is not None
+        assert i2 is not None
+        assert i3 is not None
+        assert i1.position == 1
+        assert i2.position == 2
+        assert i3.position == 3
+
+    # Move item 1 to same position 1 (no-op)
+    response_noop = client.patch(
+        f"/api/v1/roadmaps/items/{item1_id}/position",
+        json={"position": 1},
+        headers=normal_user_headers,
+    )
+    assert response_noop.status_code == 200
+
 
 def test_roadmap_cascade_deletion(app) -> None:
     """Verify that deleting a roadmap correctly purges all child items from the database."""

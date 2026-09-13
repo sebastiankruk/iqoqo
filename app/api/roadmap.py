@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from flask import Blueprint, Response, g, jsonify, request
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import require_auth
@@ -157,20 +157,38 @@ def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
         except (ValueError, TypeError):
             return jsonify({"error": "Position must be a valid integer greater than or equal to 1", "code": 400}), 400
 
-        items_stmt = select(RoadmapItem).filter(RoadmapItem.roadmap_id == item.roadmap_id).order_by(RoadmapItem.position)
-        items = list(db.session.scalars(items_stmt).all())
+        count_stmt = select(func.count()).where(RoadmapItem.roadmap_id == item.roadmap_id)  # pylint: disable=not-callable
+        total_items = db.session.scalar(count_stmt) or 1
+        target_position = max(1, min(new_position, total_items))
 
-        if item in items:
-            items.remove(item)
+        old_position = item.position
+        if old_position != target_position:
+            if old_position > target_position:
+                # Moving item up (e.g. from 5 to 2): shift items in [target, old - 1] by +1
+                db.session.execute(
+                    update(RoadmapItem)
+                    .where(
+                        RoadmapItem.roadmap_id == item.roadmap_id,
+                        RoadmapItem.position >= target_position,
+                        RoadmapItem.position < old_position,
+                    )
+                    .values(position=RoadmapItem.position + 1)
+                )
+            else:
+                # Moving item down (e.g. from 2 to 5): shift items in [old + 1, target] by -1
+                db.session.execute(
+                    update(RoadmapItem)
+                    .where(
+                        RoadmapItem.roadmap_id == item.roadmap_id,
+                        RoadmapItem.position <= target_position,
+                        RoadmapItem.position > old_position,
+                    )
+                    .values(position=RoadmapItem.position - 1)
+                )
 
-        # Insert at the 0-indexed position (new_position - 1)
-        target_idx = max(0, min(new_position - 1, len(items)))
-        items.insert(target_idx, item)
+            item.position = target_position
+            db.session.commit()
 
-        for idx, node in enumerate(items):
-            node.position = idx + 1
-
-        db.session.commit()
         return jsonify({"success": True}), 200
     except SQLAlchemyError as e:
         logger.error("Error reordering roadmap item: %s", e)
