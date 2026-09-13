@@ -94,3 +94,47 @@ def test_video_lookup_strategy():
             assert result["title"] == "The Matrix"
             assert provider == "tmdb"
             assert result.get("data_source") == "tmdb"
+
+
+def test_default_fallback_strategy_isbn_13():
+    """DefaultFallbackStrategy prioritizes ISBN lookup for 13-digit 978/979 barcodes."""
+    from app.strategies.default import DefaultFallbackStrategy
+
+    strategy = DefaultFallbackStrategy()
+    with patch("app.strategies.default.fetch_isbn_metadata") as mock_isbn:
+        mock_isbn.return_value = {"title": "Neuromancer", "Source": "google_books"}
+        result, provider = strategy.lookup("9780441569595")
+        assert result is not None
+        assert provider == "isbn"
+        assert result["title"] == "Neuromancer"
+        mock_isbn.assert_called_once()
+
+
+def test_default_fallback_strategy_isbn_10():
+    """DefaultFallbackStrategy recognizes valid 10-digit ISBNs."""
+    from app.strategies.default import DefaultFallbackStrategy
+
+    strategy = DefaultFallbackStrategy()
+    with patch("app.strategies.default.fetch_isbn_metadata") as mock_isbn:
+        mock_isbn.return_value = {"title": "Neuromancer", "Source": "google_books"}
+        result, provider = strategy.lookup("0441569595")
+        assert result is not None
+        assert provider == "isbn"
+        mock_isbn.assert_called_once()
+
+
+def test_default_fallback_strategy_non_isbn_10_char():
+    """DefaultFallbackStrategy does not falsely fast-path arbitrary 10-character barcodes as ISBN."""
+    from app.strategies.default import DefaultFallbackStrategy
+
+    strategy = DefaultFallbackStrategy()
+    with (
+        patch("app.strategies.default.fetch_isbn_metadata") as mock_isbn,
+        patch("app.strategies.default.fetch_discogs_metadata") as mock_discogs,
+    ):
+        mock_discogs.return_value = {"title": "Discovery", "data_source": "discogs"}
+        result, provider = strategy.lookup("ABCDEFGHIJ")
+        # Should not have called ISBN fetcher
+        mock_isbn.assert_not_called()
+        assert result is not None
+        assert provider == "discogs"
