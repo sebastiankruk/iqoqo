@@ -364,8 +364,8 @@ def test_get_items_multi_status_filter(client, app):
         items = [
             Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="reading", collection_status="wish_list", meta={}),
             Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="wish_list", collection_status="wish_list", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", collection_status="my_collection", meta={}),
-            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", collection_status="my_collection", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="available", collection_status="available", meta={}),
+            Item(manifestation_id=manifestation.id, owner_id=test_user.id, status="read", collection_status="available", meta={}),
         ]
         db.session.add_all(items)
         db.session.commit()
