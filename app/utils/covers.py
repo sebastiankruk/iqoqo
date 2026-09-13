@@ -268,7 +268,7 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
             # 2. Google Books (Search -> Thumbnail)
             gb_search = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn_for_lookup}"
             try:
-                with requests.get(gb_search, timeout=5) as gb_res:
+                with safe_get(gb_search, timeout=5) as gb_res:
                     if gb_res.status_code == 200:
                         gb_data = gb_res.json()
                         if "items" in gb_data:
@@ -283,7 +283,7 @@ def fetch_external_api_cover(identifier: str, isbn: str | None = None) -> tuple[
                                 # Fallback to original (zoom=1) if high-res failed validation
                                 if not res and thumb_high_res != thumb:
                                     res = download_direct_url(identifier, thumb, "api_google_books", suffix="gb")
-            except (requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
+            except (SSRFError, requests.RequestException, OSError, ValueError, TypeError, KeyError, IndexError):
                 pass
     else:
         logger.debug("Skipping External Bibliographic APIs (OpenLibrary/GoogleBooks) for non-ISBN identifier: %s", identifier)
@@ -344,18 +344,18 @@ def _fetch_musicbrainz_cover(barcode: str) -> tuple[str, str] | None:
     """Query MusicBrainz by barcode, download front cover from Cover Art Archive."""
     url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
     try:
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "iqoqo/0.7.1 ( dev@kruk.me )"})
-        if resp.status_code != 200:
-            return None
-        releases = resp.json().get("releases", [])
-        if not releases:
-            return None
-        release_id = releases[0].get("id")
-        if not release_id:
-            return None
-        cover_url = f"https://coverartarchive.org/release/{release_id}/front"
-        return download_direct_url(barcode, cover_url, "api_musicbrainz", suffix="mb")
-    except (requests.RequestException, ValueError, KeyError) as e:
+        with safe_get(url, timeout=10, headers={"User-Agent": "iqoqo/0.7.1 ( dev@kruk.me )"}) as resp:
+            if resp.status_code != 200:
+                return None
+            releases = resp.json().get("releases", [])
+            if not releases:
+                return None
+            release_id = releases[0].get("id")
+            if not release_id:
+                return None
+            cover_url = f"https://coverartarchive.org/release/{release_id}/front"
+            return download_direct_url(barcode, cover_url, "api_musicbrainz", suffix="mb")
+    except (SSRFError, requests.RequestException, ValueError, KeyError) as e:
         logger.error("MusicBrainz cover lookup failed for %s: %s", barcode, e)
         return None
 
