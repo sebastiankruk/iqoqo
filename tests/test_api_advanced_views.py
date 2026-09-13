@@ -89,7 +89,7 @@ def user_scoped_taxonomy_data(app):
         m_a = Manifestation(expression_id=e_a.id, publisher="HarperCollins", meta={"format": MediaFormat.BOOK})
         db.session.add(m_a)
         db.session.flush()
-        i_a = Item(manifestation_id=m_a.id, owner_id=user_a.id, status="owned")
+        i_a = Item(manifestation_id=m_a.id, owner_id=user_a.id, status="available")
         db.session.add(i_a)
         db.session.flush()
 
@@ -115,7 +115,7 @@ def user_scoped_taxonomy_data(app):
         m_b = Manifestation(expression_id=e_b.id, publisher="Penguin", meta={"format": MediaFormat.BOOK})
         db.session.add(m_b)
         db.session.flush()
-        i_b = Item(manifestation_id=m_b.id, owner_id=user_b.id, status="owned")
+        i_b = Item(manifestation_id=m_b.id, owner_id=user_b.id, status="available")
         db.session.add(i_b)
         db.session.flush()
 
@@ -543,8 +543,8 @@ def test_taxonomy_filtering_across_endpoints(client: FlaskClient, app: Flask) ->
         db.session.flush()
 
         # Items
-        i1 = Item(manifestation_id=m1.id, owner_id=user_id, status="owned")
-        i2 = Item(manifestation_id=m2.id, owner_id=user_id, status="owned")
+        i1 = Item(manifestation_id=m1.id, owner_id=user_id, status="available")
+        i2 = Item(manifestation_id=m2.id, owner_id=user_id, status="available")
         db.session.add_all([i1, i2])
         db.session.flush()
 
@@ -746,8 +746,8 @@ def test_taxonomy_filtering_case_insensitive(client: FlaskClient, app: Flask) ->
         db.session.add_all([m1, m2])
         db.session.flush()
 
-        i1 = Item(manifestation_id=m1.id, owner_id=user_id, status="owned")
-        i2 = Item(manifestation_id=m2.id, owner_id=user_id, status="owned")
+        i1 = Item(manifestation_id=m1.id, owner_id=user_id, status="available")
+        i2 = Item(manifestation_id=m2.id, owner_id=user_id, status="available")
         db.session.add_all([i1, i2])
         db.session.flush()
 
@@ -863,7 +863,7 @@ def test_global_catalog_visibility_unowned_items(client, app):
         db.session.add(m_owned)
         db.session.flush()
 
-        i_owned = Item(manifestation_id=m_owned.id, owner_id=user_id, status="owned")
+        i_owned = Item(manifestation_id=m_owned.id, owner_id=user_id, status="available")
         db.session.add(i_owned)
 
         db.session.commit()

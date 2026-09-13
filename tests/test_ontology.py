@@ -171,3 +171,64 @@ def test_scan_formats_validity() -> None:
 def test_item_status_python_values_non_empty(status: str) -> None:
     """Each status in ITEM_STATUSES must be a non-empty string."""
     assert isinstance(status, str) and status.strip(), f"ITEM_STATUSES contains an invalid entry: {status!r}"
+
+
+def test_model_check_constraints_defined() -> None:
+    """Verify that domain models define DB check constraints on status and visibility."""
+    from sqlalchemy import CheckConstraint
+
+    from app.db.auth import User
+    from app.db.core import Item, UserWorkIntent
+    from app.db.lending import LoanRequest
+
+    item_ck_names = {c.name for c in Item.__table__.constraints if isinstance(c, CheckConstraint)}
+    assert "ck_items_status" in item_ck_names
+    assert "ck_items_collection_status" in item_ck_names
+
+    intent_ck_names = {c.name for c in UserWorkIntent.__table__.constraints if isinstance(c, CheckConstraint)}
+    assert "ck_user_work_intents_status" in intent_ck_names
+
+    user_ck_names = {c.name for c in User.__table__.constraints if isinstance(c, CheckConstraint)}
+    assert "ck_users_visibility" in user_ck_names
+
+    loan_ck_names = {c.name for c in LoanRequest.__table__.constraints if isinstance(c, CheckConstraint)}
+    assert "ck_loan_requests_status" in loan_ck_names
+
+
+def test_optional_foreign_keys_ondelete_set_null() -> None:
+    """Verify that optional foreign keys declare ondelete='SET NULL'."""
+    from app.db.core import Item, ItemCustodyEvent, ItemTag, UserCollection
+    from app.db.roadmap import RoadmapItem
+    from app.db.settings import ScanTelemetry
+
+    # Item.lent_to_user_id
+    lent_fk = next(fk for fk in Item.__table__.foreign_keys if fk.parent.name == "lent_to_user_id")
+    assert lent_fk.ondelete == "SET NULL"
+
+    # UserCollection.parent_id
+    parent_fk = next(fk for fk in UserCollection.__table__.foreign_keys if fk.parent.name == "parent_id")
+    assert parent_fk.ondelete == "SET NULL"
+
+    # ItemTag.added_by_id
+    tag_fk = next(fk for fk in ItemTag.__table__.foreign_keys if fk.parent.name == "added_by_id")
+    assert tag_fk.ondelete == "SET NULL"
+
+    # ItemCustodyEvent.actor_id
+    custody_fk = next(fk for fk in ItemCustodyEvent.__table__.foreign_keys if fk.parent.name == "actor_id")
+    assert custody_fk.ondelete == "SET NULL"
+
+    # EntityAuditLog.actor_id
+    from app.db.core import EntityAuditLog
+
+    audit_fk = next(fk for fk in EntityAuditLog.__table__.foreign_keys if fk.parent.name == "actor_id")
+    assert audit_fk.ondelete == "SET NULL"
+
+    # ScanTelemetry.manifestation_id
+    scan_fk = next(fk for fk in ScanTelemetry.__table__.foreign_keys if fk.parent.name == "manifestation_id")
+    assert scan_fk.ondelete == "SET NULL"
+
+    # RoadmapItem.work_id & manifestation_id
+    roadmap_work_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == "work_id")
+    assert roadmap_work_fk.ondelete == "SET NULL"
+    roadmap_manif_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == "manifestation_id")
+    assert roadmap_manif_fk.ondelete == "SET NULL"

@@ -51,7 +51,7 @@ def get_url():
 
 def include_object(object, name, type_, reflected, compare_to):
     # Allow tables in the specific schemas managed by iqoqo
-    allowed_schemas = ["public", "catalog", "inventory", "auth", "social"]
+    allowed_schemas = ["public", "catalog", "inventory", "auth", "social", "config"]
     if type_ == "table" and object.schema is not None and object.schema not in allowed_schemas:
         return False
     return True
@@ -116,10 +116,35 @@ def run_migrations_online():
     connectable = current_app.extensions["migrate"].db.engine
 
     with connectable.connect() as connection:
+        # Automated backward-compatible upgrade bridge for v0.7.17 production head (f65648a6aaf4)
+        try:
+            from sqlalchemy import inspect as sa_inspect, text as sa_text
+
+            insp = sa_inspect(connection)
+            if insp.has_table("alembic_version"):
+                rows = connection.execute(sa_text("SELECT version_num FROM alembic_version")).fetchall()
+                legacy_heads = {"f65648a6aaf4", "20260818_add_expansion_links", "20260818_add_expansion_links_and_mechanics"}
+                for row in rows:
+                    if row[0] in legacy_heads:
+                        logger.info("Alembic bridge: detected legacy revision %s; stamping v0_7_17_baseline.", row[0])
+                        connection.execute(
+                            sa_text("UPDATE alembic_version SET version_num = 'v0_7_17_baseline' WHERE version_num = :old_rev"),
+                            {"old_rev": row[0]},
+                        )
+                if connection.in_transaction():
+                    connection.commit()
+        except Exception as e:
+            logger.warning("Could not execute Alembic upgrade bridge: %s", e)
+            if connection.in_transaction():
+                connection.rollback()
+
         context.configure(connection=connection, target_metadata=target_metadata, **conf_args)
 
         with context.begin_transaction():
             context.run_migrations()
+
+        if connection.in_transaction():
+            connection.commit()
 
 
 if context.is_offline_mode():

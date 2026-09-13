@@ -193,6 +193,7 @@ fi
 
 echo "✅ Database cloned successfully!"
 
+
 # Sync static assets (covers and gallery)
 echo "🖼️ Syncing images (covers and gallery)..."
 for dir in "covers" "gallery"; do

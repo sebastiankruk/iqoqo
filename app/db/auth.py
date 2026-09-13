@@ -139,7 +139,10 @@ class User(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "users"
-    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
+    __table_args__ = (
+        db.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
+        *(({"schema": _AUTH},) if _AUTH else ()),
+    )
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)

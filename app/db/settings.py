@@ -35,6 +35,7 @@ _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
 
 _INVENTORY = "inventory" if _USE_PG else None
 _CATALOG = "catalog" if _USE_PG else None
+_CONFIG = "config" if _USE_PG else None
 
 
 class LLMTelemetry(db.Model):  # type: ignore[name-defined]
@@ -179,7 +180,7 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
     value = db.Column(db.JSON, nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
-    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+    __table_args__ = ({"schema": _CONFIG},) if _CONFIG else ()
 
     @property
     def decrypted_value(self) -> Any:
