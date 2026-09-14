@@ -35,6 +35,7 @@ then map everything to the new FRBR hierarchy.
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -48,18 +49,38 @@ from app.db import db
 from app.db.models import Expression, Item, Manifestation, User, Work
 
 
-def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False) -> dict:
+def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False, force: bool = False) -> dict:
     """
     Migrate legacy data to FRBR format.
 
     Args:
         legacy_data: Dictionary containing legacy client, manifestation, and item data.
         clear_existing: If True, clears all existing data before migrating.
+        force: If True, bypasses interactive confirmation prompts.
 
     Returns:
         Dictionary with migration statistics.
     """
     if clear_existing:
+        if os.environ.get("FLASK_ENV") == "production" and os.environ.get("ALLOW_PROD_CLEAR") != "1":
+            print(
+                "\nError: Refusing to clear database in production environment without ALLOW_PROD_CLEAR=1.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        is_test = bool(os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules)
+        if not force and not is_test:
+            db_name = db.engine.url.database or "iqoqo"
+            print(f"\n⚠️ WARNING: This will permanently delete all Work, Expression, Manifestation, and Item data in '{db_name}'.")
+            try:
+                confirm = input(f"Type '{db_name}' to confirm data clear: ")
+            except (EOFError, KeyboardInterrupt):
+                confirm = ""
+            if confirm.strip() != db_name:
+                print("Operation cancelled: Typed confirmation did not match database name.", file=sys.stderr)
+                sys.exit(1)
+
         print("Clearing existing data...")
         Item.query.delete()
         Manifestation.query.delete()
@@ -256,6 +277,11 @@ def main():
         action="store_true",
         help="Clear all existing data before migration",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass interactive confirmation prompt",
+    )
     args = parser.parse_args()
 
     # Load legacy data
@@ -272,7 +298,7 @@ def main():
     app = create_app()
     with app.app_context():
         print("Starting migration...")
-        stats = migrate_legacy_data(legacy_data, clear_existing=args.clear)
+        stats = migrate_legacy_data(legacy_data, clear_existing=args.clear, force=args.force)
 
         print("\n=== Migration Complete ===")
         print(f"Works created: {stats['works_created']}")

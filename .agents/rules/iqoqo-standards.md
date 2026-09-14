@@ -48,6 +48,11 @@ Talk like caveman
 
 - **Domain First:** This is a "Library of Everything" built on the FRBR (Functional Requirements for Bibliographic Records) ontology. Always respect the Work -> Expression -> Manifestation -> Item hierarchy.
 - **Spec-Driven Development (OpenSpec):** Before proposing structural modifications or implementing new features, you SHOULD inspect the canonical specifications located in `openspec/specs/`. Always follow the **Explore -> Propose -> Apply -> Archive** workflow using the `openspec` CLI.
+- **Secret Encryption at Rest:** All sensitive API keys, secrets, and live OAuth tokens stored in `InstanceSettings` (or DB tables) MUST be encrypted at rest using symmetric Fernet encryption keyed from `SECRET_KEY`. Plaintext storage of sensitive credentials in database tables or settings is strictly prohibited.
+- **SQL Pagination & Memory Bounds:** Endpoints returning lists of entities (items, manifestations, works, collections) MUST implement database-level SQL `LIMIT`/`OFFSET` or keyset pagination. In-memory Python slicing (`query.all()[offset:offset+limit]`) and unconstrained table-dump queries into process heap memory are strictly prohibited.
+- **Interactive UI Wiring & Safety:** Every interactive UI control (buttons, menus, actions) MUST be wired to an active handler or, if deferred to a future milestone, explicitly disabled with an explanatory badge or tooltip (e.g., "Coming in v0.8.0"). Dead, unwired, or silently failing UI controls are prohibited.
+- **Linear Migration DAG:** Alembic migrations MUST maintain a single, strictly linear DAG with exactly one head (`len(ScriptDirectory.get_heads()) == 1`). Branching, multiple heads, and unbatched full-table DDL/DML in migrations are strictly prohibited.
+- **Operational Script Guards:** Operational scripts performing destructive actions (database drops, table purges, or bulk deletions) MUST enforce environment checks against production (`FLASK_ENV=production`) and require typed interactive confirmation of the target database name before execution.
 
 ### 🔄 Post-Session Knowledge Sync
 - **Fast Knowledge Sync**: After committing and pushing code changes, RECOMMEND running `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).

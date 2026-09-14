@@ -62,9 +62,13 @@ The iqoqo platform requires near 100% test coverage across a heterogeneous multi
 
 * **Seeding & Fixtures:** Always use isolated database transactions per test. Use explicit factories or seed models that preserve relational integrity between Works, Expressions, Manifestations, and Items.
 * **Strict Validation:** Assert response status codes, specific payload structures, and headers (e.g., provenance or taxonomy headers). Do not use broad exception handling.
+* **SQL Pagination & Query Limits:** Explicitly test list endpoints with pagination limits and offsets, asserting that database-level `LIMIT`/`OFFSET` queries are executed rather than in-memory heap slicing.
+* **Migration DAG Verification:** Verify that the Alembic migration history remains linear with exactly one head (`len(ScriptDirectory.get_heads()) == 1`).
 
 ### B. Frontend UI Testing (`Vitest` + RTL)
 
+* **Top-Level Import Hygiene:** Never use dynamic `await import(...)` inside individual test bodies for mocked or hoisted packages (e.g. `sonner`, `next/navigation`); declare all imports at top-level module scope to prevent race conditions with Vitest mock hoisting.
+* **Interactive Control Wiring:** Assert that every clickable button or menu action triggers an expected event handler or API call; verify that deferred features render disabled controls with clear tooltips (e.g. "Coming in v0.8.0").
 * **Accessible Queries:** Prioritize accessible locator strategies exactly as a user experiences the screen. Use `screen.getByRole`, `screen.getByLabelText`, and `screen.getByText`. Avoid querying raw CSS classes or test IDs unless an element has no semantic role.
 * **User Actions:** Always employ `@testing-library/user-event` instead of raw `.click()` triggers to simulate genuine keystrokes and focus switches.
 

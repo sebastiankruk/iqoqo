@@ -25,6 +25,7 @@ Usage:
 #
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -40,18 +41,40 @@ from app.core.data_manager import DataManager
 from app.db import db
 
 
-def init_database(seed_file: Path | None = None, reset: bool = False):
+def init_database(seed_file: Path | None = None, reset: bool = False, force: bool = False):
     """
     Initialize the database.
 
     Args:
         seed_file: Optional path to a JSON file containing seed data.
         reset: If True, drops all tables before creating them.
+        force: If True, bypasses interactive confirmation prompts.
     """
     app = create_app()
 
     with app.app_context():
         if reset:
+            # 1. Production environment safeguard
+            if os.environ.get("FLASK_ENV") == "production" and os.environ.get("ALLOW_PROD_RESET") != "1":
+                print(
+                    "\nError: Refusing to reset database in production environment without ALLOW_PROD_RESET=1.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            # 2. Interactive typed confirmation prompt
+            is_test = bool(os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules)
+            if not force and not is_test:
+                db_name = db.engine.url.database or "iqoqo"
+                print(f"\n⚠️ WARNING: This will drop all tables in database '{db_name}'.")
+                try:
+                    confirm = input(f"Type '{db_name}' to confirm table drop: ")
+                except (EOFError, KeyboardInterrupt):
+                    confirm = ""
+                if confirm.strip() != db_name:
+                    print("Operation cancelled: Typed confirmation did not match database name.", file=sys.stderr)
+                    sys.exit(1)
+
             print("Dropping all tables...")
             try:
                 db.drop_all()
@@ -138,9 +161,14 @@ def main():
         action="store_true",
         help="Drop all tables before initialization",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass interactive confirmation prompt",
+    )
     args = parser.parse_args()
 
-    init_database(seed_file=args.seed_file, reset=args.reset)
+    init_database(seed_file=args.seed_file, reset=args.reset, force=args.force)
 
 
 if __name__ == "__main__":

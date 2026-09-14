@@ -712,8 +712,8 @@ refetch-metadata: .venv/bin/activate
 		$(PYTHON_CMD) scripts/refetch_metadata.py $(if $(gap),--gap $(gap),) $(if $(content-type),--content-type $(content-type),) $(if $(limit),--limit $(limit),) $(if $(force),--force,) $(if $(dry-run),--dry-run,); \
 	fi
 
-allegro-auth:
-	@bash scripts/allegro_auth.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod)) $(if $(USE_DOCKER),--docker)
+allegro-auth: .venv/bin/activate
+	@$(PYTHON_CMD) scripts/allegro_auth.py
 
 fix-physical-kinds: .venv/bin/activate
 	@echo "Running fix-physical-kinds script in $(MODE) environment..."
