@@ -35,6 +35,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from dotenv import load_dotenv  # pylint: disable=wrong-import-position
 from app import create_app  # pylint: disable=wrong-import-position
 from app.api.admin import API_KEYS  # pylint: disable=wrong-import-position
 from app.core.config_service import CONFIG_KEY_BLOCKLIST  # pylint: disable=wrong-import-position
@@ -190,6 +191,9 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.env_file.exists():
+        load_dotenv(args.env_file, override=True)
 
     app = create_app()
     with app.app_context():
