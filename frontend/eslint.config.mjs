@@ -37,7 +37,7 @@ const eslintConfig = defineConfig([
   },
   // Allow `any` in test files for mock return values
   {
-    files: ['__tests__/**'],
+    files: ['__tests__/**', 'tests/**'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },

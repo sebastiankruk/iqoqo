@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Trash2,
@@ -35,9 +35,9 @@ import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { apiClient } from "@/lib/api/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { PermissionName } from "@/lib/permissions";
-import type { CatalogEntry, Manifestation } from "@/types/frbr";
+import type { ApiResponse, CatalogEntry, Manifestation } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 import { Button } from "@/components/ui/button";
 
@@ -86,21 +86,20 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const manifestationEscalations = myEscalations?.filter(e => e.manifestation_id === manifestation.id) ?? [];
   const pendingEscalation = manifestationEscalations.find(e => e.status === "pending");
 
-  // Poll server state every 3s while cover is pending OR processing
+  // Declarative polling for cover generation/processing state via TanStack Query refetchInterval
   const isProcessing = isPending || manifestation.meta?.cover_status === "processing";
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
-    if (isProcessing && manifestation.id) {
-      interval = setInterval(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id!) });
-      }, 3000);
-    }
-    return () => {
-      if (interval !== undefined) {
-        clearInterval(interval);
-      }
-    };
-  }, [isProcessing, manifestation.id, qc]);
+  useQuery({
+    queryKey: queryKeys.manifestation(manifestation.id ?? 0),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<CatalogEntry>>(`/manifestations/${manifestation.id}`);
+      return res.data?.data ?? null;
+    },
+    enabled: Boolean(manifestation.id && isProcessing),
+    refetchInterval: query => {
+      const status = query.state.data?.meta?.cover_status ?? manifestation.meta?.cover_status;
+      return status === "pending" || status === "processing" ? 3000 : false;
+    },
+  });
 
   if (!profile) return null;
 

@@ -305,8 +305,10 @@ describe("SuccessCard", () => {
 
     await waitFor(() => {
       expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["items"] }));
-      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["worksShelf"] }));
-      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["expressionsShelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["works", "shelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["expressions", "shelf"] })
+      );
       expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["stats"] }));
     });
   });

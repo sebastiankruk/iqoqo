@@ -193,8 +193,8 @@ export function SuccessCard({
       // Invalidate cached queries BEFORE navigating so the UI has fresh statistics
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["items"] }),
-        queryClient.invalidateQueries({ queryKey: ["worksShelf"] }),
-        queryClient.invalidateQueries({ queryKey: ["expressionsShelf"] }),
+        queryClient.invalidateQueries({ queryKey: ["works", "shelf"] }),
+        queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.stats() }),
       ]);
 
