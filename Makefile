@@ -609,6 +609,10 @@ db-export: .venv/bin/activate
 	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
 
+migrate-secrets: .venv/bin/activate
+	@echo "Migrating API secrets from .env into encrypted database settings..."
+	.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args)
+
 backup-run:
 	@if [ -z "$(remote)" ]; then \
 		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
