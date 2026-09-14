@@ -31,10 +31,12 @@ teardown() {
 }
 
 # Extract env var uses from Python code
+# Note: External API secrets managed in DB/Admin UI (e.g. TMDB, IGDB, OpenAI) are excluded
 extract_code_vars() {
     grep -rhoPh "(?:os\.getenv|os\.environ(?:\[|\.get))\s*\(\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]" \
         app/ scripts/ --include='*.py' 2>/dev/null \
         | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/" \
+        | grep -vE '^(ALLEGRO_CLIENT_(ID|SECRET)|BGG_API_TOKEN|DISCOGS_(CONSUMER_(KEY|SECRET)|USER_TOKEN)|GEMINI_API_KEY|GOOGLE_BOOKS_API_KEY|IGDB_CLIENT_(ID|SECRET)|OPENAI_API_KEY|TMDB_API_(KEY|READ_ACCESS_TOKEN)|TWITCH_CLIENT_(ID|SECRET)|UPC_(DATABASE_ORG_KEY|ITEM_DB_KEY))$' \
         | sort -u
 }
 
