@@ -74,7 +74,7 @@ interface StatusOption {
  * @param items - The selected catalog entries.
  * @returns An ordered list of status options to offer the user.
  */
-function deriveStatusOptions(items: CatalogEntry[]): StatusOption[] {
+export function deriveStatusOptions(items: CatalogEntry[]): StatusOption[] {
   // Collect the unique categories present in the selection
   const categories = new Set<string>();
   for (const item of items) {
@@ -113,12 +113,19 @@ function deriveStatusOptions(items: CatalogEntry[]): StatusOption[] {
     },
     {
       label: "On shelf (no status)",
-      value: wantStatus,
+      value: "",
       collectionStatus: "available",
     },
   ];
 
-  return options;
+  // Deduplicate options by unique tuple of (collectionStatus, value, label)
+  const seen = new Set<string>();
+  return options.filter(opt => {
+    const key = `${opt.collectionStatus}:${opt.value}:${opt.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 interface BulkAddToolbarProps {
@@ -162,7 +169,7 @@ export function BulkAddToolbar({ selectedItems, onClearSelection, onSuccess }: B
     try {
       await apiClient.post("/items/bulk", {
         manifestation_ids: selectedItems.map(i => i.id),
-        status: option.value,
+        status: option.value || undefined,
         collection_status: option.collectionStatus,
       });
       toast.success(
@@ -172,6 +179,8 @@ export function BulkAddToolbar({ selectedItems, onClearSelection, onSuccess }: B
       await qc.invalidateQueries({ queryKey: ["items"] });
       await qc.invalidateQueries({ queryKey: ["manifestations"] });
       await qc.invalidateQueries({ queryKey: ["stats"] });
+      await qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      await qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
       onClearSelection();
       onSuccess();
     } catch (err) {
@@ -225,7 +234,7 @@ export function BulkAddToolbar({ selectedItems, onClearSelection, onSuccess }: B
             className="absolute bottom-full mb-2 left-0 min-w-52 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
           >
             {statusOptions.map(opt => (
-              <li key={`${opt.value}-${opt.collectionStatus}`}>
+              <li key={`${opt.collectionStatus}-${opt.value}-${opt.label}`}>
                 <button
                   role="option"
                   aria-selected={false}

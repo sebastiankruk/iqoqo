@@ -72,13 +72,3 @@ export async function getGlobalStats(): Promise<{
 }> {
   return apiFetch("/stats/global");
 }
-
-/**
- * Fetch most recent manifestations added to the instance
- *
- * @param limit - Maximum number of items to return
- * @returns {Promise<Record<string, unknown>[]>} The recent manifestations
- */
-export async function getRecentManifestations(limit = 10) {
-  return apiFetch<Record<string, unknown>[]>("/manifestations/recent", { limit });
-}

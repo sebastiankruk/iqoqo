@@ -873,8 +873,8 @@ export function useAddItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
-      qc.invalidateQueries({ queryKey: ["worksShelf"] });
-      qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
   });
 }
@@ -1217,8 +1217,8 @@ export function useSetWorkIntent() {
       void qc.invalidateQueries({ queryKey: ["workIntent", variables.workId] });
       void qc.invalidateQueries({ queryKey: queryKeys.stats() });
       void qc.invalidateQueries({ queryKey: ["items"] });
-      void qc.invalidateQueries({ queryKey: ["worksShelf"] });
-      void qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
+      void qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      void qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
   });
 }
