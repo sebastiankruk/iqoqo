@@ -36,6 +36,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv  # pylint: disable=wrong-import-position
+
 from app import create_app  # pylint: disable=wrong-import-position
 from app.api.admin import API_KEYS  # pylint: disable=wrong-import-position
 from app.core.config_service import CONFIG_KEY_BLOCKLIST  # pylint: disable=wrong-import-position
