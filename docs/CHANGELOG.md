@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hardcoded Monitoring Credential Fallbacks**: Removed hardcoded `SuperSecret!123` fallback from `docker-compose.monitoring.yml` and required explicit `.env` configuration for `OPENOBSERVE_ROOT_PASSWORD`.
 - **Frontend Test Mock Race Conditions**: Resolved module import race condition in `frontend/__tests__/components/collection/item-card.test.tsx` by hoisting `sonner` import to top-level module scope.
 - **Deprecated Operational Scripts**: Pruned deprecated `scripts/allegro_auth.sh` wrapper script and updated `Makefile` to invoke `scripts/allegro_auth.py` directly.
+- **Prebuilt Migration Volume Isolation**: Added `volumes: !reset []` to the `migration` service in `docker-compose.prebuilt.yml` to prevent inherited `./scripts` bind-mounts from shadowing internal container scripts with empty host directories during prebuilt/standalone deployments.
 
 ## [0.7.17] - 2026-09-07
 
