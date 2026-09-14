@@ -69,7 +69,7 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False, force: 
             )
             sys.exit(1)
 
-        is_test = bool(os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules)
+        is_test = "pytest" in sys.modules
         if not force and not is_test:
             db_name = db.engine.url.database or "iqoqo"
             print(f"\n⚠️ WARNING: This will permanently delete all Work, Expression, Manifestation, and Item data in '{db_name}'.")

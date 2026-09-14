@@ -17,6 +17,15 @@
 
 setup() {
   export TEST_TEMP_DIR="$(mktemp -d)"
+  export ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+  export SECRET_KEY="${SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+  export DATABASE_URL="${DATABASE_URL:-sqlite:///${TEST_TEMP_DIR}/test.db}"
+
+  PYTHON_BIN=".venv/bin/python"
+  if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="$(command -v python3 || command -v python)"
+  fi
+  export PYTHON_BIN
 }
 
 teardown() {
@@ -24,13 +33,13 @@ teardown() {
 }
 
 @test "init_db.py --reset blocks in production environment without ALLOW_PROD_RESET" {
-  FLASK_ENV=production run .venv/bin/python scripts/init_db.py --reset
+  run env FLASK_ENV=production "$PYTHON_BIN" scripts/init_db.py --reset
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Refusing to reset database in production environment" ]]
 }
 
 @test "init_db.py --reset aborts when typed confirmation does not match" {
-  run bash -c "echo 'wrong_db_name' | .venv/bin/python scripts/init_db.py --reset"
+  run bash -c "echo 'wrong_db_name' | '$PYTHON_BIN' scripts/init_db.py --reset"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Operation cancelled" ]]
 }
@@ -39,7 +48,7 @@ teardown() {
   local mock_json="${TEST_TEMP_DIR}/data.json"
   echo '{"manifestations": []}' > "${mock_json}"
 
-  FLASK_ENV=production run .venv/bin/python scripts/migrate_legacy.py "${mock_json}" --clear
+  run env FLASK_ENV=production "$PYTHON_BIN" scripts/migrate_legacy.py "${mock_json}" --clear
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Refusing to clear database in production environment" ]]
 }
@@ -48,7 +57,8 @@ teardown() {
   local mock_json="${TEST_TEMP_DIR}/data.json"
   echo '{"manifestations": []}' > "${mock_json}"
 
-  run bash -c "echo 'wrong_db_name' | .venv/bin/python scripts/migrate_legacy.py '${mock_json}' --clear"
+  run bash -c "echo 'wrong_db_name' | '$PYTHON_BIN' scripts/migrate_legacy.py '${mock_json}' --clear"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Operation cancelled" ]]
 }
+

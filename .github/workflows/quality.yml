@@ -199,6 +199,9 @@ jobs:
         run: |
           make test-scripts-python
           make test-scripts-bash
+        env:
+          ADMIN_PASSWORD: admin
+          DATABASE_URL: sqlite:///tmp_test.db
 
   test-e2e:
     runs-on: ubuntu-latest

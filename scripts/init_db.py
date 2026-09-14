@@ -63,7 +63,7 @@ def init_database(seed_file: Path | None = None, reset: bool = False, force: boo
                 sys.exit(1)
 
             # 2. Interactive typed confirmation prompt
-            is_test = bool(os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules)
+            is_test = "pytest" in sys.modules
             if not force and not is_test:
                 db_name = db.engine.url.database or "iqoqo"
                 print(f"\n⚠️ WARNING: This will drop all tables in database '{db_name}'.")
