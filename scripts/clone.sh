@@ -102,6 +102,15 @@ fi
 DST_POSTGRES_USER=$(get_env_var "$DST_ENV" "POSTGRES_USER" "iqoqo")
 DST_POSTGRES_DB=$(get_env_var "$DST_ENV" "POSTGRES_DB" "iqoqo")
 
+# Production destination safety check
+if [ "$DST_NAME" = "prod" ] || [ "$DST_NAME" = "production" ] || [ "${FLASK_ENV:-}" = "production" ] || [ "${ENVIRONMENT:-}" = "production" ]; then
+    if [ "${ALLOW_PROD_CLONE:-}" != "1" ]; then
+        echo "❌ Error: Destination '$DST_NAME' is a production environment. Cloning into production is blocked by default."
+        echo "Set ALLOW_PROD_CLONE=1 to bypass this safeguard."
+        exit 1
+    fi
+fi
+
 # Determine compose project names
 SRC_PROJECT="iqoqo-${SRC_NAME}"
 if [ "$SRC_NAME" = "prod" ] || [ "$SRC_NAME" = "dev" ]; then
@@ -173,13 +182,23 @@ if [ "$DST_READY" = false ]; then
 fi
 
 # Terminate active connections, drop and recreate destination database, then dump and import
+# Interactive typed confirmation prompt
+if [ "${FORCE:-}" != "1" ] && [ "${IQOQO_TEST:-}" != "1" ]; then
+    echo "⚠️ WARNING: This operation will terminate connections and completely DROP the database '$DST_POSTGRES_DB' on '$DST_DB_CONTAINER'!"
+    read -r -p "Type '$DST_POSTGRES_DB' to confirm drop: " confirmation
+    if [ "$confirmation" != "$DST_POSTGRES_DB" ]; then
+        echo "❌ Aborting: Typed confirmation did not match destination database name '$DST_POSTGRES_DB'."
+        exit 1
+    fi
+fi
+
 echo "🔒 Terminating existing connections to destination DB '$DST_POSTGRES_DB'..."
 docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c \
   "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '$DST_POSTGRES_DB' AND pid <> pg_backend_pid();" || true
 
 echo "🗑️ Dropping and recreating destination database '$DST_POSTGRES_DB'..."
-docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS $DST_POSTGRES_DB;"
-docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "CREATE DATABASE $DST_POSTGRES_DB;"
+docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DST_POSTGRES_DB\";"
+docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "CREATE DATABASE \"$DST_POSTGRES_DB\";"
 
 echo "📥 Cloning database data..."
 if [ -n "$SRC_HOST" ]; then

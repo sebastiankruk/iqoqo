@@ -11,17 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Session-Agnostic myKG Query Target**: Added `make mykg-ask Q="..."` target and `.agents/skills/iqoqo-mykg/scripts/ask.py` auto-resolving the latest session in `mykg_sessions/` for zero-friction CLI querying.
 - **Decoupled Full Knowledge Sync Target**: Introduced `make knowledge-sync-full` for scheduled/manual off-peak execution of heavy batch indexing (`mempalace-index` and `mykg-update`).
+- **Destructive Operation Guards**: Added interactive typed confirmation prompts and production environment checks (`FLASK_ENV=production`) to `scripts/clone.sh`, `scripts/init_db.py --reset`, and `scripts/migrate_legacy.py --clear` to prevent accidental database resets or drops.
+- **Dedicated Migration Service in Docker Compose**: Decoupled database migrations into a dedicated one-shot `migration` container service in `docker-compose.yml` and `docker-compose.prebuilt.yml` that completes before `web` and `worker` services start.
 
 ### Changed
 
 - **Decoupled Fast Knowledge Sync**: Streamlined `make knowledge-sync` to execute only lightweight AST-based engines (`codegraph-sync` and `graphify-update`) in parallel (<45s, 0 LLM tokens). Excluded 15-minute MemPalace hallway traversal and myKG LLM daemon from routine interactive developer sessions.
 - **Agent Memory & Navigation Standards**: Updated `.agent/rules/iqoqo-standards.md` to designate CodeGraph (`codegraph node` and `codegraph impact`) as the mandatory first-stop symbol navigation protocol before raw grep scans, and strictly prohibited automated execution of full memory syncs during interactive sessions.
+- **Development Standards & Governance Rules**: Updated `.agent/rules/iqoqo-standards.md` and agent skills (`implementation-expert`, `security-auditor`, `test-craftsman`) with strict mandatory checks for symmetric Fernet secret encryption, SQL pagination bounds, interactive control wiring, and linear Alembic migration DAGs.
 - **Deterministic Virtualenv Executable Paths**: Hardcoded `.venv/bin/` paths across `iqoqo-graphify`, `iqoqo-mykg`, and `iqoqo-mempalace` skills to prevent `exit 127` subshell execution errors.
 - **MemPalace Retrieval & Ingestion Hardening**: Documented MiniLM keyword search best practices (prohibiting `head` truncation and stderr redirection) and added pre-mining credential and path sanitization (`.env*`, `*.key`, `*.pem`, `antigravity-oauth-token*`) to `.iqoqo-mempalace-scope.yaml`, `scan_scope.py`, and `run_mine.py`.
 
 ### Fixed
 
 - **myKG Daemon SIGINT Teardown & Name Collision Prevention**: Added POSIX shell signal traps (`trap ... EXIT INT TERM`) and pre-flight container removal (`docker rm -f mykg-agy-daemon`) in `Makefile` targets `mykg-update` and `mykg-index`. Ensures `mykg-agy-daemon` and `sandbox-egress-proxy` are cleanly torn down on process interruption or termination, preventing Docker container name collisions on subsequent runs.
+- **Zip Slip Vulnerability in Cover Restoration**: Fixed Zip Slip directory traversal vulnerability in `scripts/restore_covers.py` by validating canonical archive member paths before extraction.
+- **Hardcoded Monitoring Credential Fallbacks**: Removed hardcoded `SuperSecret!123` fallback from `docker-compose.monitoring.yml` and required explicit `.env` configuration for `OPENOBSERVE_ROOT_PASSWORD`.
+- **Frontend Test Mock Race Conditions**: Resolved module import race condition in `frontend/__tests__/components/collection/item-card.test.tsx` by hoisting `sonner` import to top-level module scope.
+- **Deprecated Operational Scripts**: Pruned deprecated `scripts/allegro_auth.sh` wrapper script and updated `Makefile` to invoke `scripts/allegro_auth.py` directly.
 
 ## [0.7.17] - 2026-09-07
 

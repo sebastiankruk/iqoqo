@@ -63,11 +63,6 @@
   [ "$status" -eq 0 ]
 }
 
-@test "scripts/allegro_auth.sh syntax check" {
-  run bash -n scripts/allegro_auth.sh
-  [ "$status" -eq 0 ]
-}
-
 @test "scripts/sync_agy_memory.sh syntax check" {
   run bash -n scripts/sync_agy_memory.sh
   [ "$status" -eq 0 ]

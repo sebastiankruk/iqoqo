@@ -48,6 +48,10 @@ This skill governs codebase changes. It handles provided code OR generates requi
 11. **Preserve Docs**: When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip or replace them.
 12. **Non-English UI Casing**: Always use sentence case (not Title Case) for non-English localizations (e.g., Polish strings in `frontend/messages/pl.json`). Only capitalize the first word and proper nouns (e.g., "Zarządzaj kolekcjami", "Tryb konserwacji aktywny").
 13. **Prohibit Heredoc / `cat << EOF` Editing**: NEVER create or edit codebase files using `cat << EOF`, `cat << 'EOF'`, or shell redirection in bash commands. Always use structured agent file manipulation tools (`replace_file_content` or dedicated file tools).
+14. **Secret Encryption**: All API keys, secrets, and live OAuth tokens stored in `InstanceSettings` must use symmetric Fernet encryption derived from `SECRET_KEY`. Never persist plaintext credentials to the database.
+15. **SQL Pagination**: Endpoints returning lists of entities must implement database-level SQL `LIMIT`/`OFFSET` or keyset pagination. Never use Python-level list slicing on `query.all()` or unconstrained table queries.
+16. **Interactive UI Wiring**: All buttons, dropdown items, and interactive controls must be wired to functional handlers or explicitly disabled with an explanatory tooltip/badge (e.g. "Coming in v0.8.0").
+17. **Migration DAG Linearity**: Keep Alembic migrations strictly linear with exactly one head. Never create branched heads or unbatched migration operations.
 
 ## Implementation Workflow
 

@@ -24,6 +24,10 @@ include:
   - docker-compose.monitoring.yml
 
 services:
+  migration:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
+    build: !reset null
+
   web:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null

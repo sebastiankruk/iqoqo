@@ -199,6 +199,9 @@ jobs:
         run: |
           make test-scripts-python
           make test-scripts-bash
+        env:
+          ADMIN_PASSWORD: admin
+          DATABASE_URL: sqlite:///tmp_test.db
 
   test-e2e:
     runs-on: ubuntu-latest
@@ -256,7 +259,7 @@ jobs:
 
       - name: Prepare E2E database
         run: |
-          python scripts/init_db.py --seed-file data/seed_example.json --reset
+          python scripts/init_db.py --seed-file data/seed_example.json --reset --force
           ADMIN_PASSWORD=admin PYTHONPATH=. python scripts/init_auth.py
           PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
         env:

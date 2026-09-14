@@ -42,8 +42,12 @@ Our current focus for **v0.7.18** is a thorough layer-by-layer implementation re
 * Audit Pydantic schemas for input validation to prevent injection attacks.
 * Review S3 backup configurations for encryption-at-rest.
 * Ensure rate-limiting strategies prevent API abuse and scraping.
+* Verify all credentials, API keys, and OAuth tokens in `InstanceSettings` use symmetric Fernet encryption with `SECRET_KEY` (no plaintext secrets at rest).
+* Validate file extraction routines (e.g. `zipfile`, `tarfile`) against Zip Slip directory traversal vulnerabilities.
 
 ### 4. Infrastructure Security (Docker & Deployment)
 
 * Review `docker-compose.yml` for potential container escape vulnerabilities.
 * Audit environment variable handling (e.g., SECRET_KEY, database credentials).
+* Prohibit hardcoded default passwords or fallback secrets in Docker Compose and monitoring configuration files.
+* Enforce production safeguards and interactive typed confirmation prompts on destructive maintenance scripts (`scripts/clone.sh`, `scripts/init_db.py`, `scripts/migrate_legacy.py`).
