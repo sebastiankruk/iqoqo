@@ -175,7 +175,8 @@ def test_fresh_arrivals_pagination_deduplication(app):
 
         i1 = Item(manifestation_id=m1.id, owner_id=user.id, is_hidden=False, status="available")
         i2 = Item(manifestation_id=m2.id, owner_id=user.id, is_hidden=False, status="available")
-        db.session.add_all([i1, i2])
+        i3 = Item(manifestation_id=m1.id, owner_id=user.id, is_hidden=False, status="available")
+        db.session.add_all([i1, i2, i3])
         db.session.commit()
 
         # Fetch works level with limit 10
@@ -188,3 +189,8 @@ def test_fresh_arrivals_pagination_deduplication(app):
         expr_items = fetch_global_fresh_arrivals(limit=10, level="expressions")
         expr_ids = [it.manifestation.expression_id for it in expr_items if it.manifestation]
         assert len(expr_ids) == len(set(expr_ids))
+
+        # Fetch manifestations level
+        manif_items = fetch_global_fresh_arrivals(limit=10, level="manifestations")
+        manif_ids = [it.manifestation_id for it in manif_items if it.manifestation_id]
+        assert len(manif_ids) == len(set(manif_ids))

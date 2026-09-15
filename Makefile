@@ -361,7 +361,7 @@ clone:
 		echo "Example (remote): make clone src_host=user@remote-ip src_loc=/opt/iqoqo.cc src_name=prod dst_loc=/opt/pre.iqoqo.cc dst_name=preview"; \
 		exit 1; \
 	fi
-	./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
+	FORCE="$(FORCE)" ./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
 start:
@@ -608,6 +608,10 @@ db-export: .venv/bin/activate
 	@$(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"
 	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
+
+migrate-secrets: .venv/bin/activate
+	@echo "Migrating API secrets from .env into encrypted database settings..."
+	.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args)
 
 backup-run:
 	@if [ -z "$(remote)" ]; then \

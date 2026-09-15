@@ -137,3 +137,35 @@ def test_transition_away_from_lent_clears_borrower(client, sample_item, normal_u
         assert item.collection_status == "available"
         assert item.lent_to_name is None
         assert item.lent_to_user_id is None
+
+
+def test_reset_lending_test_state_outside_testing_mode_returns_403(client, app):
+    """Ensure POST /api/lending/test/reset returns 403 outside of testing mode."""
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = False
+        res = client.post("/api/lending/test/reset")
+        assert res.status_code == 403
+        assert res.json["error"] == "Forbidden"
+    finally:
+        app.config["TESTING"] = orig_testing
+
+
+def test_reset_lending_test_state_production_env_returns_403(client, app, monkeypatch):
+    """Ensure POST /api/lending/test/reset is strictly blocked in production even if TESTING is True."""
+    monkeypatch.setenv("FLASK_ENV", "production")
+    res = client.post("/api/lending/test/reset")
+    assert res.status_code == 403
+    assert res.json["error"] == "Forbidden"
+
+
+def test_reset_lending_test_state_allowed_in_test_mode(client, app):
+    """Ensure POST /api/lending/test/reset succeeds in testing mode."""
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = True
+        res = client.post("/api/lending/test/reset")
+        assert res.status_code == 200
+        assert res.json["success"] is True
+    finally:
+        app.config["TESTING"] = orig_testing

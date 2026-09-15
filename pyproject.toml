@@ -22,6 +22,7 @@ dependencies = [
     "redis",
     "flask-limiter",
     "Flask-Caching",
+    "bleach",
 ]
 
 [project.optional-dependencies]
