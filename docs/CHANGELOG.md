@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.18] - 2026-09-15
+
+### Added
+
+- **Automated .env Secret Migration Utility**: Added `scripts/migrate_env_secrets_to_db.py` and `make migrate-secrets` CLI target to safely migrate sensitive API keys and credentials from `.env` to encrypted database settings in `InstanceSettings`, automatically commenting out migrated variables.
+- **Continuous Batch Scanning & Audio Feedback**: Introduced hands-free continuous barcode scanning mode in `frontend/app/scan/page.tsx` with synthesized audio beeps on successful capture, multi-candidate selection bottom sheet, and non-blocking Sonner toast feedback for queued items.
+- **Session-Agnostic myKG Query Target**: Added `make mykg-ask Q="..."` target and `.agents/skills/iqoqo-mykg/scripts/ask.py` auto-resolving the latest session in `mykg_sessions/` for zero-friction CLI querying.
+- **Decoupled Full Knowledge Sync Target**: Introduced `make knowledge-sync-full` for scheduled/manual off-peak execution of heavy batch indexing (`mempalace-index` and `mykg-update`).
+- **Destructive Operation Guards**: Added interactive typed confirmation prompts and production environment checks (`FLASK_ENV=production`) to `scripts/clone.sh`, `scripts/init_db.py --reset`, and `scripts/migrate_legacy.py --clear` to prevent accidental database resets or drops.
+- **Dedicated Migration Service in Docker Compose**: Decoupled database migrations into a dedicated one-shot `migration` container service in `docker-compose.yml` and `docker-compose.prebuilt.yml` that completes before `web` and `worker` services start.
+
+### Changed
+
+- **Secret Encryption at Rest**: Secured all sensitive API keys and tokens in `InstanceSettings` using symmetric Fernet encryption keyed from `SECRET_KEY`, with masked values (`sk-...`, `AIza...`) in the Admin UI and backend endpoints.
+- **Two-Stage Linear Migration DAG Pipeline**: Consolidated legacy migration history into a canonical `v0_7_17_baseline.py` and linear `v0_7_18_fixes.py` with strict 32-character revision identifiers to prevent PostgreSQL `VARCHAR(32)` truncation.
+- **Database-Level SQL Pagination & Memory Bounds**: Replaced in-memory Python slicing with strict SQL `LIMIT`/`OFFSET` pagination across `/api/items`, `/api/taxonomies`, and `/api/roadmap`, and optimized facet queries with single-pass `GROUP BY` aggregates to eliminate N+1 overhead.
+- **Frontend TanStack Query Cache Harmonization**: Synchronized query invalidation keys across hooks, scanner cards, and dropdowns, replaced manual `setInterval` polling with TanStack Query `refetchInterval` in `ManifestationActions`, and pruned dead `getRecentManifestations` endpoints.
+- **Interactive UI Safety Invariants**: Explicitly disabled unwired or planned controls with "Coming in v0.8.0" badges and tooltips across the FRBR editor and bulk toolbars.
+- **Decoupled Fast Knowledge Sync**: Streamlined `make knowledge-sync` to execute only lightweight AST-based engines (`codegraph-sync` and `graphify-update`) in parallel (<45s, 0 LLM tokens). Excluded 15-minute MemPalace hallway traversal and myKG LLM daemon from routine interactive developer sessions.
+- **Agent Memory & Navigation Standards**: Updated `.agent/rules/iqoqo-standards.md` to designate CodeGraph (`codegraph node` and `codegraph impact`) as the mandatory first-stop symbol navigation protocol before raw grep scans, and strictly prohibited automated execution of full memory syncs during interactive sessions.
+- **Development Standards & Governance Rules**: Updated `.agent/rules/iqoqo-standards.md` and agent skills (`implementation-expert`, `security-auditor`, `test-craftsman`) with strict mandatory checks for symmetric Fernet secret encryption, SQL pagination bounds, interactive control wiring, and linear Alembic migration DAGs.
+- **Deterministic Virtualenv Executable Paths**: Hardcoded `.venv/bin/` paths across `iqoqo-graphify`, `iqoqo-mykg`, and `iqoqo-mempalace` skills to prevent `exit 127` subshell execution errors.
+- **MemPalace Retrieval & Ingestion Hardening**: Documented MiniLM keyword search best practices (prohibiting `head` truncation and stderr redirection) and added pre-mining credential and path sanitization (`.env*`, `*.key`, `*.pem`, `antigravity-oauth-token*`) to `.iqoqo-mempalace-scope.yaml`, `scan_scope.py`, and `run_mine.py`.
+
+### Fixed
+
+- **SSRF Redirect Vulnerability in Cover Fetching**: Hardened `safe_get` in `app/utils/covers.py` with strict URL type coercion on redirect `Location` headers to prevent crashes and SSRF bypasses.
+- **Host Header Poisoning & Open Redirect Defense**: Added domain validation and secure fallback hosts in frontend auth exchange routes to prevent host poisoning and credential leakage.
+- **Feedback Screenshot IDOR Containment**: Replaced loose permissions check with strict `all()` verification across matching tickets in `app/api/feedback.py`.
+- **Database Check Constraint Alignment**: Added `fulfilled` status to `UserWorkIntent` check constraint in `app/db/core.py` and `v0_7_18_fixes.py`.
+- **Board Game Mechanics Taxonomy Typing**: Resolved TypeScript interface mismatches for board game taxonomies and synchronized `/api/taxonomies/boardgame-mechanics` responses.
+- **myKG Daemon SIGINT Teardown & Name Collision Prevention**: Added POSIX shell signal traps (`trap ... EXIT INT TERM`) and pre-flight container removal (`docker rm -f mykg-agy-daemon`) in `Makefile` targets `mykg-update` and `mykg-index`. Ensures `mykg-agy-daemon` and `sandbox-egress-proxy` are cleanly torn down on process interruption or termination, preventing Docker container name collisions on subsequent runs.
+- **Zip Slip Vulnerability in Cover Restoration**: Fixed Zip Slip directory traversal vulnerability in `scripts/restore_covers.py` by validating canonical archive member paths before extraction.
+- **Hardcoded Monitoring Credential Fallbacks**: Removed hardcoded `SuperSecret!123` fallback from `docker-compose.monitoring.yml` and required explicit `.env` configuration for `OPENOBSERVE_ROOT_PASSWORD`.
+- **Frontend Test Mock Race Conditions**: Resolved module import race condition in `frontend/__tests__/components/collection/item-card.test.tsx` by hoisting `sonner` import to top-level module scope.
+- **Deprecated Operational Scripts**: Pruned deprecated `scripts/allegro_auth.sh` wrapper script and updated `Makefile` to invoke `scripts/allegro_auth.py` directly.
+- **Prebuilt Migration Volume Isolation**: Added `volumes: !reset []` to the `migration` service in `docker-compose.prebuilt.yml` to prevent inherited `./scripts` bind-mounts from shadowing internal container scripts with empty host directories during prebuilt/standalone deployments.
+
 ## [0.7.17] - 2026-09-07
 
 ### Added

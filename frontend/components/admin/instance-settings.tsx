@@ -78,6 +78,13 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
         type: "api",
         placeholder: "Enter Twitch Client Secret",
       },
+      { key: "IGDB_CLIENT_ID", label: "IGDB Client ID (Direct)", type: "api", placeholder: "Enter IGDB Client ID" },
+      {
+        key: "IGDB_CLIENT_SECRET",
+        label: "IGDB Client Secret (Direct)",
+        type: "api",
+        placeholder: "Enter IGDB Client Secret",
+      },
     ],
   },
   {
@@ -104,9 +111,28 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
     title: "Media & Catalog Databases",
     description: "External APIs for music, movies, board games, and barcode lookups.",
     items: [
+      {
+        key: "DISCOGS_CONSUMER_KEY",
+        label: "Discogs Consumer Key (OAuth)",
+        type: "api",
+        placeholder: "Enter Discogs Consumer Key",
+      },
+      {
+        key: "DISCOGS_CONSUMER_SECRET",
+        label: "Discogs Consumer Secret (OAuth)",
+        type: "api",
+        placeholder: "Enter Discogs Consumer Secret",
+      },
       { key: "DISCOGS_USER_TOKEN", label: "Discogs User Token", type: "api", placeholder: "Enter Discogs token" },
-      { key: "TMDB_API_KEY", label: "TMDB API Key", type: "api", placeholder: "Enter TMDB API key" },
+      { key: "TMDB_API_KEY", label: "TMDB API Key (v3)", type: "api", placeholder: "Enter TMDB API key" },
+      {
+        key: "TMDB_API_READ_ACCESS_TOKEN",
+        label: "TMDB Read Access Token (v4)",
+        type: "api",
+        placeholder: "Enter TMDB read access token",
+      },
       { key: "BGG_API_TOKEN", label: "BoardGameGeek Token", type: "api", placeholder: "Enter BGG token" },
+      { key: "UPC_ITEM_DB_KEY", label: "UPCItemDB API Key", type: "api", placeholder: "Enter UPCItemDB key" },
       {
         key: "UPC_DATABASE_ORG_KEY",
         label: "UPC Database API Key",

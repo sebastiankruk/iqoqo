@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import re
+
 from app.strategies.base import LookupStrategy
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.discogs import fetch_discogs_metadata
@@ -27,7 +29,9 @@ class DefaultFallbackStrategy(LookupStrategy):
         meta, provider = None, None
 
         # Prioritize ISBN for ISBN-like barcodes (original scanner behavior)
-        is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
+        is_isbn_like = (len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979"))) or (
+            len(barcode) == 10 and bool(re.match(r"^\d{9}[\dXx]$", barcode))
+        )
         if is_isbn_like:
             canonical = canonicalize_isbn(barcode)
             if canonical:

@@ -22,6 +22,7 @@ API endpoints for the lending lifecycle:
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 
 from flask import Blueprint, Response, g, jsonify, request
@@ -238,7 +239,8 @@ def reset_lending_test_state() -> Response | tuple[Response, int]:
     """E2E test helper: resets all lender items to available and deletes loan requests."""
     from flask import current_app
 
-    if not (current_app.config.get("TESTING") or current_app.debug or current_app.config.get("ENV") == "development"):
+    is_prod = os.environ.get("FLASK_ENV") == "production" or current_app.config.get("ENV") == "production"
+    if is_prod or not current_app.config.get("TESTING"):
         return jsonify({"error": "Forbidden", "code": 403}), 403
 
     from app.db.core import db

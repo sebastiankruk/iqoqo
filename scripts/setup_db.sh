@@ -170,6 +170,13 @@ SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA social TO %I', :'app
 SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA social TO %I', :'app_user') \gexec;
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA social GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
 SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA social GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
+-- config schema access (InstanceSettings)
+SELECT format('CREATE SCHEMA IF NOT EXISTS config') \gexec;
+SELECT format('GRANT ALL ON SCHEMA config TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA config TO %I', :'app_user') \gexec;
+SELECT format('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA config TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA config GRANT ALL ON TABLES TO %I', :'app_user') \gexec;
+SELECT format('ALTER DEFAULT PRIVILEGES IN SCHEMA config GRANT ALL ON SEQUENCES TO %I', :'app_user') \gexec;
 -- Transfer ownership of every existing table in both schemas to the application role
 -- so that Alembic can run DDL statements (ALTER TABLE, DROP TABLE, etc.).
 SELECT format($$
@@ -179,7 +186,7 @@ BEGIN
     FOR r IN
         SELECT schemaname, tablename
         FROM pg_tables
-        WHERE schemaname IN ('public', 'catalog', 'inventory', 'auth', 'social')
+        WHERE schemaname IN ('public', 'catalog', 'inventory', 'auth', 'social', 'config')
     LOOP
         EXECUTE format('ALTER TABLE %I.%I OWNER TO %%I', r.schemaname, r.tablename, %L);
     END LOOP;

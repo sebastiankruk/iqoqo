@@ -63,12 +63,23 @@
   [ "$status" -eq 0 ]
 }
 
-@test "scripts/allegro_auth.sh syntax check" {
-  run bash -n scripts/allegro_auth.sh
-  [ "$status" -eq 0 ]
-}
-
 @test "scripts/sync_agy_memory.sh syntax check" {
   run bash -n scripts/sync_agy_memory.sh
   [ "$status" -eq 0 ]
 }
+
+@test "scripts/build_docker_images.sh syntax check" {
+  run bash -n scripts/build_docker_images.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "scripts/load_test_facets.sh syntax check" {
+  run bash -n scripts/load_test_facets.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "scripts/merge_env.sh syntax check" {
+  run bash -n scripts/merge_env.sh
+  [ "$status" -eq 0 ]
+}
+

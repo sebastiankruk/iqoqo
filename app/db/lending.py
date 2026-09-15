@@ -23,12 +23,10 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import UUID
 
 from . import db
 
-load_dotenv()
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
 
 #: The PostgreSQL schema name for inventory tables, or ``None`` for SQLite.
@@ -57,14 +55,17 @@ class LoanRequest(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "loan_requests"
     __table_args__ = (
-        (
-            {
-                "schema": _INVENTORY,
-                "extend_existing": True,
-            },
-        )
-        if _INVENTORY
-        else ({"extend_existing": True},)
+        db.CheckConstraint("status IN ('pending', 'approved', 'rejected')", name="ck_loan_requests_status"),
+        *(
+            (
+                {
+                    "schema": _INVENTORY,
+                    "extend_existing": True,
+                },
+            )
+            if _INVENTORY
+            else ({"extend_existing": True},)
+        ),
     )
 
     id = db.Column(db.Integer, primary_key=True)

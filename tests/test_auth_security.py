@@ -155,3 +155,63 @@ class TestBarcodePreviewQueryValidation:
         # Assuming the system handles it, it might return 200 or 404 (not found).
         # We just want to ensure it doesn't return 400 Bad Request.
         assert resp.status_code in (200, 404)
+
+
+def test_login_rate_limiting(app):
+    """POST /api/auth/login rejects requests beyond 5 per minute."""
+    from app.core.limiter import limiter
+
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        for _ in range(5):
+            res = test_client.post("/api/auth/login", json={"email": "nobody@iqoqo.local", "password": "wrong"})
+            assert res.status_code == 401
+
+        res = test_client.post("/api/auth/login", json={"email": "nobody@iqoqo.local", "password": "wrong"})
+        assert res.status_code == 429
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_register_rate_limiting(app):
+    """POST /api/auth/register rejects requests beyond 5 per minute."""
+    from app.core.limiter import limiter
+
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        for i in range(5):
+            res = test_client.post(
+                "/api/auth/register",
+                json={"email": f"ratelimited{i}@iqoqo.local", "password": "password123", "display_name": f"User {i}"},
+            )
+            assert res.status_code == 201
+
+        res = test_client.post(
+            "/api/auth/register",
+            json={"email": "ratelimited5@iqoqo.local", "password": "password123", "display_name": "User 5"},
+        )
+        assert res.status_code == 429
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False

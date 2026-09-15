@@ -44,3 +44,15 @@ def test_mask_api_key_short_values():
 def test_mask_api_key_8_chars():
     """Exactly 8 char value should show last 4."""
     assert _mask_api_key("12345678") == "***5678"
+
+
+def test_sensitive_keys_in_api_keys_set():
+    """Ensure sensitive OAuth and secret keys are included in API_KEYS registry."""
+    from app.api.admin import API_KEYS
+
+    required_keys = {"ALLEGRO_TOKEN_DATA", "DISCOGS_CONSUMER_KEY", "DISCOGS_CONSUMER_SECRET"}
+    for key in required_keys:
+        assert key in API_KEYS
+        # Test that sample secret is masked
+        masked = _mask_api_key(f"{key}_sample_secret_val")
+        assert masked.startswith("***")

@@ -64,6 +64,9 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 #: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
 
+#: Allowed statuses for UserWorkIntent (progress statuses plus fulfilled).
+WORK_INTENT_STATUSES: tuple[str, ...] = (*PROGRESS_STATUSES, "fulfilled")
+
 #: Controlled vocabulary for :attr:`Expression.kind`.
 #:
 #: ``live_performance`` — a concert / gig / live-recorded realization of a Work,
@@ -401,7 +404,17 @@ class Item(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "items"
-    __table_args__ = ({"schema": _INVENTORY},) if _INVENTORY else ()
+    __table_args__ = (
+        db.CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in ITEM_STATUSES)})",
+            name="ck_items_status",
+        ),
+        db.CheckConstraint(
+            f"collection_status IN ({', '.join(repr(s) for s in COLLECTION_STATUSES)})",
+            name="ck_items_collection_status",
+        ),
+        *(({"schema": _INVENTORY},) if _INVENTORY else ()),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=False)
@@ -441,10 +454,20 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     __table_args__: tuple = (
         (
             db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            db.CheckConstraint(
+                f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
+                name="ck_user_work_intents_status",
+            ),
             {"schema": _INVENTORY},
         )
         if _INVENTORY
-        else (db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),)
+        else (
+            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            db.CheckConstraint(
+                f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
+                name="ck_user_work_intents_status",
+            ),
+        )
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -507,7 +530,7 @@ class UserCollection(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="CASCADE"), nullable=True, index=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey(f"{_INVENTORY_PFX}user_collections.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
     owner = db.relationship("User", backref=db.backref("collections", cascade="all, delete-orphan", lazy="dynamic"))

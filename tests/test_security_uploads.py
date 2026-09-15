@@ -56,3 +56,26 @@ def test_prevent_directory_traversal_on_image_upload():
             # If your implementation explicitly rejects invalid names rather than sanitizing them,
             # this is also a secure outcome.
             assert str(e) == "Invalid filename"
+
+
+def test_restore_covers_prevents_zip_slip():
+    """
+    SECURITY TEST: Ensure restore_covers detects and rejects Zip Slip directory traversal.
+    """
+    import tempfile
+    import zipfile
+
+    from scripts.restore_covers import restore_covers
+
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
+        zip_path = tmp_zip.name
+
+    try:
+        with zipfile.ZipFile(zip_path, "w") as z:
+            z.writestr("../../../../tmp/malicious.txt", "payload")
+
+        with pytest.raises(ValueError, match="Zip slip directory traversal detected"):
+            restore_covers(zip_path)
+    finally:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)

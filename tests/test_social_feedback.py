@@ -304,3 +304,58 @@ def test_feedback_comment_max_length(client, social_setup, app):
         headers=headers,
     )
     assert response.status_code == 400
+
+
+def test_feedback_comment_advanced_xss_payloads(client, social_setup, app):
+    """POST feedback strips advanced XSS vectors via bleach.clean()."""
+    headers = get_headers(app, social_setup["u1_id"])
+    work_id = social_setup["work_id"]
+
+    xss_payloads = [
+        "<img src=x onerror=alert('XSS')>Awesome reading",
+        "<svg/onload=alert('XSS')>Great story",
+        "<a href='javascript:alert(1)'>Click me</a>Nice",
+        "<iframe src='http://evil.com'></iframe>Superb",
+    ]
+
+    for payload in xss_payloads:
+        response = client.post(
+            f"/api/feedback/work/{work_id}",
+            json={"rating": 4, "comment": payload},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        comment = response.json["data"]["comment"]
+        assert "<img" not in comment
+        assert "<svg" not in comment
+        assert "<a" not in comment
+        assert "<iframe" not in comment
+        assert "onerror" not in comment
+        assert "onload" not in comment
+        assert "javascript:" not in comment
+
+
+def test_social_endpoints_optional_auth(client, social_setup, app):
+    """Verify social feedback and notes GET endpoints work with or without auth."""
+    work_id = social_setup["work_id"]
+    headers = get_headers(app, social_setup["u1_id"])
+
+    # 1. Unauthenticated read of feedback
+    unauth_fb_res = client.get(f"/api/feedback/work/{work_id}")
+    assert unauth_fb_res.status_code == 200
+    assert unauth_fb_res.json["success"] is True
+
+    # 2. Authenticated read of feedback
+    auth_fb_res = client.get(f"/api/feedback/work/{work_id}", headers=headers)
+    assert auth_fb_res.status_code == 200
+    assert auth_fb_res.json["success"] is True
+
+    # 3. Unauthenticated read of notes
+    unauth_notes_res = client.get(f"/api/notes/work/{work_id}")
+    assert unauth_notes_res.status_code == 200
+    assert unauth_notes_res.json["success"] is True
+
+    # 4. Authenticated read of notes
+    auth_notes_res = client.get(f"/api/notes/work/{work_id}", headers=headers)
+    assert auth_notes_res.status_code == 200
+    assert auth_notes_res.json["success"] is True

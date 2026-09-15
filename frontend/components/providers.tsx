@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
@@ -42,10 +42,29 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Responsive toast placement: top-center on mobile (< 640px) to prevent bottom nav bar collision
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <Toaster richColors position="bottom-right" />
+      <Toaster
+        richColors
+        position={isMobile ? "top-center" : "bottom-right"}
+        mobileOffset={{
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          bottom: "5.5rem",
+        }}
+      />
     </QueryClientProvider>
   );
 }

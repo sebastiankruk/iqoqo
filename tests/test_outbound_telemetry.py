@@ -70,7 +70,7 @@ def test_record_outbound_telemetry_recording_span(mock_logger: MagicMock) -> Non
 
 
 @patch("app.utils.covers.record_outbound_telemetry")
-@patch("app.utils.covers.requests.get")
+@patch("app.utils.covers.safe_get")
 def test_download_direct_url_records_telemetry(mock_get: MagicMock, mock_record_telemetry: MagicMock) -> None:
     """Verify download_direct_url attaches Chrome User-Agent and records outbound telemetry."""
     from app.utils.covers import download_direct_url

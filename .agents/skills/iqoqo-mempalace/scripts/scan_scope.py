@@ -57,9 +57,15 @@ DEFAULT_EXCLUDES = [
     "**/app/static/covers/**",
     "**/app/static/gallery/**",
     "**/screenshots/**",
-    "**/images/**",
     "**/.DS_Store",
     "**/Thumbs.db",
+    "**/*.log",
+    "**/.env*",
+    "**/*.key",
+    "**/*.pem",
+    "**/antigravity-oauth-token*",
+    "**/*.token*",
+    "**/*secret*",
 ]
 
 
@@ -112,7 +118,7 @@ def get_version(project_root: Path) -> str:
         except Exception:
             pass
 
-    return "0.7.17"
+    return "0.7.18"
 
 
 def load_scope_config(project_root: Path) -> Optional[Dict[str, Any]]:

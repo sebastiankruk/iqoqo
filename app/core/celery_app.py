@@ -43,6 +43,12 @@ celery.conf.update(
     broker_connection_retry_on_startup=True,
     task_time_limit=600,  # hard kill after 10 min (covers slowest LLM tier at 300s)
     task_soft_time_limit=540,  # SoftTimeLimitExceeded after 9 min for graceful cleanup
+    beat_schedule={
+        "refresh-taxonomies-hourly": {
+            "task": "app.core.tasks.refresh_taxonomies_cache",
+            "schedule": 3600.0,
+        },
+    },
 )
 
 

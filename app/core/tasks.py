@@ -23,6 +23,7 @@ import logging
 import os
 import subprocess
 from collections.abc import Callable
+from typing import Any
 
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
@@ -237,3 +238,15 @@ def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: o
     except subprocess.CalledProcessError as e:
         logger.error("rclone copyto failed for feedback screenshot %s: %s", filename, e.stderr)
         raise RuntimeError(f"Feedback screenshot upload failed: {e.stderr}") from e
+
+
+@celery.task(name="app.core.tasks.refresh_taxonomies_cache")
+def refresh_taxonomies_cache() -> dict[str, Any]:
+    """Precomputes and materializes global library taxonomy facet trees into Redis cache."""
+    from app.api.taxonomies import extract_taxonomies_data
+    from app.core.cache import cache
+
+    data = extract_taxonomies_data(scope="global")
+    cache_key = "taxonomies:global:/api/taxonomies?"
+    cache.set(cache_key, {"success": True, "data": data}, timeout=3600)
+    return {"status": "refreshed", "data": data}

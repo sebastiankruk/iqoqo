@@ -15,17 +15,17 @@
 
 """API routes for social feedback (ratings and comments) on FRBR levels."""
 
-import re
 from datetime import UTC, datetime
 from typing import Any
 
+import bleach
 from flask import Response, g, jsonify, request
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
-from app.api.decorators import require_auth, require_permission
+from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.frbr_service import update_frbr_entity_type
 from app.core.permissions import PermissionName
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, User, Work, db
@@ -38,12 +38,11 @@ VALID_LEVELS = {"work", "expression", "manifestation", "item"}
 # a future rendering path relaxes that assumption.
 MAX_SOCIAL_TEXT_LENGTH = 2048
 
-_TAG_RE = re.compile(r"<[^>]*>")
-
 
 def _sanitize_text(value: str) -> str:
-    """Strip HTML-like markup from free-text user input (defense in depth)."""
-    return _TAG_RE.sub("", value).strip()
+    """Strip HTML markup from free-text user input using bleach (defense in depth)."""
+    cleaned: str = str(bleach.clean(value, tags=[], attributes={}, protocols=[], strip=True)).strip()
+    return cleaned
 
 
 def _validate_note_input(data: dict | None) -> tuple[str | None, str | None]:
@@ -113,6 +112,7 @@ def _resolve_target_entity(escalation: EscalationRequest) -> dict[str, Any] | No
 
 
 @api_bp.route("/feedback/<string:level>/<int:target_id>", methods=["GET"])
+@optional_auth
 def get_social_feedback(level: str, target_id: int) -> Response | tuple[Response, int]:
     """
     Get all social feedback (ratings and comments) for a specific FRBR level and resource ID.
@@ -265,6 +265,7 @@ def delete_social_feedback(level: str, target_id: int) -> Response | tuple[Respo
 
 
 @api_bp.route("/notes/<string:level>/<int:target_id>", methods=["GET"])
+@optional_auth
 def get_social_notes(level: str, target_id: int) -> Response | tuple[Response, int]:
     """
     Get all social notes/comments for a specific FRBR level and resource ID.

@@ -21,6 +21,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy import select
 
 from app.api.decorators import require_auth
+from app.core.limiter import limiter
 from app.db.models import SharedCollection, db
 
 sharing_bp = Blueprint("sharing", __name__, url_prefix="/sharing")
@@ -44,6 +45,7 @@ def list_shared_collections():
 @sharing_bp.route("", methods=["POST"], strict_slashes=False)
 @sharing_bp.route("/", methods=["POST"], strict_slashes=False)
 @require_auth
+@limiter.limit("30 per minute")
 def create_shared_collection():
     """Create a new shared collection."""
     data = request.get_json() or {}

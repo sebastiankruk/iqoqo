@@ -16,7 +16,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "./client";
-import type { BoardgameMechanic } from "@/types/frbr";
+import type { BoardgameMechanic } from "@/types/boardgame";
 
 /**
  * Fetch the controlled board game mechanics vocabulary from the API.
@@ -24,8 +24,8 @@ import type { BoardgameMechanic } from "@/types/frbr";
  * @returns Array of board game mechanics.
  */
 export async function getBoardgameMechanics(): Promise<BoardgameMechanic[]> {
-  const res = await apiFetch<{ success: boolean; data: BoardgameMechanic[] }>("/boardgame/mechanics");
-  return res?.data ?? [];
+  const res = await apiFetch<BoardgameMechanic[]>("/boardgame/mechanics");
+  return res ?? [];
 }
 
 /**

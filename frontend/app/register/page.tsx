@@ -51,8 +51,18 @@ export default function RegisterPage() {
 
     if (res.ok) {
       const data = await res.json();
-      // Exchange token in BFF to set the session cookie
-      window.location.href = `/api/auth-exchange?token=${data.token}`;
+      // Exchange token in BFF via POST body to set the session cookie
+      const exchangeRes = await fetch(`/api/auth-exchange`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: data.token }),
+      });
+      if (exchangeRes.ok) {
+        const result = await exchangeRes.json().catch(() => ({}));
+        window.location.href = result.redirectUrl || "/";
+      } else {
+        window.location.href = "/";
+      }
     } else {
       const errData = await res.json();
       setError(errData.error || t("registrationFailed"));

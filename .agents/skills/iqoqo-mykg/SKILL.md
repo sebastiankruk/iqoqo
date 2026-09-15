@@ -27,13 +27,13 @@ Trigger this skill when the user types `/iqoqo-mykg <command>` or when they need
 
 ## Commands
 
-| Command | Action |
-|---------|--------|
-| `/iqoqo-mykg index` | Full rebuild: `IQOQO_AI_MODE=1 make mykg-index` |
-| `/iqoqo-mykg update` | Incremental update: `IQOQO_AI_MODE=1 make mykg-update` |
-| `/iqoqo-mykg grow` | Grow schema: `IQOQO_AI_MODE=1 make mykg-update ARGS="--grow-schema"` |
-| `/iqoqo-mykg status` | Show latest session stats: `make mykg-status` |
-| `/iqoqo-mykg query "<question>"` | Query the knowledge graph |
+| Command | Action | CLI Invocation |
+|---------|--------|----------------|
+| `/iqoqo-mykg index` | Full rebuild | `IQOQO_AI_MODE=1 make mykg-index` |
+| `/iqoqo-mykg update` | Incremental update | `IQOQO_AI_MODE=1 make mykg-update` |
+| `/iqoqo-mykg grow` | Grow schema | `IQOQO_AI_MODE=1 make mykg-update ARGS="--grow-schema"` |
+| `/iqoqo-mykg status` | Show latest session stats | `make mykg-status` |
+| `/iqoqo-mykg query "<question>"` | Query knowledge graph | `make mykg-ask Q="<question>"` (or `.venv/bin/python .agents/skills/iqoqo-mykg/scripts/ask.py "<question>"`) |
 
 ## Execution Architecture
 

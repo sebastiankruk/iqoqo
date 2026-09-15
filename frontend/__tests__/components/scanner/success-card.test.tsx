@@ -305,9 +305,59 @@ describe("SuccessCard", () => {
 
     await waitFor(() => {
       expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["items"] }));
-      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["worksShelf"] }));
-      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["expressionsShelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["works", "shelf"] }));
+      expect(mockInvalidateQueries).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["expressions", "shelf"] })
+      );
       expect(mockInvalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ["stats"] }));
     });
+  });
+
+  it("arms sessionStorage auto_start_camera when adding item to shelf", async () => {
+    mockApiPost.mockResolvedValueOnce({
+      data: { success: true, data: { item_id: 42, manifestation_id: 55 } },
+    });
+
+    render(<SuccessCard isbn="9780441013593" meta={SAMPLE_META} onDismiss={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add to (shelf|library)/i }));
+
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem("iqoqo_auto_start_camera")).toBe("true");
+    });
+  });
+
+  it("renders both 'View in Collection' and 'Scan Another' when already in collection", () => {
+    const onScanAnother = vi.fn();
+    const alreadyMeta: IsbnMeta = {
+      ...SAMPLE_META,
+      already_in_collection: true,
+      item_id: 99,
+    };
+
+    render(<SuccessCard isbn="9780441013593" meta={alreadyMeta} onDismiss={vi.fn()} onScanAnother={onScanAnother} />);
+
+    expect(screen.getByText("Already in your collection")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View in Collection" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scan Another" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan Another" }));
+    expect(onScanAnother).toHaveBeenCalledOnce();
+  });
+
+  it("arms sessionStorage auto_start_camera when clicking 'View in Collection'", () => {
+    window.sessionStorage.removeItem("iqoqo_auto_start_camera");
+    const alreadyMeta: IsbnMeta = {
+      ...SAMPLE_META,
+      already_in_collection: true,
+      item_id: 99,
+    };
+
+    render(<SuccessCard isbn="9780441013593" meta={alreadyMeta} onDismiss={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "View in Collection" }));
+
+    expect(window.sessionStorage.getItem("iqoqo_auto_start_camera")).toBe("true");
+    expect(mockPush).toHaveBeenCalledWith("/item/99");
   });
 });

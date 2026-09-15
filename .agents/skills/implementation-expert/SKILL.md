@@ -16,11 +16,11 @@ The project is built on top of the FRBR/FRBRoo ontology. The tech stack consists
 
 ## Current State
 
-We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
+We have successfully released **v0.7.18**, concluding a comprehensive 26-chunk bottom-up codebase review (~407 files) and 6 critical hardening batches. Key improvements include: Fernet symmetric encryption at rest for InstanceSettings API secrets with automated `.env` migration (`make migrate-secrets`), a clean two-stage linear Alembic migration DAG (`v0_7_17_baseline` + `v0_7_18_fixes`), strict SQL `LIMIT`/`OFFSET` pagination and bounded query memory across items and taxonomies, SSRF cover lookup protection, TanStack Query cache invalidation harmonization with 'Coming in v0.8.0' safeguards on unwired controls, interactive operational script guardrails, a decoupled `migration` container service in Docker Compose, continuous hands-free batch scanning with audio feedback, and decoupled knowledge synchronization (`make knowledge-sync` vs `make knowledge-sync-full`, `make mykg-ask`).
 
-## Upcoming (v0.7.15 & Beyond)
+## Upcoming (v0.8.0 & Beyond)
 
-Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
+With v0.7.18 fully stabilized and verified, our sole focus is **v0.8.0: Semantic Web & Linked Open Data**. Core deliverables include: exposing FRBR collections as RDF/JSON-LD graphs, implementing a secure `/api/sparql` query endpoint via `rdflib` with an admin SPARQL explorer UI, creating complete `schema:CreativeWork` SEO mappings, enabling user Data Sovereignty Export (downloading personal libraries as canonical JSON-LD), and completing OWL/SHACL ontology validation synchronization. This directly establishes the foundation for **v0.9.0: Federation & Decentralization** (ActivityPub Inbox/Outbox endpoints, HTTP Signatures, and inter-server Trust Graph metadata sync).
 
 ## Core System Requirements
 
@@ -48,6 +48,10 @@ This skill governs codebase changes. It handles provided code OR generates requi
 11. **Preserve Docs**: When modifying existing functions, preserve all existing docstrings, comments, and type annotations. Do not strip or replace them.
 12. **Non-English UI Casing**: Always use sentence case (not Title Case) for non-English localizations (e.g., Polish strings in `frontend/messages/pl.json`). Only capitalize the first word and proper nouns (e.g., "Zarządzaj kolekcjami", "Tryb konserwacji aktywny").
 13. **Prohibit Heredoc / `cat << EOF` Editing**: NEVER create or edit codebase files using `cat << EOF`, `cat << 'EOF'`, or shell redirection in bash commands. Always use structured agent file manipulation tools (`replace_file_content` or dedicated file tools).
+14. **Secret Encryption**: All API keys, secrets, and live OAuth tokens stored in `InstanceSettings` must use symmetric Fernet encryption derived from `SECRET_KEY`. Never persist plaintext credentials to the database.
+15. **SQL Pagination**: Endpoints returning lists of entities must implement database-level SQL `LIMIT`/`OFFSET` or keyset pagination. Never use Python-level list slicing on `query.all()` or unconstrained table queries.
+16. **Interactive UI Wiring**: All buttons, dropdown items, and interactive controls must be wired to functional handlers or explicitly disabled with an explanatory tooltip/badge (e.g. "Coming in v0.8.0").
+17. **Migration DAG Linearity**: Keep Alembic migrations strictly linear with exactly one head. Never create branched heads or unbatched migration operations.
 
 ## Implementation Workflow
 

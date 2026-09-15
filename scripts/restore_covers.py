@@ -37,6 +37,11 @@ def restore_covers(zip_path, app=None):
         app = create_app()
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(zip_path, "r") as z:
+            real_tmp = os.path.realpath(tmp)
+            for member in z.infolist():
+                member_path = os.path.realpath(os.path.join(real_tmp, member.filename))
+                if member_path != real_tmp and not member_path.startswith(real_tmp + os.sep):
+                    raise ValueError(f"Zip slip directory traversal detected: {member.filename}")
             z.extractall(tmp)
 
         # 1. Copy images

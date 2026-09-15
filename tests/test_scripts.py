@@ -242,3 +242,129 @@ def test_clone_script_argument_validation(tmp_path):
     )
     assert res.returncode != 0
     assert "Error: Destination env file" in res.stdout or "Error: Destination env file" in res.stderr
+
+
+def test_backfill_work_genres_script(app):
+    """Test backfilling genres from Manifestation meta into Work meta."""
+    from scripts.migrations.backfill_work_genres import backfill_work_genres
+
+    with app.app_context():
+        work = Work(title="Sci-Fi Epic", meta={})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(
+            expression_id=expr.id,
+            meta={"Categories": ["Science Fiction", "Space Opera"]},
+        )
+        db.session.add(manif)
+        db.session.commit()
+
+        work_id = work.id
+
+        stats = backfill_work_genres(batch_size=10, app=app)
+        assert stats["updated_works"] == 1
+
+        db.session.expire_all()
+        updated_work = db.session.get(Work, work_id)
+        assert updated_work.meta.get("genres") == ["Science Fiction", "Space Opera"]
+
+
+def test_fix_invalid_item_statuses_script(app):
+    """Test repairing invalid item statuses via standalone script."""
+    from app.db.models import Item, User
+    from scripts.migrations.fix_invalid_item_statuses import fix_invalid_item_statuses
+
+    with app.app_context():
+        user = User(email="status_fixer@example.com")
+        db.session.add(user)
+        db.session.flush()
+
+        work = Work(title="Status Test Work", meta={})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="movie", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        # Item with legacy 'unread' status on a movie
+        item = Item(
+            manifestation_id=manif.id,
+            owner_id=user.id,
+            status="unread",
+            collection_status="available",
+        )
+        db.session.add(item)
+        db.session.commit()
+        item_id = item.id
+
+        stats = fix_invalid_item_statuses(batch_size=10, app=app)
+        assert stats["updated_items"] == 1
+
+        db.session.expire_all()
+        repaired_item = db.session.get(Item, item_id)
+        assert repaired_item.status == "want_to_watch"
+
+
+def test_migrate_wishlist_intents_script(app):
+    """Test migrating legacy wishlist items to UserWorkIntent via standalone script."""
+    from app.db.models import Item, User, UserWorkIntent
+    from scripts.migrations.migrate_wishlist_intents import migrate_wishlist_intents
+
+    with app.app_context():
+        user = User(email="wishlist_tester@example.com")
+        db.session.add(user)
+        db.session.flush()
+
+        work = Work(title="Wishlist Work", meta={})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        # Item with legacy 'wish_list' collection status
+        item = Item(
+            manifestation_id=manif.id,
+            owner_id=user.id,
+            status="want_to_read",
+            collection_status="wish_list",
+        )
+        db.session.add(item)
+        db.session.commit()
+
+        user_id = user.id
+        work_id = work.id
+        item_id = item.id
+
+        stats = migrate_wishlist_intents(batch_size=10, app=app)
+        assert stats["created_intents"] == 1
+        assert stats["deleted_legacy_items"] == 1
+
+        db.session.expire_all()
+        # Check intent created
+        intent = db.session.execute(
+            db.select(UserWorkIntent).where(
+                UserWorkIntent.user_id == user_id,
+                UserWorkIntent.work_id == work_id,
+            )
+        ).scalar_one_or_none()
+        assert intent is not None
+        assert intent.status == "want_to_read"
+
+        # Check item deleted
+        assert db.session.get(Item, item_id) is None

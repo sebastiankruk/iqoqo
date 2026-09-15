@@ -28,18 +28,32 @@ Trigger this skill when the user types `/iqoqo-mempalace <command>` or when you 
 
 ## Commands
 
-| Command | Action |
-|---------|--------|
-| `/iqoqo-mempalace index` | Full rebuild: all configured scopes and AI memory into `--wing iqoqo` |
-| `/iqoqo-mempalace update` | Incremental: mine changed files or specific scopes |
-| `/iqoqo-mempalace status` | Show palace drawers, room distributions, and stats |
-| `/iqoqo-mempalace search "<query>"` | Query MemPalace memory |
+| Command | Action | CLI Invocation |
+|---------|--------|----------------|
+| `/iqoqo-mempalace index` | Full rebuild | `IQOQO_AI_MODE=1 make mempalace-index` |
+| `/iqoqo-mempalace update` | Incremental | `.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py` |
+| `/iqoqo-mempalace status` | Show palace drawers & stats | `.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py` |
+| `/iqoqo-mempalace search "<query>"` | Query MemPalace memory | `.venv/bin/mempalace search "<query>" --wing iqoqo` |
+
+## Workflow: Querying & Searching Memory (`/iqoqo-mempalace search`)
+
+```bash
+.venv/bin/mempalace search "<keywords>" --wing iqoqo
+```
+
+### Critical Retrieval Best Practices:
+1. **Keyword Focus**: MemPalace utilizes MiniLM semantic embeddings. Use tight 2-4 word concept keywords (e.g. `"FRBR board games"`, `"OpenRouter routing"`, `"ActivityPub actor"`) rather than conversational multi-sentence queries.
+2. **Never Pipe to `head`**: MemPalace outputs room and drawer headers before the matching text snippets. Piping to `head -30` truncates the actual content. Let the CLI output flow or inspect matches in full.
+3. **Never Swallow `stderr` (`2>/dev/null`)**: Do NOT silence stderr. Silencing stderr swallows critical diagnostic messages (e.g. collection missing, lock conflicts) that tell you why an answer was not found.
 
 ## Workflow: Full Index (`/iqoqo-mempalace index` or `make mempalace-index`)
 
+> [!WARNING]
+> Full palace indexing walks 297k+ entity links in its hallway graph and takes ~15 minutes on CPU. Do NOT run full indexing automatically during interactive sessions. Use surgical targeted mining instead.
+
 ### Step 1 — Detect scopes
 ```bash
-python3 .agents/skills/iqoqo-mempalace/scripts/scan_scope.py
+.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/scan_scope.py
 ```
 - Reads `.iqoqo-mempalace-scope.yaml`
 - Resolves codebase directories (`app`, `frontend`, `migrations`, `deploy`, `scripts`, `shared`, `tests`, `docs`, `openspec/specs`)
@@ -49,25 +63,25 @@ python3 .agents/skills/iqoqo-mempalace/scripts/scan_scope.py
 
 ### Step 2 — Run mining
 ```bash
-python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py
+.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py
 ```
-- Mines project scopes with `mempalace mine <scope> --mode projects --wing iqoqo`
-- Mines conversation memory with `mempalace mine .context/ai-memory/<version> --mode convos --wing iqoqo`
+- Mines project scopes with `.venv/bin/mempalace mine <scope> --mode projects --wing iqoqo`
+- Mines conversation memory with `.venv/bin/mempalace mine .context/ai-memory/<version> --mode convos --wing iqoqo`
 
 ### Step 3 — Report status
 ```bash
-python3 .agents/skills/iqoqo-mempalace/scripts/get_status.py
+.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py
 ```
 
-## Workflow: Targeted Mining
+## Workflow: Targeted Mining (Fast Single-File Ingestion, ~1-2s)
 
-To mine a specific file or directory after making changes:
+To mine a specific file or directory after making changes during interactive sessions:
 ```bash
-python3 .agents/skills/iqoqo-mempalace/scripts/run_mine.py <path>
+.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py <path>
 ```
 Or directly:
 ```bash
-mempalace mine <path> --wing iqoqo
+.venv/bin/mempalace mine <path> --wing iqoqo
 ```
 
 ## Scope Configuration

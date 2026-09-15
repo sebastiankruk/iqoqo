@@ -91,3 +91,10 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
+@test "docker-compose.prebuilt.yml resets volumes on migration service" {
+  run grep -A 5 "migration:" "${BATS_TEST_DIRNAME}/../../docker-compose.prebuilt.yml"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "volumes: !reset []" ]]
+}
+
+

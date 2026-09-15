@@ -74,3 +74,64 @@ def test_secret_key_insecure_value_rejected():
     for val in insecure_values:
         with pytest.raises(RuntimeError, match="must not be a default or placeholder value"):
             Config.validate_secret_key(val)
+
+
+# --- Reveal Settings Security & Rate Limiting ---
+
+
+def test_reveal_setting_requires_post(client, admin_headers):
+    """GET /settings/reveal must return 405 Method Not Allowed."""
+    res = client.get("/api/v1/admin/settings/reveal?key=GOOGLE_BOOKS_API_KEY", headers=admin_headers)
+    assert res.status_code == 405
+
+
+def test_reveal_setting_logs_audit(client, app, admin_headers):
+    """POST /settings/reveal returns secret and records EntityAuditLog."""
+    from app.db.core import EntityAuditLog
+    from app.db.models import InstanceSettings
+
+    with app.app_context():
+        # Clean up any preexisting setting and add test setting
+        InstanceSettings.query.filter_by(key="GOOGLE_BOOKS_API_KEY").delete()
+        setting = InstanceSettings(key="GOOGLE_BOOKS_API_KEY", value="super-secret-key-12345")
+        db.session.add(setting)
+        db.session.commit()
+
+    res = client.post("/api/v1/admin/settings/reveal", json={"key": "GOOGLE_BOOKS_API_KEY"}, headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json["success"] is True
+    assert res.json["data"]["value"] == "super-secret-key-12345"
+
+    with app.app_context():
+        log = EntityAuditLog.query.filter_by(entity_type="instance_setting", change_type="reveal_secret").first()
+        assert log is not None
+        assert log.diff.get("key") == "GOOGLE_BOOKS_API_KEY"
+
+
+def test_reveal_setting_rate_limited(app, admin_headers):
+    """POST /settings/reveal enforces 5 per minute rate limiting."""
+    from app.core.limiter import limiter
+
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        # First 5 calls succeed
+        for _ in range(5):
+            res = test_client.post("/api/v1/admin/settings/reveal", json={"key": "GOOGLE_BOOKS_API_KEY"}, headers=admin_headers)
+            assert res.status_code in (200, 400)
+
+        # 6th call hits rate limit
+        res = test_client.post("/api/v1/admin/settings/reveal", json={"key": "GOOGLE_BOOKS_API_KEY"}, headers=admin_headers)
+        assert res.status_code == 429
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False

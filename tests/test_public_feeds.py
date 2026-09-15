@@ -152,7 +152,7 @@ class TestPublicFeeds:
             user = User.query.filter_by(public_username=public_user).first()
             # Add a hidden/private item
             mani = Manifestation.query.first()
-            hidden_item = Item(owner_id=user.id, manifestation_id=mani.id, status="to_read", is_hidden=True)
+            hidden_item = Item(owner_id=user.id, manifestation_id=mani.id, status="want_to_read", is_hidden=True)
             db.session.add(hidden_item)
             db.session.commit()
 

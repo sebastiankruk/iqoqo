@@ -67,8 +67,11 @@ def fix_alembic_version():
             print("  Executing: ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
             cur.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255);")
 
-        # Reconcile renamed migration revision identifiers
+        # Reconcile renamed migration revision identifiers and legacy heads
         migration_rename_map = {
+            "f65648a6aaf4": "v0_7_17_baseline",
+            "20260818_add_expansion_links": "v0_7_17_baseline",
+            "20260818_add_expansion_links_and_mechanics": "v0_7_17_baseline",
             "20260814_add_comments_column_to_feedback": "20260814_feedback_comments",
             "20260330_add_operation_type_to_llm_telemetry": "20260330_llm_telemetry_op_type",
             "20260331_merge_token_and_telemetry_branches": "20260331_merge_token_telemetry",
@@ -81,11 +84,6 @@ def fix_alembic_version():
             )
             if cur.rowcount > 0:
                 print(f"  Reconciled legacy migration identifier: {old_rev} -> {new_rev}")
-
-        # Ensure inventory.items has collection_status column if the table exists
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'inventory' AND table_name = 'items');")
-        if cur.fetchone()[0]:
-            cur.execute("ALTER TABLE inventory.items ADD COLUMN IF NOT EXISTS collection_status VARCHAR(50);")
 
         print("✅ Fix applied successfully!")
 
