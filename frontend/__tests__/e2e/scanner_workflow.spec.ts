@@ -230,4 +230,66 @@ test.describe("Scanner Workflow", () => {
     await wishlistBtn.click();
     await expect(page.getByText("Adding to your wishlist")).toBeVisible();
   });
+
+  test("continuous batch scanning: clicking scan another on success card dismisses card and re-engages scanner", async ({
+    page,
+  }) => {
+    // Mock barcode lookup
+    await page.route(`**/api/lookup/${testBarcode}**`, async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            title: "Batch Scan Test Book",
+            authors: ["Test Author"],
+            isbn13: testBarcode,
+            format: "book",
+            candidates: [
+              {
+                title: "Batch Scan Test Book",
+                authors: ["Test Author"],
+                isbn13: testBarcode,
+                format: "book",
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+
+    // Switch to manual search tab
+    const manualTab = page.getByTestId("scanner-tab-manual");
+    if (await manualTab.isVisible()) {
+      await manualTab.click();
+      await page.waitForTimeout(300);
+
+      // Search barcode
+      const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
+      await input.fill(testBarcode);
+      await page.keyboard.press("Enter");
+
+      // Select candidate from disambiguation
+      const candidateChoice = page.getByRole("button", { name: /Batch Scan Test Book/i });
+      await expect(candidateChoice).toBeVisible({ timeout: 10000 });
+      await candidateChoice.click();
+
+      // Verify success card is displayed
+      const successHeading = page.getByText("Successfully Found!");
+      await expect(successHeading).toBeVisible();
+
+      // Click "Scan another" action button
+      const scanAnotherBtn = page.getByRole("button", { name: /Scan another/i });
+      await expect(scanAnotherBtn).toBeVisible();
+      await scanAnotherBtn.click();
+
+      // Verify success card is dismissed and scanner view is restored
+      await expect(successHeading).not.toBeVisible();
+      await expect(manualTab).toBeVisible();
+    }
+  });
 });
