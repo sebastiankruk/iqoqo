@@ -4,13 +4,28 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.1.x   | :white_check_mark: |
+| 0.7.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in this project, please email the maintainer or create a private security advisory on GitHub.
 
 ## Recent Security Updates
+
+### Secret Encryption & Operational Hardening (September 2026)
+
+#### Symmetric Encryption at Rest & Secret Migration
+
+- **Fernet Secret Encryption**: Encrypted all sensitive external API credentials, OAuth tokens, and secret keys stored in `InstanceSettings` using symmetric Fernet encryption keyed from `SECRET_KEY`. Added credential masking (`sk-...`, `AIza...`) across API endpoints and Admin UI.
+- **Automated Secret Migration Utility**: Added `scripts/migrate_env_secrets_to_db.py` and `make migrate-secrets` to safely migrate credentials from plaintext `.env` to encrypted database storage and comment out source variables.
+
+#### Web & Operational Hardening
+
+- **SSRF Redirect Type Safety**: Enforced string type coercion and strict URL scheme validation for redirect `Location` headers in cover fetches (`app/utils/covers.py`).
+- **Archive Path Traversal (Zip Slip) Protection**: Validated canonical target paths in `scripts/restore_covers.py` before extracting zip archives to prevent directory traversal.
+- **Host Header Poisoning & Open Redirect Mitigation**: Enforced host allowlisting with secure fail-closed fallback in auth exchange routes (`frontend/app/api/auth-exchange/route.ts`).
+- **Feedback Screenshot IDOR Containment**: Upgraded permission checks to strict `all()` verification across matching tickets in `_validate_screenshot_access` (`app/api/feedback.py`).
+- **Operational Script Guards**: Enforced typed interactive confirmation prompts and production environment blocks (`FLASK_ENV=production`) on destructive scripts (`clone.sh`, `init_db.py --reset`, `migrate_legacy.py --clear`).
 
 ### Subprocess & Network Hardening (August 2026)
 

@@ -362,15 +362,34 @@ new indexes — is captured in a versioned migration file under `migrations/vers
 
 ### When migrations run
 
-| Workflow                             | How migrations run                                                                                              |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| **Local dev** (`./run.sh dev`)       | Automatically — `flask db upgrade` is called before Flask starts.                                               |
-| **Docker dev** (`docker compose up`) | Automatically — the `web` container waits for the db healthcheck, then runs `flask db upgrade` before gunicorn. |
-| **Docker prod** (`./run.sh prod`)    | Same as Docker dev — automatic on every container start.                                                        |
+| Workflow                             | How migrations run                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Local dev** (`./run.sh dev`)       | Automatically — `flask db upgrade` is called before Flask starts.                                                        |
+| **Docker dev** (`docker compose up`) | Automatically — the dedicated one-shot `migration` container runs `flask db upgrade` before `web` and `worker` start.    |
+| **Docker prod** (`./run.sh prod`)    | Automatically — dedicated `migration` container completes migrations before service containers initialize.               |
 
 `flask db upgrade` is **idempotent**: running it when the schema is already current is
 completely safe and takes only a fraction of a second. It is therefore safe to run on
 every startup without any guard condition.
+
+### Migrating Plaintext Secrets to Database Storage
+
+Starting in v0.7.18, external API credentials and secrets (such as Google Books, Discogs, TMDB, BGG, IGDB, Allegro, OpenAI, and Gemini) are no longer kept in plaintext `.env`. They are encrypted at rest with symmetric Fernet encryption in the `instance_settings` table.
+
+When upgrading an existing deployment with API keys in `.env`, run the migration utility:
+
+```bash
+# Using Makefile:
+make migrate-secrets
+
+# Or via Python directly:
+python scripts/migrate_env_secrets_to_db.py
+
+# In a running Docker deployment:
+docker compose exec web python scripts/migrate_env_secrets_to_db.py
+```
+
+This utility reads migratable API keys from `.env`, encrypts them into `InstanceSettings`, and comments them out in `.env` with a `# migrated to DB settings on <date>` marker. Future secret management is performed via the Admin UI at `/admin/settings`.
 
 ### Running migrations manually
 
