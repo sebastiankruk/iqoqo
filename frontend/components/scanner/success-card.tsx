@@ -190,6 +190,15 @@ export function SuccessCard({
         }
       }
 
+      // Arm scanner auto-start for batch scanning continuity when navigating back to /scan
+      try {
+        if (typeof window !== "undefined" && window.sessionStorage) {
+          window.sessionStorage.setItem("iqoqo_auto_start_camera", "true");
+        }
+      } catch {
+        // Ignore session storage errors in restricted contexts
+      }
+
       // Invalidate cached queries BEFORE navigating so the UI has fresh statistics
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["items"] }),
@@ -339,13 +348,34 @@ export function SuccessCard({
 
               <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-6 flex-wrap">
                 {meta.already_in_collection ? (
-                  <Button
-                    className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
-                    variant="default"
-                    onClick={() => meta.item_id && router.push(`/item/${meta.item_id}`)}
-                  >
-                    View in Collection
-                  </Button>
+                  <>
+                    <Button
+                      className="flex-1 min-w-[140px] h-12 rounded-xl shadow-lg shadow-primary/20"
+                      variant="default"
+                      onClick={() => {
+                        try {
+                          if (typeof window !== "undefined" && window.sessionStorage) {
+                            window.sessionStorage.setItem("iqoqo_auto_start_camera", "true");
+                          }
+                        } catch {
+                          // Ignore session storage errors in restricted contexts
+                        }
+                        if (meta.item_id) {
+                          router.push(`/item/${meta.item_id}`);
+                        }
+                      }}
+                    >
+                      View in Collection
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 min-w-[140px] h-12 rounded-xl"
+                      onClick={onScanAnother ?? onDismiss}
+                      aria-label={t("successCard.scanAnother")}
+                    >
+                      {t("successCard.scanAnother")}
+                    </Button>
+                  </>
                 ) : (
                   <>
                     {policy === "catalog" ? (
