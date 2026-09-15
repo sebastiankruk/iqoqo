@@ -9,3 +9,4 @@
 * [TechComm Specialist](technical-communications.md) - Technical Communications Specialist for iqoqo
 * [UX/UI Auditor & Designer](ux-expert.md) - Expert in UX/UI layout density, heuristics, and user flows for physical media collectors
 * [Software Engineer](software-engineer.md) - Software engineering sidekick for the iqoqo project
+* [Code Review Partner](code-review-partner.md) - Unified code review partner covering Security, SRE, QA, Architecture, and Readability for the v0.7.18 codebase walkthrough

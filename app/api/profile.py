@@ -18,7 +18,9 @@ from datetime import UTC, datetime
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
+from app.core.limiter import limiter
 from app.db.models import ConsentRecord, User, db
+from app.utils.http_client import is_safe_url
 
 from .decorators import require_auth
 
@@ -106,7 +108,14 @@ def update_profile():
             user.visibility = val
 
     if "avatar_url" in data:
-        user.avatar_url = data["avatar_url"].strip()
+        raw_avatar = data["avatar_url"]
+        if raw_avatar:
+            avatar_url = str(raw_avatar).strip()
+            if not is_safe_url(avatar_url):
+                return jsonify({"error": "Invalid or unsafe avatar URL", "code": 400}), 400
+            user.avatar_url = avatar_url
+        else:
+            user.avatar_url = None
 
     db.session.commit()
     return jsonify({"message": "Profile updated successfully", "data": user.to_dict()})
@@ -156,7 +165,9 @@ def _mask_email(email: str) -> str:
 
 
 @profile_bp.route("/users/search", methods=["GET"], strict_slashes=False)
+@profile_bp.route("/search", methods=["GET"], strict_slashes=False)
 @require_auth
+@limiter.limit("30 per minute")
 def search_users():
     """Search for other users by exact email or partial display name."""
     query = request.args.get("q", "").strip()

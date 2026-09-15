@@ -352,3 +352,100 @@ def test_json_extract_postgresql():
     """json_extract() with dialect='postgresql' returns PG-compatible SQL."""
     result_pg = "table.meta->>'key'"
     assert "->>" in result_pg and "JSON_EXTRACT" not in result_pg
+
+
+# ── fix_alembic_version tests ─────────────────────────────────────────────
+
+
+def test_fix_alembic_missing_database_url():
+    """fix_alembic_version exits with 1 when DATABASE_URL is missing."""
+    from scripts.fix_alembic import fix_alembic_version
+
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch("scripts.fix_alembic.load_dotenv"),
+        patch("os.path.exists", return_value=False),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        fix_alembic_version()
+
+    assert excinfo.value.code == 1
+
+
+def test_fix_alembic_creates_table_if_not_exists():
+    """fix_alembic_version creates alembic_version table when it does not exist."""
+    from scripts.fix_alembic import fix_alembic_version
+
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_cur.rowcount = 0
+    mock_conn.cursor.return_value = mock_cur
+    # Table does not exist
+    mock_cur.fetchone.return_value = (False,)
+
+    with (
+        patch.dict("os.environ", {"DATABASE_URL": "postgresql://test:test@localhost:5432/test"}),
+        patch("psycopg2.connect", return_value=mock_conn),
+    ):
+        fix_alembic_version()
+
+    assert mock_conn.autocommit is True
+    # Verify CREATE TABLE query was executed
+    executed_queries = [call[0][0] for call in mock_cur.execute.call_args_list]
+    assert any("CREATE TABLE alembic_version" in q for q in executed_queries)
+    mock_cur.close.assert_called_once()
+    mock_conn.close.assert_called_once()
+
+
+def test_fix_alembic_alters_column_if_exists():
+    """fix_alembic_version alters alembic_version column when table exists."""
+    from scripts.fix_alembic import fix_alembic_version
+
+    mock_conn = MagicMock()
+    mock_cur = MagicMock()
+    mock_cur.rowcount = 1
+    mock_conn.cursor.return_value = mock_cur
+    # Table exists
+    mock_cur.fetchone.return_value = (True,)
+
+    with (
+        patch.dict("os.environ", {"DATABASE_URL": "postgresql://test:test@localhost:5432/test"}),
+        patch("psycopg2.connect", return_value=mock_conn),
+    ):
+        fix_alembic_version()
+
+    # Verify ALTER TABLE query was executed
+    executed_queries = [call[0][0] for call in mock_cur.execute.call_args_list]
+    assert any("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(255)" in q for q in executed_queries)
+    mock_cur.close.assert_called_once()
+    mock_conn.close.assert_called_once()
+
+
+def test_fix_alembic_database_fatal_error():
+    """fix_alembic_version exits with 1 on non-connection-refused database errors."""
+    import psycopg2
+
+    from scripts.fix_alembic import fix_alembic_version
+
+    with (
+        patch.dict("os.environ", {"DATABASE_URL": "postgresql://test:test@localhost:5432/test"}),
+        patch("psycopg2.connect", side_effect=psycopg2.ProgrammingError("permission denied")),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        fix_alembic_version()
+
+    assert excinfo.value.code == 1
+
+
+def test_fix_alembic_database_connection_refused_tolerated():
+    """fix_alembic_version tolerates connection refused without hard exiting."""
+    import psycopg2
+
+    from scripts.fix_alembic import fix_alembic_version
+
+    with (
+        patch.dict("os.environ", {"DATABASE_URL": "postgresql://test:test@localhost:5432/test"}),
+        patch("psycopg2.connect", side_effect=psycopg2.OperationalError("Connection refused")),
+    ):
+        # Should not raise SystemExit
+        fix_alembic_version()

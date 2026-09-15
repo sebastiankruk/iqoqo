@@ -427,7 +427,7 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
           <Save className="w-4 h-4 mr-2" />
           Save Work
         </Button>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
           <Plus className="w-4 h-4 mr-2" />
           Add Child
         </Button>
@@ -438,11 +438,11 @@ function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkF
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled title="Coming in v0.8.0">
               <ArrowUpRight className="w-4 h-4 mr-2" />
               Escalate
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </DropdownMenuItem>
@@ -761,7 +761,7 @@ function ExpressionEditor({
           <Save className="w-4 h-4 mr-2" />
           Save Expression
         </Button>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
           <Plus className="w-4 h-4 mr-2" />
           Add Child
         </Button>
@@ -772,11 +772,11 @@ function ExpressionEditor({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled title="Coming in v0.8.0">
               <ArrowUpRight className="w-4 h-4 mr-2" />
               Escalate
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </DropdownMenuItem>
@@ -941,7 +941,7 @@ function ManifestationEditor({
           <Save className="w-4 h-4 mr-2" />
           Save Manifestation
         </Button>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
           <Plus className="w-4 h-4 mr-2" />
           Add Child
         </Button>
@@ -952,11 +952,11 @@ function ManifestationEditor({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled title="Coming in v0.8.0">
               <ArrowUpRight className="w-4 h-4 mr-2" />
               Escalate
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </DropdownMenuItem>
@@ -1048,7 +1048,7 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
           <Save className="w-4 h-4 mr-2" />
           Save Item
         </Button>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
           <Plus className="w-4 h-4 mr-2" />
           Add Child
         </Button>
@@ -1059,11 +1059,11 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled title="Coming in v0.8.0">
               <ArrowUpRight className="w-4 h-4 mr-2" />
               Escalate
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </DropdownMenuItem>

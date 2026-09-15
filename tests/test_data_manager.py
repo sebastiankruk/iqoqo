@@ -21,6 +21,7 @@
 import json
 
 import pytest
+import sqlalchemy as sa
 
 from app.core.data_manager import DataManager
 from app.db import db
@@ -284,7 +285,10 @@ def test_get_stats_per_status_counts(app):
         # Create two items for each status so we can assert counts > 0
         for status in ITEM_STATUSES:
             for _ in range(2):
-                db.session.add(Item(manifestation_id=manif.id, owner_id=test_user.id, status=status, collection_status="dummy", meta={}))
+                db.session.add(Item(manifestation_id=manif.id, owner_id=test_user.id, status=status, meta={}))
+        db.session.flush()
+        # Direct SQL update to NULL bypasses column default so collection_status does not double-count
+        db.session.execute(sa.update(Item).values(collection_status=None))
         db.session.commit()
 
         stats = DataManager.get_stats()

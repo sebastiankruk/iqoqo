@@ -85,3 +85,73 @@ export async function GET(request: Request) {
   const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
   return NextResponse.redirect(new URL(target, baseUrl));
 }
+
+/**
+ * Handle POST requests to exchange a short-lived token or code for a session cookie.
+ *
+ * @param request - The incoming Next.js request with JSON body { token, callbackUrl }
+ * @returns {Promise<NextResponse>} The Next.js response setting the cookie and returning redirect info
+ */
+export async function POST(request: Request) {
+  let token: string | null = null;
+  let callbackUrl: string | null = null;
+
+  try {
+    const body = await request.json();
+    token = body?.token || body?.code || null;
+    callbackUrl = body?.callbackUrl || body?.redirect || null;
+  } catch {
+    // Body is empty or not JSON
+  }
+
+  // Fallback to query params if not provided in JSON body
+  if (!token) {
+    const url = new URL(request.url);
+    token = url.searchParams.get("token") || url.searchParams.get("code");
+    callbackUrl = callbackUrl || url.searchParams.get("callbackUrl") || url.searchParams.get("redirect");
+  }
+
+  const url = new URL(request.url);
+  const rawForwardedHost = request.headers.get("x-forwarded-host");
+  const rawHostHeader = request.headers.get("host") || "";
+
+  const fallbackHost = process.env.NEXT_PUBLIC_FRONTEND_URL
+    ? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).host
+    : "localhost:3000";
+
+  const effectiveHost =
+    rawForwardedHost && isAllowedHost(rawForwardedHost)
+      ? rawForwardedHost
+      : isAllowedHost(rawHostHeader)
+        ? rawHostHeader
+        : fallbackHost;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const effectiveProto =
+    forwardedProto === "https" || forwardedProto === "http"
+      ? forwardedProto
+      : url.protocol.startsWith("https")
+        ? "https"
+        : "http";
+
+  const isHttps = effectiveProto === "https";
+  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${effectiveProto}://${effectiveHost}`;
+
+  if (!token) {
+    return NextResponse.json({ error: "MissingToken", success: false }, { status: 400 });
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("iqoqo_session", token, {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+
+  const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
+  const redirectUrl = new URL(target, baseUrl).toString();
+
+  return NextResponse.json({ success: true, redirectUrl });
+}

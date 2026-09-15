@@ -42,3 +42,26 @@ teardown() {
   [ "$status" -eq 1 ]
   [[ "$output" =~ "Error: Destination directory" ]]
 }
+
+@test "clone.sh blocks clone into production destination without ALLOW_PROD_CLONE" {
+  local src_dir="${TEST_TEMP_DIR}/src"
+  local dst_dir="${TEST_TEMP_DIR}/dst"
+  mkdir -p "${src_dir}" "${dst_dir}"
+  touch "${src_dir}/.env.preview" "${dst_dir}/.env.prod"
+
+  run bash scripts/clone.sh "${src_dir}" preview "${dst_dir}" prod
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "is a production environment" ]]
+}
+
+@test "clone.sh proceeds past production check if ALLOW_PROD_CLONE=1" {
+  local src_dir="${TEST_TEMP_DIR}/src"
+  local dst_dir="${TEST_TEMP_DIR}/dst"
+  mkdir -p "${src_dir}" "${dst_dir}"
+  touch "${src_dir}/.env.preview" "${dst_dir}/.env.prod"
+
+  ALLOW_PROD_CLONE=1 run bash scripts/clone.sh "${src_dir}" preview "${dst_dir}" prod
+  [ "$status" -eq 1 ]
+  # Fails at docker search or container check, not at the production check
+  [[ ! "$output" =~ "is a production environment" ]]
+}

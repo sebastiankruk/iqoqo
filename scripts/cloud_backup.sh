@@ -35,13 +35,17 @@ mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump PostgreSQL
 DB_DUMP_FILE="${BACKUP_DIR}/db_dump_${TIMESTAMP}.sql"
-DB_CONTAINER=$(docker ps --filter "name=db" --format "{{.Names}}" | head -1)
+# Use specific filter to match only iqoqo PostgreSQL container, not other DB containers
+DB_CONTAINER=$(docker ps --filter "name=iqoqo-db" --filter "status=running" --format "{{.Names}}" | head -1)
 if [ -n "${DB_CONTAINER}" ]; then
-    docker exec -i "${DB_CONTAINER}" pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" > "${DB_DUMP_FILE}"
+    echo "📊 Using database container: ${DB_CONTAINER}"
+    # Explicitly set PGHOST to ensure connection inside container, not to host PostgreSQL
+    docker exec -i "${DB_CONTAINER}" sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${POSTGRES_USER:-iqoqo}'" > "${DB_DUMP_FILE}"
 else
+    echo "⚠️  No running iqoqo-db container found, falling back to docker compose"
     COMPOSE_SPEC="${COMPOSE_FILE:-docker-compose.yml}"
     docker compose -f "${COMPOSE_SPEC}" exec -T db \
-        pg_dumpall -c -U "${POSTGRES_USER:-iqoqo}" \
+        sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${POSTGRES_USER:-iqoqo}'" \
         > "${DB_DUMP_FILE}"
 fi
 
@@ -51,6 +55,16 @@ fi
 # output in every failure mode.
 if [ ! -s "${DB_DUMP_FILE}" ]; then
     echo "❌ Error: PostgreSQL dump is empty (${DB_DUMP_FILE}). Aborting backup." >&2
+    rm -rf "${BACKUP_DIR}"
+    exit 1
+fi
+
+# Additional validation: check that the dump contains actual SQL content
+# (not just error messages or empty transaction wrappers)
+if ! grep -q "CREATE\|INSERT\|ALTER\|SET" "${DB_DUMP_FILE}" 2>/dev/null; then
+    echo "❌ Error: PostgreSQL dump appears invalid (no SQL statements found). Aborting backup." >&2
+    echo "First 10 lines of dump file:" >&2
+    head -10 "${DB_DUMP_FILE}" >&2
     rm -rf "${BACKUP_DIR}"
     exit 1
 fi

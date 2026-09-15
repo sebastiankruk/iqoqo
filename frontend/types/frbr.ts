@@ -329,12 +329,7 @@ export type FacetStatsResponse = {
   borrowed_count?: number;
 };
 
-/** Controlled board game mechanic vocabulary entry. */
-export interface BoardgameMechanic {
-  id: string;
-  name: string;
-  description?: string | null;
-}
+export type { BoardgameMechanic } from "./boardgame";
 
 /** Enriched target entity details returned with escalation requests. */
 export interface EscalationTargetEntity {

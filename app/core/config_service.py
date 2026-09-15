@@ -21,6 +21,15 @@ from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 
+CONFIG_KEY_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "SECRET_KEY",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET_KEY",
+    }
+)
+
 
 class ConfigService:
     """Service to fetch configuration values uniformly across the application.
@@ -30,6 +39,8 @@ class ConfigService:
     2. Flask app config
     3. Environment variable
     """
+
+    CONFIG_KEY_BLOCKLIST = CONFIG_KEY_BLOCKLIST
 
     @staticmethod
     def get(key: str, default: Any | None = None) -> Any | None:
@@ -42,17 +53,18 @@ class ConfigService:
         Returns:
             The configuration value from highest priority source
         """
-        try:
-            from flask import current_app
+        if key not in CONFIG_KEY_BLOCKLIST:
+            try:
+                from flask import current_app
 
-            if current_app:
-                from app.db.models import InstanceSettings
+                if current_app:
+                    from app.db.models import InstanceSettings
 
-                setting = InstanceSettings.query.filter_by(key=key).first()
-                if setting is not None and setting.value is not None:
-                    return setting.value
-        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
-            pass  # DB context might not be fully initialized
+                    setting = InstanceSettings.query.filter_by(key=key).first()
+                    if setting is not None and setting.value is not None:
+                        return setting.value
+            except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
+                pass  # DB context might not be fully initialized
 
         try:
             from flask import current_app

@@ -782,3 +782,44 @@ def test_feedback_screenshot_exact_collision_idor_blocked(client, feedback_setup
     admin_headers = _auth_headers(app, feedback_setup["admin_id"])
     resp_admin = client.get(f"/api/feedback/screenshots/{victim_file}", headers=admin_headers)
     assert resp_admin.status_code == 200
+
+
+def test_feedback_screenshot_rclone_timeout(client, feedback_setup, app, monkeypatch):
+    """Verify that a timeout on rclone remote fetch returns 504 instead of hanging."""
+    import io
+    import os
+    import subprocess
+
+    from app.utils.covers import GALLERY_DIR
+
+    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
+    png_bytes = _sample_png()
+
+    resp = client.post(
+        "/api/feedback",
+        headers=u1_headers,
+        data={
+            "description": "Ticket for remote timeout test",
+            "type": "bug",
+            "screenshots": (io.BytesIO(png_bytes), "timeout_test.png"),
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+
+    # Delete local file so it tries remote
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    monkeypatch.setenv("RCLONE_FEEDBACK_REMOTE", "remote:feedback")
+
+    def mock_run_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout", 30))
+
+    monkeypatch.setattr(subprocess, "run", mock_run_timeout)
+
+    resp_timeout = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+    assert resp_timeout.status_code == 504
+    assert "Timeout retrieving screenshot" in resp_timeout.json["error"]

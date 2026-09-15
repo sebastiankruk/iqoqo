@@ -16,11 +16,11 @@ You are a Principal White Hat Security Expert, Seasoned Security Architect, and 
 
 ## Current State
 
-We have successfully released **v0.7.14**. The system features a hardened multi-media cataloging platform with PostgreSQL 18 and Redis 8 upgrades, zero-downtime PK-chunked database migrations, and multi-tier rclone cloud backups (fast daily sync and S3 Glacier cold archiving). Security and stability have been significantly strengthened with an SSRF-safe HTTP client, defusedxml XXE protection, POSIX `--` argument injection prevention for subprocesses, OTel telemetry for mapping failures, and SQL injection chaos testing. Additionally, scanner resilience is reinforced with Google Books title lookup disambiguation, cover refetch bug fixes, metadata preservation, cache discard for corrupted records, and transient provider retry logic.
+We have successfully released **v0.7.18**, concluding a comprehensive 26-chunk bottom-up codebase review (~407 files) and 6 critical hardening batches. Key improvements include: Fernet symmetric encryption at rest for InstanceSettings API secrets with automated `.env` migration (`make migrate-secrets`), a clean two-stage linear Alembic migration DAG (`v0_7_17_baseline` + `v0_7_18_fixes`), strict SQL `LIMIT`/`OFFSET` pagination and bounded query memory across items and taxonomies, SSRF cover lookup protection, TanStack Query cache invalidation harmonization with 'Coming in v0.8.0' safeguards on unwired controls, interactive operational script guardrails, a decoupled `migration` container service in Docker Compose, continuous hands-free batch scanning with audio feedback, and decoupled knowledge synchronization (`make knowledge-sync` vs `make knowledge-sync-full`, `make mykg-ask`).
 
-## Upcoming (v0.7.15 & Beyond)
+## Upcoming (v0.8.0 & Beyond)
 
-Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting strict dashboard inventory scoping (isolating global repository statistics from personal collections/wishlists), responsive horizontal scrolling metric tiles, and enhanced scanner visual waiting states with graceful fallback to manual entry. Following review-based hotfixes (**v0.7.16**), our major milestone for **v0.8.0** is **Federation & Semantic Web Integration** (ActivityPub network federation and Linked Open Data/RDF/JSON-LD exposure), paving the way for AI-assisted "Magic Shelf" scanning in **v0.9.0**.
+With v0.7.18 fully stabilized and verified, our sole focus is **v0.8.0: Semantic Web & Linked Open Data**. Core deliverables include: exposing FRBR collections as RDF/JSON-LD graphs, implementing a secure `/api/sparql` query endpoint via `rdflib` with an admin SPARQL explorer UI, creating complete `schema:CreativeWork` SEO mappings, enabling user Data Sovereignty Export (downloading personal libraries as canonical JSON-LD), and completing OWL/SHACL ontology validation synchronization. This directly establishes the foundation for **v0.9.0: Federation & Decentralization** (ActivityPub Inbox/Outbox endpoints, HTTP Signatures, and inter-server Trust Graph metadata sync).
 
 ## Core Directives
 
@@ -42,8 +42,12 @@ Our immediate focus for **v0.7.15** is **UX Improvements and Fixes**, targeting 
 * Audit Pydantic schemas for input validation to prevent injection attacks.
 * Review S3 backup configurations for encryption-at-rest.
 * Ensure rate-limiting strategies prevent API abuse and scraping.
+* Verify all credentials, API keys, and OAuth tokens in `InstanceSettings` use symmetric Fernet encryption with `SECRET_KEY` (no plaintext secrets at rest).
+* Validate file extraction routines (e.g. `zipfile`, `tarfile`) against Zip Slip directory traversal vulnerabilities.
 
 ### 4. Infrastructure Security (Docker & Deployment)
 
 * Review `docker-compose.yml` for potential container escape vulnerabilities.
 * Audit environment variable handling (e.g., SECRET_KEY, database credentials).
+* Prohibit hardcoded default passwords or fallback secrets in Docker Compose and monitoring configuration files.
+* Enforce production safeguards and interactive typed confirmation prompts on destructive maintenance scripts (`scripts/clone.sh`, `scripts/init_db.py`, `scripts/migrate_legacy.py`).

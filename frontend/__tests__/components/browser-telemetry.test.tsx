@@ -19,25 +19,25 @@ import { BrowserTelemetry } from "@/components/browser-telemetry";
 
 // Mock the open telemetry modules so they don't hit the real network or env.
 vi.mock("@opentelemetry/sdk-trace-web", () => ({
-  WebTracerProvider: vi.fn().mockImplementation(() => ({
-    register: vi.fn(),
-  })),
+  WebTracerProvider: class {
+    register = vi.fn();
+  },
 }));
 
 vi.mock("@opentelemetry/sdk-trace-base", () => ({
-  BatchSpanProcessor: vi.fn(),
+  BatchSpanProcessor: class {},
 }));
 
 vi.mock("@opentelemetry/exporter-trace-otlp-http", () => ({
-  OTLPTraceExporter: vi.fn(),
+  OTLPTraceExporter: class {},
 }));
 
 vi.mock("@opentelemetry/instrumentation-document-load", () => ({
-  DocumentLoadInstrumentation: vi.fn(),
+  DocumentLoadInstrumentation: class {},
 }));
 
 vi.mock("@opentelemetry/instrumentation-user-interaction", () => ({
-  UserInteractionInstrumentation: vi.fn(),
+  UserInteractionInstrumentation: class {},
 }));
 
 vi.mock("@opentelemetry/instrumentation", () => ({
@@ -45,7 +45,8 @@ vi.mock("@opentelemetry/instrumentation", () => ({
 }));
 
 vi.mock("@opentelemetry/resources", () => ({
-  Resource: vi.fn(),
+  Resource: class {},
+  resourceFromAttributes: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock("@opentelemetry/semantic-conventions", () => ({
@@ -53,7 +54,7 @@ vi.mock("@opentelemetry/semantic-conventions", () => ({
 }));
 
 vi.mock("@opentelemetry/context-zone", () => ({
-  ZoneContextManager: vi.fn(),
+  ZoneContextManager: class {},
 }));
 
 describe("BrowserTelemetry Component", () => {

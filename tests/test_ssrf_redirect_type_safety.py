@@ -47,3 +47,30 @@ def test_safe_get_redirect_type_safety() -> None:
         with patch("requests.Session.get", side_effect=[mock_resp_1, mock_resp_2]):
             res = safe_get("http://example.com/initial")
             assert res is mock_resp_2
+
+
+def test_covers_google_books_uses_safe_get() -> None:
+    """Ensure Google Books search in fetch_external_api_cover uses safe_get and handles SSRFError."""
+    from app.utils.covers import fetch_external_api_cover
+
+    with patch("app.utils.covers.download_direct_url", return_value=None), patch("app.utils.covers.safe_get") as mock_safe_get:
+        mock_safe_get.side_effect = SSRFError("Blocked private IP")
+        res = fetch_external_api_cover("9780441569595")
+        assert res is None
+        # safe_get was invoked for the Google Books endpoint
+        assert mock_safe_get.called
+        call_url = mock_safe_get.call_args[0][0]
+        assert "googleapis.com" in call_url
+
+
+def test_covers_musicbrainz_uses_safe_get() -> None:
+    """Ensure _fetch_musicbrainz_cover uses safe_get and handles SSRFError."""
+    from app.utils.covers import _fetch_musicbrainz_cover
+
+    with patch("app.utils.covers.safe_get") as mock_safe_get:
+        mock_safe_get.side_effect = SSRFError("Blocked private IP")
+        res = _fetch_musicbrainz_cover("123456789012")
+        assert res is None
+        assert mock_safe_get.called
+        call_url = mock_safe_get.call_args[0][0]
+        assert "musicbrainz.org" in call_url

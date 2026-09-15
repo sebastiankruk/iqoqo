@@ -36,6 +36,7 @@ interface BottomSheetProps {
   format?: ScanFormat;
   torchOn?: boolean;
   onTorchCapabilityFound?: (hasTorch: boolean) => void;
+  autoStart?: boolean;
 }
 
 /**
@@ -52,6 +53,7 @@ interface BottomSheetProps {
  * @param root0.format - The current media format (book, cd, vinyl)
  * @param root0.torchOn - Whether the flashlight should be on
  * @param root0.onTorchCapabilityFound - Callback when flashlight capability is detected
+ * @param root0.autoStart - Whether to automatically start the camera scanner on mount
  * @returns {JSX.Element} The component
  */
 export function BottomSheet({
@@ -65,6 +67,7 @@ export function BottomSheet({
   format = "book",
   torchOn = false,
   onTorchCapabilityFound,
+  autoStart = false,
 }: BottomSheetProps) {
   const t = useTranslations("scanner");
   const tabs = [
@@ -283,6 +286,14 @@ export function BottomSheet({
       stopScanner();
     }
   }, [videoRef, lookupBarcode, stopScanner, onScannerStateChange, onTorchCapabilityFound, t]);
+
+  // Auto-start camera if requested by parent container in batch workflow
+  useEffect(() => {
+    if (autoStart && activeTab === "barcode" && !scannerActive && !isSearching) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Auto-start camera on batch navigation
+      startScanner();
+    }
+  }, [autoStart, activeTab, scannerActive, isSearching, startScanner]);
 
   useEffect(() => {
     if (activeTab === "manual") {

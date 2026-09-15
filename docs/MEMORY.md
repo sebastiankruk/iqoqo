@@ -1,6 +1,6 @@
 # MEMORY — iqoqo Dev Server
 
-> **Last updated:** 2026-08-28  
+> **Last updated:** 2026-09-15  
 > **Codebase snapshot:** iqoqo-internal monorepo
 
 ---
@@ -10,7 +10,7 @@
 **iqoqo** is a self-hosted, local-first personal media catalog for physical collections (books, board games, movies, music, etc.). Built on the FRBR (Functional Requirements for Bibliographic Records) ontology, it provides:
 
 - A Python **Flask** backend with JWT auth, RBAC, Alembic migrations, and PostgreSQL 18 support
-- A **Next.js 16.2** frontend with App Router, shadcn/ui, and Tailwind CSS v4
+- A **Next.js 16.3** frontend with App Router, shadcn/ui, and Tailwind CSS v4
 - A **Celery** background worker with Redis 8 task broker
 - An **OpenObserve** unified telemetry stack (traces, metrics, logs)
 - Multi-tier **Rclone** cloud backups (Daily sync, S3 Glacier cold archiving)
@@ -272,6 +272,10 @@ iqoqo/
 | `make lint` | Run all linters (ruff, mypy, pylint, eslint, markdownlint) |
 | `make format` | Format Python and TypeScript codebases |
 | `make status` | Check service health and database migrations |
+| `make migrate-secrets` | Migrate API secrets from `.env` into encrypted database settings |
+| `make knowledge-sync` | Fast AST knowledge sync (<45s, CodeGraph + Graphify) |
+| `make knowledge-sync-full` | Full scheduled batch indexing (MemPalace + myKG) |
+| `make mykg-ask Q="..."` | Query knowledge graph via latest session |
 | `make docker-build-preview` | Build local container images for preview testing |
 
 ---
@@ -280,9 +284,13 @@ iqoqo/
 
 - ✅ FRBR four-tier bibliographic model (Work → Expression → Manifestation → Item)
 - ✅ Flask 3.1 REST API with Python 3.14+
-- ✅ Next.js 16.2 App Router with Tailwind CSS v4 and shadcn/ui
+- ✅ Next.js 16.3 App Router with Tailwind CSS v4 and shadcn/ui
 - ✅ PostgreSQL 18 with GIN full-text search and JSONB metadata
 - ✅ Redis 8 + Celery background task processing
+- ✅ Symmetric Fernet encryption at rest for `InstanceSettings` API credentials
+- ✅ Two-stage linear Alembic migration DAG (`v0_7_17_baseline` + `v0_7_18_fixes`)
+- ✅ SQL `LIMIT`/`OFFSET` pagination and bounded query memory across endpoints
+- ✅ Continuous hands-free batch scanning with audio feedback and toast queues
 - ✅ Nginx reverse proxy gateway routing
 - ✅ OpenObserve unified observability stack (traces, metrics, logs)
 - ✅ Multi-tier Rclone cloud backup (Daily fast sync + S3 Glacier cold archiving)
@@ -309,14 +317,16 @@ iqoqo/
 
 1. **db** — PostgreSQL 18 database (`5432`)
 2. **redis** — Redis 8 broker and cache (`6379`)
-3. **web** — Flask / Gunicorn REST API (`5000`)
-4. **worker** — Celery background task processor
-5. **frontend** — Next.js 16.2 App Router (`3000`)
-6. **nginx** — Reverse proxy gateway (`8000`)
+3. **migration** — Dedicated one-shot Alembic schema migration runner (completes before web/worker)
+4. **web** — Flask / Gunicorn REST API (`5000`)
+5. **worker** — Celery background task processor
+6. **frontend** — Next.js 16.3 App Router (`3000`)
+7. **nginx** — Reverse proxy gateway (`8000`)
 
 ### Prebuilt Deployment (`docker-compose.prebuilt.yml`)
 
 - Pulls tagged images from GHCR: `iqoqo-backend`, `iqoqo-frontend`, `iqoqo-nginx`.
+- Uses dedicated one-shot `migration` service with isolated volume bindings (`volumes: !reset []`).
 
 ### AI Sandbox (`docker-compose.ai_sandbox.yml`)
 
@@ -326,7 +336,7 @@ iqoqo/
 
 ## 12. Version & Release Context
 
-- **Release Version:** `0.7.17`
-- **Release Branch:** `release/0.7.17`
-- **Release Date:** `2026-09-05`
+- **Release Version:** `0.7.18`
+- **Release Branch:** `release/0.7.18`
+- **Release Date:** `2026-09-15`
 - **Changelog:** Documented in [CHANGELOG.md](CHANGELOG.md)

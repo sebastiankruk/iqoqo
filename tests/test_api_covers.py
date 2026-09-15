@@ -132,10 +132,11 @@ def test_cover_lookup_musicbrainz_upc(app):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"releases": [{"id": "abc-123", "title": "Test Album"}]}
+    mock_response.__enter__.return_value = mock_response
 
     with patch("app.utils.covers.download_direct_url") as mock_download:
         mock_download.return_value = ("/static/covers/0602445564354_mb.jpg", "api_musicbrainz")
-        with patch("app.utils.covers.requests.get", return_value=mock_response):
+        with patch("app.utils.covers.safe_get", return_value=mock_response):
             result = fetch_upc_cover("0602445564354", content_type="music")
 
     assert result is not None

@@ -15,6 +15,7 @@
 #
 """Feedback submission and local ticket management endpoints."""
 
+import logging
 import os
 import subprocess
 import uuid
@@ -36,6 +37,8 @@ from app.db.models import FeedbackComment, FeedbackItem, User, db
 from app.utils.covers import GALLERY_DIR
 from app.utils.images import save_upload_image, validate_upload_file
 from app.utils.rclone_utils import get_rclone_target
+
+logger = logging.getLogger(__name__)
 
 _TYPES = {"feature_request", "bug"}
 _STATUSES = {"new", "accepted", "in_progress", "in_validation", "closed"}
@@ -135,6 +138,19 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     return None
 
 
+def _fetch_remote_screenshot(rclone_remote: str, safe_name: str) -> tuple[Response, int] | Response:
+    """Fetch screenshot from rclone remote storage with a timeout."""
+    target = get_rclone_target(rclone_remote, "feedback", safe_name)
+    try:
+        result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True, timeout=30)
+        return Response(result.stdout, mimetype="image/jpeg")
+    except subprocess.TimeoutExpired:
+        logger.error("Timed out fetching screenshot from rclone remote: %s", target)
+        return jsonify({"success": False, "error": "Timeout retrieving screenshot from remote storage"}), 504
+    except subprocess.CalledProcessError:
+        return jsonify({"success": False, "error": "Screenshot not found"}), 404
+
+
 @api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
@@ -155,12 +171,7 @@ def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     if not rclone_remote:
         return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
 
-    target = get_rclone_target(rclone_remote, "feedback", safe_name)
-    try:
-        result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True)
-        return Response(result.stdout, mimetype="image/jpeg")
-    except subprocess.CalledProcessError:
-        return jsonify({"success": False, "error": "Screenshot not found"}), 404
+    return _fetch_remote_screenshot(rclone_remote, safe_name)
 
 
 @api_bp.route("/feedback", methods=["GET"])

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import hmac
 import uuid
 from functools import wraps
 
@@ -26,7 +27,10 @@ from app.db.models import TokenBlocklist, User, db
 def _is_token_revoked(jti: str | None) -> bool:
     if not jti:
         return False
-    return db.session.query(TokenBlocklist.id).filter_by(jti=jti).first() is not None
+    entry = db.session.execute(db.select(TokenBlocklist).filter_by(jti=jti)).scalar_one_or_none()
+    if entry and entry.jti:
+        return hmac.compare_digest(entry.jti, jti)
+    return False
 
 
 def require_auth(f):

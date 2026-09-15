@@ -25,6 +25,7 @@ import type { Item, CatalogEntry } from "@/types/frbr";
 import { ItemCard } from "@/components/collection/item-card";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn().mockReturnValue("/"),
@@ -273,7 +274,6 @@ describe("ItemCard", () => {
   });
 
   it("shows error toast when wishlist removal fails", async () => {
-    const { toast } = await import("sonner");
     vi.mocked(apiClient.delete).mockRejectedValueOnce(new Error("Network error"));
 
     renderWithQuery(<ItemCard item={makeItem({ id: -10, collection_status: "wish_list", is_owner: true })} />);

@@ -84,8 +84,8 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
       qc.invalidateQueries({ queryKey: ["items"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
-      qc.invalidateQueries({ queryKey: ["worksShelf"] });
-      qc.invalidateQueries({ queryKey: ["expressionsShelf"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
       if (variables.collectionStatus === "wish_list") {
         toast.success("Added to your wishlist!");
       } else {

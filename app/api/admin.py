@@ -18,14 +18,15 @@
 import os
 from datetime import date
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.core import frbr_service
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.auth import User as AuthUser
-from app.db.core import Expression, Item, Manifestation, Work
+from app.db.core import EntityAuditLog, Expression, Item, Manifestation, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
@@ -268,6 +269,8 @@ def manage_role_permissions(role_id):
 API_KEYS = {
     "GOOGLE_BOOKS_API_KEY",
     "DISCOGS_USER_TOKEN",
+    "DISCOGS_CONSUMER_KEY",
+    "DISCOGS_CONSUMER_SECRET",
     "TMDB_API_KEY",
     "TMDB_API_READ_ACCESS_TOKEN",
     "BGG_API_TOKEN",
@@ -282,6 +285,7 @@ API_KEYS = {
     "UPC_DATABASE_ORG_KEY",
     "ALLEGRO_CLIENT_ID",
     "ALLEGRO_CLIENT_SECRET",
+    "ALLEGRO_TOKEN_DATA",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
 }
@@ -318,9 +322,7 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
     if category == "internal" and not can_internal:
         return jsonify({"success": False, "error": "Permission denied"}), 403
 
-    db_settings = {s.key: s.value for s in db.session.execute(db.select(InstanceSettings)).scalars().all()}
-    from flask import current_app
-
+    db_settings = {s.key: InstanceSettings.get_value(s.key) for s in db.session.execute(db.select(InstanceSettings)).scalars().all()}
     flask_config = current_app.config if current_app else {}
     result = {}
 
@@ -383,17 +385,9 @@ def _put_settings(user: User, data: dict) -> dict:
         if isinstance(value, str) and value.startswith("***"):
             continue
 
-        setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
-        if setting:
-            setting.value = value
-        else:
-            new_setting = InstanceSettings()
-            new_setting.key = key
-            new_setting.value = value
-            db.session.add(new_setting)
+        InstanceSettings.set_value(key, value)
         saved[key] = value
 
-    db.session.commit()
     return {"success": True, "data": saved}
 
 
@@ -413,16 +407,18 @@ def manage_settings():
     return jsonify(_put_settings(user, request.json or {}))
 
 
-@admin_bp.route("/settings/reveal", methods=["GET"])
+@admin_bp.route("/settings/reveal", methods=["POST"])
 @require_auth
 @admin_required
+@limiter.limit("5 per minute")
 def reveal_setting():
     """Reveal a specific masked setting value."""
     user = _get_current_user()
     if not user:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
-    key = request.args.get("key")
+    data = request.get_json(silent=True) or {}
+    key = data.get("key") or request.args.get("key")
     if not key or key not in API_KEYS:
         return jsonify({"success": False, "error": "Invalid or missing key"}), 400
 
@@ -430,7 +426,22 @@ def reveal_setting():
         return jsonify({"success": False, "error": "Permission denied"}), 403
 
     db_setting = db.session.execute(db.select(InstanceSettings).filter_by(key=key)).scalar_one_or_none()
-    value = db_setting.value if db_setting else (os.environ.get(key) or "")
+    value = InstanceSettings.get_value(key) if db_setting else (os.environ.get(key) or "")
+
+    # Audit log entry for revealing a sensitive setting
+    try:
+        audit_entry = EntityAuditLog(
+            entity_type="instance_setting",
+            entity_id=db_setting.id if db_setting else 0,
+            actor_id=user.id,
+            change_type="reveal_secret",
+            diff={"key": key},
+        )
+        db.session.add(audit_entry)
+        db.session.commit()
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        current_app.logger.warning("Failed to record EntityAuditLog on reveal_setting: %s", exc)
 
     return jsonify({"success": True, "data": {"value": value}})
 

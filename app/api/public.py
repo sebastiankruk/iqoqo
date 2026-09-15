@@ -25,6 +25,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.frbr_service import serialize_collection_to_rdf
+from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
@@ -116,64 +117,115 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
     """Fetch global fresh arrivals with granular level grouping."""
     if level not in ("manifestations", "expressions", "works"):
         level = "manifestations"
-
-    # Base query for public items, filtering hidden ones and only public users
-    stmt = (
-        select(Item)
-        .join(User, Item.owner_id == User.id)
-        .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
-    )
-
     if level == "works":
-        # Group or filter to get one item per unique work
-        stmt = stmt.join(Manifestation).join(Expression).join(Work).order_by(Item.updated_at.desc())
-        items = list(
-            db.session.execute(
-                stmt.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        if db.engine.dialect.name == "postgresql":
+            subq = (
+                select(Item.id, Item.updated_at)
+                .join(User, Item.owner_id == User.id)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+                .distinct(Work.id)
+                .order_by(Work.id, Item.updated_at.desc())
+                .subquery()
             )
-            .scalars()
-            .all()
+            top_ids_stmt = select(subq.c.id).order_by(subq.c.updated_at.desc()).limit(limit)
+            item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
+        else:
+            rn = func.row_number().over(partition_by=Work.id, order_by=Item.updated_at.desc()).label("rn")
+            subq = (
+                select(Item.id, Item.updated_at, rn)
+                .join(User, Item.owner_id == User.id)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+                .subquery()
+            )
+            top_ids_stmt = select(subq.c.id).where(subq.c.rn == 1).order_by(subq.c.updated_at.desc()).limit(limit)
+            item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
+
+        if not item_ids:
+            return []
+        items_stmt = (
+            select(Item)
+            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            .where(Item.id.in_(item_ids))
         )
-        seen_works = set()
-        unique_items = []
-        for it in items:
-            w_id = it.manifestation.expression.work_id if it.manifestation and it.manifestation.expression else None
-            if w_id and w_id not in seen_works:
-                seen_works.add(w_id)
-                unique_items.append(it)
-                if len(unique_items) >= limit:
-                    break
-        return unique_items
+        items_map = {item.id: item for item in db.session.execute(items_stmt).scalars().all()}
+        return [items_map[iid] for iid in item_ids if iid in items_map]
 
     if level == "expressions":
-        stmt = stmt.join(Manifestation).join(Expression).order_by(Item.updated_at.desc())
-        items = list(
-            db.session.execute(
-                stmt.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        if db.engine.dialect.name == "postgresql":
+            subq = (
+                select(Item.id, Item.updated_at)
+                .join(User, Item.owner_id == User.id)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+                .distinct(Expression.id)
+                .order_by(Expression.id, Item.updated_at.desc())
+                .subquery()
             )
-            .scalars()
-            .all()
-        )
-        seen_exprs = set()
-        unique_items = []
-        for it in items:
-            expr_id = it.manifestation.expression_id if it.manifestation else None
-            if expr_id and expr_id not in seen_exprs:
-                seen_exprs.add(expr_id)
-                unique_items.append(it)
-                if len(unique_items) >= limit:
-                    break
-        return unique_items
+            top_ids_stmt = select(subq.c.id).order_by(subq.c.updated_at.desc()).limit(limit)
+            item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
+        else:
+            rn = func.row_number().over(partition_by=Expression.id, order_by=Item.updated_at.desc()).label("rn")
+            subq = (
+                select(Item.id, Item.updated_at, rn)
+                .join(User, Item.owner_id == User.id)
+                .join(Manifestation, Item.manifestation_id == Manifestation.id)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+                .subquery()
+            )
+            top_ids_stmt = select(subq.c.id).where(subq.c.rn == 1).order_by(subq.c.updated_at.desc()).limit(limit)
+            item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
 
-    query = (
+        if not item_ids:
+            return []
+        items_stmt = (
+            select(Item)
+            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            .where(Item.id.in_(item_ids))
+        )
+        items_map = {item.id: item for item in db.session.execute(items_stmt).scalars().all()}
+        return [items_map[iid] for iid in item_ids if iid in items_map]
+
+    if db.engine.dialect.name == "postgresql":
+        subq = (
+            select(Item.id, Item.updated_at)
+            .join(User, Item.owner_id == User.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+            .distinct(Manifestation.id)
+            .order_by(Manifestation.id, Item.updated_at.desc())
+            .subquery()
+        )
+        top_ids_stmt = select(subq.c.id).order_by(subq.c.updated_at.desc()).limit(limit)
+        item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
+    else:
+        rn = func.row_number().over(partition_by=Manifestation.id, order_by=Item.updated_at.desc()).label("rn")
+        subq = (
+            select(Item.id, Item.updated_at, rn)
+            .join(User, Item.owner_id == User.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
+            .subquery()
+        )
+        top_ids_stmt = select(subq.c.id).where(subq.c.rn == 1).order_by(subq.c.updated_at.desc()).limit(limit)
+        item_ids = list(db.session.execute(top_ids_stmt).scalars().all())
+
+    if not item_ids:
+        return []
+    items_stmt = (
         select(Item)
-        .join(User, Item.owner_id == User.id)
         .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        .where(Item.is_hidden.is_(False), User.visibility == "public", Item.status != "wish_list")
-        .order_by(Item.updated_at.desc())
-        .limit(limit)
+        .where(Item.id.in_(item_ids))
     )
-    return list(db.session.execute(query).scalars().all())
+    items_map = {item.id: item for item in db.session.execute(items_stmt).scalars().all()}
+    return [items_map[iid] for iid in item_ids if iid in items_map]
 
 
 def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
@@ -246,6 +298,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
 
 
 @public_bp.route("/feed.xml", methods=["GET"])
+@limiter.limit("60 per minute")
 def global_fresh_feed():
     """Exposes global raw manifestation additions supporting granular FRBR level filtering."""
     view_filter = request.args.get("view", "manifestations")  # manifestations | expressions | works
@@ -262,6 +315,7 @@ def global_fresh_feed():
 
 
 @public_bp.route("/u/<string:username>/feed.xml", methods=["GET"])
+@limiter.limit("60 per minute")
 def user_collection_feed(username: str):
     """Exposes personal collection feed streams."""
     items = fetch_user_public_collection(username=username, limit=50)
@@ -277,6 +331,7 @@ def user_collection_feed(username: str):
 
 
 @public_bp.route("/share/<string:token>/feed.xml", methods=["GET"])
+@limiter.limit("60 per minute")
 def shared_collection_feed(token: str):
     """Exposes public shared collection feed streams via safe access token lookup."""
     items = fetch_shared_collection_by_token(token=token, limit=50)

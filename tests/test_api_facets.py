@@ -288,3 +288,53 @@ class TestCrossFRBRMultiFilter:
             assert resp2.status_code == 200
             # Should hit the cache — same logical request
             assert mock_get_stats.call_count == 1, "Reordered params should produce same cache key"
+
+    def test_taxonomies_caching(self, client, normal_user_headers, app):
+        """Test that /api/taxonomies caches its response and doesn't re-query on subsequent calls."""
+        from unittest.mock import patch
+
+        with app.app_context():
+            from app.core.cache import cache
+
+            cache.clear()
+
+        with patch("app.api.taxonomies.extract_taxonomies_data", return_value={"tags": ["t1"]}) as mock_extract:
+            resp1 = client.get("/api/taxonomies?scope=global", headers=normal_user_headers)
+            assert resp1.status_code == 200
+            assert mock_extract.call_count == 1
+
+            resp2 = client.get("/api/taxonomies?scope=global", headers=normal_user_headers)
+            assert resp2.status_code == 200
+            assert mock_extract.call_count == 1
+
+    def test_taxonomies_cache_key_normalized(self, client, normal_user_headers, app):
+        """Test that reordered params on /api/taxonomies hit the same cache key."""
+        from unittest.mock import patch
+
+        with app.app_context():
+            from app.core.cache import cache
+
+            cache.clear()
+
+        with patch("app.api.taxonomies.extract_taxonomies_data", return_value={"tags": ["t1"]}) as mock_extract:
+            resp1 = client.get("/api/taxonomies?scope=global&category=text&format=book", headers=normal_user_headers)
+            assert resp1.status_code == 200
+            assert mock_extract.call_count == 1
+
+            resp2 = client.get("/api/taxonomies?format=book&scope=global&category=text", headers=normal_user_headers)
+            assert resp2.status_code == 200
+            assert mock_extract.call_count == 1
+
+    def test_refresh_taxonomies_cache_task(self, app):
+        """Test Celery task for precomputing and caching global taxonomies."""
+        from app.core.cache import cache
+        from app.core.tasks import refresh_taxonomies_cache
+
+        with app.app_context():
+            cache.clear()
+            res = refresh_taxonomies_cache()
+            assert res["status"] == "refreshed"
+            assert "tags" in res["data"]
+            cached = cache.get("taxonomies:global:/api/taxonomies?")
+            assert cached is not None
+            assert cached["success"] is True

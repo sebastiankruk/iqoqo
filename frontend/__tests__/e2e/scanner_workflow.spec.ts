@@ -230,4 +230,62 @@ test.describe("Scanner Workflow", () => {
     await wishlistBtn.click();
     await expect(page.getByText("Adding to your wishlist")).toBeVisible();
   });
+
+  test("continuous batch scanning: clicking scan another on success card dismisses card and re-engages scanner", async ({
+    page,
+  }) => {
+    // Mock barcode lookup
+    await page.route(`**/api/lookup/${testBarcode}**`, async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            title: "Batch Scan Test Book",
+            authors: ["Test Author"],
+            isbn13: testBarcode,
+            format: "book",
+            candidates: [
+              {
+                title: "Batch Scan Test Book",
+                authors: ["Test Author"],
+                isbn13: testBarcode,
+                format: "book",
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/scan");
+    await page.waitForLoadState("networkidle");
+
+    // Switch to manual search tab
+    const manualTab = page.getByTestId("scanner-tab-manual");
+    if (await manualTab.isVisible()) {
+      await manualTab.click();
+      await page.waitForTimeout(300);
+
+      // Search barcode
+      const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
+      await input.fill(testBarcode);
+      await page.keyboard.press("Enter");
+
+      // Verify success card is displayed directly for single candidate
+      const successHeading = page.getByText("Successfully Found!");
+      await expect(successHeading).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText("Batch Scan Test Book")).toBeVisible();
+
+      // Click "Scan another" action button
+      const scanAnotherBtn = page.getByRole("button", { name: /Scan another/i });
+      await expect(scanAnotherBtn).toBeVisible();
+      await scanAnotherBtn.click();
+
+      // Verify success card is dismissed and scanner view is restored
+      await expect(successHeading).not.toBeVisible();
+      await expect(manualTab).toBeVisible();
+    }
+  });
 });
