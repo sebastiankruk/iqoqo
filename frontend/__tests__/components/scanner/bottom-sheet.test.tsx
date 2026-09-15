@@ -19,7 +19,7 @@
  * Verifies tab rendering, tab switching, manual search, barcode camera,
  * error display, and manual entry fallback.
  */
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -205,5 +205,33 @@ describe("BottomSheet", () => {
     // Clicking skip should trigger onShowManualForm with the searched barcode
     fireEvent.click(skipBtn);
     expect(onShowManualForm).toHaveBeenCalledWith("9780140449136");
+  });
+
+  it("autoStart prop triggers camera stream acquisition on mount", async () => {
+    const mockGetUserMedia = vi.fn().mockResolvedValue({
+      getVideoTracks: () => [{ stop: vi.fn(), getCapabilities: () => ({}) }],
+      getTracks: () => [{ stop: vi.fn() }],
+    });
+    Object.defineProperty(globalThis.navigator, "mediaDevices", {
+      value: { getUserMedia: mockGetUserMedia },
+      writable: true,
+      configurable: true,
+    });
+
+    const videoEl = document.createElement("video");
+    vi.spyOn(videoEl, "play").mockResolvedValue(undefined);
+    const videoRefWithElement = { current: videoEl };
+
+    render(<BottomSheet videoRef={videoRefWithElement} onFound={onFound} autoStart={true} />);
+
+    await waitFor(() => {
+      expect(mockGetUserMedia).toHaveBeenCalledWith(
+        expect.objectContaining({
+          video: expect.objectContaining({
+            facingMode: { ideal: "environment" },
+          }),
+        })
+      );
+    });
   });
 });

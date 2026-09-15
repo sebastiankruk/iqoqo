@@ -72,6 +72,15 @@ export default function ScanPage() {
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [autoStart, setAutoStart] = useState(() => {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      if (window.sessionStorage.getItem("iqoqo_auto_start_camera") === "true") {
+        window.sessionStorage.removeItem("iqoqo_auto_start_camera");
+        return true;
+      }
+    }
+    return false;
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage) {
@@ -99,9 +108,16 @@ export default function ScanPage() {
     }
   }, []);
 
+  const handleScanAnother = useCallback(() => {
+    setResult(null);
+    setCandidates(null);
+    setAutoStart(true);
+  }, []);
+
   const handleDismiss = useCallback(() => {
     setResult(null);
     setCandidates(null);
+    setAutoStart(false);
   }, []);
 
   const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }, file?: File) => {
@@ -226,6 +242,7 @@ export default function ScanPage() {
             format={activeFormat}
             torchOn={torchOn}
             onTorchCapabilityFound={setHasTorch}
+            autoStart={autoStart}
           />
         )}
         {result && (
@@ -234,6 +251,7 @@ export default function ScanPage() {
             meta={result.meta}
             policy={policy}
             onDismiss={handleDismiss}
+            onScanAnother={handleScanAnother}
             snappedCover={snappedCover}
             onShowManualForm={handleShowManualForm}
           />
