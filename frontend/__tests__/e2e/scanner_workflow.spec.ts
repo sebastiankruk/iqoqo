@@ -273,14 +273,10 @@ test.describe("Scanner Workflow", () => {
       await input.fill(testBarcode);
       await page.keyboard.press("Enter");
 
-      // Select candidate from disambiguation
-      const candidateChoice = page.getByRole("button", { name: /Batch Scan Test Book/i });
-      await expect(candidateChoice).toBeVisible({ timeout: 10000 });
-      await candidateChoice.click();
-
-      // Verify success card is displayed
+      // Verify success card is displayed directly for single candidate
       const successHeading = page.getByText("Successfully Found!");
-      await expect(successHeading).toBeVisible();
+      await expect(successHeading).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText("Batch Scan Test Book")).toBeVisible();
 
       // Click "Scan another" action button
       const scanAnotherBtn = page.getByRole("button", { name: /Scan another/i });
