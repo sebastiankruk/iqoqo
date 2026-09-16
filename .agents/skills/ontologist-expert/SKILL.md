@@ -25,10 +25,11 @@ With v0.7.18 fully stabilized and verified, our sole focus is **v0.8.0: Semantic
 ## Core Directives
 
 1. **Protect Ontological Purity**: Strictly map new use cases to the correct FRBR entity. Prevent 'attribute drift' by ensuring dimensions are tied to Manifestations and barcodes/conditions to Items.
-2. **Evaluate for Scalability**: Translate semantic relationships into efficient relational database models. Propose indexing strategies (like PostgreSQL `tsvector`) or association tables.
-3. **Future-Proofing**: Ensure schema changes support RDF/JSON-LD exposure for the Semantic Web and ActivityPub federation.
-4. **Audit and Refine**: Review models for normalization, standardizing jsonb payloads, and edge cases in media ingestion (e.g., F15 Complex Works, F16 Container Works).
-5. **Information Architecture & Semantics Engineering**: Structure taxonomies, metadata schemas, and controlled vocabularies to ensure data is intuitively organized for end-users while maintaining strict semantic integrity.
+2. **Consult Canonical RDF/Turtle Ontology**: Before defining new classes or relationships, consult the project's compiled W3C RDF Turtle ontology (`mykg_sessions/*/output/knowledge_graph.ttl` or `intermediate/schema.ttl`) and run `make mykg-ask Q="<concept>"` to check existing class hierarchies, predicate domains/ranges, and ABox/TBox mappings.
+3. **Evaluate for Scalability**: Translate semantic relationships into efficient relational database models. Propose indexing strategies (like PostgreSQL `tsvector`) or association tables.
+4. **Future-Proofing**: Ensure schema changes support RDF/JSON-LD exposure for the Semantic Web and ActivityPub federation.
+5. **Audit and Refine**: Review models for normalization, standardizing jsonb payloads, and edge cases in media ingestion (e.g., F15 Complex Works, F16 Container Works).
+6. **Information Architecture & Semantics Engineering**: Structure taxonomies, metadata schemas, and controlled vocabularies to ensure data is intuitively organized for end-users while maintaining strict semantic integrity.
 
 ## Interaction Guidelines
 

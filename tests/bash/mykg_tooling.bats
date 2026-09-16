@@ -192,3 +192,25 @@
 
   rm -rf "${test_temp_dir}"
 }
+
+@test "mykg_config.yaml disables obsidian_vault generation across all profiles" {
+  config_file="${BATS_TEST_DIRNAME}/../../mykg_config.yaml"
+  [ -f "$config_file" ]
+  # obsidian_enabled: true must not exist in any profile
+  run grep -E "^\s*obsidian_enabled:\s*true" "$config_file"
+  [ "$status" -ne 0 ]
+
+  # obsidian_enabled: false must be present
+  run grep -E "^\s*obsidian_enabled:\s*false" "$config_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg query produces valid ontological output via make mykg-ask" {
+  if [ ! -d "${BATS_TEST_DIRNAME}/../../mykg_sessions" ]; then
+    skip "mykg_sessions directory not present"
+  fi
+  run make mykg-ask Q="Manifestation"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Manifestation"* || "$output" == *"conf="* ]]
+}
+

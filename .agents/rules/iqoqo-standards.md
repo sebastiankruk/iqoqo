@@ -18,20 +18,37 @@ Talk like caveman
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
+- **Scope & Coverage**: CodeGraph indexes the **entire repository** including backend (`app/**`, `tests/**`) and frontend (`frontend/**` TypeScript/React/TSX).
 - **Mandatory First-Stop Navigation**: Before running `grep_search`, `find_by_name`, or ripgrep for any code symbol (class, function, method, SQLAlchemy model, Flask route, or React hook), you MUST first execute CodeGraph:
-  - Inspect symbol / definition: `codegraph node <SymbolName>`
+  - Search routes & partial symbols: `codegraph query "<pattern>"` (e.g. `codegraph query "items/bulk"`, `codegraph query "useManifestation"`)
+  - Inspect symbol / definition: `codegraph node <SymbolName>` (for exact symbol declarations)
+  - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`)
   - Call hierarchy: `codegraph callers <SymbolName>` / `codegraph callees <SymbolName>`
   - Impact & ripple analysis: `codegraph impact <SymbolName>`
   - Explore paths: `codegraph explore "<query>"`
   - Test blast radius: `codegraph affected <file_path>`
+- **HTTP Boundary Note**: Frontend API calls (`apiClient.post`) and Flask routes (`@api_bp.route`) do not share static AST edges. Discover endpoints using `codegraph query "<route_path>"` rather than `codegraph node`.
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 ### 🕸️ Graphify Knowledge Graph Directive
-- **Primary Navigation Tool**: RECOMMEND consulting `graphify-out/graph.json` for codebase questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives.
+- **Primary Navigation Tool**: Consult `graphify-out/graph.json` for codebase questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused architecture questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives.
 - **Scoped Over Broad**: Prefer graphify query results (scoped subgraph) over reading `GRAPH_REPORT.md` (broad architecture review) or raw grep output.
 - **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `make graphify-index` to update the scope.
 - **Index Update**: RECOMMEND running `make graphify-update` after code changes.
-- **Integration**: Graphify complements mempalace (domain memory) and codegraph (symbol dependencies). Use graphify for "what connects to what", mempalace for "why did we decide this", codegraph for "what will break if I change X".
+
+### 🦉 myKG Ontological Graph & TTL Directive
+- **Ontological Ground Truth**: myKG maintains the canonical W3C RDF Turtle ontology (`output/knowledge_graph.ttl`) and RDFS TBox schema (`intermediate/schema.ttl`) covering FRBR hierarchies, ABox/TBox mappings, and entity domain relationships.
+- **Pre-Flight Domain Querying**: Before running broad multi-directory greps for FRBR domain semantics, classifications, or entity schemas, query the latest compiled knowledge graph:
+  `make mykg-ask Q="<concept>"`
+- **Direct TTL Inspection**: When formal RDF triples, OWL/RDFS class axioms, or predicate ranges are required, inspect `mykg_sessions/*/output/knowledge_graph.ttl` directly. Note that `obsidian_vault` is disabled and should not be sought.
+- **Release CI Only Execution**: myKG is an offline batch compiler (~15–60 min, ~$4.36 per full run). NEVER execute `make mykg-update` or `make mykg-index` during interactive development sessions. It is strictly reserved for Release CI and manual scheduled maintenance.
+
+### 🧩 Memory Tools Integration Quartet
+- **Integration**: Each of the 4 memory tools serves a distinct, non-overlapping question:
+  - **CodeGraph**: *"Where is symbol X defined, who calls it, and what will break if I change it?"*
+  - **Graphify**: *"What are the high-level architecture layers and how do modules connect?"*
+  - **MemPalace**: *"Why did we decide this, and what architectural decisions were made in past releases?"*
+  - **myKG**: *"How do FRBR entities, ABox/TBox schemas, and domain concepts relate in formal RDF?"*
 
 ### 🤖 AiOps Environment Mode Directive
 - **Universal Standard for AI**: ALWAYS set `IQOQO_AI_MODE=1` in your environment before running any commands (e.g. `IQOQO_AI_MODE=1 make lint`, `IQOQO_AI_MODE=1 make test`, `IQOQO_AI_MODE=1 make status`, `IQOQO_AI_MODE=1 pytest`, `IQOQO_AI_MODE=1 make codegraph-sync`).
