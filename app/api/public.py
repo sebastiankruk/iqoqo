@@ -20,11 +20,11 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 import datetime
 from typing import Any
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.frbr_service import serialize_collection_to_rdf
+from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
@@ -229,23 +229,23 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
 
 
 def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
-    """Fetch user public collection."""
+    """Fetch user public collection with eager loading across all FRBR tiers."""
     user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
     if not user:
         return []
     stmt = (
         select(Item)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
         .where(Item.owner_id == user.id, Item.is_hidden.is_(False))
         .order_by(Item.updated_at.desc())
         .limit(limit)
     )
-    return list(db.session.execute(stmt).scalars().all())
+    return list(db.session.execute(stmt).scalars().unique().all())
 
 
 def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
-    """Fetch items from a shared collection by token."""
+    """Fetch items from a shared collection by token with eager loading across all FRBR tiers."""
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
@@ -289,10 +289,9 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
     return list(
-        db.session.execute(
-            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        )
+        db.session.execute(query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work)))
         .scalars()
+        .unique()
         .all()
     )
 
@@ -377,15 +376,35 @@ def get_public_items(username: str):
     """Retrieve public items for a user."""
     accept_header = request.headers.get("Accept", "")
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    format_arg = request.args.get("format", "").lower()
+    is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
-    if "application/ld+json" in accept_header:
-        items = fetch_user_public_collection(username=username, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
-        return Response(rdf_payload, mimetype="application/ld+json")
-    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
-        items = fetch_user_public_collection(username=username, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
-        return Response(rdf_payload, mimetype="text/turtle")
+    # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
+    rdf_format: str | None = None
+    rdf_mimetype: str = ""
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        rdf_format = "nt"
+        rdf_mimetype = "application/n-triples"
+    elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        rdf_format = "json-ld"
+        rdf_mimetype = "application/ld+json"
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        rdf_format = "turtle"
+        rdf_mimetype = "text/turtle"
+
+    if rdf_format:
+        limit_val = request.args.get("limit", 100, type=int)
+        items = fetch_user_public_collection(username=username, limit=limit_val)
+        collection_uri = f"{base_url}/u/{username}"
+        if is_stream:
+            return Response(
+                stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
+                mimetype=rdf_mimetype,
+                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+            )
+        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
+        return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
     user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
@@ -440,15 +459,35 @@ def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    format_arg = request.args.get("format", "").lower()
+    is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
-    if "application/ld+json" in accept_header:
-        items = fetch_shared_collection_by_token(token=token, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
-        return Response(rdf_payload, mimetype="application/ld+json")
-    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
-        items = fetch_shared_collection_by_token(token=token, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
-        return Response(rdf_payload, mimetype="text/turtle")
+    # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
+    rdf_format: str | None = None
+    rdf_mimetype: str = ""
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        rdf_format = "nt"
+        rdf_mimetype = "application/n-triples"
+    elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        rdf_format = "json-ld"
+        rdf_mimetype = "application/ld+json"
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        rdf_format = "turtle"
+        rdf_mimetype = "text/turtle"
+
+    if rdf_format:
+        limit_val = request.args.get("limit", 100, type=int)
+        items = fetch_shared_collection_by_token(token=token, limit=limit_val)
+        collection_uri = f"{base_url}/share/{token}"
+        if is_stream:
+            return Response(
+                stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
+                mimetype=rdf_mimetype,
+                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+            )
+        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
+        return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
