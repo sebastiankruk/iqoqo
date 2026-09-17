@@ -38,11 +38,12 @@ def sparql_user(app):
         from app.db.models import Permission, Role
 
         user_role = Role(name="sparql_user_role")
-        write_perm = Permission.query.filter_by(name="write:item").first()
-        if not write_perm:
-            write_perm = Permission(name="write:item")
-            db.session.add(write_perm)
-        user_role.permissions.append(write_perm)
+        for perm_name in ("write:item", "read:metadata"):
+            perm = Permission.query.filter_by(name=perm_name).first()
+            if not perm:
+                perm = Permission(name=perm_name)
+                db.session.add(perm)
+            user_role.permissions.append(perm)
         db.session.add(user_role)
 
         user = User(email="sparql@iqoqo.local", display_name="SPARQL User")
@@ -274,6 +275,23 @@ class TestSPARQLEndpoint:
             json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},
         )
         assert response.status_code == 401
+
+    def test_forbidden_without_read_metadata(self, client, app):
+        from app.api.auth import generate_internal_jwt
+
+        with app.app_context():
+            user = User(email="norole@iqoqo.local", display_name="No Role User")
+            db.session.add(user)
+            db.session.flush()
+            token = generate_internal_jwt(user)
+
+        response = client.post(
+            "/api/sparql",
+            json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+        assert response.get_json()["missing_permission"] == "read:metadata"
 
     def test_empty_query_returns_400(self, client, sparql_user):
         response = client.post(

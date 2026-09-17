@@ -109,8 +109,13 @@ export default function GroupsPage() {
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+  const canAccessSparql =
+    hasPermission(PermissionName.READ_METADATA) ||
+    hasPermission(PermissionName.WRITE_METADATA) ||
+    (profile.roles ?? []).includes("admin") ||
+    (profile.roles ?? []).includes("contributor");
 
-  const hasCustodianAccess = canViewMetadata || canEditCover;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canAccessSparql;
   const canViewSettings =
     hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) ||
     hasPermission(PermissionName.CONFIG_FEDERATION) ||
@@ -153,6 +158,15 @@ export default function GroupsPage() {
                     isActive={false}
                     onClick={() => {}}
                     href="/admin/content?tab=cover-art"
+                  />
+                )}
+                {canAccessSparql && (
+                  <NavItem
+                    label="SPARQL Explorer"
+                    icon={Code2}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/sparql"
                   />
                 )}
               </nav>
@@ -212,13 +226,6 @@ export default function GroupsPage() {
                     href="/admin/settings?tab=security"
                   />
                 )}
-                <NavItem
-                  label="SPARQL Explorer"
-                  icon={Code2}
-                  isActive={false}
-                  onClick={() => {}}
-                  href="/admin/sparql"
-                />
               </nav>
             </div>
           )}

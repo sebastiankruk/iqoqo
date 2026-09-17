@@ -23,6 +23,8 @@ import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/hooks";
+import { PermissionName } from "@/lib/permissions";
 
 const EXAMPLE_QUERIES = [
   {
@@ -86,11 +88,20 @@ interface SPARQLResults {
  * @returns The SPARQL Explorer Page component UI.
  */
 export default function SPARQLExplorerPage() {
+  const { data: profile, isLoading } = useProfile();
   const [query, setQuery] = useState(EXAMPLE_QUERIES[0].query);
   const [results, setResults] = useState<SPARQLResults | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const permissions = profile?.permissions ?? [];
+  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
+  const canAccessSparql =
+    hasPermission(PermissionName.READ_METADATA) ||
+    hasPermission(PermissionName.WRITE_METADATA) ||
+    (profile?.roles ?? []).includes("admin") ||
+    (profile?.roles ?? []).includes("contributor");
 
   const executeQuery = async () => {
     setLoading(true);
@@ -137,6 +148,32 @@ export default function SPARQLExplorerPage() {
     URL.revokeObjectURL(url);
   };
 
+  if (isLoading || !profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!canAccessSparql) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-4">
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground max-w-md">
+            You need custodian permissions to access the SPARQL Explorer.
+          </p>
+          <Button asChild>
+            <Link href="/dashboard">Back to Dashboard</Link>
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
@@ -145,11 +182,11 @@ export default function SPARQLExplorerPage() {
           <div>
             <h1 className="text-2xl font-bold">SPARQL Explorer</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Query your collection using SPARQL over the FRBR/Schema.org RDF graph.
+              Query the library catalog using SPARQL over the FRBR/Schema.org RDF graph.
             </p>
           </div>
           <Button variant="outline" asChild>
-            <Link href="/admin/settings">Back to Settings</Link>
+            <Link href="/admin/content">Back to Custodians</Link>
           </Button>
         </div>
 

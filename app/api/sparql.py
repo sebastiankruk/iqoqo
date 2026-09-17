@@ -19,8 +19,9 @@ from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.decorators import require_auth
+from app.api.decorators import require_auth, require_permission
 from app.core.limiter import limiter
+from app.core.permissions import PermissionName
 from app.core.sparql_service import (
     SPARQLError,
     SPARQLQueryTooLarge,
@@ -33,18 +34,26 @@ from app.core.sparql_service import (
     format_select_results,
     validate_query,
 )
-from app.db.models import Expression, Item, Manifestation, db
+from app.db.models import Expression, Item, Manifestation, User, db
 
 sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 
 
-def _get_user_items() -> list[Item]:
-    """Fetch all items belonging to the authenticated user with eager-loaded FRBR entities."""
-    stmt = (
-        select(Item)
-        .where(Item.owner_id == g.user_id)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+def _get_sparql_items(user: User | None) -> list[Item]:
+    """Fetch items for SPARQL querying with eager-loaded FRBR entities.
+
+    Custodians and admins (holding READ_METADATA or WRITE_METADATA, or admin/contributor role)
+    query all instance items across the library catalog. Other users query only their owned items.
+    """
+    stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    is_custodian_or_admin = user and (
+        user.has_permission(PermissionName.READ_METADATA)
+        or user.has_permission(PermissionName.WRITE_METADATA)
+        or any(r.name in ("admin", "contributor") for r in getattr(user, "roles", []))
     )
+    if not is_custodian_or_admin and user:
+        stmt = stmt.where(Item.owner_id == user.id)
+
     return list(db.session.execute(stmt).scalars().all())
 
 
@@ -55,7 +64,8 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
 
     try:
         validate_query(query)
-        items = _get_user_items()
+        user = db.session.get(User, g.user_id) if hasattr(g, "user_id") and g.user_id else None
+        items = _get_sparql_items(user)
         base_url = request.url_root.rstrip("/")
         graph = build_graph(items, base_url)
         result = execute_sparql(graph, query)
@@ -95,6 +105,7 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
 
 @sparql_bp.route("", methods=["POST"])
 @require_auth
+@require_permission(PermissionName.READ_METADATA)
 @limiter.limit("10 per minute")
 def sparql_post():
     """Execute a SPARQL query via POST body."""
@@ -117,6 +128,7 @@ def sparql_post():
 
 @sparql_bp.route("", methods=["GET"])
 @require_auth
+@require_permission(PermissionName.READ_METADATA)
 @limiter.limit("10 per minute")
 def sparql_get():
     """Execute a SPARQL query via GET ?query= parameter (SPARQL Protocol compliance)."""
