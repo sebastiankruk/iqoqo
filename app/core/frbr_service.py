@@ -17,11 +17,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import itertools
+import re
+from collections.abc import Generator, Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 from app.core.ontology_validation import (
     validate_container_not_linked_as_expansion,
@@ -47,8 +53,6 @@ from app.db.video import ManifestationContribution
 
 if TYPE_CHECKING:
     from app.db.games import ContainerAggregation
-
-import re
 
 _LEADING_ARTICLES_RE = re.compile(r"^(?:the|a|an|ten|ta|to)\s+", re.IGNORECASE)
 
@@ -1228,6 +1232,7 @@ def update_frbr_entity_type(
 FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
+PROV = Namespace("http://www.w3.org/ns/prov#")
 
 # Schema.org type mapping for content types
 SCHEMA_TYPE_MAP = {
@@ -1237,11 +1242,146 @@ SCHEMA_TYPE_MAP = {
     "movie": SCHEMA.Movie,
     "board_game": SCHEMA.Game,
     "puzzle": SCHEMA.Product,
+    "concert": SCHEMA.MusicEvent,
 }
 
 
-def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
-    """Add contributor, WorkPart, ImageScan, and UserCollection triples from DB."""
+def _add_provenance_triples(
+    g: Graph,
+    m_uri: URIRef,
+    meta: dict[str, Any],
+    raw_payload: dict[str, Any] | None = None,
+    isbn: str | None = None,
+) -> None:
+    """Extract external provenance and attach prov:wasDerivedFrom."""
+    prov_url = meta.get("source_url") or meta.get("provenance_url") or meta.get("was_derived_from") or meta.get("provenance")
+    if prov_url and str(prov_url).startswith(("http://", "https://")):
+        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(prov_url))))
+        return
+
+    source = meta.get("data_source") or meta.get("source") or meta.get("provider")
+    if not source and raw_payload:
+        source = raw_payload.get("source") or raw_payload.get("data_source")
+
+    if not source:
+        return
+
+    source_str = str(source).lower()
+    if source_str.startswith(("http://", "https://")):
+        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(source))))
+    elif "openlibrary" in source_str or "open_library" in source_str:
+        olid = meta.get("openlibrary_id") or meta.get("olid")
+        if olid:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/books/{olid}")))
+        elif isbn:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/isbn/{isbn}")))
+        else:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://openlibrary.org")))
+    elif "musicbrainz" in source_str:
+        mbid = meta.get("musicbrainz_id") or meta.get("mbid")
+        if mbid:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://musicbrainz.org/release/{mbid}")))
+        else:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org")))
+    elif "bgg" in source_str or "boardgamegeek" in source_str:
+        bgg_id = meta.get("bgg_id") or meta.get("boardgamegeek_id")
+        if bgg_id:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://boardgamegeek.com/boardgame/{bgg_id}")))
+        else:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://boardgamegeek.com")))
+    elif "allegro" in source_str:
+        allegro_url = meta.get("allegro_url")
+        if allegro_url:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(allegro_url))))
+        else:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
+
+
+def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
+    """Enrich graph with relational and provenance metadata from a plain dictionary item."""
+    item_id = item.get("id")
+    m_id = item.get("manifestation_id", item_id)
+    w_id = item.get("work_id", m_id)
+    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
+    w_uri = URIRef(f"{base_url}/api/public/works/{w_id}")
+
+    if item.get("publisher"):
+        g.add((m_uri, SCHEMA.publisher, Literal(str(item["publisher"]))))
+    if item.get("language"):
+        g.add((m_uri, SCHEMA.inLanguage, Literal(str(item["language"]))))
+    pub_date = item.get("publication_date") or item.get("date_published") or item.get("year")
+    if pub_date:
+        g.add((m_uri, SCHEMA.datePublished, Literal(str(pub_date))))
+
+    cover = item.get("cover_url") or item.get("image")
+    if cover:
+        img_uri = URIRef(str(cover) if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
+        g.add((m_uri, SCHEMA.image, img_uri))
+
+    for c in item.get("contributors", []):
+        if isinstance(c, dict):
+            c_name = c.get("name")
+            c_type = c.get("type", "person")
+            c_id = c.get("id", c_name)
+            c_uri = URIRef(f"{base_url}/api/public/contributors/{c_id}")
+            g.add((c_uri, RDF.type, SCHEMA.Person if c_type == "person" else SCHEMA.Organization))
+            if c_name:
+                g.add((c_uri, SCHEMA.name, Literal(c_name)))
+            g.add((m_uri, SCHEMA.contributor, c_uri))
+        elif isinstance(c, str):
+            c_uri = URIRef(f"{base_url}/api/public/contributors/{c}")
+            g.add((c_uri, RDF.type, SCHEMA.Person))
+            g.add((c_uri, SCHEMA.name, Literal(c)))
+            g.add((m_uri, SCHEMA.contributor, c_uri))
+
+    _add_provenance_triples(g, m_uri, item, isbn=item.get("isbn"))
+
+    is_part_of = item.get("is_part_of") or item.get("container_work_id")
+    if is_part_of:
+        p_uri = URIRef(str(is_part_of) if str(is_part_of).startswith("http") else f"{base_url}/api/public/works/{is_part_of}")
+        g.add((w_uri, SCHEMA.isPartOf, p_uri))
+        g.add((p_uri, SCHEMA.hasPart, w_uri))
+
+    has_part = item.get("has_part")
+    if has_part:
+        p_list = has_part if isinstance(has_part, list) else [has_part]
+        for p in p_list:
+            p_uri = URIRef(str(p) if str(p).startswith("http") else f"{base_url}/api/public/works/{p}")
+            g.add((w_uri, SCHEMA.hasPart, p_uri))
+            g.add((p_uri, SCHEMA.isPartOf, w_uri))
+
+
+def _enrich_graph_from_db(
+    g: Graph,
+    items: list[Any],
+    base_url: str,
+    collection_uri: str | URIRef | None = None,
+) -> None:
+    """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB."""
+    if collection_uri:
+        coll_uri_ref = URIRef(str(collection_uri))
+        g.add((coll_uri_ref, RDF.type, SCHEMA.Collection))
+        for item in items:
+            if isinstance(item, dict):
+                m_id = item.get("manifestation_id") or item.get("id")
+                i_id = item.get("id")
+            else:
+                m_id = getattr(item, "manifestation_id", getattr(item, "id", None))
+                i_id = getattr(item, "id", None) if hasattr(item, "manifestation_id") else None
+
+            if m_id:
+                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
+                g.add((coll_uri_ref, SCHEMA.hasPart, m_uri))
+                g.add((m_uri, SCHEMA.isPartOf, coll_uri_ref))
+            if i_id and i_id != m_id:
+                i_uri = URIRef(f"{base_url}/api/public/items/{i_id}")
+                g.add((coll_uri_ref, SCHEMA.hasPart, i_uri))
+                g.add((i_uri, SCHEMA.isPartOf, coll_uri_ref))
+
+    for item in items:
+        if isinstance(item, dict):
+            _enrich_dict_item(g, item, base_url)
+
     seen_works: set[int] = set()
     seen_expressions: set[int] = set()
     seen_manifestations: set[int] = set()
@@ -1249,7 +1389,7 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
 
     for item in items:
         if isinstance(item, dict):
-            continue  # Skip plain dicts — no DB relationships
+            continue  # Handled above via _enrich_dict_item
 
         # Resolve IDs from ORM objects
         if hasattr(item, "manifestation_id") and hasattr(item, "manifestation"):
@@ -1273,72 +1413,119 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
                 if m.expression.work:
                     seen_works.add(m.expression.work.id)
 
-    # WorkContributions
-    if seen_works:
-        contribs = db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(seen_works))).scalars().all()
-        for wc in contribs:
-            w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
-            g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
-            if wc.contributor:
-                g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
-            g.add((w_uri, SCHEMA.contributor, c_uri))
-            g.add((w_uri, FRBR.creator, c_uri))
+    try:
+        # WorkContributions
+        if seen_works:
+            contribs = db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(seen_works))).scalars().all()
+            for wc in contribs:
+                w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
+                c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
+                g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
+                if wc.contributor:
+                    g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
+                g.add((w_uri, SCHEMA.contributor, c_uri))
+                g.add((w_uri, FRBR.creator, c_uri))
 
-    # ExpressionContributions
-    if seen_expressions:
-        expr_contribs = (
-            db.session.execute(select(ExpressionContribution).where(ExpressionContribution.expression_id.in_(seen_expressions)))
-            .scalars()
-            .all()
-        )
-        for ec in expr_contribs:
-            e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
-            g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
-            if ec.contributor:
-                g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
-            g.add((e_uri, SCHEMA.contributor, c_uri))
+        # ExpressionContributions
+        if seen_expressions:
+            expr_contribs = (
+                db.session.execute(select(ExpressionContribution).where(ExpressionContribution.expression_id.in_(seen_expressions)))
+                .scalars()
+                .all()
+            )
+            for ec in expr_contribs:
+                e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
+                c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
+                g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
+                if ec.contributor:
+                    g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
+                g.add((e_uri, SCHEMA.contributor, c_uri))
 
-    # WorkParts (container aggregation)
-    if seen_works:
-        parts = db.session.execute(select(WorkPart).where(WorkPart.container_work_id.in_(seen_works))).scalars().all()
-        for wp in parts:
-            container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
-            part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
-            g.add((part_uri, SCHEMA.isPartOf, container_uri))
-            g.add((container_uri, SCHEMA.hasPart, part_uri))
+        # ManifestationContributions
+        if seen_manifestations:
+            m_contribs = (
+                db.session.execute(
+                    select(ManifestationContribution).where(ManifestationContribution.manifestation_id.in_(seen_manifestations))
+                )
+                .scalars()
+                .all()
+            )
+            for mc in m_contribs:
+                m_uri = URIRef(f"{base_url}/api/public/manifestations/{mc.manifestation_id}")
+                c_uri = URIRef(f"{base_url}/api/public/contributors/{mc.contributor_id}")
+                g.add((c_uri, RDF.type, SCHEMA.Person if mc.contributor and mc.contributor.type == "person" else SCHEMA.Organization))
+                if mc.contributor:
+                    g.add((c_uri, SCHEMA.name, Literal(mc.contributor.name)))
+                g.add((m_uri, SCHEMA.contributor, c_uri))
 
-    # ImageScans
-    if seen_manifestations:
-        scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
-        for scan in scans:
-            m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
-            img_uri = URIRef(f"{base_url}/{scan.file_path}")
-            g.add((m_uri, SCHEMA.image, img_uri))
+        # WorkParts (container aggregation)
+        if seen_works:
+            parts = db.session.execute(select(WorkPart).where(WorkPart.container_work_id.in_(seen_works))).scalars().all()
+            for wp in parts:
+                container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
+                part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
+                g.add((part_uri, SCHEMA.isPartOf, container_uri))
+                g.add((container_uri, SCHEMA.hasPart, part_uri))
 
-    # UserCollections
-    if seen_items:
-        links = db.session.execute(select(UserCollectionItem).where(UserCollectionItem.item_id.in_(seen_items))).scalars().all()
-        for link in links:
-            coll = link.collection
-            if coll:
-                coll_uri = URIRef(f"{base_url}/api/public/collections/{coll.id}")
-                i_uri = URIRef(f"{base_url}/api/public/items/{link.item_id}")
-                g.add((coll_uri, RDF.type, SCHEMA.Collection))
-                g.add((coll_uri, SCHEMA.name, Literal(coll.name)))
-                g.add((coll_uri, SCHEMA.hasPart, i_uri))
+        # ImageScans
+        if seen_manifestations:
+            scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
+            for scan in scans:
+                m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
+                img_uri = URIRef(f"{base_url}/{scan.file_path}")
+                g.add((m_uri, SCHEMA.image, img_uri))
 
-    # DatePublished from manifestation meta
-    if seen_manifestations:
-        manifests = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
-        for m in manifests:
-            if m.meta and m.meta.get("publication_date"):
+        # UserCollections
+        if seen_items:
+            links = db.session.execute(select(UserCollectionItem).where(UserCollectionItem.item_id.in_(seen_items))).scalars().all()
+            for link in links:
+                coll = link.collection
+                if coll:
+                    coll_uri = URIRef(f"{base_url}/api/public/collections/{coll.id}")
+                    i_uri = URIRef(f"{base_url}/api/public/items/{link.item_id}")
+                    g.add((coll_uri, RDF.type, SCHEMA.Collection))
+                    g.add((coll_uri, SCHEMA.name, Literal(coll.name)))
+                    g.add((coll_uri, SCHEMA.hasPart, i_uri))
+                    g.add((i_uri, SCHEMA.isPartOf, coll_uri))
+
+        # Manifestations enrichment: publisher, datePublished, image, prov:wasDerivedFrom
+        if seen_manifestations:
+            manifests = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
+            for m in manifests:
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
-                g.add((m_uri, SCHEMA.datePublished, Literal(m.meta["publication_date"])))
+                if m.publisher:
+                    g.add((m_uri, SCHEMA.publisher, Literal(m.publisher)))
+                pub_date = (
+                    getattr(m, "publication_date", None)
+                    or (m.meta.get("publication_date") if m.meta else None)
+                    or (m.meta.get("year") if m.meta else None)
+                )
+                if pub_date:
+                    g.add((m_uri, SCHEMA.datePublished, Literal(str(pub_date))))
+                cover = getattr(m, "cover_url", None) or (m.meta.get("cover_url") if m.meta else None)
+                if cover:
+                    img_uri = URIRef(cover if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
+                    g.add((m_uri, SCHEMA.image, img_uri))
+
+                _add_provenance_triples(g, m_uri, m.meta or {}, getattr(m, "raw_payload", None), getattr(m, "isbn13", None))
+
+        # Expressions enrichment: inLanguage
+        if seen_expressions:
+            exprs = db.session.execute(select(Expression).where(Expression.id.in_(seen_expressions))).scalars().all()
+            for expr in exprs:
+                if getattr(expr, "language", None):
+                    for m in getattr(expr, "manifestations", []):
+                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                        g.add((m_uri, SCHEMA.inLanguage, Literal(expr.language)))
+    except (SQLAlchemyError, AttributeError, KeyError):
+        pass
 
 
-def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
+def build_collection_rdf_graph(
+    items: list[Any],
+    base_url: str,
+    collection_uri: str | URIRef | None = None,
+) -> Graph:
     """
     Build an in-memory RDF Graph for a list of collection items/manifestations
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
@@ -1347,6 +1534,7 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
     g.bind("frbr", FRBR)
     g.bind("sioc", SIOC)
     g.bind("schema", SCHEMA)
+    g.bind("prov", PROV)
 
     for item in items:
         # Resolve whether dict or db object
@@ -1363,6 +1551,8 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
             content_type = item.get("content_type")
             publisher = item.get("publisher")
             language = item.get("language")
+            publication_date = item.get("publication_date") or item.get("date_published") or item.get("year")
+            cover_url = item.get("cover_url") or item.get("image")
         else:
             item_id = getattr(item, "id", None)
             if hasattr(item, "manifestation_id"):
@@ -1378,6 +1568,8 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
                 content_type = None
                 publisher = None
                 language = None
+                publication_date = None
+                cover_url = None
 
                 m = item.manifestation
                 if m:
@@ -1386,6 +1578,12 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
                     title = getattr(m, "title", "Untitled") or "Untitled"
                     isbn = m.isbn13
                     publisher = getattr(m, "publisher", None)
+                    publication_date = (
+                        getattr(m, "publication_date", None)
+                        or (m.meta.get("publication_date") if m.meta else None)
+                        or (m.meta.get("year") if m.meta else None)
+                    )
+                    cover_url = getattr(m, "cover_url", None) or (m.meta.get("cover_url") if m.meta else None)
                     if m.expression:
                         expression_id = m.expression.id
                         work_id = m.expression.work_id
@@ -1420,6 +1618,12 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
                 content_type = None
                 publisher = getattr(item, "publisher", None)
                 language = None
+                publication_date = (
+                    getattr(item, "publication_date", None)
+                    or (item.meta.get("publication_date") if getattr(item, "meta", None) else None)
+                    or (item.meta.get("year") if getattr(item, "meta", None) else None)
+                )
+                cover_url = getattr(item, "cover_url", None) or (item.meta.get("cover_url") if getattr(item, "meta", None) else None)
 
                 if hasattr(item, "expression") and item.expression:
                     expr = item.expression
@@ -1475,6 +1679,15 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
         if language:
             g.add((m_uri, SCHEMA.inLanguage, Literal(language)))
 
+        if publication_date:
+            g.add((m_uri, SCHEMA.datePublished, Literal(str(publication_date))))
+
+        if cover_url:
+            img_uri = URIRef(
+                str(cover_url) if str(cover_url).startswith(("http://", "https://")) else f"{base_url}/{str(cover_url).lstrip('/')}"
+            )
+            g.add((m_uri, SCHEMA.image, img_uri))
+
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))
             g.add((w_uri, FRBR.creator, Literal(author)))
@@ -1491,25 +1704,251 @@ def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
             if status:
                 g.add((i_uri, SCHEMA.itemCondition, Literal(status)))
 
+        # Specialized domain mapping for Concerts
+        is_concert = (content_type in ("concert", "live_performance")) or (isinstance(item, dict) and item.get("is_concert"))
+        if not is_concert and not isinstance(item, dict):
+            expr = getattr(item, "expression", None) or (
+                item.manifestation.expression if hasattr(item, "manifestation") and item.manifestation else None
+            )
+            if expr and getattr(expr, "kind", None) == EXPRESSION_KIND_LIVE_PERFORMANCE:
+                is_concert = True
+            m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+            if m_obj and getattr(m_obj, "format", None) == "concert":
+                is_concert = True
+
+        if is_concert:
+            g.add((m_uri, RDF.type, SCHEMA.MusicEvent))
+            p_list = None
+            if isinstance(item, dict):
+                p_list = item.get("performers") or item.get("performer") or authors
+                c_date = item.get("start_date") or item.get("date") or publication_date
+                c_loc = item.get("location") or item.get("venue")
+            else:
+                m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+                meta_dict = (m_obj.meta or {}) if m_obj else {}
+                p_list = meta_dict.get("performers") or meta_dict.get("performer") or authors
+                c_date = meta_dict.get("start_date") or meta_dict.get("event_date") or publication_date
+                c_loc = meta_dict.get("location") or meta_dict.get("venue")
+
+            if p_list:
+                if isinstance(p_list, str):
+                    p_list = [p_list]
+                for p in p_list:
+                    g.add((m_uri, SCHEMA.performer, Literal(str(p))))
+            if c_date:
+                g.add((m_uri, SCHEMA.startDate, Literal(str(c_date))))
+            if c_loc:
+                g.add((m_uri, SCHEMA.location, Literal(str(c_loc))))
+
+        # Specialized domain mapping for Board Games
+        is_board_game = (content_type == "board_game") or (isinstance(item, dict) and item.get("content_type") == "board_game")
+        if not is_board_game and not isinstance(item, dict):
+            m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+            if m_obj and getattr(m_obj, "format_type", None) == "game":
+                is_board_game = True
+
+        if is_board_game:
+            g.add((m_uri, RDF.type, SCHEMA.Game))
+            min_p = None
+            max_p = None
+            num_p = None
+            if isinstance(item, dict):
+                min_p = item.get("min_players")
+                max_p = item.get("max_players")
+                num_p = item.get("number_of_players")
+            else:
+                m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+                meta_dict = (m_obj.meta or {}) if m_obj else {}
+                min_p = meta_dict.get("min_players")
+                max_p = meta_dict.get("max_players")
+                num_p = meta_dict.get("number_of_players")
+
+            if min_p is not None and max_p is not None:
+                player_str = str(min_p) if min_p == max_p else f"{min_p}-{max_p}"
+                g.add((m_uri, SCHEMA.numberOfPlayers, Literal(player_str)))
+            elif min_p is not None:
+                g.add((m_uri, SCHEMA.numberOfPlayers, Literal(f"{min_p}+")))
+            elif num_p:
+                g.add((m_uri, SCHEMA.numberOfPlayers, Literal(str(num_p))))
+
     # --- Enrichment pass: Contributors, WorkParts, ImageScans, UserCollections ---
-    # Only available when processing ORM objects with DB access
-    _enrich_graph_from_db(g, items, base_url)
+    _enrich_graph_from_db(g, items, base_url, collection_uri=collection_uri)
     return g
 
 
-def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
+def _eager_load_items_fallback(items: list[Any]) -> list[Any]:
+    """Ensure ORM instances in items have their FRBR relations eagerly loaded.
+
+    If un-hydrated Item or Manifestation instances are detected, re-queries them
+    in a single batch using joinedload across Item -> Manifestation -> Expression -> Work.
+    """
+    if not items:
+        return items
+
+    orm_items: list[Any] = []
+    item_ids: list[int] = []
+    manifestation_ids: list[int] = []
+
+    for it in items:
+        if isinstance(it, dict):
+            continue
+        if hasattr(it, "manifestation_id") and hasattr(it, "id") and it.id is not None:
+            item_ids.append(it.id)
+            orm_items.append(it)
+        elif hasattr(it, "expression_id") and hasattr(it, "id") and it.id is not None:
+            manifestation_ids.append(it.id)
+            orm_items.append(it)
+
+    if not orm_items:
+        return items
+
+    needs_hydration = False
+    for it in orm_items:
+        try:
+            insp = sa_inspect(it)
+            if hasattr(it, "manifestation_id"):
+                if "manifestation" in insp.unloaded:
+                    needs_hydration = True
+                    break
+                m = it.manifestation
+                if m is not None:
+                    m_insp = sa_inspect(m)
+                    if "expression" in m_insp.unloaded:
+                        needs_hydration = True
+                        break
+                    e = m.expression
+                    if e is not None:
+                        e_insp = sa_inspect(e)
+                        if "work" in e_insp.unloaded:
+                            needs_hydration = True
+                            break
+            elif hasattr(it, "expression_id"):
+                if "expression" in insp.unloaded:
+                    needs_hydration = True
+                    break
+                e = it.expression
+                if e is not None:
+                    e_insp = sa_inspect(e)
+                    if "work" in e_insp.unloaded:
+                        needs_hydration = True
+                        break
+        except (SQLAlchemyError, AttributeError, KeyError):
+            pass
+
+    if not needs_hydration:
+        return items
+
+    try:
+        hydrated_items_map: dict[int, Any] = {}
+        if item_ids:
+            stmt = (
+                select(Item)
+                .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+                .where(Item.id.in_(item_ids))
+            )
+            for loaded_item in db.session.execute(stmt).scalars().unique().all():
+                hydrated_items_map[loaded_item.id] = loaded_item
+
+        hydrated_manifestations_map: dict[int, Any] = {}
+        if manifestation_ids:
+            m_stmt = (
+                select(Manifestation)
+                .options(joinedload(Manifestation.expression).joinedload(Expression.work))
+                .where(Manifestation.id.in_(manifestation_ids))
+            )
+            for loaded_m in db.session.execute(m_stmt).scalars().unique().all():
+                hydrated_manifestations_map[loaded_m.id] = loaded_m
+
+        result: list[Any] = []
+        for it in items:
+            if isinstance(it, dict):
+                result.append(it)
+            elif hasattr(it, "manifestation_id") and it.id in hydrated_items_map:
+                result.append(hydrated_items_map[it.id])
+            elif hasattr(it, "expression_id") and it.id in hydrated_manifestations_map:
+                result.append(hydrated_manifestations_map[it.id])
+            else:
+                result.append(it)
+        return result
+    except (SQLAlchemyError, AttributeError, KeyError):
+        return items
+
+
+def stream_collection_to_rdf(
+    items_iterable: Iterable[Any],
+    base_url: str,
+    output_format: str = "nt",
+    chunk_size: int = 50,
+    collection_uri: str | URIRef | None = None,
+) -> Generator[str, None, None]:
+    """
+    Generator that streams serialized RDF chunks for large collections.
+    Supports 'nt' (N-Triples), 'turtle', and 'json-ld'.
+    Processes items in chunks without loading entire collections into memory.
+    """
+    iterator = iter(items_iterable)
+    first_chunk = True
+
+    while True:
+        chunk = list(itertools.islice(iterator, chunk_size))
+        if not chunk:
+            break
+
+        chunk = _eager_load_items_fallback(chunk)
+        g = build_collection_rdf_graph(chunk, base_url, collection_uri=collection_uri)
+
+        if output_format in ("nt", "n-triples", "ntriples"):
+            chunk_nt = g.serialize(format="nt")
+            if chunk_nt:
+                yield chunk_nt
+        elif output_format == "turtle":
+            chunk_ttl = g.serialize(format="turtle")
+            if first_chunk:
+                yield chunk_ttl
+            else:
+                lines = [
+                    line for line in chunk_ttl.splitlines(keepends=True) if not (line.startswith("@prefix") or line.startswith("PREFIX"))
+                ]
+                yield "".join(lines).lstrip()
+        elif output_format == "json-ld":
+            context = {
+                "frbr": str(FRBR),
+                "sioc": str(SIOC),
+                "schema": str(SCHEMA),
+                "prov": str(PROV),
+                "title": "schema:name",
+                "isbn": "schema:isbn",
+                "author": "schema:author",
+            }
+            chunk_jsonld = g.serialize(format="json-ld", context=context, indent=2)
+            if chunk_jsonld:
+                yield chunk_jsonld + "\n"
+
+        first_chunk = False
+
+
+def serialize_collection_to_rdf(
+    items: list[Any],
+    base_url: str,
+    output_format: str = "json-ld",
+    collection_uri: str | URIRef | None = None,
+) -> str:
     """
     Serializes a list of collection items/manifestations into semantic RDF graphs
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
     """
-    g = build_collection_rdf_graph(items, base_url)
+    items = _eager_load_items_fallback(items)
+    g = build_collection_rdf_graph(items, base_url, collection_uri=collection_uri)
 
-    # Serialization Context Setup for JSON-LD vs Turtle
+    if output_format in ("nt", "n-triples", "ntriples"):
+        return g.serialize(format="nt")
+
     if output_format == "json-ld":
         context = {
             "frbr": str(FRBR),
             "sioc": str(SIOC),
             "schema": str(SCHEMA),
+            "prov": str(PROV),
             "title": "schema:name",
             "isbn": "schema:isbn",
             "author": "schema:author",
