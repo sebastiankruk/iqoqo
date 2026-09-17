@@ -232,3 +232,60 @@ def test_optional_foreign_keys_ondelete_set_null() -> None:
     assert roadmap_work_fk.ondelete == "SET NULL"
     roadmap_manif_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == "manifestation_id")
     assert roadmap_manif_fk.ondelete == "SET NULL"
+
+
+# ---------------------------------------------------------------------------
+# FRBR Linked Open Data Canonical IRI Tests
+# ---------------------------------------------------------------------------
+
+
+def test_frbr_entity_iri_default_base() -> None:
+    """Verify default canonical IRI formatting across all four FRBR levels."""
+    import os
+    from unittest.mock import patch
+
+    from app.db.core import Expression, Item, Manifestation, Work
+
+    with patch.dict(os.environ, {}, clear=True):
+        work = Work(id=42, title="Test Work")
+        expression = Expression(id=10, work_id=42)
+        manifestation = Manifestation(id=20, expression_id=10)
+        item = Item(id=30, manifestation_id=20)
+
+        assert work.iri == "https://iqoqo.org/works/42"
+        assert expression.iri == "https://iqoqo.org/expressions/10"
+        assert manifestation.iri == "https://iqoqo.org/manifestations/20"
+        assert item.iri == "https://iqoqo.org/items/30"
+
+
+def test_frbr_entity_iri_custom_base_url() -> None:
+    """Verify canonical IRI formatting respects BASE_URL and strips trailing slashes."""
+    import os
+    from unittest.mock import patch
+
+    from app.db.core import Expression, Item, Manifestation, Work
+
+    custom_url = "https://custom.library.org/"
+    with patch.dict(os.environ, {"BASE_URL": custom_url}):
+        work = Work(id=1, title="Test Work")
+        expression = Expression(id=2, work_id=1)
+        manifestation = Manifestation(id=3, expression_id=2)
+        item = Item(id=4, manifestation_id=3)
+
+        assert work.iri == "https://custom.library.org/works/1"
+        assert expression.iri == "https://custom.library.org/expressions/2"
+        assert manifestation.iri == "https://custom.library.org/manifestations/3"
+        assert item.iri == "https://custom.library.org/items/4"
+
+
+def test_frbr_entity_iri_frontend_url_fallback() -> None:
+    """Verify canonical IRI falls back to NEXT_PUBLIC_FRONTEND_URL when BASE_URL is unset."""
+    import os
+    from unittest.mock import patch
+
+    from app.db.core import Work
+
+    frontend_url = "https://frontend.example.com"
+    with patch.dict(os.environ, {"NEXT_PUBLIC_FRONTEND_URL": frontend_url}, clear=True):
+        work = Work(id=77, title="Sample")
+        assert work.iri == "https://frontend.example.com/works/77"
