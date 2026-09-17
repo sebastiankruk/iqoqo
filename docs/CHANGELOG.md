@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OWL Ontology & SHACL Shapes Synchronization**: Synchronized canonical OWL domain ontology (`docs/ontology/iqoqo.ttl`) with post-v0.7.18 database schema, added comprehensive SHACL constraint shapes (`docs/ontology/iqoqo-shapes.ttl`), introduced centralized validation service (`app/core/shacl_service.py`), and operational sync verification script (`scripts/sync_ontology.py --check`).
+- **Canonical Linked Open Data IRI Minting**: Implemented `iri` property on core FRBR models (`Work`, `Expression`, `Manifestation`, `Item`) minting canonical `https://iqoqo.cc` IRIs.
+
 ### Changed
 
 ### Fixed
