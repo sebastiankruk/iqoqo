@@ -174,6 +174,24 @@ class TestSPARQLService:
         assert result.graph is not None
         assert len(result.graph) > 0
 
+    def test_format_select_results_respects_max_rows(self):
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "expression_id": "e-1",
+                "work_id": "w-1",
+                "title": "Test Book",
+                "authors": ["Author 1", "Author 2"],
+                "tags": ["tag1", "tag2"],
+                "status": None,
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        result = execute_sparql(graph, "SELECT ?s ?p ?o WHERE { ?s ?p ?o }")
+        formatted = format_select_results(result, max_rows=2)
+        assert len(formatted["results"]["bindings"]) == 2
+
 
 class TestSPARQLEndpoint:
     """Integration tests for the SPARQL API endpoint."""

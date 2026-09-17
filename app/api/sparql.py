@@ -17,6 +17,7 @@
 
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.decorators import require_auth
 from app.core.limiter import limiter
@@ -32,14 +33,19 @@ from app.core.sparql_service import (
     format_select_results,
     validate_query,
 )
-from app.db.models import Item, db
+from app.db.models import Expression, Item, Manifestation, db
 
 sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 
 
 def _get_user_items() -> list[Item]:
-    """Fetch all items belonging to the authenticated user."""
-    return list(db.session.execute(select(Item).where(Item.owner_id == g.user_id)).scalars().all())
+    """Fetch all items belonging to the authenticated user with eager-loaded FRBR entities."""
+    stmt = (
+        select(Item)
+        .where(Item.owner_id == g.user_id)
+        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    )
+    return list(db.session.execute(stmt).scalars().all())
 
 
 def _execute_and_respond(query: str) -> tuple[Response, int] | Response:

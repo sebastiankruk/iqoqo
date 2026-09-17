@@ -28,6 +28,7 @@ import {
   Key,
   Database,
   Image as ImageIcon,
+  Code2,
 } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -211,6 +212,13 @@ export default function GroupsPage() {
                     href="/admin/settings?tab=security"
                   />
                 )}
+                <NavItem
+                  label="SPARQL Explorer"
+                  icon={Code2}
+                  isActive={false}
+                  onClick={() => {}}
+                  href="/admin/sparql"
+                />
               </nav>
             </div>
           )}

@@ -17,18 +17,22 @@
 
 import re
 import signal
+import time
 from typing import Any
 
 from rdflib import Graph
 from rdflib.query import Result
 
-from app.core.frbr_service import serialize_collection_to_rdf
+from app.core.frbr_service import build_collection_rdf_graph
 
 # Maximum allowed query length in bytes
 MAX_QUERY_LENGTH = 10240  # 10KB
 
 # Query execution timeout in seconds
 QUERY_TIMEOUT = 5
+
+# Maximum allowed SELECT result rows to prevent memory explosion
+MAX_RESULT_ROWS = 1000
 
 # Patterns that indicate write operations (must be rejected)
 WRITE_PATTERNS = re.compile(
@@ -80,13 +84,9 @@ def build_graph(items: list[Any], base_url: str) -> Graph:
     """
     Build an in-memory RDF graph from a list of collection items.
 
-    Uses serialize_collection_to_rdf() to produce Turtle, then parses it back
-    into a Graph suitable for SPARQL querying.
+    Directly constructs the RDF Graph without intermediate string serialization.
     """
-    turtle_data = serialize_collection_to_rdf(items, base_url, output_format="turtle")
-    g = Graph()
-    g.parse(data=turtle_data, format="turtle")
-    return g
+    return build_collection_rdf_graph(items, base_url)
 
 
 def execute_sparql(graph: Graph, query: str) -> Result:
@@ -121,15 +121,22 @@ def execute_sparql(graph: Graph, query: str) -> Result:
     return result
 
 
-def format_select_results(result: Result) -> dict[str, Any]:
+def format_select_results(result: Result, max_rows: int = MAX_RESULT_ROWS) -> dict[str, Any]:
     """
-    Format SELECT query results as SPARQL Results JSON.
+    Format SELECT query results as SPARQL Results JSON with safety row limits.
 
     See: https://www.w3.org/TR/sparql11-results-json/
     """
     variables = [str(v) for v in result.vars] if result.vars else []
-    bindings = []
+    bindings: list[dict[str, Any]] = []
+    start_time = time.time()
+
     for row in result:
+        if len(bindings) >= max_rows:
+            break
+        if time.time() - start_time > QUERY_TIMEOUT:
+            raise SPARQLTimeout(f"Query execution exceeded {QUERY_TIMEOUT}s timeout")
+
         binding = {}
         for i, var in enumerate(variables):
             value = row[i]  # type: ignore[index]  # rdflib ResultRow supports indexing

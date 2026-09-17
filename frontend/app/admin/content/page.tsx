@@ -33,6 +33,7 @@ import {
   X,
   Image as ImageIcon,
   LifeBuoy,
+  Code2,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -261,6 +262,13 @@ function ContentManagementContent(): React.JSX.Element {
                     onClick={() => handleTabChange("security")}
                   />
                 )}
+                <NavItem
+                  label="SPARQL Explorer"
+                  icon={Code2}
+                  isActive={false}
+                  onClick={() => {}}
+                  href="/admin/sparql"
+                />
               </nav>
             </div>
           )}

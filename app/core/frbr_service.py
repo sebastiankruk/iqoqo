@@ -1260,9 +1260,9 @@ def _enrich_graph_from_db(g: Graph, items: list[Any], base_url: str) -> None:
                 g.add((m_uri, SCHEMA.datePublished, Literal(m.meta["publication_date"])))
 
 
-def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
+def build_collection_rdf_graph(items: list[Any], base_url: str) -> Graph:
     """
-    Serializes a list of collection items/manifestations into semantic RDF graphs
+    Build an in-memory RDF Graph for a list of collection items/manifestations
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
     """
     g = Graph()
@@ -1416,6 +1416,15 @@ def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: 
     # --- Enrichment pass: Contributors, WorkParts, ImageScans, UserCollections ---
     # Only available when processing ORM objects with DB access
     _enrich_graph_from_db(g, items, base_url)
+    return g
+
+
+def serialize_collection_to_rdf(items: list[Any], base_url: str, output_format: str = "json-ld") -> str:
+    """
+    Serializes a list of collection items/manifestations into semantic RDF graphs
+    supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+    """
+    g = build_collection_rdf_graph(items, base_url)
 
     # Serialization Context Setup for JSON-LD vs Turtle
     if output_format == "json-ld":

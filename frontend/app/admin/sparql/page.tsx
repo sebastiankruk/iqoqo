@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { Play, Download, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
@@ -29,9 +30,12 @@ const EXAMPLE_QUERIES = [
     query: `SELECT ?work ?title ?author
 WHERE {
   ?work a <http://iflastandards.info/ns/frbr/frbrer/Work> .
+  ?expr <http://iflastandards.info/ns/frbr/frbrer/expressionOf> ?work .
+  ?manif <http://iflastandards.info/ns/frbr/frbrer/embodimentOf> ?expr .
   ?manif <https://schema.org/name> ?title .
   ?manif <https://schema.org/author> ?author .
-}`,
+}
+LIMIT 50`,
   },
   {
     label: "Items with ISBN",
@@ -40,7 +44,8 @@ WHERE {
   ?manif a <http://iflastandards.info/ns/frbr/frbrer/Manifestation> .
   ?manif <https://schema.org/name> ?title .
   ?manif <https://schema.org/isbn> ?isbn .
-}`,
+}
+LIMIT 50`,
   },
   {
     label: "All triples (limited)",
@@ -54,7 +59,8 @@ LIMIT 50`,
 WHERE {
   ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
   ?item <https://schema.org/itemCondition> ?status .
-}`,
+}
+LIMIT 50`,
   },
   {
     label: "CONSTRUCT - Full graph (limited)",
@@ -135,11 +141,16 @@ export default function SPARQLExplorerPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       <div className="flex-1 mx-auto w-full max-w-6xl px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">SPARQL Explorer</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Query your collection using SPARQL over the FRBR/Schema.org RDF graph.
-          </p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">SPARQL Explorer</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Query your collection using SPARQL over the FRBR/Schema.org RDF graph.
+            </p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/admin/settings">Back to Settings</Link>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
