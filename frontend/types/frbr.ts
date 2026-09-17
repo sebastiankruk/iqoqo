@@ -73,6 +73,8 @@ export interface Manifestation {
   upc?: string;
   ean?: string;
   publisher?: string;
+  format_type?: string;
+  format?: string;
   year?: number;
   cover_url?: string | null;
   owner_count?: number;

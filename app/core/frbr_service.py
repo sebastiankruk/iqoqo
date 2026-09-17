@@ -145,6 +145,7 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     barcode: str | None = None,
     catalog_number: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    format_type: str | None = None,
 ) -> Manifestation:
     """
     Creates a new Manifestation for an Expression.
@@ -162,20 +163,50 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         barcode: Generic barcode
         catalog_number: Catalog number
         raw_payload: Verbatim provider payload JSON
+        format_type: Physical format type (e.g., 'hardcover', 'paperback', 'vinyl')
 
     Returns:
         The created Manifestation object
     """
     if meta is None:
         meta = {}
+    else:
+        meta = dict(meta)
+
+    if isbn13 is None:
+        cand_isbn = meta.get("isbn13") or meta.get("isbn")
+        if cand_isbn and isinstance(cand_isbn, str):
+            isbn13 = cand_isbn
+    if isbn13 and isinstance(isbn13, str):
+        clean_isbn = isbn13.replace("-", "").replace(" ", "").strip()
+        if len(clean_isbn) <= 13:
+            isbn13 = clean_isbn
+
+    if publisher is None:
+        cand_pub = meta.get("publisher") or meta.get("Publisher")
+        if cand_pub and isinstance(cand_pub, str):
+            publisher = cand_pub
+    if publisher and isinstance(publisher, str):
+        publisher = publisher.strip()[:255]
+
+    if format_type is None:
+        cand_fmt = meta.get("format_type") or format or meta.get("format") or meta.get("video_format") or meta.get("format_name")
+        if cand_fmt and isinstance(cand_fmt, str):
+            format_type = cand_fmt
+    if format_type and isinstance(format_type, str):
+        format_type = format_type.strip().lower()[:50]
+
     if format is None:
-        format = meta.get("format") or meta.get("video_format") or meta.get("format_name")
+        format = format_type or meta.get("format") or meta.get("video_format") or meta.get("format_name")
     if label is None:
         label = meta.get("label") or meta.get("studio") or meta.get("imprint") or publisher
     if barcode is None:
         barcode = meta.get("barcode") or meta.get("identifier") or ean or upc or isbn13
     if catalog_number is None:
         catalog_number = meta.get("catalog_number") or meta.get("catno") or meta.get("sku")
+
+    for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"):
+        meta.pop(k, None)
 
     manifestation = Manifestation(
         expression_id=expression_id,
@@ -184,6 +215,7 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         ean=ean,
         publisher=publisher,
         publication_date=publication_date,
+        format_type=format_type,
         format=format,
         label=label,
         barcode=barcode,
@@ -248,11 +280,19 @@ def get_or_create_book_manifestation(
     Returns:
         The Manifestation object
     """
+    clean_isbn = isbn.replace("-", "").replace(" ", "").strip() if isbn else ""
+
     # Check if manifestation already exists
-    manifestation: Manifestation | None = Manifestation.query.filter_by(isbn13=isbn).first()  # type: ignore[assignment]
+    manifestation: Manifestation | None = None
+    if clean_isbn:
+        manifestation = Manifestation.query.filter_by(isbn13=clean_isbn).first()  # type: ignore[assignment]
+    if not manifestation and isbn:
+        manifestation = Manifestation.query.filter_by(isbn13=isbn).first()  # type: ignore[assignment]
 
     if manifestation:
         # Update metadata if provided
+        if publisher and not manifestation.publisher:
+            manifestation.publisher = publisher.strip()[:255]
         if title or authors:
             if not manifestation.meta:
                 manifestation.meta = {}
@@ -271,7 +311,13 @@ def get_or_create_book_manifestation(
     if authors:
         metadata["Authors"] = authors if isinstance(authors, list) else [authors]
 
-    manifestation = create_manifestation(expression_id=expression.id, isbn13=isbn, publisher=publisher, meta=metadata)
+    manifestation = create_manifestation(
+        expression_id=expression.id,
+        isbn13=clean_isbn or isbn,
+        publisher=publisher,
+        format_type="book",
+        meta=metadata,
+    )
 
     return manifestation
 
@@ -886,6 +932,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     barcode: str | None = None,
     catalog_number: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    format_type: str | None = None,
 ) -> Manifestation:
     """
     Update an existing Manifestation.
@@ -904,6 +951,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         barcode: New barcode
         catalog_number: New catalog number
         raw_payload: Verbatim provider payload JSON
+        format_type: New physical format type (e.g., 'hardcover', 'paperback', 'vinyl')
 
     Returns:
         The updated Manifestation object
@@ -918,17 +966,21 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
             raise ValueError(f"Expression with id {expression_id} not found")
         manif.expression_id = expression_id
     if isbn13 is not None:
-        manif.isbn13 = isbn13
+        manif.isbn13 = isbn13.replace("-", "").replace(" ", "").strip() if isbn13 else None
     if upc is not None:
         manif.upc = upc
     if ean is not None:
         manif.ean = ean
     if publisher is not None:
-        manif.publisher = publisher
+        manif.publisher = publisher.strip()[:255] if publisher else None
     if publication_date is not None:
         manif.publication_date = publication_date
+    if format_type is not None:
+        manif.format_type = format_type.strip().lower()[:50] if format_type else None
     if format is not None:
         manif.format = format
+        if manif.format_type is None and format:
+            manif.format_type = format.strip().lower()[:50]
         current_meta = dict(manif.meta or {})
         current_meta["format"] = format
         current_meta["Format"] = format
@@ -960,6 +1012,8 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
             current_meta["format"] = new_type
             current_meta["Format"] = new_type
             manif.format = new_type
+            if manif.format_type is None:
+                manif.format_type = new_type.strip().lower()[:50]
             if manif.expression:
                 category = FORMAT_TO_CATEGORY.get(new_type) or FORMAT_ALIAS_TO_CATEGORY.get(new_type) or new_type
                 manif.expression.content_type = category
@@ -969,7 +1023,31 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
                     w_meta["format"] = category
                     w_meta["Format"] = category
                     manif.expression.work.meta = w_meta
+
+        if "format_type" in meta and format_type is None and meta["format_type"]:
+            manif.format_type = str(meta["format_type"]).strip().lower()[:50]
+        if ("publisher" in meta or "Publisher" in meta) and publisher is None:
+            cand_pub = meta.get("publisher") or meta.get("Publisher")
+            if cand_pub:
+                manif.publisher = str(cand_pub).strip()[:255]
+        if ("isbn13" in meta or "isbn" in meta) and isbn13 is None:
+            cand_isbn = meta.get("isbn13") or meta.get("isbn")
+            if cand_isbn:
+                manif.isbn13 = str(cand_isbn).replace("-", "").replace(" ", "").strip()
+
+        for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"):
+            current_meta.pop(k, None)
+
         manif.meta = current_meta
+    else:
+        if manif.meta:
+            current_meta = dict(manif.meta)
+            has_promoted = any(k in current_meta for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"))
+            if has_promoted:
+                for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"):
+                    current_meta.pop(k, None)
+                manif.meta = current_meta
+
     db.session.commit()
     return manif
 

@@ -306,9 +306,10 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     ean = db.Column(db.String(13), index=True)
 
     # Promoted core relational columns
-    publisher = db.Column(db.String(500))
+    publisher = db.Column(db.String(255), nullable=True)
     publication_date = db.Column(db.Date)
     cover_url = db.Column(db.String(255), nullable=True)
+    format_type = db.Column(db.String(50), nullable=True, index=True)
     format = db.Column(db.String(50), nullable=True, index=True)
     label = db.Column(db.String(500), nullable=True)
     barcode = db.Column(db.String(100), nullable=True, index=True)
