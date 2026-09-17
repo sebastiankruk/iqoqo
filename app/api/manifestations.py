@@ -242,6 +242,8 @@ def get_manifestations() -> tuple[Response, int]:
                 ),
                 "isbn13": m.isbn13,
                 "publisher": m.publisher,
+                "format_type": m.format_type,
+                "format": m.format_type or m.format,
                 "year": resolved_year,
                 "meta": m.meta,
                 "title": work_title,
@@ -346,6 +348,8 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "upc": m.upc,
         "ean": m.ean,
         "publisher": m.publisher,
+        "format_type": m.format_type,
+        "format": m.format_type or m.format,
         "year": resolved_year,
         "meta": m.meta,
         "title": work_title,
@@ -505,7 +509,20 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
 
     if metadata:
         if "publisher" in metadata:
-            manifestation.publisher = metadata.pop("publisher")
+            pub_val = metadata.pop("publisher")
+            manifestation.publisher = pub_val.strip()[:255] if pub_val else None
+        if "format_type" in metadata:
+            fmt_val = metadata.pop("format_type")
+            manifestation.format_type = fmt_val.strip().lower()[:50] if fmt_val else None
+        if "format" in metadata:
+            fmt_val = metadata.pop("format")
+            manifestation.format = fmt_val
+            if not manifestation.format_type and fmt_val:
+                manifestation.format_type = fmt_val.strip().lower()[:50]
+        if "isbn13" in metadata:
+            isbn_val = metadata.pop("isbn13")
+            if isbn_val:
+                manifestation.isbn13 = isbn_val.replace("-", "").replace(" ", "").strip()
 
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:

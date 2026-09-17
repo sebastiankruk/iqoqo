@@ -577,6 +577,8 @@ def update_manifestation(manif_id):
             publisher=data.get("publisher"),
             publication_date=pub_date,
             meta=parse_meta(data.get("meta")),
+            format=data.get("format"),
+            format_type=data.get("format_type"),
         )
         return jsonify({"success": True, "data": {"id": manif.id}})
     except ValueError as e:
