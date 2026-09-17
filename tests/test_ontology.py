@@ -252,10 +252,10 @@ def test_frbr_entity_iri_default_base() -> None:
         manifestation = Manifestation(id=20, expression_id=10)
         item = Item(id=30, manifestation_id=20)
 
-        assert work.iri == "https://iqoqo.org/works/42"
-        assert expression.iri == "https://iqoqo.org/expressions/10"
-        assert manifestation.iri == "https://iqoqo.org/manifestations/20"
-        assert item.iri == "https://iqoqo.org/items/30"
+        assert work.iri == "https://iqoqo.cc/works/42"
+        assert expression.iri == "https://iqoqo.cc/expressions/10"
+        assert manifestation.iri == "https://iqoqo.cc/manifestations/20"
+        assert item.iri == "https://iqoqo.cc/items/30"
 
 
 def test_frbr_entity_iri_custom_base_url() -> None:

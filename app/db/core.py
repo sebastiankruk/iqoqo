@@ -88,7 +88,7 @@ WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
 
 def _get_lod_base_url() -> str:
     """Return the canonical base URL for Linked Open Data entity IRIs."""
-    base = os.environ.get("BASE_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or "https://iqoqo.org"
+    base = os.environ.get("BASE_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or "https://iqoqo.cc"
     return base.rstrip("/")
 
 
