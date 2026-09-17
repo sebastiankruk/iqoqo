@@ -24,6 +24,9 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
+@prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+@prefix schema: <https://schema.org/> .
+@prefix sioc: <http://rdfs.org/sioc/ns#> .
 
 iqoqo: a sh:Ontology ;
     rdfs:label "iqoqo SHACL Shapes" ;
@@ -167,3 +170,72 @@ iqoqo:FeedbackCommentShape a sh:NodeShape ;
     sh:targetClass iqoqo:FeedbackComment ;
     sh:name "Feedback Comment shape" ;
     sh:description "A feedback comment is a SIOC Post." .
+
+# ---------------------------------------------------------------------------
+# FRBR / Schema.org Shapes (Linked Open Data & Export Validation)
+# ---------------------------------------------------------------------------
+
+iqoqo:FRBRExpressionShape a sh:NodeShape ;
+    sh:targetClass frbr:Expression ;
+    sh:property [
+        sh:path frbr:expressionOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Expression must link to exactly one Work via frbr:expressionOf." ;
+    ] .
+
+iqoqo:FRBRManifestationShape a sh:NodeShape ;
+    sh:targetClass frbr:Manifestation ;
+    sh:property [
+        sh:path frbr:embodimentOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Manifestation must link to exactly one Expression via frbr:embodimentOf." ;
+    ] ;
+    sh:property [
+        sh:path schema:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Manifestation must have at least one schema:name." ;
+    ] ;
+    sh:property [
+        sh:path schema:isbn ;
+        sh:datatype xsd:string ;
+        sh:pattern "^\\d{13}$" ;
+        sh:message "ISBN must be exactly 13 digits." ;
+    ] .
+
+iqoqo:FRBRItemShape a sh:NodeShape ;
+    sh:targetClass frbr:Item ;
+    sh:property [
+        sh:path frbr:exemplarOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Item must link to exactly one Manifestation via frbr:exemplarOf." ;
+    ] .
+
+iqoqo:FRBRWorkShape a sh:NodeShape ;
+    sh:targetClass frbr:Work ;
+    sh:property [
+        sh:path frbr:creator ;
+        sh:datatype xsd:string ;
+        sh:message "Work creator must be a string literal." ;
+    ] .
+
+iqoqo:CreativeWorkShape a sh:NodeShape ;
+    sh:targetClass schema:CreativeWork ;
+    sh:property [
+        sh:path schema:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "CreativeWork must have a schema:name." ;
+    ] ;
+    sh:property [
+        sh:path schema:author ;
+        sh:datatype xsd:string ;
+        sh:message "schema:author must be a string literal." ;
+    ] .
+

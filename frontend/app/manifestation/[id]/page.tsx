@@ -102,21 +102,36 @@ export default function ManifestationPage() {
   const composedLabel = composeMediaBadgeLabel(badge, key => t(key));
   const badgeLabel = isSeries ? t("seriesSuffix", { label: composedLabel }) : composedLabel;
 
-  const isBoardGame = manifestation.content_type === "board_game";
-  const schemaType = isBoardGame ? "Game" : "Book";
+  const schemaTypeMap: Record<string, string> = {
+    text: "Book",
+    book: "Book",
+    audiobook: "Audiobook",
+    music: "MusicAlbum",
+    movie: "Movie",
+    board_game: "Game",
+    puzzle: "Product",
+  };
+  const schemaType = schemaTypeMap[manifestation.content_type ?? "text"] || "CreativeWork";
 
-  const jsonLdData = {
+  const jsonLdData: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": schemaType,
     name: manifestation.title || "Untitled Work",
     author: {
       "@type": "Person",
-      name: manifestation.authors?.[0] || "Unknown Author",
+      name:
+        (Array.isArray(manifestation.meta?.authors)
+          ? (manifestation.meta.authors as string[])[0]
+          : (manifestation.meta?.authors as string | undefined)) ||
+        manifestation.authors?.[0] ||
+        "Unknown Author",
     },
-    isbn: manifestation.isbn13,
+    image: coverUrl || undefined,
+    isbn: manifestation.isbn13 || (manifestation.meta?.isbn as string | undefined) || undefined,
     identifier: manifestation.id,
     publisher: manifestation.meta?.Publisher,
     datePublished: resolved_year,
+    inLanguage: manifestation.meta?.language,
   };
 
   const resolvedIsbn =
