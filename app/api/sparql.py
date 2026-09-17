@@ -1,0 +1,139 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+"""SPARQL query endpoint — read-only SPARQL Protocol over user collections."""
+
+from flask import Blueprint, Response, g, jsonify, request
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from app.api.decorators import require_auth, require_permission
+from app.core.limiter import limiter
+from app.core.permissions import PermissionName
+from app.core.sparql_service import (
+    SPARQLError,
+    SPARQLQueryTooLarge,
+    SPARQLSyntaxError,
+    SPARQLTimeout,
+    SPARQLWriteRejected,
+    build_graph,
+    execute_sparql,
+    format_graph_results,
+    format_select_results,
+    validate_query,
+)
+from app.db.models import Expression, Item, Manifestation, User, db
+
+sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
+
+
+def _get_sparql_items(user: User | None) -> list[Item]:
+    """Fetch items for SPARQL querying with eager-loaded FRBR entities.
+
+    Custodians and admins (holding READ_METADATA or WRITE_METADATA, or admin/contributor role)
+    query all instance items across the library catalog. Other users query only their owned items.
+    """
+    stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+    is_custodian_or_admin = user and (
+        user.has_permission(PermissionName.READ_METADATA)
+        or user.has_permission(PermissionName.WRITE_METADATA)
+        or any(r.name in ("admin", "contributor") for r in getattr(user, "roles", []))
+    )
+    if not is_custodian_or_admin and user:
+        stmt = stmt.where(Item.owner_id == user.id)
+
+    return list(db.session.execute(stmt).scalars().all())
+
+
+def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
+    """Validate, execute, and format a SPARQL query response."""
+    error_msg = None
+    status_code = 400
+
+    try:
+        validate_query(query)
+        user = db.session.get(User, g.user_id) if hasattr(g, "user_id") and g.user_id else None
+        items = _get_sparql_items(user)
+        base_url = request.url_root.rstrip("/")
+        graph = build_graph(items, base_url)
+        result = execute_sparql(graph, query)
+    except (SPARQLQueryTooLarge, SPARQLWriteRejected, SPARQLSyntaxError) as e:
+        error_msg = str(e)
+        status_code = 400
+    except SPARQLTimeout as e:
+        error_msg = str(e)
+        status_code = 408
+    except SPARQLError as e:
+        error_msg = str(e)
+        status_code = 500
+
+    if error_msg is not None:
+        return jsonify({"error": error_msg}), status_code
+
+    # Determine result type and format accordingly
+    if result.type in ("SELECT", "ASK"):
+        data = format_select_results(result)
+        return Response(
+            response=jsonify(data).get_data(as_text=True),
+            status=200,
+            mimetype="application/sparql-results+json",
+        )
+
+    # CONSTRUCT or DESCRIBE — return RDF
+    accept = request.headers.get("Accept", "text/turtle")
+    if "application/ld+json" in accept:
+        output = format_graph_results(result, output_format="json-ld")
+        mimetype = "application/ld+json"
+    else:
+        output = format_graph_results(result, output_format="turtle")
+        mimetype = "text/turtle"
+
+    return Response(response=output, status=200, mimetype=mimetype)
+
+
+@sparql_bp.route("", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.READ_METADATA)
+@limiter.limit("10 per minute")
+def sparql_post():
+    """Execute a SPARQL query via POST body."""
+    if request.is_json:
+        body = request.get_json(silent=True)
+        if not body or "query" not in body:
+            return jsonify({"error": "Missing 'query' field in JSON body"}), 400
+        query = body["query"]
+    elif request.content_type and "application/sparql-query" in request.content_type:
+        query = request.get_data(as_text=True)
+    else:
+        # Form-encoded fallback (SPARQL Protocol)
+        query = request.form.get("query", "")
+
+    if not query or not query.strip():
+        return jsonify({"error": "Empty query"}), 400
+
+    return _execute_and_respond(query)
+
+
+@sparql_bp.route("", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.READ_METADATA)
+@limiter.limit("10 per minute")
+def sparql_get():
+    """Execute a SPARQL query via GET ?query= parameter (SPARQL Protocol compliance)."""
+    query = request.args.get("query", "")
+    if not query or not query.strip():
+        return jsonify({"error": "Missing 'query' parameter"}), 400
+
+    return _execute_and_respond(query)

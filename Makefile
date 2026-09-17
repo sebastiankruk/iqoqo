@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
 
 SHELL := /bin/bash
 
@@ -744,3 +744,17 @@ generate-covers-dry: ## Dry-run AI cover generation batch
 
 watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --watermark-only
+
+## Semantic Web / Ontology
+audit-frbr: .venv/bin/activate ## Running FRBR integrity audit
+	@echo "Running FRBR integrity audit..."
+	@PYTHONPATH=. .venv/bin/python scripts/audit_frbr_integrity.py
+
+etl-frbr: .venv/bin/activate ## Running FRBR ETL strict cleanup (idempotent)
+	@echo "Running FRBR ETL strict cleanup (idempotent)..."
+	@PYTHONPATH=. .venv/bin/python scripts/etl_frbr_strict.py
+
+sync-ontology: .venv/bin/activate ## Checking ontology sync with DB models
+	@echo "Checking ontology sync with DB models..."
+	@PYTHONPATH=. .venv/bin/python scripts/sync_ontology.py
+

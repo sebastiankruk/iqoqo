@@ -35,35 +35,54 @@ Trigger this skill when the user types `/iqoqo-codegraph <command>` or during de
 | `/iqoqo-codegraph sync` | Incremental symbol sync | `codegraph sync` |
 | `/iqoqo-codegraph index` | Rebuild full AST symbol index | `codegraph index` |
 | `/iqoqo-codegraph status` | Show symbol count and language stats | `codegraph status` |
+| `/iqoqo-codegraph query "<search>"` | Search symbols, routes, partial names | `codegraph query "<search>"` |
 | `/iqoqo-codegraph impact <symbol>` | Analyze code affected by changing symbol | `codegraph impact <symbol>` |
 | `/iqoqo-codegraph explore "<query>"` | View relevant symbols and call paths | `codegraph explore "<query>"` |
 | `/iqoqo-codegraph node <symbol>` | Show symbol source and caller/callee trail | `codegraph node <symbol>` |
+| `/iqoqo-codegraph node -f <file> <symbol>` | Disambiguate multi-definition symbol | `codegraph node -f <file> <symbol>` |
 | `/iqoqo-codegraph callers <symbol>` | Find all functions that call symbol | `codegraph callers <symbol>` |
 | `/iqoqo-codegraph callees <symbol>` | Find all functions called by symbol | `codegraph callees <symbol>` |
 | `/iqoqo-codegraph affected <files...>` | Find test files affected by changed files | `codegraph affected <files...>` |
 
 ## High-ROI Symbol Search Pattern
 
-When investigating unfamiliar code or tracking down a symbol, follow this 3-step navigation sequence instead of grepping:
+When investigating unfamiliar code or tracking down a symbol, follow this 4-step navigation sequence instead of grepping:
 
-1. **Inspect Definition & Context**:
+1. **Discover & Search Routes or Partial Names**:
+   ```bash
+   codegraph query "<SearchTerm>"
+   ```
+   Finds route decorators (e.g. `codegraph query "items/bulk"`), React hooks (e.g. `useManifestation`), or fuzzy symbol names without needing the exact identifier.
+
+2. **Inspect Definition & Context**:
    ```bash
    codegraph node <SymbolName>
+   # When defined in multiple places (e.g. Python class vs React component):
+   codegraph node -f <filename> <SymbolName>
    ```
    Instantly displays the symbol declaration, file path, line numbers, docstring, and immediate caller/callee list without drowning in string search hits.
 
-2. **Assess Blast Radius & Ripple Effects**:
+3. **Assess Blast Radius & Ripple Effects**:
    ```bash
    codegraph impact <SymbolName>
    ```
    Maps all downstream dependents (routes, models, controllers, UI components) that depend on this symbol.
 
-3. **Trace Call Hierarchies**:
+4. **Trace Call Hierarchies**:
    ```bash
    codegraph callers <SymbolName>
    codegraph callees <SymbolName>
    ```
    Traces upstream callers and downstream callees across the entire repository.
+
+## Repository Scope & Cross-Boundary Architecture
+
+CodeGraph indexes the entire repository across both languages:
+- **Backend**: Python/Flask models, routes, services (`app/**`, `tests/**`)
+- **Frontend**: Next.js App Router components, React hooks, utilities (`frontend/**`)
+
+> [!NOTE]
+> HTTP client calls in frontend (`apiClient.post("/items/bulk")`) and Flask route handlers (`@api_bp.route("/items/bulk")`) do not share static AST edges across languages. To discover endpoints, always use `codegraph query "<route_path>"` rather than `codegraph node`.
 
 ## Workflow Examples
 

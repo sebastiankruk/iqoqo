@@ -36,6 +36,7 @@ import {
   X,
   Image as ImageIcon,
   LifeBuoy,
+  Code2,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -190,8 +191,13 @@ function SettingsContent(): React.JSX.Element {
   const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
   const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
+  const canAccessSparql =
+    hasPermission(PermissionName.READ_METADATA) ||
+    hasPermission(PermissionName.WRITE_METADATA) ||
+    (profile.roles ?? []).includes("admin") ||
+    (profile.roles ?? []).includes("contributor");
 
-  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -241,6 +247,15 @@ function SettingsContent(): React.JSX.Element {
                     isActive={activeTab === "escalations"}
                     onClick={() => handleTabChange("escalations")}
                     href="/admin/content?tab=escalations"
+                  />
+                )}
+                {canAccessSparql && (
+                  <NavItem
+                    label="SPARQL Explorer"
+                    icon={Code2}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/sparql"
                   />
                 )}
               </nav>
