@@ -224,3 +224,371 @@ iqoqo:FeedbackComment a owl:Class ;
     rdfs:subClassOf sioc:Post ;
     rdfs:label "Feedback Comment" ;
     rdfs:comment "A comment on a feedback ticket." .
+
+# ---------------------------------------------------------------------------
+# User & Collection models (auth / inventory)
+# ---------------------------------------------------------------------------
+
+:User a owl:Class ;
+    rdfs:subClassOf sioc:UserAccount ;
+    rdfs:label "User" ;
+    rdfs:comment "A registered user account in the system (auth.users)." .
+
+:UserCollection a owl:Class ;
+    rdfs:label "UserCollection" ;
+    rdfs:comment "A curated collection of items organized by a user (inventory.user_collections)." .
+
+:ImageScan a owl:Class ;
+    rdfs:label "ImageScan" ;
+    rdfs:comment "An ingested barcode or camera image scan (catalog.image_scans)." .
+
+# ---------------------------------------------------------------------------
+# User Work Intent (v0.7.18)
+# ---------------------------------------------------------------------------
+
+:UserWorkIntent a owl:Class ;
+    rdfs:label "UserWorkIntent" ;
+    rdfs:comment "User intent toward a Conceptual Work (e.g. want_to_read) (inventory.user_work_intents)." .
+
+:intentWork a owl:ObjectProperty ;
+    rdfs:label "intent work" ;
+    rdfs:comment "The Work targeted by the user work intent." ;
+    rdfs:domain :UserWorkIntent ;
+    rdfs:range :Work .
+
+:intentUser a owl:ObjectProperty ;
+    rdfs:label "intent user" ;
+    rdfs:comment "The User who expressed the work intent." ;
+    rdfs:domain :UserWorkIntent ;
+    rdfs:range :User .
+
+:intentStatus a owl:DatatypeProperty ;
+    rdfs:label "intent status" ;
+    rdfs:comment "Status of the intent (e.g. want_to_read)." ;
+    rdfs:domain :UserWorkIntent ;
+    rdfs:range xsd:string .
+
+:is_hidden a owl:DatatypeProperty ;
+    rdfs:label "is hidden" ;
+    rdfs:comment "Whether the item or intent is hidden from public view." ;
+    rdfs:domain owl:Thing ;
+    rdfs:range xsd:boolean .
+
+# ---------------------------------------------------------------------------
+# Item Custody Event (CIDOC CRM-compliant provenance log)
+# ---------------------------------------------------------------------------
+
+:ItemCustodyEvent a owl:Class ;
+    rdfs:label "ItemCustodyEvent" ;
+    rdfs:comment "CIDOC CRM-compliant immutable event log for item custody and provenance changes (inventory.item_custody_events)." .
+
+:custodyItem a owl:ObjectProperty ;
+    rdfs:label "custody item" ;
+    rdfs:comment "The Item whose custody changed." ;
+    rdfs:domain :ItemCustodyEvent ;
+    rdfs:range :Item .
+
+:custodyActor a owl:ObjectProperty ;
+    rdfs:label "custody actor" ;
+    rdfs:comment "The User actor who performed the custody change." ;
+    rdfs:domain :ItemCustodyEvent ;
+    rdfs:range :User .
+
+:eventType a owl:DatatypeProperty ;
+    rdfs:label "event type" ;
+    rdfs:comment "CIDOC CRM event type label (acquisition, transfer, loss, found, condition_update)." ;
+    rdfs:domain :ItemCustodyEvent ;
+    rdfs:range xsd:string .
+
+:eventNotes a owl:DatatypeProperty ;
+    rdfs:label "event notes" ;
+    rdfs:comment "Optional free-text provenance notes for the custody event." ;
+    rdfs:domain :ItemCustodyEvent ;
+    rdfs:range xsd:string .
+
+:recordedAt a owl:DatatypeProperty ;
+    rdfs:label "recorded at" ;
+    rdfs:comment "Timestamp when the custody event was recorded." ;
+    rdfs:domain :ItemCustodyEvent ;
+    rdfs:range xsd:dateTime .
+
+# ---------------------------------------------------------------------------
+# Circulation & Lending Requests
+# ---------------------------------------------------------------------------
+
+:LoanRequest a owl:Class ;
+    rdfs:label "LoanRequest" ;
+    rdfs:comment "Circulation loan request from a borrower to loan an Item from its owner (inventory.loan_requests)." .
+
+:loanItem a owl:ObjectProperty ;
+    rdfs:label "loan item" ;
+    rdfs:comment "The Item requested for loan." ;
+    rdfs:domain :LoanRequest ;
+    rdfs:range :Item .
+
+:loanRequester a owl:ObjectProperty ;
+    rdfs:label "loan requester" ;
+    rdfs:comment "The User requesting to borrow the item." ;
+    rdfs:domain :LoanRequest ;
+    rdfs:range :User .
+
+:loanStatus a owl:DatatypeProperty ;
+    rdfs:label "loan status" ;
+    rdfs:comment "Status of the loan request (pending, approved, rejected)." ;
+    rdfs:domain :LoanRequest ;
+    rdfs:range xsd:string .
+
+:loanNotes a owl:DatatypeProperty ;
+    rdfs:label "loan notes" ;
+    rdfs:comment "Notes associated with the loan request." ;
+    rdfs:domain :LoanRequest ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Reading Roadmaps
+# ---------------------------------------------------------------------------
+
+:ReadingRoadmap a owl:Class ;
+    rdfs:label "ReadingRoadmap" ;
+    rdfs:comment "A curated reading path or guide created by a user (catalog.reading_roadmaps)." .
+
+:RoadmapItem a owl:Class ;
+    rdfs:label "RoadmapItem" ;
+    rdfs:comment "An individual sequential stage or step on a reading roadmap (catalog.roadmap_items)." .
+
+:roadmapUser a owl:ObjectProperty ;
+    rdfs:label "roadmap user" ;
+    rdfs:comment "The User who authored the reading roadmap." ;
+    rdfs:domain :ReadingRoadmap ;
+    rdfs:range :User .
+
+:roadmapTitle a owl:DatatypeProperty ;
+    rdfs:label "roadmap title" ;
+    rdfs:comment "Title of the reading roadmap." ;
+    rdfs:domain :ReadingRoadmap ;
+    rdfs:range xsd:string .
+
+:roadmapDescription a owl:DatatypeProperty ;
+    rdfs:label "roadmap description" ;
+    rdfs:comment "Detailed description or guide notes for the reading roadmap." ;
+    rdfs:domain :ReadingRoadmap ;
+    rdfs:range xsd:string .
+
+:is_public a owl:DatatypeProperty ;
+    rdfs:label "is public" ;
+    rdfs:comment "Whether the roadmap is publicly accessible." ;
+    rdfs:domain :ReadingRoadmap ;
+    rdfs:range xsd:boolean .
+
+:inRoadmap a owl:ObjectProperty ;
+    rdfs:label "in roadmap" ;
+    rdfs:comment "The ReadingRoadmap this item belongs to." ;
+    rdfs:domain :RoadmapItem ;
+    rdfs:range :ReadingRoadmap .
+
+:roadmapWork a owl:ObjectProperty ;
+    rdfs:label "roadmap work" ;
+    rdfs:comment "The Work referenced by this roadmap step." ;
+    rdfs:domain :RoadmapItem ;
+    rdfs:range :Work .
+
+:roadmapManifestation a owl:ObjectProperty ;
+    rdfs:label "roadmap manifestation" ;
+    rdfs:comment "The Manifestation referenced by this roadmap step." ;
+    rdfs:domain :RoadmapItem ;
+    rdfs:range :Manifestation .
+
+:roadmapPosition a owl:DatatypeProperty ;
+    rdfs:label "roadmap position" ;
+    rdfs:comment "Sequential integer ordering position on the roadmap." ;
+    rdfs:domain :RoadmapItem ;
+    rdfs:range xsd:integer .
+
+:roadmapItemStatus a owl:DatatypeProperty ;
+    rdfs:label "roadmap item status" ;
+    rdfs:comment "Progress status on this item (queued, in_progress, completed)." ;
+    rdfs:domain :RoadmapItem ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Tags & Folksonomy
+# ---------------------------------------------------------------------------
+
+:Tag a owl:Class ;
+    rdfs:subClassOf skos:Concept ;
+    rdfs:label "Tag" ;
+    rdfs:comment "A folksonomic label or keyword for categorization (catalog.tags)." .
+
+:tagName a owl:DatatypeProperty ;
+    rdfs:label "tag name" ;
+    rdfs:comment "The string name or label of the tag." ;
+    rdfs:domain :Tag ;
+    rdfs:range xsd:string .
+
+:ItemTag a owl:Class ;
+    rdfs:label "ItemTag" ;
+    rdfs:comment "Reified association linking an Item to a Tag with provenance (inventory.item_tags)." .
+
+:taggedItem a owl:ObjectProperty ;
+    rdfs:label "tagged item" ;
+    rdfs:comment "The Item associated with this tag." ;
+    rdfs:domain :ItemTag ;
+    rdfs:range :Item .
+
+:hasTag a owl:ObjectProperty ;
+    rdfs:label "has tag" ;
+    rdfs:comment "The Tag linked to the item." ;
+    rdfs:domain :ItemTag ;
+    rdfs:range :Tag .
+
+:tagAddedBy a owl:ObjectProperty ;
+    rdfs:label "tag added by" ;
+    rdfs:comment "The User who applied the tag." ;
+    rdfs:domain :ItemTag ;
+    rdfs:range :User .
+
+# ---------------------------------------------------------------------------
+# Social Notes & Annotations
+# ---------------------------------------------------------------------------
+
+:SocialNote a owl:Class ;
+    rdfs:subClassOf sioc:Post ;
+    rdfs:label "SocialNote" ;
+    rdfs:comment "Personal margin notes or commentary by a user on any FRBR tier (inventory.social_notes)." .
+
+:noteUser a owl:ObjectProperty ;
+    rdfs:label "note user" ;
+    rdfs:comment "The User who authored the note." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range :User .
+
+:noteTargetWork a owl:ObjectProperty ;
+    rdfs:label "note target work" ;
+    rdfs:comment "Target Work if note is attached at Work tier." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range :Work .
+
+:noteTargetExpression a owl:ObjectProperty ;
+    rdfs:label "note target expression" ;
+    rdfs:comment "Target Expression if note is attached at Expression tier." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range :Expression .
+
+:noteTargetManifestation a owl:ObjectProperty ;
+    rdfs:label "note target manifestation" ;
+    rdfs:comment "Target Manifestation if note is attached at Manifestation tier." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range :Manifestation .
+
+:noteTargetItem a owl:ObjectProperty ;
+    rdfs:label "note target item" ;
+    rdfs:comment "Target Item if note is attached at Item tier." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range :Item .
+
+:noteText a owl:DatatypeProperty ;
+    rdfs:label "note text" ;
+    rdfs:comment "The text body of the social note." ;
+    rdfs:domain :SocialNote ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Escalation & Moderation Requests
+# ---------------------------------------------------------------------------
+
+:EscalationRequest a owl:Class ;
+    rdfs:label "EscalationRequest" ;
+    rdfs:comment "A moderation or correction request escalated to instance curators (inventory.escalation_requests)." .
+
+:escalationUser a owl:ObjectProperty ;
+    rdfs:label "escalation user" ;
+    rdfs:comment "The User initiating the escalation." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :User .
+
+:escalationResolver a owl:ObjectProperty ;
+    rdfs:label "escalation resolver" ;
+    rdfs:comment "The User who resolved the escalation." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :User .
+
+:escalationWork a owl:ObjectProperty ;
+    rdfs:label "escalation work" ;
+    rdfs:comment "Target Work of the escalation request." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :Work .
+
+:escalationExpression a owl:ObjectProperty ;
+    rdfs:label "escalation expression" ;
+    rdfs:comment "Target Expression of the escalation request." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :Expression .
+
+:escalationManifestation a owl:ObjectProperty ;
+    rdfs:label "escalation manifestation" ;
+    rdfs:comment "Target Manifestation of the escalation request." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :Manifestation .
+
+:escalationItem a owl:ObjectProperty ;
+    rdfs:label "escalation item" ;
+    rdfs:comment "Target Item of the escalation request." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range :Item .
+
+:escalationStatus a owl:DatatypeProperty ;
+    rdfs:label "escalation status" ;
+    rdfs:comment "Status of the escalation request (pending, resolved, rejected)." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range xsd:string .
+
+:fieldName a owl:DatatypeProperty ;
+    rdfs:label "field name" ;
+    rdfs:comment "Field being escalated or corrected." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range xsd:string .
+
+:suggestedValue a owl:DatatypeProperty ;
+    rdfs:label "suggested value" ;
+    rdfs:comment "Suggested correction value." ;
+    rdfs:domain :EscalationRequest ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Entity Audit Log
+# ---------------------------------------------------------------------------
+
+:EntityAuditLog a owl:Class ;
+    rdfs:label "EntityAuditLog" ;
+    rdfs:comment "Curation and edit history log for Work, Expression, and Manifestation tiers (inventory.entity_audit_logs)." .
+
+:auditActor a owl:ObjectProperty ;
+    rdfs:label "audit actor" ;
+    rdfs:comment "The User who performed the audited catalog edit." ;
+    rdfs:domain :EntityAuditLog ;
+    rdfs:range :User .
+
+:auditEntityType a owl:DatatypeProperty ;
+    rdfs:label "audit entity type" ;
+    rdfs:comment "Type of entity audited (work, expression, manifestation)." ;
+    rdfs:domain :EntityAuditLog ;
+    rdfs:range xsd:string .
+
+:auditEntityId a owl:DatatypeProperty ;
+    rdfs:label "audit entity id" ;
+    rdfs:comment "Primary key of the audited entity." ;
+    rdfs:domain :EntityAuditLog ;
+    rdfs:range xsd:integer .
+
+:auditChangeType a owl:DatatypeProperty ;
+    rdfs:label "audit change type" ;
+    rdfs:comment "Action or edit label (e.g. metadata_edit, merge)." ;
+    rdfs:domain :EntityAuditLog ;
+    rdfs:range xsd:string .
+
+:auditLoggedAt a owl:DatatypeProperty ;
+    rdfs:label "audit logged at" ;
+    rdfs:comment "Timestamp when the audit log was recorded." ;
+    rdfs:domain :EntityAuditLog ;
+    rdfs:range xsd:dateTime .
+

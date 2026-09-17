@@ -239,3 +239,243 @@ iqoqo:CreativeWorkShape a sh:NodeShape ;
         sh:message "schema:author must be a string literal." ;
     ] .
 
+# ---------------------------------------------------------------------------
+# Post-v0.7.18 Domain Entity Shapes
+# ---------------------------------------------------------------------------
+
+iqoqo:UserWorkIntentShape a sh:NodeShape ;
+    sh:targetClass iqoqo:UserWorkIntent ;
+    sh:name "User Work Intent shape" ;
+    sh:description "A UserWorkIntent links a User to a Work with a progress status." ;
+    sh:property [
+        sh:path iqoqo:intentWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "A UserWorkIntent must link to exactly one Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:intentUser ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A UserWorkIntent must link to exactly one User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:intentStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A UserWorkIntent must have an intent status string." ;
+    ] .
+
+iqoqo:ItemCustodyEventShape a sh:NodeShape ;
+    sh:targetClass iqoqo:ItemCustodyEvent ;
+    sh:name "Item Custody Event shape" ;
+    sh:description "An ItemCustodyEvent records an immutable provenance event on an Item." ;
+    sh:property [
+        sh:path iqoqo:custodyItem ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Item ;
+        sh:message "An ItemCustodyEvent must link to exactly one Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:eventType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "An ItemCustodyEvent must have an eventType string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:recordedAt ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "An ItemCustodyEvent must have a recordedAt dateTime." ;
+    ] .
+
+iqoqo:LoanRequestShape a sh:NodeShape ;
+    sh:targetClass iqoqo:LoanRequest ;
+    sh:name "Loan Request shape" ;
+    sh:description "A circulation LoanRequest links an Item to a requester User." ;
+    sh:property [
+        sh:path iqoqo:loanItem ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Item ;
+        sh:message "A LoanRequest must link to exactly one Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:loanRequester ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A LoanRequest must link to exactly one requester User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:loanStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A LoanRequest must have a status string." ;
+    ] .
+
+iqoqo:ReadingRoadmapShape a sh:NodeShape ;
+    sh:targetClass iqoqo:ReadingRoadmap ;
+    sh:name "Reading Roadmap shape" ;
+    sh:description "A ReadingRoadmap represents a curated path owned by a User." ;
+    sh:property [
+        sh:path iqoqo:roadmapUser ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A ReadingRoadmap must have an author User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:roadmapTitle ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A ReadingRoadmap must have a title string." ;
+    ] .
+
+iqoqo:RoadmapItemShape a sh:NodeShape ;
+    sh:targetClass iqoqo:RoadmapItem ;
+    sh:name "Roadmap Item shape" ;
+    sh:description "A RoadmapItem is an ordered step in a ReadingRoadmap." ;
+    sh:property [
+        sh:path iqoqo:inRoadmap ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:ReadingRoadmap ;
+        sh:message "A RoadmapItem must belong to a ReadingRoadmap." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:roadmapPosition ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "A RoadmapItem must have an integer position." ;
+    ] ;
+    sh:or (
+        [ sh:property [ sh:path iqoqo:roadmapWork ; sh:minCount 1 ; sh:class iqoqo:Work ] ]
+        [ sh:property [ sh:path iqoqo:roadmapManifestation ; sh:minCount 1 ; sh:class iqoqo:Manifestation ] ]
+    ) .
+
+iqoqo:TagShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Tag ;
+    sh:name "Tag shape" ;
+    sh:description "A folksonomic or curated Tag." ;
+    sh:property [
+        sh:path iqoqo:tagName ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A Tag must have a tagName string." ;
+    ] .
+
+iqoqo:ItemTagShape a sh:NodeShape ;
+    sh:targetClass iqoqo:ItemTag ;
+    sh:name "Item Tag shape" ;
+    sh:description "Reified link between an Item and a Tag." ;
+    sh:property [
+        sh:path iqoqo:taggedItem ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Item ;
+        sh:message "An ItemTag must link to exactly one Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:hasTag ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Tag ;
+        sh:message "An ItemTag must link to exactly one Tag." ;
+    ] .
+
+iqoqo:SocialNoteShape a sh:NodeShape ;
+    sh:targetClass iqoqo:SocialNote ;
+    sh:name "Social Note shape" ;
+    sh:description "A SocialNote is attached to exactly one FRBR entity level (Work, Expression, Manifestation, or Item)." ;
+    sh:property [
+        sh:path iqoqo:noteText ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A SocialNote must have text content." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:noteUser ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A SocialNote must have an author User." ;
+    ] ;
+    sh:xone (
+        [ sh:property [ sh:path iqoqo:noteTargetWork ; sh:minCount 1 ; sh:maxCount 1 ; sh:class iqoqo:Work ] ]
+        [ sh:property [ sh:path iqoqo:noteTargetExpression ; sh:minCount 1 ; sh:maxCount 1 ; sh:class iqoqo:Expression ] ]
+        [ sh:property [ sh:path iqoqo:noteTargetManifestation ; sh:minCount 1 ; sh:maxCount 1 ; sh:class iqoqo:Manifestation ] ]
+        [ sh:property [ sh:path iqoqo:noteTargetItem ; sh:minCount 1 ; sh:maxCount 1 ; sh:class iqoqo:Item ] ]
+    ) .
+
+iqoqo:EscalationRequestShape a sh:NodeShape ;
+    sh:targetClass iqoqo:EscalationRequest ;
+    sh:name "Escalation Request shape" ;
+    sh:description "An EscalationRequest reports an issue or correction for administrative action." ;
+    sh:property [
+        sh:path iqoqo:escalationUser ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "An EscalationRequest must have an initiator User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:fieldName ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "An EscalationRequest must specify the fieldName." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:suggestedValue ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "An EscalationRequest must specify the suggestedValue." ;
+    ] .
+
+iqoqo:EntityAuditLogShape a sh:NodeShape ;
+    sh:targetClass iqoqo:EntityAuditLog ;
+    sh:name "Entity Audit Log shape" ;
+    sh:description "An EntityAuditLog records changes to catalog entities." ;
+    sh:property [
+        sh:path iqoqo:auditEntityType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "An EntityAuditLog must record auditEntityType." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:auditEntityId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "An EntityAuditLog must record an integer auditEntityId." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:auditChangeType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "An EntityAuditLog must record auditChangeType." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:auditLoggedAt ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "An EntityAuditLog must record auditLoggedAt dateTime." ;
+    ] .
+
+
