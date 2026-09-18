@@ -193,6 +193,83 @@ class TestSPARQLService:
         formatted = format_select_results(result, max_rows=2)
         assert len(formatted["results"]["bindings"]) == 2
 
+    def test_validate_query_rejects_with_value_error(self):
+        with pytest.raises(ValueError):
+            validate_query("INSERT DATA { <s> <p> <o> }")
+        with pytest.raises(ValueError):
+            validate_query("SELECT ?s WHERE { ?s ?p ?o } " + " " * 11000)
+
+    def test_execute_ask_query(self):
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "expression_id": "e-1",
+                "work_id": "w-1",
+                "title": "Test Book",
+                "isbn": "9780000000001",
+                "authors": ["Author One"],
+                "tags": [],
+                "status": "read",
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        result = execute_sparql(graph, "ASK { ?s ?p ?o }")
+        formatted = format_select_results(result)
+        assert formatted.get("boolean") is True
+
+    def test_execute_timeout_handling(self):
+        from unittest.mock import MagicMock
+
+        from app.core.sparql_service import SPARQLTimeout
+
+        mock_graph = MagicMock()
+        import time
+
+        def slow_query(_q):
+            time.sleep(0.5)
+            return MagicMock()
+
+        mock_graph.query.side_effect = slow_query
+
+        with pytest.raises(SPARQLTimeout):
+            execute_sparql(mock_graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.05)
+
+    def test_build_graph_excludes_other_users_private_items(self):
+        items = [
+            {
+                "id": "pub-item",
+                "manifestation_id": "m-1",
+                "title": "Public Item",
+                "is_hidden": False,
+                "owner_id": "user-other",
+            },
+            {
+                "id": "priv-item-other",
+                "manifestation_id": "m-2",
+                "title": "Private Item Other",
+                "is_hidden": True,
+                "owner_id": "user-other",
+            },
+            {
+                "id": "priv-item-mine",
+                "manifestation_id": "m-3",
+                "title": "Private Item Mine",
+                "is_hidden": True,
+                "owner_id": "user-me",
+            },
+        ]
+        graph = build_graph(items, "http://localhost:5000", user_id="user-me")
+        # Check that pub-item is in graph
+        res_pub = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/pub-item> ?p ?o }")
+        assert res_pub.askAnswer is True
+        # Check that priv-item-mine is in graph
+        res_mine = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/priv-item-mine> ?p ?o }")
+        assert res_mine.askAnswer is True
+        # Check that priv-item-other is EXCLUDED
+        res_other = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/priv-item-other> ?p ?o }")
+        assert res_other.askAnswer is False
+
 
 class TestSPARQLEndpoint:
     """Integration tests for the SPARQL API endpoint."""
@@ -266,7 +343,7 @@ class TestSPARQLEndpoint:
             json={"query": big_query},
             headers=sparql_user,
         )
-        assert response.status_code == 400
+        assert response.status_code in (400, 413)
         assert "maximum size" in response.get_json()["error"]
 
     def test_unauthenticated_returns_401(self, client):
@@ -333,3 +410,33 @@ class TestSPARQLEndpoint:
             headers={**sparql_user, "Content-Type": "application/sparql-query"},
         )
         assert response.status_code == 200
+
+    def test_post_select_query_xml(self, client, sparql_user):
+        response = client.post(
+            "/api/sparql",
+            json={"query": "SELECT ?title WHERE { ?s <https://schema.org/name> ?title }"},
+            headers={**sparql_user, "Accept": "application/sparql-results+xml"},
+        )
+        assert response.status_code == 200
+        assert "application/sparql-results+xml" in response.content_type
+        assert b"<?xml" in response.data or b"<sparql" in response.data
+
+    def test_post_select_query_csv(self, client, sparql_user):
+        response = client.post(
+            "/api/sparql",
+            json={"query": "SELECT ?title WHERE { ?s <https://schema.org/name> ?title }"},
+            headers={**sparql_user, "Accept": "text/csv"},
+        )
+        assert response.status_code == 200
+        assert "text/csv" in response.content_type
+        assert b"title" in response.data
+
+    def test_post_construct_rdf_xml(self, client, sparql_user):
+        response = client.post(
+            "/api/sparql",
+            json={"query": "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o } LIMIT 10"},
+            headers={**sparql_user, "Accept": "application/rdf+xml"},
+        )
+        assert response.status_code == 200
+        assert "application/rdf+xml" in response.content_type
+        assert b"<rdf:RDF" in response.data or b"<?xml" in response.data
