@@ -21,6 +21,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
+import { downloadCollectionExport, ExportFormat, EXPORT_FORMAT_OPTIONS } from "@/lib/api/export";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
@@ -73,20 +74,28 @@ export default function ProfilePage() {
       .catch(err => console.error("Failed to load profile", err));
   }, []);
 
-  const handleExport = useCallback(async (format: "json-ld" | "turtle" | "json") => {
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("json-ld");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleDownloadExport = useCallback(async () => {
     try {
-      const ext = format === "json-ld" ? "jsonld" : format === "turtle" ? "ttl" : "json";
-      const resp = await apiClient.get(`/v1/items/export?format=${format}`, { responseType: "blob" });
-      const blob = new Blob([resp.data as BlobPart], { type: "application/octet-stream" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `iqoqo-collection.${ext}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Exported as ${format}`);
+      setIsExporting(true);
+      await downloadCollectionExport(selectedFormat);
     } catch {
-      toast.error("Export failed");
+      // Toast notification is managed inside downloadCollectionExport
+    } finally {
+      setIsExporting(false);
+    }
+  }, [selectedFormat]);
+
+  const handleExport = useCallback(async (format: ExportFormat) => {
+    try {
+      setIsExporting(true);
+      await downloadCollectionExport(format);
+    } catch {
+      // Toast notification is managed inside downloadCollectionExport
+    } finally {
+      setIsExporting(false);
     }
   }, []);
 
@@ -260,24 +269,45 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="p-4 border rounded-lg bg-card space-y-4">
-          <h2 className="text-xl font-semibold">Export Collection</h2>
-          <p className="text-sm text-muted-foreground">
-            Download your full library as Linked Open Data for portability and interoperability.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => handleExport("json-ld")}>
-              <Download className="w-4 h-4 mr-2" />
-              JSON-LD
-            </Button>
-            <Button variant="outline" onClick={() => handleExport("turtle")}>
-              <Download className="w-4 h-4 mr-2" />
-              Turtle (RDF)
-            </Button>
-            <Button variant="outline" onClick={() => handleExport("json")}>
-              <Download className="w-4 h-4 mr-2" />
-              JSON
-            </Button>
+        <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="export-collection-card">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold">Export Collection</h2>
+            <p className="text-sm text-muted-foreground">
+              Download your full library as Linked Open Data or hierarchical JSON for complete data sovereignty and
+              portability.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="export-format-select" className="block text-sm font-medium text-foreground">
+                Export Format
+              </label>
+              <select
+                id="export-format-select"
+                aria-label="Export Format"
+                value={selectedFormat}
+                onChange={e => setSelectedFormat(e.target.value as ExportFormat)}
+                className="w-full max-w-sm h-10 px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                disabled={isExporting}
+              >
+                {EXPORT_FORMAT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground" data-testid="export-format-description">
+                {EXPORT_FORMAT_OPTIONS.find(opt => opt.value === selectedFormat)?.description}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button onClick={handleDownloadExport} disabled={isExporting} aria-label="Export Collection Button">
+                <Download className="w-4 h-4 mr-2" />
+                {isExporting ? "Exporting..." : "Download Export"}
+              </Button>
+            </div>
           </div>
         </div>
 
