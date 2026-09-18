@@ -296,7 +296,7 @@ export function buildCollectionJsonLd(options: CollectionJsonLdOptions): Record<
 /** Reference to a manifestation embodied under a work. */
 export interface WorkManifestationRef {
   id: number | string;
-  title?: string;
+  title?: string | null;
   isbn?: string | null;
   language?: string | null;
   contentType?: string | null;
@@ -349,6 +349,76 @@ export function buildWorkJsonLd(options: WorkJsonLdOptions): Record<string, unkn
       const lang = resolveInLanguage(m.language);
       if (lang) {
         entry.inLanguage = lang;
+      }
+      if (m.year !== undefined && m.year !== null) {
+        entry.datePublished = m.year;
+      }
+      return entry;
+    });
+  }
+
+  return jsonLd;
+}
+
+/** Options for generating a CreativeWork JSON-LD payload for an Expression. */
+export interface ExpressionJsonLdOptions {
+  id: number | string;
+  workId: number | string;
+  workTitle: string;
+  authors?: string[] | string | null;
+  language?: string | null;
+  contentType?: string | null;
+  expressionKind?: string | null;
+  manifestations?: WorkManifestationRef[];
+}
+
+/**
+ * Builds a Schema.org CreativeWork JSON-LD object for an Expression entity.
+ *
+ * @param {ExpressionJsonLdOptions} options - Expression metadata options.
+ * @returns {Record<string, unknown>} CreativeWork JSON-LD object.
+ */
+export function buildExpressionJsonLd(options: ExpressionJsonLdOptions): Record<string, unknown> {
+  const resolvedAuthorName = Array.isArray(options.authors)
+    ? options.authors[0] || "Unknown Author"
+    : options.authors || "Unknown Author";
+
+  const jsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: `${options.workTitle} (${options.language || options.contentType || "Expression"})`,
+    author: {
+      "@type": "Person",
+      name: resolvedAuthorName,
+    },
+    identifier: options.id,
+    isPartOf: {
+      "@type": "CreativeWork",
+      name: options.workTitle,
+      identifier: options.workId,
+      url: `/work/${options.workId}`,
+    },
+  };
+
+  const lang = resolveInLanguage(options.language);
+  if (lang) {
+    jsonLd.inLanguage = lang;
+  }
+
+  if (options.manifestations && options.manifestations.length > 0) {
+    jsonLd.workExample = options.manifestations.map(m => {
+      const type = resolveSchemaType(
+        m.contentType || options.contentType,
+        m.expressionKind || options.expressionKind,
+        m.format
+      );
+      const entry: Record<string, unknown> = {
+        "@type": type,
+        name: m.title || options.workTitle,
+        identifier: m.id,
+      };
+      if (m.isbn) {
+        entry.isbn = m.isbn;
       }
       if (m.year !== undefined && m.year !== null) {
         entry.datePublished = m.year;

@@ -50,6 +50,59 @@ export interface Expression {
  */
 export const EXPRESSION_KINDS = ["live_performance"] as const;
 
+/** Manifestation reference within a WorkDetail or ExpressionDetail view. */
+export interface WorkDetailManifestation {
+  id: number;
+  expression_id?: number;
+  work_id?: number;
+  title?: string;
+  isbn13?: string | null;
+  ean?: string | null;
+  upc?: string | null;
+  publisher?: string | null;
+  format?: string | null;
+  format_type?: string | null;
+  year?: number | string | null;
+  cover_url?: string | null;
+  user_owns?: boolean;
+  meta?: Record<string, unknown>;
+}
+
+/** Expression representation within a WorkDetail view. */
+export interface WorkDetailExpression {
+  id: number;
+  work_id: number;
+  content_type?: string | null;
+  language?: string | null;
+  kind?: string | null;
+  is_live_performance?: boolean;
+  manifestations: WorkDetailManifestation[];
+}
+
+/** Detailed view payload for a Conceptual Work. */
+export interface WorkDetail {
+  id: number;
+  title: string;
+  authors: string[];
+  meta?: Record<string, unknown>;
+  contributions?: Record<string, unknown>;
+  expressions: WorkDetailExpression[];
+}
+
+/** Detailed view payload for an Expression entity. */
+export interface ExpressionDetail {
+  id: number;
+  work_id: number;
+  work_title: string;
+  authors: string[];
+  content_type?: string | null;
+  language?: string | null;
+  kind?: string | null;
+  is_live_performance?: boolean;
+  contributions?: Record<string, unknown>;
+  manifestations: WorkDetailManifestation[];
+}
+
 import type { MediaFormat, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
 export * from "./taxonomy";
 

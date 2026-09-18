@@ -282,7 +282,24 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   </div>
                 )}
                 {manifestation.work_id && (
-                  <a rel="embodimentOf" href={`/api/public/works/${manifestation.work_id}`} className="hidden" />
+                  <>
+                    <a rel="embodimentOf" href={`/work/${manifestation.work_id}`} className="hidden" />
+                    <div>
+                      <dt className="text-muted-foreground">{t("tabWork")}</dt>
+                      <dd className="font-medium text-foreground">
+                        <Link
+                          href={`/work/${manifestation.work_id}`}
+                          rel="embodimentOf"
+                          className="text-primary hover:underline"
+                        >
+                          {manifestation.title || t("tabWork")}
+                        </Link>
+                      </dd>
+                    </div>
+                  </>
+                )}
+                {manifestation.expression_id && (
+                  <a rel="expressionOf" href={`/expression/${manifestation.expression_id}`} className="hidden" />
                 )}
                 {!!(
                   manifestation.meta?.Publisher &&

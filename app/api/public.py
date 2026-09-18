@@ -20,7 +20,7 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 import datetime
 from typing import Any, cast
 
-from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
+from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -38,6 +38,21 @@ def add_cors_headers(response: Response) -> Response:
     response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization"
     return response
+
+
+def _prefers_html() -> bool:
+    """Return True if the request explicitly asks for HTML over RDF formats."""
+    if request.args.get("format"):
+        return False
+    accept = request.headers.get("Accept", "")
+    if (
+        "text/html" in accept
+        and "application/ld+json" not in accept
+        and "text/turtle" not in accept
+        and "application/n-triples" not in accept
+    ):
+        return True
+    return False
 
 
 def _negotiate_rdf_format(default_format: str = "json-ld") -> tuple[str, str]:
@@ -761,6 +776,12 @@ def generate_sitemap_xml(base_url: str) -> str:
         loc_m = f"{base_url}/manifestation/{mid}"
         urls.append(f"  <url><loc>{loc_m}</loc><changefreq>monthly</changefreq></url>")
 
+    # Public catalog works (bounded up to 50,000 URLs)
+    works = db.session.execute(select(Work.id).limit(50000)).scalars().all()
+    for wid in works:
+        loc_w = f"{base_url}/work/{wid}"
+        urls.append(f"  <url><loc>{loc_w}</loc><changefreq>monthly</changefreq></url>")
+
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(urls) + "\n</urlset>"
@@ -795,6 +816,9 @@ def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response
     manifestation = db.session.execute(stmt).scalars().first()
     if not manifestation:
         return jsonify({"error": "Manifestation not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/manifestation/{manifestation.id}", code=303))
 
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
@@ -833,6 +857,9 @@ def get_public_work(work_id: int) -> Response | tuple[Response, int]:
     work = db.session.execute(stmt).scalars().first()
     if not work:
         return jsonify({"error": "Work not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/work/{work.id}", code=303))
 
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
@@ -876,6 +903,9 @@ def get_public_expression(expression_id: int) -> Response | tuple[Response, int]
     if not expression:
         return jsonify({"error": "Expression not found"}), 404
 
+    if _prefers_html():
+        return cast(Response, redirect(f"/expression/{expression.id}", code=303))
+
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
 
@@ -916,6 +946,9 @@ def get_public_item(item_id: int) -> Response | tuple[Response, int]:
     item = db.session.execute(stmt).scalars().first()
     if not item:
         return jsonify({"error": "Item not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/item/{item.id}", code=303))
 
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")

@@ -132,7 +132,7 @@ describe("Semantic Web Validation for Manifestation View", () => {
 
     const workLink = container.querySelector("a[rel='embodimentOf']");
     expect(workLink).toBeInTheDocument();
-    expect(workLink?.getAttribute("href")).toBe("/api/public/works/456");
+    expect(workLink?.getAttribute("href")).toBe("/work/456");
   });
 
   it("should properly structure inLanguage and inventory item availability offers", async () => {
