@@ -85,9 +85,12 @@ class ExportService:
         """
         Build an RDF Graph for a batch of Items adhering to FRBRer and Schema.org shapes.
 
-        Ensures physical attributes (like isbn13) attach strictly to Manifestations, never to Works.
+        Ensures physical attributes (like isbn13) attach strictly to Manifestations, never to Works,
+        and enriches with contributors, work parts, image scans, and user collections.
         """
-        graph = Graph()
+        from app.core.frbr_service import build_collection_rdf_graph
+
+        graph = build_collection_rdf_graph(items, base_url)
         graph.bind("frbr", FRBR_PURL)
         graph.bind("frbrer", FRBR_IFLA)
         graph.bind("schema", SCHEMA)
@@ -104,85 +107,26 @@ class ExportService:
             e_id = expr.id if expr else m_id
             w_id = work.id if work else e_id
 
-            i_uri = URIRef(f"{base_url}/items/{item_id}")
-            m_uri = URIRef(f"{base_url}/manifestations/{m_id}")
-            e_uri = URIRef(f"{base_url}/expressions/{e_id}")
-            w_uri = URIRef(f"{base_url}/works/{w_id}")
+            w_uri = URIRef(f"{base_url}/api/public/works/{w_id}")
+            e_uri = URIRef(f"{base_url}/api/public/expressions/{e_id}")
+            m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
+            i_uri = URIRef(f"{base_url}/api/public/items/{item_id}")
 
-            # 1. Work level (F1)
-            graph.add((w_uri, RDF.type, FRBR_IFLA.Work))
+            # PURL FRBR types and Dublin Core alignments
             graph.add((w_uri, RDF.type, FRBR_PURL.Work))
-            graph.add((w_uri, RDF.type, SCHEMA.CreativeWork))
-
             w_title = (work.title if work else getattr(m, "title", "Untitled")) or "Untitled"
-            graph.add((w_uri, SCHEMA.name, Literal(w_title)))
             graph.add((w_uri, DC.title, Literal(w_title)))
 
-            authors: list[str] = []
-            if work and work.meta and isinstance(work.meta, dict):
-                raw_authors = work.meta.get("authors") or work.meta.get("Authors")
-                if isinstance(raw_authors, list):
-                    authors = [str(a) for a in raw_authors if a]
-                elif isinstance(raw_authors, str) and raw_authors.strip():
-                    authors = [raw_authors.strip()]
-            if not authors and m and m.meta and isinstance(m.meta, dict):
-                raw_authors = m.meta.get("authors") or m.meta.get("Authors") or m.meta.get("author")
-                if isinstance(raw_authors, list):
-                    authors = [str(a) for a in raw_authors if a]
-                elif isinstance(raw_authors, str) and raw_authors.strip():
-                    authors = [raw_authors.strip()]
-
-            if not authors:
-                authors = ["Unknown"]
-
-            for author in authors:
-                graph.add((w_uri, FRBR_IFLA.creator, Literal(author)))
-                graph.add((w_uri, FRBR_PURL.creator, Literal(author)))
-                graph.add((w_uri, SCHEMA.author, Literal(author)))
-                graph.add((w_uri, DC.creator, Literal(author)))
-
-            # 2. Expression level (F2)
-            graph.add((e_uri, RDF.type, FRBR_IFLA.Expression))
             graph.add((e_uri, RDF.type, FRBR_PURL.Expression))
-            graph.add((e_uri, FRBR_IFLA.expressionOf, w_uri))
             graph.add((e_uri, FRBR_PURL.expressionOf, w_uri))
 
-            if expr and expr.language:
-                graph.add((e_uri, DC.language, Literal(expr.language)))
-                graph.add((e_uri, SCHEMA.inLanguage, Literal(expr.language)))
-
-            # 3. Manifestation level (F3)
-            graph.add((m_uri, RDF.type, FRBR_IFLA.Manifestation))
             graph.add((m_uri, RDF.type, FRBR_PURL.Manifestation))
-            graph.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-            graph.add((m_uri, FRBR_IFLA.embodimentOf, e_uri))
             graph.add((m_uri, FRBR_PURL.embodimentOf, e_uri))
-
             m_title = (m.title if m else w_title) or "Untitled"
-            graph.add((m_uri, SCHEMA.name, Literal(m_title)))
             graph.add((m_uri, DC.title, Literal(m_title)))
 
-            if m:
-                # ISBN-13 is strictly attached to Manifestation, never to Work
-                if m.isbn13 and len(m.isbn13) == 13 and m.isbn13.isdigit():
-                    graph.add((m_uri, SCHEMA.isbn, Literal(m.isbn13)))
-                if m.publisher:
-                    graph.add((m_uri, SCHEMA.publisher, Literal(m.publisher)))
-                    graph.add((m_uri, DC.publisher, Literal(m.publisher)))
-                if m.publication_date:
-                    graph.add((m_uri, SCHEMA.datePublished, Literal(str(m.publication_date))))
-                if m.format or m.format_type:
-                    fmt_val = m.format or m.format_type
-                    graph.add((m_uri, SCHEMA.bookFormat, Literal(fmt_val)))
-
-            # 4. Item level (F4)
-            graph.add((i_uri, RDF.type, FRBR_IFLA.Item))
             graph.add((i_uri, RDF.type, FRBR_PURL.Item))
-            graph.add((i_uri, FRBR_IFLA.exemplarOf, m_uri))
             graph.add((i_uri, FRBR_PURL.exemplarOf, m_uri))
-
-            if item.condition:
-                graph.add((i_uri, SCHEMA.itemCondition, Literal(item.condition)))
             if item.status:
                 graph.add((i_uri, IQOQO.status, Literal(item.status)))
 
