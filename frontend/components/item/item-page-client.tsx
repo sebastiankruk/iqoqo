@@ -40,7 +40,8 @@ interface ItemDetailProps {
  */
 function ItemDetail(props: ItemDetailProps) {
   const { item: initialItem } = props;
-  const { item } = useManifestationWithPolling(initialItem);
+  const { item: polledItem } = useManifestationWithPolling(initialItem);
+  const item = polledItem ?? initialItem;
   const router = useRouter();
 
   const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
@@ -111,9 +112,9 @@ export interface ItemPageClientProps {
  * @param {ItemPageClientProps} props - Component props.
  * @returns {JSX.Element} The rendered item page client view.
  */
-export function ItemPageClient({ itemId, initialItem }: ItemPageClientProps) {
+export function ItemPageClient({ itemId }: ItemPageClientProps) {
   const router = useRouter();
-  const { data: item, isLoading, isError } = useItem(itemId, initialItem);
+  const { data: item, isLoading, isError } = useItem(itemId);
 
   if (isLoading) {
     return (

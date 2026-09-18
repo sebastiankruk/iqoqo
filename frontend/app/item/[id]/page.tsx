@@ -34,7 +34,7 @@ interface Props {
 async function getItem(id: string | number): Promise<Item | null> {
   try {
     const res = await fetch(resolveApiUrl(`/items/${id}`, true), {
-      next: { revalidate: 60 },
+      cache: "no-store",
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -126,7 +126,7 @@ export default async function ItemPage(props: Props) {
   return (
     <>
       {workData && <WorkStructuredData data={workData} />}
-      <ItemPageClient itemId={itemId} initialItem={item} />
+      <ItemPageClient itemId={itemId} />
     </>
   );
 }
