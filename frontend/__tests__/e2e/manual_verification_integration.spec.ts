@@ -123,14 +123,14 @@ test.describe("Manual Verification Integration E2E", () => {
   });
 
   test("Profile Setup, Visibility & Taken Username Conflict", async ({ page }) => {
-    await page.goto("/admin/settings?tab=profile");
+    await page.goto("/profile");
     await page.waitForLoadState("networkidle");
 
     const displayName = page.getByPlaceholder("Enter your display name");
-    const publicUsername = page.getByPlaceholder("testuser1");
+    const publicUsername = page.getByPlaceholder("your-username");
     const bio = page.getByPlaceholder("Tell the world about your library...");
     const publicRadio = page.locator('input[value="public"]');
-    const saveButton = page.getByRole("button", { name: "Save Changes" });
+    const saveButton = page.getByRole("button", { name: "Save Profile" });
 
     // Set bio and update display name
     await displayName.fill("Grog Elder");
