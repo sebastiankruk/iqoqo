@@ -236,8 +236,8 @@ export function Navbar() {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                      <Link href="/admin/settings">
-                        <Settings className="mr-2 h-4 w-4" /> {t("profileSettings")}
+                      <Link href="/profile">
+                        <User className="mr-2 h-4 w-4" /> {t("profile")}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -256,10 +256,10 @@ export function Navbar() {
                         )}
                       </Link>
                     </DropdownMenuItem>
-                    {profile.roles?.includes("admin") && (
+                    {(profile.roles?.includes("admin")) && (
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <Link href="/admin/settings?tab=instance">
-                          <Settings className="mr-2 h-4 w-4" /> {t("adminConfiguration")}
+                        <Link href="/admin/settings">
+                          <Settings className="mr-2 h-4 w-4" /> {t("adminSettings")}
                         </Link>
                       </DropdownMenuItem>
                     )}
@@ -386,9 +386,9 @@ export function Navbar() {
             </Link>
 
             <Link
-              href="/admin/settings"
+              href="/profile"
               className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-                pathname?.startsWith("/admin") || pathname?.startsWith("/profile")
+                pathname?.startsWith("/profile")
                   ? "text-accent font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               }`}

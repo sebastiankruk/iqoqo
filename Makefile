@@ -155,6 +155,9 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
+	@echo "  audit-frbr        - Run FRBR database integrity audit (supports ARGS=\"--json --verbose\")"
+	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (supports ARGS=\"--dry-run --verbose\")"
+	@echo "  sync-ontology     - Check ontology sync with DB models"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -748,13 +751,13 @@ watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 ## Semantic Web / Ontology
 audit-frbr: .venv/bin/activate ## Running FRBR integrity audit
 	@echo "Running FRBR integrity audit..."
-	@PYTHONPATH=. .venv/bin/python scripts/audit_frbr_integrity.py
+	@$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS)
 
 etl-frbr: .venv/bin/activate ## Running FRBR ETL strict cleanup (idempotent)
 	@echo "Running FRBR ETL strict cleanup (idempotent)..."
-	@PYTHONPATH=. .venv/bin/python scripts/etl_frbr_strict.py
+	@$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS)
 
 sync-ontology: .venv/bin/activate ## Checking ontology sync with DB models
 	@echo "Checking ontology sync with DB models..."
-	@PYTHONPATH=. .venv/bin/python scripts/sync_ontology.py
+	@$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS)
 

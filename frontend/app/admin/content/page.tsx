@@ -174,7 +174,7 @@ function ContentManagementContent(): React.JSX.Element {
           <div>
             <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
             <nav className="flex flex-col gap-1">
-              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/admin/settings" />
+              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/profile" />
             </nav>
           </div>
 
