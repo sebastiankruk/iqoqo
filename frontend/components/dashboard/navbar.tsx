@@ -256,10 +256,13 @@ export function Navbar() {
                         )}
                       </Link>
                     </DropdownMenuItem>
-                    {(profile.roles?.includes("admin")) && (
+                    {(profile.roles?.includes("admin") ||
+                      profile.permissions?.some(p =>
+                        ["write_metadata", "edit_cover", "escalate_resolve", "read_metadata"].includes(p)
+                      )) && (
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <Link href="/admin/settings">
-                          <Settings className="mr-2 h-4 w-4" /> {t("adminSettings")}
+                          <Settings className="mr-2 h-4 w-4" /> {t("administration")}
                         </Link>
                       </DropdownMenuItem>
                     )}

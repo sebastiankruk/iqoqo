@@ -84,41 +84,41 @@ def audit_orphan_entities() -> dict[str, list[dict[str, Any]]]:
     orphan_items: list[dict[str, Any]] = []
 
     # Expressions without Work
-    expr_stmt = select(Expression).where(
-        Expression.work_id.is_(None) | ~Expression.work_id.in_(select(Work.id))
-    )
+    expr_stmt = select(Expression).where(Expression.work_id.is_(None) | ~Expression.work_id.in_(select(Work.id)))
     for expr in db.session.execute(expr_stmt).scalars().all():
-        orphan_expressions.append({
-            "id": expr.id,
-            "work_id": expr.work_id,
-            "content_type": expr.content_type,
-            "language": expr.language,
-        })
+        orphan_expressions.append(
+            {
+                "id": expr.id,
+                "work_id": expr.work_id,
+                "content_type": expr.content_type,
+                "language": expr.language,
+            }
+        )
 
     # Manifestations without Expression
     manif_stmt = select(Manifestation).where(
-        Manifestation.expression_id.is_(None)
-        | ~Manifestation.expression_id.in_(select(Expression.id))
+        Manifestation.expression_id.is_(None) | ~Manifestation.expression_id.in_(select(Expression.id))
     )
     for manif in db.session.execute(manif_stmt).scalars().all():
-        orphan_manifestations.append({
-            "id": manif.id,
-            "expression_id": manif.expression_id,
-            "isbn13": manif.isbn13,
-            "publisher": manif.publisher,
-        })
+        orphan_manifestations.append(
+            {
+                "id": manif.id,
+                "expression_id": manif.expression_id,
+                "isbn13": manif.isbn13,
+                "publisher": manif.publisher,
+            }
+        )
 
     # Items without Manifestation
-    item_stmt = select(Item).where(
-        Item.manifestation_id.is_(None)
-        | ~Item.manifestation_id.in_(select(Manifestation.id))
-    )
+    item_stmt = select(Item).where(Item.manifestation_id.is_(None) | ~Item.manifestation_id.in_(select(Manifestation.id)))
     for item in db.session.execute(item_stmt).scalars().all():
-        orphan_items.append({
-            "id": item.id,
-            "manifestation_id": item.manifestation_id,
-            "status": getattr(item, "status", None),
-        })
+        orphan_items.append(
+            {
+                "id": item.id,
+                "manifestation_id": item.manifestation_id,
+                "status": getattr(item, "status", None),
+            }
+        )
 
     return {
         "expressions": orphan_expressions,
@@ -145,11 +145,13 @@ def audit_duplicate_entities() -> dict[str, list[dict[str, Any]]]:
                 authors = sorted(str(author).strip().lower() for author in raw_authors if str(author).strip())
         norm_title = (work.title or "").strip().lower()
         key = f"{norm_title}||{'|'.join(authors)}"
-        work_groups[key].append({
-            "id": work.id,
-            "title": work.title,
-            "authors": authors,
-        })
+        work_groups[key].append(
+            {
+                "id": work.id,
+                "title": work.title,
+                "authors": authors,
+            }
+        )
 
     duplicate_works = [
         {"cluster_key": key, "count": len(items), "entities": items}
@@ -167,16 +169,16 @@ def audit_duplicate_entities() -> dict[str, list[dict[str, Any]]]:
             continue
         cleaned_isbn = ISBN13_CLEAN_PATTERN.sub("", manif.isbn13.upper())
         if cleaned_isbn:
-            manif_groups[cleaned_isbn].append({
-                "id": manif.id,
-                "raw_isbn13": manif.isbn13,
-                "publisher": manif.publisher,
-            })
+            manif_groups[cleaned_isbn].append(
+                {
+                    "id": manif.id,
+                    "raw_isbn13": manif.isbn13,
+                    "publisher": manif.publisher,
+                }
+            )
 
     duplicate_manifestations = [
-        {"isbn13": key, "count": len(items), "entities": items}
-        for key, items in manif_groups.items()
-        if len(items) > 1
+        {"isbn13": key, "count": len(items), "entities": items} for key, items in manif_groups.items() if len(items) > 1
     ]
 
     return {
@@ -204,38 +206,46 @@ def audit_isbn_violations() -> list[dict[str, Any]]:
 
         if len(cleaned) == 10:
             if validate_isbn10_checksum(cleaned):
-                violations.append({
-                    "entity_type": "Manifestation",
-                    "entity_id": manif.id,
-                    "violation": "isbn10_unnormalized",
-                    "value": raw_isbn,
-                    "detail": "Valid 10-digit ISBN stored in isbn13 column without conversion",
-                })
+                violations.append(
+                    {
+                        "entity_type": "Manifestation",
+                        "entity_id": manif.id,
+                        "violation": "isbn10_unnormalized",
+                        "value": raw_isbn,
+                        "detail": "Valid 10-digit ISBN stored in isbn13 column without conversion",
+                    }
+                )
             else:
-                violations.append({
-                    "entity_type": "Manifestation",
-                    "entity_id": manif.id,
-                    "violation": "invalid_checksum_isbn10",
-                    "value": raw_isbn,
-                    "detail": "10-digit ISBN with invalid modulo 11 check digit",
-                })
+                violations.append(
+                    {
+                        "entity_type": "Manifestation",
+                        "entity_id": manif.id,
+                        "violation": "invalid_checksum_isbn10",
+                        "value": raw_isbn,
+                        "detail": "10-digit ISBN with invalid modulo 11 check digit",
+                    }
+                )
         elif len(cleaned) == 13:
             if not validate_isbn13_checksum(cleaned):
-                violations.append({
+                violations.append(
+                    {
+                        "entity_type": "Manifestation",
+                        "entity_id": manif.id,
+                        "violation": "invalid_checksum_isbn13",
+                        "value": raw_isbn,
+                        "detail": "13-digit ISBN with invalid EAN-13 check digit",
+                    }
+                )
+        else:
+            violations.append(
+                {
                     "entity_type": "Manifestation",
                     "entity_id": manif.id,
-                    "violation": "invalid_checksum_isbn13",
+                    "violation": "invalid_length",
                     "value": raw_isbn,
-                    "detail": "13-digit ISBN with invalid EAN-13 check digit",
-                })
-        else:
-            violations.append({
-                "entity_type": "Manifestation",
-                "entity_id": manif.id,
-                "violation": "invalid_length",
-                "value": raw_isbn,
-                "detail": f"ISBN length {len(cleaned)} is neither 10 nor 13 digits",
-            })
+                    "detail": f"ISBN length {len(cleaned)} is neither 10 nor 13 digits",
+                }
+            )
 
     # 2. Inspect Work entities for misplaced ISBN attributes
     work_stmt = select(Work)
@@ -246,13 +256,15 @@ def audit_isbn_violations() -> list[dict[str, Any]]:
             continue
         for key in ("isbn", "isbn13", "ISBN", "ISBN13"):
             if key in work.meta and work.meta[key]:
-                violations.append({
-                    "entity_type": "Work",
-                    "entity_id": work.id,
-                    "violation": "work_level_isbn",
-                    "value": str(work.meta[key]),
-                    "detail": f"ISBN attribute '{key}' misplaced on Work entity instead of Manifestation",
-                })
+                violations.append(
+                    {
+                        "entity_type": "Work",
+                        "entity_id": work.id,
+                        "violation": "work_level_isbn",
+                        "value": str(work.meta[key]),
+                        "detail": f"ISBN attribute '{key}' misplaced on Work entity instead of Manifestation",
+                    }
+                )
 
     return violations
 

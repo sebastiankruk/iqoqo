@@ -22,7 +22,6 @@ import {
   Loader2,
   Settings,
   Users,
-  User,
   Shield,
   BadgeCheck,
   Key,
@@ -171,13 +170,6 @@ function ContentManagementContent(): React.JSX.Element {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
-            <nav className="flex flex-col gap-1">
-              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/profile" />
-            </nav>
-          </div>
-
           {hasCustodianAccess && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>

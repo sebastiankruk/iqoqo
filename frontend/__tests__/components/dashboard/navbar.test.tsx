@@ -52,6 +52,7 @@ vi.mock("next-intl", () => ({
           helpAndFeedback: "Help & Feedback",
           adminConfiguration: "Admin Configuration",
           adminSettings: "Admin Settings",
+          administration: "Administration",
           logOut: "Log out",
           home: "Home",
           profile: "Profile",
@@ -170,10 +171,10 @@ describe("Navbar Auth State", () => {
 
     expect(within(menu).getByText("Language")).toBeInTheDocument();
     expect(within(menu).getByText("Theme")).toBeInTheDocument();
-    expect(within(menu).queryByText("Admin Settings")).toBeNull();
+    expect(within(menu).queryByText("Administration")).toBeNull();
   });
 
-  it("shows Admin Settings for admin users", async () => {
+  it("shows Administration for admin users", async () => {
     const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "admin@example.com", display_name: "Admin", roles: ["admin"] },
@@ -186,7 +187,30 @@ describe("Navbar Auth State", () => {
     await user.click(avatarBtn);
 
     const menu = await screen.findByRole("menu");
-    const adminItem = within(menu).getByText("Admin Settings");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+    expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
+  });
+
+  it("shows Administration for custodian users", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "custodian@example.com",
+        display_name: "Custodian",
+        roles: ["user"],
+        permissions: ["write_metadata"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
     expect(adminItem).toBeInTheDocument();
     expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
   });

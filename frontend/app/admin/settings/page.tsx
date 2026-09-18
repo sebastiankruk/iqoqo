@@ -105,16 +105,21 @@ function SettingsContent(): React.JSX.Element {
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  // Redirect to login if user is unauthenticated, or to /profile if not admin
+  // Redirect to login if user is unauthenticated, or to /profile if no admin/custodian access
   useEffect(() => {
     if (!isLoading && !profile) {
       router.push("/login");
-    } else if (!isLoading && profile && !(profile.roles?.includes("admin"))) {
-      router.push("/profile");
+    } else if (!isLoading && profile) {
+      const isAdmin = profile.roles?.includes("admin");
+      const permissions = profile.permissions ?? [];
+      const hasCustodianPerms = permissions.some(p =>
+        ["write_metadata", "edit_cover", "escalate_resolve", "read_metadata"].includes(p)
+      );
+      if (!isAdmin && !hasCustodianPerms) {
+        router.push("/profile");
+      }
     }
   }, [profile, isLoading, router]);
-
-  const activeTab = internalTab || searchParams.get("tab") || "instance";
 
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
@@ -149,6 +154,20 @@ function SettingsContent(): React.JSX.Element {
     (profile.roles ?? []).includes("contributor");
 
   const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
+  const isAdmin = (profile.roles ?? []).includes("admin");
+
+  // Determine default tab based on permissions
+  const getDefaultTab = (): string => {
+    if (searchParams.get("tab")) return searchParams.get("tab")!;
+    if (isAdmin && canViewSettings) return "instance";
+    if (canViewMetadata) return "metadata";
+    if (canEditCover) return "cover-art";
+    if (canViewEscalationQueue) return "escalations";
+    if (canAccessSparql) return "sparql";
+    return "instance";
+  };
+
+  const activeTab = internalTab || getDefaultTab();
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">

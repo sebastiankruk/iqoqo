@@ -91,6 +91,10 @@ def normalize_to_isbn13(raw_isbn: str) -> str | None:
     return None
 
 
+# Alias for cleaner API
+normalize_isbn = normalize_to_isbn13
+
+
 def create_pre_execution_backup(backup_dir: Path) -> Path:
     """Create a verified point-in-time JSON snapshot of core FRBR entities before data mutation.
 
@@ -205,21 +209,17 @@ def run_etl_pipeline(
             stats["relocated_work_isbns"] += 1
 
             if normalized:
-                existing_manif = db.session.execute(
-                    select(Manifestation).where(Manifestation.isbn13 == normalized)
-                ).scalars().first()
+                existing_manif = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalized)).scalars().first()
                 if not existing_manif:
                     # Find child manifestations under this Work to receive the ISBN if missing
-                    child_exprs = db.session.execute(
-                        select(Expression).where(Expression.work_id == work.id)
-                    ).scalars().all()
+                    child_exprs = db.session.execute(select(Expression).where(Expression.work_id == work.id)).scalars().all()
                     assigned = False
                     for expr in child_exprs:
                         if assigned:
                             break
-                        child_manifs = db.session.execute(
-                            select(Manifestation).where(Manifestation.expression_id == expr.id)
-                        ).scalars().all()
+                        child_manifs = (
+                            db.session.execute(select(Manifestation).where(Manifestation.expression_id == expr.id)).scalars().all()
+                        )
                         for manif in child_manifs:
                             if not manif.isbn13:
                                 manif.isbn13 = normalized

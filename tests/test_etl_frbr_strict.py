@@ -103,9 +103,7 @@ def test_etl_dry_run(app) -> None:
         assert stats["reparented_expressions"] >= 1
 
         # In dry run, w1 and w2 must still both exist
-        remaining_works = db.session.execute(
-            select(Work).where(Work.id.in_([w1.id, w2.id]))
-        ).scalars().all()
+        remaining_works = db.session.execute(select(Work).where(Work.id.in_([w1.id, w2.id]))).scalars().all()
         assert len(remaining_works) == 2
 
 
@@ -140,9 +138,7 @@ def test_etl_manifestation_merging_and_item_reparenting(app) -> None:
         assert stats["reparented_items"] >= 1
 
         # Only one manifestation should remain
-        remaining = db.session.execute(
-            select(Manifestation).where(Manifestation.id.in_([m1.id, m2.id]))
-        ).scalars().all()
+        remaining = db.session.execute(select(Manifestation).where(Manifestation.id.in_([m1.id, m2.id]))).scalars().all()
         assert len(remaining) == 1
         canonical = remaining[0]
 
@@ -170,9 +166,7 @@ def test_etl_work_duplicate_merging(app) -> None:
         assert stats["reconciled_works"] >= 1
         assert stats["reparented_expressions"] >= 1
 
-        remaining_works = db.session.execute(
-            select(Work).where(Work.id.in_([w1.id, w2.id]))
-        ).scalars().all()
+        remaining_works = db.session.execute(select(Work).where(Work.id.in_([w1.id, w2.id]))).scalars().all()
         assert len(remaining_works) == 1
         canonical_work = remaining_works[0]
 
