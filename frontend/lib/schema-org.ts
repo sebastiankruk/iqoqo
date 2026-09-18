@@ -359,3 +359,44 @@ export function buildWorkJsonLd(options: WorkJsonLdOptions): Record<string, unkn
 
   return jsonLd;
 }
+
+/** Options for generating a ProfilePage JSON-LD payload. */
+export interface ProfileJsonLdOptions {
+  username: string;
+  displayName?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  publicItemCount?: number;
+}
+
+/**
+ * Builds a Schema.org ProfilePage JSON-LD object for a user's public profile.
+ *
+ * @param {ProfileJsonLdOptions} options - Profile metadata options.
+ * @returns {Record<string, unknown>} ProfilePage JSON-LD object.
+ */
+export function buildProfileJsonLd(options: ProfileJsonLdOptions): Record<string, unknown> {
+  const name = options.displayName || options.username;
+  const jsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    name: `${name}'s Library`,
+    mainEntity: {
+      "@type": "Person",
+      name: name,
+      alternateName: options.username,
+      ...(options.bio ? { description: options.bio } : {}),
+      ...(options.avatarUrl ? { image: options.avatarUrl } : {}),
+    },
+  };
+
+  if (options.publicItemCount !== undefined) {
+    jsonLd.hasPart = {
+      "@type": "CollectionPage",
+      name: `${name}'s Public Collection`,
+      numberOfItems: options.publicItemCount,
+    };
+  }
+
+  return jsonLd;
+}

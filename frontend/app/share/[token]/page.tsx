@@ -20,6 +20,7 @@ import { getTranslations } from "next-intl/server";
 import { Library, Share2, Rss } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
+import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ShareButton } from "@/components/ui/share-button";
@@ -94,8 +95,21 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
   const collection = collectionRes.data;
   const items = collection.items || [];
 
+  const collectionJsonLd = buildCollectionJsonLd({
+    name: collection.collection_name,
+    description: collection.collection_description || undefined,
+    totalCount: items.length,
+    authorName: collection.author,
+    items: items.map(item => ({
+      id: item.manifestation_id || item.id,
+      title: item.title,
+      url: `/manifestation/${item.manifestation_id || item.id}`,
+    })),
+  });
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
       <Navbar />
       <main className="flex-1">
         {/* Header Section */}

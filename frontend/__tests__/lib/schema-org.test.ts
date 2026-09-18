@@ -23,6 +23,7 @@ import {
   buildManifestationJsonLd,
   buildCollectionJsonLd,
   buildWorkJsonLd,
+  buildProfileJsonLd,
 } from "@/lib/schema-org";
 
 describe("Schema.org Utilities & JSON-LD Builders", () => {
@@ -249,6 +250,46 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(examples[0]["isbn"]).toBe("9780441172719");
       expect(examples[0]["inLanguage"]).toBe("en");
       expect(examples[1]["@type"]).toBe("Audiobook");
+    });
+  });
+
+  describe("buildProfileJsonLd", () => {
+    it("constructs a valid ProfilePage JSON-LD schema for user profiles", () => {
+      const jsonLd = buildProfileJsonLd({
+        username: "jdoe",
+        displayName: "John Doe",
+        bio: "Avid sci-fi reader",
+        avatarUrl: "https://example.com/avatar.png",
+        publicItemCount: 42,
+      });
+
+      expect(jsonLd["@context"]).toBe("https://schema.org");
+      expect(jsonLd["@type"]).toBe("ProfilePage");
+      expect(jsonLd["name"]).toBe("John Doe's Library");
+
+      const person = jsonLd["mainEntity"] as any;
+      expect(person["@type"]).toBe("Person");
+      expect(person["name"]).toBe("John Doe");
+      expect(person["alternateName"]).toBe("jdoe");
+      expect(person["description"]).toBe("Avid sci-fi reader");
+      expect(person["image"]).toBe("https://example.com/avatar.png");
+
+      const part = jsonLd["hasPart"] as any;
+      expect(part["@type"]).toBe("CollectionPage");
+      expect(part["name"]).toBe("John Doe's Public Collection");
+      expect(part["numberOfItems"]).toBe(42);
+    });
+
+    it("falls back to username when displayName is missing", () => {
+      const jsonLd = buildProfileJsonLd({
+        username: "collector99",
+      });
+
+      expect(jsonLd["name"]).toBe("collector99's Library");
+      const person = jsonLd["mainEntity"] as any;
+      expect(person["name"]).toBe("collector99");
+      expect(person["alternateName"]).toBe("collector99");
+      expect(jsonLd["hasPart"]).toBeUndefined();
     });
   });
 });

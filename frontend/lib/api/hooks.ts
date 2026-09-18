@@ -504,9 +504,10 @@ export function useInfiniteManifestations(
  * Custom hook to fetch a single manifestation by ID.
  *
  * @param id - Manifestation ID
+ * @param initialData - Optional initial data for SSR pre-fetching
  * @returns {import('@tanstack/react-query').UseQueryResult<CatalogEntry>} Query result
  */
-export function useManifestation(id: number) {
+export function useManifestation(id: number, initialData?: CatalogEntry | null) {
   return useQuery({
     queryKey: queryKeys.manifestation(id),
     queryFn: async () => {
@@ -514,6 +515,7 @@ export function useManifestation(id: number) {
       return res.data?.data ?? null;
     },
     enabled: id > 0,
+    initialData: initialData ?? undefined,
   });
 }
 
@@ -791,13 +793,15 @@ export function useWorkParts(workId: number) {
  * Custom hook to fetch a single item by ID.
  *
  * @param id - Item ID
+ * @param initialData - Optional initial data for SSR pre-fetching
  * @returns {import('@tanstack/react-query').UseQueryResult<Item>} Query result
  */
-export function useItem(id: number) {
+export function useItem(id: number, initialData?: Item | null) {
   return useQuery({
     queryKey: queryKeys.item(id),
     queryFn: () => apiFetch<Item>(`/items/${id}`),
     enabled: id !== 0 && !isNaN(id),
+    initialData: initialData ?? undefined,
   });
 }
 
