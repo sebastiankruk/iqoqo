@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Download, Loader2 } from "lucide-react";
+import { Play, Download, Loader2, Clock, ChevronLeft, ChevronRight, FileSpreadsheet, FileJson } from "lucide-react";
 import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
@@ -28,24 +28,31 @@ import { PermissionName } from "@/lib/permissions";
 
 const EXAMPLE_QUERIES = [
   {
-    label: "All works with authors",
+    label: "All Works",
     query: `SELECT ?work ?title ?author
 WHERE {
   ?work a <http://iflastandards.info/ns/frbr/frbrer/Work> .
-  ?expr <http://iflastandards.info/ns/frbr/frbrer/expressionOf> ?work .
-  ?manif <http://iflastandards.info/ns/frbr/frbrer/embodimentOf> ?expr .
-  ?manif <https://schema.org/name> ?title .
-  ?manif <https://schema.org/author> ?author .
+  OPTIONAL { ?work <https://schema.org/name> ?title } .
+  OPTIONAL { ?work <https://schema.org/author> ?author } .
 }
 LIMIT 50`,
   },
   {
-    label: "Items with ISBN",
+    label: "Manifestations by format",
     query: `SELECT ?manif ?title ?isbn
 WHERE {
   ?manif a <http://iflastandards.info/ns/frbr/frbrer/Manifestation> .
-  ?manif <https://schema.org/name> ?title .
-  ?manif <https://schema.org/isbn> ?isbn .
+  OPTIONAL { ?manif <https://schema.org/name> ?title } .
+  OPTIONAL { ?manif <https://schema.org/isbn> ?isbn } .
+}
+LIMIT 50`,
+  },
+  {
+    label: "Recent Items",
+    query: `SELECT ?item ?status
+WHERE {
+  ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
+  OPTIONAL { ?item <https://schema.org/itemCondition> ?status } .
 }
 LIMIT 50`,
   },
@@ -53,15 +60,6 @@ LIMIT 50`,
     label: "All triples (limited)",
     query: `SELECT ?s ?p ?o
 WHERE { ?s ?p ?o }
-LIMIT 50`,
-  },
-  {
-    label: "Items by status",
-    query: `SELECT ?item ?status
-WHERE {
-  ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
-  ?item <https://schema.org/itemCondition> ?status .
-}
 LIMIT 50`,
   },
   {
@@ -81,9 +79,11 @@ interface SPARQLResults {
   results: { bindings: SPARQLBinding[] };
 }
 
+const PAGE_SIZE = 25;
+
 /**
  * SPARQL Explorer Page component.
- * Allows users to query the FRBR/Schema.org RDF graph using SPARQL.
+ * Allows administrators and custodians to query the FRBR/Schema.org RDF graph using SPARQL.
  *
  * @returns The SPARQL Explorer Page component UI.
  */
@@ -94,20 +94,27 @@ export default function SPARQLExplorerPage() {
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const permissions = profile?.permissions ?? [];
+  const roles = profile?.roles ?? [];
   const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
   const canAccessSparql =
+    roles.includes("admin") ||
+    roles.includes("contributor") ||
     hasPermission(PermissionName.READ_METADATA) ||
-    hasPermission(PermissionName.WRITE_METADATA) ||
-    (profile?.roles ?? []).includes("admin") ||
-    (profile?.roles ?? []).includes("contributor");
+    hasPermission(PermissionName.WRITE_METADATA);
 
   const executeQuery = async () => {
     setLoading(true);
     setError(null);
     setResults(null);
     setRawOutput(null);
+    setLatencyMs(null);
+    setCurrentPage(1);
+
+    const startTime = performance.now();
 
     try {
       const isConstruct = /^\s*(CONSTRUCT|DESCRIBE)/i.test(query);
@@ -124,12 +131,17 @@ export default function SPARQLExplorerPage() {
         }
       );
 
+      const endTime = performance.now();
+      setLatencyMs(Math.round(endTime - startTime));
+
       if (isConstruct) {
         setRawOutput(typeof response.data === "string" ? response.data : JSON.stringify(response.data));
       } else {
         setResults(response.data as SPARQLResults);
       }
     } catch (err: unknown) {
+      const endTime = performance.now();
+      setLatencyMs(Math.round(endTime - startTime));
       const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
       setError(axiosErr.response?.data?.error || axiosErr.message || "Query execution failed");
     } finally {
@@ -137,13 +149,46 @@ export default function SPARQLExplorerPage() {
     }
   };
 
-  const downloadResults = () => {
-    const content = rawOutput || JSON.stringify(results, null, 2);
-    const blob = new Blob([content], { type: rawOutput ? "text/turtle" : "application/json" });
+  const downloadJSON = () => {
+    if (!results) return;
+    const content = JSON.stringify(results, null, 2);
+    const blob = new Blob([content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = rawOutput ? "sparql_results.ttl" : "sparql_results.json";
+    a.download = "sparql_results.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadCSV = () => {
+    if (!results) return;
+    const vars = results.head.vars;
+    const rows = results.results.bindings.map(b =>
+      vars
+        .map(v => {
+          const val = b[v]?.value ?? "";
+          return `"${val.replace(/"/g, '""')}"`;
+        })
+        .join(",")
+    );
+    const csvContent = [vars.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sparql_results.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadTurtle = () => {
+    if (!rawOutput) return;
+    const blob = new Blob([rawOutput], { type: "text/turtle" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sparql_results.ttl";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -174,6 +219,11 @@ export default function SPARQLExplorerPage() {
     );
   }
 
+  const bindings = results?.results.bindings ?? [];
+  const totalRows = bindings.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const paginatedBindings = bindings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
@@ -195,7 +245,7 @@ export default function SPARQLExplorerPage() {
           <Card className="lg:col-span-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Example Queries</CardTitle>
-              <CardDescription className="text-xs">Click to load</CardDescription>
+              <CardDescription className="text-xs">Click to load query template</CardDescription>
             </CardHeader>
             <CardContent className="space-y-1">
               {EXAMPLE_QUERIES.map(ex => (
@@ -221,17 +271,40 @@ export default function SPARQLExplorerPage() {
                   placeholder="Enter SPARQL query..."
                   spellCheck={false}
                 />
-                <div className="flex gap-2 mt-3">
-                  <Button onClick={executeQuery} disabled={loading || !query.trim()} size="sm">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                    Execute
-                  </Button>
-                  {(results || rawOutput) && (
-                    <Button variant="outline" onClick={downloadResults} size="sm">
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+                  <div className="flex items-center gap-2">
+                    <Button onClick={executeQuery} disabled={loading || !query.trim()} size="sm">
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                      Execute
                     </Button>
-                  )}
+                    {latencyMs !== null && (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                        <Clock className="h-3 w-3" />
+                        {latencyMs}ms
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {results && (
+                      <>
+                        <Button variant="outline" onClick={downloadCSV} size="sm">
+                          <FileSpreadsheet className="h-4 w-4 mr-1" />
+                          Download CSV
+                        </Button>
+                        <Button variant="outline" onClick={downloadJSON} size="sm">
+                          <FileJson className="h-4 w-4 mr-1" />
+                          Download JSON
+                        </Button>
+                      </>
+                    )}
+                    {rawOutput && (
+                      <Button variant="outline" onClick={downloadTurtle} size="sm">
+                        <Download className="h-4 w-4 mr-1" />
+                        Download Turtle
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -246,8 +319,39 @@ export default function SPARQLExplorerPage() {
 
             {results && (
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Results ({results.results.bindings.length} rows)</CardTitle>
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm">Results ({totalRows} rows)</CardTitle>
+                    <CardDescription className="text-xs">
+                      Showing {totalRows > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0} to{" "}
+                      {Math.min(currentPage * PAGE_SIZE, totalRows)} of {totalRows}
+                    </CardDescription>
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -262,7 +366,7 @@ export default function SPARQLExplorerPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {results.results.bindings.map((binding, i) => (
+                        {paginatedBindings.map((binding, i) => (
                           <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                             {results.head.vars.map(v => (
                               <td key={v} className="p-2 max-w-xs truncate" title={binding[v]?.value}>
