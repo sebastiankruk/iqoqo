@@ -55,7 +55,14 @@ function ItemDetail(props: ItemDetailProps) {
       <HeroBanner coverUrl={coverUrl} title={item.work?.title ?? item.title} />
 
       <div className="relative z-10 mx-auto -mt-12 max-w-6xl px-4 pb-12 sm:px-6">
-        <div className="overflow-hidden rounded-xl bg-card shadow-lg ring-1 ring-border/60">
+        <div
+          className="overflow-hidden rounded-xl bg-card shadow-lg ring-1 ring-border/60"
+          itemScope
+          itemType="https://schema.org/CreativeWork"
+          typeof="Item"
+          vocab="http://iflastandards.info/ns/frbr/frbrer/"
+          prefix="schema: https://schema.org/ frbr: http://iflastandards.info/ns/frbr/frbrer/"
+        >
           <div className="flex flex-col lg:flex-row">
             {/* Sidebar – 30% */}
             <aside className="w-full border-b border-border bg-card p-6 lg:w-[30%] lg:border-b-0 lg:border-r">

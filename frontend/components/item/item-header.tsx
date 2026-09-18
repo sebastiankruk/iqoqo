@@ -105,6 +105,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
           priority
           unoptimized
+          itemProp="image"
         />
       </div>
 
@@ -139,13 +140,24 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
         {/* Core details */}
         <div className="space-y-2 mb-6">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight">
+          <h1
+            className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight font-serif text-foreground leading-tight"
+            property="schema:name"
+            itemProp="name"
+          >
             {title}
           </h1>
-          <div className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium">
+          <div
+            className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium"
+            property="schema:author"
+            typeof="Person"
+            itemProp="author"
+            itemScope
+            itemType="https://schema.org/Person"
+          >
             {(work?.authors ?? item.authors ?? []).length > 0 ? (
               (work?.authors ?? item.authors ?? []).map((author, idx, arr) => (
-                <span key={author}>
+                <span key={author} property="schema:name" itemProp="name">
                   <DiscoveryPivot
                     type="q"
                     value={author}

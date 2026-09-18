@@ -74,6 +74,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       images: coverUrl ? [{ url: coverUrl }] : [],
     },
+    alternates: {
+      types: {
+        "application/ld+json": [
+          {
+            url: `/api/manifestations/${manifestation.id}`,
+            title: `${title} - Schema.org JSON-LD`,
+          },
+        ],
+      },
+    },
   };
 }
 

@@ -92,6 +92,16 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
       description: user.bio || `Explore a library of ${user.public_item_count} items.`,
       images: user.avatar_url ? [{ url: user.avatar_url }] : [],
     },
+    alternates: {
+      types: {
+        "application/rss+xml": [
+          { url: `/api/public/u/${user.username}/feed.xml`, title: `${displayName}'s Library Feed` },
+        ],
+        "application/ld+json": [
+          { url: `/api/public/u/${user.username}/items?format=json-ld`, title: `${displayName}'s Library JSON-LD` },
+        ],
+      },
+    },
   };
 }
 

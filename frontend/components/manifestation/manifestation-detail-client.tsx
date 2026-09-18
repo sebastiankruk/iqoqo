@@ -23,6 +23,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
+import { resolveSchemaType } from "@/lib/schema-org";
 import { Button } from "@/components/ui/button";
 import type { CatalogEntry } from "@/types/frbr";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +118,13 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
   const resolvedUpc = (manifestation.upc || "").trim() || (manifestation.meta?.upc as string | undefined);
   const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];
 
+  const schemaType = resolveSchemaType(
+    manifestation.content_type,
+    manifestation.expression_kind,
+    manifestation.format || (manifestation.meta?.format as string | undefined)
+  );
+  const schemaUrl = `https://schema.org/${schemaType}`;
+
   return (
     <div
       className="min-h-screen flex flex-col bg-background"
@@ -124,6 +132,8 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
       prefix="sioc: http://rdfs.org/sioc/ns# schema: https://schema.org/"
       typeof="Manifestation"
       resource={`#manifestation-${manifestation.id}`}
+      itemScope
+      itemType={schemaUrl}
     >
       <Navbar />
       <div className="flex-1 mx-auto w-full max-w-5xl px-6 py-12">
@@ -140,6 +150,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   unoptimized
                   priority
                   className="object-cover"
+                  itemProp="image"
                 />
               ) : childCovers.length > 0 ? (
                 <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-0.5 bg-background">
@@ -206,17 +217,24 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   {badgeLabel}
                 </Badge>
               </div>
-              <h1 className="font-serif text-3xl md:text-4xl font-bold text-foreground" property="schema:name">
+              <h1
+                className="font-serif text-3xl md:text-4xl font-bold text-foreground"
+                property="schema:name"
+                itemProp="name"
+              >
                 {manifestation.title || "Untitled Work"}
               </h1>
               <div
                 className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
                 property="schema:author"
                 typeof="Person"
+                itemProp={schemaType === "MusicAlbum" ? "byArtist" : "author"}
+                itemScope
+                itemType="https://schema.org/Person"
               >
                 {(manifestation.authors ?? []).length > 0 ? (
                   (manifestation.authors ?? []).map((author, idx, arr) => (
-                    <span key={author} property="schema:name">
+                    <span key={author} property="schema:name" itemProp="name">
                       <span
                         role="button"
                         tabIndex={0}
@@ -242,7 +260,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 {resolvedIsbn && (
                   <div>
                     <dt className="text-muted-foreground">{t("isbn13")}</dt>
-                    <dd className="font-medium text-foreground" property="schema:isbn">
+                    <dd className="font-medium text-foreground" property="schema:isbn" itemProp="isbn">
                       {String(resolvedIsbn)}
                     </dd>
                   </div>
@@ -250,13 +268,17 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 {resolvedEan && (
                   <div>
                     <dt className="text-muted-foreground">{t("ean")}</dt>
-                    <dd className="font-medium text-foreground">{String(resolvedEan)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:gtin13" itemProp="gtin13">
+                      {String(resolvedEan)}
+                    </dd>
                   </div>
                 )}
                 {resolvedUpc && (
                   <div>
                     <dt className="text-muted-foreground">{t("upc")}</dt>
-                    <dd className="font-medium text-foreground">{String(resolvedUpc)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:gtin12" itemProp="gtin12">
+                      {String(resolvedUpc)}
+                    </dd>
                   </div>
                 )}
                 {manifestation.work_id && (
@@ -269,13 +291,21 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 ) && (
                   <div>
                     <dt className="text-muted-foreground">{t("publisher")}</dt>
-                    <dd className="font-medium text-foreground">{String(manifestation.meta.Publisher)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:publisher" itemProp="publisher">
+                      {String(manifestation.meta.Publisher)}
+                    </dd>
                   </div>
                 )}
                 {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
                   <div>
                     <dt className="text-muted-foreground">{t("year")}</dt>
-                    <dd className="font-medium text-foreground">{String(resolved_year)}</dd>
+                    <dd
+                      className="font-medium text-foreground"
+                      property="schema:datePublished"
+                      itemProp="datePublished"
+                    >
+                      {String(resolved_year)}
+                    </dd>
                   </div>
                 )}
                 {!!(
@@ -285,7 +315,9 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 ) && (
                   <div>
                     <dt className="text-muted-foreground">{t("language")}</dt>
-                    <dd className="font-medium text-foreground">{String(manifestation.meta.Language)}</dd>
+                    <dd className="font-medium text-foreground" property="schema:inLanguage" itemProp="inLanguage">
+                      {String(manifestation.meta.Language)}
+                    </dd>
                   </div>
                 )}
               </dl>

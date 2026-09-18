@@ -95,6 +95,12 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
         "application/rss+xml": [
           { url: `/api/public/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` },
         ],
+        "application/ld+json": [
+          {
+            url: `/api/public/share/${token}?format=json-ld`,
+            title: `${collection.collection_name} - Schema.org JSON-LD`,
+          },
+        ],
       },
     },
   };
