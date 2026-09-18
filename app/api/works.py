@@ -15,8 +15,11 @@
 #
 """API routes for Work and Expression level specialized views."""
 
+from typing import Any, cast
+
 from flask import Response, g, jsonify, request
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
@@ -648,3 +651,144 @@ def delete_work_intent(work_id: int) -> Response | tuple[Response, int]:
         db.session.commit()
 
     return jsonify({"success": True, "data": {"status": None}})
+
+
+@api_bp.route("/works/<int:work_id>", methods=["GET"])
+@optional_auth
+def get_work_detail(work_id: int) -> tuple[Response, int]:
+    """Retrieve detailed information for a single Work, including its expressions and manifestations."""
+    stmt = (
+        select(Work)
+        .options(
+            selectinload(cast(Any, Work.expressions)).selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Work.id == work_id)
+    )
+    work = db.session.execute(stmt).scalars().first()
+    if not work:
+        return jsonify({"success": False, "data": None, "error": "Work not found"}), 404
+
+    from app.core.frbr_service import is_live_performance, serialize_contributions
+
+    user_id = getattr(g, "user_id", None)
+    owned_manifestation_ids: set[int] = set()
+    if user_id:
+        manif_ids = [m.id for expr in getattr(work, "expressions", []) for m in getattr(expr, "manifestations", [])]
+        if manif_ids:
+            stmt_items = select(Item.manifestation_id).where(
+                Item.manifestation_id.in_(manif_ids),
+                Item.owner_id == user_id,
+                Item.is_hidden.is_(False),
+            )
+            owned = db.session.execute(stmt_items).scalars().all()
+            owned_manifestation_ids = set(owned)
+
+    expressions_data = []
+    for expr in getattr(work, "expressions", []):
+        manifestations_data = []
+        for m in getattr(expr, "manifestations", []):
+            resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
+            cover_url = m.cover_url or (m.meta.get("cover_url") if m.meta else None)
+            manifestations_data.append(
+                {
+                    "id": m.id,
+                    "expression_id": expr.id,
+                    "work_id": work.id,
+                    "title": work.title,
+                    "isbn13": m.isbn13,
+                    "ean": m.ean,
+                    "upc": m.upc,
+                    "publisher": m.publisher,
+                    "format": m.format_type or m.format,
+                    "format_type": m.format_type,
+                    "year": resolved_year,
+                    "cover_url": cover_url,
+                    "user_owns": m.id in owned_manifestation_ids,
+                    "meta": m.meta,
+                }
+            )
+
+        expressions_data.append(
+            {
+                "id": expr.id,
+                "work_id": work.id,
+                "content_type": expr.content_type,
+                "language": expr.language,
+                "kind": expr.kind,
+                "is_live_performance": is_live_performance(expr),
+                "manifestations": manifestations_data,
+            }
+        )
+
+    authors = work.meta.get("authors", []) if work.meta else []
+    contributions = serialize_contributions(work=work)
+
+    data = {
+        "id": work.id,
+        "title": work.title,
+        "authors": authors,
+        "meta": work.meta,
+        "contributions": contributions,
+        "expressions": expressions_data,
+    }
+    return jsonify({"success": True, "data": data, "error": None}), 200
+
+
+@api_bp.route("/expressions/<int:expression_id>", methods=["GET"])
+@optional_auth
+def get_expression_detail(expression_id: int) -> tuple[Response, int]:
+    """Retrieve detailed information for a single Expression."""
+    stmt = (
+        select(Expression)
+        .options(
+            joinedload(cast(Any, Expression.work)),
+            selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Expression.id == expression_id)
+    )
+    expr = db.session.execute(stmt).scalars().first()
+    if not expr:
+        return jsonify({"success": False, "data": None, "error": "Expression not found"}), 404
+
+    from app.core.frbr_service import is_live_performance, serialize_contributions
+
+    work = getattr(expr, "work", None)
+    authors = work.meta.get("authors", []) if (work and work.meta) else []
+
+    manifestations_data = []
+    for m in getattr(expr, "manifestations", []):
+        resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
+        cover_url = m.cover_url or (m.meta.get("cover_url") if m.meta else None)
+        manifestations_data.append(
+            {
+                "id": m.id,
+                "expression_id": expr.id,
+                "work_id": work.id if work else None,
+                "title": work.title if work else "",
+                "isbn13": m.isbn13,
+                "ean": m.ean,
+                "upc": m.upc,
+                "publisher": m.publisher,
+                "format": m.format_type or m.format,
+                "format_type": m.format_type,
+                "year": resolved_year,
+                "cover_url": cover_url,
+                "meta": m.meta,
+            }
+        )
+
+    contributions = serialize_contributions(work=work, expression=expr)
+
+    data = {
+        "id": expr.id,
+        "work_id": expr.work_id,
+        "work_title": work.title if work else "",
+        "authors": authors,
+        "content_type": expr.content_type,
+        "language": expr.language,
+        "kind": expr.kind,
+        "is_live_performance": is_live_performance(expr),
+        "contributions": contributions,
+        "manifestations": manifestations_data,
+    }
+    return jsonify({"success": True, "data": data, "error": None}), 200

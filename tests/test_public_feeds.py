@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 from rdflib import RDF, Graph, URIRef
+from sqlalchemy import select
 
 from app.db.models import Expression, Item, Manifestation, User, Work, db
 
@@ -223,3 +224,135 @@ class TestContentNegotiation:
 
         SIOC_topic = URIRef("http://rdfs.org/sioc/ns#topic")
         assert (None, SIOC_topic, None) in g
+
+
+class TestPublicSemanticEndpoints:
+    """Validates public FRBR and Schema.org semantic endpoints for AI agents and crawlers."""
+
+    def test_cors_headers_on_public_manifestation(self, client, app, sample_data):
+        """Verifies permissive CORS headers are returned for external web agents (e.g. Gemini)."""
+        with app.app_context():
+            mani = db.session.execute(select(Manifestation)).scalars().first()
+            mani_id = mani.id
+
+        # GET request with Gemini Origin
+        response = client.get(
+            f"/api/public/manifestations/{mani_id}",
+            headers={"Origin": "https://gemini.google.com"},
+        )
+        assert response.status_code == 200
+        assert response.headers.get("Access-Control-Allow-Origin") == "*"
+
+        # OPTIONS preflight request
+        options_resp = client.options(
+            f"/api/public/manifestations/{mani_id}",
+            headers={
+                "Origin": "https://gemini.google.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert options_resp.status_code == 200
+        assert options_resp.headers.get("Access-Control-Allow-Origin") == "*"
+
+    def test_get_public_manifestation_jsonld_and_turtle(self, client, app, sample_data):
+        """Verifies Manifestation entity serves JSON-LD by default and Turtle on request."""
+        with app.app_context():
+            mani = db.session.execute(select(Manifestation)).scalars().first()
+            mani_id = mani.id
+
+        # Default JSON-LD
+        resp_jsonld = client.get(f"/api/public/manifestations/{mani_id}")
+        assert resp_jsonld.status_code == 200
+        assert "application/ld+json" in resp_jsonld.content_type
+
+        g_jsonld = Graph()
+        g_jsonld.parse(data=resp_jsonld.data, format="json-ld")
+        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Manifestation")) in g_jsonld
+        assert (None, RDF.type, URIRef("https://schema.org/CreativeWork")) in g_jsonld
+        assert (None, URIRef("https://schema.org/name"), None) in g_jsonld
+
+        # Requested Turtle
+        resp_turtle = client.get(
+            f"/api/public/manifestations/{mani_id}",
+            headers={"Accept": "text/turtle"},
+        )
+        assert resp_turtle.status_code == 200
+        assert "text/turtle" in resp_turtle.content_type
+
+        g_turtle = Graph()
+        g_turtle.parse(data=resp_turtle.data, format="turtle")
+        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Manifestation")) in g_turtle
+
+    def test_get_public_manifestation_not_found(self, client):
+        """Verifies 404 is returned when manifestation does not exist."""
+        resp = client.get("/api/public/manifestations/9999999")
+        assert resp.status_code == 404
+        assert resp.get_json()["error"] == "Manifestation not found"
+
+    def test_get_public_work_jsonld(self, client, app, sample_data):
+        """Verifies Work entity serves RDF linking expressions and manifestations."""
+        with app.app_context():
+            work = db.session.execute(select(Work)).scalars().first()
+            work_id = work.id
+
+        response = client.get(
+            f"/api/public/works/{work_id}",
+            headers={"Origin": "https://gemini.google.com"},
+        )
+        assert response.status_code == 200
+        assert "application/ld+json" in response.content_type
+        assert response.headers.get("Access-Control-Allow-Origin") == "*"
+
+        g = Graph()
+        g.parse(data=response.data, format="json-ld")
+        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Work")) in g
+        assert (None, RDF.type, URIRef("https://schema.org/CreativeWork")) in g
+        assert (None, URIRef("https://schema.org/name"), None) in g
+
+    def test_get_public_work_not_found(self, client):
+        """Verifies 404 is returned when work does not exist."""
+        resp = client.get("/api/public/works/9999999")
+        assert resp.status_code == 404
+        assert resp.get_json()["error"] == "Work not found"
+
+    def test_get_public_expression_jsonld(self, client, app, sample_data):
+        """Verifies Expression entity serves RDF."""
+        with app.app_context():
+            expr = db.session.execute(select(Expression)).scalars().first()
+            expr_id = expr.id
+
+        response = client.get(f"/api/public/expressions/{expr_id}")
+        assert response.status_code == 200
+        assert "application/ld+json" in response.content_type
+
+        g = Graph()
+        g.parse(data=response.data, format="json-ld")
+        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Expression")) in g
+
+    def test_get_public_item_jsonld_and_hidden_guard(self, client, app, public_user, sample_data):
+        """Verifies Item entity serves RDF and respects privacy flag."""
+        with app.app_context():
+            user = db.session.execute(select(User).where(User.public_username == public_user)).scalars().first()
+            mani = db.session.execute(select(Manifestation)).scalars().first()
+
+            public_item = db.session.execute(select(Item).where(Item.is_hidden.is_(False))).scalars().first()
+            public_item_id = public_item.id
+
+            hidden_item = Item(owner_id=user.id, manifestation_id=mani.id, status="read", is_hidden=True)
+            db.session.add(hidden_item)
+            db.session.commit()
+            hidden_item_id = hidden_item.id
+
+        # Public item
+        resp_pub = client.get(f"/api/public/items/{public_item_id}")
+        assert resp_pub.status_code == 200
+        assert "application/ld+json" in resp_pub.content_type
+
+        g = Graph()
+        g.parse(data=resp_pub.data, format="json-ld")
+        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Item")) in g
+
+        # Hidden item
+        resp_hid = client.get(f"/api/public/items/{hidden_item_id}")
+        assert resp_hid.status_code == 404
+        assert resp_hid.get_json()["error"] == "Item not found"

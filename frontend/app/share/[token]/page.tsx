@@ -20,11 +20,35 @@ import { getTranslations } from "next-intl/server";
 import { Library, Share2, Rss } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
+import { buildCollectionJsonLd } from "@/lib/schema-org";
+import type { Item, CatalogEntry } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ShareButton } from "@/components/ui/share-button";
 import { Footer } from "@/components/dashboard/footer";
 import { Navbar } from "@/components/dashboard/navbar";
+
+interface SharedCollectionItem {
+  id: number | string;
+  manifestation_id?: number | string;
+  title: string;
+  authors?: string[];
+  cover_url?: string;
+  status?: string;
+  collection_status?: string;
+}
+
+interface SharedCollectionData {
+  author: string;
+  collection_name: string;
+  collection_description?: string;
+  items: SharedCollectionItem[];
+}
+
+interface SharedCollectionResponse {
+  success: boolean;
+  data: SharedCollectionData;
+}
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
@@ -35,13 +59,13 @@ interface SharedCollectionPageProps {
  * @param token - The unique share token.
  * @returns The shared collection data or null if not found.
  */
-async function getSharedCollection(token: string) {
+async function getSharedCollection(token: string): Promise<SharedCollectionResponse | null> {
   try {
     const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    return await res.json();
+    return (await res.json()) as SharedCollectionResponse;
   } catch {
     return null;
   }
@@ -71,6 +95,12 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
         "application/rss+xml": [
           { url: `/api/public/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` },
         ],
+        "application/ld+json": [
+          {
+            url: `/api/public/share/${token}?format=json-ld`,
+            title: `${collection.collection_name} - Schema.org JSON-LD`,
+          },
+        ],
       },
     },
   };
@@ -94,8 +124,21 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
   const collection = collectionRes.data;
   const items = collection.items || [];
 
+  const collectionJsonLd = buildCollectionJsonLd({
+    name: collection.collection_name,
+    description: collection.collection_description || undefined,
+    totalCount: items.length,
+    authorName: collection.author,
+    items: items.map((item: SharedCollectionItem) => ({
+      id: item.manifestation_id || item.id,
+      title: item.title,
+      url: `/manifestation/${item.manifestation_id || item.id}`,
+    })),
+  });
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
       <Navbar />
       <main className="flex-1">
         {/* Header Section */}
@@ -148,7 +191,7 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
           </div>
 
           {items.length > 0 ? (
-            <CollectionGrid items={items} />
+            <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
           ) : (
             <EmptyState
               title="Empty Collection"

@@ -15,9 +15,10 @@
 //
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import ManifestationPage from "@/app/manifestation/[id]/page";
+import { render } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import ManifestationPage, { generateMetadata } from "@/app/manifestation/[id]/page";
+import { ManifestationDetailClient } from "@/components/manifestation/manifestation-detail-client";
 import * as hooks from "@/lib/api/hooks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -61,12 +62,39 @@ describe("Semantic Web Validation for Manifestation View", () => {
     },
   };
 
-  it("should inject a valid application/ld+json script for AI agent search engines", () => {
-    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
-    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: mockManifestation, isLoading: false } as any);
-    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
-    const { container } = renderWithQueryClient(<ManifestationPage />);
+  it("should generate proper SEO metadata for manifestation in SSR", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockManifestation }),
+    } as unknown as Response);
+
+    const meta = await generateMetadata({ params: Promise.resolve({ id: "123" }) });
+    expect(meta.title).toBe("The Fellowship of the Ring - iqoqo");
+    expect(meta.description).toContain("J.R.R. Tolkien");
+  });
+
+  it("should inject a valid application/ld+json script for AI agent search engines in Server Component SSR", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: mockManifestation }),
+    } as unknown as Response);
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({
+      data: mockManifestation,
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useManifestation>);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useWorkParts
+    >);
+
+    const pageElement = await ManifestationPage({ params: Promise.resolve({ id: "123" }) });
+    const { container } = renderWithQueryClient(pageElement);
 
     const scriptTag = container.querySelector("script[type='application/ld+json']");
     expect(scriptTag).toBeInTheDocument();
@@ -81,11 +109,20 @@ describe("Semantic Web Validation for Manifestation View", () => {
   });
 
   it("should expose valid RDFa semantic attributes compliant with FRBRer ontology", () => {
-    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
-    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: mockManifestation, isLoading: false } as any);
-    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({
+      data: mockManifestation,
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useManifestation>);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useWorkParts
+    >);
 
-    const { container } = renderWithQueryClient(<ManifestationPage />);
+    const { container } = renderWithQueryClient(
+      <ManifestationDetailClient manifestationId={123} initialManifestation={mockManifestation as any} />
+    );
 
     const mainContainer = container.firstChild as HTMLElement;
     expect(mainContainer).toBeInTheDocument();
@@ -95,23 +132,85 @@ describe("Semantic Web Validation for Manifestation View", () => {
 
     const workLink = container.querySelector("a[rel='embodimentOf']");
     expect(workLink).toBeInTheDocument();
-    expect(workLink?.getAttribute("href")).toBe("/api/public/works/456");
+    expect(workLink?.getAttribute("href")).toBe("/work/456");
   });
 
-  it("should render SIOC topic elements for automated folksonomy categorization mapping", () => {
-    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
-    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: mockManifestation, isLoading: false } as any);
-    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+  it("should properly structure inLanguage and inventory item availability offers", async () => {
+    const ownedManifestation = {
+      ...mockManifestation,
+      user_owns: true,
+      meta: {
+        ...mockManifestation.meta,
+        language: "eng",
+      },
+    };
 
-    renderWithQueryClient(<ManifestationPage />);
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: ownedManifestation }),
+    } as unknown as Response);
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({
+      data: ownedManifestation,
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useManifestation>);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useWorkParts
+    >);
 
-    const classicTag = screen.getByText("Classic");
-    const fantasyTag = screen.getByText("Fantasy");
+    const pageElement = await ManifestationPage({ params: Promise.resolve({ id: "123" }) });
+    const { container } = renderWithQueryClient(pageElement);
 
-    expect(classicTag).toBeInTheDocument();
-    expect(classicTag.getAttribute("property")).toBe("sioc:topic");
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    expect(scriptTag).not.toBeNull();
 
-    expect(fantasyTag).toBeInTheDocument();
-    expect(fantasyTag.getAttribute("property")).toBe("sioc:topic");
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["inLanguage"]).toBe("en");
+    expect(Array.isArray(jsonLd["offers"])).toBe(true);
+    expect(jsonLd["offers"][0]["availability"]).toBe("https://schema.org/InStock");
+  });
+
+  it("should map offers to PreOrder for wishlist items and resolve board_game schema type", async () => {
+    const wishlistGame = {
+      id: 999,
+      title: "Catan",
+      authors: ["Klaus Teuber"],
+      content_type: "board_game",
+      wishlist_item_id: 42,
+      user_owns: false,
+      meta: {
+        Publisher: "Kosmos",
+        Year: "1995",
+        language: "deu",
+      },
+    };
+
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: wishlistGame }),
+    } as unknown as Response);
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({
+      data: wishlistGame,
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useManifestation>);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useWorkParts
+    >);
+
+    const pageElement = await ManifestationPage({ params: Promise.resolve({ id: "999" }) });
+    const { container } = renderWithQueryClient(pageElement);
+
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    expect(scriptTag).not.toBeNull();
+
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["@type"]).toBe("Game");
+    expect(jsonLd["inLanguage"]).toBe("de");
+    expect(jsonLd["offers"][0]["availability"]).toBe("https://schema.org/PreOrder");
   });
 });

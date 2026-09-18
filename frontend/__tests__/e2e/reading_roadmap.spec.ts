@@ -50,10 +50,23 @@ test.describe("Reading Roadmap E2E Workflow", () => {
   test("should allow a user to create, populate, and reorder a reading roadmap pipeline", async ({ page }) => {
     // Navigate to the primary roadmaps organizational panel
     await page.goto("/collection?view=roadmap");
-    await page.click('[data-testid="create-roadmap-btn"]');
+
+    // Ensure page and roadmap view have hydrated and loaded empty state
+    await expect(page.getByRole("heading", { name: "Reading Roadmaps", level: 1 })).toBeVisible();
+    await expect(page.getByText("Loading roadmaps...")).not.toBeVisible();
+    await expect(page.getByText("No Reading Roadmaps Yet")).toBeVisible();
+
+    // Open create dialog with retry against hydration race conditions
+    const titleInput = page.locator('input[name="title"]');
+    await expect(async () => {
+      if (!(await titleInput.isVisible())) {
+        await page.click('[data-testid="create-roadmap-btn"]');
+      }
+      await expect(titleInput).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
 
     // Formulate roadmap core attributes
-    await page.fill('input[name="title"]', "Distributed Systems Mastery 2026");
+    await titleInput.fill("Distributed Systems Mastery 2026");
     await page.fill(
       'textarea[name="description"]',
       "A rigorous track mapping out foundations of decentralized computing."

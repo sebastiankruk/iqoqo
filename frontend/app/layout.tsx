@@ -38,7 +38,10 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(frontendUrl),
   title: "iqoqo – The Library of Everything",
   description: "Your personal library dashboard for books, games, music and collections",
   icons: {

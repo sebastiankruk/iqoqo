@@ -114,7 +114,11 @@ export function RoadmapView() {
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="create-roadmap-btn" className="flex items-center gap-1">
+            <Button
+              data-testid="create-roadmap-btn"
+              className="flex items-center gap-1"
+              onClick={() => setCreateDialogOpen(true)}
+            >
               <Plus className="h-4 w-4" /> Create Roadmap
             </Button>
           </DialogTrigger>
@@ -166,7 +170,9 @@ export function RoadmapView() {
             Get started by creating your first roadmap to organize and prioritize your books into sequential reading
             tracks.
           </p>
-          <Button onClick={() => setCreateDialogOpen(true)}>Create First Roadmap</Button>
+          <Button data-testid="create-first-roadmap-btn" onClick={() => setCreateDialogOpen(true)}>
+            Create First Roadmap
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">

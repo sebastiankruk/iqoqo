@@ -1,9 +1,44 @@
 User-agent: *
 Allow: /
 
-# Public profiles are indexable
+# Public pages, profiles, and shares are indexable
 Allow: /u/
+Allow: /share/
+Allow: /manifestation/
+Allow: /item/
+Allow: /work/
+Allow: /expression/
 
-# Admin and API routes are not for crawlers
+# Allow crawlers and AI agents to access public Linked Data & semantic feeds
+Allow: /api/public/
+Allow: /api/sparql
+
+# Admin and private internal API routes are not for crawlers
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Googlebot
+Allow: /
+Allow: /manifestation/
+Allow: /item/
+Allow: /work/
+Allow: /expression/
+Allow: /u/
+Allow: /share/
+Allow: /api/public/
+Allow: /api/sparql
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Google-Extended
+Allow: /
+Allow: /manifestation/
+Allow: /item/
+Allow: /work/
+Allow: /expression/
+Allow: /u/
+Allow: /share/
+Allow: /api/public/
+Allow: /api/sparql
 Disallow: /api/
 Disallow: /admin/
