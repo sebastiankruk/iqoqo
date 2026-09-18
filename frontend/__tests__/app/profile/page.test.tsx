@@ -48,8 +48,18 @@ vi.mock("@/components/escalation/my-escalations", () => ({
   MyEscalations: () => <div data-testid="my-escalations">My Escalations</div>,
 }));
 
+// Mock export API function
+vi.mock("@/lib/api/export", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/lib/api/export")>();
+  return {
+    ...actual,
+    downloadCollectionExport: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 import ProfilePage from "@/app/profile/page";
 import { apiClient, apiFetch } from "@/lib/api/client";
+import { downloadCollectionExport } from "@/lib/api/export";
 import { useAppConfig } from "@/lib/api/hooks";
 
 describe("ProfilePage", () => {
@@ -163,6 +173,41 @@ describe("ProfilePage", () => {
           is_granted: false,
         })
       );
+    });
+  });
+
+  it("renders export collection card with format selection and download button", async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Collection")).toBeInTheDocument();
+    });
+
+    const formatSelect = screen.getByLabelText("Export Format");
+    expect(formatSelect).toBeInTheDocument();
+    expect(formatSelect).toHaveValue("json-ld");
+
+    const exportBtn = screen.getByRole("button", { name: "Export Collection Button" });
+    expect(exportBtn).toBeInTheDocument();
+    expect(exportBtn).toHaveTextContent("Download Export");
+  });
+
+  it("handles format change and triggers downloadCollectionExport", async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Export Collection")).toBeInTheDocument();
+    });
+
+    const formatSelect = screen.getByLabelText("Export Format");
+    fireEvent.change(formatSelect, { target: { value: "turtle" } });
+    expect(formatSelect).toHaveValue("turtle");
+
+    const exportBtn = screen.getByRole("button", { name: "Export Collection Button" });
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(downloadCollectionExport).toHaveBeenCalledWith("turtle");
     });
   });
 });
