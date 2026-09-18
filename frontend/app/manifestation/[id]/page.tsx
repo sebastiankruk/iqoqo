@@ -24,6 +24,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
+import { buildManifestationJsonLd, type OfferOptions } from "@/lib/schema-org";
 import { Button } from "@/components/ui/button";
 import type { CatalogEntry } from "@/types/frbr";
 import { Badge } from "@/components/ui/badge";
@@ -102,37 +103,51 @@ export default function ManifestationPage() {
   const composedLabel = composeMediaBadgeLabel(badge, key => t(key));
   const badgeLabel = isSeries ? t("seriesSuffix", { label: composedLabel }) : composedLabel;
 
-  const schemaTypeMap: Record<string, string> = {
-    text: "Book",
-    book: "Book",
-    audiobook: "Audiobook",
-    music: "MusicAlbum",
-    movie: "Movie",
-    board_game: "Game",
-    puzzle: "Product",
-  };
-  const schemaType = schemaTypeMap[manifestation.content_type ?? "text"] || "CreativeWork";
+  const offersList: OfferOptions[] = [];
+  const rawItems = (
+    manifestation as unknown as {
+      items?: Array<{ collection_status?: string; status?: string; price?: number; currency?: string }>;
+    }
+  ).items;
+  if (Array.isArray(rawItems) && rawItems.length > 0) {
+    for (const itm of rawItems) {
+      offersList.push({
+        status: itm.collection_status || itm.status || (manifestation.user_owns ? "owned" : "available"),
+        price: itm.price,
+        currency: itm.currency,
+      });
+    }
+  } else if (manifestation.user_owns) {
+    offersList.push({ status: "owned" });
+  } else if (manifestation.wishlist_item_id) {
+    offersList.push({ status: "wishlist" });
+  } else if (manifestation.meta?.collection_status) {
+    offersList.push({ status: String(manifestation.meta.collection_status) });
+  } else {
+    offersList.push({ status: "available" });
+  }
 
-  const jsonLdData: Record<string, unknown> = {
-    "@context": "https://schema.org",
-    "@type": schemaType,
-    name: manifestation.title || "Untitled Work",
-    author: {
-      "@type": "Person",
-      name:
-        (Array.isArray(manifestation.meta?.authors)
-          ? (manifestation.meta.authors as string[])[0]
-          : (manifestation.meta?.authors as string | undefined)) ||
-        manifestation.authors?.[0] ||
-        "Unknown Author",
-    },
-    image: coverUrl || undefined,
-    isbn: manifestation.isbn13 || (manifestation.meta?.isbn as string | undefined) || undefined,
-    identifier: manifestation.id,
-    publisher: manifestation.meta?.Publisher,
-    datePublished: resolved_year,
-    inLanguage: manifestation.meta?.language,
-  };
+  const jsonLdData = buildManifestationJsonLd({
+    id: manifestation.id,
+    title: manifestation.title || "Untitled Work",
+    authors: (manifestation.meta?.authors as string[] | string | undefined) ?? manifestation.authors,
+    coverUrl: coverUrl || undefined,
+    isbn:
+      manifestation.isbn13 ||
+      (manifestation.meta?.isbn as string | undefined) ||
+      (manifestation.meta?.isbn13 as string | undefined) ||
+      undefined,
+    publisher: (manifestation.meta?.Publisher as string | undefined) || (manifestation.publisher as string | undefined),
+    datePublished: resolved_year as string | number | undefined,
+    language:
+      (manifestation.meta?.language as string | undefined) ||
+      (manifestation.meta?.Language as string | undefined) ||
+      (manifestation as unknown as { language?: string }).language,
+    contentType: manifestation.content_type,
+    expressionKind: manifestation.expression_kind,
+    format: format,
+    offers: offersList,
+  });
 
   const resolvedIsbn =
     (manifestation.isbn13 || "").trim() ||

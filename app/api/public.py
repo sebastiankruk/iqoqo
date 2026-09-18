@@ -692,28 +692,57 @@ def check_inventory(username: str):
     return jsonify({"success": True, "data": []})
 
 
-@public_bp.route("/sitemap.xml", methods=["GET"])
-@limiter.limit("60 per minute")
-def sitemap():
-    """Generate an XML sitemap listing public user profiles and shared collections."""
-    base_url = request.url_root.rstrip("/")
-
+def generate_sitemap_xml(base_url: str) -> str:
+    """Generate an XML sitemap listing public user profiles, shared collections, and catalog manifestations."""
     # Public users
     users = db.session.execute(select(User.public_username).where(User.visibility == "public")).scalars().all()
 
-    # Shared collections
-    shares = db.session.execute(select(SharedCollection.share_token)).scalars().all()
+    # Active shared collections (not expired)
+    now = datetime.datetime.now(datetime.UTC)
+    shares = (
+        db.session.execute(
+            select(SharedCollection.share_token).where(or_(SharedCollection.expires_at.is_(None), SharedCollection.expires_at > now))
+        )
+        .scalars()
+        .all()
+    )
 
-    urls = []
+    # Public catalog manifestations (bounded up to 50,000 URLs)
+    manifestations = db.session.execute(select(Manifestation.id).limit(50000)).scalars().all()
+
+    urls: list[str] = []
     for username in users:
-        loc = f"{base_url}/api/public/u/{username}/items"
-        urls.append(f"  <url><loc>{loc}</loc><changefreq>weekly</changefreq></url>")
-    for token in shares:
-        loc = f"{base_url}/api/public/share/{token}"
-        urls.append(f"  <url><loc>{loc}</loc><changefreq>monthly</changefreq></url>")
+        if not username:
+            continue
+        loc_profile = f"{base_url}/u/{username}"
+        loc_api = f"{base_url}/api/public/u/{username}/items"
+        urls.append(f"  <url><loc>{loc_profile}</loc><changefreq>weekly</changefreq></url>")
+        urls.append(f"  <url><loc>{loc_api}</loc><changefreq>weekly</changefreq></url>")
 
-    xml = (
+    for token in shares:
+        if not token:
+            continue
+        loc_share = f"{base_url}/share/{token}"
+        loc_api_share = f"{base_url}/api/public/share/{token}"
+        urls.append(f"  <url><loc>{loc_share}</loc><changefreq>monthly</changefreq></url>")
+        urls.append(f"  <url><loc>{loc_api_share}</loc><changefreq>monthly</changefreq></url>")
+
+    for mid in manifestations:
+        loc_m = f"{base_url}/manifestation/{mid}"
+        urls.append(f"  <url><loc>{loc_m}</loc><changefreq>monthly</changefreq></url>")
+
+    return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(urls) + "\n</urlset>"
     )
-    return Response(xml, content_type="application/xml")
+
+
+@public_bp.route("/sitemap.xml", methods=["GET"])
+@limiter.limit("60 per minute")
+def sitemap() -> Response:
+    """Generate an XML sitemap listing public user profiles, shared collections, and catalog items."""
+    base_url = request.url_root.rstrip("/")
+    xml = generate_sitemap_xml(base_url)
+    resp = Response(xml, content_type="application/xml; charset=utf-8")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp

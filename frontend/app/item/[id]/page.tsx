@@ -15,10 +15,11 @@
 //
 "use client";
 
-import { use } from "react";
+import { use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
+import { WorkStructuredData } from "@/components/work/work-structured-data";
 import { HeroBanner } from "@/components/item/hero-banner";
 import { ItemSidebar } from "@/components/item/item-sidebar";
 import { ItemHeader } from "@/components/item/item-header";
@@ -109,6 +110,30 @@ export default function ItemPage(props: Props) {
 
   const { data: item, isLoading, isError } = useItem(itemId);
 
+  const workData = useMemo(() => {
+    if (!item) return null;
+    const workTitle = item.work?.title || item.title || "Untitled Work";
+    const workAuthors = item.work?.authors ?? item.authors;
+    const manifestations = [
+      {
+        id: item.manifestation_id,
+        title: item.title,
+        isbn: item.isbn,
+        language: item.expression?.language,
+        contentType: item.content_type || item.expression?.content_type,
+        expressionKind: item.expression?.kind,
+        format: (item.meta?.format as string) || (item.manifestation_meta?.format as string),
+      },
+    ];
+
+    return {
+      id: item.work?.id || item.manifestation_id,
+      title: workTitle,
+      authors: workAuthors,
+      manifestations,
+    };
+  }, [item]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -137,6 +162,7 @@ export default function ItemPage(props: Props) {
 
   return (
     <div className="min-h-screen bg-background">
+      {workData && <WorkStructuredData data={workData} />}
       <Navbar />
       <ItemDetail item={item} />
     </div>

@@ -114,4 +114,59 @@ describe("Semantic Web Validation for Manifestation View", () => {
     expect(fantasyTag).toBeInTheDocument();
     expect(fantasyTag.getAttribute("property")).toBe("sioc:topic");
   });
+
+  it("should include inLanguage and offers in JSON-LD when user owns manifestation", () => {
+    const ownedManifestation = {
+      ...mockManifestation,
+      user_owns: true,
+      meta: {
+        ...mockManifestation.meta,
+        language: "eng",
+      },
+    };
+
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: ownedManifestation, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    expect(scriptTag).not.toBeNull();
+
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["inLanguage"]).toBe("en");
+    expect(Array.isArray(jsonLd["offers"])).toBe(true);
+    expect(jsonLd["offers"][0]["availability"]).toBe("https://schema.org/InStock");
+  });
+
+  it("should map offers to PreOrder for wishlist items and resolve board_game schema type", () => {
+    const wishlistGame = {
+      id: 999,
+      title: "Catan",
+      authors: ["Klaus Teuber"],
+      content_type: "board_game",
+      wishlist_item_id: 42,
+      user_owns: false,
+      meta: {
+        Publisher: "Kosmos",
+        Year: "1995",
+        language: "deu",
+      },
+    };
+
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as any);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({ data: wishlistGame, isLoading: false } as any);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as any);
+
+    const { container } = renderWithQueryClient(<ManifestationPage />);
+
+    const scriptTag = container.querySelector("script[type='application/ld+json']");
+    expect(scriptTag).not.toBeNull();
+
+    const jsonLd = JSON.parse(scriptTag!.textContent || "{}");
+    expect(jsonLd["@type"]).toBe("Game");
+    expect(jsonLd["inLanguage"]).toBe("de");
+    expect(jsonLd["offers"][0]["availability"]).toBe("https://schema.org/PreOrder");
+  });
 });
