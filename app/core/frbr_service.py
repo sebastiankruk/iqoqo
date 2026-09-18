@@ -1366,8 +1366,15 @@ def _enrich_graph_from_db(
                 m_id = item.get("manifestation_id") or item.get("id")
                 i_id = item.get("id")
             else:
-                m_id = getattr(item, "manifestation_id", getattr(item, "id", None))
-                i_id = getattr(item, "id", None) if hasattr(item, "manifestation_id") else None
+                if hasattr(item, "manifestation_id"):
+                    m_id = item.manifestation_id
+                    i_id = getattr(item, "id", None)
+                elif hasattr(item, "expression_id"):
+                    m_id = getattr(item, "id", None)
+                    i_id = None
+                else:
+                    m_id = None
+                    i_id = None
 
             if m_id:
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
@@ -1412,6 +1419,14 @@ def _enrich_graph_from_db(
                 seen_expressions.add(m.expression.id)
                 if m.expression.work:
                     seen_works.add(m.expression.work.id)
+        elif hasattr(item, "work_id"):
+            # Expression object
+            seen_expressions.add(item.id)
+            if item.work_id:
+                seen_works.add(item.work_id)
+        elif hasattr(item, "expressions") or isinstance(item, Work):
+            # Work object
+            seen_works.add(item.id)
 
     try:
         # WorkContributions
@@ -1605,6 +1620,81 @@ def build_collection_rdf_graph(
                     expression_id = item_id
                 if work_id is None:
                     work_id = expression_id
+            elif hasattr(item, "work_id"):
+                # Database Expression object
+                expression_id = item.id
+                work_id = item.work_id
+                content_type = getattr(item, "content_type", None)
+                w_title = getattr(item.work, "title", "Untitled") if getattr(item, "work", None) else "Untitled"
+                authors = []
+                if getattr(item, "work", None) and item.work.meta:
+                    authors = item.work.meta.get("authors", []) or item.work.meta.get("Authors", [])
+
+                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+                e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
+                g.add((w_uri, RDF.type, FRBR.Work))
+                g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
+                g.add((w_uri, SCHEMA.name, Literal(w_title)))
+                for author in authors:
+                    g.add((w_uri, FRBR.creator, Literal(author)))
+                    g.add((w_uri, SCHEMA.author, Literal(author)))
+                g.add((e_uri, RDF.type, FRBR.Expression))
+                g.add((e_uri, FRBR.expressionOf, w_uri))
+
+                for m_elem in getattr(item, "manifestations", []):
+                    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                    g.add((m_uri, RDF.type, FRBR.Manifestation))
+                    g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
+                    g.add((m_uri, FRBR.embodimentOf, e_uri))
+                    if m_elem.title:
+                        g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
+                    if m_elem.isbn13:
+                        g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
+                    if m_elem.cover_url:
+                        img_uri = URIRef(
+                            str(m_elem.cover_url)
+                            if str(m_elem.cover_url).startswith(("http://", "https://"))
+                            else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
+                        )
+                        g.add((m_uri, SCHEMA.image, img_uri))
+                continue
+            elif hasattr(item, "expressions") or isinstance(item, Work):
+                # Database Work object
+                work_id = item.id
+                title = getattr(item, "title", "Untitled") or "Untitled"
+                authors = []
+                if getattr(item, "meta", None):
+                    authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
+
+                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+                g.add((w_uri, RDF.type, FRBR.Work))
+                g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
+                g.add((w_uri, SCHEMA.name, Literal(title)))
+                for author in authors:
+                    g.add((w_uri, FRBR.creator, Literal(author)))
+                    g.add((w_uri, SCHEMA.author, Literal(author)))
+
+                for expr_elem in getattr(item, "expressions", []):
+                    e_uri = URIRef(f"{base_url}/api/public/expressions/{expr_elem.id}")
+                    g.add((e_uri, RDF.type, FRBR.Expression))
+                    g.add((e_uri, FRBR.expressionOf, w_uri))
+                    for m_elem in getattr(expr_elem, "manifestations", []):
+                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                        g.add((m_uri, RDF.type, FRBR.Manifestation))
+                        g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
+                        g.add((m_uri, FRBR.embodimentOf, e_uri))
+                        if m_elem.title:
+                            g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
+                        if m_elem.isbn13:
+                            g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
+                        if m_elem.cover_url:
+                            img_uri = URIRef(
+                                str(m_elem.cover_url)
+                                if str(m_elem.cover_url).startswith(("http://", "https://"))
+                                else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
+                            )
+                            g.add((m_uri, SCHEMA.image, img_uri))
+                continue
             else:
                 # Database Manifestation object
                 manifestation_id = item_id
@@ -1665,6 +1755,9 @@ def build_collection_rdf_graph(
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
         g.add((m_uri, SCHEMA.name, Literal(title)))
 
+        g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
+        g.add((w_uri, SCHEMA.name, Literal(title)))
+
         # Add specific Schema.org type based on content_type
         specific_type = SCHEMA_TYPE_MAP.get(content_type) if content_type else None
         if specific_type:
@@ -1691,6 +1784,7 @@ def build_collection_rdf_graph(
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))
             g.add((w_uri, FRBR.creator, Literal(author)))
+            g.add((w_uri, SCHEMA.author, Literal(author)))
 
         # SIOC Semantics for Tagging / Folksonomy categorization
         for tag in tags:

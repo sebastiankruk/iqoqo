@@ -81,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       types: {
         "application/ld+json": [
           {
-            url: `/api/items/${item.id}`,
+            url: `/api/public/items/${item.id}`,
             title: `${title} - Schema.org JSON-LD`,
           },
         ],

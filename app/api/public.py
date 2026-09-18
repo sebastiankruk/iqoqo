@@ -18,7 +18,7 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 """
 
 import datetime
-from typing import Any
+from typing import Any, cast
 
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 from sqlalchemy import func, or_, select
@@ -29,6 +29,36 @@ from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
+
+
+@public_bp.after_request
+def add_cors_headers(response: Response) -> Response:
+    """Ensure all public endpoints provide open CORS for AI agents and Linked Data crawlers."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization"
+    return response
+
+
+def _negotiate_rdf_format(default_format: str = "json-ld") -> tuple[str, str]:
+    """Negotiate RDF format and mimetype from Accept header and format query param.
+
+    Returns:
+        tuple[str, str]: (rdf_format, rdf_mimetype)
+    """
+    accept_header = request.headers.get("Accept", "")
+    format_arg = request.args.get("format", "").lower()
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        return "nt", "application/n-triples"
+    if "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        return "turtle", "text/turtle"
+    if "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        return "json-ld", "application/ld+json"
+
+    if default_format == "json-ld":
+        return "json-ld", "application/ld+json"
+    return "turtle", "text/turtle"
 
 
 def generate_rss_xml(
@@ -745,4 +775,162 @@ def sitemap() -> Response:
     xml = generate_sitemap_xml(base_url)
     resp = Response(xml, content_type="application/xml; charset=utf-8")
     resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@public_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a Manifestation entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    """
+    stmt = (
+        select(Manifestation)
+        .options(
+            joinedload(Manifestation.expression).joinedload(Expression.work),
+        )
+        .where(Manifestation.id == manifestation_id)
+    )
+    manifestation = db.session.execute(stmt).scalars().first()
+    if not manifestation:
+        return jsonify({"error": "Manifestation not found"}), 404
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/manifestation/{manifestation.id}"
+    rdf_payload = serialize_collection_to_rdf(
+        [manifestation],
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/works/<int:work_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_work(work_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a Work entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples,
+    linking expressions and manifestations embodied by the work.
+    """
+    stmt = (
+        select(Work)
+        .options(
+            selectinload(cast(Any, Work.expressions)).selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Work.id == work_id)
+    )
+    work = db.session.execute(stmt).scalars().first()
+    if not work:
+        return jsonify({"error": "Work not found"}), 404
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/work/{work.id}"
+    expressions_list: list[Any] = getattr(work, "expressions", [])
+    manifestations = [m for expr in expressions_list for m in getattr(expr, "manifestations", [])]
+    items_to_serialize: list[Any] = manifestations if manifestations else [work]
+
+    rdf_payload = serialize_collection_to_rdf(
+        items_to_serialize,
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/expressions/<int:expression_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_expression(expression_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for an Expression entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    """
+    stmt = (
+        select(Expression)
+        .options(
+            joinedload(Expression.work),
+            selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Expression.id == expression_id)
+    )
+    expression = db.session.execute(stmt).scalars().first()
+    if not expression:
+        return jsonify({"error": "Expression not found"}), 404
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/expression/{expression.id}"
+    expr_manifestations: list[Any] = list(getattr(expression, "manifestations", []))
+    items_to_serialize: list[Any] = expr_manifestations if expr_manifestations else [expression]
+
+    rdf_payload = serialize_collection_to_rdf(
+        items_to_serialize,
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/items/<int:item_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_item(item_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for an Item entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    Only non-hidden items are accessible publicly.
+    """
+    stmt = (
+        select(Item)
+        .options(
+            joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
+        )
+        .where(Item.id == item_id, Item.is_hidden.is_(False))
+    )
+    item = db.session.execute(stmt).scalars().first()
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/item/{item.id}"
+    rdf_payload = serialize_collection_to_rdf(
+        [item],
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
     return resp
