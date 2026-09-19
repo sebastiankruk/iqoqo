@@ -1356,8 +1356,18 @@ def _enrich_graph_from_db(
     items: list[Any],
     base_url: str,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> None:
-    """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB."""
+    """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB.
+    
+    Args:
+        g: The RDF graph to enrich.
+        items: List of items to enrich.
+        base_url: Base URL for generating URIs.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment (excludes private data),
+                           "full" for authenticated export (includes all data).
+    """
     if collection_uri:
         coll_uri_ref = URIRef(str(collection_uri))
         g.add((coll_uri_ref, RDF.type, SCHEMA.Collection))
@@ -1482,16 +1492,17 @@ def _enrich_graph_from_db(
                 g.add((part_uri, SCHEMA.isPartOf, container_uri))
                 g.add((container_uri, SCHEMA.hasPart, part_uri))
 
-        # ImageScans
-        if seen_manifestations:
+        # ImageScans - only include in full profile (authenticated exports)
+        if enrichment_profile == "full" and seen_manifestations:
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
             for scan in scans:
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
                 img_uri = URIRef(f"{base_url}/{scan.file_path}")
                 g.add((m_uri, SCHEMA.image, img_uri))
 
-        # UserCollections
-        if seen_items:
+        # UserCollections - only include in full profile (authenticated exports)
+        # Private collection names should not be exposed in public RDF
+        if enrichment_profile == "full" and seen_items:
             links = db.session.execute(select(UserCollectionItem).where(UserCollectionItem.item_id.in_(seen_items))).scalars().all()
             for link in links:
                 coll = link.collection
@@ -1540,10 +1551,18 @@ def build_collection_rdf_graph(
     items: list[Any],
     base_url: str,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> Graph:
     """
     Build an in-memory RDF Graph for a list of collection items/manifestations
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+    
+    Args:
+        items: List of items to serialize.
+        base_url: Base URL for generating URIs.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment (excludes private data),
+                           "full" for authenticated export (includes all data).
     """
     g = Graph()
     g.bind("frbr", FRBR)
@@ -1866,7 +1885,7 @@ def build_collection_rdf_graph(
                 g.add((m_uri, SCHEMA.numberOfPlayers, Literal(str(num_p))))
 
     # --- Enrichment pass: Contributors, WorkParts, ImageScans, UserCollections ---
-    _enrich_graph_from_db(g, items, base_url, collection_uri=collection_uri)
+    _enrich_graph_from_db(g, items, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
     return g
 
 
@@ -1974,11 +1993,20 @@ def stream_collection_to_rdf(
     output_format: str = "nt",
     chunk_size: int = 50,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> Generator[str, None, None]:
     """
     Generator that streams serialized RDF chunks for large collections.
     Supports 'nt' (N-Triples), 'turtle', and 'json-ld'.
     Processes items in chunks without loading entire collections into memory.
+    
+    Args:
+        items_iterable: Iterable of items to serialize.
+        base_url: Base URL for generating URIs.
+        output_format: Output format ('nt', 'turtle', or 'json-ld').
+        chunk_size: Number of items per chunk.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment, "full" for authenticated export.
     """
     iterator = iter(items_iterable)
     first_chunk = True
@@ -1989,7 +2017,7 @@ def stream_collection_to_rdf(
             break
 
         chunk = _eager_load_items_fallback(chunk)
-        g = build_collection_rdf_graph(chunk, base_url, collection_uri=collection_uri)
+        g = build_collection_rdf_graph(chunk, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
 
         if output_format in ("nt", "n-triples", "ntriples"):
             chunk_nt = g.serialize(format="nt")
@@ -2014,11 +2042,41 @@ def stream_collection_to_rdf(
                 "isbn": "schema:isbn",
                 "author": "schema:author",
             }
+            # Serialize as JSON-LD with @graph container for valid streaming
             chunk_jsonld = g.serialize(format="json-ld", context=context, indent=2)
             if chunk_jsonld:
-                yield chunk_jsonld + "\n"
+                import json
+                try:
+                    chunk_data = json.loads(chunk_jsonld)
+                    # Extract the graph items
+                    if isinstance(chunk_data, list):
+                        graph_items = chunk_data
+                    elif isinstance(chunk_data, dict) and "@graph" in chunk_data:
+                        graph_items = chunk_data["@graph"]
+                    else:
+                        graph_items = [chunk_data]
+                    
+                    if first_chunk:
+                        # First chunk: yield opening with context
+                        yield '{\n  "@context": ' + json.dumps(context, indent=2) + ',\n  "@graph": [\n'
+                        items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
+                        yield items_json
+                    else:
+                        # Subsequent chunks: yield only items with leading comma
+                        items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
+                        yield ",\n" + items_json
+                except json.JSONDecodeError:
+                    # Fallback: yield as-is if parsing fails
+                    if first_chunk:
+                        yield chunk_jsonld
+                    else:
+                        yield "\n" + chunk_jsonld
 
         first_chunk = False
+    
+    # Close the JSON-LD document if we started one
+    if output_format == "json-ld" and not first_chunk:
+        yield "\n  ]\n}\n"
 
 
 def serialize_collection_to_rdf(
@@ -2026,13 +2084,21 @@ def serialize_collection_to_rdf(
     base_url: str,
     output_format: str = "json-ld",
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> str:
     """
     Serializes a list of collection items/manifestations into semantic RDF graphs
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+    
+    Args:
+        items: List of items to serialize.
+        base_url: Base URL for generating URIs.
+        output_format: Output format ('nt', 'turtle', or 'json-ld').
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment, "full" for authenticated export.
     """
     items = _eager_load_items_fallback(items)
-    g = build_collection_rdf_graph(items, base_url, collection_uri=collection_uri)
+    g = build_collection_rdf_graph(items, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
 
     if output_format in ("nt", "n-triples", "ntriples"):
         return g.serialize(format="nt")
