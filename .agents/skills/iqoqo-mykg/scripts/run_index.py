@@ -21,12 +21,18 @@ First scope creates a new session; subsequent scopes use --append.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+
+def get_mykg_profile() -> str:
+    """Return the mykg profile to use, from MYKG_PROFILE env var or default."""
+    return os.environ.get("MYKG_PROFILE", "agent-claude-code")
 
 
 def get_mykg_path() -> str:
@@ -72,7 +78,7 @@ def prepare_scope_path(paths: List[str]) -> Tuple[str, bool]:
 
 def run_extract(mykg_path: str, scope_path: str, session: Optional[str] = None) -> Optional[str]:
     """Run mykg extract-graph for a scope. Returns session ID."""
-    cmd = [mykg_path, "extract-graph", scope_path, "--profile", "agent-claude-code"]
+    cmd = [mykg_path, "extract-graph", scope_path, "--profile", get_mykg_profile()]
 
     if session:
         cmd.extend(["--append", "--session", session])
