@@ -174,6 +174,7 @@ def process_task(
 
             proc = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,  # prevent opencode blocking on stdin for permission prompts
                 stdout=stdout_f,
                 stderr=stderr_f,
                 text=True,
