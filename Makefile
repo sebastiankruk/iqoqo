@@ -155,9 +155,9 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
-	@echo "  audit-frbr        - Run FRBR database integrity audit (supports ARGS=\"--json --verbose\")"
-	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (supports ARGS=\"--dry-run --verbose\")"
-	@echo "  sync-ontology     - Check ontology sync with DB models"
+	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
+	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
+	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -749,15 +749,15 @@ watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --watermark-only
 
 ## Semantic Web / Ontology
-audit-frbr: .venv/bin/activate ## Running FRBR integrity audit
+audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
 	@echo "Running FRBR integrity audit..."
 	@$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS)
 
-etl-frbr: .venv/bin/activate ## Running FRBR ETL strict cleanup (idempotent)
+etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for production)
 	@echo "Running FRBR ETL strict cleanup (idempotent)..."
 	@$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS)
 
-sync-ontology: .venv/bin/activate ## Checking ontology sync with DB models
+sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."
 	@$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS)
 
