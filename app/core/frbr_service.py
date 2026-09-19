@@ -177,28 +177,53 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     else:
         meta = dict(meta)
 
+    # Import shared validation utilities
+    from app.core.f3_validation import (
+        extract_promoted_key_case_insensitive,
+        normalize_isbn,
+        validate_publisher,
+        validate_format_type,
+        ISBNValidationError,
+    )
+
+    # Normalize ISBN using shared validation
     if isbn13 is None:
-        cand_isbn = meta.get("isbn13") or meta.get("isbn")
+        cand_isbn = extract_promoted_key_case_insensitive(meta, "isbn13")
+        if not cand_isbn:
+            cand_isbn = extract_promoted_key_case_insensitive(meta, "isbn")
         if cand_isbn and isinstance(cand_isbn, str):
-            isbn13 = cand_isbn
-    if isbn13 and isinstance(isbn13, str):
-        clean_isbn = isbn13.replace("-", "").replace(" ", "").strip()
-        if len(clean_isbn) <= 13:
-            isbn13 = clean_isbn
+            try:
+                isbn13 = normalize_isbn(cand_isbn)
+            except ISBNValidationError:
+                # Skip invalid ISBNs - they won't be stored
+                isbn13 = None
+    elif isbn13 and isinstance(isbn13, str):
+        try:
+            isbn13 = normalize_isbn(isbn13)
+        except ISBNValidationError:
+            isbn13 = None
 
+    # Normalize publisher using shared validation
     if publisher is None:
-        cand_pub = meta.get("publisher") or meta.get("Publisher")
+        cand_pub = extract_promoted_key_case_insensitive(meta, "publisher")
         if cand_pub and isinstance(cand_pub, str):
-            publisher = cand_pub
-    if publisher and isinstance(publisher, str):
-        publisher = publisher.strip()[:255]
+            publisher = validate_publisher(cand_pub, strict=False)
+    elif publisher and isinstance(publisher, str):
+        publisher = validate_publisher(publisher, strict=False)
 
+    # Normalize format_type using shared validation
     if format_type is None:
-        cand_fmt = meta.get("format_type") or format or meta.get("format") or meta.get("video_format") or meta.get("format_name")
+        cand_fmt = (
+            extract_promoted_key_case_insensitive(meta, "format_type")
+            or format
+            or extract_promoted_key_case_insensitive(meta, "format")
+            or extract_promoted_key_case_insensitive(meta, "video_format")
+            or extract_promoted_key_case_insensitive(meta, "format_name")
+        )
         if cand_fmt and isinstance(cand_fmt, str):
-            format_type = cand_fmt
-    if format_type and isinstance(format_type, str):
-        format_type = format_type.strip().lower()[:50]
+            format_type = validate_format_type(cand_fmt, strict=False)
+    elif format_type and isinstance(format_type, str):
+        format_type = validate_format_type(format_type, strict=False)
 
     if format is None:
         format = format_type or meta.get("format") or meta.get("video_format") or meta.get("format_name")
@@ -209,8 +234,15 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     if catalog_number is None:
         catalog_number = meta.get("catalog_number") or meta.get("catno") or meta.get("sku")
 
-    for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"):
-        meta.pop(k, None)
+    # Prune promoted keys from metadata (case-insensitive)
+    promoted_keys = ["isbn13", "isbn", "publisher", "format_type"]
+    for key in promoted_keys:
+        keys_to_remove = [
+            k for k in meta.keys()
+            if isinstance(k, str) and k.lower() == key.lower()
+        ]
+        for k in keys_to_remove:
+            del meta[k]
 
     manifestation = Manifestation(
         expression_id=expression_id,
