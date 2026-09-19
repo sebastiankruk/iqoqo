@@ -23,12 +23,18 @@ Supports --grow-schema to use --append-with-grow-schema.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+
+def get_mykg_profile() -> str:
+    """Return the mykg profile to use, from MYKG_PROFILE env var or default."""
+    return os.environ.get("MYKG_PROFILE", "agent-claude-code")
 
 
 def get_mykg_path() -> str:
@@ -96,7 +102,7 @@ def prepare_scope_path(paths: List[str]) -> Tuple[str, bool]:
 
 def run_extract(mykg_path: str, scope_path: str, session: str, grow_schema: bool = False) -> bool:
     """Run mykg extract-graph for a scope. Returns success."""
-    cmd = [mykg_path, "extract-graph", scope_path, "--append", "--session", session, "--profile", "agent-claude-code"]
+    cmd = [mykg_path, "extract-graph", scope_path, "--append", "--session", session, "--profile", get_mykg_profile()]
 
     if grow_schema:
         cmd.append("--append-with-grow-schema")

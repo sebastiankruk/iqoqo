@@ -82,6 +82,50 @@ services:
         condition: service_healthy
     working_dir: /workspace
 
+  mykg-opencode-daemon:
+    image: python:3.11-slim
+    # 1. Drop Root Privileges & Capabilities
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # 2. Resource Exhaustion Protection
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    # 3. Read-Only Filesystem with strict ephemeral tmpfs (sized to prevent OOM from opencode state)
+    read_only: true
+    tmpfs:
+      - /tmp:size=32M
+      - /home/appuser:uid=1000,gid=1000,mode=0700,size=64M
+    # 4. Strict, Minimal Volume Mounts
+    volumes:
+      - ./mykg_sessions:/workspace/mykg_sessions:rw
+      - ./.agents:/workspace/.agents:ro
+      # SURGICAL CREDENTIAL MOUNT: Mount ONLY the single opencode auth.json file into read-only secret path
+      - ~/.local/share/opencode/auth.json:/run/secrets/opencode-auth.json:ro
+    environment:
+      - HOME=/home/appuser
+      - HTTP_PROXY=http://sandbox-egress-proxy:3128
+      - HTTPS_PROXY=http://sandbox-egress-proxy:3128
+      - http_proxy=http://sandbox-egress-proxy:3128
+      - https_proxy=http://sandbox-egress-proxy:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+      - AI_AGENT=opencode
+      # SECURITY: Deny all opencode tools (bash, file I/O, web, etc.) — makes opencode text-in/text-out like agy
+      # Explicit deny rules cannot be overridden by --auto flag. Prevents prompt-injection driven tool abuse.
+      - OPENCODE_PERMISSION={"permission":{"bash":"deny","edit":"deny","write":"deny","read":"deny","glob":"deny","grep":"deny","webfetch":"deny","websearch":"deny","task":"deny","external_directory":"deny"}}
+    networks:
+      - sandbox-internal
+    depends_on:
+      sandbox-egress-proxy:
+        condition: service_healthy
+    working_dir: /workspace
+
 networks:
   sandbox-internal:
     internal: true
