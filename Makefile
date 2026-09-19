@@ -43,7 +43,7 @@ ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
 endif
 
 # Docker compose configuration for production/preview targets
-COMPOSE_FILE     ?= docker-compose.prod.yml
+COMPOSE_FILE     ?= docker-compose.prebuilt.yml
 COMPOSE_PROJECT  ?= iqoqo
 COMPOSE_ENV_FILE ?= .env
 
