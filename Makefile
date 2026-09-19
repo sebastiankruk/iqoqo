@@ -752,7 +752,7 @@ watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
 	@echo "Running FRBR integrity audit..."
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
-		$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS); \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/audit_frbr_integrity.py $(ARGS); \
 	else \
 		if [ -f ".env" ]; then \
 			set -a; . ./.env; set +a; \
@@ -765,7 +765,7 @@ audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
 etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for production)
 	@echo "Running FRBR ETL strict cleanup (idempotent)..."
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
-		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/etl_frbr_strict.py $(ARGS); \
 	else \
 		if [ -f ".env" ]; then \
 			set -a; . ./.env; set +a; \
@@ -778,7 +778,7 @@ etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for pr
 sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
-		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/sync_ontology.py $(ARGS); \
 	else \
 		if [ -f ".env" ]; then \
 			set -a; . ./.env; set +a; \
