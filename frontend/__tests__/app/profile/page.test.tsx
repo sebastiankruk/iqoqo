@@ -50,7 +50,7 @@ vi.mock("@/components/escalation/my-escalations", () => ({
 
 // Mock export API function
 vi.mock("@/lib/api/export", async importOriginal => {
-  const actual = await importOriginal<typeof import("@/lib/api/export")>();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     downloadCollectionExport: vi.fn().mockResolvedValue(undefined),
