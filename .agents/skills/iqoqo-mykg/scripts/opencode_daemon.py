@@ -23,6 +23,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -155,20 +156,44 @@ def process_task(
             cmd.extend(["--variant", variant])
         cmd.append(combined_prompt)
 
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout,
-            check=False,
-        )
+        print(f"[opencode_daemon] Running opencode for task {task_id[:12]} (prompt size: {len(combined_prompt)} chars)...", flush=True)
+
+        # Increase timeout to handle npm registry check delays (5 min per blocked attempt)
+        # When registry.npmjs.org is blocked by egress filter, opencode waits ~5 min before continuing
+        effective_timeout = max(timeout, 600)  # At least 10 minutes
+
+        # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
+        # after 'init' (the "event connected" handshake). Using capture_output=True creates a
+        # pipe whose buffer fills and blocks because subprocess.run() only drains after the
+        # process exits — a classic pipe deadlock. We avoid this by redirecting stdout/stderr
+        # to temp files so opencode can write freely, then read back the content after exit.
+        with (
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
+            tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
+        ):
+
+            proc = subprocess.run(
+                cmd,
+                stdout=stdout_f,
+                stderr=stderr_f,
+                text=True,
+                encoding="utf-8",
+                timeout=effective_timeout,
+                check=False,
+            )
+
+            stdout_f.seek(0)
+            stdout_data = stdout_f.read()
+            stderr_f.seek(0)
+            stderr_data = stderr_f.read()
+
+        print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
 
         if proc.returncode != 0:
-            print(f"[opencode_daemon] Warning: opencode failed for {task_id}: {proc.stderr}", file=sys.stderr)
+            print(f"[opencode_daemon] Warning: opencode failed for {task_id}: {stderr_data}", file=sys.stderr, flush=True)
             return False
 
-        answer_text = clean_json_fences(proc.stdout)
+        answer_text = clean_json_fences(stdout_data)
         answer_envelope = {
             "task_id": actual_task_id,
             "answer": answer_text,
@@ -177,7 +202,7 @@ def process_task(
         temp_file.write_text(json.dumps(answer_envelope), encoding="utf-8")
         temp_file.rename(answer_file)
         done_file.touch()
-        print(f"[opencode_daemon] Processed task {task_id[:12]}")
+        print(f"[opencode_daemon] Processed task {task_id[:12]}", flush=True)
         return True
     except subprocess.TimeoutExpired:
         print(f"[opencode_daemon] TimeoutExpired for task {task_id}", file=sys.stderr)
@@ -224,7 +249,7 @@ def run_daemon(
         config_desc.append(f"effort={effective_effort}")
     config_str = f" ({', '.join(config_desc)})" if config_desc else ""
 
-    print(f"[opencode_daemon] Starting daemon watching {inbox_dir} (workers={workers}){config_str}...")
+    print(f"[opencode_daemon] Starting daemon watching {inbox_dir} (workers={workers}){config_str}...", flush=True)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         while running:
@@ -255,6 +280,7 @@ def run_daemon(
                 done_marker = target_outbox / f"{task_id}.done"
 
                 if not done_marker.exists() and task_id not in submitted_tasks:
+                    print(f"[opencode_daemon] Submitting task {task_id[:12]}...", flush=True)
                     submitted_tasks.add(task_id)
                     fut = executor.submit(
                         process_task,

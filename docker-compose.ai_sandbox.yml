@@ -92,17 +92,17 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # 2. Resource Exhaustion Protection
+    # 2. Resource Exhaustion Protection (increased for large prompt processing)
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
-    # 3. Read-Only Filesystem with strict ephemeral tmpfs (sized to prevent OOM from opencode state)
+          cpus: '1.0'
+          memory: 2G
+    # 3. Read-Only Filesystem with strict ephemeral tmpfs (opencode needs space for cache/config/db)
     read_only: true
     tmpfs:
-      - /tmp:size=32M
-      - /home/appuser:uid=1000,gid=1000,mode=0700,size=64M
+      - /tmp:size=256M
+      - /home/appuser:uid=1000,gid=1000,mode=0700,size=512M
     # 4. Strict, Minimal Volume Mounts
     volumes:
       - ./mykg_sessions:/workspace/mykg_sessions:rw

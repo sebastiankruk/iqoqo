@@ -257,6 +257,7 @@ mykg-update: .venv/bin/activate
 			-e AI_AGENT="$(AI_AGENT)" \
 			"$$AI_CONTAINER" \
 			python3 "$$AI_SCRIPT" \
+			--workers 1 \
 			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
 			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
 	fi; \
@@ -305,6 +306,7 @@ mykg-index: .venv/bin/activate
 				-e AI_AGENT="$(AI_AGENT)" \
 				"$$AI_CONTAINER" \
 				python3 "$$AI_SCRIPT" \
+				--workers 1 \
 				"mykg_sessions" \
 				"mykg_sessions" >/dev/null 2>&1 || true; \
 		fi; \
