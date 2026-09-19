@@ -33,6 +33,8 @@ services:
     command: ["python3", "/workspace/deploy/sandbox_proxy/proxy.py"]
     volumes:
       - ./deploy/sandbox_proxy:/workspace/deploy/sandbox_proxy:ro
+    environment:
+      - AI_AGENT=${AI_AGENT:-agy}
     networks:
       - sandbox-internal
       - sandbox-egress

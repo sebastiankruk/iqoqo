@@ -244,19 +244,22 @@ mykg-update: .venv/bin/activate
 			AI_MOUNT="/usr/local/bin/agy:ro"; \
 			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
 		fi; \
-		if [ -n "$$AI_BIN" ]; then \
-			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-				-v "$$AI_BIN:$$AI_MOUNT" \
-				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				"$$AI_CONTAINER" \
-				python3 "$$AI_SCRIPT" \
-				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
-				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
-		fi; \
+	if [ -n "$$AI_BIN" ]; then \
+		docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
+		export AI_AGENT="$(AI_AGENT)"; \
+		docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
+		docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
+			-v "$$AI_BIN:$$AI_MOUNT" \
+			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+			-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
+			-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+			-e AI_AGENT="$(AI_AGENT)" \
+			"$$AI_CONTAINER" \
+			python3 "$$AI_SCRIPT" \
+			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
+			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
+	fi; \
 	fi; \
 	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
@@ -291,12 +294,15 @@ mykg-index: .venv/bin/activate
 		fi; \
 		if [ -n "$$AI_BIN" ]; then \
 			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
+			export AI_AGENT="$(AI_AGENT)"; \
+			docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
 				-v "$$AI_BIN:$$AI_MOUNT" \
 				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
 				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
 				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
 				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+				-e AI_AGENT="$(AI_AGENT)" \
 				"$$AI_CONTAINER" \
 				python3 "$$AI_SCRIPT" \
 				"mykg_sessions" \
