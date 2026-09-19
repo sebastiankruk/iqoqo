@@ -218,7 +218,7 @@
   allowlist_file="${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy/allowlist-opencode.conf"
   [ -f "$allowlist_file" ]
 
-  run grep -E "api\.opencode\.ai:443" "$allowlist_file"
+  run grep -E "models\.opencode\.ai:443" "$allowlist_file"
   [ "$status" -eq 0 ]
   run grep -E "opencode\.ai:443" "$allowlist_file"
   [ "$status" -eq 0 ]
@@ -303,7 +303,7 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode-go/qwen3.7-plus"* ]]
+  [[ "$output" == *"opencode-go/muse-spark-1.3-contributor"* ]]
   [[ "$output" == *"minimal"* ]]
   [[ "$output" == *"opencode_daemon.py"* ]]
   [[ "$output" == *"mykg-opencode-daemon"* ]]
@@ -343,7 +343,7 @@ print('FAIL_CLOSED_OK')
   run grep -E "agent-opencode:" "$config_file"
   [ "$status" -eq 0 ]
 
-  run grep -E "opencode-go/qwen3\.7-plus" "$config_file"
+  run grep -E "opencode-go/muse-spark-1\.3-contributor" "$config_file"
   [ "$status" -eq 0 ]
 }
 

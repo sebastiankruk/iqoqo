@@ -28,14 +28,36 @@ import pytest
 
 
 def _load_module(name: str, file_path: Path) -> Any:
-    """Dynamically load module from file path."""
+    """Dynamically load a Python module from a file path."""
     spec = importlib.util.spec_from_file_location(name, file_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load {file_path}")
+        raise ImportError(f"Cannot load module {name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _make_subprocess_mock(stdout_data: str = "", stderr_data: str = "", returncode: int = 0):
+    """Create a mock subprocess.run function that writes to temp files (for opencode)."""
+    def mock_subprocess_run(*args, **kwargs):
+        stdout_f = kwargs.get('stdout')
+        stderr_f = kwargs.get('stderr')
+        if stdout_f:
+            stdout_f.write(stdout_data)
+            stdout_f.flush()
+        if stderr_f:
+            stderr_f.write(stderr_data)
+            stderr_f.flush()
+        return MagicMock(returncode=returncode)
+    return mock_subprocess_run
+
+
+def _make_subprocess_capture_mock(stdout_data: str = "", stderr_data: str = "", returncode: int = 0):
+    """Create a mock subprocess.run function that returns stdout/stderr directly (for agy)."""
+    def mock_subprocess_run(*args, **kwargs):
+        return MagicMock(returncode=returncode, stdout=stdout_data, stderr=stderr_data)
+    return mock_subprocess_run
 
 
 @pytest.fixture
@@ -80,9 +102,7 @@ def test_process_task_success(agy_daemon_module, tmp_path):
         encoding="utf-8",
     )
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='```json\n{"nodes": ["N1"]}\n```', stderr="")
-
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('```json\n{"nodes": ["N1"]}\n```', "")) as mock_run:
         success = agy_daemon_module.process_task(task_file, outbox)
         assert success is True
 
@@ -119,8 +139,7 @@ def test_process_task_with_model_and_effort(agy_daemon_module, tmp_path):
     task_file = inbox / f"{task_id}.task.json"
     task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('{"nodes": []}', "")) as mock_run:
         success = agy_daemon_module.process_task(
             task_file,
             outbox,
@@ -149,8 +168,7 @@ def test_process_task_with_env_vars(agy_daemon_module, tmp_path, monkeypatch):
     task_file = inbox / f"{task_id}.task.json"
     task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('{"nodes": []}', "")) as mock_run:
         success = agy_daemon_module.process_task(task_file, outbox)
         assert success is True
         args = mock_run.call_args[0][0]
@@ -280,8 +298,7 @@ def test_process_task_sanitizes_prompt_and_injects_guardrail(agy_daemon_module, 
         encoding="utf-8",
     )
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('{"nodes": []}', "")) as mock_run:
         success = agy_daemon_module.process_task(task_file, outbox)
         assert success is True
 
@@ -368,9 +385,7 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
         encoding="utf-8",
     )
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='```json\n{"nodes": ["N1"]}\n```', stderr="")
-
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('```json\n{"nodes": ["N1"]}\n```', "")) as mock_run:
         success = opencode_daemon_module.process_task(task_file, outbox)
         assert success is True
 
@@ -381,7 +396,7 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
         assert "run" in args
         assert "--auto" in args
         assert "-m" in args
-        assert args[args.index("-m") + 1] == "opencode-go/qwen3.7-plus"
+        assert args[args.index("-m") + 1] == "opencode-go/muse-spark-1.3-contributor"
         assert "--variant" in args
         assert args[args.index("--variant") + 1] == "minimal"
 
@@ -407,8 +422,7 @@ def test_opencode_process_task_with_model_and_effort(opencode_daemon_module, tmp
     task_file = inbox / f"{task_id}.task.json"
     task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "")) as mock_run:
         success = opencode_daemon_module.process_task(
             task_file,
             outbox,
@@ -434,8 +448,7 @@ def test_opencode_process_task_medium_effort_omits_variant(opencode_daemon_modul
     task_file = inbox / f"{task_id}.task.json"
     task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "")) as mock_run:
         success = opencode_daemon_module.process_task(
             task_file,
             outbox,
@@ -511,8 +524,7 @@ def test_opencode_process_task_sanitizes_prompt_and_injects_guardrail(opencode_d
         encoding="utf-8",
     )
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout='{"nodes": []}', stderr="")
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "")) as mock_run:
         success = opencode_daemon_module.process_task(task_file, outbox)
         assert success is True
 

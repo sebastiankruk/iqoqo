@@ -123,6 +123,7 @@ def process_task(
     timeout: int = 300,
     model: str | None = None,
     effort: str | None = None,
+    max_retries: int = 3,
 ) -> bool:
     """Process a single task file by calling opencode and writing the answer atomically."""
     task_id = task_path.stem.split(".")[0]
@@ -133,84 +134,115 @@ def process_task(
     if done_file.exists() and answer_file.exists():
         return True
 
-    try:
-        task_data: dict[str, Any] = json.loads(task_path.read_text(encoding="utf-8"))
-        actual_task_id = task_data.get("task_id", task_id)
-        system_prompt = sanitize_task_payload(task_data.get("system", ""))
-        user_prompt = sanitize_task_payload(task_data.get("user", ""))
+    for attempt in range(max_retries):
+        try:
+            return _execute_task(task_path, outbox_dir, timeout, model, effort, attempt)
+        except subprocess.TimeoutExpired:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                print(f"[opencode_daemon] TimeoutExpired for task {task_id}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})", file=sys.stderr, flush=True)
+                time.sleep(wait_time)
+            else:
+                print(f"[opencode_daemon] TimeoutExpired for task {task_id} after {max_retries} attempts", file=sys.stderr, flush=True)
+                return False
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            print(f"[opencode_daemon] Error processing task {task_id}: {exc}", file=sys.stderr, flush=True)
+            return False
+    
+    return False
 
-        combined_prompt = (
-            f"{SECURITY_GUARDRAIL}\n\n"
-            f"System Instructions:\n{system_prompt}\n\n"
-            f"User Prompt:\n{user_prompt}\n\n"
-            "CRITICAL: Respond ONLY with the requested JSON payload. "
-            "Do NOT include conversational text or markdown code fences."
+
+def _execute_task(
+    task_path: Path,
+    outbox_dir: Path,
+    timeout: int,
+    model: str | None,
+    effort: str | None,
+    attempt: int,
+) -> bool:
+    """Execute a single task attempt."""
+    task_id = task_path.stem.split(".")[0]
+    done_file = outbox_dir / f"{task_id}.done"
+    answer_file = outbox_dir / f"{task_id}.answer.json"
+    temp_file = outbox_dir / f"{task_id}.answer.json.tmp"
+
+    task_data: dict[str, Any] = json.loads(task_path.read_text(encoding="utf-8"))
+    actual_task_id = task_data.get("task_id", task_id)
+    system_prompt = sanitize_task_payload(task_data.get("system", ""))
+    user_prompt = sanitize_task_payload(task_data.get("user", ""))
+
+    combined_prompt = (
+        f"{SECURITY_GUARDRAIL}\n\n"
+        f"System Instructions:\n{system_prompt}\n\n"
+        f"User Prompt:\n{user_prompt}\n\n"
+        "CRITICAL: Respond ONLY with the requested JSON payload. "
+        "Do NOT include conversational text or markdown code fences."
+    )
+
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
+    effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
+
+    cmd = ["opencode", "run", "--auto", "--pure", "-m", effective_model]
+    variant = map_effort_to_variant(effective_effort)
+    if variant:
+        cmd.extend(["--variant", variant])
+    cmd.append(combined_prompt)
+
+    print(f"[opencode_daemon] Running opencode for task {task_id[:12]} (prompt size: {len(combined_prompt)} chars)...", flush=True)
+
+    # Dynamic timeout based on prompt size and potential npm registry delays
+    # Base: 10 minutes minimum
+    # Additional: 1 second per 1000 chars of prompt (for large prompts)
+    # npm registry delays: up to 5 minutes per blocked attempt
+    base_timeout = 600  # 10 minutes base
+    prompt_timeout = len(combined_prompt) // 1000  # 1 second per 1000 chars
+    effective_timeout = max(timeout, base_timeout + prompt_timeout)
+    
+    print(f"[opencode_daemon] Using timeout: {effective_timeout}s for task {task_id[:12]}", flush=True)
+
+    # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
+    # after 'init' (the "event connected" handshake). Using capture_output=True creates a
+    # pipe whose buffer fills and blocks because subprocess.run() only drains after the
+    # process exits — a classic pipe deadlock. We avoid this by redirecting stdout/stderr
+    # to temp files so opencode can write freely, then read back the content after exit.
+    with (
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
+    ):
+
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,  # prevent opencode blocking on stdin for permission prompts
+            stdout=stdout_f,
+            stderr=stderr_f,
+            text=True,
+            encoding="utf-8",
+            timeout=effective_timeout,
+            check=False,
         )
 
-        effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/qwen3.7-plus"
-        effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
+        stdout_f.seek(0)
+        stdout_data = stdout_f.read()
+        stderr_f.seek(0)
+        stderr_data = stderr_f.read()
 
-        cmd = ["opencode", "run", "--auto", "--pure", "-m", effective_model]
-        variant = map_effort_to_variant(effective_effort)
-        if variant:
-            cmd.extend(["--variant", variant])
-        cmd.append(combined_prompt)
+    print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
 
-        print(f"[opencode_daemon] Running opencode for task {task_id[:12]} (prompt size: {len(combined_prompt)} chars)...", flush=True)
-
-        # Increase timeout to handle npm registry check delays (5 min per blocked attempt)
-        # When registry.npmjs.org is blocked by egress filter, opencode waits ~5 min before continuing
-        effective_timeout = max(timeout, 600)  # At least 10 minutes
-
-        # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
-        # after 'init' (the "event connected" handshake). Using capture_output=True creates a
-        # pipe whose buffer fills and blocks because subprocess.run() only drains after the
-        # process exits — a classic pipe deadlock. We avoid this by redirecting stdout/stderr
-        # to temp files so opencode can write freely, then read back the content after exit.
-        with (
-            tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
-            tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
-        ):
-
-            proc = subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,  # prevent opencode blocking on stdin for permission prompts
-                stdout=stdout_f,
-                stderr=stderr_f,
-                text=True,
-                encoding="utf-8",
-                timeout=effective_timeout,
-                check=False,
-            )
-
-            stdout_f.seek(0)
-            stdout_data = stdout_f.read()
-            stderr_f.seek(0)
-            stderr_data = stderr_f.read()
-
-        print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
-
-        if proc.returncode != 0:
-            print(f"[opencode_daemon] Warning: opencode failed for {task_id}: {stderr_data}", file=sys.stderr, flush=True)
-            return False
-
-        answer_text = clean_json_fences(stdout_data)
-        answer_envelope = {
-            "task_id": actual_task_id,
-            "answer": answer_text,
-        }
-
-        temp_file.write_text(json.dumps(answer_envelope), encoding="utf-8")
-        temp_file.rename(answer_file)
-        done_file.touch()
-        print(f"[opencode_daemon] Processed task {task_id[:12]}", flush=True)
-        return True
-    except subprocess.TimeoutExpired:
-        print(f"[opencode_daemon] TimeoutExpired for task {task_id}", file=sys.stderr)
+    if proc.returncode != 0:
+        print(f"[opencode_daemon] Warning: opencode failed for {task_id}: {stderr_data}", file=sys.stderr, flush=True)
         return False
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        print(f"[opencode_daemon] Error processing task {task_id}: {exc}", file=sys.stderr)
-        return False
+
+    answer_text = clean_json_fences(stdout_data)
+    answer_envelope = {
+        "task_id": actual_task_id,
+        "answer": answer_text,
+    }
+
+    temp_file.write_text(json.dumps(answer_envelope), encoding="utf-8")
+    temp_file.rename(answer_file)
+    done_file.touch()
+    print(f"[opencode_daemon] Processed task {task_id[:12]}", flush=True)
+    return True
 
 
 def run_daemon(
@@ -241,7 +273,7 @@ def run_daemon(
     active_futures: dict[Future[bool], str] = {}
     submitted_tasks: set[str] = set()
 
-    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/qwen3.7-plus"
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
     config_desc = []
     if effective_model:
@@ -306,8 +338,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         "-m",
-        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/qwen3.7-plus",
-        help="Model to use for opencode CLI (default: opencode-go/qwen3.7-plus)",
+        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor",
+        help="Model to use for opencode CLI (default: opencode-go/muse-spark-1.3-contributor)",
     )
     parser.add_argument(
         "--effort",

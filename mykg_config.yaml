@@ -1297,7 +1297,7 @@ profiles:
       max_retries: 0
     llm:
       context_window: 200000    # opencode Go effective context window
-      model: opencode-go/qwen3.7-plus  # informational — the daemon uses OPENCODE_MODEL env var
+      model: opencode-go/muse-spark-1.3-contributor  # informational — the daemon uses OPENCODE_MODEL env var
       max_output_tokens: 32000  # passed through to the task envelope
       timeout: 1800             # seconds the pipeline will wait for a .done sentinel
       retry_429_max: 0          # agent provider does not hit API rate limits
