@@ -303,7 +303,7 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode-go/muse-spark-1.3-contributor"* ]]
+  [[ "$output" == *"opencode-go/qwen3.7-plus"* ]]
   [[ "$output" == *"minimal"* ]]
   [[ "$output" == *"opencode_daemon.py"* ]]
   [[ "$output" == *"mykg-opencode-daemon"* ]]
