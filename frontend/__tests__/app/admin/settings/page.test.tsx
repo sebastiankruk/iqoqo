@@ -68,10 +68,10 @@ describe("SettingsHubPage", () => {
     >);
 
     render(<SettingsHubPage />);
-    expect(screen.queryByRole("heading", { name: "Profile Settings" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Instance Settings" })).toBeNull();
   });
 
-  it("renders profile settings for standard users", async () => {
+  it("redirects non-admin users to /profile", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: { id: "1", email: "user@test.com", display_name: "Test User", roles: ["user"] } as unknown as UserProfile,
       isLoading: false,
@@ -79,15 +79,11 @@ describe("SettingsHubPage", () => {
 
     render(<SettingsHubPage />);
 
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
-
-    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Users" })).not.toBeInTheDocument();
+    // Non-admin users should be redirected to /profile
+    expect(mockPush).toHaveBeenCalledWith("/profile");
   });
 
-  it("renders admin tabs and allows switching for admins", async () => {
+  it("renders admin tabs for admins without Profile tab", async () => {
     vi.mocked(useProfile).mockReturnValue({
       data: {
         id: "2",
@@ -110,10 +106,16 @@ describe("SettingsHubPage", () => {
 
     render(<SettingsHubPage />);
 
+    // Admin should NOT be redirected
     expect(mockPush).not.toHaveBeenCalled();
-    expect(await screen.findByRole("heading", { name: "Profile Settings", level: 1 })).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
+    // Admin should see Instance Settings as default tab (not Profile Settings)
+    expect(await screen.findByRole("heading", { name: "Instance Settings", level: 1 })).toBeInTheDocument();
+
+    // Profile tab should NOT exist in admin settings
+    expect(screen.queryByRole("button", { name: "Profile" })).not.toBeInTheDocument();
+
+    // Admin tabs should be visible
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "API Integrations" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();

@@ -20,10 +20,10 @@ This skill extends the standard `mykg` pipeline with iqoqo-specific knowledge in
 
 ## When to Use
 
-Trigger this skill when the user types `/iqoqo-mykg <command>` or when they need to:
-- Index the entire iqoqo knowledge base (code + docs + notes)
-- Update the knowledge graph after code changes
-- Query the knowledge graph for architecture or implementation details
+Trigger this skill when the user types `/iqoqo-mykg <command>` or during development:
+- **Ontological Pre-Flight Queries**: Query FRBR hierarchies, ABox/TBox schemas, and entity domain relationships with `make mykg-ask Q="<question>"` before grepping.
+- **Formal Turtle/RDF Inspection**: Inspect canonical W3C Turtle files `output/knowledge_graph.ttl` and `intermediate/schema.ttl` for ontology validation.
+- **Release Gating & Scheduled Compilation**: Run batch extraction (`make mykg-index` or `make mykg-update`) strictly in Release CI or manual release preparation (prohibited during active coding sessions).
 
 ## Commands
 
@@ -100,6 +100,8 @@ Supported models can be inspected anytime via `agy models`. Supported effort tie
 
 ## Notes
 
+- **Canonical RDF Output**: Primary artifact is `output/knowledge_graph.ttl` (W3C Turtle RDF with RDFS schema and ABox triples) and `intermediate/schema.ttl`. The legacy `output/obsidian_vault/` generator is disabled in `mykg_config.yaml`.
+- **Querying**: Use `make mykg-ask Q="<question>"` (calls `ask.py`) to query without manually tracking session IDs.
 - **Sessions directory**: Uses `mykg_sessions/` symlink (points to Dropbox for persistence)
 - **Scope config**: `.iqoqo-mykg-scope.yaml` is committed to git; `.iqoqo-mykg/` (runtime state) is gitignored
 - **Docker files**: Wildcards like `docker*` are resolved to a temporary directory before extraction

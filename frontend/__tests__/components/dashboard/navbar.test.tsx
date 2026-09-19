@@ -18,7 +18,7 @@
  *
  * next/link and next/navigation are mocked globally in vitest.setup.ts.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -51,6 +51,8 @@ vi.mock("next-intl", () => ({
           manageCollections: "Manage Collections",
           helpAndFeedback: "Help & Feedback",
           adminConfiguration: "Admin Configuration",
+          adminSettings: "Admin Settings",
+          administration: "Administration",
           logOut: "Log out",
           home: "Home",
           profile: "Profile",
@@ -125,6 +127,17 @@ describe("Navbar", () => {
     render(<Navbar />);
     expect(screen.getByTestId("language-toggle")).toBeInTheDocument();
   });
+
+  it("renders mobile bottom nav with link to /profile for authenticated users", () => {
+    (useProfile as Mock).mockReturnValue({
+      data: { email: "user@example.com", display_name: "User", roles: ["user"] },
+      isLoading: false,
+    });
+    render(<Navbar />);
+    const profileLinks = screen.getAllByRole("link", { name: "Profile" });
+    const mobileProfileLink = profileLinks.find(l => l.getAttribute("href") === "/profile");
+    expect(mobileProfileLink).toBeDefined();
+  });
 });
 
 describe("Navbar Auth State", () => {
@@ -150,14 +163,18 @@ describe("Navbar Auth State", () => {
     const avatarBtn = screen.getByLabelText("User menu");
     await user.click(avatarBtn);
 
-    // Use findByText to await the asynchronous opening of the Radix dropdown
-    expect(await screen.findByText("Profile Settings")).toBeInTheDocument();
-    expect(screen.getByText("Language")).toBeInTheDocument();
-    expect(screen.getByText("Theme")).toBeInTheDocument();
-    expect(screen.queryByText("Admin Configuration")).toBeNull();
+    // Use findByRole to await the asynchronous opening of the Radix dropdown menu
+    const menu = await screen.findByRole("menu");
+    const profileItem = within(menu).getByText("Profile");
+    expect(profileItem).toBeInTheDocument();
+    expect(profileItem.closest("a")).toHaveAttribute("href", "/profile");
+
+    expect(within(menu).getByText("Language")).toBeInTheDocument();
+    expect(within(menu).getByText("Theme")).toBeInTheDocument();
+    expect(within(menu).queryByText("Administration")).toBeNull();
   });
 
-  it("shows Admin Configuration for admin users", async () => {
+  it("shows Administration for admin users", async () => {
     const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: { email: "admin@example.com", display_name: "Admin", roles: ["admin"] },
@@ -169,8 +186,33 @@ describe("Navbar Auth State", () => {
     const avatarBtn = screen.getByLabelText("User menu");
     await user.click(avatarBtn);
 
-    // Use findByText to await the asynchronous opening of the Radix dropdown
-    expect(await screen.findByText("Admin Configuration")).toBeInTheDocument();
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+    expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
+  });
+
+  it("shows Administration for custodian users", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "custodian@example.com",
+        display_name: "Custodian",
+        roles: ["user"],
+        permissions: ["write_metadata"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+    expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
   });
 
   // ── 6.5 Help & Feedback link in user menu ──────────────────────

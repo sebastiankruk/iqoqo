@@ -56,6 +56,7 @@ COPY --chown=appuser:appuser app app/
 COPY --chown=appuser:appuser migrations migrations/
 COPY --chown=appuser:appuser scripts scripts/
 COPY --chown=appuser:appuser shared shared/
+COPY --chown=appuser:appuser docs/ontology docs/ontology/
 COPY --chown=appuser:appuser run.py wsgi.py ./
 
 # Setup rclone config directory with restrictive permissions.

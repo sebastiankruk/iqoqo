@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
 
 SHELL := /bin/bash
 
@@ -43,7 +43,7 @@ ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
 endif
 
 # Docker compose configuration for production/preview targets
-COMPOSE_FILE     ?= docker-compose.prod.yml
+COMPOSE_FILE     ?= docker-compose.prebuilt.yml
 COMPOSE_PROJECT  ?= iqoqo
 COMPOSE_ENV_FILE ?= .env
 
@@ -155,6 +155,9 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
+	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
+	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
+	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -195,12 +198,23 @@ codegraph-status:
 # myKG targets
 MYKG_DEFAULT_MODEL ?= gemini-3.8-flash-low
 MYKG_DEFAULT_EFFORT ?= low
+AI_AGENT ?= agy
+AGY_DEFAULT_MODEL ?= gemini-3.8-flash-low
+AGY_DEFAULT_EFFORT ?= low
+OPENCODE_DEFAULT_MODEL ?= opencode-go/muse-spark-1.3-contributor
+OPENCODE_DEFAULT_EFFORT ?= minimal
+AI_EFFECTIVE_MODEL = $(if $(MODEL),$(MODEL),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_MODEL),$(OPENCODE_DEFAULT_MODEL)))
+AI_EFFECTIVE_EFFORT = $(if $(EFFORT),$(EFFORT),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_EFFORT),$(OPENCODE_DEFAULT_EFFORT)))
+AI_PROFILE = $(if $(filter opencode,$(AI_AGENT)),agent-opencode,agent-claude-code)
+ifeq ($(filter agy opencode,$(AI_AGENT)),)
+$(error Invalid AI_AGENT '$(AI_AGENT)'. Valid options: agy, opencode)
+endif
 
 mykg-scope: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 
 mykg-update: .venv/bin/activate
-	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox..."
+	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT))..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
 	@cleanup() { \
 		EXIT_CODE=$$?; \
@@ -208,6 +222,7 @@ mykg-update: .venv/bin/activate
 		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
 			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
 		fi; \
 		exit $$EXIT_CODE; \
 	}; \
@@ -218,25 +233,41 @@ mykg-update: .venv/bin/activate
 		print(str(sessions[0])) if sessions else sys.exit(0)"); \
 	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
-		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
-		if [ -n "$$AGY_BIN" ]; then \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
-				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
-				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
-				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
-				mykg-agy-daemon \
-				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
-				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
-				"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
+		if [ "$(AI_AGENT)" = "opencode" ]; then \
+			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
+			AI_CONTAINER="mykg-opencode-daemon"; \
+			AI_MOUNT="/usr/local/bin/opencode:ro"; \
+			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
+		else \
+			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
+			AI_CONTAINER="mykg-agy-daemon"; \
+			AI_MOUNT="/usr/local/bin/agy:ro"; \
+			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
 		fi; \
+	if [ -n "$$AI_BIN" ]; then \
+		docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
+		export AI_AGENT="$(AI_AGENT)"; \
+		docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
+		docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
+			-v "$$AI_BIN:$$AI_MOUNT" \
+			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+			-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
+			-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+			-e AI_AGENT="$(AI_AGENT)" \
+			"$$AI_CONTAINER" \
+			python3 "$$AI_SCRIPT" \
+			--workers 1 \
+			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
+			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
 	fi; \
-	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
+	fi; \
+	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	exit $$EXIT_CODE
 
 mykg-index: .venv/bin/activate
-	$(AI_ECHO) "Running full mykg index with Docker sandbox..."
+	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT))..."
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 	@cleanup() { \
 		EXIT_CODE=$$?; \
@@ -244,26 +275,43 @@ mykg-index: .venv/bin/activate
 		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
 			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
+			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
 		fi; \
 		exit $$EXIT_CODE; \
 	}; \
 	trap cleanup EXIT INT TERM; \
 	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
 		mkdir -p "mykg_sessions"; \
-		AGY_BIN=$$(which agy 2>/dev/null || echo ""); \
-		if [ -n "$$AGY_BIN" ]; then \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name mykg-agy-daemon \
-				-v "$$AGY_BIN:/usr/local/bin/agy:ro" \
-				-e MYKG_MODEL="$(if $(MODEL),$(MODEL),$(if $(MYKG_MODEL),$(MYKG_MODEL),$(MYKG_DEFAULT_MODEL)))" \
-				-e MYKG_EFFORT="$(if $(EFFORT),$(EFFORT),$(if $(MYKG_EFFORT),$(MYKG_EFFORT),$(MYKG_DEFAULT_EFFORT)))" \
-				mykg-agy-daemon \
-				python3 .agents/skills/iqoqo-mykg/scripts/agy_daemon.py \
+		if [ "$(AI_AGENT)" = "opencode" ]; then \
+			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
+			AI_CONTAINER="mykg-opencode-daemon"; \
+			AI_MOUNT="/usr/local/bin/opencode:ro"; \
+			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
+		else \
+			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
+			AI_CONTAINER="mykg-agy-daemon"; \
+			AI_MOUNT="/usr/local/bin/agy:ro"; \
+			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
+		fi; \
+		if [ -n "$$AI_BIN" ]; then \
+			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
+			export AI_AGENT="$(AI_AGENT)"; \
+			docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
+			docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
+				-v "$$AI_BIN:$$AI_MOUNT" \
+				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
+				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+				-e AI_AGENT="$(AI_AGENT)" \
+				"$$AI_CONTAINER" \
+				python3 "$$AI_SCRIPT" \
+				--workers 1 \
 				"mykg_sessions" \
 				"mykg_sessions" >/dev/null 2>&1 || true; \
 		fi; \
 	fi; \
-	.venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
+	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
 	EXIT_CODE=$$?; \
 	exit $$EXIT_CODE
 
@@ -744,3 +792,44 @@ generate-covers-dry: ## Dry-run AI cover generation batch
 
 watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --watermark-only
+
+## Semantic Web / Ontology
+audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
+	@echo "Running FRBR integrity audit..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/audit_frbr_integrity.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS); \
+	fi
+
+etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for production)
+	@echo "Running FRBR ETL strict cleanup (idempotent)..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/etl_frbr_strict.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+	fi
+
+sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
+	@echo "Checking ontology sync with DB models..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/sync_ontology.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+	fi
+

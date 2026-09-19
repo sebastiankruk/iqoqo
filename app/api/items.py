@@ -18,9 +18,10 @@
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, current_app, g, jsonify, request, send_file
+from flask import Response, current_app, g, jsonify, request, send_file, stream_with_context
 from pydantic import ValidationError
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
@@ -30,6 +31,7 @@ from app.api.decorators import optional_auth, require_auth, require_permission, 
 from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.core.export_service import ExportService
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -347,6 +349,57 @@ def get_virtual_items(
         )
 
     return virtual_items
+
+
+@api_bp.route("/v1/items/export", methods=["GET"])
+@api_bp.route("/items/export", methods=["GET"])
+@require_auth
+def export_user_items():
+    """Stream export of the authenticated user's library items in Linked Data or JSON format.
+
+    Query parameter:
+        format: 'json-ld' (default), 'turtle', or 'json'
+    """
+    export_format = request.args.get("format", "json-ld").lower().strip()
+    valid_formats = {"json-ld", "turtle", "json"}
+    if export_format not in valid_formats:
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid export format '{export_format}'. Supported formats: {', '.join(sorted(valid_formats))}",
+                    "code": 400,
+                }
+            ),
+            400,
+        )
+
+    user_id = getattr(g, "user_id", None) or getattr(getattr(g, "current_user", None), "id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    format_metadata = {
+        "json-ld": ("application/ld+json", "jsonld"),
+        "turtle": ("text/turtle", "ttl"),
+        "json": ("application/json", "json"),
+    }
+    content_type, ext = format_metadata[export_format]
+    filename = f"iqoqo-export-{timestamp}.{ext}"
+
+    generator = ExportService.stream_user_collection(
+        user_id=user_id,
+        export_format=export_format,
+        base_url=request.host_url.rstrip("/"),
+    )
+
+    return Response(
+        stream_with_context(generator),
+        mimetype=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @api_bp.route("/items", methods=["GET"])

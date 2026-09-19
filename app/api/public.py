@@ -18,17 +18,62 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 """
 
 import datetime
-from typing import Any
+from typing import Any, cast
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.frbr_service import serialize_collection_to_rdf
+from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
+
+
+@public_bp.after_request
+def add_cors_headers(response: Response) -> Response:
+    """Ensure all public endpoints provide open CORS for AI agents and Linked Data crawlers."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization"
+    return response
+
+
+def _prefers_html() -> bool:
+    """Return True if the request explicitly asks for HTML over RDF formats."""
+    if request.args.get("format"):
+        return False
+    accept = request.headers.get("Accept", "")
+    if (
+        "text/html" in accept
+        and "application/ld+json" not in accept
+        and "text/turtle" not in accept
+        and "application/n-triples" not in accept
+    ):
+        return True
+    return False
+
+
+def _negotiate_rdf_format(default_format: str = "json-ld") -> tuple[str, str]:
+    """Negotiate RDF format and mimetype from Accept header and format query param.
+
+    Returns:
+        tuple[str, str]: (rdf_format, rdf_mimetype)
+    """
+    accept_header = request.headers.get("Accept", "")
+    format_arg = request.args.get("format", "").lower()
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        return "nt", "application/n-triples"
+    if "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        return "turtle", "text/turtle"
+    if "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        return "json-ld", "application/ld+json"
+
+    if default_format == "json-ld":
+        return "json-ld", "application/ld+json"
+    return "turtle", "text/turtle"
 
 
 def generate_rss_xml(
@@ -229,23 +274,23 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
 
 
 def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
-    """Fetch user public collection."""
+    """Fetch user public collection with eager loading across all FRBR tiers."""
     user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
     if not user:
         return []
     stmt = (
         select(Item)
-        .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
         .where(Item.owner_id == user.id, Item.is_hidden.is_(False))
         .order_by(Item.updated_at.desc())
         .limit(limit)
     )
-    return list(db.session.execute(stmt).scalars().all())
+    return list(db.session.execute(stmt).scalars().unique().all())
 
 
 def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
-    """Fetch items from a shared collection by token."""
+    """Fetch items from a shared collection by token with eager loading across all FRBR tiers."""
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
@@ -289,10 +334,9 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
     return list(
-        db.session.execute(
-            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
-        )
+        db.session.execute(query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work)))
         .scalars()
+        .unique()
         .all()
     )
 
@@ -377,15 +421,35 @@ def get_public_items(username: str):
     """Retrieve public items for a user."""
     accept_header = request.headers.get("Accept", "")
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    format_arg = request.args.get("format", "").lower()
+    is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
-    if "application/ld+json" in accept_header:
-        items = fetch_user_public_collection(username=username, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
-        return Response(rdf_payload, mimetype="application/ld+json")
-    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
-        items = fetch_user_public_collection(username=username, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
-        return Response(rdf_payload, mimetype="text/turtle")
+    # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
+    rdf_format: str | None = None
+    rdf_mimetype: str = ""
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        rdf_format = "nt"
+        rdf_mimetype = "application/n-triples"
+    elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        rdf_format = "json-ld"
+        rdf_mimetype = "application/ld+json"
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        rdf_format = "turtle"
+        rdf_mimetype = "text/turtle"
+
+    if rdf_format:
+        limit_val = request.args.get("limit", 100, type=int)
+        items = fetch_user_public_collection(username=username, limit=limit_val)
+        collection_uri = f"{base_url}/u/{username}"
+        if is_stream:
+            return Response(
+                stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
+                mimetype=rdf_mimetype,
+                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+            )
+        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
+        return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
     user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
@@ -440,15 +504,35 @@ def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")
     base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    format_arg = request.args.get("format", "").lower()
+    is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
-    if "application/ld+json" in accept_header:
-        items = fetch_shared_collection_by_token(token=token, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="json-ld")
-        return Response(rdf_payload, mimetype="application/ld+json")
-    if "text/turtle" in accept_header or "application/x-turtle" in accept_header:
-        items = fetch_shared_collection_by_token(token=token, limit=100)
-        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format="turtle")
-        return Response(rdf_payload, mimetype="text/turtle")
+    # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
+    rdf_format: str | None = None
+    rdf_mimetype: str = ""
+
+    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+        rdf_format = "nt"
+        rdf_mimetype = "application/n-triples"
+    elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+        rdf_format = "json-ld"
+        rdf_mimetype = "application/ld+json"
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+        rdf_format = "turtle"
+        rdf_mimetype = "text/turtle"
+
+    if rdf_format:
+        limit_val = request.args.get("limit", 100, type=int)
+        items = fetch_shared_collection_by_token(token=token, limit=limit_val)
+        collection_uri = f"{base_url}/share/{token}"
+        if is_stream:
+            return Response(
+                stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
+                mimetype=rdf_mimetype,
+                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+            )
+        rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
+        return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
@@ -651,3 +735,235 @@ def check_inventory(username: str):
         )
 
     return jsonify({"success": True, "data": []})
+
+
+def generate_sitemap_xml(base_url: str) -> str:
+    """Generate an XML sitemap listing public user profiles, shared collections, and catalog manifestations."""
+    # Public users
+    users = db.session.execute(select(User.public_username).where(User.visibility == "public")).scalars().all()
+
+    # Active shared collections (not expired)
+    now = datetime.datetime.now(datetime.UTC)
+    shares = (
+        db.session.execute(
+            select(SharedCollection.share_token).where(or_(SharedCollection.expires_at.is_(None), SharedCollection.expires_at > now))
+        )
+        .scalars()
+        .all()
+    )
+
+    # Public catalog manifestations (bounded up to 50,000 URLs)
+    manifestations = db.session.execute(select(Manifestation.id).limit(50000)).scalars().all()
+
+    urls: list[str] = []
+    for username in users:
+        if not username:
+            continue
+        loc_profile = f"{base_url}/u/{username}"
+        loc_api = f"{base_url}/api/public/u/{username}/items"
+        urls.append(f"  <url><loc>{loc_profile}</loc><changefreq>weekly</changefreq></url>")
+        urls.append(f"  <url><loc>{loc_api}</loc><changefreq>weekly</changefreq></url>")
+
+    for token in shares:
+        if not token:
+            continue
+        loc_share = f"{base_url}/share/{token}"
+        loc_api_share = f"{base_url}/api/public/share/{token}"
+        urls.append(f"  <url><loc>{loc_share}</loc><changefreq>monthly</changefreq></url>")
+        urls.append(f"  <url><loc>{loc_api_share}</loc><changefreq>monthly</changefreq></url>")
+
+    for mid in manifestations:
+        loc_m = f"{base_url}/manifestation/{mid}"
+        urls.append(f"  <url><loc>{loc_m}</loc><changefreq>monthly</changefreq></url>")
+
+    # Public catalog works (bounded up to 50,000 URLs)
+    works = db.session.execute(select(Work.id).limit(50000)).scalars().all()
+    for wid in works:
+        loc_w = f"{base_url}/work/{wid}"
+        urls.append(f"  <url><loc>{loc_w}</loc><changefreq>monthly</changefreq></url>")
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(urls) + "\n</urlset>"
+    )
+
+
+@public_bp.route("/sitemap.xml", methods=["GET"])
+@limiter.limit("60 per minute")
+def sitemap() -> Response:
+    """Generate an XML sitemap listing public user profiles, shared collections, and catalog items."""
+    base_url = request.url_root.rstrip("/")
+    xml = generate_sitemap_xml(base_url)
+    resp = Response(xml, content_type="application/xml; charset=utf-8")
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
+@public_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a Manifestation entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    """
+    stmt = (
+        select(Manifestation)
+        .options(
+            joinedload(Manifestation.expression).joinedload(Expression.work),
+        )
+        .where(Manifestation.id == manifestation_id)
+    )
+    manifestation = db.session.execute(stmt).scalars().first()
+    if not manifestation:
+        return jsonify({"error": "Manifestation not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/manifestation/{manifestation.id}", code=303))
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/manifestation/{manifestation.id}"
+    rdf_payload = serialize_collection_to_rdf(
+        [manifestation],
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/works/<int:work_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_work(work_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a Work entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples,
+    linking expressions and manifestations embodied by the work.
+    """
+    stmt = (
+        select(Work)
+        .options(
+            selectinload(cast(Any, Work.expressions)).selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Work.id == work_id)
+    )
+    work = db.session.execute(stmt).scalars().first()
+    if not work:
+        return jsonify({"error": "Work not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/work/{work.id}", code=303))
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/work/{work.id}"
+    expressions_list: list[Any] = getattr(work, "expressions", [])
+    manifestations = [m for expr in expressions_list for m in getattr(expr, "manifestations", [])]
+    items_to_serialize: list[Any] = manifestations if manifestations else [work]
+
+    rdf_payload = serialize_collection_to_rdf(
+        items_to_serialize,
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/expressions/<int:expression_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_expression(expression_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for an Expression entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    """
+    stmt = (
+        select(Expression)
+        .options(
+            joinedload(Expression.work),
+            selectinload(cast(Any, Expression.manifestations)),
+        )
+        .where(Expression.id == expression_id)
+    )
+    expression = db.session.execute(stmt).scalars().first()
+    if not expression:
+        return jsonify({"error": "Expression not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/expression/{expression.id}", code=303))
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/expression/{expression.id}"
+    expr_manifestations: list[Any] = list(getattr(expression, "manifestations", []))
+    items_to_serialize: list[Any] = expr_manifestations if expr_manifestations else [expression]
+
+    rdf_payload = serialize_collection_to_rdf(
+        items_to_serialize,
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/items/<int:item_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_item(item_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for an Item entity.
+
+    Serves FRBR/Schema.org semantic metadata in JSON-LD, Turtle, or N-Triples.
+    Only non-hidden items are accessible publicly.
+    """
+    stmt = (
+        select(Item)
+        .options(
+            joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
+        )
+        .where(Item.id == item_id, Item.is_hidden.is_(False))
+    )
+    item = db.session.execute(stmt).scalars().first()
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    if _prefers_html():
+        return cast(Response, redirect(f"/item/{item.id}", code=303))
+
+    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+
+    collection_uri = f"{base_url}/item/{item.id}"
+    rdf_payload = serialize_collection_to_rdf(
+        [item],
+        base_url,
+        output_format=rdf_format,
+        collection_uri=collection_uri,
+    )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp

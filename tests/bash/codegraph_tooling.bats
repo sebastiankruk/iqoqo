@@ -42,3 +42,30 @@
   [[ "$output" == *"CodeGraph Status"* ]]
   [[ "$output" == *"Index Statistics:"* ]]
 }
+
+@test "codegraph query finds HTTP route endpoints and partial symbols" {
+  if ! command -v codegraph >/dev/null 2>&1; then
+    skip "codegraph CLI not installed in environment"
+  fi
+  run codegraph query "items/bulk"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"POST /items/bulk"* || "$output" == *"items.py"* ]]
+
+  run codegraph query "useManifestation"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"useManifestation"* ]]
+}
+
+@test "codegraph node -f disambiguates multi-definition symbols across backend and frontend" {
+  if ! command -v codegraph >/dev/null 2>&1; then
+    skip "codegraph CLI not installed in environment"
+  fi
+  run codegraph node -f instance-settings.tsx InstanceSettings
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"frontend/components/admin/instance-settings.tsx"* ]]
+
+  run codegraph node -f settings.py InstanceSettings
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"app/db/settings.py"* ]]
+}
+

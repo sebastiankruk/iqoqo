@@ -113,3 +113,63 @@ def test_check_inventory_manifestation_only(client, public_user, sample_data, ap
     assert len(data["data"]) > 0
     assert data["data"][0]["type"] == "manifestation"
     assert data["data"][0]["title"] == "The Cave Bible"
+
+
+def test_get_public_work_content_negotiation_html(client, sample_data):
+    work = Work.query.filter_by(title="The Cave Bible").first()
+    assert work is not None
+    # Client asks for text/html without format arg
+    response = client.get(
+        f"/api/public/works/{work.id}",
+        headers={"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+    )
+    assert response.status_code == 303
+    assert response.headers["Location"] == f"/work/{work.id}"
+
+
+def test_get_public_manifestation_content_negotiation_html(client, sample_data):
+    mani = Manifestation.query.first()
+    assert mani is not None
+    response = client.get(
+        f"/api/public/manifestations/{mani.id}",
+        headers={"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+    )
+    assert response.status_code == 303
+    assert response.headers["Location"] == f"/manifestation/{mani.id}"
+
+
+def test_get_work_detail_endpoint(client, sample_data):
+    work = Work.query.filter_by(title="The Cave Bible").first()
+    assert work is not None
+    response = client.get(f"/api/works/{work.id}")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["success"] is True
+    assert data["data"]["id"] == work.id
+    assert data["data"]["title"] == "The Cave Bible"
+    assert len(data["data"]["expressions"]) >= 1
+    expr = data["data"]["expressions"][0]
+    assert len(expr["manifestations"]) >= 1
+    assert expr["manifestations"][0]["publisher"] == "Rock Press"
+
+
+def test_get_expression_detail_endpoint(client, sample_data):
+    expr = Expression.query.first()
+    assert expr is not None
+    response = client.get(f"/api/expressions/{expr.id}")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["success"] is True
+    assert data["data"]["id"] == expr.id
+    assert data["data"]["work_title"] == "The Cave Bible"
+    assert len(data["data"]["manifestations"]) >= 1
+
+
+def test_sitemap_includes_works(client, sample_data):
+    work = Work.query.filter_by(title="The Cave Bible").first()
+    assert work is not None
+    response = client.get("/api/public/sitemap.xml")
+    assert response.status_code == 200
+    xml = response.data.decode("utf-8")
+    assert f"/work/{work.id}" in xml
+    assert "/manifestation/" in xml

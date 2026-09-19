@@ -283,6 +283,40 @@ async def handle_client(
             pass
 
 
+def resolve_allowlist_path() -> Path:
+    """Determine which allowlist file to load based on environment configuration.
+
+    Priority:
+    1. ALLOWLIST_CONFIG env var (explicit path, backward-compatible)
+    2. AI_AGENT env var (agent-aware selection: 'agy' or 'opencode')
+    3. Default: allowlist.conf (agy)
+
+    Fails closed (returns a non-existent path) if AI_AGENT is unrecognized.
+    """
+    config_env = os.environ.get("ALLOWLIST_CONFIG")
+    if config_env:
+        return Path(config_env)
+
+    proxy_dir = Path(__file__).resolve().parent
+    ai_agent = os.environ.get("AI_AGENT", "agy").strip().lower()
+
+    agent_allowlist_map = {
+        "agy": "allowlist.conf",
+        "opencode": "allowlist-opencode.conf",
+    }
+
+    if ai_agent not in agent_allowlist_map:
+        logger.error(
+            "Unrecognized AI_AGENT value '%s'. Valid options: %s. FAILING CLOSED.",
+            ai_agent,
+            ", ".join(sorted(agent_allowlist_map.keys())),
+        )
+        # Return a path that doesn't exist → load_allowlist will fail closed
+        return proxy_dir / f"allowlist-{ai_agent}.conf"
+
+    return proxy_dir / agent_allowlist_map[ai_agent]
+
+
 async def main() -> None:
     """Parse configuration and start proxy server."""
     port_str = os.environ.get("PROXY_PORT", "3128")
@@ -291,8 +325,7 @@ async def main() -> None:
     except ValueError:
         listen_port = 3128
 
-    config_env = os.environ.get("ALLOWLIST_CONFIG")
-    config_path = Path(config_env) if config_env else None
+    config_path = resolve_allowlist_path()
     rules = load_allowlist(config_path)
 
     logger.info("Starting sandbox egress proxy on 0.0.0.0:%d with %d rules...", listen_port, len(rules))

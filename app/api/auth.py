@@ -40,16 +40,54 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 oauth = OAuth()
 
 
+def _ensure_google_oauth() -> bool:
+    """Ensure Google OAuth client is registered with current credentials.
+
+    Priority:
+    1. Database (InstanceSettings table via ConfigService)
+    2. Flask app config
+    3. Environment variables
+
+    Returns:
+        True if the client is registered, False if credentials are not configured.
+    """
+    from app.core.config_service import ConfigService
+
+    client_id = ConfigService.get("GOOGLE_CLIENT_ID")
+    client_secret = ConfigService.get("GOOGLE_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        return False
+
+    existing_client = getattr(oauth, "google", None)
+    if existing_client is not None:
+        if getattr(existing_client, "client_id", None) == client_id and getattr(existing_client, "client_secret", None) == client_secret:
+            return True
+        oauth._clients.pop("google", None)  # pylint: disable=protected-access
+
+    oauth.register(
+        name="google",
+        client_id=client_id,
+        client_secret=client_secret,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+    return True
+
+
 def init_oauth(app):
     oauth.init_app(app)
-    if app.config.get("GOOGLE_CLIENT_ID"):
-        oauth.register(
-            name="google",
-            client_id=app.config["GOOGLE_CLIENT_ID"],
-            client_secret=app.config["GOOGLE_CLIENT_SECRET"],
-            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-            client_kwargs={"scope": "openid email profile"},
-        )
+    with app.app_context():
+        try:
+            _ensure_google_oauth()
+        except (
+            SQLAlchemyError,
+            ValueError,
+            AttributeError,
+            KeyError,
+            RuntimeError,
+        ) as exc:
+            app.logger.warning("Could not initialize Google OAuth at startup: %s", exc)
 
 
 def generate_internal_jwt(user: User) -> str:
@@ -66,6 +104,11 @@ def generate_internal_jwt(user: User) -> str:
 
 @auth_bp.route("/login/google")
 def google_login():
+    if not _ensure_google_oauth():
+        logger.warning("Google OAuth login attempted but Google client is not configured")
+        frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+        return redirect(f"{frontend_url}/login?error=oauth_not_configured")
+
     callback_url = request.args.get("callbackUrl") or request.args.get("redirect")
     if callback_url and callback_url.startswith("/") and not callback_url.startswith("//"):
         session["oauth_callback_url"] = callback_url
@@ -82,34 +125,46 @@ def google_login():
 
     try:
         return oauth.google.authorize_redirect(redirect_uri)
-    except OAuthError as e:
+    except (OAuthError, AttributeError) as e:
         logger.error("Google OAuth authorize_redirect failed: %s", e, exc_info=True)
         return jsonify({"error": f"OAuth init failed: {e}"}), 502
 
 
 @auth_bp.route("/callback/google")
 def google_callback():
-    callback_url = session.pop("oauth_callback_url", None)
-
-    try:
-        token = oauth.google.authorize_access_token()
-    except OAuthError as e:
-        logger.error("Google OAuth token exchange failed: %s", e, exc_info=True)
-        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=token_exchange_failed")
-
-    try:
-        user_info = oauth.google.parse_id_token(token, nonce=None)
-    except JoseError as e:
-        logger.error("Google OAuth parse_id_token failed: %s", e, exc_info=True)
-        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=id_token_parse_failed")
-
-    email = user_info.get("email")
-    if not email:
-        logger.error("Google OAuth: no email in user_info: %s", user_info)
-        return redirect(f"{os.getenv('NEXT_PUBLIC_FRONTEND_URL', 'http://localhost:3000')}/login?error=no_email")
-
-    picture = user_info.get("picture")
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    error_code = None
+
+    if not _ensure_google_oauth():
+        logger.warning("Google OAuth callback received but Google client is not configured")
+        error_code = "oauth_not_configured"
+
+    callback_url = session.pop("oauth_callback_url", None)
+    token = None
+    if not error_code:
+        try:
+            token = oauth.google.authorize_access_token()
+        except (OAuthError, AttributeError) as e:
+            logger.error("Google OAuth token exchange failed: %s", e, exc_info=True)
+            error_code = "token_exchange_failed"
+
+    user_info = None
+    if not error_code and token:
+        try:
+            user_info = oauth.google.parse_id_token(token, nonce=None)
+        except (JoseError, AttributeError) as e:
+            logger.error("Google OAuth parse_id_token failed: %s", e, exc_info=True)
+            error_code = "id_token_parse_failed"
+
+    email = user_info.get("email") if user_info else None
+    if not error_code and not email:
+        logger.error("Google OAuth: no email in user_info: %s", user_info)
+        error_code = "no_email"
+
+    if error_code:
+        return redirect(f"{frontend_url}/login?error={error_code}")
+
+    picture = user_info.get("picture") if user_info else None
 
     try:
         user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()

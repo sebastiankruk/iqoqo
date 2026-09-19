@@ -177,7 +177,10 @@ class ManifestationUpdateSchema(BaseModel):
     Title: str | None = None
     Authors: list[str] | None = None
     genres: list[str] | None = None
-    publisher: str | None = None
+    publisher: str | None = Field(default=None, max_length=255)
+    format_type: str | None = Field(default=None, max_length=50)
+    format: str | None = Field(default=None, max_length=50)
+    isbn13: str | None = Field(default=None, max_length=20)
 
 
 class ScanBarcodeSchema(BaseModel):
@@ -279,8 +282,9 @@ class ManifestationFrbrUpdateSchema(BaseModel):
     isbn13: str | None = Field(default=None, max_length=20)
     upc: str | None = Field(default=None, max_length=20)
     ean: str | None = Field(default=None, max_length=20)
-    publisher: str | None = Field(default=None, max_length=500)
+    publisher: str | None = Field(default=None, max_length=255)
     publication_date: str | None = None
+    format_type: str | None = Field(default=None, max_length=50, description="Carrier format type (e.g. hardcover, paperback, vinyl)")
     format: str | None = Field(default=None, max_length=50, description="Carrier format (e.g. vinyl, cd, bluray)")
     label: str | None = Field(default=None, max_length=500, description="Label or studio name")
     barcode: str | None = Field(default=None, max_length=100, description="UPC/EAN barcode")

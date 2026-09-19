@@ -192,3 +192,158 @@
 
   rm -rf "${test_temp_dir}"
 }
+
+@test "mykg_config.yaml disables obsidian_vault generation across all profiles" {
+  config_file="${BATS_TEST_DIRNAME}/../../mykg_config.yaml"
+  [ -f "$config_file" ]
+  # obsidian_enabled: true must not exist in any profile
+  run grep -E "^\s*obsidian_enabled:\s*true" "$config_file"
+  [ "$status" -ne 0 ]
+
+  # obsidian_enabled: false must be present
+  run grep -E "^\s*obsidian_enabled:\s*false" "$config_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg query produces valid ontological output via make mykg-ask" {
+  if [ ! -d "${BATS_TEST_DIRNAME}/../../mykg_sessions" ]; then
+    skip "mykg_sessions directory not present"
+  fi
+  run make mykg-ask Q="Manifestation"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Manifestation"* || "$output" == *"conf="* ]]
+}
+
+@test "allowlist-opencode.conf exists and contains opencode Go API endpoints" {
+  allowlist_file="${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy/allowlist-opencode.conf"
+  [ -f "$allowlist_file" ]
+
+  run grep -E "models\.opencode\.ai:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "opencode\.ai:443" "$allowlist_file"
+  [ "$status" -eq 0 ]
+
+  # Verify no Google/Gemini endpoints leak into the opencode allowlist
+  run grep -E "googleapis\.com" "$allowlist_file"
+  [ "$status" -ne 0 ]
+  run grep -E "google\.com" "$allowlist_file"
+  [ "$status" -ne 0 ]
+
+  # Verify only port-443 entries exist (no port 80 or other ports)
+  run grep -E "^[^#].*:([0-9]+)" "$allowlist_file"
+  [ "$status" -eq 0 ]
+  run grep -E "^[^#].*:(?!443)[0-9]+" "$allowlist_file"
+  [ "$status" -ne 0 ]
+}
+
+@test "proxy.py selects correct allowlist based on AI_AGENT env var" {
+  proxy_script="${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy/proxy.py"
+  [ -f "$proxy_script" ]
+
+  # Verify AI_AGENT=opencode loads allowlist-opencode.conf
+  run python3 -c "
+import os, sys
+os.environ['AI_AGENT'] = 'opencode'
+if 'ALLOWLIST_CONFIG' in os.environ: del os.environ['ALLOWLIST_CONFIG']
+sys.path.insert(0, '${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy')
+import proxy
+path = proxy.resolve_allowlist_path()
+assert path.name == 'allowlist-opencode.conf', f'Expected allowlist-opencode.conf, got {path.name}'
+print('OK')
+"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OK"* ]]
+
+  # Verify AI_AGENT=agy loads allowlist.conf
+  run python3 -c "
+import os, sys
+os.environ['AI_AGENT'] = 'agy'
+if 'ALLOWLIST_CONFIG' in os.environ: del os.environ['ALLOWLIST_CONFIG']
+sys.path.insert(0, '${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy')
+import importlib, proxy
+importlib.reload(proxy)
+path = proxy.resolve_allowlist_path()
+assert path.name == 'allowlist.conf', f'Expected allowlist.conf, got {path.name}'
+print('OK')
+"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OK"* ]]
+}
+
+@test "proxy.py fails closed for unrecognized AI_AGENT value" {
+  run python3 -c "
+import os, sys
+os.environ['AI_AGENT'] = 'invalid_agent'
+if 'ALLOWLIST_CONFIG' in os.environ: del os.environ['ALLOWLIST_CONFIG']
+sys.path.insert(0, '${BATS_TEST_DIRNAME}/../../deploy/sandbox_proxy')
+import importlib, proxy
+importlib.reload(proxy)
+path = proxy.resolve_allowlist_path()
+# The path should reference a non-existent file → load_allowlist will fail closed
+assert not path.exists(), f'Expected non-existent path, but {path} exists'
+assert 'invalid_agent' in path.name
+print('FAIL_CLOSED_OK')
+"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FAIL_CLOSED_OK"* ]]
+}
+
+@test "Makefile AI_AGENT validation rejects invalid values" {
+  run make -n mykg-update AI_AGENT=invalid
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid AI_AGENT"* ]]
+  [[ "$output" == *"agy"* ]]
+  [[ "$output" == *"opencode"* ]]
+
+  run make -n mykg-index AI_AGENT=badvalue
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid AI_AGENT"* ]]
+}
+
+@test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
+  run make -n mykg-update AI_AGENT=opencode
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"opencode-go/muse-spark-1.3-contributor"* ]]
+  [[ "$output" == *"minimal"* ]]
+  [[ "$output" == *"opencode_daemon.py"* ]]
+  [[ "$output" == *"mykg-opencode-daemon"* ]]
+  [[ "$output" == *"agent-opencode"* ]]
+}
+
+@test "Makefile mykg-update preserves agy defaults when AI_AGENT=agy" {
+  run make -n mykg-update
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gemini-3.8-flash-low"* ]]
+  [[ "$output" == *"agy_daemon.py"* ]]
+  [[ "$output" == *"mykg-agy-daemon"* ]]
+  [[ "$output" == *"agent-claude-code"* ]]
+}
+
+@test "docker-compose.ai_sandbox.yml includes mykg-opencode-daemon with correct hardening" {
+  compose_file="${BATS_TEST_DIRNAME}/../../docker-compose.ai_sandbox.yml"
+  [ -f "$compose_file" ]
+
+  # Verify opencode daemon service exists
+  run grep -E "mykg-opencode-daemon:" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  # Verify opencode auth.json credential mount
+  run grep -E "auth\.json:/run/secrets/opencode-auth\.json:ro" "$compose_file"
+  [ "$status" -eq 0 ]
+
+  # Verify AI_AGENT=opencode environment variable
+  run grep -E "AI_AGENT=opencode" "$compose_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykgconfig.yaml includes agent-opencode profile" {
+  config_file="${BATS_TEST_DIRNAME}/../../mykg_config.yaml"
+  [ -f "$config_file" ]
+
+  run grep -E "agent-opencode:" "$config_file"
+  [ "$status" -eq 0 ]
+
+  run grep -E "opencode-go/muse-spark-1\.3-contributor" "$config_file"
+  [ "$status" -eq 0 ]
+}
+
