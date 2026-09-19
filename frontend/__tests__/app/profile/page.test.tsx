@@ -99,8 +99,10 @@ describe("ProfilePage", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText("Test User")).toBeInTheDocument();
+      // Email is rendered as text in the header
       expect(screen.getByText("user@iqoqo.local")).toBeInTheDocument();
+      // Display name is in an input field
+      expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
 
     // Verify apiFetch was called with the correct path
@@ -114,7 +116,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Test User")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
 
     // Mock the POST request for the consent toggle
@@ -150,7 +152,7 @@ describe("ProfilePage", () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Test User")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
 
     vi.mocked(apiClient.post).mockResolvedValueOnce({

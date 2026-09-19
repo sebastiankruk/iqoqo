@@ -43,7 +43,7 @@ ifeq ($(filter prod,$(MAKECMDGOALS)),prod)
 endif
 
 # Docker compose configuration for production/preview targets
-COMPOSE_FILE     ?= docker-compose.prod.yml
+COMPOSE_FILE     ?= docker-compose.prebuilt.yml
 COMPOSE_PROJECT  ?= iqoqo
 COMPOSE_ENV_FILE ?= .env
 
@@ -155,6 +155,9 @@ help:
 	@echo ""
 	@echo "Semantic Web:"
 	@echo "  generate-taxonomy - Generate taxonomy constants from shared/taxonomy.yaml"
+	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
+	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
+	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -746,15 +749,42 @@ watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 	$(PYTHON_CMD) scripts/generate_ai_covers.py --batch-all-unwatermarked --watermark-only
 
 ## Semantic Web / Ontology
-audit-frbr: .venv/bin/activate ## Running FRBR integrity audit
+audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
 	@echo "Running FRBR integrity audit..."
-	@PYTHONPATH=. .venv/bin/python scripts/audit_frbr_integrity.py
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/audit_frbr_integrity.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS); \
+	fi
 
-etl-frbr: .venv/bin/activate ## Running FRBR ETL strict cleanup (idempotent)
+etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for production)
 	@echo "Running FRBR ETL strict cleanup (idempotent)..."
-	@PYTHONPATH=. .venv/bin/python scripts/etl_frbr_strict.py
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/etl_frbr_strict.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+	fi
 
-sync-ontology: .venv/bin/activate ## Checking ontology sync with DB models
+sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."
-	@PYTHONPATH=. .venv/bin/python scripts/sync_ontology.py
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/sync_ontology.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+	fi
 

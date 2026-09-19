@@ -18,14 +18,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { apiClient } from "@/lib/api/client";
 import {
   Loader2,
   Settings,
   Users,
-  User,
   Shield,
   BadgeCheck,
   Key,
@@ -41,7 +37,6 @@ import {
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
-import { MyEscalations } from "@/components/escalation/my-escalations";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
@@ -108,62 +103,23 @@ function SettingsContent(): React.JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { data: profile, isLoading } = useProfile();
-  const queryClient = useQueryClient();
   const [internalTab, setInternalTab] = useState<string | null>(null);
 
-  // Redirect to login if user is unauthenticated
+  // Redirect to login if user is unauthenticated, or to /profile if no admin/custodian access
   useEffect(() => {
     if (!isLoading && !profile) {
       router.push("/login");
+    } else if (!isLoading && profile) {
+      const isAdmin = profile.roles?.includes("admin");
+      const permissions = profile.permissions ?? [];
+      const hasCustodianPerms = permissions.some(p =>
+        ["write_metadata", "edit_cover", "escalate_resolve", "read_metadata"].includes(p)
+      );
+      if (!isAdmin && !hasCustodianPerms) {
+        router.push("/profile");
+      }
     }
   }, [profile, isLoading, router]);
-  const [displayName, setDisplayName] = useState<string>("");
-  const [publicUsername, setPublicUsername] = useState<string>("");
-  const [bio, setBio] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string>("");
-  const [visibility, setVisibility] = useState<string>("private");
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const activeTab = internalTab || searchParams.get("tab") || "profile";
-
-  // Initialize local state when profile loads
-  useEffect(() => {
-    if (profile) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDisplayName(profile.display_name || "");
-      setPublicUsername(profile.public_username || "");
-      setBio(profile.bio || "");
-      setAvatarUrl(profile.avatar_url || "");
-      setVisibility(profile.visibility || "private");
-    }
-  }, [profile, activeTab]);
-
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      await apiClient.put("/profile/", {
-        display_name: displayName.trim(),
-        public_username: publicUsername.trim() || null,
-        bio: bio.trim(),
-        avatar_url: avatarUrl.trim(),
-        visibility: visibility,
-      });
-      // Invalidate so the navbar and other consumers refresh immediately
-      await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      toast.success("Profile updated successfully");
-      setUsernameError(null);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
-      toast.error(errorMsg);
-      if (errorMsg.toLowerCase().includes("username")) {
-        setUsernameError(errorMsg);
-      }
-      console.error(err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleTabChange = (tab: string) => {
     setInternalTab(tab);
@@ -198,6 +154,20 @@ function SettingsContent(): React.JSX.Element {
     (profile.roles ?? []).includes("contributor");
 
   const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
+  const isAdmin = (profile.roles ?? []).includes("admin");
+
+  // Determine default tab based on permissions
+  const getDefaultTab = (): string => {
+    if (searchParams.get("tab")) return searchParams.get("tab")!;
+    if (isAdmin && canViewSettings) return "instance";
+    if (canViewMetadata) return "metadata";
+    if (canEditCover) return "cover-art";
+    if (canViewEscalationQueue) return "escalations";
+    if (canAccessSparql) return "sparql";
+    return "instance";
+  };
+
+  const activeTab = internalTab || getDefaultTab();
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -206,18 +176,6 @@ function SettingsContent(): React.JSX.Element {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
-            <nav className="flex flex-col gap-1">
-              <NavItem
-                label="Profile"
-                icon={User}
-                isActive={activeTab === "profile"}
-                onClick={() => handleTabChange("profile")}
-              />
-            </nav>
-          </div>
-
           {hasCustodianAccess && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
@@ -328,148 +286,6 @@ function SettingsContent(): React.JSX.Element {
 
         {/* Main Content Area */}
         <div className="flex-1 min-w-0 pb-20">
-          {activeTab === "profile" && (
-            <div className="flex flex-col gap-8">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Manage your personal account settings and preferences.
-                </p>
-              </div>
-              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6 flex flex-col gap-8">
-                  {/* Display Name */}
-                  <div>
-                    <h3 className="text-lg font-medium">Display Name</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      This is your public display name on this instance.
-                    </p>
-                    <input
-                      className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={displayName}
-                      onChange={e => setDisplayName(e.target.value)}
-                      placeholder="Enter your display name"
-                    />
-                  </div>
-
-                  {/* Avatar URL */}
-                  <div>
-                    <h3 className="text-lg font-medium">Avatar URL</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Link to an image for your profile picture.</p>
-                    <input
-                      className="mt-4 flex h-9 w-full max-w-md rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={avatarUrl}
-                      onChange={e => setAvatarUrl(e.target.value)}
-                      placeholder="https://example.com/avatar.jpg"
-                    />
-                  </div>
-
-                  {/* Public Username */}
-                  <div>
-                    <h3 className="text-lg font-medium">Public Username</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Setting a public username allows you to share your collection at <code>/u/[username]</code>.
-                    </p>
-                    <div className="mt-4 flex items-center gap-2 max-w-md">
-                      <span className="text-sm text-muted-foreground">
-                        {typeof window !== "undefined" ? window.location.host : "iqoqo.app"}/u/
-                      </span>
-                      <input
-                        className={cn(
-                          "flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                          usernameError && "border-red-500 focus-visible:ring-red-500"
-                        )}
-                        value={publicUsername}
-                        onChange={e => {
-                          setPublicUsername(e.target.value);
-                          if (usernameError) setUsernameError(null);
-                        }}
-                        placeholder="testuser1"
-                      />
-                    </div>
-                    {usernameError && <p className="mt-2 text-xs font-medium text-red-500">{usernameError}</p>}
-                  </div>
-
-                  {/* Bio */}
-                  <div>
-                    <h3 className="text-lg font-medium">Bio</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      A short description about you or your collection.
-                    </p>
-                    <textarea
-                      className="mt-4 flex min-h-[100px] w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={bio}
-                      onChange={e => setBio(e.target.value)}
-                      placeholder="Tell the world about your library..."
-                    />
-                  </div>
-
-                  {/* Visibility */}
-                  <div>
-                    <h3 className="text-lg font-medium">Profile Visibility</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Control who can see your profile and collection.
-                    </p>
-                    <div className="mt-4 flex flex-col gap-2">
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="visibility"
-                          value="private"
-                          checked={visibility === "private"}
-                          onChange={e => setVisibility(e.target.value)}
-                          className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
-                        />
-                        <div>
-                          <p className="text-sm font-medium group-hover:text-foreground transition-colors">Private</p>
-                          <p className="text-xs text-muted-foreground">Only you can see your collection.</p>
-                        </div>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <input
-                          type="radio"
-                          name="visibility"
-                          value="public"
-                          checked={visibility === "public"}
-                          onChange={e => setVisibility(e.target.value)}
-                          className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
-                        />
-                        <div>
-                          <p className="text-sm font-medium group-hover:text-foreground transition-colors">Public</p>
-                          <p className="text-xs text-muted-foreground">
-                            Anyone with the link can view your collection.
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border dark:border-white/10 px-6 py-3 flex justify-end">
-                  <button
-                    className="h-9 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium disabled:opacity-50 flex items-center gap-2"
-                    onClick={handleSaveProfile}
-                    disabled={
-                      isSaving ||
-                      (displayName === (profile.display_name || "") &&
-                        publicUsername === (profile.public_username || "") &&
-                        bio === (profile.bio || "") &&
-                        avatarUrl === (profile.avatar_url || "") &&
-                        visibility === (profile.visibility || "private"))
-                    }
-                  >
-                    {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isSaving ? "Saving..." : "Save Changes"}
-                  </button>
-                </div>
-              </div>
-
-              <div id="help-requests">
-                <MyEscalations />
-              </div>
-            </div>
-          )}
-
           {activeTab === "instance" && canViewSettings && (
             <div className="flex flex-col gap-8">
               <div>
