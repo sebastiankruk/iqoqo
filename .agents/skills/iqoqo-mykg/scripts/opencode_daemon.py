@@ -129,7 +129,6 @@ def process_task(
     task_id = task_path.stem.split(".")[0]
     done_file = outbox_dir / f"{task_id}.done"
     answer_file = outbox_dir / f"{task_id}.answer.json"
-    temp_file = outbox_dir / f"{task_id}.answer.json.tmp"
 
     if done_file.exists() and answer_file.exists():
         return True
@@ -148,7 +147,7 @@ def process_task(
         except Exception as exc:  # pylint: disable=broad-exception-caught
             print(f"[opencode_daemon] Error processing task {task_id}: {exc}", file=sys.stderr, flush=True)
             return False
-    
+
     return False
 
 
@@ -197,7 +196,7 @@ def _execute_task(
     base_timeout = 600  # 10 minutes base
     prompt_timeout = len(combined_prompt) // 1000  # 1 second per 1000 chars
     effective_timeout = max(timeout, base_timeout + prompt_timeout)
-    
+
     print(f"[opencode_daemon] Using timeout: {effective_timeout}s for task {task_id[:12]}", flush=True)
 
     # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
