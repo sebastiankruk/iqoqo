@@ -352,7 +352,7 @@ class TestMigrationPreflight:
 
     def test_preflight_isbn_conflict(self, app):
         """Test preflight with ISBN conflicts.
-        
+
         Note: In the current schema, isbn13 has a UNIQUE constraint, so duplicates
         cannot exist in normal operation. This test verifies the preflight logic
         would detect conflicts if they existed (e.g., from legacy data before constraint).

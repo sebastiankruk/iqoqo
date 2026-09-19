@@ -179,11 +179,11 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
 
     # Import shared validation utilities
     from app.core.f3_validation import (
+        ISBNValidationError,
         extract_promoted_key_case_insensitive,
         normalize_isbn,
-        validate_publisher,
         validate_format_type,
-        ISBNValidationError,
+        validate_publisher,
     )
 
     # Normalize ISBN using shared validation
@@ -1391,7 +1391,7 @@ def _enrich_graph_from_db(
     enrichment_profile: str = "public",
 ) -> None:
     """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB.
-    
+
     Args:
         g: The RDF graph to enrich.
         items: List of items to enrich.
@@ -1588,7 +1588,7 @@ def build_collection_rdf_graph(
     """
     Build an in-memory RDF Graph for a list of collection items/manifestations
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
-    
+
     Args:
         items: List of items to serialize.
         base_url: Base URL for generating URIs.
@@ -2031,7 +2031,7 @@ def stream_collection_to_rdf(
     Generator that streams serialized RDF chunks for large collections.
     Supports 'nt' (N-Triples), 'turtle', and 'json-ld'.
     Processes items in chunks without loading entire collections into memory.
-    
+
     Args:
         items_iterable: Iterable of items to serialize.
         base_url: Base URL for generating URIs.
@@ -2087,7 +2087,7 @@ def stream_collection_to_rdf(
                         graph_items = chunk_data["@graph"]
                     else:
                         graph_items = [chunk_data]
-                    
+
                     if first_chunk:
                         # First chunk: yield opening with context
                         yield '{\n  "@context": ' + json.dumps(context, indent=2) + ',\n  "@graph": [\n'
@@ -2105,7 +2105,7 @@ def stream_collection_to_rdf(
                         yield "\n" + chunk_jsonld
 
         first_chunk = False
-    
+
     # Close the JSON-LD document if we started one
     if output_format == "json-ld" and not first_chunk:
         yield "\n  ]\n}\n"
@@ -2121,7 +2121,7 @@ def serialize_collection_to_rdf(
     """
     Serializes a list of collection items/manifestations into semantic RDF graphs
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
-    
+
     Args:
         items: List of items to serialize.
         base_url: Base URL for generating URIs.

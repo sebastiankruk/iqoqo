@@ -31,22 +31,24 @@ before schema changes. Run preflight separately if needed:
 
 import json
 import logging
-from typing import Any
-import sqlalchemy as sa
-from alembic import op
 
 # Import shared validation utilities
 import sys
 from pathlib import Path
+from typing import Any
+
+import sqlalchemy as sa
+from alembic import op
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from app.core.f3_validation import (
     MAX_PUBLISHER_LENGTH,
+    ISBNValidationError,
     PreflightReport,
     extract_promoted_key_case_insensitive,
     normalize_isbn,
-    validate_publisher,
     validate_format_type,
-    ISBNValidationError,
+    validate_publisher,
 )
 
 logger = logging.getLogger(__name__)
