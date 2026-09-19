@@ -13,7 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-"""SPARQL query endpoint — read-only SPARQL Protocol over user collections."""
+"""SPARQL query endpoint — read-only SPARQL Protocol over user collections with resource isolation."""
+
+import logging
+import time
 
 from flask import Blueprint, Response, g, jsonify, request
 from rdflib import Graph
@@ -24,8 +27,10 @@ from app.api.decorators import require_auth, require_permission
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.sparql_service import (
+    SPARQLConcurrencyLimit,
     SPARQLError,
     SPARQLQueryTooLarge,
+    SPARQLResourceLimit,
     SPARQLSyntaxError,
     SPARQLTimeout,
     SPARQLWriteRejected,
@@ -37,6 +42,8 @@ from app.core.sparql_service import (
 )
 from app.db.models import Expression, Item, Manifestation, User, db
 
+logger = logging.getLogger(__name__)
+
 sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 
 
@@ -46,22 +53,29 @@ def _get_sparql_items(user: User | None) -> list[Item]:
     Strictly filters Item entities to public records and items owned by user,
     preventing disclosure of other users' private collection records.
     """
+    from app.core.sparql_service import MAX_GRAPH_ITEMS
+    
     stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     if user and user.id:
         stmt = stmt.where(or_(Item.is_hidden.is_(False), Item.owner_id == user.id))
     else:
         stmt = stmt.where(Item.is_hidden.is_(False))
+    
+    # Apply item count limit
+    stmt = stmt.limit(MAX_GRAPH_ITEMS)
 
     return list(db.session.execute(stmt).scalars().all())
 
 
 def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
     """Validate, execute, and format a SPARQL query response."""
+    start_time = time.time()
     error_msg = None
     status_code = 400
+    rejection_reason = None
 
     try:
-        validate_query(query)
+        operation = validate_query(query)
         user = db.session.get(User, g.user_id) if hasattr(g, "user_id") and g.user_id else None
         items = _get_sparql_items(user)
         base_url = request.url_root.rstrip("/")
@@ -70,18 +84,43 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
     except SPARQLQueryTooLarge as e:
         error_msg = str(e)
         status_code = 413
-    except (SPARQLWriteRejected, SPARQLSyntaxError) as e:
+        rejection_reason = "query_too_large"
+    except SPARQLWriteRejected as e:
         error_msg = str(e)
         status_code = 400
+        rejection_reason = "write_rejected"
+    except SPARQLSyntaxError as e:
+        error_msg = str(e)
+        status_code = 400
+        rejection_reason = "syntax_error"
     except SPARQLTimeout as e:
         error_msg = str(e)
         status_code = 504
+        rejection_reason = "timeout"
+    except SPARQLResourceLimit as e:
+        error_msg = str(e)
+        status_code = 413
+        rejection_reason = "resource_limit"
+    except SPARQLConcurrencyLimit as e:
+        error_msg = str(e)
+        status_code = 503
+        rejection_reason = "concurrency_limit"
     except SPARQLError as e:
         error_msg = str(e)
         status_code = 500
+        rejection_reason = "internal_error"
 
+    duration = time.time() - start_time
+    
     if error_msg is not None:
+        # Log rejection without query content (for security)
+        logger.warning(
+            f"SPARQL query rejected: reason={rejection_reason}, duration={duration:.3f}s, status={status_code}"
+        )
         return jsonify({"error": error_msg, "code": status_code}), status_code
+    
+    # Log successful query completion without query content
+    logger.info(f"SPARQL query completed: operation={operation}, duration={duration:.3f}s")
 
     accept = request.headers.get("Accept", "")
     output_payload: str | bytes

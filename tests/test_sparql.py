@@ -219,21 +219,28 @@ class TestSPARQLService:
         assert formatted.get("boolean") is True
 
     def test_execute_timeout_handling(self):
-        from unittest.mock import MagicMock
-
+        """Test that timeout is enforced with a very short deadline."""
         from app.core.sparql_service import SPARQLTimeout
-
-        mock_graph = MagicMock()
-        import time
-
-        def slow_query(_q):
-            time.sleep(0.5)
-            return MagicMock()
-
-        mock_graph.query.side_effect = slow_query
-
+        
+        # Create a small graph
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "expression_id": "e-1",
+                "work_id": "w-1",
+                "title": "Test Book",
+                "authors": ["Author One"],
+                "tags": ["fiction"],
+                "status": "read",
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        
+        # Use an extremely short timeout that will be exceeded even for simple queries
+        # due to process startup overhead
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(mock_graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.05)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
 
     def test_build_graph_excludes_other_users_private_items(self):
         items = [
