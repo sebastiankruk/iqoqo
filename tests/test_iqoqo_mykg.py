@@ -40,9 +40,10 @@ def _load_module(name: str, file_path: Path) -> Any:
 
 def _make_subprocess_mock(stdout_data: str = "", stderr_data: str = "", returncode: int = 0):
     """Create a mock subprocess.run function that writes to temp files (for opencode)."""
+
     def mock_subprocess_run(*args, **kwargs):
-        stdout_f = kwargs.get('stdout')
-        stderr_f = kwargs.get('stderr')
+        stdout_f = kwargs.get("stdout")
+        stderr_f = kwargs.get("stderr")
         if stdout_f:
             stdout_f.write(stdout_data)
             stdout_f.flush()
@@ -50,13 +51,16 @@ def _make_subprocess_mock(stdout_data: str = "", stderr_data: str = "", returnco
             stderr_f.write(stderr_data)
             stderr_f.flush()
         return MagicMock(returncode=returncode)
+
     return mock_subprocess_run
 
 
 def _make_subprocess_capture_mock(stdout_data: str = "", stderr_data: str = "", returncode: int = 0):
     """Create a mock subprocess.run function that returns stdout/stderr directly (for agy)."""
+
     def mock_subprocess_run(*args, **kwargs):
         return MagicMock(returncode=returncode, stdout=stdout_data, stderr=stderr_data)
+
     return mock_subprocess_run
 
 
