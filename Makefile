@@ -751,13 +751,40 @@ watermark-covers: ## Apply watermarks to existing AI covers without regenerating
 ## Semantic Web / Ontology
 audit-frbr: ## Running FRBR integrity audit (USE_DOCKER=true for production)
 	@echo "Running FRBR integrity audit..."
-	@$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS)
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/audit_frbr_integrity.py $(ARGS); \
+	fi
 
 etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for production)
 	@echo "Running FRBR ETL strict cleanup (idempotent)..."
-	@$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS)
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
+	fi
 
 sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."
-	@$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS)
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+	else \
+		if [ -f ".env" ]; then \
+			set -a; . ./.env; set +a; \
+		fi; \
+		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
+		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
+		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+	fi
 
