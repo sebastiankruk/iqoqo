@@ -16,6 +16,7 @@
 
 import React from "react";
 import { buildExpressionJsonLd, type ExpressionJsonLdOptions } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 
 export interface ExpressionStructuredDataProps {
   data: ExpressionJsonLdOptions;
@@ -31,5 +32,5 @@ export interface ExpressionStructuredDataProps {
 export function ExpressionStructuredData({ data }: ExpressionStructuredDataProps) {
   const jsonLd = buildExpressionJsonLd(data);
 
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />;
+  return <JsonLdScript data={jsonLd} />;
 }

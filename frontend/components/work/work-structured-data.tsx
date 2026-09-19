@@ -16,6 +16,7 @@
 
 import React from "react";
 import { buildWorkJsonLd, type WorkJsonLdOptions } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 
 export interface WorkStructuredDataProps {
   data: WorkJsonLdOptions;
@@ -31,5 +32,5 @@ export interface WorkStructuredDataProps {
 export function WorkStructuredData({ data }: WorkStructuredDataProps) {
   const jsonLd = buildWorkJsonLd(data);
 
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />;
+  return <JsonLdScript data={jsonLd} />;
 }

@@ -21,6 +21,7 @@ import { Library } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { buildProfileJsonLd } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { ShareButton } from "@/components/ui/share-button";
 import { CheckInventory } from "@/components/public/check-inventory";
@@ -140,7 +141,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(profileJsonLd) }} />
+      <JsonLdScript data={profileJsonLd} />
       <Navbar />
       <main className="flex-1">
         {/* Header / Hero Section */}

@@ -15,6 +15,7 @@
 //
 
 import type { Metadata } from "next";
+import { JsonLdScript } from "@/components/json-ld-script";
 
 export const metadata: Metadata = {
   title: "Collection - iqoqo",
@@ -47,7 +48,7 @@ export default function CollectionLayout({ children }: { children: React.ReactNo
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
+      <JsonLdScript data={collectionJsonLd} />
       {children}
     </>
   );

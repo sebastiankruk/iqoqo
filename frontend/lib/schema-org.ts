@@ -470,3 +470,28 @@ export function buildProfileJsonLd(options: ProfileJsonLdOptions): Record<string
 
   return jsonLd;
 }
+
+/**
+ * Serializes a JSON-LD value for safe embedding inside an HTML `<script>` tag.
+ *
+ * JSON-LD payloads are embedded in SSR HTML via `dangerouslySetInnerHTML`. If any
+ * catalog or user-controlled string contains `</script>`, `<`, `>`, `&`, or
+ * Unicode line/paragraph separators (U+2028, U+2029), the raw `JSON.stringify()`
+ * output can break out of the script element and execute stored XSS.
+ *
+ * This helper performs a second pass over `JSON.stringify()` output, replacing
+ * script-breaking characters with their JSON `\uXXXX` escape sequences. JSON
+ * parsers decode these escapes back to the original characters, so the resulting
+ * payload remains valid JSON-LD with unchanged semantics.
+ *
+ * @param {unknown} value - The JSON-LD object to serialize.
+ * @returns {string} HTML-safe JSON string suitable for `dangerouslySetInnerHTML`.
+ */
+export function serializeJsonLdForHtml(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
