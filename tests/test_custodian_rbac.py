@@ -26,6 +26,7 @@ These tests verify that:
 """
 
 import pytest
+
 from app.api.auth import generate_internal_jwt
 from app.db.models import Permission, Role, User, db
 

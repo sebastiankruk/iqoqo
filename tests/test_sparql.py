@@ -541,8 +541,9 @@ class TestSPARQLIPCAndLimits:
 
     def test_child_crash_returns_structured_error(self):
         """If the child process crashes, the parent returns a structured error."""
-        from app.core.sparql_service import SPARQLChildProcessError, _MP_CONTEXT, _execute_query_in_process
         from unittest.mock import patch
+
+        from app.core.sparql_service import _MP_CONTEXT, SPARQLChildProcessError, _execute_query_in_process
 
         items = [{"id": "1", "manifestation_id": "m1", "title": "T", "authors": [], "tags": [], "status": None}]
         graph = build_graph(items, "http://localhost:5000")

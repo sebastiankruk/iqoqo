@@ -130,7 +130,7 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         error_msg = str(e)
         status_code = 500
         rejection_reason = "internal_error"
-    except Exception as e:
+    except Exception:
         # Catch-all: convert any uncaught exception into a structured error response
         # so clients never see an uncaught Flask traceback.
         logger.exception("SPARQL endpoint uncaught exception in phase=%s", phase)
