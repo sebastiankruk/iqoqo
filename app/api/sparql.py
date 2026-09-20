@@ -144,14 +144,21 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         # Log rejection without query content (for security)
         logger.warning(
             "SPARQL query rejected: reason=%s, phase=%s, duration=%.3fs, status=%s",
-            rejection_reason, phase, duration, status_code,
+            rejection_reason,
+            phase,
+            duration,
+            status_code,
         )
         return jsonify({"error": error_msg, "code": status_code}), status_code
 
     # Log successful query completion without query content
     logger.info(
         "SPARQL query completed: operation=%s, phase=%s, graph_build=%.3fs, execute=%.3fs, total=%.3fs",
-        operation, phase, graph_build_duration, execute_duration, duration,
+        operation,
+        phase,
+        graph_build_duration,
+        execute_duration,
+        duration,
     )
 
     accept = request.headers.get("Accept", "")

@@ -1794,7 +1794,9 @@ def build_collection_rdf_graph(
                         if m_elem.cover_url:
                             encoded_cover = _safe_iri(str(m_elem.cover_url))
                             if encoded_cover is not None:
-                                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                                img_iri = (
+                                    encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                                )
                                 g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
                             else:
                                 _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)

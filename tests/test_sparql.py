@@ -551,6 +551,7 @@ class TestSPARQLIPCAndLimits:
         # Patch the child function to simulate a crash (exit without sending)
         def crashing_child(graph_data, query, conn):
             import os
+
             os._exit(1)
 
         with patch("app.core.sparql_service._execute_query_in_process", side_effect=crashing_child):

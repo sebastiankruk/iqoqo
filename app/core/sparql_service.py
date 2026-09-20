@@ -358,9 +358,7 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
                     _sparql_limit_rejections_total.add(1, {"reason": "graph_size"})
                 except Exception:
                     pass
-            raise SPARQLResourceLimit(
-                f"Serialized graph ({len(graph_bytes)} bytes) exceeds limit of {MAX_SERIALIZED_BYTES}."
-            )
+            raise SPARQLResourceLimit(f"Serialized graph ({len(graph_bytes)} bytes) exceeds limit of {MAX_SERIALIZED_BYTES}.")
 
         # Create one-way pipe and child process using explicit context
         parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)
@@ -402,9 +400,7 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
                     _sparql_child_crashes_total.add(1, {"exit_code": str(exit_code)})
                 except Exception:
                     pass
-            raise SPARQLChildProcessError(
-                f"Isolated query process exited unexpectedly (code={exit_code})."
-            ) from ipc_err
+            raise SPARQLChildProcessError(f"Isolated query process exited unexpectedly (code={exit_code}).") from ipc_err
 
         # Wait for child to finish cleanly
         process.join(timeout=2.0)
