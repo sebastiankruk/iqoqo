@@ -423,7 +423,7 @@ class TestMultiFormatAndStreamingSerialization:
         chunks = list(stream_collection_to_rdf(sample_items, "http://testserver", output_format="json-ld", chunk_size=5))
         # New streaming implementation produces 4 chunks: opening context, 2 data chunks, closing bracket
         assert len(chunks) == 4
-        
+
         # Concatenate all chunks to form a valid JSON-LD document
         combined_jsonld = "".join(chunks)
         g = Graph()
