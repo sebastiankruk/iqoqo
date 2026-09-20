@@ -270,7 +270,7 @@ class TestRelationalAndProvenanceEnrichment:
 
             db.session.commit()
 
-            ttl = serialize_collection_to_rdf([it], "http://testserver", output_format="turtle")
+            ttl = serialize_collection_to_rdf([it], "http://testserver", output_format="turtle", enrichment_profile="full")
             g = Graph()
             g.parse(data=ttl, format="turtle")
 
@@ -421,11 +421,17 @@ class TestMultiFormatAndStreamingSerialization:
 
     def test_stream_collection_to_rdf_jsonld(self, sample_items):
         chunks = list(stream_collection_to_rdf(sample_items, "http://testserver", output_format="json-ld", chunk_size=5))
-        assert len(chunks) == 2
-        for chunk in chunks:
-            g = Graph()
-            g.parse(data=chunk, format="json-ld")
-            assert len(g) > 0
+        # New streaming implementation produces 4 chunks: opening context, 2 data chunks, closing bracket
+        assert len(chunks) == 4
+        
+        # Concatenate all chunks to form a valid JSON-LD document
+        combined_jsonld = "".join(chunks)
+        g = Graph()
+        g.parse(data=combined_jsonld, format="json-ld")
+        # Should have all 10 manifestations
+        for i in range(1, 11):
+            m = URIRef(f"http://testserver/api/public/manifestations/mani-{i}")
+            assert (m, RDF.type, SCHEMA.Book) in g
 
 
 class TestQueryOptimizationAndFallback:
