@@ -46,7 +46,7 @@ def test_get_frbr_tree_success(client, admin_headers, app):
         work = frbr_service.create_work(title="Test FRBR Book")
         expression = frbr_service.create_expression(work_id=work.id, content_type="text", language="en")
         manifestation = frbr_service.create_manifestation(
-            expression_id=expression.id, isbn13="9781234567890", publisher="Test Publisher", meta={"TestMeta": "test_value"}
+            expression_id=expression.id, isbn13="9781234567897", publisher="Test Publisher", meta={"TestMeta": "test_value"}
         )
         work_id = work.id
         manif_id = manifestation.id
@@ -60,7 +60,7 @@ def test_get_frbr_tree_success(client, admin_headers, app):
     assert data["work"]["id"] == work_id
     assert data["expression"]["content_type"] == "text"
     assert data["expression"]["language"] == "en"
-    assert data["manifestation"]["isbn13"] == "9781234567890"
+    assert data["manifestation"]["isbn13"] == "9781234567897"
     assert data["manifestation"]["publisher"] == "Test Publisher"
 
 
@@ -227,13 +227,13 @@ def test_search_frbr_manifestation_by_isbn(client, admin_headers, app):
     with app.app_context():
         work = frbr_service.create_work(title="Searchable Book")
         expression = frbr_service.create_expression(work_id=work.id)
-        frbr_service.create_manifestation(expression_id=expression.id, isbn13="9781234567890")
+        frbr_service.create_manifestation(expression_id=expression.id, isbn13="9781234567897")
 
-    res = client.get("/api/v1/admin/frbr/search?q=9781234567890&type=manifestation", headers=admin_headers)
+    res = client.get("/api/v1/admin/frbr/search?q=9781234567897&type=manifestation", headers=admin_headers)
     assert res.status_code == 200
     assert res.json["success"] is True
     assert len(res.json["data"]) >= 1
-    assert res.json["data"][0]["isbn13"] == "9781234567890"
+    assert res.json["data"][0]["isbn13"] == "9781234567897"
 
 
 def test_search_frbr_manifestation_by_upc(client, admin_headers, app):

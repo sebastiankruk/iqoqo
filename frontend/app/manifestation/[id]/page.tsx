@@ -17,6 +17,7 @@
 import type { Metadata } from "next";
 import { resolveApiUrl, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { buildManifestationJsonLd, type OfferOptions } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 import type { CatalogEntry } from "@/types/frbr";
 import { ManifestationDetailClient } from "@/components/manifestation/manifestation-detail-client";
 
@@ -161,9 +162,7 @@ export default async function ManifestationPage({ params }: Props) {
 
   return (
     <>
-      {jsonLdData && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }} />
-      )}
+      {jsonLdData && <JsonLdScript data={jsonLdData} />}
       <ManifestationDetailClient manifestationId={manifestationId} initialManifestation={manifestation} />
     </>
   );

@@ -90,7 +90,7 @@ class ExportService:
         """
         from app.core.frbr_service import build_collection_rdf_graph
 
-        graph = build_collection_rdf_graph(items, base_url)
+        graph = build_collection_rdf_graph(items, base_url, enrichment_profile="full")
         graph.bind("frbr", FRBR_PURL)
         graph.bind("frbrer", FRBR_IFLA)
         graph.bind("schema", SCHEMA)

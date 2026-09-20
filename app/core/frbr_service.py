@@ -18,9 +18,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import itertools
+import logging
 import re
 from collections.abc import Generator, Iterable
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
@@ -51,10 +53,46 @@ from app.db.core import (
 from app.db.models import db
 from app.db.video import ManifestationContribution
 
+_logger_frbr = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from app.db.games import ContainerAggregation
 
 _LEADING_ARTICLES_RE = re.compile(r"^(?:the|a|an|ten|ta|to)\s+", re.IGNORECASE)
+
+
+def _safe_iri(value: str) -> str | None:
+    """Return a valid IRI string for *value*, or ``None`` if it cannot be safely encoded.
+
+    - Absolute URLs (``http://`` / ``https://``) have each component re-encoded
+      so spaces, Unicode, and reserved characters are percent-escaped while
+      preserving scheme, host, and existing structure.
+    - Relative paths are joined to ``None`` base (caller must prepend base_url).
+    - Values that cannot be parsed at all return ``None`` so the caller can
+      skip the optional triple rather than crashing graph serialization.
+    """
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        if raw.startswith(("http://", "https://")):
+            parts = urlsplit(raw)
+            # Re-encode path and query so spaces / unicode become %XX
+            safe_path = quote(parts.path, safe="/:@!$&'()*+,;=-._~%")
+            safe_query = quote(parts.query, safe=":@!$&'()*+,;=-._~%?/")
+            safe_frag = quote(parts.fragment, safe=":@!$&'()*+,;=-._~%?/")
+            rebuilt = urlunsplit((parts.scheme, parts.netloc, safe_path, safe_query, safe_frag))
+            # Final validation: rdflib URIRef must accept it
+            return rebuilt
+        # Relative path: encode each segment
+        segments = raw.split("/")
+        encoded_segments = [quote(seg, safe="") for seg in segments if seg]
+        return "/".join(encoded_segments)
+    except (ValueError, TypeError, AttributeError):
+        _logger_frbr.debug("Skipping unencodable IRI: %r", raw)
+        return None
 
 
 def derive_sort_title(title: str) -> str:
@@ -177,28 +215,53 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     else:
         meta = dict(meta)
 
+    # Import shared validation utilities
+    from app.core.f3_validation import (
+        ISBNValidationError,
+        extract_promoted_key_case_insensitive,
+        normalize_isbn,
+        validate_format_type,
+        validate_publisher,
+    )
+
+    # Normalize ISBN using shared validation
     if isbn13 is None:
-        cand_isbn = meta.get("isbn13") or meta.get("isbn")
+        cand_isbn = extract_promoted_key_case_insensitive(meta, "isbn13")
+        if not cand_isbn:
+            cand_isbn = extract_promoted_key_case_insensitive(meta, "isbn")
         if cand_isbn and isinstance(cand_isbn, str):
-            isbn13 = cand_isbn
-    if isbn13 and isinstance(isbn13, str):
-        clean_isbn = isbn13.replace("-", "").replace(" ", "").strip()
-        if len(clean_isbn) <= 13:
-            isbn13 = clean_isbn
+            try:
+                isbn13 = normalize_isbn(cand_isbn)
+            except ISBNValidationError:
+                # Skip invalid ISBNs - they won't be stored
+                isbn13 = None
+    elif isbn13 and isinstance(isbn13, str):
+        try:
+            isbn13 = normalize_isbn(isbn13)
+        except ISBNValidationError:
+            isbn13 = None
 
+    # Normalize publisher using shared validation
     if publisher is None:
-        cand_pub = meta.get("publisher") or meta.get("Publisher")
+        cand_pub = extract_promoted_key_case_insensitive(meta, "publisher")
         if cand_pub and isinstance(cand_pub, str):
-            publisher = cand_pub
-    if publisher and isinstance(publisher, str):
-        publisher = publisher.strip()[:255]
+            publisher = validate_publisher(cand_pub, strict=False)
+    elif publisher and isinstance(publisher, str):
+        publisher = validate_publisher(publisher, strict=False)
 
+    # Normalize format_type using shared validation
     if format_type is None:
-        cand_fmt = meta.get("format_type") or format or meta.get("format") or meta.get("video_format") or meta.get("format_name")
+        cand_fmt = (
+            extract_promoted_key_case_insensitive(meta, "format_type")
+            or format
+            or extract_promoted_key_case_insensitive(meta, "format")
+            or extract_promoted_key_case_insensitive(meta, "video_format")
+            or extract_promoted_key_case_insensitive(meta, "format_name")
+        )
         if cand_fmt and isinstance(cand_fmt, str):
-            format_type = cand_fmt
-    if format_type and isinstance(format_type, str):
-        format_type = format_type.strip().lower()[:50]
+            format_type = validate_format_type(cand_fmt, strict=False)
+    elif format_type and isinstance(format_type, str):
+        format_type = validate_format_type(format_type, strict=False)
 
     if format is None:
         format = format_type or meta.get("format") or meta.get("video_format") or meta.get("format_name")
@@ -209,8 +272,12 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     if catalog_number is None:
         catalog_number = meta.get("catalog_number") or meta.get("catno") or meta.get("sku")
 
-    for k in ("isbn13", "isbn", "publisher", "Publisher", "format_type"):
-        meta.pop(k, None)
+    # Prune promoted keys from metadata (case-insensitive)
+    promoted_keys = ["isbn13", "isbn", "publisher", "format_type"]
+    for key in promoted_keys:
+        keys_to_remove = [k for k in meta.keys() if isinstance(k, str) and k.lower() == key.lower()]
+        for k in keys_to_remove:
+            del meta[k]
 
     manifestation = Manifestation(
         expression_id=expression_id,
@@ -1256,7 +1323,9 @@ def _add_provenance_triples(
     """Extract external provenance and attach prov:wasDerivedFrom."""
     prov_url = meta.get("source_url") or meta.get("provenance_url") or meta.get("was_derived_from") or meta.get("provenance")
     if prov_url and str(prov_url).startswith(("http://", "https://")):
-        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(prov_url))))
+        safe_prov = _safe_iri(str(prov_url))
+        if safe_prov is not None:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
         return
 
     source = meta.get("data_source") or meta.get("source") or meta.get("provider")
@@ -1268,7 +1337,9 @@ def _add_provenance_triples(
 
     source_str = str(source).lower()
     if source_str.startswith(("http://", "https://")):
-        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(source))))
+        safe_prov = _safe_iri(str(source))
+        if safe_prov is not None:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
     elif "openlibrary" in source_str or "open_library" in source_str:
         olid = meta.get("openlibrary_id") or meta.get("olid")
         if olid:
@@ -1292,7 +1363,9 @@ def _add_provenance_triples(
     elif "allegro" in source_str:
         allegro_url = meta.get("allegro_url")
         if allegro_url:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(allegro_url))))
+            safe_allegro = _safe_iri(str(allegro_url))
+            if safe_allegro is not None:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
         else:
             g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
 
@@ -1315,8 +1388,12 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
 
     cover = item.get("cover_url") or item.get("image")
     if cover:
-        img_uri = URIRef(str(cover) if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
-        g.add((m_uri, SCHEMA.image, img_uri))
+        encoded_cover = _safe_iri(str(cover))
+        if encoded_cover is not None:
+            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+            g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+        else:
+            _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_id)
 
     for c in item.get("contributors", []):
         if isinstance(c, dict):
@@ -1356,8 +1433,18 @@ def _enrich_graph_from_db(
     items: list[Any],
     base_url: str,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> None:
-    """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB."""
+    """Add contributor, WorkPart, ImageScan, provenance, and UserCollection triples from DB.
+
+    Args:
+        g: The RDF graph to enrich.
+        items: List of items to enrich.
+        base_url: Base URL for generating URIs.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment (excludes private data),
+                           "full" for authenticated export (includes all data).
+    """
     if collection_uri:
         coll_uri_ref = URIRef(str(collection_uri))
         g.add((coll_uri_ref, RDF.type, SCHEMA.Collection))
@@ -1482,16 +1569,21 @@ def _enrich_graph_from_db(
                 g.add((part_uri, SCHEMA.isPartOf, container_uri))
                 g.add((container_uri, SCHEMA.hasPart, part_uri))
 
-        # ImageScans
-        if seen_manifestations:
+        # ImageScans - only include in full profile (authenticated exports)
+        if enrichment_profile == "full" and seen_manifestations:
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
             for scan in scans:
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
-                img_uri = URIRef(f"{base_url}/{scan.file_path}")
-                g.add((m_uri, SCHEMA.image, img_uri))
+                encoded_path = _safe_iri(str(scan.file_path))
+                if encoded_path is not None:
+                    img_uri = URIRef(f"{base_url}/{encoded_path}")
+                    g.add((m_uri, SCHEMA.image, img_uri))
+                else:
+                    _logger_frbr.warning("Skipping malformed ImageScan path for manifestation %s", scan.manifestation_id)
 
-        # UserCollections
-        if seen_items:
+        # UserCollections - only include in full profile (authenticated exports)
+        # Private collection names should not be exposed in public RDF
+        if enrichment_profile == "full" and seen_items:
             links = db.session.execute(select(UserCollectionItem).where(UserCollectionItem.item_id.in_(seen_items))).scalars().all()
             for link in links:
                 coll = link.collection
@@ -1519,8 +1611,12 @@ def _enrich_graph_from_db(
                     g.add((m_uri, SCHEMA.datePublished, Literal(str(pub_date))))
                 cover = getattr(m, "cover_url", None) or (m.meta.get("cover_url") if m.meta else None)
                 if cover:
-                    img_uri = URIRef(cover if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
-                    g.add((m_uri, SCHEMA.image, img_uri))
+                    encoded_cover = _safe_iri(str(cover))
+                    if encoded_cover is not None:
+                        img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                        g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                    else:
+                        _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m.id)
 
                 _add_provenance_triples(g, m_uri, m.meta or {}, getattr(m, "raw_payload", None), getattr(m, "isbn13", None))
 
@@ -1540,10 +1636,18 @@ def build_collection_rdf_graph(
     items: list[Any],
     base_url: str,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> Graph:
     """
     Build an in-memory RDF Graph for a list of collection items/manifestations
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+
+    Args:
+        items: List of items to serialize.
+        base_url: Base URL for generating URIs.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment (excludes private data),
+                           "full" for authenticated export (includes all data).
     """
     g = Graph()
     g.bind("frbr", FRBR)
@@ -1651,12 +1755,12 @@ def build_collection_rdf_graph(
                     if m_elem.isbn13:
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                     if m_elem.cover_url:
-                        img_uri = URIRef(
-                            str(m_elem.cover_url)
-                            if str(m_elem.cover_url).startswith(("http://", "https://"))
-                            else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
-                        )
-                        g.add((m_uri, SCHEMA.image, img_uri))
+                        encoded_cover = _safe_iri(str(m_elem.cover_url))
+                        if encoded_cover is not None:
+                            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                            g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                        else:
+                            _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)
                 continue
             elif hasattr(item, "expressions") or isinstance(item, Work):
                 # Database Work object
@@ -1688,12 +1792,14 @@ def build_collection_rdf_graph(
                         if m_elem.isbn13:
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                         if m_elem.cover_url:
-                            img_uri = URIRef(
-                                str(m_elem.cover_url)
-                                if str(m_elem.cover_url).startswith(("http://", "https://"))
-                                else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
-                            )
-                            g.add((m_uri, SCHEMA.image, img_uri))
+                            encoded_cover = _safe_iri(str(m_elem.cover_url))
+                            if encoded_cover is not None:
+                                img_iri = (
+                                    encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                                )
+                                g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                            else:
+                                _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)
                 continue
             else:
                 # Database Manifestation object
@@ -1776,10 +1882,12 @@ def build_collection_rdf_graph(
             g.add((m_uri, SCHEMA.datePublished, Literal(str(publication_date))))
 
         if cover_url:
-            img_uri = URIRef(
-                str(cover_url) if str(cover_url).startswith(("http://", "https://")) else f"{base_url}/{str(cover_url).lstrip('/')}"
-            )
-            g.add((m_uri, SCHEMA.image, img_uri))
+            encoded_cover = _safe_iri(str(cover_url))
+            if encoded_cover is not None:
+                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+            else:
+                _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))
@@ -1866,7 +1974,7 @@ def build_collection_rdf_graph(
                 g.add((m_uri, SCHEMA.numberOfPlayers, Literal(str(num_p))))
 
     # --- Enrichment pass: Contributors, WorkParts, ImageScans, UserCollections ---
-    _enrich_graph_from_db(g, items, base_url, collection_uri=collection_uri)
+    _enrich_graph_from_db(g, items, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
     return g
 
 
@@ -1974,11 +2082,20 @@ def stream_collection_to_rdf(
     output_format: str = "nt",
     chunk_size: int = 50,
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> Generator[str, None, None]:
     """
     Generator that streams serialized RDF chunks for large collections.
     Supports 'nt' (N-Triples), 'turtle', and 'json-ld'.
     Processes items in chunks without loading entire collections into memory.
+
+    Args:
+        items_iterable: Iterable of items to serialize.
+        base_url: Base URL for generating URIs.
+        output_format: Output format ('nt', 'turtle', or 'json-ld').
+        chunk_size: Number of items per chunk.
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment, "full" for authenticated export.
     """
     iterator = iter(items_iterable)
     first_chunk = True
@@ -1989,7 +2106,7 @@ def stream_collection_to_rdf(
             break
 
         chunk = _eager_load_items_fallback(chunk)
-        g = build_collection_rdf_graph(chunk, base_url, collection_uri=collection_uri)
+        g = build_collection_rdf_graph(chunk, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
 
         if output_format in ("nt", "n-triples", "ntriples"):
             chunk_nt = g.serialize(format="nt")
@@ -2014,11 +2131,42 @@ def stream_collection_to_rdf(
                 "isbn": "schema:isbn",
                 "author": "schema:author",
             }
+            # Serialize as JSON-LD with @graph container for valid streaming
             chunk_jsonld = g.serialize(format="json-ld", context=context, indent=2)
             if chunk_jsonld:
-                yield chunk_jsonld + "\n"
+                import json
+
+                try:
+                    chunk_data = json.loads(chunk_jsonld)
+                    # Extract the graph items
+                    if isinstance(chunk_data, list):
+                        graph_items = chunk_data
+                    elif isinstance(chunk_data, dict) and "@graph" in chunk_data:
+                        graph_items = chunk_data["@graph"]
+                    else:
+                        graph_items = [chunk_data]
+
+                    if first_chunk:
+                        # First chunk: yield opening with context
+                        yield '{\n  "@context": ' + json.dumps(context, indent=2) + ',\n  "@graph": [\n'
+                        items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
+                        yield items_json
+                    else:
+                        # Subsequent chunks: yield only items with leading comma
+                        items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
+                        yield ",\n" + items_json
+                except json.JSONDecodeError:
+                    # Fallback: yield as-is if parsing fails
+                    if first_chunk:
+                        yield chunk_jsonld
+                    else:
+                        yield "\n" + chunk_jsonld
 
         first_chunk = False
+
+    # Close the JSON-LD document if we started one
+    if output_format == "json-ld" and not first_chunk:
+        yield "\n  ]\n}\n"
 
 
 def serialize_collection_to_rdf(
@@ -2026,13 +2174,21 @@ def serialize_collection_to_rdf(
     base_url: str,
     output_format: str = "json-ld",
     collection_uri: str | URIRef | None = None,
+    enrichment_profile: str = "public",
 ) -> str:
     """
     Serializes a list of collection items/manifestations into semantic RDF graphs
     supporting FRBRer, SIOC (for tags), and Schema.org profiles.
+
+    Args:
+        items: List of items to serialize.
+        base_url: Base URL for generating URIs.
+        output_format: Output format ('nt', 'turtle', or 'json-ld').
+        collection_uri: Optional collection URI for hasPart/isPartOf relationships.
+        enrichment_profile: "public" for public-safe enrichment, "full" for authenticated export.
     """
     items = _eager_load_items_fallback(items)
-    g = build_collection_rdf_graph(items, base_url, collection_uri=collection_uri)
+    g = build_collection_rdf_graph(items, base_url, collection_uri=collection_uri, enrichment_profile=enrichment_profile)
 
     if output_format in ("nt", "n-triples", "ntriples"):
         return g.serialize(format="nt")

@@ -30,6 +30,11 @@ from app.db.models import Expression, Item, Manifestation, SharedCollection, Use
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 
+# Public RDF request policy constants
+MAX_PUBLIC_RDF_LIMIT = 1000  # Maximum items allowed in a single public RDF request
+DEFAULT_PUBLIC_RDF_LIMIT = 100  # Default limit when not specified
+MIN_PUBLIC_RDF_LIMIT = 1  # Minimum valid limit
+
 
 @public_bp.after_request
 def add_cors_headers(response: Response) -> Response:
@@ -38,6 +43,26 @@ def add_cors_headers(response: Response) -> Response:
     response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization"
     return response
+
+
+def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT) -> int:
+    """Parse and validate the 'limit' query parameter with safe bounds.
+
+    Returns a clamped limit value between MIN_PUBLIC_RDF_LIMIT and MAX_PUBLIC_RDF_LIMIT.
+    Non-positive or malformed values are replaced with the default.
+    """
+    try:
+        limit = request.args.get("limit", default, type=int)
+    except (ValueError, TypeError):
+        limit = default
+
+    # Clamp to safe bounds
+    if limit < MIN_PUBLIC_RDF_LIMIT:
+        limit = default
+    elif limit > MAX_PUBLIC_RDF_LIMIT:
+        limit = MAX_PUBLIC_RDF_LIMIT
+
+    return limit
 
 
 def _prefers_html() -> bool:
@@ -273,12 +298,21 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
     return [items_map[iid] for iid in item_ids if iid in items_map]
 
 
-def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
-    """Fetch user public collection with eager loading across all FRBR tiers."""
+def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = False) -> list[Any] | Any:
+    """Fetch user public collection with eager loading across all FRBR tiers.
+
+    Args:
+        username: The public username to fetch items for.
+        limit: Maximum number of items to return.
+        stream: If True, returns an iterator instead of a list for memory-efficient streaming.
+
+    Returns:
+        List of items or iterator if stream=True.
+    """
     user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
     user = db.session.execute(user_stmt).scalar_one_or_none()
     if not user:
-        return []
+        return [] if not stream else iter([])
     stmt = (
         select(Item)
         .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
@@ -286,20 +320,32 @@ def fetch_user_public_collection(username: str, limit: int = 50) -> list[Any]:
         .order_by(Item.updated_at.desc())
         .limit(limit)
     )
+    if stream:
+        # Return an iterator for memory-efficient streaming
+        return db.session.execute(stmt).scalars().unique().yield_per(50)
     return list(db.session.execute(stmt).scalars().unique().all())
 
 
-def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
-    """Fetch items from a shared collection by token with eager loading across all FRBR tiers."""
+def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool = False) -> list[Any] | Any:
+    """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
+
+    Args:
+        token: The share token to look up.
+        limit: Maximum number of items to return.
+        stream: If True, returns an iterator instead of a list for memory-efficient streaming.
+
+    Returns:
+        List of items or iterator if stream=True.
+    """
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
-        return []
+        return [] if not stream else iter([])
     if collection.is_expired:
-        return []
+        return [] if not stream else iter([])
     user = db.session.get(User, collection.user_id)
     if not user:
-        return []
+        return [] if not stream else iter([])
 
     query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False))
     filters = collection.filters
@@ -333,6 +379,18 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50) -> list[Any]:
             )
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
+
+    if stream:
+        # Return an iterator for memory-efficient streaming
+        return (
+            db.session.execute(
+                query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+            )
+            .scalars()
+            .unique()
+            .yield_per(50)
+        )
+
     return list(
         db.session.execute(query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work)))
         .scalars()
@@ -439,8 +497,8 @@ def get_public_items(username: str):
         rdf_mimetype = "text/turtle"
 
     if rdf_format:
-        limit_val = request.args.get("limit", 100, type=int)
-        items = fetch_user_public_collection(username=username, limit=limit_val)
+        limit_val = _parse_safe_rdf_limit()
+        items = fetch_user_public_collection(username=username, limit=limit_val, stream=is_stream)
         collection_uri = f"{base_url}/u/{username}"
         if is_stream:
             return Response(
@@ -448,6 +506,9 @@ def get_public_items(username: str):
                 mimetype=rdf_mimetype,
                 headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
             )
+        # For non-streaming, convert iterator to list if needed
+        if not isinstance(items, list):
+            items = list(items)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
         return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
@@ -522,8 +583,8 @@ def get_shared_collection(token: str):
         rdf_mimetype = "text/turtle"
 
     if rdf_format:
-        limit_val = request.args.get("limit", 100, type=int)
-        items = fetch_shared_collection_by_token(token=token, limit=limit_val)
+        limit_val = _parse_safe_rdf_limit()
+        items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
         collection_uri = f"{base_url}/share/{token}"
         if is_stream:
             return Response(
@@ -531,6 +592,9 @@ def get_shared_collection(token: str):
                 mimetype=rdf_mimetype,
                 headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
             )
+        # For non-streaming, convert iterator to list if needed
+        if not isinstance(items, list):
+            items = list(items)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
         return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 

@@ -192,14 +192,14 @@ describe("Navbar Auth State", () => {
     expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
   });
 
-  it("shows Administration for custodian users", async () => {
+  it("shows Administration for custodian users with custodian role", async () => {
     const user = userEvent.setup();
     (useProfile as Mock).mockReturnValue({
       data: {
         email: "custodian@example.com",
         display_name: "Custodian",
-        roles: ["user"],
-        permissions: ["write_metadata"],
+        roles: ["user", "custodian"],
+        permissions: [],
       },
       isLoading: false,
     });
@@ -213,6 +213,160 @@ describe("Navbar Auth State", () => {
     const adminItem = within(menu).getByText("Administration");
     expect(adminItem).toBeInTheDocument();
     expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
+  });
+
+  it("shows Administration for users with write:metadata permission (colon format)", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "custodian@example.com",
+        display_name: "Custodian",
+        roles: ["user"],
+        permissions: ["write:metadata"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+    expect(adminItem.closest("a")).toHaveAttribute("href", "/admin/settings");
+  });
+
+  it("shows Administration for users with edit:cover permission (colon format)", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "cover-editor@example.com",
+        display_name: "Cover Editor",
+        roles: ["user"],
+        permissions: ["edit:cover"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+  });
+
+  it("shows Administration for users with escalate:resolve permission (colon format)", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "escalation-resolver@example.com",
+        display_name: "Escalation Resolver",
+        roles: ["user"],
+        permissions: ["escalate:resolve"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+  });
+
+  it("shows Administration for users with read:metadata permission (colon format)", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "metadata-reader@example.com",
+        display_name: "Metadata Reader",
+        roles: ["user"],
+        permissions: ["read:metadata"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
+  });
+
+  it("does NOT show Administration for users with underscore format permissions (regression test)", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "user@example.com",
+        display_name: "Regular User",
+        roles: ["user"],
+        permissions: ["write_metadata", "edit_cover"], // Wrong format - should NOT grant access
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    // Administration should NOT be visible with underscore format permissions
+    expect(within(menu).queryByText("Administration")).toBeNull();
+  });
+
+  it("does NOT show Administration for regular users without custodian permissions", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "regular@example.com",
+        display_name: "Regular User",
+        roles: ["user"],
+        permissions: ["read:owners", "write:item"], // Non-admin permissions
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByText("Administration")).toBeNull();
+  });
+
+  it("shows Administration for users with multiple custodian permissions", async () => {
+    const user = userEvent.setup();
+    (useProfile as Mock).mockReturnValue({
+      data: {
+        email: "power-custodian@example.com",
+        display_name: "Power Custodian",
+        roles: ["user"],
+        permissions: ["write:metadata", "edit:cover", "escalate:resolve", "read:metadata"],
+      },
+      isLoading: false,
+    });
+
+    render(<Navbar />);
+
+    const avatarBtn = screen.getByLabelText("User menu");
+    await user.click(avatarBtn);
+
+    const menu = await screen.findByRole("menu");
+    const adminItem = within(menu).getByText("Administration");
+    expect(adminItem).toBeInTheDocument();
   });
 
   // ── 6.5 Help & Feedback link in user menu ──────────────────────

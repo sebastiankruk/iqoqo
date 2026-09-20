@@ -49,6 +49,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { RoadmapView } from "@/components/collection/roadmap-view";
 import { useTranslations } from "next-intl";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -569,9 +570,7 @@ function CollectionContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      {collectionJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
-      )}
+      {collectionJsonLd && <JsonLdScript data={collectionJsonLd} />}
       <div aria-live="polite" className="sr-only">
         {ariaLiveText}
       </div>

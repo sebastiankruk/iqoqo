@@ -21,6 +21,7 @@ import { Library, Share2, Rss } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -138,7 +139,7 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionJsonLd) }} />
+      <JsonLdScript data={collectionJsonLd} />
       <Navbar />
       <main className="flex-1">
         {/* Header Section */}

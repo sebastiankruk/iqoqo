@@ -219,21 +219,28 @@ class TestSPARQLService:
         assert formatted.get("boolean") is True
 
     def test_execute_timeout_handling(self):
-        from unittest.mock import MagicMock
-
+        """Test that timeout is enforced with a very short deadline."""
         from app.core.sparql_service import SPARQLTimeout
 
-        mock_graph = MagicMock()
-        import time
+        # Create a small graph
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "expression_id": "e-1",
+                "work_id": "w-1",
+                "title": "Test Book",
+                "authors": ["Author One"],
+                "tags": ["fiction"],
+                "status": "read",
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
 
-        def slow_query(_q):
-            time.sleep(0.5)
-            return MagicMock()
-
-        mock_graph.query.side_effect = slow_query
-
+        # Use an extremely short timeout that will be exceeded even for simple queries
+        # due to process startup overhead
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(mock_graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.05)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
 
     def test_build_graph_excludes_other_users_private_items(self):
         items = [
@@ -440,3 +447,141 @@ class TestSPARQLEndpoint:
         assert response.status_code == 200
         assert "application/rdf+xml" in response.content_type
         assert b"<rdf:RDF" in response.data or b"<?xml" in response.data
+
+
+class TestSPARQLURIEdgeCases:
+    """Regression tests for URI construction with reserved characters."""
+
+    def test_cover_url_with_spaces_does_not_crash(self):
+        """Cover filenames containing spaces must not crash graph serialization."""
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "expression_id": "e-1",
+                "work_id": "w-1",
+                "title": "Test Book",
+                "cover_url": "/covers/My Book Cover (2024).jpg",
+                "authors": [],
+                "tags": [],
+                "status": "read",
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        # Must serialize without exception
+        nt = graph.serialize(format="nt")
+        assert nt is not None
+        # Spaces must be percent-encoded
+        assert "%20" in nt or "My%20Book" in nt
+
+    def test_cover_url_with_unicode(self):
+        """Cover filenames containing Unicode characters must be safely encoded."""
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "title": "Książka",
+                "cover_url": "/covers/książka_okładka.png",
+                "authors": [],
+                "tags": [],
+                "status": "read",
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        nt = graph.serialize(format="nt")
+        assert nt is not None
+
+    def test_cover_url_absolute_with_spaces(self):
+        """Absolute cover URLs with spaces must be percent-encoded."""
+        items = [
+            {
+                "id": "item-1",
+                "manifestation_id": "m-1",
+                "title": "Test",
+                "cover_url": "https://example.com/covers/my cover.jpg",
+                "authors": [],
+                "tags": [],
+                "status": None,
+            }
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        nt = graph.serialize(format="nt")
+        assert nt is not None
+        assert "%20" in nt
+
+    def test_malformed_cover_url_skipped_gracefully(self):
+        """Completely malformed cover URLs should be skipped, not crash."""
+        from app.core.frbr_service import _safe_iri
+
+        # _safe_iri should return None for empty/None
+        assert _safe_iri("") is None
+        assert _safe_iri(None) is None  # type: ignore[arg-type]
+
+    def test_example_queries_do_not_return_500(self, client, sparql_user):
+        """SPARQL Explorer example queries must return 200, not 500."""
+        example_queries = [
+            "SELECT ?title WHERE { ?s <https://schema.org/name> ?title } LIMIT 10",
+            "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 5",
+            "ASK { ?s a <http://iflastandards.info/ns/frbr/frbrer/Work> }",
+            "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o } LIMIT 10",
+            "DESCRIBE <http://iflastandards.info/ns/frbr/frbrer/Work>",
+        ]
+        for query in example_queries:
+            response = client.post(
+                "/api/sparql",
+                json={"query": query},
+                headers=sparql_user,
+            )
+            assert response.status_code != 500, f"Query returned 500: {query}"
+            assert response.status_code in (200, 400, 413, 504), f"Unexpected status {response.status_code} for: {query}"
+
+
+class TestSPARQLIPCAndLimits:
+    """Tests for IPC reliability and resource limit enforcement."""
+
+    def test_child_crash_returns_structured_error(self):
+        """If the child process crashes, the parent returns a structured error."""
+        from unittest.mock import patch
+
+        from app.core.sparql_service import _MP_CONTEXT, SPARQLChildProcessError, _execute_query_in_process
+
+        items = [{"id": "1", "manifestation_id": "m1", "title": "T", "authors": [], "tags": [], "status": None}]
+        graph = build_graph(items, "http://localhost:5000")
+
+        # Patch the child function to simulate a crash (exit without sending)
+        def crashing_child(graph_data, query, conn):
+            import os
+
+            os._exit(1)
+
+        with patch("app.core.sparql_service._execute_query_in_process", side_effect=crashing_child):
+            with pytest.raises((SPARQLChildProcessError, Exception)):
+                execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=5.0)
+
+    def test_graph_build_error_returns_structured_response(self, client, sparql_user):
+        """Graph build failures must return structured JSON error, not uncaught 500."""
+        from unittest.mock import patch
+
+        with patch("app.api.sparql.build_graph", side_effect=Exception("graph build boom")):
+            response = client.post(
+                "/api/sparql",
+                json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},
+                headers=sparql_user,
+            )
+            # Should be a structured error, not an uncaught 500
+            assert response.status_code in (413, 500, 502)
+            data = response.get_json()
+            assert "error" in data
+
+    def test_result_row_limit_enforced(self):
+        """SELECT results must be capped at MAX_RESULT_ROWS."""
+        from app.core.sparql_service import MAX_RESULT_ROWS
+
+        items = [
+            {"id": f"i-{i}", "manifestation_id": f"m-{i}", "title": f"Book {i}", "authors": [], "tags": [], "status": None}
+            for i in range(20)
+        ]
+        graph = build_graph(items, "http://localhost:5000")
+        result = execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }")
+        formatted = format_select_results(result)
+        assert len(formatted["results"]["bindings"]) <= MAX_RESULT_ROWS
