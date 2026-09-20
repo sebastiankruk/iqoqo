@@ -237,10 +237,7 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     # Prune promoted keys from metadata (case-insensitive)
     promoted_keys = ["isbn13", "isbn", "publisher", "format_type"]
     for key in promoted_keys:
-        keys_to_remove = [
-            k for k in meta.keys()
-            if isinstance(k, str) and k.lower() == key.lower()
-        ]
+        keys_to_remove = [k for k in meta.keys() if isinstance(k, str) and k.lower() == key.lower()]
         for k in keys_to_remove:
             del meta[k]
 
@@ -2078,6 +2075,7 @@ def stream_collection_to_rdf(
             chunk_jsonld = g.serialize(format="json-ld", context=context, indent=2)
             if chunk_jsonld:
                 import json
+
                 try:
                     chunk_data = json.loads(chunk_jsonld)
                     # Extract the graph items

@@ -148,11 +148,11 @@ class TestPublicRDFVisibilitySafety:
     def test_public_rdf_excludes_private_collections(self, client, public_rdf_test_data):
         """Public RDF should not include private UserCollection names."""
         response = client.get(
-            f"/api/public/u/usera/items?format=json-ld",
+            "/api/public/u/usera/items?format=json-ld",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
-        
+
         # Serialize to string to check for private collection name
         rdf_str = json.dumps(data)
         assert "My Private Collection" not in rdf_str
@@ -164,7 +164,7 @@ class TestPublicRDFVisibilitySafety:
         )
         assert response.status_code == 200
         data = json.loads(response.data)
-        
+
         # Serialize to string to check for scan path
         rdf_str = json.dumps(data)
         assert "scans/test_scan.jpg" not in rdf_str
@@ -176,7 +176,7 @@ class TestPublicRDFVisibilitySafety:
         )
         assert response.status_code == 200
         data = json.loads(response.data)
-        
+
         # Should include author information
         rdf_str = json.dumps(data)
         assert "Test Author" in rdf_str or "author" in rdf_str.lower()
@@ -191,7 +191,7 @@ class TestPublicRDFFormatValidity:
             "/api/public/u/usera/items?format=json-ld&stream=true",
         )
         assert response.status_code == 200
-        
+
         # Should be valid JSON
         try:
             data = json.loads(response.data)
@@ -208,7 +208,7 @@ class TestPublicRDFFormatValidity:
             "/api/public/u/usera/items?format=turtle&stream=true",
         )
         assert response.status_code == 200
-        
+
         # Should be parseable as Turtle
         g = Graph()
         try:
@@ -223,7 +223,7 @@ class TestPublicRDFFormatValidity:
             "/api/public/u/usera/items?format=nt&stream=true",
         )
         assert response.status_code == 200
-        
+
         # Should be parseable as N-Triples
         g = Graph()
         try:
@@ -239,13 +239,13 @@ class TestPublicRDFBoundedMemory:
     def test_first_chunk_emitted_quickly(self, client, public_rdf_test_data):
         """First chunk should be emitted without loading the full collection."""
         import time
-        
+
         start = time.time()
         response = client.get(
             "/api/public/u/usera/items?format=json-ld&stream=true&limit=10",
         )
         elapsed = time.time() - start
-        
+
         assert response.status_code == 200
         # Should complete quickly (under 5 seconds for small dataset)
         assert elapsed < 5.0

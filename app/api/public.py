@@ -47,7 +47,7 @@ def add_cors_headers(response: Response) -> Response:
 
 def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT) -> int:
     """Parse and validate the 'limit' query parameter with safe bounds.
-    
+
     Returns a clamped limit value between MIN_PUBLIC_RDF_LIMIT and MAX_PUBLIC_RDF_LIMIT.
     Non-positive or malformed values are replaced with the default.
     """
@@ -55,13 +55,13 @@ def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT) -> int:
         limit = request.args.get("limit", default, type=int)
     except (ValueError, TypeError):
         limit = default
-    
+
     # Clamp to safe bounds
     if limit < MIN_PUBLIC_RDF_LIMIT:
         limit = default
     elif limit > MAX_PUBLIC_RDF_LIMIT:
         limit = MAX_PUBLIC_RDF_LIMIT
-    
+
     return limit
 
 
@@ -300,12 +300,12 @@ def fetch_global_fresh_arrivals(limit: int = 50, level: str = "manifestations") 
 
 def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = False) -> list[Any] | Any:
     """Fetch user public collection with eager loading across all FRBR tiers.
-    
+
     Args:
         username: The public username to fetch items for.
         limit: Maximum number of items to return.
         stream: If True, returns an iterator instead of a list for memory-efficient streaming.
-    
+
     Returns:
         List of items or iterator if stream=True.
     """
@@ -328,12 +328,12 @@ def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = 
 
 def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool = False) -> list[Any] | Any:
     """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
-    
+
     Args:
         token: The share token to look up.
         limit: Maximum number of items to return.
         stream: If True, returns an iterator instead of a list for memory-efficient streaming.
-    
+
     Returns:
         List of items or iterator if stream=True.
     """
@@ -379,13 +379,18 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
             )
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
-    
+
     if stream:
         # Return an iterator for memory-efficient streaming
-        return db.session.execute(
-            query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
-        ).scalars().unique().yield_per(50)
-    
+        return (
+            db.session.execute(
+                query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+            )
+            .scalars()
+            .unique()
+            .yield_per(50)
+        )
+
     return list(
         db.session.execute(query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work)))
         .scalars()

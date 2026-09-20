@@ -221,7 +221,7 @@ class TestSPARQLService:
     def test_execute_timeout_handling(self):
         """Test that timeout is enforced with a very short deadline."""
         from app.core.sparql_service import SPARQLTimeout
-        
+
         # Create a small graph
         items = [
             {
@@ -236,7 +236,7 @@ class TestSPARQLService:
             }
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Use an extremely short timeout that will be exceeded even for simple queries
         # due to process startup overhead
         with pytest.raises(SPARQLTimeout):

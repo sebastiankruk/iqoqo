@@ -49,7 +49,7 @@ class TestAdversarialQueries:
             for i in range(50)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Cartesian join query that would be very expensive
         cartesian_query = """
         SELECT ?s1 ?s2 ?s3 ?s4
@@ -61,7 +61,7 @@ class TestAdversarialQueries:
         }
         LIMIT 10000
         """
-        
+
         # Should timeout rather than complete
         with pytest.raises(SPARQLTimeout):
             execute_sparql(graph, cartesian_query, timeout=0.5)
@@ -81,12 +81,12 @@ class TestAdversarialQueries:
             }
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Execute multiple queries with very short timeouts
         for _ in range(5):
             with pytest.raises(SPARQLTimeout):
                 execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
-        
+
         # After timeouts, a normal query should still work
         result = execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o } LIMIT 1", timeout=5.0)
         assert result is not None
@@ -107,7 +107,7 @@ class TestAdversarialQueries:
             for i in range(5)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Try to execute more concurrent queries than the limit
         # The limit is MAX_CONCURRENT_QUERIES = 4
         def run_query():
@@ -121,12 +121,12 @@ class TestAdversarialQueries:
                 return "timeout"
             except Exception as e:
                 return f"error: {e}"
-        
+
         # Launch 10 concurrent queries
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(run_query) for _ in range(10)]
             results = [f.result() for f in concurrent.futures.as_completed(futures)]
-        
+
         # At least some should succeed (the system shouldn't crash)
         successes = results.count("success")
         assert successes > 0, f"At least some queries should succeed, got results: {results}"
@@ -148,10 +148,10 @@ class TestAdversarialQueries:
             }
             for i in range(6000)
         ]
-        
+
         # build_graph should truncate to MAX_GRAPH_ITEMS
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Graph should be created (truncated to limit)
         assert graph is not None
         # The graph should have been truncated, so it shouldn't have all 6000 items
@@ -175,13 +175,13 @@ class TestAdversarialQueries:
             for i in range(20)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Query that would return many results, but with LIMIT
         result = execute_sparql(graph, "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 50", timeout=5.0)
-        
+
         # format_select_results should respect max_rows
         from app.core.sparql_service import format_select_results
-        
+
         formatted = format_select_results(result, max_rows=10)
         assert len(formatted["results"]["bindings"]) <= 10
 
@@ -201,7 +201,7 @@ class TestAdversarialQueries:
             for i in range(50)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Complex query with multiple FILTERs
         complex_query = """
         SELECT ?s ?title ?status
@@ -214,7 +214,7 @@ class TestAdversarialQueries:
         ORDER BY ?title
         LIMIT 20
         """
-        
+
         result = execute_sparql(graph, complex_query, timeout=5.0)
         assert result is not None
 
@@ -234,7 +234,7 @@ class TestAdversarialQueries:
             for i in range(30)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Query with nested OPTIONAL patterns
         nested_query = """
         SELECT ?s ?title ?author ?tag
@@ -249,7 +249,7 @@ class TestAdversarialQueries:
         }
         LIMIT 50
         """
-        
+
         result = execute_sparql(graph, nested_query, timeout=5.0)
         assert result is not None
 
@@ -269,7 +269,7 @@ class TestAdversarialQueries:
             for i in range(100)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Aggregation query with GROUP BY and HAVING
         aggregation_query = """
         SELECT ?author (COUNT(?s) as ?count)
@@ -280,7 +280,7 @@ class TestAdversarialQueries:
         HAVING (COUNT(?s) > 5)
         ORDER BY DESC(?count)
         """
-        
+
         result = execute_sparql(graph, aggregation_query, timeout=5.0)
         assert result is not None
 
@@ -300,7 +300,7 @@ class TestAdversarialQueries:
             for i in range(30)
         ]
         graph = build_graph(items, "http://localhost:5000")
-        
+
         # Query with subquery
         subquery_query = """
         SELECT ?s ?title
@@ -314,6 +314,6 @@ class TestAdversarialQueries:
             }
         }
         """
-        
+
         result = execute_sparql(graph, subquery_query, timeout=5.0)
         assert result is not None

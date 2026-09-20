@@ -61,9 +61,7 @@ class FormatTypeValidationError(F3ValidationError):
     pass
 
 
-def extract_promoted_key_case_insensitive(
-    meta: dict[str, Any] | None, key: str
-) -> Any | None:
+def extract_promoted_key_case_insensitive(meta: dict[str, Any] | None, key: str) -> Any | None:
     """Extract a promoted key from metadata using case-insensitive matching.
 
     This function handles legacy metadata keys that may have different casing
@@ -115,18 +113,13 @@ def isbn10_to_isbn13(isbn10: str) -> str | None:
     if not (cleaned[:9].isdigit() and (cleaned[9].isdigit() or cleaned[9] == "X")):
         return None
 
-    total10 = sum(
-        (10 - idx) * (10 if char == "X" else int(char))
-        for idx, char in enumerate(cleaned)
-    )
+    total10 = sum((10 - idx) * (10 if char == "X" else int(char)) for idx, char in enumerate(cleaned))
     if total10 % 11 != 0:
         return None
 
     # Construct 13-digit prefix (978 + first 9 digits)
     core = f"978{cleaned[:9]}"
-    total13 = sum(
-        int(digit) * (1 if idx % 2 == 0 else 3) for idx, digit in enumerate(core)
-    )
+    total13 = sum(int(digit) * (1 if idx % 2 == 0 else 3) for idx, digit in enumerate(core))
     check13 = (10 - (total13 % 10)) % 10
     return f"{core}{check13}"
 
@@ -161,29 +154,20 @@ def normalize_isbn(raw_isbn: str) -> str | None:
     if len(cleaned) == 10:
         result = isbn10_to_isbn13(cleaned)
         if result is None:
-            raise ISBNValidationError(
-                f"Invalid ISBN-10 checksum: {raw_isbn}"
-            )
+            raise ISBNValidationError(f"Invalid ISBN-10 checksum: {raw_isbn}")
         return result
 
     if len(cleaned) == 13 and cleaned.isdigit():
         # Validate ISBN-13 checksum
-        total = sum(
-            int(digit) * (1 if idx % 2 == 0 else 3)
-            for idx, digit in enumerate(cleaned[:12])
-        )
+        total = sum(int(digit) * (1 if idx % 2 == 0 else 3) for idx, digit in enumerate(cleaned[:12]))
         expected_check = (10 - (total % 10)) % 10
         if int(cleaned[12]) != expected_check:
-            raise ISBNValidationError(
-                f"Invalid ISBN-13 checksum: {raw_isbn}"
-            )
+            raise ISBNValidationError(f"Invalid ISBN-13 checksum: {raw_isbn}")
         return cleaned
 
     # Invalid length
     if len(cleaned) not in (10, 13):
-        raise ISBNValidationError(
-            f"Invalid ISBN length: {len(cleaned)} (expected 10 or 13)"
-        )
+        raise ISBNValidationError(f"Invalid ISBN length: {len(cleaned)} (expected 10 or 13)")
 
     return None
 
@@ -217,17 +201,14 @@ def validate_publisher(publisher: str | None, strict: bool = False) -> str | Non
     if len(cleaned) > MAX_PUBLISHER_LENGTH:
         if strict:
             raise PublisherValidationError(
-                f"Publisher name exceeds maximum length of {MAX_PUBLISHER_LENGTH}: "
-                f"{len(cleaned)} characters"
+                f"Publisher name exceeds maximum length of {MAX_PUBLISHER_LENGTH}: " f"{len(cleaned)} characters"
             )
         return None
 
     return cleaned
 
 
-def validate_format_type(
-    format_type: str | None, strict: bool = False
-) -> str | None:
+def validate_format_type(format_type: str | None, strict: bool = False) -> str | None:
     """Validate and normalize a format type against the shared taxonomy.
 
     Args:
@@ -256,8 +237,7 @@ def validate_format_type(
     if len(cleaned) > MAX_FORMAT_TYPE_LENGTH:
         if strict:
             raise FormatTypeValidationError(
-                f"Format type exceeds maximum length of {MAX_FORMAT_TYPE_LENGTH}: "
-                f"{len(cleaned)} characters"
+                f"Format type exceeds maximum length of {MAX_FORMAT_TYPE_LENGTH}: " f"{len(cleaned)} characters"
             )
         return None
 
@@ -265,18 +245,11 @@ def validate_format_type(
     from app.core.taxonomy import MediaFormat
 
     # Check if format is in the known taxonomy
-    known_formats = {
-        attr.lower()
-        for attr in dir(MediaFormat)
-        if not attr.startswith("_") and isinstance(getattr(MediaFormat, attr), str)
-    }
+    known_formats = {attr.lower() for attr in dir(MediaFormat) if not attr.startswith("_") and isinstance(getattr(MediaFormat, attr), str)}
 
     if cleaned not in known_formats:
         if strict:
-            raise FormatTypeValidationError(
-                f"Unknown format type: {format_type}. "
-                f"Known formats: {sorted(known_formats)}"
-            )
+            raise FormatTypeValidationError(f"Unknown format type: {format_type}. " f"Known formats: {sorted(known_formats)}")
         # In non-strict mode, accept the value but log a warning
         # This allows forward compatibility with new formats
         return cleaned
@@ -368,10 +341,7 @@ def normalize_manifestation_meta(
     promoted_keys = ["isbn13", "isbn", "publisher", "format_type"]
     for key in promoted_keys:
         # Case-insensitive removal
-        keys_to_remove = [
-            k for k in meta_copy.keys()
-            if isinstance(k, str) and k.lower() == key.lower()
-        ]
+        keys_to_remove = [k for k in meta_copy.keys() if isinstance(k, str) and k.lower() == key.lower()]
         for k in keys_to_remove:
             del meta_copy[k]
 
@@ -394,53 +364,57 @@ class PreflightReport:
 
     def add_long_publisher(self, manifestation_id: int, publisher: str, length: int):
         """Record a publisher that exceeds the target column length."""
-        self.long_publishers.append({
-            "manifestation_id": manifestation_id,
-            "publisher": publisher,
-            "length": length,
-            "max_length": MAX_PUBLISHER_LENGTH,
-        })
+        self.long_publishers.append(
+            {
+                "manifestation_id": manifestation_id,
+                "publisher": publisher,
+                "length": length,
+                "max_length": MAX_PUBLISHER_LENGTH,
+            }
+        )
 
     def add_invalid_isbn(self, manifestation_id: int, isbn: str, reason: str):
         """Record an invalid ISBN value."""
-        self.invalid_isbns.append({
-            "manifestation_id": manifestation_id,
-            "isbn": isbn,
-            "reason": reason,
-        })
+        self.invalid_isbns.append(
+            {
+                "manifestation_id": manifestation_id,
+                "isbn": isbn,
+                "reason": reason,
+            }
+        )
 
     def add_isbn_conflict(self, isbn: str, manifestation_ids: list[int]):
         """Record duplicate ISBN values."""
-        self.isbn_conflicts.append({
-            "isbn": isbn,
-            "manifestation_ids": manifestation_ids,
-        })
+        self.isbn_conflicts.append(
+            {
+                "isbn": isbn,
+                "manifestation_ids": manifestation_ids,
+            }
+        )
 
     def add_mixed_case_key(self, manifestation_id: int, key: str, expected: str):
         """Record a mixed-case promoted key."""
-        self.mixed_case_keys.append({
-            "manifestation_id": manifestation_id,
-            "key": key,
-            "expected": expected,
-        })
+        self.mixed_case_keys.append(
+            {
+                "manifestation_id": manifestation_id,
+                "key": key,
+                "expected": expected,
+            }
+        )
 
     def add_other_issue(self, issue_type: str, details: dict[str, Any]):
         """Record any other preflight issue."""
-        self.other_issues.append({
-            "type": issue_type,
-            "details": details,
-        })
+        self.other_issues.append(
+            {
+                "type": issue_type,
+                "details": details,
+            }
+        )
 
     @property
     def has_issues(self) -> bool:
         """Check if there are any preflight issues."""
-        return bool(
-            self.long_publishers
-            or self.invalid_isbns
-            or self.isbn_conflicts
-            or self.mixed_case_keys
-            or self.other_issues
-        )
+        return bool(self.long_publishers or self.invalid_isbns or self.isbn_conflicts or self.mixed_case_keys or self.other_issues)
 
     @property
     def blocking_issues(self) -> bool:
@@ -470,40 +444,28 @@ class PreflightReport:
         if self.long_publishers:
             lines.append(f"\n⚠ Long Publishers ({len(self.long_publishers)}):")
             for item in self.long_publishers[:10]:  # Show first 10
-                lines.append(
-                    f"  - Manifestation {item['manifestation_id']}: "
-                    f"{item['length']} chars (max {item['max_length']})"
-                )
+                lines.append(f"  - Manifestation {item['manifestation_id']}: " f"{item['length']} chars (max {item['max_length']})")
             if len(self.long_publishers) > 10:
                 lines.append(f"  ... and {len(self.long_publishers) - 10} more")
 
         if self.invalid_isbns:
             lines.append(f"\n⚠ Invalid ISBNs ({len(self.invalid_isbns)}):")
             for item in self.invalid_isbns[:10]:
-                lines.append(
-                    f"  - Manifestation {item['manifestation_id']}: "
-                    f"{item['isbn']} ({item['reason']})"
-                )
+                lines.append(f"  - Manifestation {item['manifestation_id']}: " f"{item['isbn']} ({item['reason']})")
             if len(self.invalid_isbns) > 10:
                 lines.append(f"  ... and {len(self.invalid_isbns) - 10} more")
 
         if self.isbn_conflicts:
             lines.append(f"\n✗ ISBN Conflicts ({len(self.isbn_conflicts)}):")
             for item in self.isbn_conflicts[:10]:
-                lines.append(
-                    f"  - ISBN {item['isbn']}: "
-                    f"manifestations {item['manifestation_ids']}"
-                )
+                lines.append(f"  - ISBN {item['isbn']}: " f"manifestations {item['manifestation_ids']}")
             if len(self.isbn_conflicts) > 10:
                 lines.append(f"  ... and {len(self.isbn_conflicts) - 10} more")
 
         if self.mixed_case_keys:
             lines.append(f"\nℹ Mixed-Case Keys ({len(self.mixed_case_keys)}):")
             for item in self.mixed_case_keys[:10]:
-                lines.append(
-                    f"  - Manifestation {item['manifestation_id']}: "
-                    f"'{item['key']}' (expected '{item['expected']}')"
-                )
+                lines.append(f"  - Manifestation {item['manifestation_id']}: " f"'{item['key']}' (expected '{item['expected']}')")
             if len(self.mixed_case_keys) > 10:
                 lines.append(f"  ... and {len(self.mixed_case_keys) - 10} more")
 

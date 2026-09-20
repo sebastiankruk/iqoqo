@@ -53,7 +53,7 @@ class TestOperationClassification:
         """INSERT operations should be rejected."""
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("INSERT DATA { <http://example.org/s> <http://example.org/p> 'value' }")
-        
+
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("INSERT { ?s ?p ?o } WHERE { ?s ?p ?o }")
 
@@ -61,7 +61,7 @@ class TestOperationClassification:
         """DELETE operations should be rejected."""
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("DELETE WHERE { ?s ?p ?o }")
-        
+
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("DELETE DATA { <http://example.org/s> <http://example.org/p> 'value' }")
 
@@ -69,7 +69,7 @@ class TestOperationClassification:
         """DROP operations should be rejected."""
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("DROP GRAPH <http://example.org/graph>")
-        
+
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("DROP ALL")
 
@@ -77,7 +77,7 @@ class TestOperationClassification:
         """CLEAR operations should be rejected."""
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("CLEAR GRAPH <http://example.org/graph>")
-        
+
         with pytest.raises(SPARQLWriteRejected):
             classify_operation("CLEAR ALL")
 
@@ -126,7 +126,7 @@ class TestOperationClassification:
         # but validate_query should catch them
         with pytest.raises(SPARQLSyntaxError):
             validate_query("SELECT ?s WHERE { ?s ?p }")  # Missing object
-        
+
         with pytest.raises(SPARQLSyntaxError):
             validate_query("SELECT ?s WHERE")  # Incomplete WHERE clause
 
@@ -134,7 +134,7 @@ class TestOperationClassification:
         """Empty queries should raise SPARQLSyntaxError in validate_query."""
         with pytest.raises(SPARQLSyntaxError):
             validate_query("")
-        
+
         with pytest.raises(SPARQLSyntaxError):
             validate_query("   ")
 
@@ -181,7 +181,7 @@ class TestValidateQuery:
     def test_oversized_query_rejected(self):
         """Queries exceeding MAX_QUERY_LENGTH should be rejected."""
         from app.core.sparql_service import SPARQLQueryTooLarge
-        
+
         large_query = "SELECT ?s WHERE { ?s ?p ?o } #" + "x" * 20000
         with pytest.raises(SPARQLQueryTooLarge):
             validate_query(large_query)

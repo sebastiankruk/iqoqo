@@ -48,12 +48,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import create_app  # noqa: E402
 from app.db import db  # noqa: E402
 from app.db.contributions import (  # noqa: E402
-    ExpressionContribution,
     ManifestationContribution,
     WorkContribution,
     WorkPart,
 )
 from app.db.core import (  # noqa: E402
+    _CATALOG_PFX,
+    _INVENTORY_PFX,
     EntityAuditLog,
     Expression,
     ImageScan,
@@ -63,13 +64,10 @@ from app.db.core import (  # noqa: E402
     UserWorkIntent,
     Work,
     WorkExpansionLink,
-    _CATALOG_PFX,
-    _INVENTORY_PFX,
 )
-from app.db.social import _SOCIAL_PFX  # noqa: E402
 from app.db.social import (  # noqa: E402
+    _SOCIAL_PFX,
     EscalationRequest,
-    SharedCollection,
     SocialFeedback,
     SocialNote,
 )
@@ -428,10 +426,7 @@ def create_complete_backup(backup_dir: Path) -> Path:
             "item_status_logs": len(item_status_logs),
         },
         "entities": {
-            "works": [
-                {"id": w.id, "title": w.title, "meta": w.meta, "raw_payload": w.raw_payload}
-                for w in works
-            ],
+            "works": [{"id": w.id, "title": w.title, "meta": w.meta, "raw_payload": w.raw_payload} for w in works],
             "expressions": [
                 {
                     "id": e.id,
@@ -667,9 +662,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
     )
 
     # Check for Expression reparenting
-    dup_expressions = db.session.execute(
-        select(Expression).where(Expression.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_expressions = db.session.execute(select(Expression).where(Expression.work_id == duplicate_work.id)).scalars().all()
     if dup_expressions:
         plan.add_operation(
             MergeOperation(
@@ -682,9 +675,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for WorkContribution reparenting
-    dup_contributions = db.session.execute(
-        select(WorkContribution).where(WorkContribution.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_contributions = db.session.execute(select(WorkContribution).where(WorkContribution.work_id == duplicate_work.id)).scalars().all()
     if dup_contributions:
         plan.add_operation(
             MergeOperation(
@@ -697,9 +688,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for WorkPart reparenting (as container)
-    dup_parts_container = db.session.execute(
-        select(WorkPart).where(WorkPart.container_work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_parts_container = db.session.execute(select(WorkPart).where(WorkPart.container_work_id == duplicate_work.id)).scalars().all()
     if dup_parts_container:
         plan.add_operation(
             MergeOperation(
@@ -712,9 +701,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for WorkPart reparenting (as part)
-    dup_parts_member = db.session.execute(
-        select(WorkPart).where(WorkPart.part_work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_parts_member = db.session.execute(select(WorkPart).where(WorkPart.part_work_id == duplicate_work.id)).scalars().all()
     if dup_parts_member:
         plan.add_operation(
             MergeOperation(
@@ -727,12 +714,15 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for WorkExpansionLink reparenting
-    dup_expansions = db.session.execute(
-        select(WorkExpansionLink).where(
-            (WorkExpansionLink.base_work_id == duplicate_work.id)
-            | (WorkExpansionLink.expansion_work_id == duplicate_work.id)
+    dup_expansions = (
+        db.session.execute(
+            select(WorkExpansionLink).where(
+                (WorkExpansionLink.base_work_id == duplicate_work.id) | (WorkExpansionLink.expansion_work_id == duplicate_work.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if dup_expansions:
         plan.add_operation(
             MergeOperation(
@@ -745,21 +735,21 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for UserWorkIntent conflicts
-    dup_intents = db.session.execute(
-        select(UserWorkIntent).where(UserWorkIntent.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_intents = db.session.execute(select(UserWorkIntent).where(UserWorkIntent.work_id == duplicate_work.id)).scalars().all()
     for intent in dup_intents:
         # Check if canonical already has intent from same user
-        existing = db.session.execute(
-            select(UserWorkIntent).where(
-                UserWorkIntent.work_id == canonical_work.id,
-                UserWorkIntent.user_id == intent.user_id,
+        existing = (
+            db.session.execute(
+                select(UserWorkIntent).where(
+                    UserWorkIntent.work_id == canonical_work.id,
+                    UserWorkIntent.user_id == intent.user_id,
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
-            plan.add_conflict(
-                f"UserWorkIntent conflict: user {intent.user_id} has intent on both works"
-            )
+            plan.add_conflict(f"UserWorkIntent conflict: user {intent.user_id} has intent on both works")
         else:
             plan.add_operation(
                 MergeOperation(
@@ -772,21 +762,21 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
             )
 
     # Check for SocialFeedback conflicts
-    dup_feedback = db.session.execute(
-        select(SocialFeedback).where(SocialFeedback.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_feedback = db.session.execute(select(SocialFeedback).where(SocialFeedback.work_id == duplicate_work.id)).scalars().all()
     for feedback in dup_feedback:
         # Check if canonical already has feedback from same user
-        existing = db.session.execute(
-            select(SocialFeedback).where(
-                SocialFeedback.work_id == canonical_work.id,
-                SocialFeedback.user_id == feedback.user_id,
+        existing = (
+            db.session.execute(
+                select(SocialFeedback).where(
+                    SocialFeedback.work_id == canonical_work.id,
+                    SocialFeedback.user_id == feedback.user_id,
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
-            plan.add_conflict(
-                f"SocialFeedback conflict: user {feedback.user_id} has feedback on both works"
-            )
+            plan.add_conflict(f"SocialFeedback conflict: user {feedback.user_id} has feedback on both works")
         else:
             plan.add_operation(
                 MergeOperation(
@@ -799,9 +789,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
             )
 
     # Check for SocialNote reparenting
-    dup_notes = db.session.execute(
-        select(SocialNote).where(SocialNote.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_notes = db.session.execute(select(SocialNote).where(SocialNote.work_id == duplicate_work.id)).scalars().all()
     if dup_notes:
         plan.add_operation(
             MergeOperation(
@@ -814,9 +802,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for EscalationRequest reparenting
-    dup_escalations = db.session.execute(
-        select(EscalationRequest).where(EscalationRequest.work_id == duplicate_work.id)
-    ).scalars().all()
+    dup_escalations = db.session.execute(select(EscalationRequest).where(EscalationRequest.work_id == duplicate_work.id)).scalars().all()
     if dup_escalations:
         plan.add_operation(
             MergeOperation(
@@ -829,12 +815,16 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
         )
 
     # Check for EntityAuditLog reparenting
-    dup_audit_logs = db.session.execute(
-        select(EntityAuditLog).where(
-            EntityAuditLog.entity_type == "Work",
-            EntityAuditLog.entity_id == duplicate_work.id,
+    dup_audit_logs = (
+        db.session.execute(
+            select(EntityAuditLog).where(
+                EntityAuditLog.entity_type == "Work",
+                EntityAuditLog.entity_id == duplicate_work.id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if dup_audit_logs:
         plan.add_operation(
             MergeOperation(
@@ -872,9 +862,7 @@ def generate_work_merge_plan(canonical_work: Work, duplicate_work: Work) -> Merg
     return plan
 
 
-def generate_manifestation_merge_plan(
-    canonical_manif: Manifestation, duplicate_manif: Manifestation
-) -> MergePlan:
+def generate_manifestation_merge_plan(canonical_manif: Manifestation, duplicate_manif: Manifestation) -> MergePlan:
     """Generate a complete merge plan for duplicate Manifestations.
 
     :param canonical_manif: The Manifestation to keep
@@ -888,9 +876,7 @@ def generate_manifestation_merge_plan(
     )
 
     # Check for Item reparenting
-    dup_items = db.session.execute(
-        select(Item).where(Item.manifestation_id == duplicate_manif.id)
-    ).scalars().all()
+    dup_items = db.session.execute(select(Item).where(Item.manifestation_id == duplicate_manif.id)).scalars().all()
     if dup_items:
         plan.add_operation(
             MergeOperation(
@@ -903,9 +889,7 @@ def generate_manifestation_merge_plan(
         )
 
     # Check for ImageScan reparenting
-    dup_scans = db.session.execute(
-        select(ImageScan).where(ImageScan.manifestation_id == duplicate_manif.id)
-    ).scalars().all()
+    dup_scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id == duplicate_manif.id)).scalars().all()
     if dup_scans:
         plan.add_operation(
             MergeOperation(
@@ -918,11 +902,11 @@ def generate_manifestation_merge_plan(
         )
 
     # Check for ManifestationContribution reparenting
-    dup_contributions = db.session.execute(
-        select(ManifestationContribution).where(
-            ManifestationContribution.manifestation_id == duplicate_manif.id
-        )
-    ).scalars().all()
+    dup_contributions = (
+        db.session.execute(select(ManifestationContribution).where(ManifestationContribution.manifestation_id == duplicate_manif.id))
+        .scalars()
+        .all()
+    )
     if dup_contributions:
         plan.add_operation(
             MergeOperation(
@@ -935,14 +919,10 @@ def generate_manifestation_merge_plan(
         )
 
     # Check for ItemStatusLog reparenting (via Item)
-    dup_items = db.session.execute(
-        select(Item).where(Item.manifestation_id == duplicate_manif.id)
-    ).scalars().all()
+    dup_items = db.session.execute(select(Item).where(Item.manifestation_id == duplicate_manif.id)).scalars().all()
     dup_item_ids = [item.id for item in dup_items]
     if dup_item_ids:
-        dup_status_logs = db.session.execute(
-            select(ItemStatusLog).where(ItemStatusLog.item_id.in_(dup_item_ids))
-        ).scalars().all()
+        dup_status_logs = db.session.execute(select(ItemStatusLog).where(ItemStatusLog.item_id.in_(dup_item_ids))).scalars().all()
         if dup_status_logs:
             plan.add_operation(
                 MergeOperation(
@@ -955,21 +935,21 @@ def generate_manifestation_merge_plan(
             )
 
     # Check for SocialFeedback conflicts
-    dup_feedback = db.session.execute(
-        select(SocialFeedback).where(SocialFeedback.manifestation_id == duplicate_manif.id)
-    ).scalars().all()
+    dup_feedback = db.session.execute(select(SocialFeedback).where(SocialFeedback.manifestation_id == duplicate_manif.id)).scalars().all()
     for feedback in dup_feedback:
         # Check if canonical already has feedback from same user
-        existing = db.session.execute(
-            select(SocialFeedback).where(
-                SocialFeedback.manifestation_id == canonical_manif.id,
-                SocialFeedback.user_id == feedback.user_id,
+        existing = (
+            db.session.execute(
+                select(SocialFeedback).where(
+                    SocialFeedback.manifestation_id == canonical_manif.id,
+                    SocialFeedback.user_id == feedback.user_id,
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
-            plan.add_conflict(
-                f"SocialFeedback conflict: user {feedback.user_id} has feedback on both manifestations"
-            )
+            plan.add_conflict(f"SocialFeedback conflict: user {feedback.user_id} has feedback on both manifestations")
         else:
             plan.add_operation(
                 MergeOperation(
@@ -982,9 +962,7 @@ def generate_manifestation_merge_plan(
             )
 
     # Check for SocialNote reparenting
-    dup_notes = db.session.execute(
-        select(SocialNote).where(SocialNote.manifestation_id == duplicate_manif.id)
-    ).scalars().all()
+    dup_notes = db.session.execute(select(SocialNote).where(SocialNote.manifestation_id == duplicate_manif.id)).scalars().all()
     if dup_notes:
         plan.add_operation(
             MergeOperation(
@@ -997,11 +975,9 @@ def generate_manifestation_merge_plan(
         )
 
     # Check for EscalationRequest reparenting
-    dup_escalations = db.session.execute(
-        select(EscalationRequest).where(
-            EscalationRequest.manifestation_id == duplicate_manif.id
-        )
-    ).scalars().all()
+    dup_escalations = (
+        db.session.execute(select(EscalationRequest).where(EscalationRequest.manifestation_id == duplicate_manif.id)).scalars().all()
+    )
     if dup_escalations:
         plan.add_operation(
             MergeOperation(
@@ -1081,36 +1057,28 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                 stats["reparented_expressions"] += operation.record_count
             elif operation.model_class == "WorkContribution":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _CATALOG_PFX + "work_contributions SET work_id = :target WHERE work_id = :source"
-                    ),
+                    text("UPDATE " + _CATALOG_PFX + "work_contributions SET work_id = :target WHERE work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_contributions"] += operation.record_count
             elif operation.model_class == "WorkPart.container":
                 # Use raw SQL to update WorkPart records where this Work is the container
                 db.session.execute(
-                    text(
-                        "UPDATE " + _CATALOG_PFX + "work_parts SET container_work_id = :target WHERE container_work_id = :source"
-                    ),
+                    text("UPDATE " + _CATALOG_PFX + "work_parts SET container_work_id = :target WHERE container_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_work_parts"] += operation.record_count
             elif operation.model_class == "WorkPart.member":
                 # Use raw SQL to update WorkPart records where this Work is a member
                 db.session.execute(
-                    text(
-                        "UPDATE " + _CATALOG_PFX + "work_parts SET part_work_id = :target WHERE part_work_id = :source"
-                    ),
+                    text("UPDATE " + _CATALOG_PFX + "work_parts SET part_work_id = :target WHERE part_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_work_parts"] += operation.record_count
             elif operation.model_class == "WorkExpansionLink":
                 # Use raw SQL to update WorkExpansionLink records
                 db.session.execute(
-                    text(
-                        "UPDATE " + _CATALOG_PFX + "work_expansion_links SET base_work_id = :target WHERE base_work_id = :source"
-                    ),
+                    text("UPDATE " + _CATALOG_PFX + "work_expansion_links SET base_work_id = :target WHERE base_work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 db.session.execute(
@@ -1122,17 +1090,13 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                 stats["reparented_expansions"] += operation.record_count
             elif operation.model_class == "UserWorkIntent":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _INVENTORY_PFX + "user_work_intents SET work_id = :target WHERE work_id = :source"
-                    ),
+                    text("UPDATE " + _INVENTORY_PFX + "user_work_intents SET work_id = :target WHERE work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_intents"] += operation.record_count
             elif operation.model_class == "SocialFeedback":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _SOCIAL_PFX + "social_feedbacks SET work_id = :target WHERE work_id = :source"
-                    ),
+                    text("UPDATE " + _SOCIAL_PFX + "social_feedbacks SET work_id = :target WHERE work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_feedback"] += operation.record_count
@@ -1144,16 +1108,16 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
                 stats["reparented_notes"] += operation.record_count
             elif operation.model_class == "EscalationRequest":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _SOCIAL_PFX + "escalation_requests SET work_id = :target WHERE work_id = :source"
-                    ),
+                    text("UPDATE " + _SOCIAL_PFX + "escalation_requests SET work_id = :target WHERE work_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_escalations"] += operation.record_count
             elif operation.model_class == "EntityAuditLog":
                 db.session.execute(
                     text(
-                        "UPDATE " + _CATALOG_PFX + "entity_audit_logs SET entity_id = :target WHERE entity_type = 'Work' AND entity_id = :source"
+                        "UPDATE "
+                        + _CATALOG_PFX
+                        + "entity_audit_logs SET entity_id = :target WHERE entity_type = 'Work' AND entity_id = :source"
                     ),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
@@ -1181,9 +1145,7 @@ def apply_work_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, i
     return stats
 
 
-def apply_manifestation_merge_plan(
-    plan: MergePlan, dry_run: bool = False
-) -> dict[str, int]:
+def apply_manifestation_merge_plan(plan: MergePlan, dry_run: bool = False) -> dict[str, int]:
     """Apply a Manifestation merge plan transactionally.
 
     :param plan: The merge plan to apply
@@ -1217,24 +1179,22 @@ def apply_manifestation_merge_plan(
         if operation.operation_type == "reparent":
             if operation.model_class == "Item":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _INVENTORY_PFX + "items SET manifestation_id = :target WHERE manifestation_id = :source"
-                    ),
+                    text("UPDATE " + _INVENTORY_PFX + "items SET manifestation_id = :target WHERE manifestation_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_items"] += operation.record_count
             elif operation.model_class == "ImageScan":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _CATALOG_PFX + "image_scans SET manifestation_id = :target WHERE manifestation_id = :source"
-                    ),
+                    text("UPDATE " + _CATALOG_PFX + "image_scans SET manifestation_id = :target WHERE manifestation_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_scans"] += operation.record_count
             elif operation.model_class == "ManifestationContribution":
                 db.session.execute(
                     text(
-                        "UPDATE " + _CATALOG_PFX + "manifestation_contributions SET manifestation_id = :target WHERE manifestation_id = :source"
+                        "UPDATE "
+                        + _CATALOG_PFX
+                        + "manifestation_contributions SET manifestation_id = :target WHERE manifestation_id = :source"
                     ),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
@@ -1246,25 +1206,19 @@ def apply_manifestation_merge_plan(
                 pass
             elif operation.model_class == "SocialFeedback":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _SOCIAL_PFX + "social_feedbacks SET manifestation_id = :target WHERE manifestation_id = :source"
-                    ),
+                    text("UPDATE " + _SOCIAL_PFX + "social_feedbacks SET manifestation_id = :target WHERE manifestation_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_feedback"] += operation.record_count
             elif operation.model_class == "SocialNote":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _SOCIAL_PFX + "social_notes SET manifestation_id = :target WHERE manifestation_id = :source"
-                    ),
+                    text("UPDATE " + _SOCIAL_PFX + "social_notes SET manifestation_id = :target WHERE manifestation_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_notes"] += operation.record_count
             elif operation.model_class == "EscalationRequest":
                 db.session.execute(
-                    text(
-                        "UPDATE " + _SOCIAL_PFX + "escalation_requests SET manifestation_id = :target WHERE manifestation_id = :source"
-                    ),
+                    text("UPDATE " + _SOCIAL_PFX + "escalation_requests SET manifestation_id = :target WHERE manifestation_id = :source"),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
                 stats["reparented_escalations"] += operation.record_count
@@ -1365,20 +1319,16 @@ def run_safe_etl_pipeline(
             result["stats"]["relocated_work_isbns"] += 1
 
             if normalized:
-                existing_manif = db.session.execute(
-                    select(Manifestation).where(Manifestation.isbn13 == normalized)
-                ).scalars().first()
+                existing_manif = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalized)).scalars().first()
                 if not existing_manif:
-                    child_exprs = db.session.execute(
-                        select(Expression).where(Expression.work_id == work.id)
-                    ).scalars().all()
+                    child_exprs = db.session.execute(select(Expression).where(Expression.work_id == work.id)).scalars().all()
                     assigned = False
                     for expr in child_exprs:
                         if assigned:
                             break
-                        child_manifs = db.session.execute(
-                            select(Manifestation).where(Manifestation.expression_id == expr.id)
-                        ).scalars().all()
+                        child_manifs = (
+                            db.session.execute(select(Manifestation).where(Manifestation.expression_id == expr.id)).scalars().all()
+                        )
                         for manif in child_manifs:
                             if not manif.isbn13:
                                 manif.isbn13 = normalized
@@ -1400,7 +1350,7 @@ def run_safe_etl_pipeline(
             if norm_isbn:
                 isbn_groups[norm_isbn].append((m, norm_isbn))
 
-    for isbn_key, group in isbn_groups.items():
+    for _isbn_key, group in isbn_groups.items():
         if len(group) == 1:
             m, target_isbn = group[0]
             if m.isbn13 != target_isbn:
@@ -1413,9 +1363,7 @@ def run_safe_etl_pipeline(
         # Canonical manifestation: select record with highest item count or oldest id
         group_with_counts = []
         for m, target_isbn in group:
-            item_count = len(
-                db.session.execute(select(Item).where(Item.manifestation_id == m.id)).scalars().all()
-            )
+            item_count = len(db.session.execute(select(Item).where(Item.manifestation_id == m.id)).scalars().all())
             group_with_counts.append((item_count, -m.id, m, target_isbn))
         group_with_counts.sort(reverse=True)
 

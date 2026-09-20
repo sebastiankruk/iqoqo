@@ -108,7 +108,12 @@ def comprehensive_work_fixture(app):
         db.session.flush()
 
         escalation1 = EscalationRequest(
-            work_id=duplicate_work.id, user_id=user1.id, request_type="correction", field_name="author", suggested_value="Fixed Author", note="Fix author name"
+            work_id=duplicate_work.id,
+            user_id=user1.id,
+            request_type="correction",
+            field_name="author",
+            suggested_value="Fixed Author",
+            note="Fix author name",
         )
         db.session.add(escalation1)
         db.session.flush()
@@ -189,9 +194,7 @@ def comprehensive_manifestation_fixture(app):
         db.session.add(manif_contrib)
         db.session.flush()
 
-        status_log = ItemStatusLog(
-            item_id=item1.id, user_id=user.id, old_status=None, new_status="read"
-        )
+        status_log = ItemStatusLog(item_id=item1.id, user_id=user.id, old_status=None, new_status="read")
         db.session.add(status_log)
         db.session.flush()
 
@@ -204,7 +207,12 @@ def comprehensive_manifestation_fixture(app):
         db.session.flush()
 
         escalation = EscalationRequest(
-            manifestation_id=duplicate_manif.id, user_id=user.id, request_type="correction", field_name="publisher", suggested_value="Fixed Publisher", note="Fix publisher"
+            manifestation_id=duplicate_manif.id,
+            user_id=user.id,
+            request_type="correction",
+            field_name="publisher",
+            suggested_value="Fixed Publisher",
+            note="Fix publisher",
         )
         db.session.add(escalation)
         db.session.flush()
@@ -372,17 +380,13 @@ class TestDryRunIsolation:
         with app.app_context():
             fixture = comprehensive_work_fixture
             duplicate_id = fixture["duplicate_work_id"]
-            expressions_before = db.session.execute(
-                select(Expression).where(Expression.work_id == duplicate_id)
-            ).scalars().all()
+            expressions_before = db.session.execute(select(Expression).where(Expression.work_id == duplicate_id)).scalars().all()
             assert len(expressions_before) > 0
             result = run_safe_etl_pipeline(dry_run=True, backup_dir=tmp_path, verbose=False)
             assert result["dry_run"] is True
             duplicate_still_exists = db.session.execute(select(Work).where(Work.id == duplicate_id)).scalars().first()
             assert duplicate_still_exists is not None
-            expressions_after = db.session.execute(
-                select(Expression).where(Expression.work_id == duplicate_id)
-            ).scalars().all()
+            expressions_after = db.session.execute(select(Expression).where(Expression.work_id == duplicate_id)).scalars().all()
             assert len(expressions_after) == len(expressions_before)
 
     def test_dry_run_generates_merge_plans(self, app, comprehensive_work_fixture, tmp_path):
@@ -417,9 +421,7 @@ class TestLiveModeWithBackup:
             assert result["stats"]["reconciled_works"] >= 1
             duplicate_deleted = db.session.execute(select(Work).where(Work.id == duplicate_id)).scalars().first()
             assert duplicate_deleted is None
-            reparented_expressions = db.session.execute(
-                select(Expression).where(Expression.work_id == canonical_id)
-            ).scalars().all()
+            reparented_expressions = db.session.execute(select(Expression).where(Expression.work_id == canonical_id)).scalars().all()
             assert len(reparented_expressions) >= 2
 
 
@@ -454,7 +456,7 @@ class TestIdempotence:
         """Verify rerunning ETL after successful merge produces no changes."""
         with app.app_context():
             result1 = run_safe_etl_pipeline(dry_run=False, backup_dir=tmp_path, verbose=False)
-            reconciled_works_1 = result1["stats"]["reconciled_works"]
+            _ = result1["stats"]["reconciled_works"]  # noqa: F841
             result2 = run_safe_etl_pipeline(dry_run=False, backup_dir=tmp_path, verbose=False)
             reconciled_works_2 = result2["stats"]["reconciled_works"]
             assert reconciled_works_2 == 0

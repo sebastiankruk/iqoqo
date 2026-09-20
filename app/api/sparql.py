@@ -54,13 +54,13 @@ def _get_sparql_items(user: User | None) -> list[Item]:
     preventing disclosure of other users' private collection records.
     """
     from app.core.sparql_service import MAX_GRAPH_ITEMS
-    
+
     stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
     if user and user.id:
         stmt = stmt.where(or_(Item.is_hidden.is_(False), Item.owner_id == user.id))
     else:
         stmt = stmt.where(Item.is_hidden.is_(False))
-    
+
     # Apply item count limit
     stmt = stmt.limit(MAX_GRAPH_ITEMS)
 
@@ -111,14 +111,12 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         rejection_reason = "internal_error"
 
     duration = time.time() - start_time
-    
+
     if error_msg is not None:
         # Log rejection without query content (for security)
-        logger.warning(
-            f"SPARQL query rejected: reason={rejection_reason}, duration={duration:.3f}s, status={status_code}"
-        )
+        logger.warning(f"SPARQL query rejected: reason={rejection_reason}, duration={duration:.3f}s, status={status_code}")
         return jsonify({"error": error_msg, "code": status_code}), status_code
-    
+
     # Log successful query completion without query content
     logger.info(f"SPARQL query completed: operation={operation}, duration={duration:.3f}s")
 

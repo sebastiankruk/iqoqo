@@ -218,11 +218,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_column_precedence(self):
         """Test that column values take precedence over metadata."""
         meta = {"isbn13": "9780000000000", "publisher": "Meta Publisher"}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(
-            meta,
-            isbn13="9781111111111",
-            publisher="Column Publisher"
-        )
+        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta, isbn13="9781111111111", publisher="Column Publisher")
         assert isbn == "9781111111111"  # Column value wins
         assert pub == "Column Publisher"  # Column value wins
 
