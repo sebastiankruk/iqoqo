@@ -113,7 +113,7 @@ function SettingsContent(): React.JSX.Element {
       const isAdmin = profile.roles?.includes("admin");
       const permissions = profile.permissions ?? [];
       const hasCustodianPerms = permissions.some(p =>
-        ["write_metadata", "edit_cover", "escalate_resolve", "read_metadata"].includes(p)
+        ["write:metadata", "edit:cover", "escalate:resolve", "read:metadata"].includes(p)
       );
       if (!isAdmin && !hasCustodianPerms) {
         router.push("/profile");

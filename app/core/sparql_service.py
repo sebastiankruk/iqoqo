@@ -60,7 +60,7 @@ _sparql_limit_rejections_total = _sparql_counter("sparql_limit_rejections_total"
 MAX_QUERY_LENGTH = 10240  # 10KB
 
 # Query execution timeout in seconds
-QUERY_TIMEOUT = 5
+QUERY_TIMEOUT = 15
 
 # Maximum allowed SELECT result rows to prevent memory explosion
 MAX_RESULT_ROWS = 1000
