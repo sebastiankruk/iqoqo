@@ -156,8 +156,9 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
       await expect(adminMenuItem).toBeVisible();
 
       // Verify it links to admin settings
-      const adminLink = menu.getByRole("link", { name: "Administration" });
-      await expect(adminLink).toHaveAttribute("href", "/admin/settings");
+      // The Link component wraps the text, so we look for the href attribute
+      const adminLink = menu.locator('a[href="/admin/settings"]');
+      await expect(adminLink).toBeVisible();
     });
 
     test("user with write:metadata permission sees Administration menu", async ({ page }) => {
@@ -341,7 +342,7 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
       await page.getByLabel("User menu").click();
 
       const menu = page.getByRole("menu");
-      const adminLink = menu.getByRole("link", { name: "Administration" });
+      const adminLink = menu.locator('a[href="/admin/settings"]');
 
       // Click the link
       await adminLink.click();
