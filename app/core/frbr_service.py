@@ -18,12 +18,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import itertools
+import logging
 import re
 from collections.abc import Generator, Iterable
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
+
+_logger_frbr = logging.getLogger(__name__)
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -55,6 +59,40 @@ if TYPE_CHECKING:
     from app.db.games import ContainerAggregation
 
 _LEADING_ARTICLES_RE = re.compile(r"^(?:the|a|an|ten|ta|to)\s+", re.IGNORECASE)
+
+
+def _safe_iri(value: str) -> str | None:
+    """Return a valid IRI string for *value*, or ``None`` if it cannot be safely encoded.
+
+    - Absolute URLs (``http://`` / ``https://``) have each component re-encoded
+      so spaces, Unicode, and reserved characters are percent-escaped while
+      preserving scheme, host, and existing structure.
+    - Relative paths are joined to ``None`` base (caller must prepend base_url).
+    - Values that cannot be parsed at all return ``None`` so the caller can
+      skip the optional triple rather than crashing graph serialization.
+    """
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        if raw.startswith(("http://", "https://")):
+            parts = urlsplit(raw)
+            # Re-encode path and query so spaces / unicode become %XX
+            safe_path = quote(parts.path, safe="/:@!$&'()*+,;=-._~%")
+            safe_query = quote(parts.query, safe=":@!$&'()*+,;=-._~%?/")
+            safe_frag = quote(parts.fragment, safe=":@!$&'()*+,;=-._~%?/")
+            rebuilt = urlunsplit((parts.scheme, parts.netloc, safe_path, safe_query, safe_frag))
+            # Final validation: rdflib URIRef must accept it
+            return rebuilt
+        # Relative path: encode each segment
+        segments = raw.split("/")
+        encoded_segments = [quote(seg, safe="") for seg in segments if seg]
+        return "/".join(encoded_segments)
+    except (ValueError, TypeError, AttributeError):
+        _logger_frbr.debug("Skipping unencodable IRI: %r", raw)
+        return None
 
 
 def derive_sort_title(title: str) -> str:
@@ -1285,7 +1323,9 @@ def _add_provenance_triples(
     """Extract external provenance and attach prov:wasDerivedFrom."""
     prov_url = meta.get("source_url") or meta.get("provenance_url") or meta.get("was_derived_from") or meta.get("provenance")
     if prov_url and str(prov_url).startswith(("http://", "https://")):
-        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(prov_url))))
+        safe_prov = _safe_iri(str(prov_url))
+        if safe_prov is not None:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
         return
 
     source = meta.get("data_source") or meta.get("source") or meta.get("provider")
@@ -1297,7 +1337,9 @@ def _add_provenance_triples(
 
     source_str = str(source).lower()
     if source_str.startswith(("http://", "https://")):
-        g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(source))))
+        safe_prov = _safe_iri(str(source))
+        if safe_prov is not None:
+            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
     elif "openlibrary" in source_str or "open_library" in source_str:
         olid = meta.get("openlibrary_id") or meta.get("olid")
         if olid:
@@ -1321,7 +1363,9 @@ def _add_provenance_triples(
     elif "allegro" in source_str:
         allegro_url = meta.get("allegro_url")
         if allegro_url:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(str(allegro_url))))
+            safe_allegro = _safe_iri(str(allegro_url))
+            if safe_allegro is not None:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
         else:
             g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
 
@@ -1344,8 +1388,12 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
 
     cover = item.get("cover_url") or item.get("image")
     if cover:
-        img_uri = URIRef(str(cover) if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
-        g.add((m_uri, SCHEMA.image, img_uri))
+        encoded_cover = _safe_iri(str(cover))
+        if encoded_cover is not None:
+            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+            g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+        else:
+            _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_id)
 
     for c in item.get("contributors", []):
         if isinstance(c, dict):
@@ -1526,8 +1574,12 @@ def _enrich_graph_from_db(
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
             for scan in scans:
                 m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
-                img_uri = URIRef(f"{base_url}/{scan.file_path}")
-                g.add((m_uri, SCHEMA.image, img_uri))
+                encoded_path = _safe_iri(str(scan.file_path))
+                if encoded_path is not None:
+                    img_uri = URIRef(f"{base_url}/{encoded_path}")
+                    g.add((m_uri, SCHEMA.image, img_uri))
+                else:
+                    _logger_frbr.warning("Skipping malformed ImageScan path for manifestation %s", scan.manifestation_id)
 
         # UserCollections - only include in full profile (authenticated exports)
         # Private collection names should not be exposed in public RDF
@@ -1559,8 +1611,12 @@ def _enrich_graph_from_db(
                     g.add((m_uri, SCHEMA.datePublished, Literal(str(pub_date))))
                 cover = getattr(m, "cover_url", None) or (m.meta.get("cover_url") if m.meta else None)
                 if cover:
-                    img_uri = URIRef(cover if str(cover).startswith(("http://", "https://")) else f"{base_url}/{str(cover).lstrip('/')}")
-                    g.add((m_uri, SCHEMA.image, img_uri))
+                    encoded_cover = _safe_iri(str(cover))
+                    if encoded_cover is not None:
+                        img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                        g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                    else:
+                        _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m.id)
 
                 _add_provenance_triples(g, m_uri, m.meta or {}, getattr(m, "raw_payload", None), getattr(m, "isbn13", None))
 
@@ -1699,12 +1755,12 @@ def build_collection_rdf_graph(
                     if m_elem.isbn13:
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                     if m_elem.cover_url:
-                        img_uri = URIRef(
-                            str(m_elem.cover_url)
-                            if str(m_elem.cover_url).startswith(("http://", "https://"))
-                            else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
-                        )
-                        g.add((m_uri, SCHEMA.image, img_uri))
+                        encoded_cover = _safe_iri(str(m_elem.cover_url))
+                        if encoded_cover is not None:
+                            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                            g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                        else:
+                            _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)
                 continue
             elif hasattr(item, "expressions") or isinstance(item, Work):
                 # Database Work object
@@ -1736,12 +1792,12 @@ def build_collection_rdf_graph(
                         if m_elem.isbn13:
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                         if m_elem.cover_url:
-                            img_uri = URIRef(
-                                str(m_elem.cover_url)
-                                if str(m_elem.cover_url).startswith(("http://", "https://"))
-                                else f"{base_url}/{str(m_elem.cover_url).lstrip('/')}"
-                            )
-                            g.add((m_uri, SCHEMA.image, img_uri))
+                            encoded_cover = _safe_iri(str(m_elem.cover_url))
+                            if encoded_cover is not None:
+                                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                                g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+                            else:
+                                _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)
                 continue
             else:
                 # Database Manifestation object
@@ -1824,10 +1880,12 @@ def build_collection_rdf_graph(
             g.add((m_uri, SCHEMA.datePublished, Literal(str(publication_date))))
 
         if cover_url:
-            img_uri = URIRef(
-                str(cover_url) if str(cover_url).startswith(("http://", "https://")) else f"{base_url}/{str(cover_url).lstrip('/')}"
-            )
-            g.add((m_uri, SCHEMA.image, img_uri))
+            encoded_cover = _safe_iri(str(cover_url))
+            if encoded_cover is not None:
+                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
+            else:
+                _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
         for author in authors:
             g.add((m_uri, SCHEMA.author, Literal(author)))

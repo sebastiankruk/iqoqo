@@ -30,6 +30,32 @@ from app.core.frbr_service import build_collection_rdf_graph
 
 logger = logging.getLogger(__name__)
 
+# --- SPARQL lifecycle telemetry (structured metrics) ---
+try:
+    from opentelemetry import metrics as _otel_metrics
+
+    _sparql_meter = _otel_metrics.get_meter("iqoqo.sparql")
+except Exception:  # pragma: no cover - telemetry optional
+    _sparql_meter = None  # type: ignore[assignment]
+
+
+def _sparql_counter(name: str, description: str):  # type: ignore[no-untyped-def]
+    if _sparql_meter is None:
+        return None
+    try:
+        return _sparql_meter.create_counter(name=name, description=description)
+    except Exception:
+        return None
+
+
+_sparql_queries_total = _sparql_counter("sparql_queries_total", "Total SPARQL queries executed")
+_sparql_query_duration = None  # Histogram not required; we log phase durations
+_sparql_timeouts_total = _sparql_counter("sparql_timeouts_total", "SPARQL queries that timed out")
+_sparql_graph_build_failures_total = _sparql_counter("sparql_graph_build_failures_total", "SPARQL graph construction failures")
+_sparql_child_crashes_total = _sparql_counter("sparql_child_crashes_total", "SPARQL child process crashes")
+_sparql_capacity_rejections_total = _sparql_counter("sparql_capacity_rejections_total", "SPARQL capacity rejections")
+_sparql_limit_rejections_total = _sparql_counter("sparql_limit_rejections_total", "SPARQL resource limit rejections")
+
 # Maximum allowed query length in bytes
 MAX_QUERY_LENGTH = 10240  # 10KB
 
@@ -44,6 +70,9 @@ MAX_GRAPH_ITEMS = 5000
 
 # Maximum number of triples in materialized graph
 MAX_GRAPH_TRIPLES = 100000
+
+# Maximum number of triples in CONSTRUCT/DESCRIBE result graph
+MAX_RESULT_TRIPLES = 50000
 
 # Maximum concurrent expensive queries
 MAX_CONCURRENT_QUERIES = 4
@@ -78,6 +107,14 @@ class SPARQLResourceLimit(SPARQLError):
 
 class SPARQLConcurrencyLimit(SPARQLError):
     """Raised when concurrent query limit is exceeded."""
+
+
+class SPARQLGraphBuildError(SPARQLError):
+    """Raised when RDF graph construction or serialization fails."""
+
+
+class SPARQLChildProcessError(SPARQLError):
+    """Raised when the isolated query child exits without a valid result."""
 
 
 def classify_operation(query: str) -> str:
@@ -185,11 +222,13 @@ def validate_query(query: str) -> str:
     return operation
 
 
-def _execute_query_in_process(graph_data: bytes, query: str, result_queue: multiprocessing.Queue) -> None:
+def _execute_query_in_process(graph_data: bytes, query: str, conn) -> None:  # type: ignore[no-untyped-def]
     """
     Execute a SPARQL query in a separate process.
 
     This function runs in a child process and can be killed if it exceeds the timeout.
+    Results are sent back via a one-way Connection (pipe) rather than a Queue so the
+    parent can use deadline-aware recv() instead of unreliable Queue.empty() polling.
     """
     try:
         # Deserialize the graph in the child process
@@ -207,6 +246,8 @@ def _execute_query_in_process(graph_data: bytes, query: str, result_queue: multi
             variables = [str(v) for v in result.vars] if result.vars else []
             bindings = []
             for row in result:
+                if len(bindings) >= MAX_RESULT_ROWS:
+                    break
                 binding = {}
                 for i, var in enumerate(variables):
                     value = row[i]
@@ -229,11 +270,32 @@ def _execute_query_in_process(graph_data: bytes, query: str, result_queue: multi
         else:
             # CONSTRUCT/DESCRIBE - serialize graph
             result_graph = result.graph if hasattr(result, "graph") and result.graph is not None else Graph()
+            # Enforce result triple limit
+            if len(result_graph) > MAX_RESULT_TRIPLES:
+                conn.send(("error", f"Result graph ({len(result_graph)} triples) exceeds limit of {MAX_RESULT_TRIPLES}."))
+                return
             result_data = {"type": "GRAPH", "data": result_graph.serialize(format="nt")}
 
-        result_queue.put(("success", result_data))
+        conn.send(("success", result_data))
     except Exception as e:
-        result_queue.put(("error", str(e)))
+        try:
+            conn.send(("error", str(e)))
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+# Explicit multiprocessing context for consistent IPC across deployment images.
+# 'spawn' is the safest cross-platform choice (macOS default, required for some
+# Linux container images) and avoids fork-related issues with C extensions.
+_MP_CONTEXT = multiprocessing.get_context("spawn")
+
+# Maximum serialized-byte limit for result payloads (10 MB)
+MAX_SERIALIZED_BYTES = 10 * 1024 * 1024
 
 
 def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> Result:
@@ -255,39 +317,107 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
         SPARQLTimeout: If execution exceeds timeout
         SPARQLSyntaxError: If the query has syntax errors
         SPARQLResourceLimit: If resource limits are exceeded
+        SPARQLGraphBuildError: If graph serialization fails
+        SPARQLChildProcessError: If the child exits without a valid result
     """
     start_time = time.time()
+    deadline = start_time + timeout
 
     # Check concurrency limit
     if not _query_semaphore.acquire(blocking=False):
+        if _sparql_capacity_rejections_total is not None:
+            try:
+                _sparql_capacity_rejections_total.add(1, {"reason": "concurrency_limit"})
+            except Exception:
+                pass
         raise SPARQLConcurrencyLimit("Too many concurrent queries. Please retry later.")
 
+    process = None
+    parent_conn = None
     try:
         # Serialize graph for transfer to child process
-        graph_data = graph.serialize(format="nt")
+        try:
+            graph_data = graph.serialize(format="nt")
+        except Exception as exc:
+            logger.exception("SPARQL graph serialization failed")
+            if _sparql_graph_build_failures_total is not None:
+                try:
+                    _sparql_graph_build_failures_total.add(1, {"phase": "serialize"})
+                except Exception:
+                    pass
+            raise SPARQLGraphBuildError("RDF graph serialization failed.") from exc
 
-        # Create result queue and child process
-        result_queue = multiprocessing.Queue()
-        process = multiprocessing.Process(target=_execute_query_in_process, args=(graph_data, query, result_queue), daemon=True)
+        # Enforce serialized graph size limit
+        if isinstance(graph_data, str):
+            graph_bytes = graph_data.encode("utf-8")
+        else:
+            graph_bytes = graph_data
+        if len(graph_bytes) > MAX_SERIALIZED_BYTES:
+            if _sparql_limit_rejections_total is not None:
+                try:
+                    _sparql_limit_rejections_total.add(1, {"reason": "graph_size"})
+                except Exception:
+                    pass
+            raise SPARQLResourceLimit(
+                f"Serialized graph ({len(graph_bytes)} bytes) exceeds limit of {MAX_SERIALIZED_BYTES}."
+            )
+
+        # Create one-way pipe and child process using explicit context
+        parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)
+        process = _MP_CONTEXT.Process(
+            target=_execute_query_in_process,
+            args=(graph_bytes, query, child_conn),
+            daemon=True,
+        )
 
         process.start()
-        process.join(timeout=timeout)
+        # Close child end in parent immediately
+        child_conn.close()
 
+        # Deadline-aware receive: compute remaining time
+        remaining = max(0.0, deadline - time.time())
+        if remaining <= 0:
+            raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout (deadline expired before IPC)")
+
+        try:
+            if not parent_conn.poll(remaining):
+                # Timeout - no data received within deadline
+                _terminate_process(process)
+                if _sparql_timeouts_total is not None:
+                    try:
+                        _sparql_timeouts_total.add(1, {"reason": "ipc_deadline"})
+                    except Exception:
+                        pass
+                raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout")
+
+            # Data available - receive it
+            status, result_data = parent_conn.recv()
+        except (EOFError, OSError) as ipc_err:
+            # Child exited without sending data
+            _terminate_process(process)
+            exit_code = process.exitcode
+            logger.warning("SPARQL child process exited without result: exitcode=%s", exit_code)
+            if _sparql_child_crashes_total is not None:
+                try:
+                    _sparql_child_crashes_total.add(1, {"exit_code": str(exit_code)})
+                except Exception:
+                    pass
+            raise SPARQLChildProcessError(
+                f"Isolated query process exited unexpectedly (code={exit_code})."
+            ) from ipc_err
+
+        # Wait for child to finish cleanly
+        process.join(timeout=2.0)
         if process.is_alive():
-            # Timeout exceeded - kill the process
-            logger.warning("SPARQL query exceeded timeout, terminating process")
             process.terminate()
             process.join(timeout=1.0)
             if process.is_alive():
                 process.kill()
                 process.join()
-            raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout")
 
-        # Get result from queue
-        if result_queue.empty():
-            raise SPARQLError("Query execution failed: no result returned")
-
-        status, result_data = result_queue.get()
+        # Check child exit status
+        if process.exitcode is not None and process.exitcode != 0:
+            logger.warning("SPARQL child process exited with code %s", process.exitcode)
 
         if status == "error":
             error_msg = result_data
@@ -297,12 +427,43 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
 
         # Reconstruct Result object from serialized data
         duration = time.time() - start_time
-        logger.info(f"SPARQL query completed in {duration:.3f}s, type={result_data.get('type')}")
+        logger.info(
+            "SPARQL query completed in %.3fs, type=%s, graph_bytes=%d",
+            duration,
+            result_data.get("type"),
+            len(graph_bytes),
+        )
+        if _sparql_queries_total is not None:
+            try:
+                _sparql_queries_total.add(1, {"type": result_data.get("type", "unknown")})
+            except Exception:
+                pass
 
         return _reconstruct_result(result_data)
 
     finally:
+        # Clean up IPC resources
+        if parent_conn is not None:
+            try:
+                parent_conn.close()
+            except Exception:
+                pass
+        # Ensure process is cleaned up
+        if process is not None and process.is_alive():
+            _terminate_process(process)
         _query_semaphore.release()
+
+
+def _terminate_process(process: multiprocessing.Process) -> None:
+    """Terminate a child process with escalating force: terminate -> kill."""
+    try:
+        process.terminate()
+        process.join(timeout=1.0)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=1.0)
+    except Exception:
+        logger.debug("Failed to terminate SPARQL child process", exc_info=True)
 
 
 def _reconstruct_result(result_data: dict) -> Result:
@@ -425,7 +586,13 @@ def build_graph(
                         continue
             entities_to_serialize.append(it)
 
-    graph = build_collection_rdf_graph(entities_to_serialize, base_url)
+    try:
+        graph = build_collection_rdf_graph(entities_to_serialize, base_url)
+    except SPARQLGraphBuildError:
+        raise
+    except Exception as exc:
+        logger.exception("SPARQL graph construction failed")
+        raise SPARQLGraphBuildError("RDF graph construction failed; please retry or reduce collection size.") from exc
 
     # Check triple count limit
     triple_count = len(graph)
