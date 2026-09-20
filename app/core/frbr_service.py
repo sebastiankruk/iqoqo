@@ -26,8 +26,6 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
-
-_logger_frbr = logging.getLogger(__name__)
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -54,6 +52,8 @@ from app.db.core import (
 )
 from app.db.models import db
 from app.db.video import ManifestationContribution
+
+_logger_frbr = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.db.games import ContainerAggregation

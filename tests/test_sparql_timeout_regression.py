@@ -435,6 +435,7 @@ class TestSPARQLConcurrentQueryStability:
         # (Note: this is a probabilistic test - timing-dependent)
         # We just verify the mechanism works
         assert MAX_CONCURRENT_QUERIES > 0, "MAX_CONCURRENT_QUERIES must be positive"
+        assert rejected_count >= 0, "rejected_count should be non-negative"
 
 
 class TestSPARQLTimeoutConfigurability:

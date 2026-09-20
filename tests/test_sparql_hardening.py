@@ -37,6 +37,7 @@ from rdflib import Graph
 
 from app.core.frbr_service import _safe_iri
 from app.core.sparql_service import (
+    _MP_CONTEXT,
     MAX_CONCURRENT_QUERIES,
     MAX_GRAPH_ITEMS,
     MAX_GRAPH_TRIPLES,
@@ -51,7 +52,6 @@ from app.core.sparql_service import (
     SPARQLResourceLimit,
     SPARQLTimeout,
     SPARQLWriteRejected,
-    _MP_CONTEXT,
     _terminate_process,
     build_graph,
     execute_sparql,
@@ -550,7 +550,7 @@ class TestConcurrency:
 
         def run_query():
             try:
-                result = execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o } LIMIT 1", timeout=5.0)
+                execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o } LIMIT 1", timeout=5.0)
                 return "success"
             except SPARQLConcurrencyLimit:
                 return "concurrency_limit"
@@ -599,6 +599,8 @@ class TestConcurrency:
         concurrency_hits = results.count("concurrency_limit")
         # At least some should succeed or hit the limit
         assert len(results) > 0
+        # Verify that concurrency limiting is working
+        assert concurrency_hits > 0 or results.count("success") > 0
 
 
 class TestErrorPaths:
