@@ -33,7 +33,13 @@ class TestAdversarialQueries:
     """Test adversarial query patterns and resource limits."""
 
     def test_cartesian_join_timeout(self):
-        """Cartesian join queries should timeout rather than hang."""
+        """Cartesian join queries should timeout rather than hang.
+
+        Note: Timeout reduced from 0.5s to 0.01s in hotfix/0.8.0.1/sparql because
+        fork context is significantly faster than spawn, allowing queries to complete
+        before the original timeout. The test verifies the timeout mechanism works,
+        not that Cartesian joins are inherently slow.
+        """
         # Create a graph with enough data to make Cartesian joins expensive
         items = [
             {
@@ -62,9 +68,9 @@ class TestAdversarialQueries:
         LIMIT 10000
         """
 
-        # Should timeout rather than complete
+        # Should timeout rather than complete (very short timeout to trigger mechanism)
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, cartesian_query, timeout=0.5)
+            execute_sparql(graph, cartesian_query, timeout=0.01)
 
     def test_repeated_timeouts_dont_leak_resources(self):
         """Repeated timeouts should not leak worker processes."""

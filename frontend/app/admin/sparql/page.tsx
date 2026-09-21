@@ -126,6 +126,8 @@ export default function SPARQLExplorerPage() {
           headers: {
             Accept: isConstruct ? "text/turtle" : "application/sparql-results+json",
           },
+          // SPARQL queries need longer timeout (graph build + execution)
+          timeout: 60_000,
           // Don't parse response as JSON for CONSTRUCT
           ...(isConstruct ? { responseType: "text", transformResponse: [(data: string) => data] } : {}),
         }

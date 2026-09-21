@@ -290,9 +290,12 @@ def _execute_query_in_process(graph_data: bytes, query: str, conn) -> None:  # t
 
 
 # Explicit multiprocessing context for consistent IPC across deployment images.
-# 'spawn' is the safest cross-platform choice (macOS default, required for some
-# Linux container images) and avoids fork-related issues with C extensions.
-_MP_CONTEXT = multiprocessing.get_context("spawn")
+# 'fork' is significantly faster than 'spawn' on Linux (no full process state serialization)
+# and uses less memory, critical for gunicorn workers with tight timeouts.
+# 'spawn' was causing gunicorn workers to be killed during process.start() due to
+# the overhead of serializing large RDF graphs to pipes.
+# Note: 'fork' is safe here because we're not using threading before forking.
+_MP_CONTEXT = multiprocessing.get_context("fork")
 
 # Maximum serialized-byte limit for result payloads (10 MB)
 MAX_SERIALIZED_BYTES = 10 * 1024 * 1024
@@ -368,7 +371,21 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
             daemon=True,
         )
 
-        process.start()
+        try:
+            process.start()
+        except Exception as proc_err:
+            # Subprocess creation failed (e.g., memory pressure, resource limits)
+            # Close pipe ends to prevent resource leaks
+            child_conn.close()
+            parent_conn.close()
+            logger.error("SPARQL subprocess creation failed: %s", proc_err)
+            if _sparql_child_crashes_total is not None:
+                try:
+                    _sparql_child_crashes_total.add(1, {"reason": "spawn_failed", "error": str(proc_err)})
+                except Exception:
+                    pass
+            raise SPARQLChildProcessError(f"Failed to create isolated query process: {proc_err}") from proc_err
+
         # Close child end in parent immediately
         child_conn.close()
 
