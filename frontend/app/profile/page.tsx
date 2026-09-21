@@ -15,15 +15,18 @@
 //
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { apiFetch, apiClient } from "@/lib/api/client"; // Use your configured client
+import { apiFetch, apiClient } from "@/lib/api/client";
+import { downloadCollectionExport, ExportFormat, EXPORT_FORMAT_OPTIONS } from "@/lib/api/export";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Avatar } from "@/components/ui/avatar";
 import { useAppConfig } from "@/lib/api/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { MyEscalations } from "@/components/escalation/my-escalations";
 
 /**
@@ -45,6 +48,8 @@ interface UserProfile {
   id: string;
   email: string;
   display_name: string | null;
+  public_username: string | null;
+  bio: string | null;
   avatar_url: string | null;
   visibility: "public" | "private";
   created_at: string;
@@ -53,24 +58,93 @@ interface UserProfile {
 
 /**
  * Profile page component.
+ * Consolidates username, bio, avatar URL, profile visibility, RDF export, and GDPR consents.
  *
  * @returns {JSX.Element} The page component
  */
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editNameValue, setEditNameValue] = useState("");
   const { data: config } = useAppConfig();
+  const queryClient = useQueryClient();
+
+  // Editable profile form state
+  const [displayName, setDisplayName] = useState("");
+  const [publicUsername, setPublicUsername] = useState("");
+  const [bio, setBio] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("private");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("json-ld");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     // Note the trailing slash to match Flask's route: /profile/
     apiFetch<UserProfile>("/profile/")
       .then(data => {
         setProfile(data);
-        setEditNameValue(data.display_name || "");
+        setDisplayName(data.display_name || "");
+        setPublicUsername(data.public_username || "");
+        setBio(data.bio || "");
+        setAvatarUrl(data.avatar_url || "");
+        setVisibility(data.visibility || "private");
       })
       .catch(err => console.error("Failed to load profile", err));
   }, []);
+
+  /**
+   * Handles saving the user's profile.
+   * @returns {Promise<void>} A promise that resolves when the profile is saved.
+   */
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put("/profile/", {
+        display_name: displayName.trim(),
+        public_username: publicUsername.trim() || null,
+        bio: bio.trim(),
+        avatar_url: avatarUrl.trim(),
+        visibility,
+      });
+      setProfile(prev =>
+        prev
+          ? {
+              ...prev,
+              display_name: displayName.trim(),
+              public_username: publicUsername.trim() || null,
+              bio: bio.trim(),
+              avatar_url: avatarUrl.trim(),
+              visibility,
+            }
+          : null
+      );
+      // Invalidate so the navbar and other consumers refresh immediately
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Profile updated successfully");
+      setUsernameError(null);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
+      toast.error(errorMsg);
+      if (errorMsg.toLowerCase().includes("username")) {
+        setUsernameError(errorMsg);
+      }
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDownloadExport = useCallback(async () => {
+    try {
+      setIsExporting(true);
+      await downloadCollectionExport(selectedFormat);
+    } catch {
+      // Toast notification is managed inside downloadCollectionExport
+    } finally {
+      setIsExporting(false);
+    }
+  }, [selectedFormat]);
 
   /**
    * Handles the user logout.
@@ -88,26 +162,9 @@ export default function ProfilePage() {
   };
 
   /**
-   * Handles the update of the user's display name.
-   * @returns {Promise<void>} A promise that resolves when the name update is complete.
-   */
-
-  const handleUpdateName = async () => {
-    try {
-      await apiClient.put("/profile/", { display_name: editNameValue });
-      setProfile(prev => (prev ? { ...prev, display_name: editNameValue } : null));
-      setIsEditingName(false);
-      toast.success("Profile updated");
-    } catch {
-      toast.error("Failed to update profile");
-    }
-  };
-
-  /**
    * Handles the deletion of the user's account.
    * @returns {Promise<void>} A promise that resolves when the account deletion is complete.
    */
-
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm(
       "Are you absolutely sure? This will permanently delete your account, your library collection, and all your data. This cannot be undone."
@@ -128,7 +185,6 @@ export default function ProfilePage() {
    * @param {string} type - The type of consent to toggle.
    * @param {boolean} currentStatus - The current status of the consent.
    */
-
   const toggleConsent = async (type: string, currentStatus: boolean) => {
     try {
       await apiClient.post("/profile/consent", {
@@ -153,13 +209,21 @@ export default function ProfilePage() {
 
   if (!profile) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
 
+  const isProfileDirty =
+    displayName !== (profile.display_name || "") ||
+    publicUsername !== (profile.public_username || "") ||
+    bio !== (profile.bio || "") ||
+    avatarUrl !== (profile.avatar_url || "") ||
+    visibility !== (profile.visibility || "private");
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="max-w-2xl mx-auto p-6 space-y-8">
+        {/* ── Header ── */}
         <div className="flex items-center space-x-4">
           <Avatar
-            src={profile.avatar_url}
+            src={avatarUrl || profile.avatar_url}
             alt="Avatar"
             size={64}
             className="border"
@@ -171,41 +235,136 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="p-4 border rounded-lg bg-card">
-          <h2 className="text-xl font-semibold mb-4">Account Details</h2>
-          <div className="space-y-4">
+        {/* ── Profile Settings Card ── */}
+        <div className="border border-border rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
+          <div className="p-6 flex flex-col gap-6">
             <div>
-              <span className="block text-sm font-medium text-muted-foreground">Display Name</span>
-              {isEditingName ? (
-                <div className="flex items-center space-x-2 mt-1">
-                  <input
-                    type="text"
-                    value={editNameValue}
-                    onChange={e => setEditNameValue(e.target.value)}
-                    className="border rounded px-2 py-1 flex-1 text-sm bg-background"
-                  />
-                  <Button size="sm" onClick={handleUpdateName}>
-                    Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditingName(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between mt-1">
-                  <span>{profile.display_name || "N/A"}</span>
-                  <Button size="sm" variant="outline" onClick={() => setIsEditingName(true)}>
-                    Edit
-                  </Button>
-                </div>
-              )}
+              <h2 className="text-xl font-semibold">Profile Settings</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage your public identity and account preferences.
+              </p>
             </div>
+
+            {/* Display Name */}
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="display-name">
+                Display Name
+              </label>
+              <input
+                id="display-name"
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                placeholder="Enter your display name"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+
+            {/* Public Username */}
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="public-username">
+                Public Username
+              </label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Setting a public username allows sharing your collection at{" "}
+                <code>/u/[username]</code>.
+              </p>
+              <div className="flex items-center gap-2 max-w-md">
+                <span className="text-sm text-muted-foreground">
+                  {typeof window !== "undefined" ? window.location.host : "iqoqo.app"}/u/
+                </span>
+                <input
+                  id="public-username"
+                  type="text"
+                  value={publicUsername}
+                  onChange={e => {
+                    setPublicUsername(e.target.value);
+                    if (usernameError) setUsernameError(null);
+                  }}
+                  placeholder="your-username"
+                  className={`flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring${usernameError ? " border-red-500 focus-visible:ring-red-500" : ""}`}
+                />
+              </div>
+              {usernameError && <p className="mt-2 text-xs font-medium text-red-500">{usernameError}</p>}
+            </div>
+
+            {/* Avatar URL */}
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="avatar-url">
+                Avatar URL
+              </label>
+              <input
+                id="avatar-url"
+                type="text"
+                value={avatarUrl}
+                onChange={e => setAvatarUrl(e.target.value)}
+                placeholder="https://example.com/avatar.jpg"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <label className="block text-sm font-medium mb-1" htmlFor="bio">
+                Bio
+              </label>
+              <textarea
+                id="bio"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                placeholder="Tell the world about your library..."
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+
+            {/* Visibility */}
+            <div>
+              <p className="text-sm font-medium mb-2">Profile Visibility</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="private"
+                    checked={visibility === "private"}
+                    onChange={() => setVisibility("private")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Private</p>
+                    <p className="text-xs text-muted-foreground">Only you can see your collection.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="public"
+                    checked={visibility === "public"}
+                    onChange={() => setVisibility("public")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Public</p>
+                    <p className="text-xs text-muted-foreground">Anyone with the link can view your collection.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Single primary CTA per card */}
+          <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border px-6 py-3 flex justify-end">
+            <Button onClick={handleSaveProfile} disabled={isSaving || !isProfileDirty}>
+              {isSaving ? "Saving..." : "Save Profile"}
+            </Button>
           </div>
         </div>
 
-        <div className="p-4 border rounded-lg bg-card space-y-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Privacy & Consents (GDPR)</h2>
+        {/* ── Privacy & Consents Card ── */}
+        <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="privacy-consents-card">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Privacy &amp; Consents (GDPR)</h2>
             <Link
               href="/legal/privacy"
               target="_blank"
@@ -242,10 +401,55 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* ── Export Collection Card ── */}
+        <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="export-collection-card">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold">Export Collection</h2>
+            <p className="text-sm text-muted-foreground">
+              Download your full library as Linked Open Data or hierarchical JSON for complete data sovereignty and
+              portability.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="export-format-select" className="block text-sm font-medium text-foreground">
+                Export Format
+              </label>
+              <select
+                id="export-format-select"
+                aria-label="Export Format"
+                value={selectedFormat}
+                onChange={e => setSelectedFormat(e.target.value as ExportFormat)}
+                className="w-full max-w-sm h-10 px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                disabled={isExporting}
+              >
+                {EXPORT_FORMAT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground" data-testid="export-format-description">
+                {EXPORT_FORMAT_OPTIONS.find(opt => opt.value === selectedFormat)?.description}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button onClick={handleDownloadExport} disabled={isExporting} aria-label="Export Collection Button">
+                <Download className="w-4 h-4 mr-2" />
+                {isExporting ? "Exporting..." : "Download Export"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── My Help Requests ── */}
         <div id="help-requests">
           <MyEscalations />
         </div>
 
+        {/* ── Account Actions ── */}
         <div className="flex justify-between items-center pt-4">
           <Button variant="outline" onClick={handleLogout}>
             Log Out

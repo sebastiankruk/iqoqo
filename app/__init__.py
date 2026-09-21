@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import logging
+from typing import Any
 
 # Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -98,36 +99,47 @@ def create_app(config_class=Config, config_override=None):
 
     import_models()
 
-    # Configure CORS from config
+    # Configure CORS: public Linked Data endpoints always allow universal access (*),
+    # while restricted internal API routes respect CORS_ENABLED and CORS_ORIGINS settings.
+    cors_resources: dict[str, Any] = {
+        r"/api/public/*": {
+            "origins": "*",
+            "methods": ["GET", "HEAD", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Accept", "Authorization"],
+        },
+        r"/api/sparql*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Accept", "Authorization"],
+        },
+    }
+
     cors_enabled = _coerce_bool(app.config.get("CORS_ENABLED"), default=False)
     if cors_enabled:
         cors_origins = _coerce_list(app.config.get("CORS_ORIGINS"))
         if cors_origins:
-            CORS(
-                app,
-                resources={
-                    r"/api/*": {
-                        "origins": cors_origins,
-                        "methods": _coerce_list(
-                            app.config.get("CORS_METHODS"),
-                            default=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                        ),
-                        "allow_headers": _coerce_list(
-                            app.config.get("CORS_ALLOW_HEADERS"),
-                            default=["Content-Type", "Authorization"],
-                        ),
-                        # Credential forwarding (cookies/Authorization) on cross-origin
-                        # requests requires an explicit operator opt-in via the
-                        # CORS_SUPPORTS_CREDENTIALS=true environment variable.
-                        # OAuth/federation deployments must set this explicitly; the
-                        # default remains False to avoid unintended CSRF exposure.
-                        "supports_credentials": _coerce_bool(
-                            app.config.get("CORS_SUPPORTS_CREDENTIALS"),
-                            default=False,
-                        ),
-                    }
-                },
-            )
+            cors_resources[r"/api/*"] = {
+                "origins": cors_origins,
+                "methods": _coerce_list(
+                    app.config.get("CORS_METHODS"),
+                    default=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                ),
+                "allow_headers": _coerce_list(
+                    app.config.get("CORS_ALLOW_HEADERS"),
+                    default=["Content-Type", "Authorization"],
+                ),
+                # Credential forwarding (cookies/Authorization) on cross-origin
+                # requests requires an explicit operator opt-in via the
+                # CORS_SUPPORTS_CREDENTIALS=true environment variable.
+                # OAuth/federation deployments must set this explicitly; the
+                # default remains False to avoid unintended CSRF exposure.
+                "supports_credentials": _coerce_bool(
+                    app.config.get("CORS_SUPPORTS_CREDENTIALS"),
+                    default=False,
+                ),
+            }
+
+    CORS(app, resources=cors_resources)
 
     init_oauth(app)
 

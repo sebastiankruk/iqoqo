@@ -158,9 +158,22 @@ After installation, make sure the Docker daemon is running.
 
      > **Multi-Environment Deployments:** If you run multiple iqoqo instances (prod, preview, dev) with separate Allegro app registrations, also set `ALLEGRO_APP_NAME` to the registered application name (e.g. `iqoqo_cc`, `iqoqo_pre`, `iqoqo_dev`). Allegro validates the `User-Agent` header against this name.
 
+   - **Linked Open Data & Semantic Web:** Configure the canonical base URL for IRI minting and Linked Data endpoints:
+
+      ```text
+      # Canonical base URL for Linked Open Data IRIs (default: https://iqoqo.cc)
+      BASE_URL=https://your-domain.example.com
+      ```
+
+      This URL is used to mint canonical IRIs for all FRBR entities (e.g., `https://your-domain.example.com/works/42`). It also powers the public Linked Data endpoints, SPARQL endpoint, data exports, and Schema.org structured data.
+
+      > **Local Development:** Set `BASE_URL=http://localhost:5000` (or your configured `WEB_PORT`) for local development.
+
+      See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for full documentation of SPARQL, Linked Data endpoints, and data exports.
+
    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
-     Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
+      Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
 
    > **Note for VS Code users:** To have the environment variables from the `.env` file automatically loaded in the integrated terminal, you need to enable the `python.terminal.useEnvFile` setting. You can do this by opening your VS Code settings (JSON) and adding `"python.terminal.useEnvFile": true`.
 
@@ -185,6 +198,68 @@ format_normalizations:
 ```
 
 Run `make fix-physical-kinds` (`--audit`, `--interactive`, `--dry-run`, `--apply`) to inspect and normalize stored physical item formats.
+
+## Linked Open Data Configuration
+
+iqoqo v0.8.0 introduces a Semantic Web layer that makes your collection queryable via SPARQL and accessible as Linked Data. The following environment variables control this behavior:
+
+| Variable          | Default              | Description                                                  |
+| ----------------- | -------------------- | ------------------------------------------------------------ |
+| `BASE_URL`        | `https://iqoqo.cc`   | Canonical base URL for IRI minting and Linked Data endpoints |
+
+### IRI Minting
+
+Every FRBR entity receives a canonical IRI based on `BASE_URL`:
+
+```text
+{BASE_URL}/works/{id}            → https://iqoqo.cc/works/42
+{BASE_URL}/expressions/{id}      → https://iqoqo.cc/expressions/17
+{BASE_URL}/manifestations/{id}   → https://iqoqo.cc/manifestations/99
+{BASE_URL}/items/{id}            → https://iqoqo.cc/items/256
+```
+
+### Examples
+
+**Production deployment:**
+
+```bash
+# .env
+BASE_URL=https://iqoqo.cc
+```
+
+**Local development:**
+
+```bash
+# .env
+BASE_URL=http://localhost:5000
+```
+
+**Custom domain:**
+
+```bash
+# .env
+BASE_URL=https://library.example.com
+```
+
+### Verification
+
+After starting iqoqo, verify the Semantic Web layer is working:
+
+```bash
+# Test public Linked Data endpoint (no auth required)
+curl -H "Accept: application/ld+json" http://localhost:8000/api/public/works/1
+
+# Test SPARQL endpoint (auth required)
+curl -G "http://localhost:8000/api/sparql" \
+  --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 1" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Test data export (auth required)
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:8000/api/items/export?format=turtle"
+```
+
+See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for comprehensive documentation.
 
 ## Environment Variable Hierarchy
 
@@ -855,6 +930,10 @@ make lint-markdown  # markdownlint
 - See **[CHANGELOG.md](CHANGELOG.md)** for the latest updates and release notes.
 - See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development guidelines and coding standards.
 - See **[ARCHITECTURE.md](ARCHITECTURE.md)** to understand the FRBR hierarchy and data model.
+- See **[SEMANTIC_WEB.md](SEMANTIC_WEB.md)** for SPARQL, Linked Data, and data export documentation.
+- See **[API.md](API.md)** for complete API reference documentation.
+- See **[OPERATIONS.md](OPERATIONS.md)** for FRBR ETL and ontology sync operations.
+- See **[UPGRADE_0.8.0.md](UPGRADE_0.8.0.md)** for v0.8.0 migration instructions.
 - See **[COVERS_SETUP.md](COVERS_SETUP.md)** for advanced cover art and vision configuration.
 - See **[UPGRADE_POSTGRES_18.md](UPGRADE_POSTGRES_18.md)** for PostgreSQL 16 → 18 migration instructions.
 - Check **[docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)** for the FRBR ontology structure.

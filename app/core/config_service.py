@@ -60,9 +60,9 @@ class ConfigService:
                 if current_app:
                     from app.db.models import InstanceSettings
 
-                    setting = InstanceSettings.query.filter_by(key=key).first()
-                    if setting is not None and setting.value is not None:
-                        return setting.value
+                    val = InstanceSettings.get_value(key)
+                    if val is not None:
+                        return val
             except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
                 pass  # DB context might not be fully initialized
 

@@ -22,7 +22,6 @@ import {
   Loader2,
   Settings,
   Users,
-  User,
   Shield,
   BadgeCheck,
   Key,
@@ -33,6 +32,7 @@ import {
   X,
   Image as ImageIcon,
   LifeBuoy,
+  Code2,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -136,8 +136,13 @@ function ContentManagementContent(): React.JSX.Element {
   const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
   const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
+  const canAccessSparql =
+    hasPermission(PermissionName.READ_METADATA) ||
+    hasPermission(PermissionName.WRITE_METADATA) ||
+    (profile?.roles ?? []).includes("admin") ||
+    (profile?.roles ?? []).includes("contributor");
 
-  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
 
   const fallbackCustodianTab = canViewMetadata
     ? "metadata"
@@ -165,13 +170,6 @@ function ContentManagementContent(): React.JSX.Element {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
-            <nav className="flex flex-col gap-1">
-              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/admin/settings" />
-            </nav>
-          </div>
-
           {hasCustodianAccess && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
@@ -198,6 +196,15 @@ function ContentManagementContent(): React.JSX.Element {
                     icon={LifeBuoy}
                     isActive={effectiveTab === "escalations"}
                     onClick={() => handleTabChange("escalations")}
+                  />
+                )}
+                {canAccessSparql && (
+                  <NavItem
+                    label="SPARQL Explorer"
+                    icon={Code2}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/sparql"
                   />
                 )}
               </nav>

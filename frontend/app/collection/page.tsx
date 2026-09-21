@@ -48,6 +48,8 @@ import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 import { RoadmapView } from "@/components/collection/roadmap-view";
 import { useTranslations } from "next-intl";
+import { buildCollectionJsonLd } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -436,6 +438,29 @@ function CollectionContent() {
             ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
             : 0;
 
+  // Schema.org CollectionPage structured data for SEO
+  const collectionJsonLd = useMemo(() => {
+    if (!profile) return null;
+    const authorName = profile.display_name || profile.public_username;
+    const collectionName = `${authorName}'s Collection`;
+    const itemRefs = allItems.slice(0, 50).map(item => {
+      const title = item.title || "Untitled";
+      const contentType = "content_type" in item ? (item.content_type as string | undefined) : undefined;
+      const format = "format" in item ? (item.format as string | undefined) : undefined;
+      const id = item.id;
+      const url = `/manifestation/${id}`;
+      return { id, title, url, contentType, format };
+    });
+
+    return buildCollectionJsonLd({
+      name: collectionName,
+      description: `Personal library collection with ${total} items`,
+      totalCount: total,
+      authorName,
+      items: itemRefs,
+    });
+  }, [profile, total, allItems]);
+
   /** Clears all selected manifestations (e.g. after switching view mode). */
   const clearManifestationSelection = useCallback(() => {
     setSelectedManifestations(new Map());
@@ -545,6 +570,7 @@ function CollectionContent() {
 
   return (
     <div className="min-h-screen bg-background">
+      {collectionJsonLd && <JsonLdScript data={collectionJsonLd} />}
       <div aria-live="polite" className="sr-only">
         {ariaLiveText}
       </div>

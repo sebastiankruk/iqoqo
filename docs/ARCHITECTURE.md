@@ -775,11 +775,217 @@ cd frontend && npm run dev              # React on :3000
 
 See [docs/INSTALL.md](INSTALL.md) for full setup instructions.
 
+## 🌐 Semantic Web Layer (v0.8.0+)
+
+iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms the FRBR-modeled collection into a queryable, interoperable Linked Data source.
+
+### Architecture Overview
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                   Semantic Web Layer                          │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │   SPARQL    │    │   Public    │    │   Export    │     │
+│  │  Endpoint   │    │ Linked Data │    │  Service    │     │
+│  │ /api/sparql │    │ /api/public │    │ /api/items/ │     │
+│  └──────┬──────┘    └──────┬──────┘    │  export     │     │
+│         │                  │           └──────┬──────┘     │
+│         │                  │                  │             │
+│         ▼                  ▼                  ▼             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │          RDF Serialization Pipeline                  │   │
+│  │  (app/core/frbr_service.py + app/core/export_service.py)│
+│  ├─────────────────────────────────────────────────────┤   │
+│  │  FRBR → RDF Graph → Content Negotiation → Response  │   │
+│  │  Namespaces: FRBR, Schema.org, Dublin Core, iqoqo   │   │
+│  └─────────────────────┬───────────────────────────────┘   │
+│                        │                                    │
+│                        ▼                                    │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │          IRI Minting (app/db/core.py)                │   │
+│  │  BASE_URL → {base}/works/{id}, /expressions/{id},   │   │
+│  │             /manifestations/{id}, /items/{id}        │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### SPARQL Endpoint Architecture (`app/api/sparql.py`, `app/core/sparql_service.py`)
+
+The SPARQL endpoint provides read-only SPARQL Protocol access over user collections with strict resource isolation:
+
+**Request Lifecycle:**
+
+1. **Authentication** — `@require_auth` + `@require_permission(READ_METADATA)` validates JWT and checks `read:metadata` permission.
+2. **Rate Limiting** — `@limiter.limit("10 per minute")` prevents abuse.
+3. **Query Validation** — `validate_query()` parses the SPARQL query, rejects write operations (`INSERT`, `DELETE`, `UPDATE`), and enforces the 10KB size limit.
+4. **Graph Construction** — `_get_sparql_items()` fetches up to 5,000 items (bounded by `MAX_GRAPH_ITEMS`) with eager-loaded FRBR relationships. `build_graph()` materializes the RDF graph in memory (max 100,000 triples).
+5. **Subprocess Execution** — `execute_sparql()` runs the query in an isolated child process with a 15-second timeout (`QUERY_TIMEOUT`). This prevents runaway queries from affecting the main Flask worker.
+6. **Result Formatting** — `format_select_results()` or `format_graph_results()` serialize the output based on the `Accept` header.
+7. **Size Guard** — Final response is checked against `MAX_SERIALIZED_BYTES` (10MB) before sending.
+
+**Concurrency Control:**
+
+A `threading.Semaphore(4)` (`MAX_CONCURRENT_QUERIES`) limits simultaneous expensive queries. Additional requests receive HTTP 503 (Service Unavailable).
+
+**Security Model:**
+
+- **Read-only enforcement:** Write operations are rejected at parse time.
+- **Per-user scoping:** Authenticated users see their own items + public (non-hidden) items. Anonymous queries see only public items.
+- **Resource bounds:** Query size, graph size, result size, execution time, and concurrency are all bounded.
+- **Subprocess isolation:** Query execution runs in a separate process, preventing memory leaks or crashes from affecting the web worker.
+
+### Public API Architecture (`app/api/public.py`)
+
+Public endpoints serve FRBR/Schema.org semantic metadata without authentication:
+
+**Design Principles:**
+
+- **Open CORS:** All responses include `Access-Control-Allow-Origin: *` for AI agents and Linked Data crawlers.
+- **Content Negotiation:** `_negotiate_rdf_format()` inspects `Accept` headers and `?format=` parameters to select the output serialization.
+- **HTML Redirect:** Browser requests (`Accept: text/html`) receive a 303 redirect to the frontend page, enabling dereferenceable IRIs.
+- **Safe Bounds:** `_parse_safe_rdf_limit()` clamps collection limits to 1–1000 items, preventing memory exhaustion.
+- **Streaming:** Large collections support `?stream=true` for memory-efficient chunked responses via `stream_collection_to_rdf()`.
+
+**Endpoint Structure:**
+
+```text
+/api/public/
+├── works/<id>              → Work RDF (JSON-LD/Turtle/N-Triples)
+├── expressions/<id>        → Expression RDF
+├── manifestations/<id>     → Manifestation RDF
+├── items/<id>              → Item RDF (non-hidden only)
+├── u/<username>/items      → User collection RDF or JSON
+├── u/<username>/feed.xml   → User RSS feed
+├── share/<token>           → Shared collection RDF or JSON
+├── share/<token>/feed.xml  → Shared collection RSS feed
+├── feed.xml                → Global fresh arrivals RSS feed
+└── sitemap.xml             → XML sitemap for search engines
+```
+
+### RDF Serialization Pipeline (`app/core/frbr_service.py`, `app/core/export_service.py`)
+
+The serialization pipeline converts FRBR ORM objects into RDF graphs:
+
+**Namespace Bindings:**
+
+| Prefix    | Namespace                                       | Usage                         |
+| --------- | ----------------------------------------------- | ----------------------------- |
+| `frbr`    | `http://purl.org/vocab/frbr/core#`              | FRBR relationships            |
+| `frbrer`  | `http://iflastandards.info/ns/frbr/frbrer/`     | FRBRer structural relations   |
+| `schema`  | `https://schema.org/`                           | Schema.org types & properties |
+| `dc`      | `http://purl.org/dc/terms/`                     | Dublin Core metadata          |
+| `iqoqo`   | `https://iqoqo.org/ontology#`                   | iqoqo-specific ontology       |
+
+**FRBR → RDF Mapping:**
+
+| FRBR Entity   | RDF Type                                 | Key Properties                                                                |
+| ------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Work          | `frbr:Work` + `schema:CreativeWork`      | `dc:title`, `dc:creator`, `schema:author`                                     |
+| Expression    | `frbr:Expression`                        | `dc:language`, `frbr:expressionOf`                                            |
+| Manifestation | `frbr:Manifestation` + Schema.org type   | `schema:isbn`, `schema:publisher`, `schema:datePublished`, `schema:image`     |
+| Item          | `frbr:Item`                              | `frbr:exemplarOf`, `schema:itemCondition`                                     |
+
+**Schema.org Type Mapping:**
+
+| Content Type   | Schema.org Type     |
+| -------------- | ------------------- |
+| `text`         | `schema:Book`       |
+| `audiobook`    | `schema:Audiobook`  |
+| `music`        | `schema:MusicAlbum` |
+| `movie`        | `schema:Movie`      |
+| `board_game`   | `schema:Game`       |
+| `puzzle`       | `schema:Product`    |
+| `concert`      | `schema:MusicEvent` |
+
+### Content Negotiation Architecture
+
+Content negotiation is handled by `_negotiate_rdf_format()` in `app/api/public.py`:
+
+```text
+Request → Accept Header / ?format= param
+         ↓
+    _negotiate_rdf_format()
+         ↓
+    ┌────────────────────────────────────────┐
+    │ application/ld+json → json-ld          │
+    │ text/turtle         → turtle           │
+    │ application/n-triples → nt             │
+    │ text/html           → redirect (303)   │
+    │ (default)           → json-ld          │
+    └────────────────────────────────────────┘
+         ↓
+    serialize_collection_to_rdf(items, base_url, output_format)
+         ↓
+    Response with appropriate Content-Type header
+```
+
+### IRI Minting Architecture (`app/db/core.py`)
+
+Each FRBR model has an `iri` property that mints canonical dereferenceable IRIs:
+
+```python
+def _get_lod_base_url() -> str:
+    """Return the canonical base URL for Linked Open Data entity IRIs."""
+    base = os.environ.get("BASE_URL") or \
+           os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or \
+           "https://iqoqo.cc"
+    return base.rstrip("/")
+
+class Work(db.Model):
+    @property
+    def iri(self) -> str:
+        return f"{_get_lod_base_url()}/works/{self.id}"
+
+class Expression(db.Model):
+    @property
+    def iri(self) -> str:
+        return f"{_get_lod_base_url()}/expressions/{self.id}"
+
+class Manifestation(db.Model):
+    @property
+    def iri(self) -> str:
+        return f"{_get_lod_base_url()}/manifestations/{self.id}"
+
+class Item(db.Model):
+    @property
+    def iri(self) -> str:
+        return f"{_get_lod_base_url()}/items/{self.id}"
+```
+
+**Fallback Chain:** `BASE_URL` → `NEXT_PUBLIC_FRONTEND_URL` → `https://iqoqo.cc`
+
+IRIs are used as subject URIs in all RDF serializations, enabling Linked Data crawling and dereferencing.
+
+### Data Sovereignty Export Architecture (`app/core/export_service.py`)
+
+The export service provides streaming serialization of user collections:
+
+**Pipeline:**
+
+1. `ExportService.stream_user_collection()` queries the user's items with eager-loaded FRBR relationships.
+2. Items are batched into chunks for memory-efficient processing.
+3. Each batch is serialized via `build_batch_rdf_graph()` (RDF formats) or chunked JSON serialization.
+4. Results are yielded as a generator for Flask's `stream_with_context()`.
+
+**Supported Formats:**
+
+| Format    | Serializer                                | Content-Type          |
+| --------- | ----------------------------------------- | --------------------- |
+| `json-ld` | `build_batch_rdf_graph()` then serialize  | `application/ld+json` |
+| `turtle`  | `build_batch_rdf_graph()` then serialize  | `text/turtle`         |
+| `json`    | Chunked hierarchical JSON                 | `application/json`    |
+
 ## 📖 Further Reading
 
 - **FRBRoo Specification**: [https://www.ifla.org/publications/node/11240](https://www.ifla.org/publications/node/11240)
 - **FRBR Family**: [https://www.ifla.org/frbr](https://www.ifla.org/frbr)
 - **iqoqo Ontology**: [docs/ontology/iqoqo.ttl](ontology/iqoqo.ttl)
+- **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries, Linked Data, and exports
+- **[API Reference](API.md)** — Complete endpoint documentation
+- **[Operations Runbook](OPERATIONS.md)** — FRBR ETL and ontology sync
 
 ## 🤝 Questions?
 

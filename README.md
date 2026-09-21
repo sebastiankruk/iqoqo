@@ -51,6 +51,9 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
+- **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** - SPARQL, Linked Data, exports, and Schema.org
+- **[API Reference](docs/API.md)** - Complete REST API documentation
+- **[Operations Runbook](docs/OPERATIONS.md)** - FRBR ETL, ontology sync, and maintenance
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[Changelog](docs/CHANGELOG.md)** - Recent updates and version history
 - **[Cover Setup](docs/COVERS_SETUP.md)** - AI cover generation and vision extraction setup
@@ -88,15 +91,29 @@ Automate the creation of missing covers using local or cloud LLMs (Ollama, OpenA
 
 See the **[AI Cover Generation Guide](docs/AI_COVERS.md)** for details on configuration, circuit breakers, and batch processing.
 
+## 🌐 Semantic Web & Linked Open Data
+
+iqoqo is a first-class Semantic Web citizen. Every entity in your collection is a dereferenceable Linked Data resource:
+
+- **SPARQL Endpoint:** Query your collection with standard SPARQL at `/api/sparql` — supports SELECT, CONSTRUCT, ASK, and DESCRIBE with content negotiation for JSON, XML, Turtle, and CSV.
+- **Public Linked Data:** Every Work, Expression, Manifestation, and Item is available as JSON-LD, Turtle, or N-Triples at `/api/public/{entity}/{id}` — open CORS for AI agents and crawlers.
+- **Schema.org SEO:** Automatic Schema.org structured data for rich search engine snippets (Book, Audiobook, Movie, Game, MusicAlbum).
+- **Data Sovereignty Export:** Export your complete library as JSON-LD, Turtle, or JSON at `/api/items/export` — you own your data.
+- **Canonical IRIs:** Every entity gets a stable IRI via `BASE_URL` configuration (e.g., `https://iqoqo.cc/works/42`).
+
+See the **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** for SPARQL examples, Linked Data integration, and AI agent usage.
+
 ## 🎯 Roadmap
 
 - [x] Multi-user authentication and authorization
 - [x] Support for different types of media (books, vinyl, board games, etc.)
 - [x] Admin web UI for data management
 - [x] Socializing collections with sharing and recommendations
+- [x] Semantic Web & Linked Open Data (SPARQL, JSON-LD, Turtle)
+- [x] Schema.org SEO and structured data
+- [x] Data sovereignty export (JSON-LD, Turtle, JSON)
 - [ ] Mobile apps (iOS & Android)
-- [ ] Federation protocol for cross-instance discovery
-- [ ] Advanced search with SPARQL queries
+- [ ] Federation protocol for cross-instance discovery (ActivityPub)
 
 ## 💖 Support & Upstream Sustainability
 

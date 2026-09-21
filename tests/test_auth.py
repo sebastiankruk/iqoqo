@@ -129,3 +129,42 @@ def test_token_blocklist_expires_at_and_pruning(client, app):
         # Expired token was deleted, valid token remains
         assert TokenBlocklist.query.filter_by(jti="expired-jti-12345").first() is None
         assert TokenBlocklist.query.filter_by(jti=entry.jti).first() is not None
+
+
+def test_google_login_not_configured(client, app, monkeypatch):
+    """Google login should redirect to /login?error=oauth_not_configured instead of crashing with 500."""
+    from app.api.auth import oauth
+
+    # Simulate environment and DB without Google OAuth credentials
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    app.config.pop("GOOGLE_CLIENT_ID", None)
+    app.config.pop("GOOGLE_CLIENT_SECRET", None)
+    oauth._registry.pop("google", None)
+    oauth._clients.pop("google", None)
+
+    response = client.get("/api/auth/login/google")
+    assert response.status_code == 302
+    assert "error=oauth_not_configured" in response.headers["Location"]
+
+
+def test_google_login_configured_in_db(client, app, monkeypatch):
+    """Google login should load credentials from DB InstanceSettings and redirect to Google."""
+    from app.api.auth import oauth
+    from app.db.models import InstanceSettings
+
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    app.config.pop("GOOGLE_CLIENT_ID", None)
+    app.config.pop("GOOGLE_CLIENT_SECRET", None)
+    oauth._registry.pop("google", None)
+    oauth._clients.pop("google", None)
+
+    with app.app_context():
+        InstanceSettings.set_value("GOOGLE_CLIENT_ID", "test-google-client-id.apps.googleusercontent.com")
+        InstanceSettings.set_value("GOOGLE_CLIENT_SECRET", "test-google-client-secret")
+
+    response = client.get("/api/auth/login/google")
+    assert response.status_code == 302
+    assert "accounts.google.com" in response.headers["Location"]
+    assert "client_id=test-google-client-id.apps.googleusercontent.com" in response.headers["Location"]

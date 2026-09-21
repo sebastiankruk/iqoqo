@@ -20,6 +20,8 @@ import { getTranslations } from "next-intl/server";
 import { Library } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
+import { buildProfileJsonLd } from "@/lib/schema-org";
+import { JsonLdScript } from "@/components/json-ld-script";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { ShareButton } from "@/components/ui/share-button";
 import { CheckInventory } from "@/components/public/check-inventory";
@@ -91,6 +93,16 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
       description: user.bio || `Explore a library of ${user.public_item_count} items.`,
       images: user.avatar_url ? [{ url: user.avatar_url }] : [],
     },
+    alternates: {
+      types: {
+        "application/rss+xml": [
+          { url: `/api/public/u/${user.username}/feed.xml`, title: `${displayName}'s Library Feed` },
+        ],
+        "application/ld+json": [
+          { url: `/api/public/u/${user.username}/items?format=json-ld`, title: `${displayName}'s Library JSON-LD` },
+        ],
+      },
+    },
   };
 }
 
@@ -119,8 +131,17 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   const itemsRes = await getItems(username);
   const items = itemsRes.data.items || [];
 
+  const profileJsonLd = buildProfileJsonLd({
+    username: user.username,
+    displayName: user.display_name,
+    bio: user.bio,
+    avatarUrl: user.avatar_url,
+    publicItemCount: items.length,
+  });
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <JsonLdScript data={profileJsonLd} />
       <Navbar />
       <main className="flex-1">
         {/* Header / Hero Section */}

@@ -11,5 +11,6 @@ frontend/playwright-report/
 frontend/test-results/
 .agent
 .gemini
+.caim
 !.gemini/gems
 !.gemini/commands

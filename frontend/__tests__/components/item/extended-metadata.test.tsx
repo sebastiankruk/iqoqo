@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 //
 // This program is free software: you can redistribute it and/or modify
@@ -33,6 +34,28 @@ describe("ExtendedMetadata", () => {
     const desc = "This is a test description.";
     render(<ExtendedMetadata meta={{ Description: desc }} />);
     expect(screen.getByText(desc)).toBeInTheDocument();
+  });
+
+  it("renders markdown formatting safely", () => {
+    const desc = "## Heading\n\n**Bold Text** and *Italic Text*";
+    render(<ExtendedMetadata meta={{ description: desc }} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Heading" })).toBeInTheDocument();
+    expect(screen.getByText("Bold Text")).toBeInTheDocument();
+  });
+
+  it("renders HTML descriptions safely without raw tags leaking", () => {
+    const desc = "<p>Clean <b>bold</b> text</p>";
+    const { container } = render(<ExtendedMetadata meta={{ description: desc }} />);
+    expect(container.querySelector("b")).toHaveTextContent("bold");
+    expect(screen.queryByText("<p>")).not.toBeInTheDocument();
+  });
+
+  it("neutralizes malicious script tags and inline handlers", () => {
+    const desc = '<p>Safe text</p><script>alert("xss")</script><img src="x" onerror="alert(1)">';
+    const { container } = render(<ExtendedMetadata meta={{ description: desc }} />);
+    expect(screen.getByText("Safe text")).toBeInTheDocument();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("renders additional details in a collapsible section", () => {

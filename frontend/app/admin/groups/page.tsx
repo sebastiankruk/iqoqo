@@ -20,7 +20,6 @@ import {
   Loader2,
   Settings,
   Users,
-  User,
   Shield,
   BadgeCheck,
   Building2,
@@ -28,6 +27,7 @@ import {
   Key,
   Database,
   Image as ImageIcon,
+  Code2,
 } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -108,8 +108,13 @@ export default function GroupsPage() {
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
+  const canAccessSparql =
+    hasPermission(PermissionName.READ_METADATA) ||
+    hasPermission(PermissionName.WRITE_METADATA) ||
+    (profile.roles ?? []).includes("admin") ||
+    (profile.roles ?? []).includes("contributor");
 
-  const hasCustodianAccess = canViewMetadata || canEditCover;
+  const hasCustodianAccess = canViewMetadata || canEditCover || canAccessSparql;
   const canViewSettings =
     hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) ||
     hasPermission(PermissionName.CONFIG_FEDERATION) ||
@@ -125,13 +130,6 @@ export default function GroupsPage() {
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
         <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Personal</h2>
-            <nav className="flex flex-col gap-1">
-              <NavItem label="Profile" icon={User} isActive={false} onClick={() => {}} href="/admin/settings" />
-            </nav>
-          </div>
-
           {hasCustodianAccess && (
             <div>
               <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
@@ -152,6 +150,15 @@ export default function GroupsPage() {
                     isActive={false}
                     onClick={() => {}}
                     href="/admin/content?tab=cover-art"
+                  />
+                )}
+                {canAccessSparql && (
+                  <NavItem
+                    label="SPARQL Explorer"
+                    icon={Code2}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/sparql"
                   />
                 )}
               </nav>

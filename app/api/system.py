@@ -30,6 +30,7 @@ from app.config import Config
 from app.core.cache import cache
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
+from app.core.shacl_service import validate_rdf_string
 from app.db.models import Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, GALLERY_DIR
 
@@ -298,6 +299,15 @@ def export_data():
 def import_data():
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
+
+        # Detect RDF format imports and validate with SHACL
+        content_type = request.content_type or ""
+        if content_type in ("text/turtle", "application/ld+json") or request.args.get("format") in ("turtle", "json-ld"):
+            rdf_format = "turtle" if "turtle" in content_type or request.args.get("format") == "turtle" else "json-ld"
+            rdf_data = request.get_data(as_text=True)
+            conforms, report = validate_rdf_string(rdf_data, rdf_format)
+            if not conforms:
+                return jsonify({"error": "SHACL validation failed", "report": report}), 422
 
         if request.is_json:
             data = request.get_json(silent=True)

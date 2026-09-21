@@ -655,11 +655,18 @@ function ExpressionEditor({
   tree: FrbrTree;
   onSubmit: (data: ExpressionFormData) => Promise<void>;
 }) {
-  const initialType = tree.expression?.content_type ?? "";
+  const initialType = tree.expression?.content_type ?? "text";
   const [type, setType] = useState(initialType);
   const initialKind = tree.expression?.kind ?? "";
   const [kind, setKind] = useState(initialKind);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setType(tree.expression?.content_type ?? "text");
+    setKind(tree.expression?.kind ?? "");
+    setMetaFields(transformMetaToFields(tree.expression?.meta));
+  }, [tree.expression?.content_type, tree.expression?.kind, tree.expression?.meta]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

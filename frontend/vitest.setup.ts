@@ -176,6 +176,7 @@ vi.mock("next-intl", () => ({
         profileSettings: "Profile Settings",
         manageCollections: "Manage Collections",
         adminConfiguration: "Admin Configuration",
+        adminSettings: "Admin Settings",
         logOut: "Log out",
         home: "Home",
         profile: "Profile",
