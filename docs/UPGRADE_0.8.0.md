@@ -57,11 +57,11 @@ If not set, the default is `https://iqoqo.cc`. See the [Semantic Web Guide](SEMA
 
 v0.8.0 promotes three core physical attributes from the unstructured JSONB `meta` column to indexed, typed relational columns on the `Manifestation` table:
 
-| Attribute     | JSONB Key (old)        | Relational Column (new) | Type          | Index   |
-| ------------- | ---------------------- | ----------------------- | ------------- | ------- |
-| ISBN-13       | `meta['isbn13']`       | `isbn13`                | `VARCHAR(13)` | Unique  |
+| Attribute     | JSONB Key (old)        | Relational Column (new) | Type           | Index   |
+| ------------- | ---------------------- | ----------------------- | -------------- | ------- |
+| ISBN-13       | `meta['isbn13']`       | `isbn13`                | `VARCHAR(13)`  | Unique  |
 | Publisher     | `meta['publisher']`    | `publisher`             | `VARCHAR(500)` | Indexed |
-| Format Type   | `meta['format_type']`  | `format_type`           | `VARCHAR(50)` | Indexed |
+| Format Type   | `meta['format_type']`  | `format_type`           | `VARCHAR(50)`  | Indexed |
 
 ### Why This Matters
 

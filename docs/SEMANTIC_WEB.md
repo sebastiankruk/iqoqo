@@ -2,7 +2,7 @@
 
 iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [SPARQL Query Endpoint](#sparql-query-endpoint)
 - [Public Linked Data Endpoints](#public-linked-data-endpoints)
@@ -14,16 +14,16 @@ iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your 
 
 ---
 
-## 🔍 SPARQL Query Endpoint
+## SPARQL Query Endpoint
 
 The SPARQL endpoint provides read-only access to your collection using the standard [SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/).
 
 ### Endpoint
 
-```
+```bash
 GET  /api/sparql?query=<url-encoded-sparql>
 POST /api/sparql
-```
+```text
 
 ### Authentication
 
@@ -35,7 +35,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"you@example.com","password":"your_password"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["access_token"])')
-```
+```bash
 
 ### Query Examples
 
@@ -53,14 +53,14 @@ WHERE {
 }
 ORDER BY ?title
 LIMIT 20
-```
+```text
 
 ```bash
 curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode 'query=PREFIX dc: <http://purl.org/dc/terms/> PREFIX frbr: <http://purl.org/vocab/frbr/core#> SELECT ?title ?author WHERE { ?work a frbr:Work ; dc:title ?title ; dc:creator ?author . } ORDER BY ?title LIMIT 20' \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/sparql-results+json"
-```
+```bash
 
 #### Count Items by Format
 
@@ -76,7 +76,7 @@ WHERE {
 }
 GROUP BY ?format
 ORDER BY DESC(?count)
-```
+```text
 
 #### Find Books by Publisher
 
@@ -95,7 +95,7 @@ WHERE {
   ?work dc:title ?title .
   FILTER(CONTAINS(LCASE(?publisher), "penguin"))
 }
-```
+```text
 
 #### CONSTRUCT a Sub-Graph
 
@@ -113,7 +113,7 @@ WHERE {
         dc:creator ?author .
   FILTER(CONTAINS(LCASE(?title), "hobbit"))
 }
-```
+```text
 
 ### POST Request Formats
 
@@ -136,7 +136,7 @@ curl -X POST http://localhost:8000/api/sparql \
 curl -X POST http://localhost:8000/api/sparql \
   -H "Authorization: Bearer $TOKEN" \
   -d "query=SELECT+*+WHERE+%7B+%3Fs+%3Fp+%3Fo+%7D+LIMIT+5"
-```
+```bash
 
 ### Resource Limits
 
@@ -161,7 +161,7 @@ curl -X POST http://localhost:8000/api/sparql \
 
 ---
 
-## 🔗 Public Linked Data Endpoints
+## Public Linked Data Endpoints
 
 Public endpoints serve FRBR/Schema.org semantic metadata for individual entities without authentication. These are designed for AI agents, search engine crawlers, and Linked Data consumers.
 
@@ -188,17 +188,17 @@ curl "http://localhost:8000/api/public/items/7?format=nt"
 
 # Get an Expression as Turtle via query parameter
 curl "http://localhost:8000/api/public/expressions/3?format=turtle"
-```
+```bash
 
 ### CORS Headers
 
 All public endpoints include open CORS headers for cross-origin access:
 
-```
+```text
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Accept, Authorization
-```
+```text
 
 ### HTML Redirect
 
@@ -207,7 +207,7 @@ Browser requests (Accept: text/html) receive a 303 redirect to the frontend page
 ```bash
 # Browser request → redirects to /work/1
 curl -H "Accept: text/html" -L http://localhost:8000/api/public/works/1
-```
+```bash
 
 ### Collection Feeds
 
@@ -222,7 +222,7 @@ curl http://localhost:8000/api/public/u/username/feed.xml
 
 # Shared collection feed
 curl http://localhost:8000/api/public/share/TOKEN/feed.xml
-```
+```bash
 
 ### Rate Limits
 
@@ -230,15 +230,15 @@ Public entity endpoints are rate limited to 120 requests per minute. Feed endpoi
 
 ---
 
-## 📦 Data Sovereignty Export
+## Data Sovereignty Export
 
 Export your complete library in Linked Data or JSON formats. You own your data — export it anytime.
 
 ### Endpoint
 
-```
+```text
 GET /api/items/export?format=<format>
-```
+```text
 
 **Authentication required.**
 
@@ -267,7 +267,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 curl -H "Authorization: Bearer $TOKEN" \
   -o my-library.json \
   "http://localhost:8000/api/items/export?format=json"
-```
+```bash
 
 ### JSON-LD Context
 
@@ -291,7 +291,7 @@ The JSON-LD export includes a canonical `@context` mapping to standard vocabular
     "publisher": "schema:publisher"
   }
 }
-```
+```text
 
 ### Streaming
 
@@ -299,7 +299,7 @@ Exports use chunked streaming serialization, so even large collections (10,000+ 
 
 ---
 
-## 🏷️ Schema.org SEO Mappings
+## Schema.org SEO Mappings
 
 iqoqo automatically embeds Schema.org structured data in RDF serializations, enabling search engines to display rich snippets for your public collection.
 
@@ -344,11 +344,11 @@ An XML sitemap is automatically generated at `/api/public/sitemap.xml` listing a
 
 ```bash
 curl http://localhost:8000/api/public/sitemap.xml
-```
+```bash
 
 ---
 
-## 🌍 IRI Minting and BASE_URL Configuration
+## IRI Minting and BASE_URL Configuration
 
 Every FRBR entity in iqoqo receives a canonical, dereferenceable Internationalized Resource Identifier (IRI).
 
@@ -365,7 +365,7 @@ BASE_URL=http://localhost:5000
 
 # Custom domain
 BASE_URL=https://library.example.com
-```
+```bash
 
 If not set, the default is `https://iqoqo.cc`.
 
@@ -389,7 +389,7 @@ IRIs are used as subject URIs in all RDF serializations:
 <https://iqoqo.cc/works/42> a frbr:Work ;
     dc:title "The Hobbit" ;
     dc:creator "J.R.R. Tolkien" .
-```
+```bash
 
 ### Fallback Chain
 
@@ -401,7 +401,7 @@ The IRI base URL resolves in this order:
 
 ---
 
-## 🔄 Content Negotiation
+## Content Negotiation
 
 iqoqo supports HTTP content negotiation for RDF formats via the `Accept` header and `?format=` query parameter.
 
@@ -432,7 +432,7 @@ curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 5" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/csv"
-```
+```bash
 
 ### Default Behavior
 
@@ -443,7 +443,7 @@ curl -G "http://localhost:8000/api/sparql" \
 
 ---
 
-## 🤖 AI Agent Integration
+## AI Agent Integration
 
 iqoqo's Semantic Web layer is designed for AI agent and LLM integration.
 
@@ -459,7 +459,7 @@ curl http://localhost:8000/api/public/feed.xml
 # Get user's public collection as JSON-LD
 curl -H "Accept: application/ld+json" \
   http://localhost:8000/api/public/u/username/items
-```
+```bash
 
 ### Querying with SPARQL
 
@@ -480,7 +480,7 @@ WHERE {
         schema:bookFormat schema:Game .
   OPTIONAL { ?work dc:creator ?author }
 }
-```
+```json
 
 ### CORS for Cross-Origin Access
 
@@ -492,7 +492,7 @@ Use the `?stream=true` parameter for memory-efficient streaming of large collect
 
 ```bash
 curl "http://localhost:8000/api/public/u/username/items?format=json-ld&stream=true&limit=1000"
-```
+```bash
 
 ### Linked Data Crawling
 

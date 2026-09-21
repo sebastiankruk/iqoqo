@@ -178,16 +178,16 @@ python3 -m json.tool my-library.json | head -40
 
 ## 🔍 Step 5: Compare Formats
 
-| Feature              | JSON-LD          | Turtle           | JSON             |
-| -------------------- | ---------------- | ---------------- | ---------------- |
-| Human-readable       | ✅               | ✅✅             | ✅✅             |
-| Machine-parseable    | ✅✅             | ✅               | ✅✅             |
-| FRBR hierarchy       | Via `@graph`     | Via triples      | Explicit nesting |
-| Schema.org types     | ✅               | ✅               | ❌               |
-| Standard vocabularies| ✅ (JSON-LD ctx) | ✅ (prefixes)    | ❌               |
-| Streaming support    | ✅               | ✅               | ✅               |
-| File size            | Medium           | Medium           | Smallest         |
-| Best for             | Interoperability | Semantic Web tools | Backup/migration |
+| Feature               | JSON-LD            | Turtle             | JSON               |
+| --------------------- | ------------------ | ------------------ | ------------------ |
+| Human-readable        | ✅                 | ✅✅               | ✅✅               |
+| Machine-parseable     | ✅✅               | ✅                 | ✅✅               |
+| FRBR hierarchy        | Via `@graph`       | Via triples        | Explicit nesting   |
+| Schema.org types      | ✅                 | ✅                 | ❌                 |
+| Standard vocabularies | ✅ (JSON-LD ctx)   | ✅ (prefixes)      | ❌                 |
+| Streaming support     | ✅                 | ✅                 | ✅                 |
+| File size             | Medium             | Medium             | Smallest           |
+| Best for              | Interoperability   | Semantic Web tools | Backup/migration   |
 
 ## 🔄 Step 6: Import to Another Instance
 

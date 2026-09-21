@@ -158,7 +158,7 @@ After installation, make sure the Docker daemon is running.
 
      > **Multi-Environment Deployments:** If you run multiple iqoqo instances (prod, preview, dev) with separate Allegro app registrations, also set `ALLEGRO_APP_NAME` to the registered application name (e.g. `iqoqo_cc`, `iqoqo_pre`, `iqoqo_dev`). Allegro validates the `User-Agent` header against this name.
 
-    - **Linked Open Data & Semantic Web:** Configure the canonical base URL for IRI minting and Linked Data endpoints:
+   - **Linked Open Data & Semantic Web:** Configure the canonical base URL for IRI minting and Linked Data endpoints:
 
       ```text
       # Canonical base URL for Linked Open Data IRIs (default: https://iqoqo.cc)
@@ -171,7 +171,7 @@ After installation, make sure the Docker daemon is running.
 
       See the **[Semantic Web Guide](SEMANTIC_WEB.md)** for full documentation of SPARQL, Linked Data endpoints, and data exports.
 
-    - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
+   - **Local AI Generation:** If you plan to use a local LLM for cover generation, see LOCAL_AI_SETUP.md for detailed instructions on setting up Stable Diffusion.
 
       Set `CORS_SUPPORTS_CREDENTIALS=true` only when your auth flow requires credentialed cross-origin requests.
 

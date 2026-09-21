@@ -871,22 +871,22 @@ The serialization pipeline converts FRBR ORM objects into RDF graphs:
 
 **Namespace Bindings:**
 
-| Prefix    | Namespace                              | Usage                        |
-| --------- | -------------------------------------- | ---------------------------- |
-| `frbr`    | `http://purl.org/vocab/frbr/core#`     | FRBR relationships           |
-| `frbrer`  | `http://iflastandards.info/ns/frbr/frbrer/` | FRBRer structural relations |
-| `schema`  | `https://schema.org/`                  | Schema.org types & properties |
-| `dc`      | `http://purl.org/dc/terms/`            | Dublin Core metadata         |
-| `iqoqo`   | `https://iqoqo.org/ontology#`          | iqoqo-specific ontology      |
+| Prefix    | Namespace                                       | Usage                         |
+| --------- | ----------------------------------------------- | ----------------------------- |
+| `frbr`    | `http://purl.org/vocab/frbr/core#`              | FRBR relationships            |
+| `frbrer`  | `http://iflastandards.info/ns/frbr/frbrer/`     | FRBRer structural relations   |
+| `schema`  | `https://schema.org/`                           | Schema.org types & properties |
+| `dc`      | `http://purl.org/dc/terms/`                     | Dublin Core metadata          |
+| `iqoqo`   | `https://iqoqo.org/ontology#`                   | iqoqo-specific ontology       |
 
 **FRBR → RDF Mapping:**
 
-| FRBR Entity   | RDF Type                    | Key Properties                              |
-| ------------- | --------------------------- | ------------------------------------------- |
-| Work          | `frbr:Work` + `schema:CreativeWork` | `dc:title`, `dc:creator`, `schema:author` |
-| Expression    | `frbr:Expression`           | `dc:language`, `frbr:expressionOf`          |
-| Manifestation | `frbr:Manifestation` + Schema.org type | `schema:isbn`, `schema:publisher`, `schema:datePublished`, `schema:image` |
-| Item          | `frbr:Item`                 | `frbr:exemplarOf`, `schema:itemCondition`   |
+| FRBR Entity   | RDF Type                                 | Key Properties                                                                |
+| ------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Work          | `frbr:Work` + `schema:CreativeWork`      | `dc:title`, `dc:creator`, `schema:author`                                     |
+| Expression    | `frbr:Expression`                        | `dc:language`, `frbr:expressionOf`                                            |
+| Manifestation | `frbr:Manifestation` + Schema.org type   | `schema:isbn`, `schema:publisher`, `schema:datePublished`, `schema:image`     |
+| Item          | `frbr:Item`                              | `frbr:exemplarOf`, `schema:itemCondition`                                     |
 
 **Schema.org Type Mapping:**
 
@@ -972,11 +972,11 @@ The export service provides streaming serialization of user collections:
 
 **Supported Formats:**
 
-| Format    | Serializer                     | Content-Type           |
-| --------- | ------------------------------ | ---------------------- |
-| `json-ld` | `build_batch_rdf_graph()` → `serialize(format="json-ld")` | `application/ld+json` |
-| `turtle`  | `build_batch_rdf_graph()` → `serialize(format="turtle")` | `text/turtle`          |
-| `json`    | Chunked hierarchical JSON      | `application/json`     |
+| Format    | Serializer                                | Content-Type          |
+| --------- | ----------------------------------------- | --------------------- |
+| `json-ld` | `build_batch_rdf_graph()` then serialize  | `application/ld+json` |
+| `turtle`  | `build_batch_rdf_graph()` then serialize  | `text/turtle`         |
+| `json`    | Chunked hierarchical JSON                 | `application/json`    |
 
 ## 📖 Further Reading
 

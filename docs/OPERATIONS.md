@@ -2,7 +2,7 @@
 
 This runbook covers day-to-day operational procedures for iqoqo, focusing on FRBR data integrity, ontology synchronization, and maintenance tasks introduced in v0.8.0.
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [FRBR Integrity Audit](#frbr-integrity-audit)
 - [FRBR ETL Cleanup](#frbr-etl-cleanup)
@@ -13,7 +13,7 @@ This runbook covers day-to-day operational procedures for iqoqo, focusing on FRB
 
 ---
 
-## 🔍 FRBR Integrity Audit
+## FRBR Integrity Audit
 
 ### `make audit-frbr`
 
@@ -102,7 +102,7 @@ Items:           6,789
 
 ---
 
-## 🧹 FRBR ETL Cleanup
+## FRBR ETL Cleanup
 
 ### `make etl-frbr`
 
@@ -128,10 +128,10 @@ make etl-frbr USE_DOCKER=true ARGS="--dry-run --verbose"
 
 The ETL system provides two cleanup scripts:
 
-| Script                      | Mode    | Description                                        |
-| --------------------------- | ------- | -------------------------------------------------- |
-| `scripts/etl_frbr_strict.py`| Strict  | Removes orphan entities, deduplicates ISBNs, prunes empty hierarchies |
-| `scripts/etl_frbr_safe.py`  | Safe    | Non-destructive — only reports issues, never deletes |
+| Script                       | Mode    | Description                                                             |
+| ---------------------------- | ------- | ----------------------------------------------------------------------- |
+| `scripts/etl_frbr_strict.py` | Strict  | Removes orphan entities, deduplicates ISBNs, prunes empty hierarchies   |
+| `scripts/etl_frbr_safe.py`   | Safe    | Non-destructive — only reports issues, never deletes                    |
 
 > **Note:** `make etl-frbr` runs the **strict** mode. Use `scripts/etl_frbr_safe.py` directly for safe/audit-only mode.
 
@@ -171,7 +171,7 @@ make audit-frbr ARGS="--json"
 
 ---
 
-## 🔄 Ontology Synchronization
+## Ontology Synchronization
 
 ### `make sync-ontology`
 
@@ -220,7 +220,7 @@ If the check fails, the ontology needs to be updated to reflect recent schema ch
 
 ---
 
-## 🔧 Troubleshooting FRBR Integrity Issues
+## Troubleshooting FRBR Integrity Issues
 
 ### Orphan Works (Works Without Expressions)
 
@@ -307,7 +307,7 @@ docker compose logs web | grep "SPARQL"
 
 ---
 
-## 💾 Backup and Recovery Procedures
+## Backup and Recovery Procedures
 
 ### Pre-Maintenance Backup
 
@@ -354,7 +354,7 @@ See [BACKUPS.md](BACKUPS.md) for multi-tier backup configuration (daily sync + S
 
 ---
 
-## 📋 Routine Maintenance Checklist
+## Routine Maintenance Checklist
 
 ### Daily
 

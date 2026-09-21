@@ -2,7 +2,7 @@
 
 Complete reference for iqoqo's REST API endpoints, including the Semantic Web layer introduced in v0.8.0.
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [Authentication](#authentication)
 - [SPARQL Endpoint](#sparql-endpoint)
@@ -14,7 +14,7 @@ Complete reference for iqoqo's REST API endpoints, including the Semantic Web la
 
 ---
 
-## 🔐 Authentication
+## Authentication
 
 Most endpoints require JWT authentication. Obtain a token via:
 
@@ -26,7 +26,7 @@ Content-Type: application/json
   "email": "you@example.com",
   "password": "your_password"
 }
-```
+```json
 
 **Response:**
 
@@ -38,13 +38,13 @@ Content-Type: application/json
     "refresh_token": "eyJ..."
   }
 }
-```
+```json
 
 Use the token in subsequent requests:
 
 ```bash
 Authorization: Bearer eyJ...
-```
+```text
 
 ### Permission Requirements
 
@@ -57,7 +57,7 @@ Authorization: Bearer eyJ...
 
 ---
 
-## 🔍 SPARQL Endpoint
+## SPARQL Endpoint
 
 ### `GET /api/sparql`
 
@@ -78,7 +78,7 @@ curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 5" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/sparql-results+json"
-```
+```bash
 
 ### `POST /api/sparql`
 
@@ -102,7 +102,7 @@ curl -X POST http://localhost:8000/api/sparql \
   -H "Content-Type: application/json" \
   -H "Accept: application/sparql-results+json" \
   -d '{"query": "SELECT ?title WHERE { ?work a <http://purl.org/vocab/frbr/core#Work> ; <http://purl.org/dc/terms/title> ?title } LIMIT 10"}'
-```
+```bash
 
 **Example (Raw SPARQL):**
 
@@ -111,7 +111,7 @@ curl -X POST http://localhost:8000/api/sparql \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/sparql-query" \
   -d 'SELECT * WHERE { ?s ?p ?o } LIMIT 5'
-```
+```bash
 
 ### Response Formats
 
@@ -138,7 +138,7 @@ curl -X POST http://localhost:8000/api/sparql \
     ]
   }
 }
-```
+```json
 
 #### CONSTRUCT / DESCRIBE Results
 
@@ -157,11 +157,11 @@ curl -X POST http://localhost:8000/api/sparql \
 <https://iqoqo.cc/works/42> a frbr:Work ;
     dc:title "The Hobbit" ;
     dc:creator "J.R.R. Tolkien" .
-```
+```bash
 
 ---
 
-## 🔗 Public Linked Data Endpoints
+## Public Linked Data Endpoints
 
 All public endpoints are **unauthenticated** and include open CORS headers for AI agents and Linked Data crawlers.
 
@@ -188,7 +188,7 @@ curl -H "Accept: text/turtle" http://localhost:8000/api/public/works/1
 
 # N-Triples via query parameter
 curl "http://localhost:8000/api/public/works/1?format=nt"
-```
+```bash
 
 **Response (JSON-LD):**
 
@@ -204,7 +204,7 @@ curl "http://localhost:8000/api/public/works/1?format=nt"
   "dc:title": "The Hobbit",
   "dc:creator": "J.R.R. Tolkien"
 }
-```
+```bash
 
 ### `GET /api/public/expressions/<id>`
 
@@ -214,7 +214,7 @@ Retrieve an Expression entity as RDF.
 
 ```bash
 curl -H "Accept: text/turtle" http://localhost:8000/api/public/expressions/3
-```
+```bash
 
 ### `GET /api/public/manifestations/<id>`
 
@@ -224,7 +224,7 @@ Retrieve a Manifestation entity as RDF.
 
 ```bash
 curl -H "Accept: application/ld+json" http://localhost:8000/api/public/manifestations/42
-```
+```bash
 
 ### `GET /api/public/items/<id>`
 
@@ -234,7 +234,7 @@ Retrieve an Item entity as RDF. Only non-hidden items are accessible.
 
 ```bash
 curl "http://localhost:8000/api/public/items/7?format=turtle"
-```
+```bash
 
 ### `GET /api/public/u/<username>/items`
 
@@ -264,7 +264,7 @@ curl "http://localhost:8000/api/public/u/alice/items?format=turtle&stream=true&l
 
 # Standard JSON (paginated)
 curl "http://localhost:8000/api/public/u/alice/items?page=1&per_page=24"
-```
+```bash
 
 ### `GET /api/public/feed.xml`
 
@@ -273,7 +273,7 @@ Global fresh arrivals RSS feed.
 ```bash
 curl http://localhost:8000/api/public/feed.xml
 curl "http://localhost:8000/api/public/feed.xml?view=works"
-```
+```bash
 
 ### `GET /api/public/sitemap.xml`
 
@@ -281,21 +281,21 @@ XML sitemap for search engine indexing.
 
 ```bash
 curl http://localhost:8000/api/public/sitemap.xml
-```
+```bash
 
 ### CORS Headers
 
 All public endpoints include:
 
-```
+```text
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Accept, Authorization
-```
+```text
 
 ---
 
-## 📦 Data Export Endpoint
+## Data Export Endpoint
 
 ### `GET /api/items/export`
 
@@ -326,15 +326,15 @@ curl -H "Authorization: Bearer $TOKEN" \
 curl -H "Authorization: Bearer $TOKEN" \
   -o my-library.json \
   "http://localhost:8000/api/items/export?format=json"
-```
+```bash
 
 **Response Headers:**
 
-```
+```bash
 Content-Type: application/ld+json  (or text/turtle, application/json)
 Content-Disposition: attachment; filename="iqoqo-export-20260921-143022.jsonld"
 Transfer-Encoding: chunked
-```
+```text
 
 ### Format Details
 
@@ -374,11 +374,11 @@ Hierarchical JSON following the FRBR Group 1 structure:
     }
   ]
 }
-```
+```json
 
 ---
 
-## 🔄 Content Negotiation
+## Content Negotiation
 
 ### Accept Headers
 
@@ -403,7 +403,7 @@ As an alternative to `Accept` headers, use the `?format=` parameter:
 
 ---
 
-## ⏱️ Rate Limits
+## Rate Limits
 
 | Endpoint                          | Rate Limit        | Scope        |
 | --------------------------------- | ----------------- | ------------ |
@@ -424,11 +424,11 @@ When rate limited, the API returns:
   "error": "Rate limit exceeded. Try again in X seconds.",
   "code": 429
 }
-```
+```json
 
 ---
 
-## ❌ Error Responses
+## Error Responses
 
 All error responses follow a consistent JSON envelope:
 
@@ -437,7 +437,7 @@ All error responses follow a consistent JSON envelope:
   "error": "Human-readable error message",
   "code": 400
 }
-```
+```json
 
 ### SPARQL Error Codes
 
