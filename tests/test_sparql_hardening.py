@@ -182,7 +182,7 @@ class TestIPCLifecycle:
 
     def test_fork_context_used(self):
         """Verify fork multiprocessing context is used.
-        
+
         Note: Changed from 'spawn' to 'fork' in hotfix/0.8.0.1/sparql to reduce
         subprocess creation overhead on resource-constrained hardware. Fork is safe
         here because Gunicorn workers are single-threaded (--threads 1).

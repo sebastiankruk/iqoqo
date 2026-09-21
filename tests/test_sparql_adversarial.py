@@ -34,7 +34,7 @@ class TestAdversarialQueries:
 
     def test_cartesian_join_timeout(self):
         """Cartesian join queries should timeout rather than hang.
-        
+
         Note: Timeout reduced from 0.5s to 0.01s in hotfix/0.8.0.1/sparql because
         fork context is significantly faster than spawn, allowing queries to complete
         before the original timeout. The test verifies the timeout mechanism works,
