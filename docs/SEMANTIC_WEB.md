@@ -2,18 +2,6 @@
 
 iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
 
-## Table of Contents
-
-- [SPARQL Query Endpoint](#sparql-query-endpoint)
-- [Public Linked Data Endpoints](#public-linked-data-endpoints)
-- [Data Sovereignty Export](#data-sovereignty-export)
-- [Schema.org SEO Mappings](#schemaorg-seo-mappings)
-- [IRI Minting and BASE_URL Configuration](#iri-minting-and-base_url-configuration)
-- [Content Negotiation](#content-negotiation)
-- [AI Agent Integration](#ai-agent-integration)
-
----
-
 ## SPARQL Query Endpoint
 
 The SPARQL endpoint provides read-only access to your collection using the standard [SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/).

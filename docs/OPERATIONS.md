@@ -2,17 +2,6 @@
 
 This runbook covers day-to-day operational procedures for iqoqo, focusing on FRBR data integrity, ontology synchronization, and maintenance tasks introduced in v0.8.0.
 
-## Table of Contents
-
-- [FRBR Integrity Audit](#frbr-integrity-audit)
-- [FRBR ETL Cleanup](#frbr-etl-cleanup)
-- [Ontology Synchronization](#ontology-synchronization)
-- [Troubleshooting FRBR Integrity Issues](#troubleshooting-frbr-integrity-issues)
-- [Backup and Recovery Procedures](#backup-and-recovery-procedures)
-- [Routine Maintenance Checklist](#routine-maintenance-checklist)
-
----
-
 ## FRBR Integrity Audit
 
 ### `make audit-frbr`

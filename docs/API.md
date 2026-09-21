@@ -2,18 +2,6 @@
 
 Complete reference for iqoqo's REST API endpoints, including the Semantic Web layer introduced in v0.8.0.
 
-## Table of Contents
-
-- [Authentication](#authentication)
-- [SPARQL Endpoint](#sparql-endpoint)
-- [Public Linked Data Endpoints](#public-linked-data-endpoints)
-- [Data Export Endpoint](#data-export-endpoint)
-- [Content Negotiation](#content-negotiation)
-- [Rate Limits](#rate-limits)
-- [Error Responses](#error-responses)
-
----
-
 ## Authentication
 
 Most endpoints require JWT authentication. Obtain a token via:
