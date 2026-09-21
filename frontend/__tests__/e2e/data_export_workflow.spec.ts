@@ -113,19 +113,19 @@ test.describe("Data Sovereignty Export Workflow — E2E", () => {
     await formatSelect.selectOption("turtle");
     await expect(formatSelect).toHaveValue("turtle");
 
-    // Verify description updates
+    // Verify description updates to Turtle-specific text
     const description = page.getByTestId("export-format-description");
-    await expect(description).toContainText("Turtle");
+    await expect(description).toContainText("RDF graph");
 
     // Select JSON
     await formatSelect.selectOption("json");
     await expect(formatSelect).toHaveValue("json");
-    await expect(description).toContainText("JSON");
+    await expect(description).toContainText("hierarchy");
 
     // Select JSON-LD again
     await formatSelect.selectOption("json-ld");
     await expect(formatSelect).toHaveValue("json-ld");
-    await expect(description).toContainText("JSON-LD");
+    await expect(description).toContainText("W3C standard");
   });
 
   test("download initiates with correct format for JSON-LD", async ({ page }) => {

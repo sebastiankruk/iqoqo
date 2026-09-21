@@ -177,10 +177,10 @@ test.describe("SPARQL Explorer — Query Editor", () => {
     // Results table should appear
     await expect(page.getByText("Results (2 rows)")).toBeVisible({ timeout: 10000 });
 
-    // Table headers should be visible
-    await expect(page.getByText("?work")).toBeVisible();
-    await expect(page.getByText("?title")).toBeVisible();
-    await expect(page.getByText("?author")).toBeVisible();
+    // Table column headers should be visible (use role to avoid matching query textarea)
+    await expect(page.getByRole("columnheader", { name: "?work" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "?title" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "?author" })).toBeVisible();
 
     // Result values should be visible
     await expect(page.getByText("Semantic Web Primer")).toBeVisible();
