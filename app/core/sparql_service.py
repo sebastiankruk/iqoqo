@@ -244,13 +244,13 @@ def _execute_query_in_process(graph_data: bytes, query: str, conn) -> None:  # t
         elif result.type in ("SELECT",):
             # Serialize SELECT results
             variables = [str(v) for v in result.vars] if result.vars else []
-            bindings = []
+            bindings: list[dict[str, Any]] = []
             for row in result:
                 if len(bindings) >= MAX_RESULT_ROWS:
                     break
-                binding = {}
+                binding: dict[str, Any] = {}
                 for i, var in enumerate(variables):
-                    value = row[i]
+                    value = row[i]  # type: ignore[index]
                     if value is not None:
                         from rdflib import BNode, Literal, URIRef
 
@@ -450,8 +450,12 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
         _query_semaphore.release()
 
 
-def _terminate_process(process: multiprocessing.Process) -> None:
-    """Terminate a child process with escalating force: terminate -> kill."""
+def _terminate_process(process: Any) -> None:
+    """Terminate a child process with escalating force: terminate -> kill.
+
+    Accepts any process-like object (Process, SpawnProcess, etc.) to avoid
+    mypy incompatibilities between multiprocessing context-specific types.
+    """
     try:
         process.terminate()
         process.join(timeout=1.0)
@@ -487,6 +491,7 @@ def _reconstruct_result(result_data: dict) -> Result:
             for var in result.vars:
                 if var in binding:
                     val_data = binding[var]
+                    value: Any
                     if val_data["type"] == "uri":
                         value = URIRef(val_data["value"])
                     elif val_data["type"] == "bnode":
@@ -505,7 +510,7 @@ def _reconstruct_result(result_data: dict) -> Result:
             # For serialization compatibility, use plain dicts
             bindings.append(row_dict)
 
-        result.bindings = bindings
+        result.bindings = bindings  # type: ignore[assignment]
         return result
 
     elif result_type == "GRAPH":
@@ -620,9 +625,10 @@ def format_select_results(result: Result, max_rows: int = MAX_RESULT_ROWS) -> di
     if hasattr(result, "bindings"):
         # Reconstructed result from process execution (bindings are dicts)
         for row in result.bindings[:max_rows]:
-            binding = {}
+            row_dict: dict[str, Any] = row  # type: ignore[assignment]
+            binding: dict[str, Any] = {}
             for var in variables:
-                value = row.get(var)
+                value = row_dict.get(var)
                 if value is not None:
                     from rdflib import BNode, Literal, URIRef
 
@@ -641,7 +647,7 @@ def format_select_results(result: Result, max_rows: int = MAX_RESULT_ROWS) -> di
     else:
         # Real rdflib result
         start_time = time.time()
-        for row in result:
+        for result_row in result:
             if len(bindings) >= max_rows:
                 break
             if time.time() - start_time > QUERY_TIMEOUT:
@@ -649,7 +655,7 @@ def format_select_results(result: Result, max_rows: int = MAX_RESULT_ROWS) -> di
 
             binding = {}
             for i, var in enumerate(variables):
-                value = row[i]  # type: ignore[index]
+                value = result_row[i]  # type: ignore[index]
                 if value is not None:
                     from rdflib import BNode, Literal, URIRef
 

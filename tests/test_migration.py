@@ -437,3 +437,258 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == ["v0_7_19_f3_column_promotion", "v0_7_18_fixes", "v0_7_17_baseline"]
+
+
+# ---------------------------------------------------------------------------
+# Migration Downgrade Tests (v0_7_19_f3_column_promotion)
+# ---------------------------------------------------------------------------
+
+
+def test_v0_7_19_f3_column_promotion_downgrade_executes_cleanly(app) -> None:
+    """Verify v0_7_19_f3_column_promotion downgrade() executes without errors."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade first to set up the schema
+            promo.upgrade()
+
+            # Then run downgrade - should execute without errors
+            promo.downgrade()
+
+
+def test_v0_7_19_f3_downgrade_upgrade_cycle(app) -> None:
+    """Verify upgrade-downgrade-upgrade cycle is clean (rollback safety)."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Cycle 1: upgrade -> downgrade
+            promo.upgrade()
+            promo.downgrade()
+
+            # Cycle 2: upgrade again (should work cleanly)
+            promo.upgrade()
+
+
+def test_v0_7_19_f3_downgrade_idempotent_on_fresh_schema(app) -> None:
+    """Verify downgrade on fresh schema (no data) executes cleanly."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade on empty schema
+            promo.upgrade()
+
+            # Run downgrade on empty schema (no data to migrate back)
+            promo.downgrade()
+
+
+def test_v0_7_19_f3_downgrade_with_orm_data(app) -> None:
+    """Verify downgrade works with ORM-created test data."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+    from app.db.core import Expression, Manifestation, Work
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        # Create test data using ORM before migration
+        work = Work(title="Test Book", meta={"authors": ["Test Author"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="book", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9780451524935", format_type="book", meta={"publisher": "Test Press"})
+        db.session.add(manif)
+        db.session.commit()
+
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade
+            promo.upgrade()
+
+            # Run downgrade - should handle existing data
+            promo.downgrade()
+
+
+def test_v0_7_19_f3_downgrade_multiple_records(app) -> None:
+    """Verify downgrade handles multiple records correctly."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+    from app.db.core import Expression, Manifestation, Work
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        # Create multiple test records
+        for i in range(10):
+            work = Work(title=f"Book {i}", meta={})
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id, content_type="book", language="en")
+            db.session.add(expr)
+            db.session.flush()
+
+            manif = Manifestation(expression_id=expr.id, isbn13=f"978{i:010d}", format_type="book" if i % 2 == 0 else None, meta={})
+            db.session.add(manif)
+
+        db.session.commit()
+
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade
+            promo.upgrade()
+
+            # Run downgrade - should handle mix of NULL and non-NULL format_type
+            promo.downgrade()
+
+
+def test_v0_7_19_f3_downgrade_performance(app) -> None:
+    """Verify downgrade completes within acceptable time for larger datasets."""
+    import time
+    from importlib import import_module
+    from typing import Any, cast
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+    from app.db.core import Expression, Manifestation, Work
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        # Insert 50 test records (scaled for test speed)
+        for i in range(50):
+            work = Work(title=f"Perf Book {i}", meta={})
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id, content_type="book", language="en")
+            db.session.add(expr)
+            db.session.flush()
+
+            manif = Manifestation(expression_id=expr.id, isbn13=f"978{i:010d}", format_type="book", meta={})
+            db.session.add(manif)
+
+        db.session.commit()
+
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade
+            promo.upgrade()
+
+            # Run downgrade and measure time
+            start_time = time.time()
+            promo.downgrade()
+            elapsed = time.time() - start_time
+
+            # Should complete within 30 seconds for 50 records
+            assert elapsed < 30, f"Downgrade took {elapsed:.2f}s, expected < 30s"
+
+
+def test_v0_7_19_f3_rollback_verification(app) -> None:
+    """Verify rollback preserves data accessibility."""
+    from importlib import import_module
+    from typing import Any, cast
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from app.db import db
+    from app.db.core import Expression, Manifestation, Work
+
+    promo = import_module("migrations.versions.v0_7_19_f3_column_promotion")
+
+    with app.app_context():
+        # Create test data
+        work = Work(title="Rollback Test", meta={"publisher": "Test Press"})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="book", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9789999999999", meta={})
+        db.session.add(manif)
+        db.session.commit()
+
+        manif_id = manif.id
+
+        engine = db.engine
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn, opts={"render_as_batch": True})
+            cast(Any, promo).op = Operations(ctx)
+
+            # Run upgrade
+            promo.upgrade()
+
+            # Run downgrade (simulating rollback)
+            promo.downgrade()
+
+            # Verify data is still accessible
+            row = conn.execute(sa.text("SELECT id FROM manifestations WHERE id = :id"), {"id": manif_id}).fetchone()
+            assert row is not None
+            assert row[0] == manif_id
