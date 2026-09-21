@@ -17,7 +17,7 @@
 
 Tests cover:
 1. URI encoding edge cases (_safe_iri helper)
-2. IPC lifecycle (spawn context, Pipe IPC, deadline-aware receive)
+2. IPC lifecycle (fork context, Pipe IPC, deadline-aware receive)
 3. Limit enforcement (graph items, triples, bytes, rows, concurrency, deadline)
 4. Process cleanup (no zombies after timeout/crash)
 5. Concurrency (multiple simultaneous queries at limit)
@@ -178,11 +178,16 @@ class TestSafeIRIEdgeCases:
 
 
 class TestIPCLifecycle:
-    """Test IPC lifecycle with spawn context and Pipe."""
+    """Test IPC lifecycle with fork context and Pipe."""
 
-    def test_spawn_context_used(self):
-        """Verify spawn multiprocessing context is used."""
-        assert _MP_CONTEXT.get_start_method() == "spawn"
+    def test_fork_context_used(self):
+        """Verify fork multiprocessing context is used.
+        
+        Note: Changed from 'spawn' to 'fork' in hotfix/0.8.0.1/sparql to reduce
+        subprocess creation overhead on resource-constrained hardware. Fork is safe
+        here because Gunicorn workers are single-threaded (--threads 1).
+        """
+        assert _MP_CONTEXT.get_start_method() == "fork"
 
     def test_successful_query_via_pipe(self):
         """Successful queries must work through Pipe IPC."""
