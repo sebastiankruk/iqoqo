@@ -123,15 +123,17 @@ describe("SPARQL Explorer i18n completeness", () => {
     // When SPARQL translations are added, this test should be updated
     if (hasSparqlNamespace) {
       const enSparql =
-        (enMessages as Record<string, Record<string, string>>).SPARQL ||
-        (enMessages as Record<string, Record<string, string>>).Sparql;
+        (enMessages as Record<string, unknown>).SPARQL ||
+        (enMessages as Record<string, unknown>).Sparql;
       const plSparql =
-        (plMessages as Record<string, Record<string, string>>).SPARQL ||
-        (plMessages as Record<string, Record<string, string>>).Sparql;
+        (plMessages as Record<string, unknown>).SPARQL ||
+        (plMessages as Record<string, unknown>).Sparql;
 
-      if (enSparql && plSparql) {
-        const enSparqlKeys = Object.keys(enSparql).sort();
-        const plSparqlKeys = Object.keys(plSparql).sort();
+      if (enSparql && plSparql && typeof enSparql === 'object' && typeof plSparql === 'object') {
+        const enSparqlObj = enSparql as Record<string, unknown>;
+        const plSparqlObj = plSparql as Record<string, unknown>;
+        const enSparqlKeys = Object.keys(enSparqlObj).sort();
+        const plSparqlKeys = Object.keys(plSparqlObj).sort();
         expect(enSparqlKeys).toEqual(plSparqlKeys);
       }
     }
@@ -143,17 +145,21 @@ describe("SPARQL Explorer i18n completeness", () => {
 
 describe("SPARQL Explorer error message translations", () => {
   it("Common namespace has error-related keys", () => {
-    const enCommon = (enMessages as Record<string, Record<string, string>>).Common;
-    const plCommon = (plMessages as Record<string, Record<string, string>>).Common;
+    const enCommon = (enMessages as Record<string, unknown>).Common;
+    const plCommon = (plMessages as Record<string, unknown>).Common;
 
     expect(enCommon).toBeDefined();
     expect(plCommon).toBeDefined();
 
     // Verify error-related keys exist in both locales
-    const enKeys = Object.keys(enCommon);
-    const plKeys = Object.keys(plCommon);
+    if (enCommon && plCommon && typeof enCommon === 'object' && typeof plCommon === 'object') {
+      const enCommonObj = enCommon as Record<string, unknown>;
+      const plCommonObj = plCommon as Record<string, unknown>;
+      const enKeys = Object.keys(enCommonObj);
+      const plKeys = Object.keys(plCommonObj);
 
-    // Both should have the same keys
-    expect(enKeys.sort()).toEqual(plKeys.sort());
+      // Both should have the same keys
+      expect(enKeys.sort()).toEqual(plKeys.sort());
+    }
   });
 });
