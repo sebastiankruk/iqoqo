@@ -146,7 +146,7 @@ jobs:
           if [[ $BRANCH == release/* ]]; then
             VERSION="${BRANCH#release/}"
           elif [[ $BRANCH == hotfix/* ]]; then
-            VERSION=$(echo "$BRANCH" | sed -E 's|^hotfix/([^/]+).*|\1|')
+            VERSION=$(echo "$BRANCH" | sed -E 's|^hotfix/([0-9]+\.[0-9]+\.[0-9]+).*|\1|')
           else
             VERSION="$BRANCH"
           fi

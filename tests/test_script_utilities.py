@@ -159,6 +159,18 @@ version = "0.7.7"
             assert excinfo.value.code == 1
 
 
+def test_validate_release_hotfix_4part_branch() -> None:
+    """Test get_version_from_branch extracts 3-part version from 4-part hotfix branch."""
+    from scripts.validate_release import get_version_from_branch
+
+    mock_result = MagicMock()
+    mock_result.stdout = "hotfix/0.8.0.1/sparql"
+
+    with patch("scripts.validate_release.subprocess.run", return_value=mock_result):
+        version = get_version_from_branch()
+        assert version == "0.8.0"
+
+
 def test_generate_admin_token_success(app: Any) -> None:
     """Test generate_admin_token.py token generation with mock user."""
     from scripts.generate_admin_token import generate_token
