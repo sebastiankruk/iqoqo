@@ -17,6 +17,7 @@ This migration promotes core physical attributes from the JSONB `meta` column to
 ### What Changed
 
 **Before (v0.7.18):**
+
 ```json
 {
   "id": 123,
@@ -30,6 +31,7 @@ This migration promotes core physical attributes from the JSONB `meta` column to
 ```
 
 **After (v0.8.0):**
+
 ```json
 {
   "id": 123,
@@ -75,6 +77,7 @@ with engine.connect() as conn:
 ```
 
 The preflight report will show:
+
 - Invalid ISBN formats that will be normalized
 - Publisher names exceeding length limits
 - Invalid format types
@@ -85,12 +88,14 @@ The preflight report will show:
 If you have custom SQL queries or reports that reference these fields in the JSONB `meta` column, update them to use the new typed columns:
 
 **Before:**
+
 ```sql
 SELECT * FROM manifestations WHERE meta->>'isbn13' = '978-1234567890';
 SELECT * FROM manifestations WHERE meta->>'publisher' ILIKE '%example%';
 ```
 
 **After:**
+
 ```sql
 SELECT * FROM manifestations WHERE isbn13 = '978-1234567890';
 SELECT * FROM manifestations WHERE publisher ILIKE '%example%';
@@ -115,6 +120,7 @@ curl -X POST https://your-iqoqo-instance/api/sparql \
 ```
 
 **Features:**
+
 - Content negotiation: SPARQL Results JSON, XML, Turtle, JSON-LD, CSV, TSV
 - Rate limited: 10 queries per minute
 - Requires `read:metadata` permission
@@ -131,6 +137,7 @@ Public RDF endpoints for AI agents and Linked Data crawlers:
 - `/api/public/items/<id>`
 
 **Features:**
+
 - Content negotiation: JSON-LD, Turtle, N-Triples
 - Open CORS headers (`Access-Control-Allow-Origin: *`)
 - Schema.org SEO metadata embedded
@@ -147,11 +154,13 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ```
 
 **Supported formats:**
+
 - `jsonld` - JSON-LD (default)
 - `turtle` - Turtle RDF
 - `json` - Hierarchical JSON
 
 **Features:**
+
 - Streaming export for large collections
 - FRBR-compliant structure
 - Includes canonical JSON-LD `@context` with FRBR, Schema.org, Dublin Core namespaces
@@ -172,6 +181,7 @@ The IRI base is configurable via the `BASE_URL` environment variable.
 ### XSS Prevention in Public Endpoints (#295)
 
 All user-controlled strings in public profile and shared collection responses are now sanitized to prevent reflected cross-site scripting via:
+
 - `bio` field
 - `display_name` field
 - Collection metadata fields
@@ -179,12 +189,14 @@ All user-controlled strings in public profile and shared collection responses ar
 ### SSRF Redirect Safety
 
 Hardened `safe_get` in cover and HTTP client utilities with strict URL type coercion on redirect `Location` headers to prevent:
+
 - Crashes from non-string redirect targets
 - SSRF bypasses via malicious redirect chains
 
 ### Host Header Poisoning Defense
 
 Added strict domain validation and secure fallback hosts in frontend auth exchange routes to prevent:
+
 - Host header poisoning attacks
 - Credential leakage via unvalidated `X-Forwarded-Host` headers
 
@@ -225,7 +237,8 @@ docker compose logs -f backend
 ```
 
 Look for:
-```
+
+```text
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will upgrade database to: v0_7_19_f3_column_promotion
 INFO  [migrations.v0_7_19_f3_column_promotion] Starting F3 column promotion migration
@@ -258,6 +271,7 @@ docker compose logs backend | grep -i migration
 ```
 
 Common issues:
+
 - **ISBN validation errors**: The migration normalizes ISBNs automatically. Invalid ISBNs are logged but don't fail the migration.
 - **Publisher name too long**: Names exceeding 255 characters are truncated and logged.
 - **Invalid format type**: Invalid values are set to NULL and logged.
