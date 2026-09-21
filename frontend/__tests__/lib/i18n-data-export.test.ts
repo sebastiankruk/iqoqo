@@ -59,23 +59,29 @@ describe("Data Export i18n completeness", () => {
 
     if (hasExportNamespace) {
       const enExport =
-        (enMessages as Record<string, Record<string, string>>).Export ||
-        (enMessages as Record<string, Record<string, string>>).DataExport;
+        (enMessages as Record<string, unknown>).Export ||
+        (enMessages as Record<string, unknown>).DataExport;
       const plExport =
-        (plMessages as Record<string, Record<string, string>>).Export ||
-        (plMessages as Record<string, Record<string, string>>).DataExport;
+        (plMessages as Record<string, unknown>).Export ||
+        (plMessages as Record<string, unknown>).DataExport;
 
-      if (enExport && plExport) {
-        const enExportKeys = Object.keys(enExport).sort();
-        const plExportKeys = Object.keys(plExport).sort();
+      if (enExport && plExport && typeof enExport === 'object' && typeof plExport === 'object') {
+        const enExportObj = enExport as Record<string, unknown>;
+        const plExportObj = plExport as Record<string, unknown>;
+        const enExportKeys = Object.keys(enExportObj).sort();
+        const plExportKeys = Object.keys(plExportObj).sort();
         expect(enExportKeys).toEqual(plExportKeys);
 
         // Verify no empty translations
-        for (const [key, value] of Object.entries(enExport)) {
-          expect(value.trim()).not.toBe("");
+        for (const [key, value] of Object.entries(enExportObj)) {
+          if (typeof value === 'string') {
+            expect(value.trim()).not.toBe("");
+          }
         }
-        for (const [key, value] of Object.entries(plExport)) {
-          expect(value.trim()).not.toBe("");
+        for (const [key, value] of Object.entries(plExportObj)) {
+          if (typeof value === 'string') {
+            expect(value.trim()).not.toBe("");
+          }
         }
       }
     }
@@ -86,12 +92,14 @@ describe("Data Export i18n completeness", () => {
 
   it("Profile namespace has export-related keys if present", () => {
     // Check if Profile namespace exists and has export keys
-    const enProfile = (enMessages as Record<string, Record<string, string>>).Profile;
-    const plProfile = (plMessages as Record<string, Record<string, string>>).Profile;
+    const enProfile = (enMessages as Record<string, unknown>).Profile;
+    const plProfile = (plMessages as Record<string, unknown>).Profile;
 
-    if (enProfile && plProfile) {
-      const enProfileKeys = Object.keys(enProfile).sort();
-      const plProfileKeys = Object.keys(plProfile).sort();
+    if (enProfile && plProfile && typeof enProfile === 'object' && typeof plProfile === 'object') {
+      const enProfileObj = enProfile as Record<string, unknown>;
+      const plProfileObj = plProfile as Record<string, unknown>;
+      const enProfileKeys = Object.keys(enProfileObj).sort();
+      const plProfileKeys = Object.keys(plProfileObj).sort();
 
       // Profile namespace should have matching keys
       expect(enProfileKeys).toEqual(plProfileKeys);
