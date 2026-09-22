@@ -14,7 +14,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { describe, it, expect } from "vitest";
-import { formatKeyForDisplay, transformMetaToFields, transformFieldsToMeta } from "@/components/admin/frbr/types";
+import { 
+  formatKeyForDisplay, 
+  transformMetaToFields, 
+  transformFieldsToMeta,
+  normalizeMetaValue,
+  ensureArray,
+  ARRAY_META_FIELDS
+} from "@/components/admin/frbr/types";
 
 describe("formatKeyForDisplay", () => {
   it("converts snake_case to Title Case", () => {
@@ -113,5 +120,194 @@ describe("transformFieldsToMeta", () => {
       { key: "type", value: "Audiobook" },
     ];
     expect(transformFieldsToMeta(fields)).toEqual({ type: "Audiobook" });
+  });
+});
+
+describe("ARRAY_META_FIELDS", () => {
+  it("contains expected array fields", () => {
+    expect(ARRAY_META_FIELDS.has("authors")).toBe(true);
+    expect(ARRAY_META_FIELDS.has("translators")).toBe(true);
+    expect(ARRAY_META_FIELDS.has("tags")).toBe(true);
+    expect(ARRAY_META_FIELDS.has("genres")).toBe(true);
+  });
+
+  it("does not contain non-array fields", () => {
+    expect(ARRAY_META_FIELDS.has("title")).toBe(false);
+    expect(ARRAY_META_FIELDS.has("isbn13")).toBe(false);
+    expect(ARRAY_META_FIELDS.has("publisher")).toBe(false);
+  });
+});
+
+describe("normalizeMetaValue", () => {
+  it("returns string for non-array fields", () => {
+    expect(normalizeMetaValue("title", "Some Title")).toBe("Some Title");
+    expect(normalizeMetaValue("isbn13", "978-3-16-148410-0")).toBe("978-3-16-148410-0");
+  });
+
+  it("converts single author to array", () => {
+    expect(normalizeMetaValue("authors", "Remigiusz Mróz")).toEqual(["Remigiusz Mróz"]);
+  });
+
+  it("splits comma-separated authors", () => {
+    expect(normalizeMetaValue("authors", "Author1, Author2, Author3")).toEqual([
+      "Author1",
+      "Author2",
+      "Author3",
+    ]);
+  });
+
+  it("splits semicolon-separated authors", () => {
+    expect(normalizeMetaValue("authors", "Author1; Author2")).toEqual(["Author1", "Author2"]);
+  });
+
+  it("handles empty string", () => {
+    expect(normalizeMetaValue("authors", "")).toEqual([]);
+    expect(normalizeMetaValue("authors", "   ")).toEqual([]);
+  });
+
+  it("trims whitespace from each author", () => {
+    expect(normalizeMetaValue("authors", "  Author1  ,  Author2  ")).toEqual(["Author1", "Author2"]);
+  });
+
+  it("filters empty entries", () => {
+    expect(normalizeMetaValue("authors", "Author1,,Author2,")).toEqual(["Author1", "Author2"]);
+  });
+
+  it("handles mixed separators", () => {
+    expect(normalizeMetaValue("authors", "Author1, Author2; Author3")).toEqual([
+      "Author1",
+      "Author2",
+      "Author3",
+    ]);
+  });
+
+  it("normalizes tags field", () => {
+    expect(normalizeMetaValue("tags", "fiction, sci-fi, adventure")).toEqual([
+      "fiction",
+      "sci-fi",
+      "adventure",
+    ]);
+  });
+
+  it("normalizes genres field", () => {
+    expect(normalizeMetaValue("genres", "Thriller, Mystery")).toEqual(["Thriller", "Mystery"]);
+  });
+});
+
+describe("ensureArray", () => {
+  it("returns empty array for null/undefined", () => {
+    expect(ensureArray(null)).toEqual([]);
+    expect(ensureArray(undefined)).toEqual([]);
+  });
+
+  it("returns array as-is (filtered)", () => {
+    expect(ensureArray(["a", "b"])).toEqual(["a", "b"]);
+  });
+
+  it("filters non-string elements from array", () => {
+    expect(ensureArray(["a", null, "b", undefined, 123])).toEqual(["a", "b"]);
+  });
+
+  it("converts string to single-element array", () => {
+    expect(ensureArray("Single Author")).toEqual(["Single Author"]);
+  });
+
+  it("splits comma-separated string", () => {
+    expect(ensureArray("Author1, Author2")).toEqual(["Author1", "Author2"]);
+  });
+
+  it("splits semicolon-separated string", () => {
+    expect(ensureArray("Author1; Author2")).toEqual(["Author1", "Author2"]);
+  });
+
+  it("returns empty array for non-string non-array", () => {
+    expect(ensureArray(123)).toEqual([]);
+    expect(ensureArray({})).toEqual([]);
+    expect(ensureArray(true)).toEqual([]);
+  });
+});
+
+describe("transformMetaToFields with arrays", () => {
+  it("converts array to comma-separated string", () => {
+    const meta = { authors: ["Author1", "Author2"] };
+    const fields = transformMetaToFields(meta);
+    expect(fields).toEqual([{ key: "authors", value: "Author1, Author2" }]);
+  });
+
+  it("converts single-element array to string", () => {
+    const meta = { authors: ["Remigiusz Mróz"] };
+    const fields = transformMetaToFields(meta);
+    expect(fields).toEqual([{ key: "authors", value: "Remigiusz Mróz" }]);
+  });
+
+  it("converts empty array to empty string", () => {
+    const meta = { authors: [] };
+    const fields = transformMetaToFields(meta);
+    expect(fields).toEqual([{ key: "authors", value: "" }]);
+  });
+
+  it("handles mixed array and non-array fields", () => {
+    const meta = { 
+      authors: ["Author1", "Author2"], 
+      title: "Some Title",
+      tags: ["fiction", "thriller"]
+    };
+    const fields = transformMetaToFields(meta);
+    expect(fields).toEqual([
+      { key: "authors", value: "Author1, Author2" },
+      { key: "title", value: "Some Title" },
+      { key: "tags", value: "fiction, thriller" },
+    ]);
+  });
+});
+
+describe("transformFieldsToMeta with array normalization", () => {
+  it("normalizes authors field to array", () => {
+    const fields = [
+      { key: "authors", value: "Author1, Author2" },
+      { key: "title", value: "Some Title" },
+    ];
+    const result = transformFieldsToMeta(fields);
+    expect(result).toEqual({
+      authors: ["Author1", "Author2"],
+      title: "Some Title",
+    });
+  });
+
+  it("handles empty authors", () => {
+    const fields = [{ key: "authors", value: "" }];
+    expect(transformFieldsToMeta(fields)).toEqual({ authors: [] });
+  });
+
+  it("normalizes single author to array", () => {
+    const fields = [{ key: "authors", value: "Remigiusz Mróz" }];
+    expect(transformFieldsToMeta(fields)).toEqual({ authors: ["Remigiusz Mróz"] });
+  });
+
+  it("normalizes tags field", () => {
+    const fields = [{ key: "tags", value: "fiction, sci-fi" }];
+    expect(transformFieldsToMeta(fields)).toEqual({ tags: ["fiction", "sci-fi"] });
+  });
+
+  it("preserves non-array fields as strings", () => {
+    const fields = [
+      { key: "isbn13", value: "978-3-16-148410-0" },
+      { key: "publisher", value: "Publisher Name" },
+    ];
+    expect(transformFieldsToMeta(fields)).toEqual({
+      isbn13: "978-3-16-148410-0",
+      publisher: "Publisher Name",
+    });
+  });
+
+  it("handles round-trip conversion", () => {
+    const original = { 
+      authors: ["Author1", "Author2"], 
+      title: "Some Title",
+      tags: ["fiction", "thriller"]
+    };
+    const fields = transformMetaToFields(original);
+    const result = transformFieldsToMeta(fields);
+    expect(result).toEqual(original);
   });
 });

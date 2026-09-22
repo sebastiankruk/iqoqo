@@ -35,6 +35,7 @@ import {
   updateFrbrEntity as updateFrbrEntityApi,
   type FrbrItem as FrbrItemType,
 } from "./admin";
+import { ARRAY_META_FIELDS, ensureArray } from "@/components/admin/frbr/types";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -1515,6 +1516,21 @@ export function useDistributionInsights(scope: "personal" | "global" = "personal
 import { getFrbrTree } from "./admin";
 
 /**
+ * Normalizes array fields in metadata before API submission.
+ * Ensures known array fields are always arrays, even if they slipped through as strings.
+ */
+function normalizeMetaForApi(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!meta) return meta;
+  const normalized = { ...meta };
+  for (const key of ARRAY_META_FIELDS) {
+    if (key in normalized) {
+      normalized[key] = ensureArray(normalized[key]);
+    }
+  }
+  return normalized;
+}
+
+/**
  * Custom hook to fetch the full FRBR tree for a manifestation.
  *
  * @param manifestationId - The manifestation ID to load the tree for
@@ -1525,7 +1541,7 @@ export function useFrbrTree(manifestationId: number) {
     queryKey: queryKeys.frbrTree(manifestationId),
     queryFn: () => getFrbrTree(manifestationId),
     enabled: manifestationId > 0,
-    staleTime: 10_000,
+    staleTime: 1_000,
   });
 }
 
@@ -1553,7 +1569,11 @@ export function useUpdateFrbrEntity() {
       id: number;
       data: Record<string, unknown>;
     }) => {
-      return updateFrbrEntityApi(type, id, data);
+      const normalizedData = { ...data };
+      if (normalizedData.meta && typeof normalizedData.meta === "object") {
+        normalizedData.meta = normalizeMetaForApi(normalizedData.meta as Record<string, unknown>);
+      }
+      return updateFrbrEntityApi(type, id, normalizedData);
     },
     onMutate: async ({ manifestationId, type, id, data }) => {
       const queryKey = queryKeys.frbrTree(manifestationId);
@@ -1564,15 +1584,38 @@ export function useUpdateFrbrEntity() {
         if (!old) return old;
         const updated = { ...old };
         if (type === "work" && updated.work && updated.work.id === id) {
-          updated.work = { ...updated.work, ...data } as typeof updated.work;
+          const { meta, ...rest } = data;
+          updated.work = {
+            ...updated.work,
+            ...rest,
+            meta: meta ? { ...updated.work.meta, ...(meta as Record<string, unknown>) } : updated.work.meta,
+          } as typeof updated.work;
         } else if (type === "expression" && updated.expression && updated.expression.id === id) {
-          updated.expression = { ...updated.expression, ...data } as typeof updated.expression;
+          const { meta, ...rest } = data;
+          updated.expression = {
+            ...updated.expression,
+            ...rest,
+            meta: meta ? { ...updated.expression.meta, ...(meta as Record<string, unknown>) } : updated.expression.meta,
+          } as typeof updated.expression;
         } else if (type === "manifestation" && updated.manifestation.id === id) {
-          updated.manifestation = { ...updated.manifestation, ...data } as typeof updated.manifestation;
+          const { meta, ...rest } = data;
+          updated.manifestation = {
+            ...updated.manifestation,
+            ...rest,
+            meta: meta ? { ...updated.manifestation.meta, ...(meta as Record<string, unknown>) } : updated.manifestation.meta,
+          } as typeof updated.manifestation;
         } else if (type === "item") {
-          updated.items = updated.items.map(item =>
-            item.id === id ? ({ ...item, ...data } as FrbrItemType) : item
-          );
+          updated.items = updated.items.map(item => {
+            if (item.id === id) {
+              const { meta, ...rest } = data;
+              return {
+                ...item,
+                ...rest,
+                meta: meta ? { ...item.meta, ...(meta as Record<string, unknown>) } : item.meta,
+              } as FrbrItemType;
+            }
+            return item;
+          });
         }
         return updated;
       });

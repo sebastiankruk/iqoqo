@@ -95,7 +95,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
 
   const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
-  const [lastFetched] = useState(0);
+  const [lastFetched, setLastFetched] = useState(0);
 
   // Add Child dialog state
   const [addChildDialog, setAddChildDialog] = useState<{
@@ -130,6 +130,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           id: tree.work.id,
           data: { title: data.title, meta },
         });
+        setLastFetched(Date.now());
         toast.success("Work updated successfully");
       } catch (err) {
         toast.error(`Failed to update work: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -154,6 +155,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             meta,
           },
         });
+        setLastFetched(Date.now());
         toast.success("Expression updated successfully");
       } catch (err) {
         toast.error(`Failed to update expression: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -207,6 +209,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             meta,
           },
         });
+        setLastFetched(Date.now());
         toast.success("Manifestation updated successfully");
       } catch (err) {
         toast.error(`Failed to update manifestation: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -229,6 +232,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             meta,
           },
         });
+        setLastFetched(Date.now());
         toast.success("Item updated successfully");
       } catch (err) {
         toast.error(`Failed to update item: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -379,31 +383,21 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
-        <div className="flex items-center gap-4 flex-1">
-          <FRBRTreeView
-            tree={tree}
-            selectedLevel={activeTab === "items" ? "item" : activeTab}
-            onSelect={(level) => handleTreeSelect(level)}
-            onAddChild={handleAddChild}
-            onEscalate={handleEscalate}
-            onDelete={handleDelete}
-          />
-          <Select
-            value={activeTab}
-            onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
-          >
-            <SelectTrigger className="w-[200px] bg-background">
-              <SelectValue placeholder="Select level" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="work">Work (F1)</SelectItem>
-              <SelectItem value="expression">Expression (F2)</SelectItem>
-              <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
-              <SelectItem value="items">Items (F5)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg">
+        <Select
+          value={activeTab}
+          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+        >
+          <SelectTrigger className="w-[200px] bg-background">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="work">Work (F1)</SelectItem>
+            <SelectItem value="expression">Expression (F2)</SelectItem>
+            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+            <SelectItem value="items">Items (F5)</SelectItem>
+          </SelectContent>
+        </Select>
         {onClose && (
           <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -411,6 +405,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </Button>
         )}
       </div>
+      <FRBRTreeView
+        tree={tree}
+        selectedLevel={activeTab === "items" ? "item" : activeTab}
+        onSelect={(level) => handleTreeSelect(level)}
+        onAddChild={handleAddChild}
+        onEscalate={handleEscalate}
+        onDelete={handleDelete}
+      />
 
       {activeTab === "work" && (
         <Card>

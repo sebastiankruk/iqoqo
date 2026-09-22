@@ -72,3 +72,97 @@ def test_parse_meta_non_container_string_unchanged():
     result = parse_meta({"plain": "hello world", "numeric_str": "00123"})
     assert result["plain"] == "hello world"
     assert result["numeric_str"] == "00123"  # Must NOT become integer 123
+
+
+def test_parse_meta_array_field_single_author():
+    """Single author string should be converted to array."""
+    result = parse_meta({"authors": "Remigiusz Mróz"})
+    assert result == {"authors": ["Remigiusz Mróz"]}
+
+
+def test_parse_meta_array_field_comma_separated():
+    """Comma-separated authors should be split into array."""
+    result = parse_meta({"authors": "Author1, Author2, Author3"})
+    assert result == {"authors": ["Author1", "Author2", "Author3"]}
+
+
+def test_parse_meta_array_field_semicolon_separated():
+    """Semicolon-separated authors should be split into array."""
+    result = parse_meta({"authors": "Author1; Author2"})
+    assert result == {"authors": ["Author1", "Author2"]}
+
+
+def test_parse_meta_array_field_empty_string():
+    """Empty string for array field should become empty array."""
+    result = parse_meta({"authors": ""})
+    assert result == {"authors": []}
+
+
+def test_parse_meta_array_field_whitespace_only():
+    """Whitespace-only string for array field should become empty array."""
+    result = parse_meta({"authors": "   "})
+    assert result == {"authors": []}
+
+
+def test_parse_meta_array_field_already_array():
+    """Array values should be preserved."""
+    result = parse_meta({"authors": ["Author1", "Author2"]})
+    assert result == {"authors": ["Author1", "Author2"]}
+
+
+def test_parse_meta_array_field_json_string():
+    """JSON string arrays should be parsed."""
+    result = parse_meta({"authors": '["Author1", "Author2"]'})
+    assert result == {"authors": ["Author1", "Author2"]}
+
+
+def test_parse_meta_array_field_null():
+    """Null value for array field should become empty array."""
+    result = parse_meta({"authors": None})
+    assert result == {"authors": []}
+
+
+def test_parse_meta_array_field_trims_whitespace():
+    """Whitespace should be trimmed from each array element."""
+    result = parse_meta({"authors": "  Author1  ,  Author2  "})
+    assert result == {"authors": ["Author1", "Author2"]}
+
+
+def test_parse_meta_array_field_filters_empty():
+    """Empty entries should be filtered out."""
+    result = parse_meta({"authors": "Author1,,Author2,"})
+    assert result == {"authors": ["Author1", "Author2"]}
+
+
+def test_parse_meta_array_field_tags():
+    """Tags field should also be normalized to array."""
+    result = parse_meta({"tags": "fiction, sci-fi, adventure"})
+    assert result == {"tags": ["fiction", "sci-fi", "adventure"]}
+
+
+def test_parse_meta_array_field_genres():
+    """Genres field should be normalized to array."""
+    result = parse_meta({"genres": "Thriller, Mystery"})
+    assert result == {"genres": ["Thriller", "Mystery"]}
+
+
+def test_parse_meta_non_array_field_unchanged():
+    """Non-array fields should remain as strings."""
+    result = parse_meta({"title": "Some Title", "isbn13": "978-3-16-148410-0"})
+    assert result == {"title": "Some Title", "isbn13": "978-3-16-148410-0"}
+
+
+def test_parse_meta_mixed_fields():
+    """Mixed array and non-array fields should be handled correctly."""
+    result = parse_meta({
+        "authors": "Author1, Author2",
+        "title": "Some Title",
+        "tags": "fiction, thriller",
+        "isbn13": "978-3-16-148410-0"
+    })
+    assert result == {
+        "authors": ["Author1", "Author2"],
+        "title": "Some Title",
+        "tags": ["fiction", "thriller"],
+        "isbn13": "978-3-16-148410-0"
+    }

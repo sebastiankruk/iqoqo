@@ -48,6 +48,20 @@ interface ItemHeaderProps {
 }
 
 /**
+ * Normalizes authors to always be an array.
+ * Handles cases where authors might be stored as a string instead of an array.
+ *
+ * @param authors - The authors value (string, array, or null/undefined)
+ * @returns An array of author strings
+ */
+function normalizeAuthors(authors: unknown): string[] {
+  if (!authors) return [];
+  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
+  if (typeof authors === "string") return [authors];
+  return [];
+}
+
+/**
  * Responsive item header component.
  *
  * @param props - Component props
@@ -155,8 +169,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             itemScope
             itemType="https://schema.org/Person"
           >
-            {(work?.authors ?? item.authors ?? []).length > 0 ? (
-              (work?.authors ?? item.authors ?? []).map((author, idx, arr) => (
+            {normalizeAuthors(work?.authors ?? item.authors).length > 0 ? (
+              normalizeAuthors(work?.authors ?? item.authors).map((author, idx, arr) => (
                 <span key={author} property="schema:name" itemProp="name">
                   <DiscoveryPivot
                     type="q"

@@ -24,6 +24,69 @@ export interface MetaField {
 }
 
 /**
+ * Fields that should always be stored as arrays in metadata.
+ * These fields accept comma-separated input and are automatically split.
+ */
+export const ARRAY_META_FIELDS = new Set([
+  "authors",
+  "translators",
+  "illustrators",
+  "editors",
+  "contributors",
+  "tags",
+  "genres",
+  "mechanics",
+  "narrators",
+  "publishers",
+]);
+
+/**
+ * Normalizes a value to an array for known array fields.
+ * Handles comma/semicolon-separated strings, existing arrays, and empty values.
+ *
+ * @param key - The metadata field key
+ * @param value - The raw value from form input
+ * @returns Normalized value (array for known fields, original value otherwise)
+ */
+export function normalizeMetaValue(key: string, value: string): string | string[] {
+  if (!ARRAY_META_FIELDS.has(key)) {
+    return value;
+  }
+  if (!value || typeof value !== "string") {
+    return [];
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  return trimmed
+    .split(/[,;]/)
+    .map(part => part.trim())
+    .filter(part => part.length > 0);
+}
+
+/**
+ * Ensures a value is always an array.
+ * Converts strings to single-element arrays, handles null/undefined.
+ *
+ * @param value - The value to normalize
+ * @returns Always an array
+ */
+export function ensureArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/[,;]/)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+  }
+  return [];
+}
+
+/**
  * Form data for Work (F1) entity editing.
  */
 export interface WorkFormData {
@@ -97,29 +160,35 @@ export function formatKeyForDisplay(key: string): string {
 
 /**
  * Transforms a metadata object into an array of key-value pairs for form editing.
+ * Converts array values to comma-separated strings for display in text inputs.
  *
  * @param meta - The source metadata object
- * @returns Array of meta field pairs
+ * @returns Array of meta field pairs with array values joined as strings
  */
 export function transformMetaToFields(meta: Record<string, unknown> | null | undefined): MetaField[] {
   if (!meta || typeof meta !== "object") return [];
-  return Object.entries(meta).map(([key, value]) => ({
-    key,
-    value: String(value ?? ""),
-  }));
+  return Object.entries(meta).map(([key, value]) => {
+    const displayValue = Array.isArray(value)
+      ? value.join(", ")
+      : String(value ?? "");
+    return { key, value: displayValue };
+  });
 }
 
 /**
  * Transforms an array of key-value pairs back into a metadata object.
+ * Automatically normalizes known array fields (authors, tags, etc.)
+ * by splitting comma-separated values into arrays.
  *
  * @param fields - The array of meta field pairs
- * @returns The metadata record
+ * @returns The metadata record with normalized array values
  */
 export function transformFieldsToMeta(fields: MetaField[]): Record<string, unknown> {
   return fields.reduce(
     (acc, field) => {
-      if (field.key.trim()) {
-        acc[field.key.trim()] = field.value;
+      const key = field.key.trim();
+      if (key) {
+        acc[key] = normalizeMetaValue(key, field.value);
       }
       return acc;
     },
