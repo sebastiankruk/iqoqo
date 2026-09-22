@@ -30,6 +30,7 @@
 .context/ai-memory/0.7.16/
 .context/ai-memory/0.7.17/
 .context/ai-memory/0.7.18/
+.context/ai-memory/0.8.0/
 
 # Standard exclusions
 .venv/
