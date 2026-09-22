@@ -30,6 +30,11 @@ import type {
   ExpressionShelfEntry,
   WorkPartEntry,
 } from "@/types/frbr";
+import type { FrbrTree } from "./admin";
+import {
+  updateFrbrEntity as updateFrbrEntityApi,
+  type FrbrItem as FrbrItemType,
+} from "./admin";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -175,6 +180,13 @@ export const queryKeys = {
       ownership?.join(",") ?? "",
     ] as const,
   workParts: (id: number) => ["workParts", id] as const,
+  /**
+   * Query key for the FRBR tree hierarchy.
+   *
+   * @param id - The manifestation ID
+   * @returns The query key for the FRBR tree
+   */
+  frbrTree: (id: number) => ["admin", "frbr", "tree", id] as const,
   config: ["config"] as const,
 };
 
@@ -1495,5 +1507,175 @@ export function useDistributionInsights(scope: "personal" | "global" = "personal
     queryKey: ["insights", "distribution", scope],
     queryFn: () => getDistributionInsights(scope),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/* ── FRBR Tree & Mutations ──────────────────────────────────────────────── */
+
+import { getFrbrTree } from "./admin";
+
+/**
+ * Custom hook to fetch the full FRBR tree for a manifestation.
+ *
+ * @param manifestationId - The manifestation ID to load the tree for
+ * @returns Query result containing the FrbrTree
+ */
+export function useFrbrTree(manifestationId: number) {
+  return useQuery<FrbrTree>({
+    queryKey: queryKeys.frbrTree(manifestationId),
+    queryFn: () => getFrbrTree(manifestationId),
+    enabled: manifestationId > 0,
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * Custom hook to update any FRBR entity with optimistic cache updates.
+ *
+ * On mutate: cancels outgoing queries, snapshots the current cache,
+ * optimistically updates the tree, and returns a rollback context.
+ * On error: reverts the cache to the previous snapshot.
+ * On settled: invalidates the query to reconcile with server state.
+ *
+ * @returns Mutation result for updating FRBR entities
+ */
+export function useUpdateFrbrEntity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      manifestationId,
+      type,
+      id,
+      data,
+    }: {
+      manifestationId: number;
+      type: "work" | "expression" | "manifestation" | "item";
+      id: number;
+      data: Record<string, unknown>;
+    }) => {
+      return updateFrbrEntityApi(type, id, data);
+    },
+    onMutate: async ({ manifestationId, type, id, data }) => {
+      const queryKey = queryKeys.frbrTree(manifestationId);
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<FrbrTree>(queryKey);
+
+      qc.setQueryData<FrbrTree>(queryKey, old => {
+        if (!old) return old;
+        const updated = { ...old };
+        if (type === "work" && updated.work && updated.work.id === id) {
+          updated.work = { ...updated.work, ...data } as typeof updated.work;
+        } else if (type === "expression" && updated.expression && updated.expression.id === id) {
+          updated.expression = { ...updated.expression, ...data } as typeof updated.expression;
+        } else if (type === "manifestation" && updated.manifestation.id === id) {
+          updated.manifestation = { ...updated.manifestation, ...data } as typeof updated.manifestation;
+        } else if (type === "item") {
+          updated.items = updated.items.map(item =>
+            item.id === id ? ({ ...item, ...data } as FrbrItemType) : item
+          );
+        }
+        return updated;
+      });
+
+      return { previous, queryKey };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(context.queryKey, context.previous);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.frbrTree(variables.manifestationId) });
+    },
+  });
+}
+
+/**
+ * Custom hook to add a child entity to the FRBR hierarchy.
+ *
+ * Supports creating Expressions under Works, Manifestations under Expressions,
+ * and Items under Manifestations.
+ *
+ * @returns Mutation result for adding child entities
+ */
+export function useAddFrbrChild() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      manifestationId,
+      parentType,
+      parentId,
+      childType,
+      data,
+    }: {
+      manifestationId: number;
+      parentType: "work" | "expression" | "manifestation";
+      parentId: number;
+      childType: "expression" | "manifestation" | "item";
+      data: Record<string, unknown>;
+    }) => {
+      const res = await apiClient.post<ApiResponse<{ id: number }>>(
+        `/v1/admin/frbr/${parentType}/${parentId}/${childType}`,
+        data
+      );
+      if (!res.data.success || !res.data.data) {
+        throw new Error(res.data.error ?? `Failed to create ${childType}`);
+      }
+      return res.data.data;
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.frbrTree(variables.manifestationId) });
+    },
+  });
+}
+
+/**
+ * Custom hook to delete a FRBR entity with cache eviction.
+ *
+ * @returns Mutation result for deleting FRBR entities
+ */
+export function useDeleteFrbrEntity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      manifestationId,
+      type,
+      id,
+    }: {
+      manifestationId: number;
+      type: "work" | "expression" | "manifestation" | "item";
+      id: number;
+    }) => {
+      await apiClient.delete(`/v1/admin/frbr/${type}/${id}`);
+      return { type, id };
+    },
+    onMutate: async ({ manifestationId, type, id }) => {
+      const queryKey = queryKeys.frbrTree(manifestationId);
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<FrbrTree>(queryKey);
+
+      qc.setQueryData<FrbrTree>(queryKey, old => {
+        if (!old) return old;
+        const updated = { ...old };
+        if (type === "work" && updated.work?.id === id) {
+          updated.work = null;
+        } else if (type === "expression" && updated.expression?.id === id) {
+          updated.expression = null;
+        } else if (type === "item") {
+          updated.items = updated.items.filter(item => item.id !== id);
+        }
+        return updated;
+      });
+
+      return { previous, queryKey };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(context.queryKey, context.previous);
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.frbrTree(variables.manifestationId) });
+    },
   });
 }

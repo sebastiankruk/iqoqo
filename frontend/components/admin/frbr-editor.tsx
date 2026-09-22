@@ -15,1074 +15,70 @@
 //
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  getFrbrTree,
   updateFrbrEntity,
-  searchFrbrEntities,
   type FrbrTree,
-  type FrbrItem,
-  type FrbrSearchResult,
 } from "@/lib/api/admin";
 import { toast } from "sonner";
 import {
   Loader2,
-  Plus,
   Save,
   RotateCcw,
   X,
-  ChevronDown,
-  ChevronRight,
-  Pencil,
-  Trash2,
-  MoreVertical,
-  ArrowUpRight,
 } from "lucide-react";
 import Link from "next/link";
-import { useWorkParts } from "@/lib/api/hooks";
+import { useWorkParts, useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
-import { useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
-import { useBoardgameMechanics } from "@/lib/api/boardgame";
-import { EXPRESSION_KINDS } from "@/types/frbr";
-import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-interface MetaField {
-  key: string;
-  value: string;
-}
-
-/**
- * Converts a snake_case or camelCase key to Title Case for display.
- *
- * @param key - The key to convert
- * @returns Title cased version of the key
- */
-function formatKeyForDisplay(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
+import { WorkEditor } from "./frbr/work-editor";
+import { ExpressionEditor } from "./frbr/expression-editor";
+import { ManifestationEditor } from "./frbr/manifestation-editor";
+import { ItemsManager } from "./frbr/items-manager";
+import { FRBRTreeView, type FrbrLevel } from "./frbr/frbr-tree-view";
+import {
+  transformFieldsToMeta,
+  type WorkFormData,
+  type ExpressionFormData,
+  type ManifestationFormData,
+  type ItemFormData,
+} from "./frbr/types";
 
 interface FrbrEditorProps {
   manifestationId: number;
   onClose?: () => void;
 }
 
-interface WorkFormData {
-  title: string;
-  type?: string;
-  mechanics?: string[];
-  metaFields: MetaField[];
-}
-
-interface ExpressionFormData {
-  content_type?: string;
-  language?: string;
-  kind?: string;
-  metaFields: MetaField[];
-}
-
-interface ManifestationFormData {
-  type?: string;
-  isbn13?: string;
-  upc?: string;
-  ean?: string;
-  publisher?: string;
-  publication_date?: string;
-  mechanics?: string[];
-  metaFields: MetaField[];
-}
-
-interface ItemFormData {
-  status?: string;
-  condition?: string;
-  metaFields: MetaField[];
-}
-
 /**
- * Transforms a metadata object into an array of key-value pairs for form editing.
- *
- * @param meta - The source metadata object
- * @returns Array of meta field pairs
- */
-function transformMetaToFields(meta: Record<string, unknown> | null | undefined): MetaField[] {
-  if (!meta || typeof meta !== "object") return [];
-  return Object.entries(meta).map(([key, value]) => ({
-    key,
-    value: String(value ?? ""),
-  }));
-}
-
-/**
- * Transforms an array of key-value pairs back into a metadata object.
- *
- * @param fields - The array of meta field pairs
- * @returns The metadata record
- */
-function transformFieldsToMeta(fields: MetaField[]): Record<string, unknown> {
-  return fields.reduce(
-    (acc, field) => {
-      if (field.key.trim()) {
-        acc[field.key.trim()] = field.value;
-      }
-      return acc;
-    },
-    {} as Record<string, unknown>
-  );
-}
-
-/**
- * A standard styled input field for admin forms.
- *
- * @param props - Component properties
- * @param props.name - Input name
- * @param props.defaultValue - Initial value
- * @param props.placeholder - Placeholder text
- * @param props.required - Whether the field is required
- * @param props.className - Additional CSS classes
- * @returns Input JSX element
- */
-function InputField({
-  name,
-  defaultValue,
-  placeholder,
-  required,
-  className = "",
-}: {
-  name: string;
-  defaultValue?: string;
-  placeholder?: string;
-  required?: boolean;
-  className?: string;
-}) {
-  return (
-    <input
-      name={name}
-      defaultValue={defaultValue}
-      placeholder={placeholder}
-      required={required}
-      className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    />
-  );
-}
-
-/**
- * Multi-select board game mechanics using the controlled vocabulary.
- *
- * @param props - Component props.
- * @param props.value - Currently selected mechanic ids.
- * @param props.onChange - Callback when selection changes.
- * @returns Mechanics selector JSX element.
- */
-function MechanicSelector({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
-  const { data: mechanics = [], isLoading } = useBoardgameMechanics();
-  const [open, setOpen] = useState(false);
-
-  const toggle = (id: string) => {
-    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id]);
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium">Mechanics</div>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="outline" size="sm" className="w-full justify-start h-auto py-1.5">
-            {value.length === 0 ? (
-              <span className="text-muted-foreground">Select mechanics…</span>
-            ) : (
-              <span className="truncate">{value.length} selected</span>
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72 max-h-80 overflow-auto">
-          {isLoading ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
-          ) : mechanics.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No mechanics available</div>
-          ) : (
-            mechanics.map(m => (
-              <DropdownMenuItem
-                key={m.id}
-                onSelect={e => {
-                  e.preventDefault();
-                  toggle(m.id);
-                }}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  readOnly
-                  checked={value.includes(m.id)}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">{m.name}</span>
-              </DropdownMenuItem>
-            ))
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {value.map(id => {
-            const name = mechanics.find(m => m.id === id)?.name ?? id;
-            return (
-              <span
-                key={id}
-                className="inline-flex items-center gap-1 text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded"
-              >
-                {name}
-                <button
-                  type="button"
-                  onClick={() => toggle(id)}
-                  className="text-secondary-foreground/70 hover:text-secondary-foreground"
-                  aria-label={`Remove ${name}`}
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Props for the EditableKeyField component.
- */
-interface EditableKeyFieldProps {
-  value: string;
-  onChange: (newValue: string) => void;
-}
-
-/**
- * A field that displays a key as title case with an edit pencil icon.
- * Clicking the pencil switches to an input field for editing the key.
- * Pressing Enter or blurring saves the change; pressing Escape cancels.
- *
- * @param root0 - The props object
- * @param root0.value - The current key value
- * @param root0.onChange - Callback when the key is changed
- * @returns JSX element
- */
-function EditableKeyField({ value, onChange }: EditableKeyFieldProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      onChange(editValue);
-      setIsEditing(false);
-    } else if (e.key === "Escape") {
-      setEditValue(value);
-      setIsEditing(false);
-    }
-  };
-
-  if (isEditing) {
-    return (
-      <input
-        value={editValue}
-        onChange={e => setEditValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => {
-          onChange(editValue);
-          setIsEditing(false);
-        }}
-        autoFocus
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 w-1/3 font-mono"
-      />
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 w-1/3">
-      <span className="text-sm font-medium truncate flex-1" title={value}>
-        {formatKeyForDisplay(value) || "Key"}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 text-blue-500 hover:text-blue-700"
-        onClick={() => {
-          setEditValue(value);
-          setIsEditing(true);
-        }}
-      >
-        <Pencil className="w-3 h-3" />
-      </Button>
-    </div>
-  );
-}
-
-/**
- * Form for editing Work (F1) entities.
- *
- * @param props - Component properties
- * @param props.tree - The FRBR tree data
- * @param props.onSubmit - Submission handler
- * @returns Work editor JSX element
- */
-function WorkEditor({ tree, onSubmit }: { tree: FrbrTree; onSubmit: (data: WorkFormData) => Promise<void> }) {
-  const rawMeta = tree.work?.meta ?? {};
-  const initialMechanics = Array.isArray(rawMeta.mechanics)
-    ? rawMeta.mechanics.filter((v): v is string => typeof v === "string")
-    : [];
-  const [mechanics, setMechanics] = useState<string[]>(initialMechanics);
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
-    transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
-  );
-  const workType = typeof rawMeta.type === "string" ? rawMeta.type.toLowerCase() : "";
-  const isBoardGameLike = ["boardgame", "board_game", "three-dimensional object"].includes(workType);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data: WorkFormData = {
-      title: formData.get("title") as string,
-      mechanics,
-      metaFields,
-    };
-    await onSubmit(data);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="text-sm font-medium">Title</label>
-        <InputField name="title" defaultValue={tree.work?.title ?? ""} required />
-      </div>
-      {isBoardGameLike && (
-        <div>
-          <MechanicSelector value={mechanics} onChange={setMechanics} />
-        </div>
-      )}
-      <div className="space-y-2">
-        <h4 className="font-medium text-sm text-muted-foreground">Dynamic Metadata</h4>
-        {metaFields.map((field, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <EditableKeyField
-              value={field.key}
-              onChange={newKey => {
-                const newFields = [...metaFields];
-                newFields[index].key = newKey;
-                setMetaFields(newFields);
-              }}
-            />
-            <input
-              placeholder="Value"
-              value={field.value}
-              onChange={e => {
-                const newFields = [...metaFields];
-                newFields[index].value = e.target.value;
-                setMetaFields(newFields);
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex-1"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setMetaFields(metaFields.filter((_, i) => i !== index))}
-            >
-              <X className="w-4 h-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setMetaFields([...metaFields, { key: "", value: "" }])}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Field
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit">
-          <Save className="w-4 h-4 mr-2" />
-          Save Work
-        </Button>
-        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Child
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" type="button">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled title="Coming in v0.8.0">
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Escalate
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </form>
-  );
-}
-interface WorkPartsManagerProps {
-  workId: number;
-}
-
-/**
- * Component to manage the parts of a complex work (series).
- * Shows existing parts and provides a form to add/remove parts.
- *
- * @param props - Component properties
- * @param props.workId - The ID of the container work
- * @returns JSX element
- */
-function WorkPartsManager({ workId }: WorkPartsManagerProps) {
-  const { data: partsResponse, refetch: refetchParts, isLoading } = useWorkParts(workId);
-  const parts = partsResponse?.data ?? [];
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<FrbrSearchResult[]>([]);
-  const [selectedWork, setSelectedWork] = useState<FrbrSearchResult | null>(null);
-  const defaultSequence = parts.length + 1;
-  const [sequenceInput, setSequenceInput] = useState(defaultSequence);
-  const [searching, setSearching] = useState(false);
-  const [adding, setAdding] = useState(false);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSequenceInput(parts.length + 1);
-  }, [parts.length]);
-
-  const handleSearch = async (val: string) => {
-    setSearchQuery(val);
-    if (val.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const res = await searchFrbrEntities(val, "work", 10);
-      setSearchResults(res.filter(w => w.id !== workId));
-    } catch (err) {
-      console.error("Search failed:", err);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleAddPart = async () => {
-    if (!selectedWork) return;
-    setAdding(true);
-    try {
-      await apiClient.post(`/works/${workId}/parts`, {
-        part_work_id: selectedWork.id,
-        sequence: sequenceInput,
-      });
-      toast.success(`Added "${selectedWork.title}" as part of this series`);
-      setSelectedWork(null);
-      setSearchQuery("");
-      setSearchResults([]);
-      refetchParts();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add part");
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleRemovePart = async (partWorkId: number, title: string) => {
-    try {
-      await apiClient.delete(`/works/${workId}/parts/${partWorkId}`);
-      toast.success(`Removed "${title}" from series`);
-      refetchParts();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove part");
-    }
-  };
-
-  return (
-    <div className="mt-8 border-t pt-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">Series / Complex Work Parts</h3>
-        <p className="text-sm text-muted-foreground">
-          Define this work as a complex work (series/anthology) and manage its children.
-        </p>
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-        </div>
-      ) : parts.length === 0 ? (
-        <div className="text-center py-6 border border-dashed rounded-lg bg-muted/20">
-          <p className="text-sm text-muted-foreground">This work is currently not defined as a series.</p>
-        </div>
-      ) : (
-        <div className="border rounded-lg overflow-hidden bg-card divide-y">
-          {parts.map(part => (
-            <div key={part.part_work_id} className="flex items-center justify-between p-3 sm:px-4 hover:bg-muted/30">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                  {part.sequence}
-                </span>
-                <span className="font-medium text-sm truncate">{part.title}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                onClick={() => handleRemovePart(part.part_work_id, part.title)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="bg-muted/10 border rounded-lg p-4 space-y-4">
-        <h4 className="text-sm font-semibold">Add Part Work</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-2 relative">
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Search Work</label>
-            {selectedWork ? (
-              <div className="flex items-center justify-between h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <span className="truncate font-medium">{selectedWork.title}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                  onClick={() => setSelectedWork(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <input
-                  placeholder="Type to search works..."
-                  value={searchQuery}
-                  onChange={e => handleSearch(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-                {searching && (
-                  <div className="absolute right-3 top-8">
-                    <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />
-                  </div>
-                )}
-                {searchResults.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 border rounded-md bg-popover text-popover-foreground shadow-md max-h-60 overflow-auto divide-y">
-                    {searchResults.map(work => (
-                      <button
-                        key={work.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => {
-                          setSelectedWork(work);
-                          setSearchResults([]);
-                        }}
-                      >
-                        {work.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Sequence Number</label>
-            <input
-              type="number"
-              min="1"
-              value={sequenceInput}
-              onChange={e => setSequenceInput(parseInt(e.target.value, 10) || 1)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-          </div>
-        </div>
-        <Button type="button" disabled={!selectedWork || adding} onClick={handleAddPart} className="w-full sm:w-auto">
-          {adding ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-          Add to Series
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Form for editing Expression (F2) entities.
- *
- * @param props - Component properties
- * @param props.tree - The FRBR tree data
- * @param props.onSubmit - Submission handler
- * @returns Expression editor JSX element
- */
-function ExpressionEditor({
-  tree,
-  onSubmit,
-}: {
-  tree: FrbrTree;
-  onSubmit: (data: ExpressionFormData) => Promise<void>;
-}) {
-  const initialType = tree.expression?.content_type ?? "text";
-  const [type, setType] = useState(initialType);
-  const initialKind = tree.expression?.kind ?? "";
-  const [kind, setKind] = useState(initialKind);
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setType(tree.expression?.content_type ?? "text");
-    setKind(tree.expression?.kind ?? "");
-    setMetaFields(transformMetaToFields(tree.expression?.meta));
-  }, [tree.expression?.content_type, tree.expression?.kind, tree.expression?.meta]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data: ExpressionFormData = {
-      content_type: type,
-      language: formData.get("language") as string | undefined,
-      kind,
-      metaFields,
-    };
-    await onSubmit(data);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-medium">Content Type</label>
-          <select
-            name="content_type"
-            value={type}
-            onChange={e => setType(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="text">Text (Book/Comic/Manga/Magazine)</option>
-            <option value="image">Image (Artwork)</option>
-            <option value="audio">Audio (Music/Audiobook/Podcast)</option>
-            <option value="video">Video (Movie/TV Show/Anime)</option>
-            <option value="software">Software (Video Game)</option>
-            <option value="object">Object (Board Game/Model/Merch)</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Kind</label>
-          <select
-            name="kind"
-            value={kind}
-            onChange={e => setKind(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <option value="">Studio / Default</option>
-            {EXPRESSION_KINDS.map(k => (
-              <option key={k} value={k}>
-                {formatKeyForDisplay(k)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Language</label>
-          <InputField name="language" defaultValue={tree.expression?.language ?? ""} placeholder="e.g., en, pl" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <h4 className="font-medium text-sm text-muted-foreground">Dynamic Metadata</h4>
-        {metaFields.map((field, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <EditableKeyField
-              value={field.key}
-              onChange={newKey => {
-                const newFields = [...metaFields];
-                newFields[index].key = newKey;
-                setMetaFields(newFields);
-              }}
-            />
-            <input
-              placeholder="Value"
-              value={field.value}
-              onChange={e => {
-                const newFields = [...metaFields];
-                newFields[index].value = e.target.value;
-                setMetaFields(newFields);
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex-1"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setMetaFields(metaFields.filter((_, i) => i !== index))}
-            >
-              <X className="w-4 h-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setMetaFields([...metaFields, { key: "", value: "" }])}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Field
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit">
-          <Save className="w-4 h-4 mr-2" />
-          Save Expression
-        </Button>
-        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Child
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" type="button">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled title="Coming in v0.8.0">
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Escalate
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </form>
-  );
-}
-
-/**
- * Form for editing Manifestation (F3) entities.
- *
- * @param props - Component properties
- * @param props.tree - The FRBR tree data
- * @param props.onSubmit - Submission handler
- * @returns Manifestation editor JSX element
- */
-function ManifestationEditor({
-  tree,
-  onSubmit,
-}: {
-  tree: FrbrTree;
-  onSubmit: (data: ManifestationFormData) => Promise<void>;
-}) {
-  const initialType = (tree.manifestation.meta?.type as string) || "book";
-  const [type, setType] = useState(initialType);
-  const rawMeta = tree.manifestation.meta ?? {};
-  const initialMechanics = Array.isArray(rawMeta.mechanics)
-    ? rawMeta.mechanics.filter((v): v is string => typeof v === "string")
-    : [];
-  const [mechanics, setMechanics] = useState<string[]>(initialMechanics);
-  const initialMetaFields = transformMetaToFields(tree.manifestation.meta).filter(
-    f => f.key !== "type" && f.key !== "mechanics"
-  );
-  const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data: ManifestationFormData = {
-      type,
-      isbn13: formData.get("isbn13") as string | undefined,
-      upc: formData.get("upc") as string | undefined,
-      ean: formData.get("ean") as string | undefined,
-      publisher: formData.get("publisher") as string | undefined,
-      publication_date: formData.get("publication_date") as string | undefined,
-      metaFields,
-    };
-    await onSubmit({ ...data, mechanics });
-  };
-
-  const textFormats: string[] = MEDIA_HIERARCHY.text.formats.map(f => f.id);
-  const legacyBookLike = ["Book", "Comic Book", "Manga", "Magazine", "Journal", "Newspaper", "Zine"];
-  const isBookLike = textFormats.includes(type) || legacyBookLike.includes(type);
-
-  const isValidFormat = (MEDIA_FORMATS as readonly string[]).includes(type);
-  const isBoardGameLike = ["boardgame", "board_game", "three-dimensional object"].includes(type.toLowerCase());
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="text-sm font-medium">Type</label>
-          <Select value={type} onValueChange={(val: string) => setType(val)}>
-            <SelectTrigger className="w-full bg-background">
-              <SelectValue placeholder="Select type..." />
-            </SelectTrigger>
-            <SelectContent>
-              {!isValidFormat && <SelectItem value={type}>{type} (Legacy)</SelectItem>}
-              {Object.entries(MEDIA_HIERARCHY).map(([catId, cat]) => (
-                <SelectGroup key={catId}>
-                  <SelectLabel>{cat.label}</SelectLabel>
-                  {cat.formats.map(f => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {isBoardGameLike && (
-          <div className="col-span-2">
-            <MechanicSelector value={mechanics} onChange={setMechanics} />
-          </div>
-        )}
-
-        {isBookLike && (
-          <div>
-            <label className="text-sm font-medium">ISBN-13</label>
-            <InputField name="isbn13" defaultValue={tree.manifestation.isbn13 ?? ""} />
-          </div>
-        )}
-        <div>
-          <label className="text-sm font-medium">UPC</label>
-          <InputField name="upc" defaultValue={tree.manifestation.upc ?? ""} />
-        </div>
-        <div>
-          <label className="text-sm font-medium">EAN</label>
-          <InputField name="ean" defaultValue={tree.manifestation.ean ?? ""} />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Publisher</label>
-          <InputField name="publisher" defaultValue={tree.manifestation.publisher ?? ""} />
-        </div>
-        <div className="col-span-2">
-          <label className="text-sm font-medium">Publication Date</label>
-          <InputField
-            name="publication_date"
-            defaultValue={tree.manifestation.publication_date ?? ""}
-            placeholder="YYYY-MM-DD"
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <h4 className="font-medium text-sm text-muted-foreground">Dynamic Metadata</h4>
-        {metaFields.map((field, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <EditableKeyField
-              value={field.key}
-              onChange={newKey => {
-                const newFields = [...metaFields];
-                newFields[index].key = newKey;
-                setMetaFields(newFields);
-              }}
-            />
-            <input
-              placeholder="Value"
-              value={field.value}
-              onChange={e => {
-                const newFields = [...metaFields];
-                newFields[index].value = e.target.value;
-                setMetaFields(newFields);
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex-1"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setMetaFields(metaFields.filter((_, i) => i !== index))}
-            >
-              <X className="w-4 h-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setMetaFields([...metaFields, { key: "", value: "" }])}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Field
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit">
-          <Save className="w-4 h-4 mr-2" />
-          Save Manifestation
-        </Button>
-        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Child
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" type="button">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled title="Coming in v0.8.0">
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Escalate
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </form>
-  );
-}
-
-/**
- * Form for editing Item (F5) entities.
- *
- * @param props - Component properties
- * @param props.item - The FRBR item data
- * @param props.onSubmit - Submission handler
- * @returns Item editor JSX element
- */
-function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemFormData) => Promise<void> }) {
-  const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(item.meta));
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data: ItemFormData = {
-      status: formData.get("status") as string | undefined,
-      condition: formData.get("condition") as string | undefined,
-      metaFields,
-    };
-    await onSubmit(data);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-sm font-medium">Status</label>
-          <InputField name="status" defaultValue={item.status ?? ""} placeholder="available, lent, lost, wish_list" />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Condition</label>
-          <InputField name="condition" defaultValue={item.condition ?? ""} placeholder="Like New, Good, Fair" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <h4 className="font-medium text-sm text-muted-foreground">Dynamic Metadata</h4>
-        {metaFields.map((field, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <EditableKeyField
-              value={field.key}
-              onChange={newKey => {
-                const newFields = [...metaFields];
-                newFields[index].key = newKey;
-                setMetaFields(newFields);
-              }}
-            />
-            <input
-              placeholder="Value"
-              value={field.value}
-              onChange={e => {
-                const newFields = [...metaFields];
-                newFields[index].value = e.target.value;
-                setMetaFields(newFields);
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex-1"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setMetaFields(metaFields.filter((_, i) => i !== index))}
-            >
-              <X className="w-4 h-4 text-destructive" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setMetaFields([...metaFields, { key: "", value: "" }])}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Field
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit">
-          <Save className="w-4 h-4 mr-2" />
-          Save Item
-        </Button>
-        <Button type="button" variant="outline" disabled title="Coming in v0.8.0">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Child
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" type="button">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled title="Coming in v0.8.0">
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Escalate
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled className="text-destructive" title="Coming in v0.8.0">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </form>
-  );
-}
-
-/**
- * Main FRBR Editor component that manages state for the entire hierarchy.
+ * Main FRBR Editor component that orchestrates the decomposed sub-components.
+ * Uses TanStack Query for data fetching and optimistic cache updates.
  *
  * @param props - Component properties
  * @param props.manifestationId - The manifestation ID to load
@@ -1090,172 +86,278 @@ function ItemEditor({ item, onSubmit }: { item: FrbrItem; onSubmit: (data: ItemF
  * @returns FRBR editor JSX element
  */
 export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
-  const [tree, setTree] = useState<FrbrTree | null>(null);
-  const [lastFetched, setLastFetched] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
-  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const { data: tree, isLoading, isError, error, refetch } = useFrbrTree(manifestationId);
+  const updateEntity = useUpdateFrbrEntity();
+  const deleteEntity = useDeleteFrbrEntity();
   const { data: profile } = useProfile();
   const createEscalation = useCreateEscalation();
   const hasWriteMetadata = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
   const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
 
-  const [itemFilter, setItemFilter] = useState({ owner: "", status: "", condition: "" });
+  const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
+  const [lastFetched] = useState(0);
 
-  const fetchTree = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getFrbrTree(manifestationId);
-      setTree(data);
-      setLastFetched(Date.now());
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load FRBR tree";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [manifestationId]);
+  // Add Child dialog state
+  const [addChildDialog, setAddChildDialog] = useState<{
+    open: boolean;
+    parentLevel: FrbrLevel | null;
+  }>({ open: false, parentLevel: null });
+  const [newChildTitle, setNewChildTitle] = useState("");
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchTree();
-  }, [fetchTree]);
+  // Delete confirmation dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    level: FrbrLevel | null;
+    id: number | null;
+  }>({ open: false, level: null, id: null });
 
-  const handleWorkSubmit = async (data: WorkFormData) => {
-    if (!tree?.work) return;
-    try {
-      const meta = transformFieldsToMeta(data.metaFields);
-      if (data.mechanics) {
-        meta.mechanics = data.mechanics;
+  // Escalate dialog state
+  const [escalateDialog, setEscalateDialog] = useState<{
+    open: boolean;
+    level: FrbrLevel | null;
+    id: number | null;
+  }>({ open: false, level: null, id: null });
+  const [escalationNote, setEscalationNote] = useState("");
+
+  const handleWorkSubmit = useCallback(
+    async (data: WorkFormData) => {
+      if (!tree?.work) return;
+      try {
+        const meta = transformFieldsToMeta(data.metaFields);
+        await updateEntity.mutateAsync({
+          manifestationId,
+          type: "work",
+          id: tree.work.id,
+          data: { title: data.title, meta },
+        });
+        toast.success("Work updated successfully");
+      } catch (err) {
+        toast.error(`Failed to update work: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
-      await updateFrbrEntity("work", tree.work.id, { title: data.title, meta });
-      toast.success("Work updated successfully");
-      await fetchTree();
-    } catch (err) {
-      toast.error(`Failed to update work: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-  };
+    },
+    [tree, manifestationId, updateEntity]
+  );
 
-  const handleExpressionSubmit = async (data: ExpressionFormData) => {
-    if (!tree?.expression) return;
-    try {
-      const meta = transformFieldsToMeta(data.metaFields);
-      await updateFrbrEntity("expression", tree.expression.id, {
-        content_type: data.content_type,
-        language: data.language,
-        kind: data.kind,
-        meta,
-      });
-      toast.success("Expression updated successfully");
-      await fetchTree();
-    } catch (err) {
-      toast.error(`Failed to update expression: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-  };
+  const handleExpressionSubmit = useCallback(
+    async (data: ExpressionFormData) => {
+      if (!tree?.expression) return;
+      try {
+        const meta = transformFieldsToMeta(data.metaFields);
+        await updateEntity.mutateAsync({
+          manifestationId,
+          type: "expression",
+          id: tree.expression.id,
+          data: {
+            content_type: data.content_type,
+            language: data.language,
+            kind: data.kind,
+            meta,
+          },
+        });
+        toast.success("Expression updated successfully");
+      } catch (err) {
+        toast.error(`Failed to update expression: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    },
+    [tree, manifestationId, updateEntity]
+  );
 
-  const handleManifestationSubmit = async (data: ManifestationFormData) => {
-    if (!tree?.manifestation) return;
-    try {
-      const originalType = tree.manifestation.meta?.type as string;
-      const typeChanged = data.type && data.type !== originalType;
+  const handleManifestationSubmit = useCallback(
+    async (data: ManifestationFormData) => {
+      if (!tree?.manifestation) return;
+      try {
+        const originalType = tree.manifestation.meta?.type as string;
+        const typeChanged = data.type && data.type !== originalType;
 
-      if (!hasWriteMetadata) {
-        if (typeChanged && hasEscalateRequest) {
-          await createEscalation.mutateAsync({
-            level: "manifestation",
-            targetId: tree.manifestation.id,
-            data: {
-              request_type: "change_type",
-              field_name: "type",
-              current_value: originalType,
-              suggested_value: data.type ?? "",
-              note: "Type change suggested via editor",
-            },
-          });
-          toast.success("Type change requested via User Requests.");
-        } else {
-          toast.error("You do not have permission to update metadata.");
+        if (!hasWriteMetadata) {
+          if (typeChanged && hasEscalateRequest) {
+            await createEscalation.mutateAsync({
+              level: "manifestation",
+              targetId: tree.manifestation.id,
+              data: {
+                request_type: "change_type",
+                field_name: "type",
+                current_value: originalType,
+                suggested_value: data.type ?? "",
+                note: "Type change suggested via editor",
+              },
+            });
+            toast.success("Type change requested via User Requests.");
+          } else {
+            toast.error("You do not have permission to update metadata.");
+          }
+          return;
         }
+
+        const meta = transformFieldsToMeta(data.metaFields);
+        if (data.type) {
+          meta.type = data.type;
+        }
+
+        await updateEntity.mutateAsync({
+          manifestationId,
+          type: "manifestation",
+          id: tree.manifestation.id,
+          data: {
+            isbn13: data.isbn13,
+            upc: data.upc,
+            ean: data.ean,
+            publisher: data.publisher,
+            publication_date: data.publication_date,
+            meta,
+          },
+        });
+        toast.success("Manifestation updated successfully");
+      } catch (err) {
+        toast.error(`Failed to update manifestation: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    },
+    [tree, manifestationId, updateEntity, hasWriteMetadata, hasEscalateRequest, createEscalation]
+  );
+
+  const handleItemSubmit = useCallback(
+    async (data: ItemFormData, itemId: number) => {
+      try {
+        const meta = transformFieldsToMeta(data.metaFields);
+        await updateEntity.mutateAsync({
+          manifestationId,
+          type: "item",
+          id: itemId,
+          data: {
+            status: data.status,
+            condition: data.condition,
+            meta,
+          },
+        });
+        toast.success("Item updated successfully");
+      } catch (err) {
+        toast.error(`Failed to update item: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    },
+    [manifestationId, updateEntity]
+  );
+
+  /**
+   * Handles the "Add Child" action from the tree view or editor toolbars.
+   *
+   * @param parentLevel - The parent entity level
+   */
+  const handleAddChild = useCallback((parentLevel: FrbrLevel) => {
+    setAddChildDialog({ open: true, parentLevel });
+    setNewChildTitle("");
+  }, []);
+
+  /**
+   * Confirms the creation of a new child entity.
+   */
+  const confirmAddChild = useCallback(async () => {
+    if (!addChildDialog.parentLevel || !tree || !newChildTitle.trim()) return;
+    const parentLevel = addChildDialog.parentLevel;
+
+    try {
+      let parentId: number;
+      let childType: string;
+
+      if (parentLevel === "work" && tree.work) {
+        parentId = tree.work.id;
+        childType = "expression";
+      } else if (parentLevel === "expression" && tree.expression) {
+        parentId = tree.expression.id;
+        childType = "manifestation";
+      } else if (parentLevel === "manifestation") {
+        parentId = tree.manifestation.id;
+        childType = "item";
+      } else {
         return;
       }
 
-      const meta = transformFieldsToMeta(data.metaFields);
-      if (data.type) {
-        meta.type = data.type;
-      }
-      if (data.mechanics) {
-        meta.mechanics = data.mechanics;
-      }
-
-      await updateFrbrEntity("manifestation", tree.manifestation.id, {
-        isbn13: data.isbn13,
-        upc: data.upc,
-        ean: data.ean,
-        publisher: data.publisher,
-        publication_date: data.publication_date,
-        meta,
+      await apiClient.post(`/v1/admin/frbr/${parentLevel}/${parentId}/${childType}`, {
+        title: newChildTitle.trim(),
       });
-      toast.success("Manifestation updated successfully");
-      await fetchTree();
+      toast.success(`Created new ${childType}`);
+      setAddChildDialog({ open: false, parentLevel: null });
+      await refetch();
     } catch (err) {
-      toast.error(`Failed to update manifestation: ${err instanceof Error ? err.message : "Unknown error"}`);
+      toast.error(err instanceof Error ? err.message : "Failed to create child entity");
     }
-  };
+  }, [addChildDialog.parentLevel, tree, newChildTitle, refetch]);
 
-  const handleItemSubmit = async (data: ItemFormData, itemId: number) => {
+  /**
+   * Handles the "Escalate" action.
+   *
+   * @param level - The entity level
+   * @param id - The entity ID
+   */
+  const handleEscalate = useCallback((level: FrbrLevel, id: number) => {
+    setEscalateDialog({ open: true, level, id });
+    setEscalationNote("");
+  }, []);
+
+  /**
+   * Confirms the escalation request.
+   */
+  const confirmEscalation = useCallback(async () => {
+    if (!escalateDialog.level || !escalateDialog.id) return;
     try {
-      const meta = transformFieldsToMeta(data.metaFields);
-      await updateFrbrEntity("item", itemId, {
-        status: data.status,
-        condition: data.condition,
-        meta,
+      await createEscalation.mutateAsync({
+        level: escalateDialog.level,
+        targetId: escalateDialog.id,
+        data: {
+          field_name: "general",
+          suggested_value: "",
+          note: escalationNote || "Escalation requested via editor",
+        },
       });
-      toast.success("Item updated successfully");
-      await fetchTree();
+      toast.success("Escalation request submitted");
+      setEscalateDialog({ open: false, level: null, id: null });
     } catch (err) {
-      toast.error(`Failed to update item: ${err instanceof Error ? err.message : "Unknown error"}`);
+      toast.error(err instanceof Error ? err.message : "Failed to submit escalation");
     }
-  };
+  }, [escalateDialog, createEscalation, escalationNote]);
 
-  const toggleItemExpanded = (itemId: number) => {
-    setExpandedItems(prev => {
-      const next = new Set(prev);
-      if (next.has(itemId)) {
-        next.delete(itemId);
-      } else {
-        next.add(itemId);
-      }
-      return next;
-    });
-  };
+  /**
+   * Handles the "Delete" action.
+   *
+   * @param level - The entity level
+   * @param id - The entity ID
+   */
+  const handleDelete = useCallback((level: FrbrLevel, id: number) => {
+    setDeleteDialog({ open: true, level, id });
+  }, []);
 
-  const filteredItems =
-    tree?.items.filter(item => {
-      if (
-        itemFilter.owner &&
-        !(
-          item.owner_name?.toLowerCase().includes(itemFilter.owner.toLowerCase()) ||
-          item.owner_id.toLowerCase().includes(itemFilter.owner.toLowerCase())
-        )
-      ) {
-        return false;
-      }
-      if (itemFilter.status && item.status.toLowerCase() !== itemFilter.status.toLowerCase()) {
-        return false;
-      }
-      if (
-        itemFilter.condition &&
-        !(item.condition?.toLowerCase().includes(itemFilter.condition.toLowerCase()) ?? false)
-      ) {
-        return false;
-      }
-      return true;
-    }) ?? [];
+  /**
+   * Confirms the entity deletion.
+   */
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog.level || !deleteDialog.id) return;
+    try {
+      await deleteEntity.mutateAsync({
+        manifestationId,
+        type: deleteDialog.level,
+        id: deleteDialog.id,
+      });
+      toast.success("Entity deleted");
+      setDeleteDialog({ open: false, level: null, id: null });
+      setActiveTab("manifestation");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete entity");
+    }
+  }, [deleteDialog, manifestationId, deleteEntity]);
 
-  if (loading) {
+  /**
+   * Handles tree node selection.
+   *
+   * @param level - The selected entity level
+   */
+  const handleTreeSelect = useCallback((level: FrbrLevel) => {
+    if (level === "item") {
+      setActiveTab("items");
+    } else {
+      setActiveTab(level);
+    }
+  }, []);
+
+  if (isLoading) {
     return (
       <div className="flex justify-center p-8">
         <Loader2 className="animate-spin w-8 h-8" />
@@ -1263,11 +365,11 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     );
   }
 
-  if (error || !tree) {
+  if (isError || !tree) {
     return (
       <div className="text-center p-8">
-        <p className="text-destructive">{error ?? "Failed to load FRBR hierarchy"}</p>
-        <Button variant="outline" className="mt-4" onClick={fetchTree}>
+        <p className="text-destructive">{error?.message ?? "Failed to load FRBR hierarchy"}</p>
+        <Button variant="outline" className="mt-4" onClick={() => refetch()}>
           <RotateCcw className="w-4 h-4 mr-2" />
           Retry
         </Button>
@@ -1278,20 +380,30 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4">
-        <Select
-          value={activeTab}
-          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
-        >
-          <SelectTrigger className="w-[200px] bg-background">
-            <SelectValue placeholder="Select level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="work">Work (F1)</SelectItem>
-            <SelectItem value="expression">Expression (F2)</SelectItem>
-            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
-            <SelectItem value="items">Items (F5)</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-4 flex-1">
+          <FRBRTreeView
+            tree={tree}
+            selectedLevel={activeTab === "items" ? "item" : activeTab}
+            onSelect={(level) => handleTreeSelect(level)}
+            onAddChild={handleAddChild}
+            onEscalate={handleEscalate}
+            onDelete={handleDelete}
+          />
+          <Select
+            value={activeTab}
+            onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+          >
+            <SelectTrigger className="w-[200px] bg-background">
+              <SelectValue placeholder="Select level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="work">Work (F1)</SelectItem>
+              <SelectItem value="expression">Expression (F2)</SelectItem>
+              <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+              <SelectItem value="items">Items (F5)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {onClose && (
           <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -1308,10 +420,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             {tree.work ? (
-              <>
-                <WorkEditor key={`${tree.work.id}-${lastFetched}`} tree={tree} onSubmit={handleWorkSubmit} />
-                <WorkPartsManager workId={tree.work.id} />
-              </>
+              <WorkEditor
+                key={`${tree.work.id}-${lastFetched}`}
+                tree={tree}
+                onSubmit={handleWorkSubmit}
+                onAddChild={() => handleAddChild("work")}
+                onEscalate={hasEscalateRequest ? () => handleEscalate("work", tree.work!.id) : undefined}
+                onDelete={hasWriteMetadata ? () => handleDelete("work", tree.work!.id) : undefined}
+              />
             ) : (
               <p className="text-muted-foreground">No Work associated with this manifestation.</p>
             )}
@@ -1331,6 +447,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
                 key={`${tree.expression.id}-${lastFetched}`}
                 tree={tree}
                 onSubmit={handleExpressionSubmit}
+                onAddChild={() => handleAddChild("expression")}
+                onEscalate={hasEscalateRequest ? () => handleEscalate("expression", tree.expression!.id) : undefined}
+                onDelete={hasWriteMetadata ? () => handleDelete("expression", tree.expression!.id) : undefined}
               />
             ) : (
               <p className="text-muted-foreground">No Expression associated with this manifestation.</p>
@@ -1359,6 +478,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
               key={`${tree.manifestation.id}-${lastFetched}`}
               tree={tree}
               onSubmit={handleManifestationSubmit}
+              onAddChild={() => handleAddChild("manifestation")}
+              onEscalate={hasEscalateRequest ? () => handleEscalate("manifestation", tree.manifestation.id) : undefined}
+              onDelete={hasWriteMetadata ? () => handleDelete("manifestation", tree.manifestation.id) : undefined}
             />
           </CardContent>
         </Card>
@@ -1371,98 +493,77 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             <CardDescription>Individual copies (F5 Entity)</CardDescription>
           </CardHeader>
           <CardContent>
-            {tree.items.length === 0 ? (
-              <p className="text-muted-foreground">No items associated with this manifestation.</p>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex gap-4 items-end">
-                  <div className="flex-1">
-                    <label className="text-xs text-muted-foreground mb-1 block">Owner</label>
-                    <input
-                      placeholder="Filter by owner name or email"
-                      value={itemFilter.owner}
-                      onChange={e => setItemFilter(prev => ({ ...prev, owner: e.target.value }))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    />
-                  </div>
-                  <div className="w-40">
-                    <label className="text-xs text-muted-foreground mb-1 block">Status</label>
-                    <select
-                      value={itemFilter.status}
-                      onChange={e => setItemFilter(prev => ({ ...prev, status: e.target.value }))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      <option value="">All</option>
-                      <option value="available">available</option>
-                      <option value="lent">lent</option>
-                      <option value="lost">lost</option>
-                      <option value="wish_list">wish_list</option>
-                    </select>
-                  </div>
-                  <div className="w-40">
-                    <label className="text-xs text-muted-foreground mb-1 block">Condition</label>
-                    <input
-                      placeholder="Filter by condition"
-                      value={itemFilter.condition}
-                      onChange={e => setItemFilter(prev => ({ ...prev, condition: e.target.value }))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    />
-                  </div>
-                </div>
-                <div className="border rounded-lg divide-y">
-                  {filteredItems.map(item => (
-                    <div key={item.id}>
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 text-left"
-                        onClick={() => toggleItemExpanded(item.id)}
-                      >
-                        <div className="flex items-center gap-3">
-                          {expandedItems.has(item.id) ? (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <div>
-                            <span className="font-medium">
-                              <Link
-                                href={`/item/${item.id}`}
-                                className="hover:underline hover:text-primary transition-colors"
-                                target="_blank"
-                                onClick={e => e.stopPropagation()}
-                              >
-                                Item #{item.id}
-                              </Link>
-                            </span>
-                            <span className="text-sm text-muted-foreground ml-2">
-                              {item.status} {item.condition && `• ${item.condition}`}
-                            </span>
-                          </div>
-                        </div>
-                        <span
-                          className="text-sm text-muted-foreground truncate max-w-[200px]"
-                          title={item.owner_name || item.owner_id}
-                        >
-                          {item.owner_name || item.owner_id}
-                        </span>
-                      </button>
-                      {expandedItems.has(item.id) && (
-                        <div className="p-4 pt-0 border-t bg-muted/20">
-                          <ItemEditor
-                            key={`${item.id}-${lastFetched}`}
-                            item={item}
-                            onSubmit={data => handleItemSubmit(data, item.id)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <ItemsManager
+              items={tree.items}
+              onItemSubmit={handleItemSubmit}
+              onItemEscalate={hasEscalateRequest ? (itemId) => handleEscalate("item", itemId) : undefined}
+              onItemDelete={hasWriteMetadata ? (itemId) => handleDelete("item", itemId) : undefined}
+              lastFetched={lastFetched}
+            />
           </CardContent>
         </Card>
       )}
+
+      {/* Add Child Dialog */}
+      <Dialog open={addChildDialog.open} onOpenChange={open => setAddChildDialog(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add Child {addChildDialog.parentLevel === "work" ? "Expression" : addChildDialog.parentLevel === "expression" ? "Manifestation" : "Item"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <input
+              placeholder="Enter title..."
+              value={newChildTitle}
+              onChange={e => setNewChildTitle(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            <Button onClick={confirmAddChild} disabled={!newChildTitle.trim()}>
+              Create
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteDialog.level}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the {deleteDialog.level} entity
+              {deleteDialog.level === "work" ? " and all its expressions, manifestations, and items" : ""}
+              {deleteDialog.level === "expression" ? " and all its manifestations and items" : ""}
+              {deleteDialog.level === "manifestation" ? " and all its items" : ""}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Escalate Dialog */}
+      <Dialog open={escalateDialog.open} onOpenChange={open => setEscalateDialog(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Escalation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <textarea
+              placeholder="Describe the change you are requesting..."
+              value={escalationNote}
+              onChange={e => setEscalationNote(e.target.value)}
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            <Button onClick={confirmEscalation}>Submit Request</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
