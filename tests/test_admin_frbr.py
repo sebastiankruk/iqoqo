@@ -294,3 +294,117 @@ def test_custodian_can_upload_manifestation_image(client, custodian_headers, app
         content_type="multipart/form-data",
     )
     assert resp.status_code in [200, 201, 400]  # 400 possible if image validation fails on fake data; 200/201 if it passes
+
+
+# ---------------------------------------------------------------------------
+# Contributor UX overhaul — structured contributions in API
+# ---------------------------------------------------------------------------
+
+
+def test_get_frbr_tree_includes_contributions(client, admin_headers, app):
+    """get_frbr_tree should serialize contributions for each entity level."""
+    from app.core.frbr_service import get_or_create_contributor, add_work_contribution
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Contrib Tree Test")
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text")
+        manif = frbr_service.create_manifestation(expression_id=expr.id, isbn13="9780000000999")
+
+        contrib = get_or_create_contributor("Test Author")
+        add_work_contribution(work_id=work.id, contributor_id=contrib.id, role="author", sequence=0)
+        work_id = work.id
+        manif_id = manif.id
+
+    res = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=admin_headers)
+    assert res.status_code == 200
+    data = res.json["data"]
+    assert "contributions" in data["work"]
+    assert len(data["work"]["contributions"]) == 1
+    assert data["work"]["contributions"][0]["name"] == "Test Author"
+    assert data["work"]["contributions"][0]["role"] == "author"
+
+
+def test_get_frbr_tree_legacy_meta_fallback(client, admin_headers, app):
+    """When no relational contributions exist, fall back to meta.authors."""
+    with app.app_context():
+        work = frbr_service.create_work(title="Legacy Meta Test", meta={"authors": ["Legacy Author"]})
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text")
+        manif = frbr_service.create_manifestation(expression_id=expr.id, isbn13="9780000000888")
+        manif_id = manif.id
+
+    res = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=admin_headers)
+    assert res.status_code == 200
+    data = res.json["data"]
+    # Fallback should parse legacy authors into contributions.
+    assert len(data["work"]["contributions"]) == 1
+    assert data["work"]["contributions"][0]["name"] == "Legacy Author"
+
+
+def test_update_work_with_contributions(client, admin_headers, app):
+    """PUT work should accept structured contributions."""
+    from app.db.contributions import WorkContribution
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Contrib Update Test")
+        work_id = work.id
+
+    payload = {
+        "title": "Contrib Update Test",
+        "contributions": [
+            {"name": "New Author", "role": "author", "sequence": 0},
+        ],
+    }
+    res = client.put(f"/api/v1/admin/frbr/work/{work_id}", json=payload, headers=admin_headers)
+    assert res.status_code == 200
+
+    with app.app_context():
+        rows = WorkContribution.query.filter_by(work_id=work_id).all()
+        assert len(rows) == 1
+        assert rows[0].contributor.name == "New Author"
+
+
+def test_update_expression_with_contributions(client, admin_headers, app):
+    """PUT expression should accept structured contributions."""
+    from app.db.contributions import ExpressionContribution
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Expr Contrib Test")
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text")
+        expr_id = expr.id
+
+    payload = {
+        "contributions": [
+            {"name": "Narrator Name", "role": "narrator", "sequence": 0},
+        ],
+    }
+    res = client.put(f"/api/v1/admin/frbr/expression/{expr_id}", json=payload, headers=admin_headers)
+    assert res.status_code == 200
+
+    with app.app_context():
+        rows = ExpressionContribution.query.filter_by(expression_id=expr_id).all()
+        assert len(rows) == 1
+        assert rows[0].contributor.name == "Narrator Name"
+
+
+def test_update_manifestation_with_contributions(client, admin_headers, app):
+    """PUT manifestation should accept structured contributions."""
+    from app.db.contributions import ManifestationContribution
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Manif Contrib Test")
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text")
+        manif = frbr_service.create_manifestation(expression_id=expr.id, isbn13="9780000000777")
+        manif_id = manif.id
+
+    payload = {
+        "contributions": [
+            {"name": "Big Publishing House", "role": "publisher", "sequence": 0},
+        ],
+    }
+    res = client.put(f"/api/v1/admin/frbr/manifestation/{manif_id}", json=payload, headers=admin_headers)
+    assert res.status_code == 200
+
+    with app.app_context():
+        rows = ManifestationContribution.query.filter_by(manifestation_id=manif_id).all()
+        assert len(rows) == 1
+        assert rows[0].contributor.name == "Big Publishing House"

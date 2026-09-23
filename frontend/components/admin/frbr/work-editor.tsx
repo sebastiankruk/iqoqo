@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { transformMetaToFields, type WorkFormData, type MetaField } from "./types";
 import { MetaFieldsEditor } from "./meta-fields-editor";
-import type { FrbrTree } from "@/lib/api/admin";
+import { ContributorRowsEditor } from "./contributor-rows-editor";
+import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
 
 /**
  * Props for the WorkEditor component.
@@ -38,6 +39,9 @@ interface WorkEditorProps {
   onEscalate?: () => void;
   onDelete?: () => void;
 }
+
+/** Work-level roles (Composition Event). */
+const WORK_ROLES = ["author", "composer", "lyricist", "director", "writer"];
 
 /**
  * A standard styled input field for admin forms.
@@ -88,9 +92,11 @@ function InputField({
  * @returns Work editor JSX element
  */
 export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }: WorkEditorProps) {
-  const rawMeta = tree.work?.meta ?? {};
   const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
+  );
+  const [contributions, setContributions] = useState<FrbrContribution[]>(
+    () => tree.work?.contributions ?? []
   );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -99,6 +105,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     const data: WorkFormData = {
       title: formData.get("title") as string,
       metaFields,
+      contributions,
     };
     await onSubmit(data);
   };
@@ -110,6 +117,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
         <InputField name="title" defaultValue={tree.work?.title ?? ""} required />
       </div>
       <MetaFieldsEditor fields={metaFields} onChange={setMetaFields} />
+      <ContributorRowsEditor roles={WORK_ROLES} contributions={contributions} onChange={setContributions} />
       <div className="flex items-center gap-2">
         <Button type="submit">
           <Save className="w-4 h-4 mr-2" />

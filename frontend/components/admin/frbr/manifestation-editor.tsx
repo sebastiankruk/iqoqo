@@ -36,7 +36,8 @@ import {
 import { MEDIA_FORMATS, MEDIA_HIERARCHY } from "@/types/taxonomy";
 import { transformMetaToFields, type ManifestationFormData, type MetaField } from "./types";
 import { MetaFieldsEditor } from "./meta-fields-editor";
-import type { FrbrTree } from "@/lib/api/admin";
+import { ContributorRowsEditor } from "./contributor-rows-editor";
+import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
 
 /**
  * Props for the ManifestationEditor component.
@@ -48,6 +49,9 @@ interface ManifestationEditorProps {
   onEscalate?: () => void;
   onDelete?: () => void;
 }
+
+/** Manifestation-level roles (Publication Event). */
+const MANIFESTATION_ROLES = ["publisher", "studio", "distributor"];
 
 /**
  * A standard styled input field for admin forms.
@@ -104,6 +108,9 @@ export function ManifestationEditor({ tree, onSubmit, onAddChild, onEscalate, on
     f => f.key !== "type" && f.key !== "mechanics"
   );
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
+  const [contributions, setContributions] = useState<FrbrContribution[]>(
+    () => tree.manifestation?.contributions ?? []
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -116,6 +123,7 @@ export function ManifestationEditor({ tree, onSubmit, onAddChild, onEscalate, on
       publisher: formData.get("publisher") as string | undefined,
       publication_date: formData.get("publication_date") as string | undefined,
       metaFields,
+      contributions,
     };
     await onSubmit(data);
   };
@@ -179,6 +187,7 @@ export function ManifestationEditor({ tree, onSubmit, onAddChild, onEscalate, on
         </div>
       </div>
       <MetaFieldsEditor fields={metaFields} onChange={setMetaFields} />
+      <ContributorRowsEditor roles={MANIFESTATION_ROLES} contributions={contributions} onChange={setContributions} />
       <div className="flex items-center gap-2">
         <Button type="submit">
           <Save className="w-4 h-4 mr-2" />

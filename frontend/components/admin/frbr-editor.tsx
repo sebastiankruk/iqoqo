@@ -18,19 +18,14 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  updateFrbrEntity,
-  type FrbrTree,
-} from "@/lib/api/admin";
 import { toast } from "sonner";
 import {
   Loader2,
-  Save,
   RotateCcw,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useWorkParts, useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity } from "@/lib/api/hooks";
+import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
@@ -70,6 +65,97 @@ import {
   type ManifestationFormData,
   type ItemFormData,
 } from "./frbr/types";
+
+// ---------------------------------------------------------------------------
+// Name normalization — must match backend ``normalize_contributor_name`` rules
+// ---------------------------------------------------------------------------
+
+/** Cultural surname particles that remain lowercase when interior. */
+const NAME_PARTICLES = new Set([
+  "van", "von", "der", "den", "de", "del", "da", "di", "du",
+  "la", "le", "lo", "te", "ter", "ten",
+]);
+
+/**
+ * Capitalize a single name token according to FRBR cataloging rules.
+ *
+ * Handles hyphenated compounds, single-letter initials, and cultural
+ * particles that remain lowercase when they appear as interior words.
+ *
+ * @param word - The name token to capitalize
+ * @param isFirst - Whether this is the first word in the name
+ * @returns The capitalized word
+ */
+function capitalizeNameWord(word: string, isFirst: boolean): string {
+  if (!word) return word;
+
+  // Hyphenated compound: capitalize each segment independently.
+  if (word.includes("-")) {
+    return word
+      .split("-")
+      .map((seg, idx) => capitalizeNameWord(seg, isFirst && idx === 0))
+      .join("-");
+  }
+
+  const lower = word.toLowerCase();
+
+  // Interior cultural particle stays lowercase.
+  if (!isFirst && NAME_PARTICLES.has(lower)) {
+    return lower;
+  }
+
+  // Single-letter initial (``j`` or ``j.``) → ``J.``
+  if (/^[a-zA-Z]\.?$/.test(word)) {
+    return lower.toUpperCase() + (word.endsWith(".") ? "" : ".");
+  }
+
+  // Default: capitalize first letter, lowercase the rest.
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/**
+ * Normalize whitespace and capitalize a contributor display name.
+ *
+ * Mirrors the backend :func:`normalize_contributor_name` logic so that
+ * client-side previews and server-side persistence agree.
+ *
+ * @param name - Raw contributor name input
+ * @returns Normalized display name
+ */
+export function normalizeContributorName(name: string): string {
+  if (!name) return "";
+  const cleaned = name.trim().replace(/\s+/g, " ");
+  if (!cleaned) return "";
+
+  const words = cleaned.split(" ");
+  const capitalized: string[] = [];
+
+  // Detect initials-only prefix so we can collapse "j. r. r." → "J.R.R."
+  let initialRunEnd = 0;
+  for (let idx = 0; idx < words.length; idx++) {
+    const bare = words[idx].replace(/\.$/, "");
+    if (bare.length === 1 && /[a-zA-Z]/.test(bare)) {
+      initialRunEnd = idx + 1;
+    } else {
+      break;
+    }
+  }
+
+  if (initialRunEnd > 1) {
+    const collapsed = words
+      .slice(0, initialRunEnd)
+      .map(w => w.replace(/\.$/, "").toUpperCase() + ".")
+      .join("");
+    capitalized.push(collapsed);
+  }
+
+  for (let idx = initialRunEnd; idx < words.length; idx++) {
+    const isFirst = capitalized.length === 0;
+    capitalized.push(capitalizeNameWord(words[idx], isFirst));
+  }
+
+  return capitalized.join(" ");
+}
 
 interface FrbrEditorProps {
   manifestationId: number;
@@ -128,7 +214,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           manifestationId,
           type: "work",
           id: tree.work.id,
-          data: { title: data.title, meta },
+          data: { title: data.title, meta, contributions: data.contributions },
         });
         setLastFetched(Date.now());
         toast.success("Work updated successfully");
@@ -153,6 +239,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             language: data.language,
             kind: data.kind,
             meta,
+            contributions: data.contributions,
           },
         });
         setLastFetched(Date.now());
@@ -207,6 +294,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             publisher: data.publisher,
             publication_date: data.publication_date,
             meta,
+            contributions: data.contributions,
           },
         });
         setLastFetched(Date.now());

@@ -816,3 +816,102 @@ describe("FrbrEditor Component", () => {
     expect(addChildButtons.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// normalizeContributorName — client-side name capitalization
+// ---------------------------------------------------------------------------
+
+import { normalizeContributorName } from "@/components/admin/frbr-editor";
+
+describe("normalizeContributorName", () => {
+  it("capitalizes simple multi-word names", () => {
+    expect(normalizeContributorName("gabriel garcia marquez")).toBe("Gabriel Garcia Marquez");
+  });
+
+  it("preserves cultural particle 'van' in interior position", () => {
+    expect(normalizeContributorName("ludwig van beethoven")).toBe("Ludwig van Beethoven");
+  });
+
+  it("preserves cultural particle 'da' in interior position", () => {
+    expect(normalizeContributorName("leonardo da vinci")).toBe("Leonardo da Vinci");
+  });
+
+  it("capitalizes hyphenated names", () => {
+    expect(normalizeContributorName("jean-luc godard")).toBe("Jean-Luc Godard");
+  });
+
+  it("collapses initials with dots", () => {
+    expect(normalizeContributorName("j. r. r. tolkien")).toBe("J.R.R. Tolkien");
+  });
+
+  it("collapses redundant whitespace", () => {
+    expect(normalizeContributorName("  william   shakespeare  ")).toBe("William Shakespeare");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(normalizeContributorName("")).toBe("");
+  });
+
+  it("capitalizes particle when it is the first word", () => {
+    expect(normalizeContributorName("van morrison")).toBe("Van Morrison");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ContributorRowsEditor — structured contributor rows
+// ---------------------------------------------------------------------------
+
+import { ContributorRowsEditor } from "@/components/admin/frbr/contributor-rows-editor";
+
+describe("ContributorRowsEditor", () => {
+  const roles = ["author", "composer"];
+
+  it("renders add button", () => {
+    render(<ContributorRowsEditor roles={roles} contributions={[]} onChange={vi.fn()} />);
+    expect(screen.getByTestId("contributor-add")).toBeInTheDocument();
+  });
+
+  it("renders existing contributions as rows", () => {
+    const contributions = [
+      { role: "author", name: "Test Author", sequence: 0 },
+    ];
+    render(<ContributorRowsEditor roles={roles} contributions={contributions} onChange={vi.fn()} />);
+    expect(screen.getByTestId("contributor-row-0")).toBeInTheDocument();
+    expect(screen.getByTestId("contributor-name-0")).toHaveValue("Test Author");
+  });
+
+  it("adds a new row when add button is clicked", () => {
+    const onChange = vi.fn();
+    render(<ContributorRowsEditor roles={roles} contributions={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId("contributor-add"));
+    expect(onChange).toHaveBeenCalledWith([
+      { role: "author", name: "", sequence: 0 },
+    ]);
+  });
+
+  it("removes a row when remove button is clicked", () => {
+    const onChange = vi.fn();
+    const contributions = [
+      { role: "author", name: "Author One", sequence: 0 },
+      { role: "composer", name: "Author Two", sequence: 1 },
+    ];
+    render(<ContributorRowsEditor roles={roles} contributions={contributions} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId("contributor-remove-0"));
+    expect(onChange).toHaveBeenCalledWith([
+      { role: "composer", name: "Author Two", sequence: 0 },
+    ]);
+  });
+
+  it("normalizes name on blur", () => {
+    const onChange = vi.fn();
+    const contributions = [{ role: "author", name: "", sequence: 0 }];
+    render(<ContributorRowsEditor roles={roles} contributions={contributions} onChange={onChange} />);
+    const nameInput = screen.getByTestId("contributor-name-0");
+    fireEvent.change(nameInput, { target: { value: "ludwig van beethoven" } });
+    fireEvent.blur(nameInput);
+    // Should have been called with normalized name
+    expect(onChange).toHaveBeenCalledWith([
+      { role: "author", name: "Ludwig van Beethoven", sequence: 0 },
+    ]);
+  });
+});

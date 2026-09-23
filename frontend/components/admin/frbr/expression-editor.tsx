@@ -27,7 +27,8 @@ import {
 import { EXPRESSION_KINDS } from "@/types/frbr";
 import { formatKeyForDisplay, transformMetaToFields, type ExpressionFormData, type MetaField } from "./types";
 import { MetaFieldsEditor } from "./meta-fields-editor";
-import type { FrbrTree } from "@/lib/api/admin";
+import { ContributorRowsEditor } from "./contributor-rows-editor";
+import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
 
 /**
  * Props for the ExpressionEditor component.
@@ -39,6 +40,9 @@ interface ExpressionEditorProps {
   onEscalate?: () => void;
   onDelete?: () => void;
 }
+
+/** Expression-level roles (Performance Event). */
+const EXPRESSION_ROLES = ["performer", "narrator", "conductor", "actor"];
 
 /**
  * Form for editing Expression (F2) entities.
@@ -59,13 +63,17 @@ export function ExpressionEditor({ tree, onSubmit, onAddChild, onEscalate, onDel
   const initialKind = tree.expression?.kind ?? "";
   const [kind, setKind] = useState(initialKind);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
+  const [contributions, setContributions] = useState<FrbrContribution[]>(
+    () => tree.expression?.contributions ?? []
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setType(tree.expression?.content_type ?? "text");
     setKind(tree.expression?.kind ?? "");
     setMetaFields(transformMetaToFields(tree.expression?.meta));
-  }, [tree.expression?.content_type, tree.expression?.kind, tree.expression?.meta]);
+    setContributions(tree.expression?.contributions ?? []);
+  }, [tree.expression?.content_type, tree.expression?.kind, tree.expression?.meta, tree.expression?.contributions]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,6 +83,7 @@ export function ExpressionEditor({ tree, onSubmit, onAddChild, onEscalate, onDel
       language: formData.get("language") as string | undefined,
       kind,
       metaFields,
+      contributions,
     };
     await onSubmit(data);
   };
@@ -126,6 +135,7 @@ export function ExpressionEditor({ tree, onSubmit, onAddChild, onEscalate, onDel
         </div>
       </div>
       <MetaFieldsEditor fields={metaFields} onChange={setMetaFields} />
+      <ContributorRowsEditor roles={EXPRESSION_ROLES} contributions={contributions} onChange={setContributions} />
       <div className="flex items-center gap-2">
         <Button type="submit">
           <Save className="w-4 h-4 mr-2" />
