@@ -214,7 +214,13 @@ export function ItemCard({
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";
-  const authorsList = item.authors ?? [];
+  // Normalize authors to always be an array (handles string or array)
+  const rawAuthors = item.authors;
+  const authorsList: string[] = Array.isArray(rawAuthors)
+    ? rawAuthors.filter(a => typeof a === "string")
+    : typeof rawAuthors === "string"
+      ? [rawAuthors]
+      : [];
 
   const renderAuthors = () => {
     if (authorsList.length === 0) return <span>Unknown author</span>;

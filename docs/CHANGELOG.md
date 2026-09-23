@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **FRBR Editor Manifestation Loading Bug**: Fixed issue where manifestation would not load after editing Work entities. The bug was caused by stale component keys (lastFetched state never updated), optimistic cache updates replacing entire meta objects instead of merging them, and excessive stale time (10s) delaying reconciliation. Updated lastFetched state after successful mutations, improved optimistic update logic to properly merge meta fields, and reduced staleTime to 1 second for faster UI updates.
+
 ## [0.8.0] - 2026-09-21
 
 ### Added
