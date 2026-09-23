@@ -24,6 +24,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Mock hooks ─────────────────────────────────────────────────────────────
 vi.mock("@/lib/api/hooks", () => ({
@@ -121,6 +122,19 @@ const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseWorksShelf = vi.mocked(useInfiniteWorksShelf);
 const mockUseExpressionsShelf = vi.mocked(useInfiniteExpressionsShelf);
 
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+/**
+ * Render component with QueryClientProvider.
+ *
+ * @param ui - Component to render
+ */
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 /**
  * Generates mock infinite query results for Vitest tests.
  *
@@ -141,6 +155,7 @@ function infiniteQueryResult(overrides: Record<string, unknown> = {}) {
 describe("Facet ARIA Live Region", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
 
     mockUseItems.mockReturnValue(
       infiniteQueryResult({
@@ -172,7 +187,7 @@ describe("Facet ARIA Live Region", () => {
   });
 
   it("renders aria-live polite element in collection page", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     const liveRegion = screen.queryByRole("status");
     expect(liveRegion).toBeDefined();
@@ -186,7 +201,7 @@ describe("Facet ARIA Live Region", () => {
   });
 
   it("aria-live element has sr-only class to visually hide it", () => {
-    const { container } = render(<CollectionPage />);
+    const { container } = renderWithProviders(<CollectionPage />);
 
     const liveElements = container.querySelectorAll('[aria-live="polite"]');
     if (liveElements.length > 0) {
@@ -196,7 +211,7 @@ describe("Facet ARIA Live Region", () => {
   });
 
   it("announcement text references cleared filters when no filters active", () => {
-    const { container } = render(<CollectionPage />);
+    const { container } = renderWithProviders(<CollectionPage />);
 
     const liveElements = container.querySelectorAll('[aria-live="polite"]');
     if (liveElements.length > 0) {
@@ -206,7 +221,7 @@ describe("Facet ARIA Live Region", () => {
   });
 
   it("announcement text includes total result count", () => {
-    const { container } = render(<CollectionPage />);
+    const { container } = renderWithProviders(<CollectionPage />);
 
     const liveElements = container.querySelectorAll('[aria-live="polite"]');
     if (liveElements.length > 0) {

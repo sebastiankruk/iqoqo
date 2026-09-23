@@ -43,7 +43,9 @@ import {
   useInfiniteExpressionsShelf,
   useFacetStats,
 } from "@/lib/api/hooks";
+import { useWishlist } from "@/lib/api/wishlist";
 import type { Item, CatalogEntry } from "@/types/frbr";
+import { WishlistCard } from "@/components/collection/wishlist-card";
 import { PermissionName } from "@/lib/permissions";
 import { Footer } from "@/components/dashboard/footer";
 import { RoadmapView } from "@/components/collection/roadmap-view";
@@ -204,6 +206,19 @@ function CollectionContent() {
     return statuses.filter(s => s !== "borrowed");
   }, [activeFilters]);
 
+  const isWishlistFilterActive = useMemo(
+    () => statusFilters.includes("wish_list"),
+    [statusFilters]
+  );
+
+  // Fetch wishlist items separately when wish_list filter is active
+  const { data: wishlistData } = useWishlist(
+    isWishlistFilterActive && viewMode === "items" && isLoggedIn
+      ? { limit: 100 }
+      : undefined,
+    isWishlistFilterActive && viewMode === "items" && isLoggedIn
+  );
+
   const isBorrowedFilterActive = useMemo(
     () => activeFilters.some(f => f.type === "status" && f.value === "borrowed"),
     [activeFilters]
@@ -279,6 +294,11 @@ function CollectionContent() {
     router,
   ]);
 
+  const physicalStatusFilters = useMemo(
+    () => statusFilters.filter(status => status !== "wish_list"),
+    [statusFilters]
+  );
+
   const {
     data: itemsData,
     isLoading: itemsLoading,
@@ -287,10 +307,10 @@ function CollectionContent() {
     isFetchingNextPage: isFetchingMoreItems,
   } = useInfiniteItems(
     limit,
-    statusFilters.length > 0 ? statusFilters : undefined,
+    physicalStatusFilters.length > 0 ? physicalStatusFilters : undefined,
     appliedQuery,
     sortBy,
-    viewMode === "items" && isLoggedIn,
+    viewMode === "items" && isLoggedIn && !isWishlistFilterActive,
     categoryFilters.length > 0 ? categoryFilters.join(",") : undefined,
     formatFilters.length > 0 ? formatFilters.join(",") : undefined,
     isBorrowedFilterActive,
@@ -433,7 +453,7 @@ function CollectionContent() {
       : viewMode === "expressions"
         ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
         : viewMode === "items"
-          ? (itemsData?.pages?.[0]?.meta?.total ?? 0)
+          ? isWishlistFilterActive ? (wishlistData?.total ?? 0) : (itemsData?.pages?.[0]?.meta?.total ?? 0)
           : viewMode === "manifestations"
             ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
             : 0;
@@ -1008,6 +1028,17 @@ function CollectionContent() {
               </div>
             ) : viewMode === "roadmap" ? (
               <RoadmapView />
+            ) : isWishlistFilterActive ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {(wishlistData?.data ?? []).length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <h3 className="font-serif text-lg font-bold text-foreground">No wishlist items found</h3>
+                    <p className="mt-1 max-w-xs text-sm text-muted-foreground">Try adjusting your filters.</p>
+                  </div>
+                ) : (
+                  (wishlistData?.data ?? []).map(item => <WishlistCard key={item.id} item={item} />)
+                )}
+              </div>
             ) : (
               <CollectionGrid
                 items={filteredItems}

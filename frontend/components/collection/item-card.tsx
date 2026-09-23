@@ -260,8 +260,11 @@ export function ItemCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      await apiClient.delete(`/items/${itemId}`);
+      // Wishlist items use positive IDs in the API, convert from negative if needed
+      const wishlistId = Math.abs(itemId);
+      await apiClient.delete(`/wishlist/${wishlistId}`);
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       toast.success("Removed from wishlist");
       onWishlistRemove?.(itemId);
@@ -441,6 +444,9 @@ export function ItemCard({
               {title}
             </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
+            <div className="mt-1 truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {mediaLabel}
+            </div>
             {isCatalog && userOwns && userItemId && (
               <button
                 type="button"

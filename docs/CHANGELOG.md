@@ -9,7 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dedicated Wishlist API (`/api/wishlist`)**: New REST blueprint providing full CRUD for `UserWorkIntent` with positive integer IDs, rich FRBR serialization, and F15/F16 binding support. Wishlist entries can now target specific Expressions (F2) and Manifestations (F3) via optional `expression_id` and `manifestation_id` fields. Includes FRBR hierarchy validation ensuring manifestation belongs to expression and expression belongs to work.
+- **Wishlist Frontend Types & Hooks**: New `WishlistItem`, `WishlistCreateDTO`, `WishlistUpdateDTO` TypeScript interfaces in `frontend/types/frbr.ts`. New React Query hooks (`useWishlist`, `useCreateWishlistItem`, `useUpdateWishlistItem`, `useDeleteWishlistItem`) in `frontend/lib/api/wishlist.ts`.
+- **Wishlist Card Component**: New `WishlistCard` component in `frontend/components/collection/wishlist-card.tsx` rendering edition and media badges without physical inventory actions.
+
 ### Changed
+
+- **BREAKING: Negative-ID Removal from `/api/items`**: Removed all negative-ID synthesis and routing from `/api/items` endpoints. The `/api/items` API now exclusively returns physical `Item` records (F4). Requests with negative IDs receive 404. Wishlist operations must use the dedicated `/api/wishlist` blueprint.
+- **UserWorkIntent FRBR Binding**: Extended `UserWorkIntent` model with nullable `expression_id` and `manifestation_id` foreign keys for granular F2/F3 binding. Composite unique constraint updated to `(user_id, work_id, expression_id, manifestation_id)`.
+- **Item Access Control Simplified**: `verify_item_ownership()` and `require_item_access()` in `app/core/item_access.py` now only handle physical Items. Wishlist authorization is managed by the `/api/wishlist` blueprint.
+- **Schema Validation**: Pydantic schemas now reject non-positive IDs (`<= 0`) with "Item identifier must be a positive integer" error.
 
 ### Fixed
 
