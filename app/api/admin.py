@@ -19,6 +19,7 @@ import os
 from datetime import date
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import admin_required, require_auth, require_permission
@@ -741,7 +742,7 @@ def reassign_frbr_parent_endpoint():
     data = request.json or {}
     try:
         payload = FrbrReassignSchema(**data)
-    except Exception as e:
+    except (ValidationError, TypeError) as e:
         return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
 
     try:
@@ -765,7 +766,7 @@ def merge_frbr_entities_endpoint():
     data = request.json or {}
     try:
         payload = FrbrMergeSchema(**data)
-    except Exception as e:
+    except (ValidationError, TypeError) as e:
         return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
 
     try:
@@ -789,7 +790,7 @@ def split_frbr_entity_endpoint():
     data = request.json or {}
     try:
         payload = FrbrSplitSchema(**data)
-    except Exception as e:
+    except (ValidationError, TypeError) as e:
         return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
 
     try:

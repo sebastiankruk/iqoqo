@@ -1447,21 +1447,21 @@ _MERGE_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifes
 _SPLIT_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifestation"})
 
 #: Map from child entity type to its parent entity class and FK attribute.
-_REASSIGN_PARENT_MAP: dict[str, tuple[type, str]] = {
+_REASSIGN_PARENT_MAP: dict[str, tuple[Any, str]] = {
     "expression": (Work, "work_id"),
     "manifestation": (Expression, "expression_id"),
     "item": (Manifestation, "manifestation_id"),
 }
 
 #: Map from entity type to its child entity class and FK attribute.
-_ENTITY_CHILD_MAP: dict[str, tuple[type, str]] = {
+_ENTITY_CHILD_MAP: dict[str, tuple[Any, str]] = {
     "work": (Expression, "work_id"),
     "expression": (Manifestation, "expression_id"),
     "manifestation": (Item, "manifestation_id"),
 }
 
 #: Map from entity type to its ORM class.
-_ENTITY_CLASS_MAP: dict[str, type] = {
+_ENTITY_CLASS_MAP: dict[str, Any] = {
     "work": Work,
     "expression": Expression,
     "manifestation": Manifestation,
@@ -1482,7 +1482,7 @@ def _get_entity_or_raise(entity_type: str, entity_id: int) -> Any:
 
 def _has_cycle(entity_type: str, entity_id: int, new_parent_id: int) -> bool:
     """Return True if assigning new_parent_id would create a cycle."""
-    parent_cls, parent_fk_attr = _REASSIGN_PARENT_MAP[entity_type]
+    parent_cls, _ = _REASSIGN_PARENT_MAP[entity_type]
     # Check if the new parent is the entity itself (only possible if same type)
     if entity_type == "work" and new_parent_id == entity_id:
         return True
@@ -1502,7 +1502,7 @@ def _has_cycle(entity_type: str, entity_id: int, new_parent_id: int) -> bool:
         # Determine the parent's parent
         if isinstance(parent, Work):
             break  # Work has no parent in FRBR hierarchy
-        elif isinstance(parent, Expression):
+        if isinstance(parent, Expression):
             current_id = parent.work_id
             current_cls = Work
         elif isinstance(parent, Manifestation):
@@ -1621,7 +1621,7 @@ def merge_frbr_entities(
     child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
 
     # Reparent all children from source to target
-    children = db.session.execute(select(child_cls).where(getattr(child_cls, child_fk_attr) == source_id)).scalars().all()
+    children: list[Any] = list(db.session.execute(select(child_cls).where(getattr(child_cls, child_fk_attr) == source_id)).scalars().all())
     migrated_count = 0
     for child in children:
         setattr(child, child_fk_attr, target_id)
@@ -1712,7 +1712,7 @@ def split_frbr_entity(
     child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
 
     # Validate all children exist and belong to source
-    children = (
+    children: list[Any] = list(
         db.session.execute(
             select(child_cls).where(
                 child_cls.id.in_(child_ids_to_split),
