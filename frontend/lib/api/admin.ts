@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { apiFetch, apiClient } from "./client";
-import type { ApiResponse } from "@/types/frbr";
+import type { ApiResponse, FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/types/frbr";
 
 export interface AdminUser {
   id: string;
@@ -503,4 +503,50 @@ export async function uploadEntityCover(
   });
 
   return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// FRBR Relation Management API Client
+// ---------------------------------------------------------------------------
+
+/**
+ * Reassign an entity's parent to a new parent at the adjacent FRBR level.
+ *
+ * @param payload - The reassign payload
+ * @returns The updated entity ID
+ */
+export async function reassignFrbrParent(payload: FrbrReassignPayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/reassign", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to reassign FRBR parent");
+  }
+  return res.data.data;
+}
+
+/**
+ * Merge two entities at the same FRBR level, reparenting children and contributions.
+ *
+ * @param payload - The merge payload
+ * @returns The target entity ID
+ */
+export async function mergeFrbrEntities(payload: FrbrMergePayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/merge", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to merge FRBR entities");
+  }
+  return res.data.data;
+}
+
+/**
+ * Split selected children from an entity into a newly created sibling entity.
+ *
+ * @param payload - The split payload
+ * @returns The new entity ID
+ */
+export async function splitFrbrEntity(payload: FrbrSplitPayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/split", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to split FRBR entity");
+  }
+  return res.data.data;
 }

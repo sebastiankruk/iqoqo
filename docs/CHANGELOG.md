@@ -9,12 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **FRBR Relation Management**: New admin API endpoints (`/api/v1/admin/frbr/relations/reassign`, `/merge`, `/split`) and backend services (`reassign_frbr_parent()`, `merge_frbr_entities()`, `split_frbr_entity()`) for restructuring FRBR entity relationships. Administrators can now reassign entities to different parents, merge duplicates, and split entities without manual DB interventions. All mutations are audit-logged via `EntityAuditLog`.
+- **FRBR Relation Management UI**: New `RelationManagementDialog` component in `frontend/components/admin/relation-management-dialog.tsx` with three action tabs (Reassign, Merge, Split), entity search autocomplete, and TanStack Query cache invalidation. Wired into the FRBR editor tree view action menus.
+- **Roadmap Expression Binding**: `RoadmapItem` model now supports `expression_id` FK for targeting specific Expressions (F2). Check constraint `check_roadmap_item_single_frbr_level` enforces exactly one FRBR level reference per roadmap item.
 - **Dedicated Wishlist API (`/api/wishlist`)**: New REST blueprint providing full CRUD for `UserWorkIntent` with positive integer IDs, rich FRBR serialization, and F15/F16 binding support. Wishlist entries can now target specific Expressions (F2) and Manifestations (F3) via optional `expression_id` and `manifestation_id` fields. Includes FRBR hierarchy validation ensuring manifestation belongs to expression and expression belongs to work.
 - **Wishlist Frontend Types & Hooks**: New `WishlistItem`, `WishlistCreateDTO`, `WishlistUpdateDTO` TypeScript interfaces in `frontend/types/frbr.ts`. New React Query hooks (`useWishlist`, `useCreateWishlistItem`, `useUpdateWishlistItem`, `useDeleteWishlistItem`) in `frontend/lib/api/wishlist.ts`.
 - **Wishlist Card Component**: New `WishlistCard` component in `frontend/components/collection/wishlist-card.tsx` rendering edition and media badges without physical inventory actions.
 
 ### Changed
 
+- **Roadmap Schema Normalization**: `RoadmapItem` model extended with `expression_id` FK and `check_roadmap_item_single_frbr_level` CHECK constraint. Roadmap items must now reference exactly one FRBR level (Work, Expression, or Manifestation). Alembic migration `v0_8_1_frbr_relation_management` normalizes existing ambiguous rows.
 - **BREAKING: Negative-ID Removal from `/api/items`**: Removed all negative-ID synthesis and routing from `/api/items` endpoints. The `/api/items` API now exclusively returns physical `Item` records (F4). Requests with negative IDs receive 404. Wishlist operations must use the dedicated `/api/wishlist` blueprint.
 - **UserWorkIntent FRBR Binding**: Extended `UserWorkIntent` model with nullable `expression_id` and `manifestation_id` foreign keys for granular F2/F3 binding. Composite unique constraint updated to `(user_id, work_id, expression_id, manifestation_id)`.
 - **Item Access Control Simplified**: `verify_item_ownership()` and `require_item_access()` in `app/core/item_access.py` now only handle physical Items. Wishlist authorization is managed by the `/api/wishlist` blueprint.

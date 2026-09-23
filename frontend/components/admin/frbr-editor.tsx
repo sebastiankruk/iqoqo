@@ -65,6 +65,7 @@ import {
   type ManifestationFormData,
   type ItemFormData,
 } from "./frbr/types";
+import { RelationManagementDialog } from "./relation-management-dialog";
 
 // ---------------------------------------------------------------------------
 // Name normalization — must match backend ``normalize_contributor_name`` rules
@@ -204,6 +205,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     id: number | null;
   }>({ open: false, level: null, id: null });
   const [escalationNote, setEscalationNote] = useState("");
+
+  // Relation management dialog state
+  const [relationDialog, setRelationDialog] = useState<{
+    open: boolean;
+    entityType: "work" | "expression" | "manifestation" | "item";
+    entityId: number;
+    entityTitle: string;
+  }>({ open: false, entityType: "work", entityId: 0, entityTitle: "" });
 
   const handleWorkSubmit = useCallback(
     async (data: WorkFormData) => {
@@ -418,6 +427,17 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   }, []);
 
   /**
+   * Handles the "Manage Relations" action.
+   *
+   * @param level - The entity level
+   * @param id - The entity ID
+   * @param title - The entity title
+   */
+  const handleRelationManagement = useCallback((level: FrbrLevel, id: number, title: string) => {
+    setRelationDialog({ open: true, entityType: level, entityId: id, entityTitle: title });
+  }, []);
+
+  /**
    * Confirms the entity deletion.
    */
   const confirmDelete = useCallback(async () => {
@@ -500,6 +520,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         onAddChild={handleAddChild}
         onEscalate={handleEscalate}
         onDelete={handleDelete}
+        onRelationManagement={hasWriteMetadata ? handleRelationManagement : undefined}
       />
 
       {activeTab === "work" && (
@@ -654,6 +675,16 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Relation Management Dialog */}
+      <RelationManagementDialog
+        open={relationDialog.open}
+        onOpenChange={open => setRelationDialog(prev => ({ ...prev, open }))}
+        entityType={relationDialog.entityType}
+        entityId={relationDialog.entityId}
+        entityTitle={relationDialog.entityTitle}
+        manifestationId={manifestationId}
+      />
     </div>
   );
 }
