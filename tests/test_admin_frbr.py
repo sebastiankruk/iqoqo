@@ -303,7 +303,7 @@ def test_custodian_can_upload_manifestation_image(client, custodian_headers, app
 
 def test_get_frbr_tree_includes_contributions(client, admin_headers, app):
     """get_frbr_tree should serialize contributions for each entity level."""
-    from app.core.frbr_service import get_or_create_contributor, add_work_contribution
+    from app.core.frbr_service import add_work_contribution, get_or_create_contributor
 
     with app.app_context():
         work = frbr_service.create_work(title="Contrib Tree Test")
@@ -312,7 +312,6 @@ def test_get_frbr_tree_includes_contributions(client, admin_headers, app):
 
         contrib = get_or_create_contributor("Test Author")
         add_work_contribution(work_id=work.id, contributor_id=contrib.id, role="author", sequence=0)
-        work_id = work.id
         manif_id = manif.id
 
     res = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=admin_headers)

@@ -929,13 +929,7 @@ def sync_entity_contributions(
     entity_id = entity.id
 
     # Fetch existing contribution rows for this entity.
-    existing: list[Any] = (
-        db.session.execute(
-            select(contrib_cls).where(getattr(contrib_cls, fk_attr) == entity_id)
-        )
-        .scalars()
-        .all()
-    )
+    existing: list[Any] = list(db.session.execute(select(contrib_cls).where(getattr(contrib_cls, fk_attr) == entity_id)).scalars().all())
 
     # Build lookup: (contributor_id, role) → contribution row
     existing_lookup: dict[tuple[int, str], Any] = {}
