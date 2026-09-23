@@ -551,49 +551,31 @@ class TestNormalizeContributorName:
     """Verify multi-word, hyphenated, initial, and particle capitalization."""
 
     def test_simple_multiword(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("gabriel garcia marquez") == "Gabriel Garcia Marquez"
 
     def test_cultural_particle_van(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("ludwig van beethoven") == "Ludwig van Beethoven"
 
     def test_cultural_particle_da(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("leonardo da vinci") == "Leonardo da Vinci"
 
     def test_cultural_particle_le(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         # "le" is an interior particle and stays lowercase per the normalization rules.
         assert normalize_contributor_name("ursula k. le guin") == "Ursula K. le Guin"
 
     def test_hyphenated_name(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("jean-luc godard") == "Jean-Luc Godard"
 
     def test_initials_collapsed(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("j. r. r. tolkien") == "J.R.R. Tolkien"
 
     def test_whitespace_collapse(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("  william   shakespeare  ") == "William Shakespeare"
 
     def test_empty_string(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         assert normalize_contributor_name("") == ""
 
     def test_first_word_particle_capitalized(self):
-        from app.core.frbr_service import normalize_contributor_name
-
         # When "van" is the first word it should be capitalized (e.g. Van Morrison).
         assert normalize_contributor_name("van morrison") == "Van Morrison"
 
@@ -602,8 +584,6 @@ class TestParseAgentInput:
     """Verify parse_agent_input handles heterogeneous payloads."""
 
     def test_list_of_dicts(self):
-        from app.core.frbr_service import parse_agent_input
-
         raw = [{"name": "gabriel garcia marquez", "role": "author"}]
         result = parse_agent_input(raw)
         assert len(result) == 1
@@ -612,8 +592,6 @@ class TestParseAgentInput:
         assert result[0]["sequence"] == 0
 
     def test_list_of_strings(self):
-        from app.core.frbr_service import parse_agent_input
-
         raw = ["ludwig van beethoven", "wolfgang amadeus mozart"]
         result = parse_agent_input(raw, default_role="composer")
         assert len(result) == 2
@@ -622,8 +600,6 @@ class TestParseAgentInput:
         assert result[1]["name"] == "Wolfgang Amadeus Mozart"
 
     def test_comma_separated_string(self):
-        from app.core.frbr_service import parse_agent_input
-
         raw = "jean-luc godard, francois truffaut"
         result = parse_agent_input(raw, default_role="director")
         assert len(result) == 2
@@ -631,24 +607,17 @@ class TestParseAgentInput:
         assert result[1]["name"] == "Francois Truffaut"
 
     def test_none_returns_empty(self):
-        from app.core.frbr_service import parse_agent_input
-
-        assert parse_agent_input(None) == []
+        assert not parse_agent_input(None)
 
     def test_empty_names_filtered(self):
-        from app.core.frbr_service import parse_agent_input
-
         raw = [{"name": "", "role": "author"}, {"name": "   ", "role": "author"}]
-        assert parse_agent_input(raw) == []
+        assert not parse_agent_input(raw)
 
 
 class TestSyncEntityContributions:
     """Verify sync_entity_contributions reconciles contribution rows."""
 
     def test_sync_work_contributions(self, app):
-        from app.core.frbr_service import create_work, sync_entity_contributions
-        from app.db.contributions import WorkContribution
-
         with app.app_context():
             work = create_work("Sync Test Work")
             contributions = [
@@ -663,9 +632,6 @@ class TestSyncEntityContributions:
             assert names == ["Author One", "Author Two"]
 
     def test_sync_removes_obsolete(self, app):
-        from app.core.frbr_service import create_work, sync_entity_contributions
-        from app.db.contributions import WorkContribution
-
         with app.app_context():
             work = create_work("Sync Remove Test")
             sync_entity_contributions(
@@ -687,9 +653,6 @@ class TestSyncEntityContributions:
             assert rows[0].contributor.name == "Keep Me"
 
     def test_sync_updates_sequence(self, app):
-        from app.core.frbr_service import create_work, sync_entity_contributions
-        from app.db.contributions import WorkContribution
-
         with app.app_context():
             work = create_work("Sync Sequence Test")
             sync_entity_contributions(
