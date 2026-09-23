@@ -18,18 +18,20 @@
 import json
 import re
 
-ARRAY_META_FIELDS = frozenset([
-    "authors",
-    "translators",
-    "illustrators",
-    "editors",
-    "contributors",
-    "tags",
-    "genres",
-    "mechanics",
-    "narrators",
-    "publishers",
-])
+ARRAY_META_FIELDS = frozenset(
+    [
+        "authors",
+        "translators",
+        "illustrators",
+        "editors",
+        "contributors",
+        "tags",
+        "genres",
+        "mechanics",
+        "narrators",
+        "publishers",
+    ]
+)
 
 
 def sanitize_meta(meta: dict | None) -> dict | None:
@@ -68,7 +70,7 @@ def parse_meta(meta: dict | None) -> dict | None:
         if key in ARRAY_META_FIELDS:
             if isinstance(value, str):
                 # Split on comma or semicolon using regex
-                parts = [p.strip() for p in re.split(r'[,;]', value) if p.strip()]
+                parts = [p.strip() for p in re.split(r"[,;]", value) if p.strip()]
                 result[key] = parts if parts else []
             elif isinstance(value, list):
                 result[key] = [str(item) for item in value if item is not None]

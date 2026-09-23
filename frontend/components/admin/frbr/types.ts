@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import type { FrbrTree, FrbrItem } from "@/lib/api/admin";
+import type { FrbrTree, FrbrItem, FrbrContribution } from "@/lib/api/admin";
 
 /**
  * A key-value pair for dynamic metadata editing.
@@ -94,6 +94,7 @@ export interface WorkFormData {
   type?: string;
   mechanics?: string[];
   metaFields: MetaField[];
+  contributions?: FrbrContribution[];
 }
 
 /**
@@ -104,6 +105,7 @@ export interface ExpressionFormData {
   language?: string;
   kind?: string;
   metaFields: MetaField[];
+  contributions?: FrbrContribution[];
 }
 
 /**
@@ -118,6 +120,7 @@ export interface ManifestationFormData {
   publication_date?: string;
   mechanics?: string[];
   metaFields: MetaField[];
+  contributions?: FrbrContribution[];
 }
 
 /**

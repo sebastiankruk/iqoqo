@@ -482,11 +482,36 @@ def get_frbr_tree(manif_id):
             }
         )
 
+    # Serialize structured contributions with legacy-meta fallback.
+    contrib_data = frbr_service.serialize_contributions(work=work, expression=expr, manifestation=manif)
+    work_contributions = contrib_data.get("creators", [])
+    if work and not work_contributions:
+        work_meta = work.meta or {}
+        legacy_authors = work_meta.get("authors") or work_meta.get("author")
+        if legacy_authors:
+            work_contributions = frbr_service.parse_agent_input(legacy_authors, default_role="author")
+
+    expr_contributions = contrib_data.get("performers", [])
+    # No common legacy fallback for expression performers.
+
+    manif_contributions = contrib_data.get("publishers", [])
+    if not manif_contributions and manif.publisher:
+        manif_contributions = frbr_service.parse_agent_input([manif.publisher], default_role="publisher")
+
     return jsonify(
         {
             "success": True,
             "data": {
-                "work": {"id": work.id, "title": work.title, "meta": sanitize_meta(work.meta)} if work else None,
+                "work": (
+                    {
+                        "id": work.id,
+                        "title": work.title,
+                        "meta": sanitize_meta(work.meta),
+                        "contributions": work_contributions,
+                    }
+                    if work
+                    else None
+                ),
                 "expression": (
                     {
                         "id": expr.id,
@@ -495,6 +520,7 @@ def get_frbr_tree(manif_id):
                         "kind": expr.kind,
                         "meta": sanitize_meta(expr.meta),
                         "work_id": expr.work_id,
+                        "contributions": expr_contributions,
                     }
                     if expr
                     else None
@@ -508,6 +534,7 @@ def get_frbr_tree(manif_id):
                     "publisher": manif.publisher,
                     "publication_date": str(manif.publication_date) if manif.publication_date else None,
                     "meta": sanitize_meta(manif.meta),
+                    "contributions": manif_contributions,
                 },
                 "items": items_data,
             },
@@ -522,7 +549,14 @@ def update_work(work_id):
     """Update a Work entity."""
     data = request.json or {}
     try:
-        work = frbr_service.update_work(work_id, title=data.get("title"), meta=parse_meta(data.get("meta")))
+        raw_contributions = data.get("contributions")
+        contributions = frbr_service.parse_agent_input(raw_contributions, default_role="author") if raw_contributions is not None else None
+        work = frbr_service.update_work(
+            work_id,
+            title=data.get("title"),
+            meta=parse_meta(data.get("meta")),
+            contributions=contributions,
+        )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 404
@@ -538,6 +572,10 @@ def update_expression(expr_id):
     # Current endpoint is admin-gated via @require_permission(WRITE_METADATA).
     try:
         kind = data.get("kind") or None  # map "" (and explicit null) to None = studio/default
+        raw_contributions = data.get("contributions")
+        contributions = (
+            frbr_service.parse_agent_input(raw_contributions, default_role="performer") if raw_contributions is not None else None
+        )
         expr = frbr_service.update_expression(
             expr_id,
             work_id=data.get("work_id"),
@@ -545,6 +583,7 @@ def update_expression(expr_id):
             language=data.get("language"),
             meta=parse_meta(data.get("meta")),
             kind=kind,
+            contributions=contributions,
         )
         if "kind" in data and kind is None:
             expr = frbr_service.clear_expression_kind(expr_id)
@@ -568,6 +607,10 @@ def update_manifestation(manif_id):
         return jsonify({"success": False, "error": "Invalid date format. Use ISO format (YYYY-MM-DD)"}), 400
 
     try:
+        raw_contributions = data.get("contributions")
+        contributions = (
+            frbr_service.parse_agent_input(raw_contributions, default_role="publisher") if raw_contributions is not None else None
+        )
         manif = frbr_service.update_manifestation(
             manif_id,
             expression_id=data.get("expression_id"),
@@ -579,6 +622,7 @@ def update_manifestation(manif_id):
             meta=parse_meta(data.get("meta")),
             format=data.get("format"),
             format_type=data.get("format_type"),
+            contributions=contributions,
         )
         return jsonify({"success": True, "data": {"id": manif.id}})
     except ValueError as e:

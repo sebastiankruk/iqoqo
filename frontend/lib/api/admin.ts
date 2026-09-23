@@ -229,10 +229,21 @@ export async function revealSettingValue(key: string): Promise<{ value: string }
 
 // --- FRBR ENTITY TYPES ---
 
+/**
+ * A structured contribution entry attached to an FRBR entity.
+ */
+export interface FrbrContribution {
+  role: string;
+  name: string;
+  sequence?: number;
+  contributor_id?: number;
+}
+
 export interface FrbrWork {
   id: number;
   title: string;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrExpression {
@@ -242,6 +253,7 @@ export interface FrbrExpression {
   language: string;
   kind?: string | null;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrManifestation {
@@ -253,6 +265,7 @@ export interface FrbrManifestation {
   publisher: string | null;
   publication_date: string | null;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrItem {
@@ -298,11 +311,12 @@ export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
  * @param data - The update data
  * @param data.title - Optional new title
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated work ID
  */
 export async function updateFrbrWork(
   workId: number,
-  data: { title?: string; meta?: Record<string, unknown> }
+  data: { title?: string; meta?: Record<string, unknown>; contributions?: FrbrContribution[] }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/work/${workId}`, data);
   if (!res.data.success || !res.data.data) {
@@ -321,11 +335,19 @@ export async function updateFrbrWork(
  * @param data.language - Optional new language
  * @param data.kind - Optional new expression kind (e.g. "live_performance"; empty string clears to studio/default)
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated expression ID
  */
 export async function updateFrbrExpression(
   expressionId: number,
-  data: { work_id?: number; content_type?: string; language?: string; kind?: string; meta?: Record<string, unknown> }
+  data: {
+    work_id?: number;
+    content_type?: string;
+    language?: string;
+    kind?: string;
+    meta?: Record<string, unknown>;
+    contributions?: FrbrContribution[];
+  }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/expression/${expressionId}`, data);
   if (!res.data.success || !res.data.data) {
@@ -346,6 +368,7 @@ export async function updateFrbrExpression(
  * @param data.publisher - Optional new publisher name
  * @param data.publication_date - Optional new publication date string
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated manifestation ID
  */
 export async function updateFrbrManifestation(
@@ -358,6 +381,7 @@ export async function updateFrbrManifestation(
     publisher?: string;
     publication_date?: string;
     meta?: Record<string, unknown>;
+    contributions?: FrbrContribution[];
   }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/manifestation/${manifestationId}`, data);

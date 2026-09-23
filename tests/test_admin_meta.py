@@ -154,15 +154,10 @@ def test_parse_meta_non_array_field_unchanged():
 
 def test_parse_meta_mixed_fields():
     """Mixed array and non-array fields should be handled correctly."""
-    result = parse_meta({
-        "authors": "Author1, Author2",
-        "title": "Some Title",
-        "tags": "fiction, thriller",
-        "isbn13": "978-3-16-148410-0"
-    })
+    result = parse_meta({"authors": "Author1, Author2", "title": "Some Title", "tags": "fiction, thriller", "isbn13": "978-3-16-148410-0"})
     assert result == {
         "authors": ["Author1", "Author2"],
         "title": "Some Title",
         "tags": ["fiction", "thriller"],
-        "isbn13": "978-3-16-148410-0"
+        "isbn13": "978-3-16-148410-0",
     }

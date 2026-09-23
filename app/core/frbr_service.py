@@ -102,6 +102,169 @@ def derive_sort_title(title: str) -> str:
     return _LEADING_ARTICLES_RE.sub("", title).strip()
 
 
+# Cultural surname particles that stay lowercase when they appear as interior
+# words in a personal name (e.g. "Ludwig van Beethoven", "Leonardo da Vinci").
+_NAME_PARTICLES: frozenset[str] = frozenset(
+    {
+        "van",
+        "von",
+        "der",
+        "den",
+        "de",
+        "del",
+        "da",
+        "di",
+        "du",
+        "la",
+        "le",
+        "lo",
+        "te",
+        "ter",
+        "ten",
+    }
+)
+
+_INITIAL_RE = re.compile(r"^[a-zA-Z]\.?$")
+
+
+def _capitalize_name_word(word: str, *, is_first: bool) -> str:
+    """Capitalize a single name token according to FRBR cataloging rules.
+
+    Handles hyphenated compounds (``jean-luc`` → ``Jean-Luc``), single-letter
+    initials (``j.`` → ``J.``), and cultural particles that remain lowercase
+    when they appear as interior words (``van``, ``von``, ``de`` …).
+    """
+    if not word:
+        return word
+
+    # Hyphenated compound: capitalize each segment independently.
+    if "-" in word:
+        return "-".join(_capitalize_name_word(seg, is_first=is_first and idx == 0) for idx, seg in enumerate(word.split("-")))
+
+    lower = word.lower()
+
+    # Interior cultural particle stays lowercase.
+    if not is_first and lower in _NAME_PARTICLES:
+        return lower
+
+    # Single-letter initial (``j`` or ``j.``) → ``J.``
+    if _INITIAL_RE.match(word):
+        return lower.upper() + ("." if not word.endswith(".") else "")
+
+    # Default: capitalize first letter, lowercase the rest.
+    return lower[0].upper() + lower[1:]
+
+
+def normalize_contributor_name(name: str) -> str:
+    """Normalize whitespace and capitalize a contributor display name.
+
+    Rules:
+      * Strip leading/trailing whitespace; collapse internal runs to one space.
+      * Capitalize each word, preserving interior lowercase cultural particles
+        (``van``, ``von``, ``de``, ``da``, ``del``, ``di``, ``le``, ``la``,
+        ``der``, ``den``, ``du``, ``lo``, ``te``, ``ter``, ``ten``).
+      * Hyphenated compounds capitalize each segment (``jean-luc`` → ``Jean-Luc``).
+      * Single-letter initials collapse with dots (``j. r. r.`` → ``J.R.R.``).
+
+    Examples:
+        >>> normalize_contributor_name("gabriel garcia marquez")
+        'Gabriel Garcia Marquez'
+        >>> normalize_contributor_name("ludwig van beethoven")
+        'Ludwig van Beethoven'
+        >>> normalize_contributor_name("jean-luc godard")
+        'Jean-Luc Godard'
+        >>> normalize_contributor_name("j. r. r. tolkien")
+        'J.R.R. Tolkien'
+    """
+    if not name:
+        return ""
+    cleaned = " ".join(name.split())
+    if not cleaned:
+        return ""
+
+    words = cleaned.split(" ")
+    capitalized: list[str] = []
+
+    # Detect initials-only prefix so we can collapse "j. r. r." → "J.R.R."
+    initial_run_end = 0
+    for idx, w in enumerate(words):
+        bare = w.rstrip(".")
+        if len(bare) == 1 and bare.isalpha():
+            initial_run_end = idx + 1
+        else:
+            break
+
+    if initial_run_end > 1:
+        collapsed = "".join(words[i].rstrip(".").upper() + "." for i in range(initial_run_end))
+        # Remove trailing space after last initial dot — initials run together.
+        collapsed = collapsed.strip()
+        capitalized.append(collapsed)
+        remaining_start = initial_run_end
+    else:
+        remaining_start = 0
+
+    for idx in range(remaining_start, len(words)):
+        is_first = len(capitalized) == 0
+        capitalized.append(_capitalize_name_word(words[idx], is_first=is_first))
+
+    return " ".join(capitalized)
+
+
+def parse_agent_input(
+    raw_agents: Any,
+    default_role: str = "author",
+) -> list[dict[str, Any]]:
+    """Parse heterogeneous contributor payloads into a uniform list of dicts.
+
+    Accepts:
+      * A list of dicts with ``name`` and optional ``role`` / ``sequence`` keys.
+      * A list of plain strings (each string becomes one contributor with
+        *default_role*).
+      * A single comma- or semicolon-separated string (legacy ``meta.authors``
+        style).
+      * ``None`` / empty values → empty list.
+
+    Each name is run through :func:`normalize_contributor_name` so that
+    downstream persistence always stores consistently capitalized display
+    names.  Empty / whitespace-only names are filtered out.
+
+    Returns:
+        A list of ``{"name": str, "role": str, "sequence": int}`` dicts.
+    """
+    if raw_agents is None:
+        return []
+
+    items: list[dict[str, Any]] = []
+
+    if isinstance(raw_agents, str):
+        # Legacy comma/semicolon separated string.
+        parts = [p.strip() for p in re.split(r"[;,]", raw_agents) if p.strip()]
+        for seq, part in enumerate(parts):
+            name = normalize_contributor_name(part)
+            if name:
+                items.append({"name": name, "role": default_role, "sequence": seq})
+        return items
+
+    if isinstance(raw_agents, list):
+        for seq, entry in enumerate(raw_agents):
+            if isinstance(entry, dict):
+                raw_name = entry.get("name") or entry.get("display_name") or ""
+                name = normalize_contributor_name(str(raw_name))
+                if not name:
+                    continue
+                role = str(entry.get("role") or default_role).strip() or default_role
+                sequence = int(entry.get("sequence", seq))
+                items.append({"name": name, "role": role, "sequence": sequence})
+            elif isinstance(entry, str):
+                name = normalize_contributor_name(entry)
+                if name:
+                    items.append({"name": name, "role": default_role, "sequence": seq})
+            # Skip unrecognized entry types silently.
+        return items
+
+    return []
+
+
 def create_work(
     title: str,
     meta: dict[str, Any] | None = None,
@@ -725,12 +888,103 @@ def serialize_container_aggregation(container_work: Work | None) -> dict[str, An
 # --- UPDATE METHODS ---
 
 
+def sync_entity_contributions(
+    entity: Work | Expression | Manifestation,
+    contributions: list[dict[str, Any]],
+) -> None:
+    """Reconcile an entity's contribution rows with *contributions*.
+
+    Accepts a list of dicts shaped ``{"name": str, "role": str, "sequence": int}``
+    (as produced by :func:`parse_agent_input`).  For each entry the function
+    resolves (or creates) a :class:`Contributor` row and then:
+
+      * Adds missing contribution links.
+      * Updates ``sequence`` on existing links.
+      * Removes contribution links that are no longer present in *contributions*.
+
+    The entire reconciliation runs inside a single database transaction so
+    partial failures roll back cleanly.
+
+    The correct contribution table is chosen based on the concrete type of
+    *entity* (``Work`` → :class:`WorkContribution`, ``Expression`` →
+    :class:`ExpressionContribution`, ``Manifestation`` →
+    :class:`ManifestationContribution`).
+    """
+    if entity is None:
+        return
+
+    # Pick the right contribution model and FK column.
+    if isinstance(entity, Work):
+        contrib_cls = WorkContribution
+        fk_attr = "work_id"
+    elif isinstance(entity, Expression):
+        contrib_cls = ExpressionContribution
+        fk_attr = "expression_id"
+    elif isinstance(entity, Manifestation):
+        contrib_cls = ManifestationContribution
+        fk_attr = "manifestation_id"
+    else:
+        return
+
+    entity_id = entity.id
+
+    # Fetch existing contribution rows for this entity.
+    existing: list[Any] = list(db.session.execute(select(contrib_cls).where(getattr(contrib_cls, fk_attr) == entity_id)).scalars().all())
+
+    # Build lookup: (contributor_id, role) → contribution row
+    existing_lookup: dict[tuple[int, str], Any] = {}
+    for row in existing:
+        existing_lookup[(row.contributor_id, row.role)] = row
+
+    desired_keys: set[tuple[int, str]] = set()
+
+    for entry in contributions:
+        name = entry.get("name")
+        if not name:
+            continue
+        role = str(entry.get("role") or "contributor").strip()
+        sequence = int(entry.get("sequence", 0))
+
+        contributor = get_or_create_contributor(name, contributor_type="person")
+        if contributor is None:
+            continue
+
+        key = (contributor.id, role)
+        desired_keys.add(key)
+
+        if key in existing_lookup:
+            row = existing_lookup[key]
+            if row.sequence != sequence:
+                row.sequence = sequence
+        else:
+            new_row = contrib_cls(
+                **{fk_attr: entity_id},
+                contributor_id=contributor.id,
+                role=role,
+                sequence=sequence,
+            )
+            db.session.add(new_row)
+
+    # Remove obsolete rows.
+    for key, row in existing_lookup.items():
+        if key not in desired_keys:
+            db.session.delete(row)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        _logger_frbr.exception("sync_entity_contributions failed for %s id=%s", type(entity).__name__, entity_id)
+        raise
+
+
 def update_work(
     work_id: int,
     title: str | None = None,
     sort_title: str | None = None,
     meta: dict[str, Any] | None = None,
     raw_payload: dict[str, Any] | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Work:
     """
     Update an existing Work.
@@ -741,6 +995,7 @@ def update_work(
         sort_title: New alphabetical sort title
         meta: Metadata to merge with existing
         raw_payload: Verbatim provider payload JSON
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Work object
@@ -762,6 +1017,8 @@ def update_work(
         current_meta.update(meta)
         work.meta = current_meta
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(work, contributions)
     return work
 
 
@@ -773,6 +1030,7 @@ def update_expression(
     meta: dict[str, Any] | None = None,
     kind: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Expression:
     """
     Update an existing Expression.
@@ -786,6 +1044,7 @@ def update_expression(
         kind: New expression kind (``live_performance`` or ``None`` to clear
               via :func:`clear_expression_kind`).
         raw_payload: Verbatim provider payload JSON
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Expression object
@@ -825,6 +1084,8 @@ def update_expression(
         current_meta.update(meta)
         expr.meta = current_meta
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(expr, contributions)
     return expr
 
 
@@ -1004,6 +1265,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     catalog_number: str | None = None,
     raw_payload: dict[str, Any] | None = None,
     format_type: str | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Manifestation:
     """
     Update an existing Manifestation.
@@ -1023,6 +1285,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         catalog_number: New catalog number
         raw_payload: Verbatim provider payload JSON
         format_type: New physical format type (e.g., 'hardcover', 'paperback', 'vinyl')
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Manifestation object
@@ -1120,6 +1383,8 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
                 manif.meta = current_meta
 
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(manif, contributions)
     return manif
 
 

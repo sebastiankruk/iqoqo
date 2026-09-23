@@ -136,18 +136,17 @@ def classify_operation(query: str) -> str:
 
         if query_type in ("SelectQuery", "Select"):
             return "SELECT"
-        elif query_type in ("AskQuery", "Ask"):
+        if query_type in ("AskQuery", "Ask"):
             return "ASK"
-        elif query_type in ("ConstructQuery", "Construct"):
+        if query_type in ("ConstructQuery", "Construct"):
             return "CONSTRUCT"
-        elif query_type in ("DescribeQuery", "Describe"):
+        if query_type in ("DescribeQuery", "Describe"):
             return "DESCRIBE"
-        elif query_type in ("Update", "Insert", "Delete", "Load", "Clear", "Drop", "Create", "Add", "Move", "Copy"):
+        if query_type in ("Update", "Insert", "Delete", "Load", "Clear", "Drop", "Create", "Add", "Move", "Copy"):
             raise SPARQLWriteRejected("Write operations (INSERT, DELETE, etc.) are not permitted")
-        else:
-            # Fallback: check for update keywords in a more sophisticated way
-            # This handles edge cases where the parser might not classify correctly
-            return _fallback_classify(query)
+        # Fallback: check for update keywords in a more sophisticated way
+        # This handles edge cases where the parser might not classify correctly
+        return _fallback_classify(query)
     except SPARQLWriteRejected:
         raise
     except Exception:
@@ -180,11 +179,11 @@ def _fallback_classify(query: str) -> str:
     # Check for read operations
     if query_stripped.startswith("SELECT"):
         return "SELECT"
-    elif query_stripped.startswith("ASK"):
+    if query_stripped.startswith("ASK"):
         return "ASK"
-    elif query_stripped.startswith("CONSTRUCT"):
+    if query_stripped.startswith("CONSTRUCT"):
         return "CONSTRUCT"
-    elif query_stripped.startswith("DESCRIBE"):
+    if query_stripped.startswith("DESCRIBE"):
         return "DESCRIBE"
 
     # If we can't classify, assume it's a read operation (SELECT-like)
@@ -495,7 +494,7 @@ def _reconstruct_result(result_data: dict) -> Result:
         result.askAnswer = result_data["askAnswer"]
         return result
 
-    elif result_type == "SELECT":
+    if result_type == "SELECT":
         # Create a mock Result for SELECT queries
         result = Result("SELECT")
         result.vars = result_data["variables"]
@@ -530,7 +529,7 @@ def _reconstruct_result(result_data: dict) -> Result:
         result.bindings = bindings  # type: ignore[assignment]
         return result
 
-    elif result_type == "GRAPH":
+    if result_type == "GRAPH":
         # Create a mock Result for CONSTRUCT/DESCRIBE queries
         result = Result("CONSTRUCT")
         result.graph = Graph()
