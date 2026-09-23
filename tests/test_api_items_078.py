@@ -39,29 +39,27 @@ def _make_virtual_item(app, user_id, status="want_to_read", is_hidden=False):
 
 
 def test_put_virtual_item_boundary(client, app, normal_user_headers):
-    """Assert that PUT /api/items/{virtual_id} rejects physical trait updates."""
+    """Assert that PUT /api/items/{negative_id} returns 404 (negative IDs no longer accepted)."""
     with app.app_context():
         user = User.query.first()
         user_id = user.id
 
     virtual_item_id = _make_virtual_item(app, user_id)
 
-    # Attempting to mutate or treat a virtual placeholder as a physical shelf item
+    # Negative IDs are no longer routed through /api/items.
+    # The URL converter rejects them, resulting in 404.
     response = client.put(f"/api/items/{virtual_item_id}", json={"barcode": "1234567890", "condition": "Mint"}, headers=normal_user_headers)
 
-    # Must be rejected due to FRBR structural violation
-    assert response.status_code == 400
-    data = response.get_json()
-    assert "error" in data
-    assert "FRBR Ontology Violation" in data["error"] or "cannot accept physical state mutations" in data["error"]
+    # Must be rejected - negative IDs are not valid for /api/items
+    assert response.status_code == 404
 
 
 def test_payload_schema_rejects_id_zero():
     """Assert that payload schemas explicitly reject id: 0 with a validation error."""
     with pytest.raises(ValidationError) as exc_info:
         ItemUpdateSchema(id=0, status="read")
-    assert "Item identifier cannot be zero" in str(exc_info.value)
+    assert "Item identifier must be a positive integer" in str(exc_info.value)
 
     with pytest.raises(ValidationError) as exc_info:
         ItemCreateSchema(id=0, status="read")
-    assert "Item identifier cannot be zero" in str(exc_info.value)
+    assert "Item identifier must be a positive integer" in str(exc_info.value)

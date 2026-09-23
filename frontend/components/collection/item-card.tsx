@@ -260,8 +260,9 @@ export function ItemCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      await apiClient.delete(`/items/${itemId}`);
+      await apiClient.delete(`/wishlist/${itemId}`);
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       toast.success("Removed from wishlist");
       onWishlistRemove?.(itemId);

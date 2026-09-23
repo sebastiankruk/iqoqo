@@ -63,7 +63,7 @@ export function StatsCards() {
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
       description: scope === "global" ? t("wishListDescGlobal") : t("wishListDesc"),
-      href: "/collection?statuses=wish_list",
+      href: "/wishlist",
     },
     {
       label: t("lentOut"),

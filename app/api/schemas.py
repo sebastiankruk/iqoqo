@@ -46,11 +46,11 @@ class ItemCreateSchema(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def check_id_not_zero(cls, data: Any) -> Any:
+    def check_id_positive(cls, data: Any) -> Any:
         if isinstance(data, dict):
             for key in ("id", "item_id"):
-                if key in data and data[key] == 0:
-                    raise ValueError("Item identifier cannot be zero.")
+                if key in data and data[key] is not None and data[key] <= 0:
+                    raise ValueError("Item identifier must be a positive integer.")
         return data
 
     @field_validator("lent_to_user_id")
@@ -109,11 +109,11 @@ class ItemUpdateSchema(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def check_id_not_zero(cls, data: Any) -> Any:
+    def check_id_positive(cls, data: Any) -> Any:
         if isinstance(data, dict):
             for key in ("id", "item_id"):
-                if key in data and data[key] == 0:
-                    raise ValueError("Item identifier cannot be zero.")
+                if key in data and data[key] is not None and data[key] <= 0:
+                    raise ValueError("Item identifier must be a positive integer.")
         return data
 
     @field_validator("lent_to_user_id")
@@ -234,9 +234,8 @@ class ItemLendSchema(BaseModel):
     """
     Schema for validating item lending payload.
 
-    Enforces the FRBR ontology boundary: virtual items (id <= 0, i.e. UserWorkIntent
-    wishlist placeholders) cannot participate in physical loan workflows. Only concrete,
-    localized Items with a strictly positive database ID may be lent.
+    Only physical Items with a strictly positive database ID may be lent.
+    Wishlist entries are managed through the dedicated ``/api/wishlist`` blueprint.
     """
 
     model_config = ConfigDict(extra="forbid")

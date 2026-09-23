@@ -26,7 +26,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.limiter import limiter
-from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 
@@ -668,30 +668,63 @@ def get_shared_collection(token: str):
             is_wish_list = True
 
     if is_wish_list:
-        from app.api.items import get_virtual_items
-
-        virtual_items = get_virtual_items(
-            user_id=user.id,
-            statuses_filter=filters["status"],
-            category_list=filters.get("tags"),
-            format_list=None,
-            q=filters.get("query"),
-            publishers_list=None,
-            missing_cover=False,
-            missing_id=False,
-            genres_list=None,
+        # Query UserWorkIntent directly for shared collection visibility.
+        # Only non-hidden intents are exposed through shared collections.
+        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+        intent_query = (
+            db.session.query(UserWorkIntent)
+            .options(
+                joinedload(UserWorkIntent.work)
+                .selectinload(Work.expressions)
+                .selectinload(Expression.manifestations)
+            )
+            .filter(
+                UserWorkIntent.user_id == user.id,
+                UserWorkIntent.is_hidden.is_(False),
+            )
         )
-        # Add virtual items (they have a compatible schema)
-        for vi in virtual_items:
+        status_val = filters["status"]
+        if status_val in _INTENT_LEVEL_STATUSES:
+            intent_query = intent_query.filter(UserWorkIntent.status == status_val)
+        else:
+            intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
+
+        if filters.get("query"):
+            search_term = filters["query"].strip()
+            if search_term:
+                escaped_term = search_term.lower().replace("%", r"\%").replace("_", r"\_")
+                search_pattern = f"%{escaped_term}%"
+                intent_query = intent_query.join(Work, UserWorkIntent.work_id == Work.id).filter(
+                    or_(
+                        Work.title.ilike(search_pattern, escape="\\"),
+                        db.cast(Work.meta["authors"], db.String).ilike(search_pattern, escape="\\"),
+                    )
+                )
+
+        intents = intent_query.all()
+        for intent in intents:
+            work = intent.work
+            manifestation = None
+            if work:
+                for expr in work.expressions:
+                    if expr.manifestations:
+                        manifestation = expr.manifestations[0]
+                        break
+
             items_list.append(
                 {
-                    "id": vi.get("id"),
-                    "manifestation_id": vi.get("manifestation_id"),
-                    "status": vi.get("status"),
-                    "collection_status": vi.get("collection_status"),
-                    "title": vi.get("title"),
-                    "authors": vi.get("authors", []),
-                    "cover_url": vi.get("cover_url"),
+                    "id": intent.id,
+                    "manifestation_id": manifestation.id if manifestation else None,
+                    "status": intent.status,
+                    "collection_status": "wish_list",
+                    "title": work.title if work else None,
+                    "authors": work.meta.get("authors", []) if work and work.meta else [],
+                    "cover_url": (
+                        manifestation.cover_url
+                        or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None)
+                        if manifestation
+                        else None
+                    ),
                 }
             )
 

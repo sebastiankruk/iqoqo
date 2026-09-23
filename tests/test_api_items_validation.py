@@ -107,20 +107,20 @@ class TestVirtualItemGuardrails:
     """Ensure virtual wishlist identifiers (< 0) and zero bounds remain structurally clean."""
 
     def test_mutation_on_virtual_item_throws_exception(self, client, normal_user_headers):
-        """Assert mutating requests (PUT) on virtual entities throw a 400 or 404 instead of a 500 error."""
+        """Assert mutating requests (PUT) on virtual entities return 404 (negative IDs not accepted)."""
         response = client.put(
             "/api/items/-5",
             json={"status": "read"},
             headers=normal_user_headers,
             content_type="application/json",
         )
+        # Negative IDs are rejected by the URL converter (404)
         assert response.status_code in [400, 404]
-        assert "error" in response.json
 
     def test_deletion_on_virtual_item_is_rejected(self, client, normal_user_headers):
         """Assert deletion flows throw a clean exception boundary when executed against a virtual id."""
         response = client.delete("/api/items/-12", headers=normal_user_headers)
-        # 404 = item not found (after auth); 403 = insufficient permission for DELETE_ITEM
+        # Negative IDs are rejected by the URL converter (404)
         assert response.status_code in [400, 403, 404]
 
     def test_payload_schema_strictly_rejects_id_zero(self, client, normal_user_headers):
@@ -153,24 +153,20 @@ class TestVirtualItemGuardrails:
     def test_get_logs_virtual_item_returns_empty_array(self, client, normal_user_headers):
         """Assert GET /api/items/-1/logs returns 200 with an empty data array.
 
-        The backend must gracefully handle log requests for virtual wishlist items by
-        returning an empty array rather than a 404 or 500, so that the frontend timeline
-        component can render its empty state without error.
+        The backend must reject log requests for negative IDs (404) since
+        wishlist entries are now managed through the dedicated /api/wishlist endpoint.
         """
         response = client.get("/api/items/-1/logs", headers=normal_user_headers)
-        assert response.status_code == 200
-        assert response.json["success"] is True
-        assert response.json["data"] == []
+        assert response.status_code == 404
 
     def test_qrcode_virtual_item_returns_404(self, client, normal_user_headers):
         """Assert GET /api/qrcode/-1 returns 404.
 
-        Virtual wishlist items have no physical copy to tag — generating a QR code for one
-        would be semantically meaningless and must be explicitly rejected.
+        Negative IDs are rejected by the URL converter. Wishlist entries are
+        managed through the dedicated /api/wishlist endpoint.
         """
         response = client.get("/api/qrcode/-1", headers=normal_user_headers)
         assert response.status_code == 404
-        assert "error" in response.json
 
     def test_lend_schema_rejects_zero_and_negative_ids(self):
         """Assert ItemLendSchema raises ValidationError for id=0 and id=-5.
@@ -330,11 +326,9 @@ class TestCollectionsEndpointBoundary:
         assert "error" in data
 
     def test_get_collections_negative_id_returns_400(self, client, admin_headers):
-        """GET /api/items/-1/collections must return 400 — virtual items have no shelf."""
+        """GET /api/items/-1/collections must return 400 or 404 — virtual items have no shelf."""
         resp = client.get("/api/items/-1/collections", headers=admin_headers)
-        assert resp.status_code == 400
-        data = resp.get_json()
-        assert "error" in data
+        assert resp.status_code in (400, 404)
 
     def test_post_collections_zero_id_returns_400(self, client, admin_headers):
         """POST /api/items/0/collections must return 400 from the interceptor."""
@@ -344,11 +338,9 @@ class TestCollectionsEndpointBoundary:
         assert "error" in data
 
     def test_post_collections_negative_id_returns_400(self, client, admin_headers):
-        """POST /api/items/-5/collections must return 400 — virtual items cannot be shelved."""
+        """POST /api/items/-5/collections must return 400 or 404 — virtual items cannot be shelved."""
         resp = client.post("/api/items/-5/collections", json={"collection_id": 1}, headers=admin_headers)
-        assert resp.status_code == 400
-        data = resp.get_json()
-        assert "error" in data
+        assert resp.status_code in (400, 404)
 
     def test_delete_collections_zero_id_returns_400(self, client, admin_headers):
         """DELETE /api/items/0/collections/1 must return 400 from the interceptor."""
@@ -358,11 +350,9 @@ class TestCollectionsEndpointBoundary:
         assert "error" in data
 
     def test_delete_collections_negative_id_returns_400(self, client, admin_headers):
-        """DELETE /api/items/-3/collections/1 must return 400 — virtual items cannot be removed."""
+        """DELETE /api/items/-3/collections/1 must return 400 or 404 — virtual items cannot be removed."""
         resp = client.delete("/api/items/-3/collections/1", headers=admin_headers)
-        assert resp.status_code == 400
-        data = resp.get_json()
-        assert "error" in data
+        assert resp.status_code in (400, 404)
 
 
 # ---------------------------------------------------------------------------
