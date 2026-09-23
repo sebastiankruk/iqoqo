@@ -674,9 +674,9 @@ def get_shared_collection(token: str):
         intent_query = (
             db.session.query(UserWorkIntent)
             .options(
-                joinedload(UserWorkIntent.work)
-                .selectinload(Work.expressions)
-                .selectinload(Expression.manifestations)
+                joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
+                .selectinload(Work.expressions)  # type: ignore[arg-type]
+                .selectinload(Expression.manifestations)  # type: ignore[arg-type]
             )
             .filter(
                 UserWorkIntent.user_id == user.id,

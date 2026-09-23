@@ -31,7 +31,6 @@ from app.api.auth import generate_internal_jwt
 from app.db.core import MediaCategory, MediaFormat
 from app.db.models import Expression, Item, Manifestation, Permission, Role, User, UserWorkIntent, Work, db
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

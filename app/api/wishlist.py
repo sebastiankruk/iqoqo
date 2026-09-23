@@ -270,12 +270,12 @@ def get_wishlist() -> Response | tuple[Response, int]:
     query = (
         db.session.query(UserWorkIntent)
         .options(
-            joinedload(UserWorkIntent.work)
-            .selectinload(Work.expressions)
-            .selectinload(Expression.manifestations)
+            joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
+            .selectinload(Work.expressions)  # type: ignore[arg-type]
+            .selectinload(Expression.manifestations)  # type: ignore[arg-type]
         )
-        .options(joinedload(UserWorkIntent.expression))
-        .options(joinedload(UserWorkIntent.manifestation))
+        .options(joinedload(UserWorkIntent.expression))  # type: ignore[arg-type]
+        .options(joinedload(UserWorkIntent.manifestation))  # type: ignore[arg-type]
         .filter(UserWorkIntent.user_id == user_id)
     )
 
@@ -408,12 +408,12 @@ def get_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:
     intent = (
         db.session.query(UserWorkIntent)
         .options(
-            joinedload(UserWorkIntent.work)
-            .selectinload(Work.expressions)
-            .selectinload(Expression.manifestations)
+            joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
+            .selectinload(Work.expressions)  # type: ignore[arg-type]
+            .selectinload(Expression.manifestations)  # type: ignore[arg-type]
         )
-        .options(joinedload(UserWorkIntent.expression))
-        .options(joinedload(UserWorkIntent.manifestation))
+        .options(joinedload(UserWorkIntent.expression))  # type: ignore[arg-type]
+        .options(joinedload(UserWorkIntent.manifestation))  # type: ignore[arg-type]
         .filter(UserWorkIntent.id == intent_id)
         .first()
     )

@@ -30,7 +30,6 @@ from sqlalchemy.exc import IntegrityError
 from app.db.core import MediaCategory, MediaFormat
 from app.db.models import Expression, Manifestation, User, UserWorkIntent, Work, db
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
