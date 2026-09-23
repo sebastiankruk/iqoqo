@@ -326,7 +326,7 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
     deadline = start_time + timeout
 
     # Check concurrency limit
-    if not _query_semaphore.acquire(blocking=False):  # noqa: R1732  # pylint: disable=consider-using-with
+    if not _query_semaphore.acquire(blocking=False):
         if _sparql_capacity_rejections_total is not None:
             try:
                 _sparql_capacity_rejections_total.add(1, {"reason": "concurrency_limit"})
@@ -363,8 +363,8 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
             raise SPARQLResourceLimit(f"Serialized graph ({len(graph_bytes)} bytes) exceeds limit of {MAX_SERIALIZED_BYTES}.")
 
         # Create one-way pipe and child process using explicit context
-        parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)  # noqa: R1732  # pylint: disable=consider-using-with
-        process = _MP_CONTEXT.Process(  # noqa: R1732  # pylint: disable=consider-using-with
+        parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)
+        process = _MP_CONTEXT.Process(
             target=_execute_query_in_process,
             args=(graph_bytes, query, child_conn),
             daemon=True,

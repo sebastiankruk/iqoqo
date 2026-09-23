@@ -28,8 +28,6 @@ Usage:
     python scripts/etl_frbr_safe.py [--dry-run] [--backup-dir DIR] [--verbose]
 """
 
-# pylint: disable=too-many-lines
-
 import argparse
 import json
 import re
