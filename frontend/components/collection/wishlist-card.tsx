@@ -23,6 +23,7 @@ import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 
 interface WishlistCardProps {
   item: WishlistItem;
+  variant?: "grid" | "horizontal";
 }
 
 /**
@@ -30,7 +31,7 @@ interface WishlistCardProps {
  * Displays edition and media badges without physical inventory actions
  * (no QR codes, no shelf placement).
  */
-export function WishlistCard({ item }: WishlistCardProps) {
+export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteWishlistItem();
 
@@ -49,10 +50,36 @@ export function WishlistCard({ item }: WishlistCardProps) {
   const coverUrl = item.cover_url;
   const title = item.title || "Untitled";
   const authors = item.authors || [];
+  const mediaLabel = item.content_type ?? item.expression?.content_type ?? item.medium_type;
+  const targetHref = item.manifestation_id ? `/manifestation/${item.manifestation_id}` : "/wishlist";
+
+  if (variant === "horizontal") {
+    return (
+      <Link
+        href={targetHref}
+        className="group flex min-h-40 gap-4 overflow-hidden rounded-xl bg-card p-5 shadow-sm transition-all hover:shadow-md"
+      >
+        <div className="relative aspect-[2/3] w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20">
+          {coverUrl ? (
+            <img src={coverUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-2xl">📖</div>
+          )}
+        </div>
+        <div className="min-w-0 self-center">
+          <h3 className="line-clamp-2 font-serif text-base font-bold text-foreground">{title}</h3>
+          {authors.length > 0 && (
+            <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{authors.join(", ")}</p>
+          )}
+          {mediaLabel && <span className="mt-3 inline-block rounded bg-primary/10 px-2 py-1 text-xs text-muted-foreground">{mediaLabel}</span>}
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <Link
-      href={`/wishlist/${item.id}`}
+      href={targetHref}
       className="group relative block overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md"
     >
       {/* Cover image */}
@@ -98,11 +125,7 @@ export function WishlistCard({ item }: WishlistCardProps) {
             {authors.join(", ")}
           </p>
         )}
-        {item.work_type && (
-          <span className="mt-2 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {item.work_type}
-          </span>
-        )}
+        {mediaLabel && <span className="mt-2 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{mediaLabel}</span>}
       </div>
     </Link>
   );

@@ -314,14 +314,16 @@ describe("Wishlist API client methods", () => {
   });
 
   it("getWishlist calls GET /api/wishlist", async () => {
-    const { apiFetch } = await import("@/lib/api/client");
-    const mockApiFetch = vi.mocked(apiFetch);
-    mockApiFetch.mockResolvedValueOnce({ items: [], total: 0 });
+    const { apiClient } = await import("@/lib/api/client");
+    const mockGet = vi.mocked(apiClient.get);
+    mockGet.mockResolvedValueOnce({
+      data: { success: true, data: [], meta: { total: 0 }, pagination: { total: 0 } },
+    });
 
     let getWishlist: unknown;
     try {
       const mod = await import("@/lib/api/wishlist");
-      getWishlist = mod.getWishlist;
+      getWishlist = mod.fetchWishlist;
     } catch {
       return;
     }
@@ -330,7 +332,7 @@ describe("Wishlist API client methods", () => {
 
     await (getWishlist as (params?: Record<string, unknown>) => Promise<unknown>)();
 
-    expect(mockApiFetch).toHaveBeenCalledWith("/wishlist", expect.anything());
+    expect(mockGet).toHaveBeenCalledWith("/wishlist", expect.anything());
   });
 
   it("createWishlistItem calls POST /api/wishlist", async () => {

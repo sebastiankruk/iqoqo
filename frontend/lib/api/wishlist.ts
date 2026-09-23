@@ -97,10 +97,11 @@ export async function deleteWishlistItem(id: number): Promise<void> {
 /* ── React Query hooks ──────────────────────────────────────────────────── */
 
 /** Fetch the authenticated user's wishlist with pagination and filters. */
-export function useWishlist(params?: Record<string, unknown>) {
+export function useWishlist(params?: Record<string, unknown>, enabled = true) {
   return useQuery({
     queryKey: wishlistQueryKeys.list(params),
     queryFn: () => fetchWishlist(params),
+    enabled,
     staleTime: 5_000,
   });
 }

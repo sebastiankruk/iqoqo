@@ -343,7 +343,7 @@ describe("Cross-cutting: No negative ID references in production code", () => {
 
     // The Item interface should not mention negative IDs or virtual items
     const itemInterfaceMatch = content.match(
-      /export interface Item \{[^}]+\}/s
+      /export interface Item \{[^}]+\}/
     );
     if (!itemInterfaceMatch) return;
 

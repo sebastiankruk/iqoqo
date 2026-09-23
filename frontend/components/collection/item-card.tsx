@@ -442,6 +442,9 @@ export function ItemCard({
               {title}
             </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
+            <div className="mt-1 truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {mediaLabel}
+            </div>
             {isCatalog && userOwns && userItemId && (
               <button
                 type="button"

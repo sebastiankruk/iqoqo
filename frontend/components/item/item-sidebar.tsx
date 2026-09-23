@@ -162,7 +162,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const requestLoan = useRequestLoan();
 
   const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(
-    canModifyItem && ? item.id : null
+    canModifyItem ? item.id : null
   );
   const addToCollection = useAddItemToCollection();
   const removeFromCollection = useRemoveItemFromCollection();
@@ -386,7 +386,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
               >
                 <optgroup label="Availability & Condition">
                   {["available", "lent", "damaged", "lost"]
-                    .filter(key => || key === "available")
+                    .filter(key => key === "available")
                     .map(key => (
                       <option key={key} value={key} className="bg-card py-2">
                         {STATUS_LABELS[key]?.label || key}
@@ -559,7 +559,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
 
             {/* Lending Actions for borrower/public user */}
-            {!isOwner && && profile && item.collection_status !== "wish_list" && (
+            {!isOwner && profile && item.collection_status !== "wish_list" && (
               <div className="mt-4 border-t border-border/40 pt-4 flex flex-col gap-2">
                 {item.collection_status === "lent" && item.lent_to_user_id === profile?.id ? (
                   <span
@@ -636,7 +636,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           </button>
         )}
         {/* Print QR Code — hidden for virtual wishlist items (id < 0): they have no physical copy to tag. */}
-        {canModifyItem && && (
+        {canModifyItem && (
           <button
             data-testid="qrcode-btn"
             onClick={() => setIsQrOpen(true)}
@@ -673,7 +673,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           />
         )}
 
-        {canModifyItem && && (
+        {canModifyItem && (
           <div className="flex flex-col gap-2">
             <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
               Named Collections

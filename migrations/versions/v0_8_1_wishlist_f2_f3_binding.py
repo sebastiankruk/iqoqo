@@ -45,10 +45,6 @@ def upgrade():
     s_inv = "inventory" if is_pg else None
     s_cat = "catalog" if is_pg else None
 
-    # Determine FK target table prefixes
-    expr_table = f"{s_cat}." if s_cat else ""
-    manif_table = f"{s_cat}." if s_cat else ""
-
     # STEP 1: Add expression_id column
     with op.batch_alter_table("user_work_intents", schema=s_inv) as batch_op:
         batch_op.add_column(
@@ -73,17 +69,19 @@ def upgrade():
     with op.batch_alter_table("user_work_intents", schema=s_inv) as batch_op:
         batch_op.create_foreign_key(
             fk_expr,
-            f"{expr_table}expressions",
+            "expressions",
             ["expression_id"],
             ["id"],
             ondelete="SET NULL",
+            referent_schema=s_cat,
         )
         batch_op.create_foreign_key(
             fk_manif,
-            f"{manif_table}manifestations",
+            "manifestations",
             ["manifestation_id"],
             ["id"],
             ondelete="SET NULL",
+            referent_schema=s_cat,
         )
 
     # STEP 4: Drop old unique constraint and create new one
