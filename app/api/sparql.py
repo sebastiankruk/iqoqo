@@ -15,6 +15,8 @@
 #
 """SPARQL query endpoint — read-only SPARQL Protocol over user collections with resource isolation."""
 
+# pylint: disable=too-many-return-statements
+
 import logging
 import time
 

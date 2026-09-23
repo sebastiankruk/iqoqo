@@ -409,7 +409,7 @@ class TestLiveModeWithBackup:
             assert result["dry_run"] is False
             assert result["backup_file"] is not None
             assert result["backup_verification"] is not None
-            assert result["backup_verification"]["valid"] is True
+            assert result["backup_verification"]["valid"] is True  # type: ignore[index]  # pylint: disable=unsubscriptable-object
 
     def test_live_mode_applies_merge_plans(self, app, comprehensive_work_fixture, tmp_path):
         """Verify live mode applies merge plans and reparents all dependents."""

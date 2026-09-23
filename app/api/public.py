@@ -17,6 +17,8 @@
 Handles public profile retrieval, public item grids, and "check if I have it" functionality.
 """
 
+# pylint: disable=too-many-lines
+
 import datetime
 from typing import Any, cast
 

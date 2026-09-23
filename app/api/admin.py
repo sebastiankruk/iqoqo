@@ -483,9 +483,7 @@ def get_frbr_tree(manif_id):
         )
 
     # Serialize structured contributions with legacy-meta fallback.
-    contrib_data = frbr_service.serialize_contributions(
-        work=work, expression=expr, manifestation=manif
-    )
+    contrib_data = frbr_service.serialize_contributions(work=work, expression=expr, manifestation=manif)
     work_contributions = contrib_data.get("creators", [])
     if work and not work_contributions:
         work_meta = work.meta or {}
@@ -575,7 +573,9 @@ def update_expression(expr_id):
     try:
         kind = data.get("kind") or None  # map "" (and explicit null) to None = studio/default
         raw_contributions = data.get("contributions")
-        contributions = frbr_service.parse_agent_input(raw_contributions, default_role="performer") if raw_contributions is not None else None
+        contributions = (
+            frbr_service.parse_agent_input(raw_contributions, default_role="performer") if raw_contributions is not None else None
+        )
         expr = frbr_service.update_expression(
             expr_id,
             work_id=data.get("work_id"),
@@ -608,7 +608,9 @@ def update_manifestation(manif_id):
 
     try:
         raw_contributions = data.get("contributions")
-        contributions = frbr_service.parse_agent_input(raw_contributions, default_role="publisher") if raw_contributions is not None else None
+        contributions = (
+            frbr_service.parse_agent_input(raw_contributions, default_role="publisher") if raw_contributions is not None else None
+        )
         manif = frbr_service.update_manifestation(
             manif_id,
             expression_id=data.get("expression_id"),
