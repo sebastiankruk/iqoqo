@@ -268,7 +268,7 @@ describe("ItemCard", () => {
     fireEvent.click(removeBtn);
 
     await waitFor(() => {
-      expect(apiClient.delete).toHaveBeenCalledWith("/items/-10");
+      expect(apiClient.delete).toHaveBeenCalledWith("/wishlist/10");
       expect(onWishlistRemove).toHaveBeenCalledWith(-10);
     });
   });

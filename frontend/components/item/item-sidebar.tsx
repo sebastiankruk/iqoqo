@@ -386,7 +386,6 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
               >
                 <optgroup label="Availability & Condition">
                   {["available", "lent", "damaged", "lost"]
-                    .filter(key => key === "available")
                     .map(key => (
                       <option key={key} value={key} className="bg-card py-2">
                         {STATUS_LABELS[key]?.label || key}
@@ -635,8 +634,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
           </button>
         )}
-        {/* Print QR Code — hidden for virtual wishlist items (id < 0): they have no physical copy to tag. */}
-        {canModifyItem && (
+        {/* Print QR Code — hidden for items without manifestation_id: they have no physical copy to tag. */}
+        {canModifyItem && item.manifestation_id && (
           <button
             data-testid="qrcode-btn"
             onClick={() => setIsQrOpen(true)}

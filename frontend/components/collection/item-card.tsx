@@ -260,7 +260,9 @@ export function ItemCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      await apiClient.delete(`/wishlist/${itemId}`);
+      // Wishlist items use positive IDs in the API, convert from negative if needed
+      const wishlistId = Math.abs(itemId);
+      await apiClient.delete(`/wishlist/${wishlistId}`);
       queryClient.invalidateQueries({ queryKey: ["items"] });
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });

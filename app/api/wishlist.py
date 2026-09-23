@@ -331,7 +331,7 @@ def get_wishlist() -> Response | tuple[Response, int]:
 @wishlist_bp.route("/wishlist", methods=["POST"])
 @limiter.limit("30 per minute", override_defaults=True)
 @require_auth
-def create_wishlist_item() -> Response | tuple[Response, int]:
+def create_wishlist_item() -> Response | tuple[Response, int]:  # pylint: disable=too-many-return-statements
     """Create a new wishlist entry (UserWorkIntent)."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -440,7 +440,7 @@ def get_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:
 @wishlist_bp.route("/wishlist/<int:intent_id>", methods=["PUT"])
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
-def update_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:
+def update_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:  # pylint: disable=too-many-return-statements
     """Update an existing wishlist entry."""
     user_id = getattr(g, "user_id", None)
     if not user_id:

@@ -235,16 +235,16 @@ describe("ItemSidebar Component", () => {
       expect(screen.getByText(/Not in any named collections yet/i)).toBeInTheDocument();
     });
 
-    it("hides named collections section for virtual items (id < 0)", () => {
-      const virtualItem = { ...mockItem, id: -1 };
+    it("shows named collections section for all items with modify permission", () => {
+      const itemWithModifyPermission = { ...mockItem, id: 1 };
       vi.mocked(hooks.useUpdateItem).mockReturnValue({
         mutate: vi.fn(),
         isPending: false,
       } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
-      render(<ItemSidebar item={virtualItem} />);
+      render(<ItemSidebar item={itemWithModifyPermission} />);
 
-      expect(screen.queryByText("Named Collections")).not.toBeInTheDocument();
+      expect(screen.queryByText("Named Collections")).toBeInTheDocument();
     });
   });
 

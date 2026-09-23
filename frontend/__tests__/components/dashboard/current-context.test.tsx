@@ -26,6 +26,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Item, ProgressStatus, CollectionStatus } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
@@ -34,10 +35,31 @@ vi.mock("@/lib/api/hooks", () => ({
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
 }));
 
+vi.mock("@/lib/api/wishlist", () => ({
+  useWishlist: vi.fn(),
+  useDeleteWishlistItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  wishlistQueryKeys: { all: ["wishlist"] },
+}));
+
 import { useItems } from "@/lib/api/hooks";
+import { useWishlist } from "@/lib/api/wishlist";
 import { CurrentContext } from "@/components/dashboard/current-context";
 
 const mockUseItems = vi.mocked(useItems);
+const mockUseWishlist = vi.mocked(useWishlist);
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+/**
+ * Render component with QueryClientProvider.
+ *
+ * @param ui - Component to render
+ */
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 /**
  * Make a mock API response for items.
@@ -89,6 +111,7 @@ const IRRELEVANT_ITEMS: Item[] = [
 describe("CurrentContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
   // ── Loading state ────────────────────────────────────────────────────────
@@ -99,7 +122,12 @@ describe("CurrentContext", () => {
       isLoading: true,
       isError: false,
     } as ReturnType<typeof useItems>);
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.queryByText("Project Hail Mary")).not.toBeInTheDocument();
     expect(screen.queryByText("1984")).not.toBeInTheDocument();
   });
@@ -110,7 +138,12 @@ describe("CurrentContext", () => {
       isLoading: true,
       isError: false,
     } as ReturnType<typeof useItems>);
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByRole("region", { name: /currently active items/i })).toBeInTheDocument();
   });
 
@@ -118,27 +151,31 @@ describe("CurrentContext", () => {
 
   it("is wrapped in a landmark section when both lists are empty", () => {
     mockUseItems.mockReturnValue(makeApiResponse([]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByRole("region", { name: /currently active items/i })).toBeInTheDocument();
   });
 
   it("shows the unified empty-state message when both lists are empty", () => {
     mockUseItems.mockReturnValue(makeApiResponse([]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     // The paragraph has copy that includes both the heading and the word "empty"
     expect(screen.getByText(/is empty/i)).toBeInTheDocument();
   });
 
   it("renders a link to /collection from the empty state", () => {
     mockUseItems.mockReturnValue(makeApiResponse([]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     const link = screen.getByRole("link", { name: /browse your collection/i });
     expect(link).toHaveAttribute("href", "/collection");
   });
 
   it("shows the empty state when only irrelevant-status items are present", () => {
     mockUseItems.mockReturnValue(makeApiResponse(IRRELEVANT_ITEMS));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     // The empty-state paragraph is the only element containing "is empty"
     expect(screen.getByText(/is empty/i)).toBeInTheDocument();
     // None of the irrelevant items should be rendered
@@ -151,55 +188,63 @@ describe("CurrentContext", () => {
 
   it("renders the 'Currently Reading' section when reading items are present", () => {
     mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByRole("region", { name: /currently reading items/i })).toBeInTheDocument();
     expect(screen.getByText("Currently Reading")).toBeInTheDocument();
   });
 
   it("displays reading items in the 'Currently Reading' section", () => {
     mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByText("1984")).toBeInTheDocument();
   });
 
   it("shows the item count badge for reading items", () => {
     mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByText("1 active")).toBeInTheDocument();
   });
 
   it("does not render the 'Currently Reading' section when no reading items exist", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([WISH_LIST_ITEM]));
-    render(<CurrentContext />);
+    mockUseItems.mockReturnValue(makeApiResponse([]));
+    mockUseWishlist.mockReturnValue({ data: { data: [WISH_LIST_ITEM], total: 1 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.queryByRole("region", { name: /currently reading items/i })).not.toBeInTheDocument();
   });
 
   // ── "Wish List" section ──────────────────────────────────────────────────
 
   it("renders the 'Wish List' section when wish_list items are present", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([WISH_LIST_ITEM]));
-    render(<CurrentContext />);
+    mockUseItems.mockReturnValue(makeApiResponse([]));
+    mockUseWishlist.mockReturnValue({ data: { data: [WISH_LIST_ITEM], total: 1 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByRole("region", { name: /wish list items/i })).toBeInTheDocument();
     expect(screen.getByText("Wish List")).toBeInTheDocument();
   });
 
   it("displays wish_list items in the 'Wish List' section", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([WISH_LIST_ITEM]));
-    render(<CurrentContext />);
+    mockUseItems.mockReturnValue(makeApiResponse([]));
+    mockUseWishlist.mockReturnValue({ data: { data: [WISH_LIST_ITEM], total: 1 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByText("Project Hail Mary")).toBeInTheDocument();
   });
 
   it("does not render the 'Wish List' section when no wish_list items exist", () => {
     mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
-    render(<CurrentContext />);
+    mockUseWishlist.mockReturnValue({ data: { data: [], total: 0 }, isLoading: false, isError: false } as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.queryByRole("region", { name: /wish list items/i })).not.toBeInTheDocument();
   });
 
   // ── Both sections visible ────────────────────────────────────────────────
 
   it("renders both sections when both reading and wish_list items are present", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, WISH_LIST_ITEM]));
-    render(<CurrentContext />);
+    mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
+    mockUseWishlist.mockReturnValue({ data: { data: [WISH_LIST_ITEM], total: 1 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     expect(screen.getByRole("region", { name: /currently reading items/i })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /wish list items/i })).toBeInTheDocument();
     expect(screen.getByText("1984")).toBeInTheDocument();
@@ -208,8 +253,9 @@ describe("CurrentContext", () => {
 
   // IRRELEVANT_ITEMS test is now slightly different as tests for BOTH fields
   it("never renders items that are neither 'reading' nor 'wish_list'", () => {
-    mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, WISH_LIST_ITEM, ...IRRELEVANT_ITEMS]));
-    render(<CurrentContext />);
+    mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM, ...IRRELEVANT_ITEMS]));
+    mockUseWishlist.mockReturnValue({ data: { data: [WISH_LIST_ITEM], total: 1 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
     for (const item of IRRELEVANT_ITEMS) {
       expect(screen.queryByText(item.title as string)).not.toBeInTheDocument();
     }
