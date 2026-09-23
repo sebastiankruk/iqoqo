@@ -18,7 +18,6 @@
 import json
 import re
 
-
 ARRAY_META_FIELDS = frozenset([
     "authors",
     "translators",
