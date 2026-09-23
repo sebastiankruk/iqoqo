@@ -117,33 +117,47 @@ test.describe("Wishlist Media Disambiguation (Vinyl, Audio, Games)", () => {
       });
     });
 
-    // 3. Mock GET /api/items to return the virtual wishlist item for Vinyl
+    // 3. Mock GET /api/items and /api/wishlist to return the wishlist item for Vinyl
+    const vinylWishlistItem = {
+      is_virtual: true,
+      id: 101,
+      work_id: 1,
+      owner_id: "test-user-id",
+      status: "want_to_listen",
+      collection_status: "wish_list",
+      title: "Abbey Road",
+      authors: ["The Beatles"],
+      content_type: "music",
+      work_type: "AudioWork",
+      medium_type: "Vinyl",
+      cover_url: null,
+      cover_status: null,
+      is_owner: true,
+      is_borrowed: false,
+      is_hidden: false,
+      tags: [],
+    };
+
+    await page.route("**/api/wishlist*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [vinylWishlistItem],
+          meta: { page: 1, limit: 50, total: 1, pages: 1 },
+          pagination: { total: 1, limit: 50, offset: 0, has_more: false },
+        }),
+      });
+    });
+
     await page.route("**/api/items*", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: [
-            {
-              is_virtual: true,
-              id: -101,
-              owner_id: "test-user-id",
-              status: "want_to_listen",
-              collection_status: "wish_list",
-              title: "Abbey Road",
-              authors: ["The Beatles"],
-              content_type: "music",
-              work_type: "AudioWork",
-              medium_type: "Vinyl",
-              cover_url: null,
-              cover_status: null,
-              is_owner: true,
-              is_borrowed: false,
-              is_hidden: false,
-              tags: [],
-            },
-          ],
+          data: [vinylWishlistItem],
           meta: { page: 1, limit: 50, total: 1, pages: 1 },
           pagination: { total: 1, limit: 50, offset: 0, has_more: false },
         }),
