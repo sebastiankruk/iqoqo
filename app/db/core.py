@@ -486,7 +486,10 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     __table_args__: tuple = (
         (
             db.UniqueConstraint(
-                "user_id", "work_id", "expression_id", "manifestation_id",
+                "user_id",
+                "work_id",
+                "expression_id",
+                "manifestation_id",
                 name="uq_user_work_intent_target",
             ),
             db.CheckConstraint(
@@ -498,7 +501,10 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
         if _INVENTORY
         else (
             db.UniqueConstraint(
-                "user_id", "work_id", "expression_id", "manifestation_id",
+                "user_id",
+                "work_id",
+                "expression_id",
+                "manifestation_id",
                 name="uq_user_work_intent_target",
             ),
             db.CheckConstraint(

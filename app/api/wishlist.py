@@ -54,6 +54,7 @@ wishlist_bp = Blueprint("wishlist", __name__, url_prefix="/api")
 # Pydantic schemas for wishlist payload validation
 # ---------------------------------------------------------------------------
 
+
 class WishlistCreateSchema(BaseModel):
     """Payload for creating a new wishlist entry."""
 
@@ -69,6 +70,7 @@ class WishlistCreateSchema(BaseModel):
     @classmethod
     def validate_status(cls, v: str) -> str:
         from app.db.core import WORK_INTENT_STATUSES
+
         if v not in WORK_INTENT_STATUSES:
             raise ValueError(f"Invalid status: '{v}'. Must be one of {WORK_INTENT_STATUSES}")
         return v
@@ -96,6 +98,7 @@ class WishlistUpdateSchema(BaseModel):
         if v is None:
             return v
         from app.db.core import WORK_INTENT_STATUSES
+
         if v not in WORK_INTENT_STATUSES:
             raise ValueError(f"Invalid status: '{v}'. Must be one of {WORK_INTENT_STATUSES}")
         return v
@@ -104,6 +107,7 @@ class WishlistUpdateSchema(BaseModel):
 # ---------------------------------------------------------------------------
 # FRBR hierarchy validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_frbr_hierarchy(
     work_id: int,
@@ -161,6 +165,7 @@ def _is_expression_in_work_tree(expression: Expression, work_id: int) -> bool:
 # ---------------------------------------------------------------------------
 # Serialization helpers
 # ---------------------------------------------------------------------------
+
 
 def _serialize_intent(intent: UserWorkIntent, user_id: uuid.UUID | None) -> dict[str, Any]:
     """Serialize a UserWorkIntent to a rich FRBR-aware dictionary."""
@@ -241,6 +246,7 @@ def _serialize_intent(intent: UserWorkIntent, user_id: uuid.UUID | None) -> dict
 # CRUD endpoints
 # ---------------------------------------------------------------------------
 
+
 @wishlist_bp.route("/wishlist", methods=["GET"])
 @limiter.limit("120 per minute", override_defaults=True)
 @optional_auth
@@ -317,15 +323,17 @@ def get_wishlist() -> Response | tuple[Response, int]:
         data.append(serialized)
 
     total = len(data)
-    paginated = data[offset:offset + limit]
+    paginated = data[offset : offset + limit]
 
-    return jsonify({
-        "success": True,
-        "data": paginated,
-        "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
-        "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
-        "error": None,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "data": paginated,
+            "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+            "pagination": {"total": total, "limit": limit, "offset": offset, "has_more": (offset + limit) < total},
+            "error": None,
+        }
+    )
 
 
 @wishlist_bp.route("/wishlist", methods=["POST"])
@@ -472,9 +480,8 @@ def update_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:  # 
     new_manifestation_id = payload.manifestation_id if payload.manifestation_id is not None else intent.manifestation_id
 
     # Validate FRBR hierarchy if binding is changing
-    if (
-        (payload.expression_id is not None and payload.expression_id != intent.expression_id)
-        or (payload.manifestation_id is not None and payload.manifestation_id != intent.manifestation_id)
+    if (payload.expression_id is not None and payload.expression_id != intent.expression_id) or (
+        payload.manifestation_id is not None and payload.manifestation_id != intent.manifestation_id
     ):
         hierarchy_err = _validate_frbr_hierarchy(intent.work_id, new_expression_id, new_manifestation_id)
         if hierarchy_err:

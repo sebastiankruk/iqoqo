@@ -421,6 +421,16 @@ def test_v0_7_19_f3_column_promotion_metadata() -> None:
     assert len(promo.revision) <= 32
 
 
+def test_v0_8_1_wishlist_f2_f3_binding_metadata() -> None:
+    """Verify v0_8_1_wishlist_f2_f3_binding migration metadata and dependency on v0_7_19_f3_column_promotion."""
+    from importlib import import_module
+
+    binding = import_module("migrations.versions.v0_8_1_wishlist_f2_f3_binding")
+    assert binding.revision == "v0_8_1_wishlist_f2_f3_binding"
+    assert binding.down_revision == "v0_7_19_f3_column_promotion"
+    assert len(binding.revision) <= 32
+
+
 def test_alembic_single_head_and_unbroken_lineage() -> None:
     """Ensure Alembic migration tree has exactly one head and no orphaned revisions."""
     from alembic.config import Config
@@ -433,10 +443,15 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_7_19_f3_column_promotion"
+    assert heads[0] == "v0_8_1_wishlist_f2_f3_binding"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
-    assert revisions == ["v0_7_19_f3_column_promotion", "v0_7_18_fixes", "v0_7_17_baseline"]
+    assert revisions == [
+        "v0_8_1_wishlist_f2_f3_binding",
+        "v0_7_19_f3_column_promotion",
+        "v0_7_18_fixes",
+        "v0_7_17_baseline",
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -720,8 +720,7 @@ def get_shared_collection(token: str):
                     "title": work.title if work else None,
                     "authors": work.meta.get("authors", []) if work and work.meta else [],
                     "cover_url": (
-                        manifestation.cover_url
-                        or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None)
+                        manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None)
                         if manifestation
                         else None
                     ),

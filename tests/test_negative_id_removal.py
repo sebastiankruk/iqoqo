@@ -182,9 +182,7 @@ class TestNegativeIdRejection:
         headers = _headers(app, mixed_setup["user_id"])
         negative_id = -mixed_setup["intent_id"]
         response = client.get(f"/api/items/{negative_id}", headers=headers)
-        assert response.status_code in (404, 422), (
-            f"Expected 404 or 422 for negative ID, got {response.status_code}"
-        )
+        assert response.status_code in (404, 422), f"Expected 404 or 422 for negative ID, got {response.status_code}"
 
     @pytest.mark.xfail(reason="Negative IDs still handled until Task 3.2 implementation")
     def test_update_item_negative_id_returns_404_or_422(self, client, mixed_setup, app):
@@ -196,9 +194,7 @@ class TestNegativeIdRejection:
             json={"status": "reading"},
             headers=headers,
         )
-        assert response.status_code in (400, 404, 422), (
-            f"Expected 400/404/422 for negative ID update, got {response.status_code}"
-        )
+        assert response.status_code in (400, 404, 422), f"Expected 400/404/422 for negative ID update, got {response.status_code}"
 
     @pytest.mark.xfail(reason="Negative IDs still handled until Task 3.2 implementation")
     def test_delete_item_negative_id_returns_404_or_422(self, client, mixed_setup, app):
@@ -206,9 +202,7 @@ class TestNegativeIdRejection:
         headers = _headers(app, mixed_setup["user_id"])
         negative_id = -mixed_setup["intent_id"]
         response = client.delete(f"/api/items/{negative_id}", headers=headers)
-        assert response.status_code in (400, 404, 422), (
-            f"Expected 400/404/422 for negative ID delete, got {response.status_code}"
-        )
+        assert response.status_code in (400, 404, 422), f"Expected 400/404/422 for negative ID delete, got {response.status_code}"
 
     def test_zero_id_returns_400_or_404(self, client, mixed_setup, app):
         """Given ID=0, endpoints return 400 or 404 (0 is not a valid ID)."""

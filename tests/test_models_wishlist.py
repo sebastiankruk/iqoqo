@@ -213,9 +213,7 @@ class TestUserWorkIntentUniqueConstraint:
         with app.app_context():
             # Verify the unique constraint is defined on the model
             table = UserWorkIntent.__table__
-            unique_constraints = [
-                c for c in table.constraints if hasattr(c, "columns") and len(c.columns) > 1
-            ]
+            unique_constraints = [c for c in table.constraints if hasattr(c, "columns") and len(c.columns) > 1]
             # Should have at least one multi-column unique constraint
             assert len(unique_constraints) >= 1, "UserWorkIntent should have a composite unique constraint"
 
