@@ -24,6 +24,7 @@ import os
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
+from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from . import db
@@ -93,7 +94,26 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
     """
 
     __tablename__ = "roadmap_items"
-    __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
+    __table_args__ = (
+        (
+            CheckConstraint(
+                "(CASE WHEN work_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN expression_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+                name="check_roadmap_item_single_frbr_level",
+            ),
+            {"schema": _CATALOG},
+        )
+        if _CATALOG
+        else (
+            CheckConstraint(
+                "(CASE WHEN work_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN expression_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+                name="check_roadmap_item_single_frbr_level",
+            ),
+        )
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     roadmap_id = db.Column(
@@ -104,6 +124,11 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
     work_id = db.Column(
         db.Integer,
         db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    expression_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="SET NULL"),
         nullable=True,
     )
     manifestation_id = db.Column(
@@ -119,6 +144,7 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
 
     # Relationships to resolve title/creator in to_dict()
     work = db.relationship("Work", foreign_keys=[work_id], lazy="joined")
+    expression = db.relationship("Expression", foreign_keys=[expression_id], lazy="joined")
     manifestation = db.relationship("Manifestation", foreign_keys=[manifestation_id], lazy="joined")
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,6 +165,15 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
                 authors = work.meta.get("authors", []) if work.meta else []
                 if authors and isinstance(authors, list) and isinstance(authors[0], str):
                     creator = authors[0]
+        # Fall back to direct expression link
+        elif self.expression_id is not None and hasattr(self, "expression") and self.expression is not None:
+            expr = self.expression
+            if expr.work:
+                work = expr.work
+                title = work.title or "Unknown"
+                authors = work.meta.get("authors", []) if work.meta else []
+                if authors and isinstance(authors, list) and isinstance(authors[0], str):
+                    creator = authors[0]
         # Fall back to direct work link
         elif self.work_id is not None and hasattr(self, "work") and self.work is not None:
             work = self.work
@@ -150,6 +185,7 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
         return {
             "id": self.id,
             "work_id": self.work_id,
+            "expression_id": self.expression_id,
             "manifestation_id": self.manifestation_id,
             "title": title,
             "creator": creator,

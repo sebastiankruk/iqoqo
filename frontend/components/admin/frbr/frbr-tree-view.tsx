@@ -17,7 +17,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, MoreVertical, Plus, ArrowUpRight, Trash2 } from "lucide-react";
+import { ChevronRight, ChevronDown, MoreVertical, Plus, ArrowUpRight, Trash2, ArrowRightLeft } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +43,7 @@ interface FRBRTreeViewProps {
   onAddChild?: (parentLevel: FrbrLevel) => void;
   onEscalate?: (level: FrbrLevel, id: number) => void;
   onDelete?: (level: FrbrLevel, id: number) => void;
+  onRelationManagement?: (level: FrbrLevel, id: number, title: string) => void;
 }
 
 /**
@@ -78,6 +79,7 @@ export function FRBRTreeView({
   onAddChild,
   onEscalate,
   onDelete,
+  onRelationManagement,
 }: FRBRTreeViewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["work", "expression", "manifestation", "items"])
@@ -103,6 +105,15 @@ export function FRBRTreeView({
    * @returns JSX element
    */
   function renderActions(level: FrbrLevel, id: number) {
+    // Resolve the entity title for relation management
+    const title =
+      level === "work"
+        ? tree.work?.title ?? ""
+        : level === "expression"
+          ? tree.work?.title ?? ""
+          : level === "manifestation"
+            ? tree.work?.title ?? ""
+            : "";
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -115,6 +126,12 @@ export function FRBRTreeView({
             <DropdownMenuItem onClick={() => onAddChild(level)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Child
+            </DropdownMenuItem>
+          )}
+          {onRelationManagement && (
+            <DropdownMenuItem onClick={() => onRelationManagement(level, id, title)}>
+              <ArrowRightLeft className="w-4 h-4 mr-2" />
+              Manage Relations
             </DropdownMenuItem>
           )}
           {onEscalate && (

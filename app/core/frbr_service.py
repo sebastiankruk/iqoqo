@@ -42,6 +42,7 @@ from app.db.core import (
     EXPRESSION_KINDS,
     WORK_LINK_TYPE_IS_EXPANSION_OF,
     WORK_LINK_TYPES,
+    EntityAuditLog,
     Expression,
     ImageScan,
     Item,
@@ -1431,6 +1432,338 @@ def update_item(
         item.meta = current_meta
     db.session.commit()
     return item
+
+
+# ---------------------------------------------------------------------------
+# FRBR Relation Management Services
+# ---------------------------------------------------------------------------
+
+
+#: Allowed entity types for reassign (child levels).
+_REASSIGN_ALLOWED_TYPES: frozenset[str] = frozenset({"expression", "manifestation", "item"})
+#: Allowed entity types for merge (parent levels).
+_MERGE_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifestation"})
+#: Allowed entity types for split (parent levels).
+_SPLIT_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifestation"})
+
+#: Map from child entity type to its parent entity class and FK attribute.
+_REASSIGN_PARENT_MAP: dict[str, tuple[Any, str]] = {
+    "expression": (Work, "work_id"),
+    "manifestation": (Expression, "expression_id"),
+    "item": (Manifestation, "manifestation_id"),
+}
+
+#: Map from entity type to its child entity class and FK attribute.
+_ENTITY_CHILD_MAP: dict[str, tuple[Any, str]] = {
+    "work": (Expression, "work_id"),
+    "expression": (Manifestation, "expression_id"),
+    "manifestation": (Item, "manifestation_id"),
+}
+
+#: Map from entity type to its ORM class.
+_ENTITY_CLASS_MAP: dict[str, Any] = {
+    "work": Work,
+    "expression": Expression,
+    "manifestation": Manifestation,
+    "item": Item,
+}
+
+
+def _get_entity_or_raise(entity_type: str, entity_id: int) -> Any:
+    """Fetch an entity by type and ID, raising ValueError if not found."""
+    cls = _ENTITY_CLASS_MAP.get(entity_type)
+    if cls is None:
+        raise ValueError(f"Invalid entity_type: {entity_type!r}")
+    entity = db.session.get(cls, entity_id)
+    if entity is None:
+        raise ValueError(f"{cls.__name__} with id {entity_id} not found")
+    return entity
+
+
+def _has_cycle(entity_type: str, entity_id: int, new_parent_id: int) -> bool:
+    """Return True if assigning new_parent_id would create a cycle."""
+    parent_cls, _ = _REASSIGN_PARENT_MAP[entity_type]
+    # Check if the new parent is the entity itself (only possible if same type)
+    if entity_type == "work" and new_parent_id == entity_id:
+        return True
+    # Walk up the parent chain to detect cycles.
+    # We track (class, id) pairs since IDs are not globally unique across tables.
+    entity_cls = _ENTITY_CLASS_MAP[entity_type]
+    visited: set[tuple[type, int]] = {(entity_cls, entity_id)}
+    current_id: int | None = new_parent_id
+    current_cls = parent_cls
+    while current_id is not None:
+        if (current_cls, current_id) in visited:
+            return True
+        visited.add((current_cls, current_id))
+        parent = db.session.get(current_cls, current_id)
+        if parent is None:
+            break
+        # Determine the parent's parent
+        if isinstance(parent, Work):
+            break  # Work has no parent in FRBR hierarchy
+        if isinstance(parent, Expression):
+            current_id = parent.work_id
+            current_cls = Work
+        elif isinstance(parent, Manifestation):
+            current_id = parent.expression_id
+            current_cls = Expression
+        elif isinstance(parent, Item):
+            current_id = parent.manifestation_id
+            current_cls = Manifestation
+        else:
+            break
+    return False
+
+
+def _merge_metadata(target_meta: dict[str, Any] | None, source_meta: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge source metadata into target, preserving target keys and deduping lists."""
+    result = dict(target_meta or {})
+    source = dict(source_meta or {})
+    for key, value in source.items():
+        if key not in result:
+            result[key] = value
+        else:
+            # If both are lists, merge and dedupe
+            if isinstance(result[key], list) and isinstance(value, list):
+                merged = list(result[key])
+                for item in value:
+                    if item not in merged:
+                        merged.append(item)
+                result[key] = merged
+    return result
+
+
+def reassign_frbr_parent(
+    entity_type: str,
+    entity_id: int,
+    new_parent_id: int,
+    user_id: Any | None = None,
+) -> Any:
+    """Reassign an entity's parent to a new parent at the adjacent FRBR level.
+
+    Args:
+        entity_type: One of ``"expression"``, ``"manifestation"``, or ``"item"``.
+        entity_id: The ID of the entity to reassign.
+        new_parent_id: The ID of the new parent entity.
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The updated entity.
+
+    Raises:
+        ValueError: If validation fails (invalid type, not found, cycle detected).
+    """
+    if entity_type not in _REASSIGN_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for reassign: {entity_type!r}. " f"Must be one of {sorted(_REASSIGN_ALLOWED_TYPES)}")
+
+    entity = _get_entity_or_raise(entity_type, entity_id)
+    parent_cls, parent_fk_attr = _REASSIGN_PARENT_MAP[entity_type]
+
+    new_parent = db.session.get(parent_cls, new_parent_id)
+    if new_parent is None:
+        raise ValueError(f"{parent_cls.__name__} with id {new_parent_id} not found")
+
+    old_parent_id = getattr(entity, parent_fk_attr)
+
+    # Prevent cycles
+    if _has_cycle(entity_type, entity_id, new_parent_id):
+        raise ValueError("Reassignment would create a cycle in the FRBR hierarchy")
+
+    # Perform reassignment
+    setattr(entity, parent_fk_attr, new_parent_id)
+
+    # Record audit log
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        actor_id=user_id,
+        change_type="reassign",
+        diff={
+            "parent_fk": parent_fk_attr,
+            "old_parent_id": old_parent_id,
+            "new_parent_id": new_parent_id,
+        },
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return entity
+
+
+def merge_frbr_entities(
+    entity_type: str,
+    source_id: int,
+    target_id: int,
+    user_id: Any | None = None,
+) -> Any:
+    """Merge two entities at the same FRBR level, reparenting children and contributions.
+
+    Args:
+        entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+        source_id: The ID of the source entity (to be deleted).
+        target_id: The ID of the target entity (to be kept).
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The target entity (with merged children and metadata).
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    if entity_type not in _MERGE_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for merge: {entity_type!r}. " f"Must be one of {sorted(_MERGE_ALLOWED_TYPES)}")
+    if source_id == target_id:
+        raise ValueError("Cannot merge an entity with itself")
+
+    source = _get_entity_or_raise(entity_type, source_id)
+    target = _get_entity_or_raise(entity_type, target_id)
+
+    child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
+
+    # Reparent all children from source to target
+    children: list[Any] = list(db.session.execute(select(child_cls).where(getattr(child_cls, child_fk_attr) == source_id)).scalars().all())
+    migrated_count = 0
+    for child in children:
+        setattr(child, child_fk_attr, target_id)
+        migrated_count += 1
+
+    # Re-link contributions, avoiding duplicates
+    contrib_migrated = 0
+    if entity_type == "work":
+        contrib_cls = WorkContribution
+        contrib_fk = "work_id"
+    elif entity_type == "expression":
+        contrib_cls = ExpressionContribution
+        contrib_fk = "expression_id"
+    else:  # manifestation
+        contrib_cls = ManifestationContribution
+        contrib_fk = "manifestation_id"
+
+    source_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == source_id)).scalars().all()
+    target_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == target_id)).scalars().all()
+
+    # Build set of existing (contributor_id, role) on target
+    existing_keys = {(c.contributor_id, c.role) for c in target_contribs}
+    for sc in source_contribs:
+        key = (sc.contributor_id, sc.role)
+        if key not in existing_keys:
+            # Re-link to target
+            setattr(sc, contrib_fk, target_id)
+            contrib_migrated += 1
+            existing_keys.add(key)
+        else:
+            # Duplicate — delete the source contribution
+            db.session.delete(sc)
+
+    # Merge metadata
+    merged_meta = _merge_metadata(target.meta, source.meta)
+    target.meta = merged_meta
+
+    # Record audit log
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=source_id,
+        actor_id=user_id,
+        change_type="merge",
+        diff={
+            "source_id": source_id,
+            "target_id": target_id,
+            "migrated_children": migrated_count,
+            "migrated_contributions": contrib_migrated,
+        },
+    )
+    db.session.add(audit)
+
+    # Delete source entity
+    db.session.delete(source)
+    db.session.commit()
+    return target
+
+
+def split_frbr_entity(
+    entity_type: str,
+    source_id: int,
+    child_ids_to_split: list[int],
+    new_entity_attrs: dict[str, Any],
+    user_id: Any | None = None,
+) -> Any:
+    """Split selected children from an entity into a newly created sibling entity.
+
+    Args:
+        entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+        source_id: The ID of the source entity.
+        child_ids_to_split: IDs of children to move to the new entity.
+        new_entity_attrs: Attributes for the new entity (e.g., ``{"title": "..."}``
+            for a Work).
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The newly created entity.
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    if entity_type not in _SPLIT_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for split: {entity_type!r}. " f"Must be one of {sorted(_SPLIT_ALLOWED_TYPES)}")
+    if not child_ids_to_split:
+        raise ValueError("child_ids_to_split must not be empty")
+
+    source = _get_entity_or_raise(entity_type, source_id)
+    child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
+
+    # Validate all children exist and belong to source
+    children: list[Any] = list(
+        db.session.execute(
+            select(child_cls).where(
+                child_cls.id.in_(child_ids_to_split),
+                getattr(child_cls, child_fk_attr) == source_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(children) != len(child_ids_to_split):
+        raise ValueError(f"Some child IDs do not exist or do not belong to {entity_type} {source_id}")
+
+    # Determine the parent of the source (so the new entity inherits it)
+    if entity_type == "work":
+        # Work has no parent; new Work is standalone
+        new_entity_parent_attrs: dict[str, Any] = {}
+    elif entity_type == "expression":
+        new_entity_parent_attrs = {"work_id": source.work_id}
+    else:  # manifestation
+        new_entity_parent_attrs = {"expression_id": source.expression_id}
+
+    # Build attributes for the new entity
+    entity_cls = _ENTITY_CLASS_MAP[entity_type]
+    create_attrs = {**new_entity_parent_attrs, **new_entity_attrs}
+
+    # Create the new entity
+    new_entity = entity_cls(**create_attrs)
+    db.session.add(new_entity)
+    db.session.flush()  # Get the new entity's ID
+
+    # Reparent selected children from source to new entity
+    reparented_count = 0
+    for child in children:
+        setattr(child, child_fk_attr, new_entity.id)
+        reparented_count += 1
+
+    # Record audit log on the source entity
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=source_id,
+        actor_id=user_id,
+        change_type="split",
+        diff={
+            "new_entity_id": new_entity.id,
+            "reparented_children": reparented_count,
+            "child_ids": child_ids_to_split,
+        },
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return new_entity
 
 
 #: Media category → its canonical ``unknown_*`` placeholder format,

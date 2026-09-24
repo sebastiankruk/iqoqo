@@ -469,3 +469,37 @@ export interface WishlistUpdateDTO {
   status?: ProgressStatus;
   is_hidden?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// FRBR Relation Management Types
+// ---------------------------------------------------------------------------
+
+/** Payload for reassigning an entity's parent in the FRBR hierarchy. */
+export interface FrbrReassignPayload {
+  entity_type: "expression" | "manifestation" | "item";
+  entity_id: number;
+  new_parent_id: number;
+}
+
+/** Payload for merging two entities at the same FRBR level. */
+export interface FrbrMergePayload {
+  entity_type: "work" | "expression" | "manifestation";
+  source_id: number;
+  target_id: number;
+}
+
+/** Payload for splitting children from an entity into a new sibling entity. */
+export interface FrbrSplitPayload {
+  entity_type: "work" | "expression" | "manifestation";
+  source_id: number;
+  child_ids: number[];
+  new_entity_attrs: Record<string, unknown>;
+}
+
+/** Preview of the impact of a relation management operation. */
+export interface FrbrImpactPreview {
+  entity_type: string;
+  entity_id: number;
+  children_count: number;
+  children: Array<{ id: number; label: string }>;
+}

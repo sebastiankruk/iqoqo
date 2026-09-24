@@ -19,9 +19,11 @@ import os
 from datetime import date
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import admin_required, require_auth, require_permission
+from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import frbr_service
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -724,6 +726,84 @@ def search_frbr_entities():
             results.append({"id": m.id, "title": title, "isbn13": m.isbn13, "upc": m.upc, "ean": m.ean, "type": "manifestation"})
 
     return jsonify({"success": True, "data": results, "meta": {"total": len(results), "query": query, "type": entity_type}})
+
+
+# ---------------------------------------------------------------------------
+# FRBR Relation Management Endpoints
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/frbr/relations/reassign", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def reassign_frbr_parent_endpoint():
+    """Reassign an entity's parent to a new parent at the adjacent FRBR level."""
+    user = _get_current_user()
+    data = request.json or {}
+    try:
+        payload = FrbrReassignSchema(**data)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
+
+    try:
+        entity = frbr_service.reassign_frbr_parent(
+            entity_type=payload.entity_type,
+            entity_id=payload.entity_id,
+            new_parent_id=payload.new_parent_id,
+            user_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": {"id": entity.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@admin_bp.route("/frbr/relations/merge", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def merge_frbr_entities_endpoint():
+    """Merge two entities at the same FRBR level, reparenting children and contributions."""
+    user = _get_current_user()
+    data = request.json or {}
+    try:
+        payload = FrbrMergeSchema(**data)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
+
+    try:
+        target = frbr_service.merge_frbr_entities(
+            entity_type=payload.entity_type,
+            source_id=payload.source_id,
+            target_id=payload.target_id,
+            user_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": {"id": target.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@admin_bp.route("/frbr/relations/split", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def split_frbr_entity_endpoint():
+    """Split selected children from an entity into a newly created sibling entity."""
+    user = _get_current_user()
+    data = request.json or {}
+    try:
+        payload = FrbrSplitSchema(**data)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
+
+    try:
+        new_entity = frbr_service.split_frbr_entity(
+            entity_type=payload.entity_type,
+            source_id=payload.source_id,
+            child_ids_to_split=payload.child_ids,
+            new_entity_attrs=payload.new_entity_attrs,
+            user_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": {"id": new_entity.id}})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
 
 
 @admin_bp.route("/media/upload-cover", methods=["POST"])

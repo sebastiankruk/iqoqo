@@ -328,3 +328,76 @@ class FeedbackUpdateSchema(BaseModel):
         if self.status is None and self.feedback_type is None and self.description is None and self.comment is None:
             raise ValueError("No valid fields provided for update")
         return self
+
+
+# ---------------------------------------------------------------------------
+# FRBR Relation Management Schemas
+# ---------------------------------------------------------------------------
+
+
+class FrbrReassignSchema(BaseModel):
+    """Schema for reassigning an entity's parent in the FRBR hierarchy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: str = Field(..., description="The entity type to reassign (expression, manifestation, or item)")
+    entity_id: int = Field(..., gt=0, description="The ID of the entity to reassign")
+    new_parent_id: int = Field(..., gt=0, description="The ID of the new parent entity")
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        allowed = {"expression", "manifestation", "item"}
+        if v not in allowed:
+            raise ValueError(f"Invalid entity_type for reassign: {v!r}. Must be one of {sorted(allowed)}")
+        return v
+
+
+class FrbrMergeSchema(BaseModel):
+    """Schema for merging two entities at the same FRBR level."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: str = Field(..., description="The entity type to merge (work, expression, or manifestation)")
+    source_id: int = Field(..., gt=0, description="The ID of the source entity (to be deleted)")
+    target_id: int = Field(..., gt=0, description="The ID of the target entity (to be kept)")
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        allowed = {"work", "expression", "manifestation"}
+        if v not in allowed:
+            raise ValueError(f"Invalid entity_type for merge: {v!r}. Must be one of {sorted(allowed)}")
+        return v
+
+    @model_validator(mode="after")
+    def check_different_ids(self) -> "FrbrMergeSchema":
+        if self.source_id == self.target_id:
+            raise ValueError("source_id and target_id must be different")
+        return self
+
+
+class FrbrSplitSchema(BaseModel):
+    """Schema for splitting children from an entity into a new sibling entity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: str = Field(..., description="The entity type to split (work, expression, or manifestation)")
+    source_id: int = Field(..., gt=0, description="The ID of the source entity")
+    child_ids: list[int] = Field(..., min_length=1, description="IDs of children to move to the new entity")
+    new_entity_attrs: dict[str, Any] = Field(..., description="Attributes for the new entity")
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        allowed = {"work", "expression", "manifestation"}
+        if v not in allowed:
+            raise ValueError(f"Invalid entity_type for split: {v!r}. Must be one of {sorted(allowed)}")
+        return v
+
+    @field_validator("child_ids")
+    @classmethod
+    def validate_child_ids(cls, v: list[int]) -> list[int]:
+        if any(cid <= 0 for cid in v):
+            raise ValueError("All child_ids must be positive integers")
+        return v

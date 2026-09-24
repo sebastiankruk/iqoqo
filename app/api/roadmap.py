@@ -100,6 +100,22 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
 
         data = request.get_json() or {}
 
+        # Validate exactly one FRBR level reference is provided.
+        work_id = data.get("work_id")
+        expression_id = data.get("expression_id")
+        manifestation_id = data.get("manifestation_id")
+        frbr_refs = [r for r in (work_id, expression_id, manifestation_id) if r is not None]
+        if len(frbr_refs) != 1:
+            return (
+                jsonify(
+                    {
+                        "error": "Exactly one of work_id, expression_id, or manifestation_id must be provided",
+                        "code": 400,
+                    }
+                ),
+                400,
+            )
+
         # Pylint & SQLAlchemy func.count E1102 warning disable rule:
         count_stmt = select(func.count(RoadmapItem.id)).filter(RoadmapItem.roadmap_id == roadmap.id)  # pylint: disable=not-callable
         current_count = db.session.scalar(count_stmt) or 0
@@ -116,8 +132,9 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
 
         item = RoadmapItem(
             roadmap_id=roadmap.id,
-            work_id=data.get("work_id"),
-            manifestation_id=data.get("manifestation_id"),
+            work_id=work_id,
+            expression_id=expression_id,
+            manifestation_id=manifestation_id,
             position=current_count + 1,
             notes=data.get("notes"),
             target_date=target_date,
