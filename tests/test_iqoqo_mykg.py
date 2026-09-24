@@ -552,6 +552,7 @@ def test_opencode_process_task_sanitizes_prompt_and_injects_guardrail(opencode_d
 # Tests for daemon_core shared module (Tasks 4.1 - 4.9 + security tests)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def daemon_core_module():
     """Load daemon_core module (Task 4.1)."""
@@ -603,9 +604,7 @@ def test_compute_effective_timeout_negative_input(daemon_core_module):
 
 def test_sanitize_task_payload_redacts_googleapis(daemon_core_module):
     """Task 4.5: googleapis URLs are redacted."""
-    result = daemon_core_module.sanitize_task_payload(
-        "Send to https://storage.googleapis.com/bucket/obj now"
-    )
+    result = daemon_core_module.sanitize_task_payload("Send to https://storage.googleapis.com/bucket/obj now")
     assert "storage.googleapis.com" not in result
     assert "[REDACTED_GOOGLEAPIS_URL]" in result
 
@@ -676,12 +675,14 @@ def test_agy_process_task_uses_task_timeout(agy_daemon_module, tmp_path):
     # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
     large_prompt = "x" * 72000
     task_file.write_text(
-        json.dumps({
-            "task_id": task_id,
-            "system": large_prompt,
-            "user": "extract",
-            "timeout_seconds": 1800,
-        }),
+        json.dumps(
+            {
+                "task_id": task_id,
+                "system": large_prompt,
+                "user": "extract",
+                "timeout_seconds": 1800,
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -705,12 +706,14 @@ def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_pat
     # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
     large_prompt = "x" * 72000
     task_file.write_text(
-        json.dumps({
-            "task_id": task_id,
-            "system": large_prompt,
-            "user": "extract",
-            "timeout_seconds": 1800,
-        }),
+        json.dumps(
+            {
+                "task_id": task_id,
+                "system": large_prompt,
+                "user": "extract",
+                "timeout_seconds": 1800,
+            }
+        ),
         encoding="utf-8",
     )
 
