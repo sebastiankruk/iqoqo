@@ -49,6 +49,7 @@ from daemon_core import (  # noqa: E402
     run_daemon as _run_daemon_core,
     sanitize_task_payload,
     write_answer_envelope,
+    write_error_envelope,
 )
 
 # Re-export shared symbols for backward-compatible test access
@@ -88,6 +89,7 @@ def process_task(
     try:
         task_data = load_and_validate_task(task_path)
         if task_data is None:
+            write_error_envelope(task_id, "Task validation failed: invalid or oversized task file", outbox_dir)
             return False
 
         actual_task_id = task_data.get("task_id", task_id)
@@ -124,7 +126,9 @@ def process_task(
         )
 
         if proc.returncode != 0:
-            print(f"[agy_daemon] Warning: agy failed for {task_id}: {proc.stderr}", file=sys.stderr)
+            error_msg = f"Subprocess failed with exit code {proc.returncode}"
+            write_error_envelope(task_id, error_msg, outbox_dir)
+            print(f"[agy_daemon] Warning: agy failed for {task_id}: exit code {proc.returncode}", file=sys.stderr)
             return False
 
         answer_text = clean_json_fences(proc.stdout)
@@ -132,10 +136,12 @@ def process_task(
         print(f"[agy_daemon] Processed task {task_id[:12]}")
         return True
     except subprocess.TimeoutExpired:
+        write_error_envelope(task_id, "Subprocess timed out", outbox_dir)
         print(f"[agy_daemon] TimeoutExpired for task {task_id}", file=sys.stderr)
         return False
     except Exception as exc:  # pylint: disable=broad-exception-caught
-        print(f"[agy_daemon] Error processing task {task_id}: {exc}", file=sys.stderr)
+        write_error_envelope(task_id, f"Unexpected error: {type(exc).__name__}", outbox_dir)
+        print(f"[agy_daemon] Error processing task {task_id}: {type(exc).__name__}", file=sys.stderr)
         return False
 
 

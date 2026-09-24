@@ -29,6 +29,7 @@ import signal
 import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
 
@@ -45,6 +46,8 @@ MAX_TIMEOUT_CAP = 3600      # 1-hour absolute ceiling to prevent DoS
 # ---------------------------------------------------------------------------
 
 MAX_TASK_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_ERROR_SIZE_BYTES = 100 * 1024        # 100 KB — cap error files to prevent disk exhaustion
+MAX_TASK_ID_LENGTH = 128                 # SHA-256 hex = 64 chars, allow margin
 
 # ---------------------------------------------------------------------------
 # Security: Payload sanitization patterns
@@ -199,11 +202,125 @@ def write_answer_envelope(
     done_file.touch()
 
 
+def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
+    """Sanitize error text to prevent information disclosure.
+
+    SECURITY: Removes absolute paths, environment variables, and truncates
+    to prevent disk exhaustion from runaway error messages. Applied before
+    writing .error files and before raising RuntimeError in the orchestrator.
+    """
+    if not error_text:
+        return "Unknown error"
+
+    # Truncate first to limit processing
+    sanitized = str(error_text)[:2000]
+
+    # Redact absolute paths (Unix and Windows)
+    sanitized = re.sub(r'/[a-zA-Z0-9_./-]+', '[PATH_REDACTED]', sanitized)
+    sanitized = re.sub(r'[A-Z]:\\[^\s]+', '[PATH_REDACTED]', sanitized)
+
+    # Redact environment variable references (e.g. HOME=/home/user)
+    sanitized = re.sub(r'\b[A-Z_]{3,}=[^\s,;]+', '[ENV_REDACTED]', sanitized)
+
+    # Redact potential tokens/keys (long alphanumeric strings)
+    sanitized = re.sub(r'\b[a-zA-Z0-9_\-]{32,}\b', '[TOKEN_REDACTED]', sanitized)
+
+    # Final truncation
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "... [TRUNCATED]"
+
+    return sanitized
+
+
+def validate_task_id(task_id: str) -> bool:
+    """Validate task_id contains no path traversal characters.
+
+    SECURITY: Prevents directory traversal attacks if inbox is compromised.
+    Task IDs from the orchestrator are SHA-256 hashes, but defense-in-depth
+    requires validation before using them in file paths.
+    """
+    if not task_id:
+        return False
+
+    # Reject path separators and parent directory references
+    if any(char in task_id for char in ['/', '\\', '..']):
+        return False
+
+    # Reject control characters
+    if any(ord(c) < 32 for c in task_id):
+        return False
+
+    # Length limit
+    if len(task_id) > MAX_TASK_ID_LENGTH:
+        return False
+
+    return True
+
+
+def write_error_envelope(
+    task_id: str,
+    error_text: str,
+    outbox_dir: Path,
+) -> bool:
+    """Atomically write error envelope with size limits.
+
+    SECURITY: Prevents disk exhaustion and information disclosure.
+    Uses the same temp-file-then-rename pattern as write_answer_envelope.
+
+    Args:
+        task_id: The task identifier (validated before use).
+        error_text: Raw error message (will be sanitized).
+        outbox_dir: Directory to write the .error file.
+
+    Returns:
+        True if error file was written, False if validation failed or
+        an error file already exists (first error wins).
+    """
+    # SECURITY: Validate task_id to prevent path traversal
+    if not validate_task_id(task_id):
+        print(
+            f"[daemon_core] ERROR: Invalid task_id for error envelope: "
+            f"{repr(task_id)[:50]}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
+
+    error_file = outbox_dir / f"{task_id}.error"
+
+    # Don't overwrite existing error (first error wins)
+    if error_file.exists():
+        return False
+
+    # Sanitize and truncate error text
+    sanitized_error = sanitize_error_text(error_text)
+
+    error_envelope = {
+        "task_id": task_id,
+        "error": sanitized_error,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Verify size before writing
+    error_json = json.dumps(error_envelope)
+    if len(error_json.encode('utf-8')) > MAX_ERROR_SIZE_BYTES:
+        # Hard truncation as final safety net
+        error_envelope["error"] = sanitized_error[:50000] + "... [HARD TRUNCATION]"
+        error_json = json.dumps(error_envelope)
+
+    temp_file = outbox_dir / f"{task_id}.error.tmp"
+    temp_file.write_text(error_json, encoding="utf-8")
+    temp_file.rename(error_file)
+
+    return True
+
+
 def is_task_done(task_id: str, outbox_dir: Path) -> bool:
-    """Check whether a task has already been completed."""
+    """Check whether a task has already been completed or errored."""
     done_file = outbox_dir / f"{task_id}.done"
     answer_file = outbox_dir / f"{task_id}.answer.json"
-    return done_file.exists() and answer_file.exists()
+    error_file = outbox_dir / f"{task_id}.error"
+    return (done_file.exists() and answer_file.exists()) or error_file.exists()
 
 
 def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:

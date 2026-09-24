@@ -732,3 +732,214 @@ def test_daemon_core_guardrail_not_empty(daemon_core_module):
     assert "PROHIBITED" in guardrail
     assert "network" in guardrail.lower()
     assert "credentials" in guardrail.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests for error envelope protocol (mykg-sandbox-reliability change)
+# ---------------------------------------------------------------------------
+
+
+def test_write_error_envelope_atomic(daemon_core_module, tmp_path):
+    """Task 4.1: Error envelope creates .error file atomically with correct content."""
+    result = daemon_core_module.write_error_envelope("task_abc123", "Something went wrong", tmp_path)
+    assert result is True
+
+    error_file = tmp_path / "task_abc123.error"
+    assert error_file.exists()
+
+    data = json.loads(error_file.read_text(encoding="utf-8"))
+    assert data["task_id"] == "task_abc123"
+    assert "Something went wrong" in data["error"]
+    assert "timestamp" in data
+
+
+def test_write_error_envelope_does_not_overwrite(daemon_core_module, tmp_path):
+    """SECURITY: First error wins — existing .error files are not overwritten."""
+    # Write first error
+    daemon_core_module.write_error_envelope("task_dup", "First error", tmp_path)
+    # Attempt to write second error
+    result = daemon_core_module.write_error_envelope("task_dup", "Second error", tmp_path)
+    assert result is False
+
+    data = json.loads((tmp_path / "task_dup.error").read_text(encoding="utf-8"))
+    assert "First error" in data["error"]
+
+
+def test_sanitize_error_text_redacts_paths(daemon_core_module):
+    """SECURITY: Absolute paths are redacted from error messages."""
+    result = daemon_core_module.sanitize_error_text("Error at /home/user/secret/credentials.json")
+    assert "/home/user" not in result
+    assert "[PATH_REDACTED]" in result
+
+
+def test_sanitize_error_text_redacts_env_vars(daemon_core_module):
+    """SECURITY: Environment variable references are redacted."""
+    result = daemon_core_module.sanitize_error_text("Failed with HOME=/home/user/secret")
+    assert "/home/user" not in result
+    assert "[ENV_REDACTED]" in result
+
+
+def test_sanitize_error_text_redacts_tokens(daemon_core_module):
+    """SECURITY: Long alphanumeric strings (potential tokens) are redacted."""
+    long_token = "a" * 40
+    result = daemon_core_module.sanitize_error_text(f"Auth failed with key {long_token}")
+    assert long_token not in result
+    assert "[TOKEN_REDACTED]" in result
+
+
+def test_sanitize_error_text_truncates_long_messages(daemon_core_module):
+    """SECURITY: Error messages are truncated to prevent disk exhaustion."""
+    # Use varied content that won't be caught by token redaction
+    long_error = "Error: " + ("segment " * 2000)
+    result = daemon_core_module.sanitize_error_text(long_error, max_length=500)
+    assert len(result) <= 520  # 500 + "... [TRUNCATED]"
+    assert "[TRUNCATED]" in result
+
+
+def test_sanitize_error_text_handles_empty(daemon_core_module):
+    """Empty error text returns 'Unknown error'."""
+    assert daemon_core_module.sanitize_error_text("") == "Unknown error"
+    assert daemon_core_module.sanitize_error_text(None) == "Unknown error"
+
+
+def test_validate_task_id_accepts_normal(daemon_core_module):
+    """Normal task IDs (SHA-256 hashes, alphanumeric) are accepted."""
+    assert daemon_core_module.validate_task_id("abc123def456") is True
+    assert daemon_core_module.validate_task_id("a" * 64) is True  # SHA-256 hex
+
+
+def test_validate_task_id_rejects_traversal(daemon_core_module):
+    """SECURITY: Path traversal characters are rejected."""
+    assert daemon_core_module.validate_task_id("../etc/passwd") is False
+    assert daemon_core_module.validate_task_id("foo/bar") is False
+    assert daemon_core_module.validate_task_id("foo\\bar") is False
+    assert daemon_core_module.validate_task_id("foo..bar") is False
+
+
+def test_validate_task_id_rejects_control_chars(daemon_core_module):
+    """SECURITY: Control characters are rejected."""
+    assert daemon_core_module.validate_task_id("task\x00id") is False
+    assert daemon_core_module.validate_task_id("task\nid") is False
+
+
+def test_validate_task_id_rejects_empty_and_oversized(daemon_core_module):
+    """SECURITY: Empty and oversized task IDs are rejected."""
+    assert daemon_core_module.validate_task_id("") is False
+    assert daemon_core_module.validate_task_id("x" * 200) is False
+
+
+def test_write_error_envelope_rejects_invalid_task_id(daemon_core_module, tmp_path):
+    """SECURITY: write_error_envelope rejects invalid task IDs."""
+    result = daemon_core_module.write_error_envelope("../etc/passwd", "error", tmp_path)
+    assert result is False
+    assert not (tmp_path / "../etc/passwd.error").exists()
+
+
+def test_is_task_done_includes_error_sentinel(daemon_core_module, tmp_path):
+    """is_task_done returns True when .error sentinel exists."""
+    # No files → not done
+    assert daemon_core_module.is_task_done("t1", tmp_path) is False
+
+    # .error file → done
+    (tmp_path / "t1.error").write_text('{"error": "fail"}', encoding="utf-8")
+    assert daemon_core_module.is_task_done("t1", tmp_path) is True
+
+
+def test_agy_daemon_writes_error_on_failure(agy_daemon_module, tmp_path):
+    """Task 4.2: agy daemon writes .error sentinel when subprocess raises an exception."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_error_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    # Mock subprocess.run to raise a generic exception
+    with patch("subprocess.run", side_effect=OSError("Mock subprocess failure")):
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        # Verify .error sentinel was created
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel file to be created"
+
+        data = json.loads(error_file.read_text(encoding="utf-8"))
+        assert data["task_id"] == task_id
+        assert "error" in data
+
+
+def test_agy_daemon_writes_error_on_nonzero_exit(agy_daemon_module, tmp_path):
+    """agy daemon writes .error sentinel when subprocess returns non-zero exit code."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_nonzero_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock("", "Error output", returncode=1)):
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel for non-zero exit"
+
+
+def test_opencode_daemon_writes_error_on_failure(opencode_daemon_module, tmp_path):
+    """Task 4.2: opencode daemon writes .error sentinel when subprocess raises an exception."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_error_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    # Mock subprocess.run to raise a generic exception
+    with patch("subprocess.run", side_effect=OSError("Mock subprocess failure")):
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        # Verify .error sentinel was created
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel file to be created"
+
+        data = json.loads(error_file.read_text(encoding="utf-8"))
+        assert data["task_id"] == task_id
+        assert "error" in data
+
+
+def test_opencode_daemon_writes_error_on_nonzero_exit(opencode_daemon_module, tmp_path):
+    """opencode daemon writes .error sentinel when subprocess returns non-zero exit code."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_nonzero_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock("", "Error output", returncode=1)):
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel for non-zero exit"

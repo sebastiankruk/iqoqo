@@ -51,6 +51,7 @@ from daemon_core import (  # noqa: E402
     run_daemon as _run_daemon_core,
     sanitize_task_payload,
     write_answer_envelope,
+    write_error_envelope,
 )
 
 # Re-export shared symbols for backward-compatible test access
@@ -153,6 +154,7 @@ def process_task(
                 )
                 time.sleep(wait_time)
             else:
+                write_error_envelope(task_id, "Subprocess timed out after all retries", outbox_dir)
                 print(
                     f"[opencode_daemon] TimeoutExpired for task {task_id} "
                     f"after {max_retries} attempts",
@@ -161,7 +163,8 @@ def process_task(
                 )
                 return False
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            print(f"[opencode_daemon] Error processing task {task_id}: {exc}", file=sys.stderr, flush=True)
+            write_error_envelope(task_id, f"Unexpected error: {type(exc).__name__}", outbox_dir)
+            print(f"[opencode_daemon] Error processing task {task_id}: {type(exc).__name__}", file=sys.stderr, flush=True)
             return False
 
     return False
@@ -179,6 +182,7 @@ def _execute_task(
 
     task_data = load_and_validate_task(task_path)
     if task_data is None:
+        write_error_envelope(task_id, "Task validation failed: invalid or oversized task file", outbox_dir)
         return False
 
     actual_task_id = task_data.get("task_id", task_id)
@@ -238,7 +242,8 @@ def _execute_task(
     print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
 
     if proc.returncode != 0:
-        print(f"[opencode_daemon] Warning: opencode failed for {task_id}: {stderr_data}", file=sys.stderr, flush=True)
+        write_error_envelope(task_id, f"Subprocess failed with exit code {proc.returncode}", outbox_dir)
+        print(f"[opencode_daemon] Warning: opencode failed for {task_id}: exit code {proc.returncode}", file=sys.stderr, flush=True)
         return False
 
     answer_text = clean_json_fences(stdout_data)
