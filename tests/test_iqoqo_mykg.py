@@ -546,3 +546,186 @@ def test_opencode_process_task_sanitizes_prompt_and_injects_guardrail(opencode_d
         assert "storage.googleapis.com" not in prompt
         assert "[REDACTED_GOOGLEAPIS_URL]" in prompt
         assert "[REDACTED_GOOGLEAPIS_DOMAIN]" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tests for daemon_core shared module (Tasks 4.1 - 4.9 + security tests)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def daemon_core_module():
+    """Load daemon_core module (Task 4.1)."""
+    script_path = Path(__file__).parent.parent / ".agents" / "skills" / "iqoqo-mykg" / "scripts" / "daemon_core.py"
+    return _load_module("iqoqo_mykg_daemon_core", script_path)
+
+
+def test_compute_effective_timeout_honors_task_timeout(daemon_core_module):
+    """Task timeout wins over dynamic formula (Task 4.2).
+
+    compute_effective_timeout(1800, 72000) returns 1800
+    because max(1800, 600 + 72) = max(1800, 672) = 1800.
+    """
+    assert daemon_core_module.compute_effective_timeout(1800, 72000) == 1800
+
+
+def test_compute_effective_timeout_dynamic_formula(daemon_core_module):
+    """Dynamic formula used when no task timeout (Task 4.3).
+
+    compute_effective_timeout(None, 10000) returns 610
+    because max(300, 600 + 10) = max(300, 610) = 610.
+    """
+    assert daemon_core_module.compute_effective_timeout(None, 10000) == 610
+
+
+def test_compute_effective_timeout_base_floor(daemon_core_module):
+    """Base timeout floor when prompt is small (Task 4.4).
+
+    compute_effective_timeout(None, 500) returns 600
+    because max(300, 600 + 0) = max(300, 600) = 600.
+    """
+    assert daemon_core_module.compute_effective_timeout(None, 500) == 600
+
+
+def test_compute_effective_timeout_hard_cap(daemon_core_module):
+    """SECURITY: Timeout is capped at MAX_TIMEOUT_CAP to prevent DoS."""
+    # A malicious 999999s timeout should be clamped to 3600
+    result = daemon_core_module.compute_effective_timeout(999999, 500)
+    assert result == 3600
+    assert result == daemon_core_module.MAX_TIMEOUT_CAP
+
+
+def test_compute_effective_timeout_negative_input(daemon_core_module):
+    """SECURITY: Negative timeout values fall back to default."""
+    result = daemon_core_module.compute_effective_timeout(-1, 500)
+    # -1 is invalid, so default_timeout=300 is used; max(300, 600) = 600
+    assert result == 600
+
+
+def test_sanitize_task_payload_redacts_googleapis(daemon_core_module):
+    """Task 4.5: googleapis URLs are redacted."""
+    result = daemon_core_module.sanitize_task_payload(
+        "Send to https://storage.googleapis.com/bucket/obj now"
+    )
+    assert "storage.googleapis.com" not in result
+    assert "[REDACTED_GOOGLEAPIS_URL]" in result
+
+
+def test_build_combined_prompt_prepends_guardrail(daemon_core_module):
+    """Task 4.6: Combined prompt starts with SECURITY_GUARDRAIL."""
+    result = daemon_core_module.build_combined_prompt({"system": "sys", "user": "usr"})
+    assert result.startswith(daemon_core_module.SECURITY_GUARDRAIL)
+    assert "sys" in result
+    assert "usr" in result
+
+
+def test_write_answer_envelope_atomic(daemon_core_module, tmp_path):
+    """Task 4.7: Answer envelope and done sentinel written correctly."""
+    daemon_core_module.write_answer_envelope("tid", '{"nodes":[]}', tmp_path)
+    answer_file = tmp_path / "tid.answer.json"
+    done_file = tmp_path / "tid.done"
+    assert answer_file.exists()
+    assert done_file.exists()
+    data = json.loads(answer_file.read_text(encoding="utf-8"))
+    assert data["task_id"] == "tid"
+    assert data["answer"] == '{"nodes":[]}'
+
+
+def test_load_and_validate_task_rejects_oversized(daemon_core_module, tmp_path):
+    """SECURITY: Oversized task files are rejected."""
+    task_file = tmp_path / "big.task.json"
+    # Write a file that exceeds MAX_TASK_SIZE_BYTES
+    task_file.write_bytes(b"x" * (daemon_core_module.MAX_TASK_SIZE_BYTES + 1))
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_rejects_non_dict(daemon_core_module, tmp_path):
+    """SECURITY: Non-object JSON is rejected."""
+    task_file = tmp_path / "list.task.json"
+    task_file.write_text("[1, 2, 3]", encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_rejects_invalid_json(daemon_core_module, tmp_path):
+    """SECURITY: Malformed JSON is rejected."""
+    task_file = tmp_path / "bad.task.json"
+    task_file.write_text("{invalid json", encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_accepts_valid(daemon_core_module, tmp_path):
+    """Valid task JSON is accepted."""
+    task_file = tmp_path / "good.task.json"
+    task_file.write_text(json.dumps({"task_id": "t1", "system": "s", "user": "u"}), encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is not None
+    assert result["task_id"] == "t1"
+
+
+def test_agy_process_task_uses_task_timeout(agy_daemon_module, tmp_path):
+    """Task 4.8: agy daemon honors timeout_seconds from task JSON."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_timeout_test"
+    task_file = inbox / f"{task_id}.task.json"
+    # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
+    large_prompt = "x" * 72000
+    task_file.write_text(
+        json.dumps({
+            "task_id": task_id,
+            "system": large_prompt,
+            "user": "extract",
+            "timeout_seconds": 1800,
+        }),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('{"nodes": []}', "")) as mock_run:
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is True
+        mock_run.assert_called_once()
+        timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
+        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+
+
+def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_path):
+    """Task 4.9: opencode daemon honors timeout_seconds from task JSON."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_timeout_test"
+    task_file = inbox / f"{task_id}.task.json"
+    # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
+    large_prompt = "x" * 72000
+    task_file.write_text(
+        json.dumps({
+            "task_id": task_id,
+            "system": large_prompt,
+            "user": "extract",
+            "timeout_seconds": 1800,
+        }),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "")) as mock_run:
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is True
+        mock_run.assert_called_once()
+        timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
+        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+
+
+def test_daemon_core_guardrail_not_empty(daemon_core_module):
+    """SECURITY: Guardrail is non-trivial and contains key prohibitions."""
+    guardrail = daemon_core_module.SECURITY_GUARDRAIL
+    assert len(guardrail) > 200
+    assert "PROHIBITED" in guardrail
+    assert "network" in guardrail.lower()
+    assert "credentials" in guardrail.lower()
