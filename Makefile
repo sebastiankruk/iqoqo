@@ -249,7 +249,7 @@ mykg-update: .venv/bin/activate
 		docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
 		docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
 		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --no-deps --rm -d --name "$$AI_CONTAINER" \
+		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
 			-v "$$AI_BIN:$$AI_MOUNT" \
 			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
 			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
@@ -299,7 +299,7 @@ mykg-index: .venv/bin/activate
 			docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
 			docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
 			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --no-deps --rm -d --name "$$AI_CONTAINER" \
+			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
 				-v "$$AI_BIN:$$AI_MOUNT" \
 				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
 				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
