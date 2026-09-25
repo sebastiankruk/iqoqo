@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose CLI is unavailable")
 def test_compose_rejects_missing_postgres_password() -> None:
     """Compose configuration must fail without an explicitly supplied DB password."""
-    env = {"PATH": os.environ.get("PATH", "")}
+    env = {"PATH": os.environ.get("PATH", ""), "ENV_FILE": "/dev/null"}
     result = subprocess.run(
         ["docker", "compose", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.yml"), "config", "--quiet"],
         cwd=REPO_ROOT,
@@ -44,7 +44,11 @@ def test_compose_rejects_missing_postgres_password() -> None:
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose CLI is unavailable")
 def test_compose_accepts_explicit_postgres_password_without_echoing_it() -> None:
     """Compose validates explicit credentials without printing resolved secrets."""
-    env = {"PATH": os.environ.get("PATH", ""), "POSTGRES_PASSWORD": "compose-test-password-only"}
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "ENV_FILE": "/dev/null",
+        "POSTGRES_PASSWORD": "compose-test-password-only",
+    }
     result = subprocess.run(
         ["docker", "compose", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.yml"), "config", "--quiet"],
         cwd=REPO_ROOT,

@@ -14,13 +14,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-from unittest.mock import patch
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
-from app.db.models import Role, TokenBlocklist, User, db
 from app.core.cache import cache
+from app.db.models import Role, TokenBlocklist, User, db
 
 
 @pytest.fixture(autouse=True)

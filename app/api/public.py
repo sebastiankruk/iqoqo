@@ -322,7 +322,7 @@ def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = 
     )
     if stream:
         # Return an iterator for memory-efficient streaming
-        return db.session.execute(stmt).scalars().unique().yield_per(50)
+        return db.session.execute(stmt).scalars().yield_per(50)
     return list(db.session.execute(stmt).scalars().unique().all())
 
 
@@ -387,7 +387,6 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                 query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
             )
             .scalars()
-            .unique()
             .yield_per(50)
         )
 
