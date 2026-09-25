@@ -277,6 +277,134 @@ def test_process_cover_pipeline_intercepts_external_url(mock_db_get, mock_downlo
     assert mock_manifestation.cover_url == "/static/covers/123_ext.jpg"
 
 
+def test_process_cover_pipeline_migrates_external_cover_column_to_local_copy(app):
+    """Legacy rows can store the provider URL in Manifestation.cover_url itself.
+
+    The canonical cover contract is a locally stored path in the relational
+    cover_url column. Converting an old provider URL must happen without making
+    a real network request in this regression test.
+    """
+    external_url = "https://i.discogs.com/legacy-cover.jpeg"
+    local_url = "/static/covers/legacy-item_ext.jpg"
+    manifestation = MagicMock(spec=Manifestation)
+    manifestation.cover_url = external_url
+    manifestation.meta = {}
+    manifestation.isbn13 = None
+    manifestation.expression = MagicMock(content_type="text")
+
+    with (
+        patch("app.utils.covers.db.session.get", return_value=manifestation),
+        patch("app.utils.covers.download_direct_url", return_value=(local_url, "api_direct_download")) as download,
+        patch("app.utils.covers.fetch_external_api_cover", return_value=None),
+        patch("app.utils.covers.fetch_upc_cover", return_value=None),
+        patch("app.utils.covers.fetch_llm_cover", return_value=None),
+        patch("app.utils.covers.generate_fallback_cover", return_value=None),
+        app.app_context(),
+    ):
+        process_cover_pipeline(
+            manifestation_id=1,
+            identifier="legacy-item",
+            title="Legacy Item",
+            author="Legacy Author",
+            llm_permissions={"allow_generate_cover": False},
+        )
+
+    download.assert_called_once_with("legacy-item", external_url, "api_direct_download")
+    assert manifestation.cover_url == local_url
+    assert manifestation.update_meta.call_args.kwargs["cover_status"] == "ready"
+
+
+def test_process_cover_pipeline_does_not_fetch_legacy_cover_from_unknown_host(app):
+    """Unknown legacy hosts are preserved as source data but never fetched."""
+    manifestation = MagicMock(spec=Manifestation)
+    manifestation.cover_url = "https://untrusted.example/cover.jpg"
+    manifestation.meta = {}
+    manifestation.isbn13 = None
+    manifestation.expression = MagicMock(content_type="text")
+
+    with (
+        patch("app.utils.covers.db.session.get", return_value=manifestation),
+        patch("app.utils.covers.download_direct_url") as download,
+        patch("app.utils.covers.fetch_external_api_cover", return_value=None),
+        patch("app.utils.covers.fetch_upc_cover", return_value=None),
+        patch("app.utils.covers.fetch_llm_cover", return_value=None),
+        patch("app.utils.covers.generate_fallback_cover", return_value=None),
+        app.app_context(),
+    ):
+        process_cover_pipeline(
+            manifestation_id=1,
+            identifier="legacy-item",
+            title="Legacy Item",
+            author="Legacy Author",
+            llm_permissions={"allow_generate_cover": False},
+        )
+
+    download.assert_not_called()
+
+
+def test_process_cover_pipeline_skips_already_migrated_local_cover(app):
+    """A completed local copy makes repeated migration attempts a no-op."""
+    manifestation = MagicMock(spec=Manifestation)
+    manifestation.cover_url = "/static/covers/legacy-item_ext.jpg"
+    manifestation.meta = {
+        "cover_url": "https://i.discogs.com/legacy-cover.jpeg",
+        "cover_status": "ready",
+    }
+
+    with (
+        patch("app.utils.covers.db.session.get", return_value=manifestation),
+        patch("app.utils.covers.download_direct_url") as download,
+        patch("app.utils.covers.fetch_external_api_cover") as fetch_api,
+        app.app_context(),
+    ):
+        process_cover_pipeline(
+            manifestation_id=1,
+            identifier="legacy-item",
+            title="Legacy Item",
+            author="Legacy Author",
+            llm_permissions={"allow_generate_cover": False},
+        )
+
+    download.assert_not_called()
+    fetch_api.assert_not_called()
+    manifestation.update_meta.assert_not_called()
+
+
+def test_legacy_source_only_pipeline_does_not_run_fallback_providers(app):
+    """Backfill mode attempts only the approved source, without other lookups."""
+    manifestation = MagicMock(spec=Manifestation)
+    manifestation.cover_url = None
+    manifestation.meta = {"cover_url": "https://i.discogs.com/legacy-cover.jpeg"}
+    manifestation.isbn13 = "9780000000000"
+    manifestation.expression = MagicMock(content_type="text")
+
+    with (
+        patch("app.utils.covers.db.session.get", return_value=manifestation),
+        patch("app.utils.covers.download_direct_url", return_value=None) as download,
+        patch("app.utils.covers.fetch_external_api_cover") as fetch_api,
+        patch("app.utils.covers.fetch_upc_cover") as fetch_upc,
+        patch("app.utils.covers.fetch_llm_cover") as fetch_llm,
+        patch("app.utils.covers.generate_fallback_cover") as fallback,
+        app.app_context(),
+    ):
+        process_cover_pipeline(
+            manifestation_id=1,
+            identifier="legacy-item",
+            title="Legacy Item",
+            author="Legacy Author",
+            llm_permissions={"allow_generate_cover": False, "allow_cloud_llm": False},
+            legacy_source_only=True,
+        )
+
+    download.assert_called_once_with("legacy-item", "https://i.discogs.com/legacy-cover.jpeg", "api_direct_download")
+    fetch_api.assert_not_called()
+    fetch_upc.assert_not_called()
+    fetch_llm.assert_not_called()
+    fallback.assert_not_called()
+    assert manifestation.meta["cover_url"] == "https://i.discogs.com/legacy-cover.jpeg"
+    assert manifestation.update_meta.call_args.kwargs["cover_status"] == "failed"
+
+
 # ── Regression tests for bugs found on pre.iqoqo.cc preview (2026-07-08) ────
 
 

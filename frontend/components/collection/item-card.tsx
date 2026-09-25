@@ -134,9 +134,9 @@ export function ItemCard({
   const coverUrl =
     getCoverUrl(itemCoverUrl || undefined, timestamp) ||
     (isCatalog
-      ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
-      : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
-        ((item as Item).meta?.["cover_url"] as string | undefined)));
+      ? getCoverUrl((item as CatalogEntry).meta?.["cover_url"] as string | undefined, timestamp)
+      : (getCoverUrl((item as Item).manifestation_meta?.["cover_url"] as string | undefined, timestamp) ??
+        getCoverUrl((item as Item).meta?.["cover_url"] as string | undefined, timestamp)));
 
   const hasLegacyCoverUrl = isCatalog
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])

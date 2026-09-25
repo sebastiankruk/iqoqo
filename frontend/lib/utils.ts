@@ -150,7 +150,27 @@ export function resolveApiUrl(path: string, isServer = false): string {
  */
 export function getCoverUrl(path: string | undefined, timestamp?: number | string): string | undefined {
   if (!path) return undefined;
-  const url = resolveApiUrl(path);
+  let coverPath = path;
+  if (/^[a-z][a-z\d+.-]*:/i.test(path)) {
+    try {
+      const parsed = new URL(path);
+      const allowedOrigins = new Set<string>();
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+        if (!configuredUrl) continue;
+        try {
+          allowedOrigins.add(new URL(configuredUrl).origin);
+        } catch {
+          // Relative API paths do not add an external host to the allowlist.
+        }
+      }
+      if (!allowedOrigins.has(parsed.origin)) return undefined;
+      coverPath = parsed.pathname;
+    } catch {
+      return undefined;
+    }
+  }
+  if (!/^\/(?:api\/)?static\/covers\/[^/?#]+$/.test(coverPath)) return undefined;
+  const url = resolveApiUrl(coverPath);
   if (timestamp) {
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}t=${timestamp}`;

@@ -105,3 +105,15 @@ def test_redis_missing_configures_memory_defaults():
 
     assert app.config["RATELIMIT_STORAGE_URI"] == "memory://"
     assert app.config["CACHE_TYPE"] == "SimpleCache"
+
+
+def test_read_only_maintenance_app_can_skip_startup_cover_cleanup():
+    """CLI dry-runs can initialize Flask without mutating stuck-cover state."""
+    with patch("app.utils.covers.cleanup_stuck_pending_covers") as cleanup:
+        app = create_app(
+            config_class=TestConfig,
+            config_override={"SKIP_STARTUP_COVER_CLEANUP": True},
+        )
+
+    cleanup.assert_not_called()
+    assert app.config["SKIP_STARTUP_COVER_CLEANUP"] is True

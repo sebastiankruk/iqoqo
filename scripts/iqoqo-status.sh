@@ -19,7 +19,7 @@
 #
 set -euo pipefail
 
-IQOQO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+IQOQO_ROOT="${IQOQO_STATUS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -765,7 +765,7 @@ if [[ -f "$EXAMPLE_FILE" ]]; then
         fi
     done < "$EXAMPLE_FILE"
 else
-    check "Template" warn ".env.example not found"
+    check "Template" info ".env.example not bundled (optional for prebuilt deployments)"
     expected_keys=()
     declare -A example_defaults
 fi

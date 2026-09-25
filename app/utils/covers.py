@@ -18,6 +18,7 @@ import io
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
@@ -50,6 +51,41 @@ os.makedirs(GALLERY_DIR, exist_ok=True)
 # Size limits for externally fetched covers
 MAX_COVER_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MIN_COVER_FILE_SIZE = 1000  # ~1 KB
+
+_ALLOWED_LEGACY_COVER_HOSTS = (
+    "allegroimg.com",
+    "discogs.com",
+    "openlibrary.org",
+    "googleusercontent.com",
+    "coverartarchive.org",
+    "image.tmdb.org",
+    "igdb.com",
+)
+
+
+def is_allowed_legacy_cover_url(url: str) -> bool:
+    """Check whether a legacy cover URL belongs to a known image provider."""
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+    except ValueError:
+        return False
+
+    return (
+        parsed.scheme in ("http", "https")
+        and port in (None, 80 if parsed.scheme == "http" else 443)
+        and not parsed.username
+        and not parsed.password
+        and any(hostname == host or hostname.endswith(f".{host}") for host in _ALLOWED_LEGACY_COVER_HOSTS)
+    )
+
+
+def is_local_cover_url(url: str | None) -> bool:
+    """Check whether a stored cover URL points to the configured local cover store."""
+    if not isinstance(url, str):
+        return False
+    return url.startswith(("/static/covers/", f"{Config.COVERS_BASE_URL.rstrip('/')}/"))
 
 
 def add_source_badge(filepath: str, source: str):
@@ -207,6 +243,10 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
     """Securely downloads a direct image URL to the local filesystem."""
     res = None
     try:
+        source_host = urlparse(url).hostname or "unknown host"
+    except ValueError:
+        source_host = "unknown host"
+    try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
@@ -223,7 +263,7 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
                 except (TypeError, ValueError):
                     pass
 
-                logger.debug(f"Downloading cover for {identifier} from URL {url}.")
+                logger.debug("Downloading cover for %s from host %s.", identifier, source_host)
 
                 downloaded = bytearray()
                 for chunk in response.iter_content(chunk_size=8192):
@@ -237,16 +277,16 @@ def download_direct_url(identifier: str, url: str, source_name: str, suffix: str
                 if len(downloaded) >= MIN_COVER_FILE_SIZE:
                     content = bytes(downloaded)
                     if is_valid_cover(content):
-                        logger.info(f"Cover for {identifier} downloaded successfully from URL {url}.")
+                        logger.info("Cover for %s downloaded successfully from host %s.", identifier, source_host)
 
                         filename = f"{identifier}_{suffix}.jpg"
                         filepath = os.path.join(COVERS_DIR, filename)
                         optimize_and_save_image(content, filepath)
                         res = f"{Config.COVERS_BASE_URL}/{filename}", source_name
     except SSRFError as exc:
-        logger.warning("SSRF blocked for %s: %s", url, exc)
+        logger.warning("SSRF blocked cover download from host %s: %s", source_host, exc)
     except (requests.RequestException, OSError, ValueError, TypeError) as e:
-        logger.error(f"Error fetching direct URL {url}: {e}")
+        logger.error("Error fetching direct cover from host %s (%s)", source_host, type(e).__name__)
     return res
 
 
@@ -409,6 +449,7 @@ def process_cover_pipeline(
     description: str = "",
     genre: str = "",
     _tag: str = "",  # pylint: disable=unused-argument
+    legacy_source_only: bool = False,
 ):
     """
     The single cover-generation pipeline.
@@ -417,6 +458,9 @@ def process_cover_pipeline(
       1.5 Direct URL Download (intercepts external hotlinks from MusicBrainz/Discogs)
       2. External APIs (OpenLibrary, Google Books)
       3/4. LLM generation
+
+    When ``legacy_source_only`` is true, only an allowlisted legacy direct URL
+    is attempted; provider fallbacks and generated covers are disabled.
     """
     from flask import current_app, has_app_context
 
@@ -430,6 +474,14 @@ def process_cover_pipeline(
     with app.app_context():
         manifestation = db.session.get(Manifestation, manifestation_id)
         if not manifestation:
+            return
+
+        if (
+            is_local_cover_url(manifestation.cover_url)
+            and manifestation.meta
+            and manifestation.meta.get("cover_status") == "ready"
+            and not user_image_path
+        ):
             return
 
         local_cover_url: str | None = None
@@ -457,22 +509,36 @@ def process_cover_pipeline(
 
         # Tier 1.5 & Tier 2: Direct Hotlinks & External APIs
         if not local_cover_url:
-            existing_url = manifestation.meta.get("cover_url") if manifestation.meta else None
+            column_url = manifestation.cover_url
+            meta_url = manifestation.meta.get("cover_url") if manifestation.meta else None
+            external_column_url = (
+                column_url if isinstance(column_url, str) and column_url.lower().startswith(("http://", "https://")) else None
+            )
+            existing_url = next(
+                (url for url in (external_column_url, meta_url) if isinstance(url, str) and is_allowed_legacy_cover_url(url)),
+                external_column_url or meta_url,
+            )
 
             # Intercept existing external URLs and download them locally
-            if existing_url and str(existing_url).startswith("http"):
+            if isinstance(existing_url, str) and is_allowed_legacy_cover_url(existing_url):
                 result = download_direct_url(identifier, existing_url, "api_direct_download")
                 if result:
                     local_cover_url, source = result
+            elif isinstance(existing_url, str) and existing_url.lower().startswith(("http://", "https://")):
+                try:
+                    source_host = urlparse(existing_url).hostname or "unknown host"
+                except ValueError:
+                    source_host = "unknown host"
+                logger.warning("Skipping legacy cover URL from unsupported host %s", source_host)
 
             # Fallback to book API fetchers
-            if not local_cover_url:
+            if not local_cover_url and not legacy_source_only:
                 result = fetch_external_api_cover(identifier, isbn=manifestation.isbn13)
                 if result:
                     local_cover_url, source = result
 
             # Tier 2.5: Non-ISBN cover providers (MusicBrainz, TMDb)
-            if not local_cover_url:
+            if not local_cover_url and not legacy_source_only:
                 content_type = manifestation.expression.content_type if manifestation.expression else None
                 result = fetch_upc_cover(identifier, content_type=content_type)
                 if result:
@@ -480,7 +546,7 @@ def process_cover_pipeline(
 
         # Tier 3/4: LLM Generation
         allow_generate_cover = Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover", False)
-        if not local_cover_url and allow_generate_cover:
+        if not local_cover_url and allow_generate_cover and not legacy_source_only:
             # Extract format for media-aware prompts
             format_type = manifestation.meta.get("format") if manifestation.meta else None
 
@@ -502,7 +568,7 @@ def process_cover_pipeline(
                 logger.exception("LLM cover generation failed for %s: %s", identifier, e)
 
         # Tier 5: PIL Fallback
-        if not local_cover_url:
+        if not local_cover_url and not legacy_source_only:
             result = generate_fallback_cover(identifier, title, author)
             if result:
                 local_cover_url, source = result

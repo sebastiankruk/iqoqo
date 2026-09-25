@@ -206,7 +206,7 @@ test.describe("Cross-FRBR Filtering at Works/Expressions Levels", () => {
     });
 
     // Mock facet stats
-    await page.route("**/api/facets/stats**", async route => {
+    await page.route("**/api/stats/facets**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

@@ -207,12 +207,13 @@ def create_app(config_class=Config, config_override=None):
         """Ensure scoped sessions are returned to the pool after each request."""
         db.session.remove()
 
-    with app.app_context():
-        try:
-            from app.utils.covers import cleanup_stuck_pending_covers
+    if not app.config.get("SKIP_STARTUP_COVER_CLEANUP", False):
+        with app.app_context():
+            try:
+                from app.utils.covers import cleanup_stuck_pending_covers
 
-            cleanup_stuck_pending_covers(timeout_minutes=30)
-        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
-            app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
+                cleanup_stuck_pending_covers(timeout_minutes=30)
+            except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
+                app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
 
     return app

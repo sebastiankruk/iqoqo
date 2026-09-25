@@ -466,8 +466,41 @@ docker-build-preview: ## Build all images locally tagged for preview environment
 # Use `make start <mode>` and `make stop` to manage the full lifecycle.
 
 
+STATUS_STACK = $(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(filter dev,$(MAKECMDGOALS)),dev,$(if $(STACK),$(STACK),$(if $(STAGE),$(STAGE),$(MODE))))))
+STATUS_PROJECT = $(if $(filter preview,$(STATUS_STACK)),iqoqo-preview,$(COMPOSE_PROJECT))
+STATUS_ENV_FILE = $(if $(filter preview,$(STATUS_STACK)),.env.preview,$(if $(filter prod,$(STATUS_STACK)),$(if $(wildcard .env.prod),.env.prod,.env),$(COMPOSE_ENV_FILE)))
+
 status: ## Show health status of all iQoQo services
-	@bash scripts/iqoqo-status.sh $(if $(filter preview,$(MAKECMDGOALS)),--stack preview,$(if $(filter prod,$(MAKECMDGOALS)),--stack prod,$(if $(filter dev,$(MAKECMDGOALS)),--stack dev,$(if $(STACK),--stack $(STACK),$(if $(STAGE),--stack $(STAGE),--stack $(MODE))))))
+	@set -euo pipefail; \
+		status_root="$(CURDIR)"; \
+		status_stack="$(STATUS_STACK)"; \
+		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack"; \
+		else \
+			tmpdir=$$(mktemp -d); \
+			tmp_container=""; \
+			cleanup_status_helper() { \
+				if [[ -n "$$tmp_container" ]]; then docker rm "$$tmp_container" >/dev/null 2>&1 || true; fi; \
+				rm -rf "$$tmpdir"; \
+			}; \
+			trap cleanup_status_helper EXIT; \
+			compose=(docker compose -p "$(STATUS_PROJECT)" -f "$(COMPOSE_FILE)" --env-file "$(STATUS_ENV_FILE)"); \
+			status_container=$$("$${compose[@]}" ps --all -q web | head -n 1); \
+			if [[ -n "$$status_container" ]]; then \
+				docker cp "$$status_container:/usr/src/app/scripts/iqoqo-status.sh" "$$tmpdir/iqoqo-status.sh" >/dev/null 2>&1 || true; \
+			fi; \
+			if [[ ! -s "$$tmpdir/iqoqo-status.sh" ]]; then \
+				status_image=$$("$${compose[@]}" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("services",{}).get("web",{}).get("image", ""))'); \
+				if [[ -z "$$status_image" ]]; then \
+					echo "ERROR: cannot resolve the backend image needed to retrieve scripts/iqoqo-status.sh." >&2; exit 2; \
+				fi; \
+				tmp_container=$$(docker create "$$status_image"); \
+				if ! docker cp "$$tmp_container:/usr/src/app/scripts/iqoqo-status.sh" "$$tmpdir/iqoqo-status.sh" >/dev/null; then \
+					echo "ERROR: backend image $$status_image does not contain /usr/src/app/scripts/iqoqo-status.sh." >&2; exit 2; \
+				fi; \
+			fi; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack"; \
+		fi
 
 # Linting targets
 lint-python: .venv/bin/activate
