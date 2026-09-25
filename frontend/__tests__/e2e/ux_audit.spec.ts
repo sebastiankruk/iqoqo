@@ -15,9 +15,19 @@
 //
 // frontend/__tests__/e2e/ux_audit.spec.ts
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import packageJson from "../../package.json" assert { type: "json" };
 
+const auditImageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../test-results/ux-audit");
+const auditScreenshotPath = (filename: string) => path.join(auditImageDirectory, filename);
+
 test.describe("UX/UI Audit Workflow", () => {
+  test.beforeAll(() => {
+    fs.mkdirSync(auditImageDirectory, { recursive: true });
+  });
+
   // 1. Audit public landing page
   test("Audit dev.iqoqo.cc landing page button density and CTAs", async ({ page }) => {
     await page.route("**/*.jpg", route => route.fulfill({ body: Buffer.from("") }));
@@ -31,8 +41,8 @@ test.describe("UX/UI Audit Workflow", () => {
     }
 
     // Take screenshot of landing page
-    await page.screenshot({ path: "../.context/notes/images/ux_dev_landing.png", fullPage: true });
-    console.log("dev.iqoqo.cc landing page screenshot saved to .context/notes/images/ux_dev_landing.png");
+    await page.screenshot({ path: auditScreenshotPath("ux_dev_landing.png"), fullPage: true });
+    console.log(`Landing page screenshot saved to ${auditScreenshotPath("ux_dev_landing.png")}`);
 
     // Count all buttons and anchor tags styled as buttons on the landing page
     const buttons = await page.locator("button, a[role='button'], a.btn").all();
@@ -132,8 +142,8 @@ test.describe("UX/UI Audit Workflow", () => {
       await page.waitForLoadState("networkidle");
 
       // Capture screenshot of authenticated dashboard
-      await page.screenshot({ path: "../.context/notes/images/ux_dashboard.png", fullPage: true });
-      console.log("Dashboard screenshot saved to .context/notes/images/ux_dashboard.png");
+      await page.screenshot({ path: auditScreenshotPath("ux_dashboard.png"), fullPage: true });
+      console.log(`Dashboard screenshot saved to ${auditScreenshotPath("ux_dashboard.png")}`);
 
       // Count buttons inside the sticky navbar
       const navbarButtons = await page.locator("nav button, nav a").all();
@@ -208,7 +218,7 @@ test.describe("UX/UI Audit Workflow", () => {
       await page.waitForLoadState("networkidle");
 
       // Screenshot 1: Scan Page initial view
-      await page.screenshot({ path: "../.context/notes/images/ux_scan_page.png" });
+        await page.screenshot({ path: auditScreenshotPath("ux_scan_page.png") });
       console.log("Scan page initial screenshot saved");
 
       let clickCount = 0;
@@ -226,7 +236,7 @@ test.describe("UX/UI Audit Workflow", () => {
 
       // Wait for success card to be visible
       await expect(page.getByText("Test Book")).toBeVisible();
-      await page.screenshot({ path: "../.context/notes/images/ux_success_card.png" });
+      await page.screenshot({ path: auditScreenshotPath("ux_success_card.png") });
       console.log("Success card screenshot saved");
 
       // Click 3: Add to Collection
@@ -250,7 +260,7 @@ test.describe("UX/UI Audit Workflow", () => {
         await page.waitForLoadState("networkidle");
 
         // Take screenshot of mobile dashboard
-        await page.screenshot({ path: "../.context/notes/images/ux_mobile_dashboard.png" });
+        await page.screenshot({ path: auditScreenshotPath("ux_mobile_dashboard.png") });
         console.log("Mobile dashboard screenshot saved");
 
         // Verify mobile navbar: "Collection" and "Scan" search box behaviour
@@ -292,7 +302,7 @@ test.describe("UX/UI Audit Workflow", () => {
         await page.waitForLoadState("networkidle");
 
         // Take initial mobile collection page screenshot
-        await page.screenshot({ path: "../.context/notes/images/ux_mobile_collection.png" });
+        await page.screenshot({ path: auditScreenshotPath("ux_mobile_collection.png") });
         console.log("Mobile collection screenshot saved");
 
         // Locate and click the mobile filters trigger button
@@ -300,7 +310,7 @@ test.describe("UX/UI Audit Workflow", () => {
         if (await filterTrigger.first().isVisible()) {
           await filterTrigger.first().click();
           await page.waitForTimeout(500); // Wait for transition
-          await page.screenshot({ path: "../.context/notes/images/ux_mobile_filters.png" });
+          await page.screenshot({ path: auditScreenshotPath("ux_mobile_filters.png") });
           console.log("Mobile filters drawer screenshot saved");
 
           // Verify that MobileFilterDrawer content is visible
@@ -320,7 +330,7 @@ test.describe("UX/UI Audit Workflow", () => {
         await page.waitForLoadState("networkidle");
 
         // Mobile scan page screenshot
-        await page.screenshot({ path: "../.context/notes/images/ux_mobile_scan.png" });
+        await page.screenshot({ path: auditScreenshotPath("ux_mobile_scan.png") });
         console.log("Mobile scan page screenshot saved");
 
         // Verify camera start button is visible

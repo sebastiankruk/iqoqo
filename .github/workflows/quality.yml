@@ -210,7 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, test-frontend, test-scripts]
     env:
-      ADMIN_PASSWORD: admin
+      ADMIN_EMAIL: ci-admin@iqoqo.cc
+      ADMIN_PASSWORD: E2EBootstrapPassword123!
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
     services:
       postgres:
@@ -263,18 +264,20 @@ jobs:
       - name: Prepare E2E database
         run: |
           python scripts/init_db.py --seed-file data/seed_example.json --reset --force
-          ADMIN_PASSWORD=admin PYTHONPATH=. python scripts/init_auth.py
+          PYTHONPATH=. python scripts/init_auth.py
           PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
         env:
           SECRET_KEY: test-secret-key-not-for-production
-          ADMIN_PASSWORD: admin
+          ADMIN_EMAIL: ci-admin@iqoqo.cc
+          ADMIN_PASSWORD: E2EBootstrapPassword123!
 
       - name: Run Playwright E2E tests
         run: cd frontend && npx playwright test --project=chromium
         env:
           CI: true
           FLASK_API_URL: http://127.0.0.1:5002/api
-          ADMIN_PASSWORD: admin
+          ADMIN_EMAIL: ci-admin@iqoqo.cc
+          ADMIN_PASSWORD: E2EBootstrapPassword123!
           SECRET_KEY: test-secret-key-not-for-production
 
       - name: Upload Playwright report
@@ -282,5 +285,7 @@ jobs:
         if: always()
         with:
           name: playwright-report
-          path: frontend/playwright-report/
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/ux-audit/
           retention-days: 7

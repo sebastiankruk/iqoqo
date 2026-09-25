@@ -23,8 +23,8 @@ test.describe("Complex Works & Series E2E", () => {
     try {
       const emailInput = page.getByLabel(/email/i);
       if (await emailInput.isVisible({ timeout: 2000 })) {
-        await emailInput.fill("admin@iqoqo.local");
-        await page.getByLabel(/password/i).fill("admin");
+        await emailInput.fill("e2e-admin@iqoqo.local");
+        await page.getByLabel(/password/i).fill("E2ETestPassword123!");
         await page.getByRole("button", { name: /sign in/i }).click();
         await page.waitForURL("**/dashboard*");
       }

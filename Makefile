@@ -615,8 +615,8 @@ _test-e2e-run:
 		fi; \
 		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$(DATABASE_URL_TEST))..."; \
 		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) pg-create-schemas; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-reset; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_PASSWORD="$${ADMIN_PASSWORD:-admin}" $(MAKE) init-auth; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! $(MAKE) db-reset; \
+		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! $(MAKE) init-auth; \
 		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-seed-e2e; \
 		echo "Killing old Flask server on port 5002 (if any) to ensure clean start against test DB..."; \
 		lsof -ti tcp:5002 | xargs kill -9 2>/dev/null || true; \
@@ -834,4 +834,3 @@ sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for pro
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
 	fi
-

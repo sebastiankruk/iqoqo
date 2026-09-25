@@ -26,8 +26,8 @@ test.describe("Advanced Organization & Views - Step 2", () => {
     try {
       const emailInput = page.locator('input[type="email"]');
       if (await emailInput.isVisible({ timeout: 2000 })) {
-        await emailInput.fill("admin@iqoqo.local");
-        await page.locator('input[type="password"]').fill("admin");
+        await emailInput.fill("e2e-admin@iqoqo.local");
+        await page.locator('input[type="password"]').fill("E2ETestPassword123!");
         // Use Promise.all so navigation tracking starts before the click
         await Promise.all([
           page.waitForURL(/\/(collection)?$/, { timeout: 20000 }),
