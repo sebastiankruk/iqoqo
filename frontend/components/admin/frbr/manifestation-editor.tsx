@@ -108,9 +108,7 @@ export function ManifestationEditor({ tree, onSubmit, onAddChild, onEscalate, on
     f => f.key !== "type" && f.key !== "mechanics"
   );
   const [metaFields, setMetaFields] = useState<MetaField[]>(initialMetaFields);
-  const [contributions, setContributions] = useState<FrbrContribution[]>(
-    () => tree.manifestation?.contributions ?? []
-  );
+  const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.manifestation?.contributions ?? []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

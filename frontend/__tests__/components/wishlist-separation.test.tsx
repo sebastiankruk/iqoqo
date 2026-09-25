@@ -66,12 +66,7 @@ describe("Task 5.1: ItemCard decoupled from wishlist logic", () => {
       if (!content) continue;
 
       // Should NOT contain patterns like: item.id < 0, id < 0, id <= 0
-      const negativeIdPatterns = [
-        /\.id\s*<\s*0/,
-        /\.id\s*<=\s*0/,
-        /is_virtual/,
-        /item\.id\s*<\s*0/,
-      ];
+      const negativeIdPatterns = [/\.id\s*<\s*0/, /\.id\s*<=\s*0/, /is_virtual/, /item\.id\s*<\s*0/];
 
       for (const pattern of negativeIdPatterns) {
         const matches = content.match(pattern);
@@ -93,10 +88,7 @@ describe("Task 5.1: ItemCard decoupled from wishlist logic", () => {
   });
 
   it("ItemCard does not branch on collection_status === 'wish_list'", () => {
-    const cardFiles = [
-      "components/item/item-card.tsx",
-      "components/item/ItemCard.tsx",
-    ];
+    const cardFiles = ["components/item/item-card.tsx", "components/item/ItemCard.tsx"];
 
     for (const file of cardFiles) {
       const content = readSource(file);
@@ -105,7 +97,7 @@ describe("Task 5.1: ItemCard decoupled from wishlist logic", () => {
       // Should NOT contain wish_list branching in inventory card components
       const lines = content.split("\n");
       const wishListBranches = lines.filter(
-        (line) =>
+        line =>
           /collection_status\s*===?\s*['"]wish_list['"]/.test(line) &&
           !line.trim().startsWith("//") &&
           !line.trim().startsWith("*")
@@ -122,10 +114,7 @@ describe("Task 5.1: ItemCard decoupled from wishlist logic", () => {
 
     const lines = content.split("\n");
     const negativeIdLines = lines.filter(
-      (line) =>
-        /\.id\s*<\s*0/.test(line) &&
-        !line.trim().startsWith("//") &&
-        !line.trim().startsWith("*")
+      line => /\.id\s*<\s*0/.test(line) && !line.trim().startsWith("//") && !line.trim().startsWith("*")
     );
 
     expect(negativeIdLines).toEqual([]);
@@ -180,10 +169,7 @@ describe("Task 5.2: Wishlist view has no physical inventory actions", () => {
         if (matches) {
           const lines = content.split("\n");
           const offendingLines = lines.filter(
-            (line) =>
-              pattern.test(line) &&
-              !line.trim().startsWith("//") &&
-              !line.trim().startsWith("*")
+            line => pattern.test(line) && !line.trim().startsWith("//") && !line.trim().startsWith("*")
           );
           expect(offendingLines).toEqual([]);
         }
@@ -192,30 +178,19 @@ describe("Task 5.2: Wishlist view has no physical inventory actions", () => {
   });
 
   it("Wishlist components do not reference lending/custody actions", () => {
-    const wishlistFiles = [
-      "components/wishlist/wishlist-card.tsx",
-      "components/wishlist/WishlistCard.tsx",
-    ];
+    const wishlistFiles = ["components/wishlist/wishlist-card.tsx", "components/wishlist/WishlistCard.tsx"];
 
     for (const file of wishlistFiles) {
       const content = readSource(file);
       if (!content) continue;
 
       // Should NOT reference lending or custody
-      const lendingPatterns = [
-        /lent_to/i,
-        /borrow/i,
-        /custody/i,
-        /loan/i,
-      ];
+      const lendingPatterns = [/lent_to/i, /borrow/i, /custody/i, /loan/i];
 
       for (const pattern of lendingPatterns) {
         const lines = content.split("\n");
         const offendingLines = lines.filter(
-          (line) =>
-            pattern.test(line) &&
-            !line.trim().startsWith("//") &&
-            !line.trim().startsWith("*")
+          line => pattern.test(line) && !line.trim().startsWith("//") && !line.trim().startsWith("*")
         );
         expect(offendingLines).toEqual([]);
       }
@@ -223,10 +198,7 @@ describe("Task 5.2: Wishlist view has no physical inventory actions", () => {
   });
 
   it("Wishlist components render edition and media badges", () => {
-    const wishlistFiles = [
-      "components/wishlist/wishlist-card.tsx",
-      "components/wishlist/WishlistCard.tsx",
-    ];
+    const wishlistFiles = ["components/wishlist/wishlist-card.tsx", "components/wishlist/WishlistCard.tsx"];
 
     for (const file of wishlistFiles) {
       const content = readSource(file);
@@ -276,10 +248,8 @@ describe("Task 5.3: Dashboard stats distinguish physical inventory from wishlist
 
     // Should reference separate fields for items and wishlist
     // (e.g., total_items vs items_wish_list, or similar)
-    const hasPhysicalField =
-      /total_items|items_available|items_on_shelf|physical_items/i.test(content);
-    const hasWishlistField =
-      /items_wish_list|wishlist_count|wish_list|to_read/i.test(content);
+    const hasPhysicalField = /total_items|items_available|items_on_shelf|physical_items/i.test(content);
+    const hasWishlistField = /items_wish_list|wishlist_count|wish_list|to_read/i.test(content);
 
     // At least one of each should be present
     expect(hasPhysicalField || /items/i.test(content)).toBe(true);
@@ -298,17 +268,13 @@ describe("Task 5.3: Dashboard stats distinguish physical inventory from wishlist
       if (!content) continue;
 
       // Should have separate counters or labels for physical vs wishlist
-      const hasPhysicalCount =
-        /physical|inventory|on.?shelf|available/i.test(content);
-      const hasWishlistCount =
-        /wishlist|wish.?list|intent/i.test(content);
+      const hasPhysicalCount = /physical|inventory|on.?shelf|available/i.test(content);
+      const hasWishlistCount = /wishlist|wish.?list|intent/i.test(content);
 
       // If the file has any count-related logic, it should distinguish
       if (/count|total|number/i.test(content)) {
         // This is a soft check — just verify the file doesn't conflate the two
-        const hasConflation =
-          /items.*=.*wish_list.*physical/i.test(content) ||
-          /physical.*wish_list/i.test(content);
+        const hasConflation = /items.*=.*wish_list.*physical/i.test(content) || /physical.*wish_list/i.test(content);
         expect(hasConflation).toBe(false);
       }
     }
@@ -326,7 +292,7 @@ describe("Cross-cutting: No negative ID references in production code", () => {
 
     const lines = content.split("\n");
     const negativeIdLines = lines.filter(
-      (line) =>
+      line =>
         /id\s*<\s*0/.test(line) &&
         !line.trim().startsWith("//") &&
         !line.trim().startsWith("*") &&
@@ -342,9 +308,7 @@ describe("Cross-cutting: No negative ID references in production code", () => {
     if (!content) return;
 
     // The Item interface should not mention negative IDs or virtual items
-    const itemInterfaceMatch = content.match(
-      /export interface Item \{[^}]+\}/
-    );
+    const itemInterfaceMatch = content.match(/export interface Item \{[^}]+\}/);
     if (!itemInterfaceMatch) return;
 
     const itemInterface = itemInterfaceMatch[0];

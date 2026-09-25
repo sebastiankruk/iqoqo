@@ -537,9 +537,7 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
           publication_date: null,
           meta: {},
         },
-        items: [
-          { id: 10, status: "available", condition: null, meta: {}, owner_id: "u1" },
-        ],
+        items: [{ id: 10, status: "available", condition: null, meta: {}, owner_id: "u1" }],
       };
 
       queryClient.setQueryData(["admin", "frbr", "tree", 3], mockTree);
@@ -609,18 +607,18 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
         manifestationId: 3,
         type: "work",
         id: 1,
-        data: { 
+        data: {
           title: "Updated",
-          meta: { 
+          meta: {
             authors: "Author1, Author2",
             tags: "fiction, thriller",
-            isbn13: "978-3-16-148410-0"
-          }
+            isbn13: "978-3-16-148410-0",
+          },
         },
       });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      
+
       // Verify that the API was called
       expect(putSpy).toHaveBeenCalled();
       // The normalization happens in the mutation function before the API call
@@ -658,11 +656,11 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
         manifestationId: 3,
         type: "work",
         id: 1,
-        data: { 
+        data: {
           title: "Updated",
-          meta: { 
-            authors: ["Author1", "Author2"]
-          }
+          meta: {
+            authors: ["Author1", "Author2"],
+          },
         },
       });
 
@@ -761,9 +759,7 @@ describe("Advanced View Hooks (Works, Expressions, Parts)", () => {
           publication_date: null,
           meta: {},
         },
-        items: [
-          { id: 10, status: "available", condition: null, meta: {}, owner_id: "u1" },
-        ],
+        items: [{ id: 10, status: "available", condition: null, meta: {}, owner_id: "u1" }],
       };
 
       queryClient.setQueryData(["admin", "frbr", "tree", 3], mockTree);

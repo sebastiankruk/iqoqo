@@ -108,11 +108,11 @@ export function FRBRTreeView({
     // Resolve the entity title for relation management
     const title =
       level === "work"
-        ? tree.work?.title ?? ""
+        ? (tree.work?.title ?? "")
         : level === "expression"
-          ? tree.work?.title ?? ""
+          ? (tree.work?.title ?? "")
           : level === "manifestation"
-            ? tree.work?.title ?? ""
+            ? (tree.work?.title ?? "")
             : "";
     return (
       <DropdownMenu>
@@ -168,9 +168,7 @@ export function FRBRTreeView({
           <Badge variant="outline" className="text-xs">
             F1
           </Badge>
-          <span className="font-medium truncate flex-1">
-            {tree.work?.title ?? "No Work"}
-          </span>
+          <span className="font-medium truncate flex-1">{tree.work?.title ?? "No Work"}</span>
         </button>
         {expandedSections.has("work") && tree.work && (
           <div

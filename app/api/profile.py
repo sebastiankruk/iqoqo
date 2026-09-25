@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
@@ -111,7 +112,7 @@ def update_profile():
         raw_avatar = data["avatar_url"]
         if raw_avatar:
             avatar_url = str(raw_avatar).strip()
-            if not is_safe_url(avatar_url):
+            if urlparse(avatar_url).scheme != "https" or not is_safe_url(avatar_url):
                 return jsonify({"error": "Invalid or unsafe avatar URL", "code": 400}), 400
             user.avatar_url = avatar_url
         else:

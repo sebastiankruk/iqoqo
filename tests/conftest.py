@@ -19,9 +19,11 @@
 # pylint: disable=redefined-outer-name  # pytest fixtures redefine names intentionally
 
 import os
+import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.orm import Session
 
 os.environ.setdefault("ADMIN_PASSWORD", "test_admin_password")
 
@@ -45,6 +47,30 @@ def pytest_configure(config: pytest.Config) -> None:
                 config.option.plugins.append("no:sugar")
         if hasattr(config, "pluginmanager"):
             config.pluginmanager.set_blocked("sugar")
+
+
+@pytest.fixture(autouse=True)
+def synthetic_users_have_valid_test_credentials():
+    """Give credential-less synthetic test users a unique test OAuth identity.
+
+    Production validation and the database constraint remain unchanged. Tests
+    that specifically exercise invalid credential rows opt out for their
+    session so the database still rejects the invalid insert.
+    """
+    from app.db.models import User
+
+    def ensure_test_auth_method(session, _flush_context, _instances):
+        if session.info.get("allow_invalid_user_auth_method"):
+            return
+        for user in session.new:
+            if isinstance(user, User) and user.password_hash is None and user.google_id is None:
+                user.google_id = f"test-fixture:{uuid.uuid4()}"
+
+    event.listen(Session, "before_flush", ensure_test_auth_method)
+    try:
+        yield
+    finally:
+        event.remove(Session, "before_flush", ensure_test_auth_method)
 
 
 @pytest.fixture
@@ -172,6 +198,7 @@ def admin_headers(app):
 
         # Create admin user
         admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")
+        admin_user.set_password("test-password")
         admin_user.roles.append(admin_role)
         db.session.add(admin_user)
         db.session.commit()
@@ -200,6 +227,7 @@ def normal_user_headers(app):
         db.session.add(user_role)
 
         user = User(email="test_user@iqoqo.local", display_name="User")
+        user.set_password("test-password")
         user.roles.append(user_role)
         db.session.add(user)
         db.session.commit()
@@ -226,6 +254,7 @@ def vision_user_headers(app):
 
         # Create user
         user = User(email="vision_user@iqoqo.local", display_name="Vision User")
+        user.set_password("test-password")
         user.roles.append(vision_role)
         db.session.add(user)
         db.session.commit()
@@ -242,6 +271,7 @@ def guest_user_headers(app):
 
     with app.app_context():
         user = User(email="guest_user@iqoqo.local", display_name="Guest")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 
@@ -263,6 +293,7 @@ def restricted_user_headers(app):
         # Right now /scan doesn't have @require_permission for specific collection_status.
 
         user = User(email="restricted@iqoqo.local", display_name="Restricted")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 
@@ -297,6 +328,7 @@ def custodian_headers(app):
         db.session.add(custodian_role)
 
         custodian = User(email="custodian_test@iqoqo.local", display_name="Custodian Test")
+        custodian.set_password("test-password")
         custodian.roles.append(custodian_role)
         db.session.add(custodian)
         db.session.commit()

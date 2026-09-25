@@ -161,9 +161,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const { data: loanStatus } = useLoanStatus(isOwner ? null : item.id);
   const requestLoan = useRequestLoan();
 
-  const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(
-    canModifyItem ? item.id : null
-  );
+  const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(canModifyItem ? item.id : null);
   const addToCollection = useAddItemToCollection();
   const removeFromCollection = useRemoveItemFromCollection();
   const { data: userCollections } = useUserCollections();
@@ -385,12 +383,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 className="w-full rounded-lg bg-secondary/80 px-3 py-2 text-sm font-medium text-foreground outline-none ring-1 ring-border transition-all hover:bg-secondary focus:ring-primary/50 disabled:opacity-60 cursor-pointer appearance-none"
               >
                 <optgroup label="Availability & Condition">
-                  {["available", "lent", "damaged", "lost"]
-                    .map(key => (
-                      <option key={key} value={key} className="bg-card py-2">
-                        {STATUS_LABELS[key]?.label || key}
-                      </option>
-                    ))}
+                  {["available", "lent", "damaged", "lost"].map(key => (
+                    <option key={key} value={key} className="bg-card py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
                 </optgroup>
                 <optgroup label="Acquisition">
                   {["wish_list", "ordered"].map(key => (

@@ -15,10 +15,12 @@
 #
 
 from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.db.models import Role, TokenBlocklist, User, db
+from app.core.cache import cache
 
 
 @pytest.fixture(autouse=True)
@@ -48,6 +50,12 @@ def test_logout_revokes_token(app, client):
     assert logout_resp.status_code == 200
     assert b"Logged out successfully" in logout_resp.data
 
+    with app.app_context():
+        import jwt
+
+        payload = jwt.decode(token, app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+        assert cache.get(f"token:revoked:{payload['jti']}") == "revoked"
+
     # 4. Verify JTI is in blocklist
     with app.app_context():
         blocklisted = TokenBlocklist.query.all()
@@ -57,6 +65,76 @@ def test_logout_revokes_token(app, client):
     prof_resp_revoked = client.get("/api/profile/", headers=headers)
     assert prof_resp_revoked.status_code == 401
     assert b"Token revoked" in prof_resp_revoked.data
+
+
+@pytest.mark.parametrize("password", ["", "short", "1234567"])
+def test_register_rejects_passwords_shorter_than_eight_characters(client, password):
+    response = client.post("/api/auth/register", json={"email": "short-password@iqoqo.local", "password": password})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Password must be at least 8 characters long"
+
+
+def test_register_accepts_eight_character_password(client):
+    response = client.post("/api/auth/register", json={"email": "eight-char-password@iqoqo.local", "password": "12345678"})
+
+    assert response.status_code == 201
+
+
+def test_token_revocation_cache_miss_falls_back_and_caches_active_state(app):
+    from app.api.decorators import _is_token_revoked
+
+    jti = "cache-miss-active-jti"
+    cache_key = f"token:revoked:{jti}"
+    with app.app_context():
+        cache.delete(cache_key)
+        expires_at = int((datetime.now(UTC) + timedelta(minutes=2)).timestamp())
+
+        assert _is_token_revoked(jti, expires_at) is False
+        assert cache.get(cache_key) == "active"
+
+        with patch("app.api.decorators.db.session.execute", side_effect=AssertionError("cache hit should avoid PostgreSQL")):
+            assert _is_token_revoked(jti, expires_at) is False
+
+
+def test_token_revocation_cache_hit_rejects_without_postgresql(app):
+    from app.api.decorators import _is_token_revoked
+
+    jti = "cache-hit-revoked-jti"
+    with app.app_context():
+        cache.set(f"token:revoked:{jti}", "revoked", timeout=120)
+        with patch("app.api.decorators.db.session.execute", side_effect=AssertionError("cache hit should avoid PostgreSQL")):
+            assert _is_token_revoked(jti, int((datetime.now(UTC) + timedelta(minutes=2)).timestamp())) is True
+
+
+def test_token_revocation_cache_miss_finds_blocklist_entry_and_caches_revoked(app):
+    from app.api.decorators import _is_token_revoked
+
+    jti = "cache-miss-revoked-jti"
+    cache_key = f"token:revoked:{jti}"
+    expires_at = datetime.now(UTC) + timedelta(minutes=2)
+    with app.app_context():
+        cache.delete(cache_key)
+        db.session.add(TokenBlocklist(jti=jti, expires_at=expires_at))
+        db.session.commit()
+
+        assert _is_token_revoked(jti, int(expires_at.timestamp())) is True
+        assert cache.get(cache_key) == "revoked"
+
+
+def test_token_revocation_cache_failure_falls_back_to_postgresql(app, monkeypatch):
+    from app.api.decorators import _is_token_revoked
+
+    jti = "cache-unavailable-revoked-jti"
+    with app.app_context():
+        db.session.add(TokenBlocklist(jti=jti, expires_at=datetime.now(UTC) + timedelta(minutes=2)))
+        db.session.commit()
+
+        def unavailable(*_args, **_kwargs):
+            raise OSError("cache unavailable")
+
+        monkeypatch.setattr(cache, "get", unavailable)
+        assert _is_token_revoked(jti, int((datetime.now(UTC) + timedelta(minutes=2)).timestamp())) is True
 
 
 def test_logout_idempotency(client):

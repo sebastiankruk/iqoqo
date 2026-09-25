@@ -43,8 +43,9 @@ test.describe("Reading Roadmap E2E Workflow", () => {
       }
     }
 
-    await page.goto(`/api/auth-exchange?token=${token}`);
-    await page.waitForURL(/\/(collection)?$/);
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
+    await page.goto("/");
   });
 
   test("should allow a user to create, populate, and reorder a reading roadmap pipeline", async ({ page }) => {

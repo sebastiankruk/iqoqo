@@ -38,6 +38,10 @@ def generate_token(email):
             print(f"User with email {email} not found.")
             return
 
+        if not user.is_active:
+            print(f"Cannot generate an administrative token for inactive user {email}.")
+            return
+
         token = generate_internal_jwt(user)
         print(f"TOKEN for {email}:")
         print(token)

@@ -254,9 +254,7 @@ describe("FrbrEditor Component", () => {
 
     // Click on the expand button for the item row (the button containing "Item #10")
     const expandButtons = screen.getAllByRole("button");
-    const itemExpandButton = expandButtons.find(btn =>
-      btn.textContent?.includes("Item #10")
-    );
+    const itemExpandButton = expandButtons.find(btn => btn.textContent?.includes("Item #10"));
     if (itemExpandButton) {
       fireEvent.click(itemExpandButton);
     }
@@ -627,9 +625,7 @@ describe("FrbrEditor Component", () => {
 
     await waitFor(() => expect(screen.getByText(/Item #10/)).toBeInTheDocument());
 
-    const expandButton = screen.getAllByRole("button").find(btn =>
-      btn.textContent?.includes("Item #10")
-    );
+    const expandButton = screen.getAllByRole("button").find(btn => btn.textContent?.includes("Item #10"));
     if (expandButton) fireEvent.click(expandButton);
 
     await waitFor(() => {
@@ -874,9 +870,7 @@ describe("ContributorRowsEditor", () => {
   });
 
   it("renders existing contributions as rows", () => {
-    const contributions = [
-      { role: "author", name: "Test Author", sequence: 0 },
-    ];
+    const contributions = [{ role: "author", name: "Test Author", sequence: 0 }];
     render(<ContributorRowsEditor roles={roles} contributions={contributions} onChange={vi.fn()} />);
     expect(screen.getByTestId("contributor-row-0")).toBeInTheDocument();
     expect(screen.getByTestId("contributor-name-0")).toHaveValue("Test Author");
@@ -886,9 +880,7 @@ describe("ContributorRowsEditor", () => {
     const onChange = vi.fn();
     render(<ContributorRowsEditor roles={roles} contributions={[]} onChange={onChange} />);
     fireEvent.click(screen.getByTestId("contributor-add"));
-    expect(onChange).toHaveBeenCalledWith([
-      { role: "author", name: "", sequence: 0 },
-    ]);
+    expect(onChange).toHaveBeenCalledWith([{ role: "author", name: "", sequence: 0 }]);
   });
 
   it("removes a row when remove button is clicked", () => {
@@ -899,9 +891,7 @@ describe("ContributorRowsEditor", () => {
     ];
     render(<ContributorRowsEditor roles={roles} contributions={contributions} onChange={onChange} />);
     fireEvent.click(screen.getByTestId("contributor-remove-0"));
-    expect(onChange).toHaveBeenCalledWith([
-      { role: "composer", name: "Author Two", sequence: 0 },
-    ]);
+    expect(onChange).toHaveBeenCalledWith([{ role: "composer", name: "Author Two", sequence: 0 }]);
   });
 
   it("normalizes name on blur", () => {
@@ -912,8 +902,6 @@ describe("ContributorRowsEditor", () => {
     fireEvent.change(nameInput, { target: { value: "ludwig van beethoven" } });
     fireEvent.blur(nameInput);
     // Should have been called with normalized name
-    expect(onChange).toHaveBeenCalledWith([
-      { role: "author", name: "Ludwig van Beethoven", sequence: 0 },
-    ]);
+    expect(onChange).toHaveBeenCalledWith([{ role: "author", name: "Ludwig van Beethoven", sequence: 0 }]);
   });
 });

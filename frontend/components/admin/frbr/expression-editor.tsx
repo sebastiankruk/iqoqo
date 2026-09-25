@@ -63,9 +63,7 @@ export function ExpressionEditor({ tree, onSubmit, onAddChild, onEscalate, onDel
   const initialKind = tree.expression?.kind ?? "";
   const [kind, setKind] = useState(initialKind);
   const [metaFields, setMetaFields] = useState<MetaField[]>(() => transformMetaToFields(tree.expression?.meta));
-  const [contributions, setContributions] = useState<FrbrContribution[]>(
-    () => tree.expression?.contributions ?? []
-  );
+  const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.expression?.contributions ?? []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

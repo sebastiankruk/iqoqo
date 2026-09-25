@@ -15,7 +15,8 @@
 //
 
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import { notFound } from "next/navigation";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ManifestationPage from "@/app/manifestation/[id]/page";
 import ItemPage from "@/app/item/[id]/page";
@@ -138,6 +139,34 @@ describe("External AI Agent Semantic Discoverability across Public SSR Pages", (
     expect(parsed["author"]["name"]).toBe("Sebastian Kruk");
     expect(parsed["numberOfItems"]).toBe(2);
     expect(parsed["mainEntity"]["itemListElement"]).toHaveLength(2);
+  });
+
+  it("shared collection page renders a server error for upstream 5xx responses", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+    } as Response);
+
+    const pageJsx = await SharedCollectionPage({ params: Promise.resolve({ token: "test-token-503" }) });
+    renderWithClient(pageJsx);
+
+    expect(screen.getByRole("alert").textContent).toContain("Server Error");
+    expect(screen.getByRole("alert").textContent).toContain("Please Try Again Later");
+  });
+
+  it("shared collection page invokes notFound only for an upstream 404", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+    vi.mocked(notFound).mockImplementation(() => {
+      throw new Error("notFound invoked");
+    });
+
+    await expect(SharedCollectionPage({ params: Promise.resolve({ token: "missing-token" }) })).rejects.toThrow(
+      "notFound invoked"
+    );
+    expect(notFound).toHaveBeenCalledOnce();
   });
 
   it("public user profile page delivers ProfilePage Schema.org JSON-LD in SSR stream", async () => {

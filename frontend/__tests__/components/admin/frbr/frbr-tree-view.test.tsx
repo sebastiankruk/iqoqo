@@ -218,14 +218,7 @@ describe("FRBRTreeView", () => {
   });
 
   it("does not render action items when callbacks are not provided", () => {
-    render(
-      <FRBRTreeView
-        tree={mockTree}
-        selectedLevel="manifestation"
-        selectedId={3}
-        onSelect={vi.fn()}
-      />
-    );
+    render(<FRBRTreeView tree={mockTree} selectedLevel="manifestation" selectedId={3} onSelect={vi.fn()} />);
     expect(screen.queryByText("Add Child")).not.toBeInTheDocument();
     expect(screen.queryByText("Escalate")).not.toBeInTheDocument();
     expect(screen.queryByText("Delete")).not.toBeInTheDocument();

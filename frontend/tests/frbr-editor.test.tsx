@@ -226,9 +226,7 @@ describe("FrbrEditor Component", () => {
 
     // Click on the expand button for the item row
     const expandButtons = screen.getAllByRole("button");
-    const itemExpandButton = expandButtons.find(btn =>
-      btn.textContent?.includes("Item #10")
-    );
+    const itemExpandButton = expandButtons.find(btn => btn.textContent?.includes("Item #10"));
     if (itemExpandButton) {
       fireEvent.click(itemExpandButton);
     }

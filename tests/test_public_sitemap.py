@@ -54,6 +54,8 @@ def test_sitemap_includes_public_users_and_excludes_private(app, client):
             display_name="Hidden User",
             visibility="private",
         )
+        pub_user.set_password("test-password")
+        priv_user.set_password("test-password")
         db.session.add_all([pub_user, priv_user])
         db.session.commit()
 
@@ -67,6 +69,7 @@ def test_sitemap_includes_active_shares_and_excludes_expired(app, client):
     """Active shared collections appear in sitemap; expired ones are excluded."""
     with app.app_context():
         owner = User(email="shares_test@iqoqo.local", display_name="Owner")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 

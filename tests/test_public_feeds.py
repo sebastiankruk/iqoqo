@@ -34,6 +34,7 @@ def public_user(app):
         user = User(
             email="public@iqoqo.local", display_name="Public User", public_username="sebastiankruk", visibility="public", bio="Cave man bio"
         )
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
         return user.public_username

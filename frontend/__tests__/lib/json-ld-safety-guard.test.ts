@@ -78,16 +78,10 @@ function hasUnsafeJsonLdSink(content: string): boolean {
 }
 
 const FRONTEND_ROOT = path.resolve(__dirname, "../..");
-const SCAN_DIRS = [
-  path.join(FRONTEND_ROOT, "app"),
-  path.join(FRONTEND_ROOT, "components"),
-];
+const SCAN_DIRS = [path.join(FRONTEND_ROOT, "app"), path.join(FRONTEND_ROOT, "components")];
 
 // Files that are allowed to contain the pattern (the safe boundary itself)
-const ALLOWED_FILES = new Set([
-  "json-ld-script.tsx",
-  "json-ld-safety-guard.test.ts",
-]);
+const ALLOWED_FILES = new Set(["json-ld-script.tsx", "json-ld-safety-guard.test.ts"]);
 
 describe("Source-level guard: no raw JSON-LD sinks", () => {
   it("fails on a synthetic unsafe fixture", () => {

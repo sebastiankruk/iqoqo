@@ -85,3 +85,25 @@ def test_init_auth_roles_permissions(app):
         assert not missing_user, f"User is missing expected permissions: {missing_user}"
         assert not extra_user, f"User has unexpected permissions: {extra_user}"
         assert user_perms == expected_user_perms
+
+
+@pytest.mark.parametrize("weak_password", ["", "   ", "short7"])
+def test_init_auth_rejects_weak_password_before_database_writes(app, weak_password):
+    """Invalid bootstrap passwords are rejected before role/user writes."""
+    from app.db.models import User
+
+    app.config["ADMIN_PASSWORD"] = weak_password
+    with pytest.raises(ValueError, match="ADMIN_PASSWORD"):
+        run_init_auth(app)
+
+    with app.app_context():
+        assert Permission.query.count() == 0
+        assert Role.query.count() == 0
+        assert User.query.count() == 0
+
+
+def test_init_auth_accepts_eight_character_password():
+    """The documented minimum of eight characters is accepted."""
+    from scripts.init_auth import validate_admin_password
+
+    assert validate_admin_password("12345678") == "12345678"

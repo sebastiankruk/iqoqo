@@ -33,10 +33,5 @@ export interface JsonLdScriptProps {
  * @returns {JSX.Element} Script tag with safely serialized JSON-LD.
  */
 export function JsonLdScript({ data }: JsonLdScriptProps) {
-  return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: serializeJsonLdForHtml(data) }}
-    />
-  );
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLdForHtml(data) }} />;
 }

@@ -302,5 +302,21 @@ describe("ItemSidebar Component", () => {
       render(<ItemSidebar item={availableItem} />);
       expect(screen.getByRole("button", { name: /Request Loan/i })).toBeInTheDocument();
     });
+
+    it("hides Request Loan button when the authenticated user owns the item", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: { id: "owner1", permissions: [] },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const ownedItem = {
+        ...mockItem,
+        owner_id: "owner1",
+        is_owner: false,
+        collection_status: "available",
+      } as unknown as Item;
+
+      render(<ItemSidebar item={ownedItem} />);
+      expect(screen.queryByRole("button", { name: /Request Loan/i })).not.toBeInTheDocument();
+    });
   });
 });

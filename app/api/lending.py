@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.decorators import require_auth
 from app.db.auth import User
@@ -98,6 +98,15 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
         db.session.add(loan_request)
         db.session.commit()
         return jsonify({"success": True, "data": loan_request.to_dict()}), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        original = e.orig
+        diagnostic = getattr(original, "diag", None)
+        constraint_name = getattr(diagnostic, "constraint_name", None) or getattr(original, "constraint_name", None)
+        if constraint_name == "loan_requests_not_self_borrow":
+            return jsonify({"error": "Cannot request to loan your own item", "code": 400}), 400
+        logger.error("Integrity error creating loan request: %s", e)
+        return jsonify({"error": "Database error", "code": 500}), 500
     except SQLAlchemyError as e:
         logger.error("Error creating loan request: %s", e)
         db.session.rollback()

@@ -95,9 +95,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
   const [metaFields, setMetaFields] = useState<MetaField[]>(() =>
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
   );
-  const [contributions, setContributions] = useState<FrbrContribution[]>(
-    () => tree.work?.contributions ?? []
-  );
+  const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.work?.contributions ?? []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

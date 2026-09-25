@@ -17,6 +17,7 @@
 #
 import hmac
 import json
+import logging
 import os
 from io import BytesIO
 
@@ -33,6 +34,8 @@ from app.core.limiter import limiter
 from app.core.shacl_service import validate_rdf_string
 from app.db.models import Item, Manifestation, User, Work, db
 from app.utils.covers import COVERS_DIR, GALLERY_DIR
+
+logger = logging.getLogger(__name__)
 
 
 @api_bp.route("/static/covers/<path:filename>", methods=["GET", "HEAD"])
@@ -245,7 +248,9 @@ def get_faceted_stats():
 
 
 @api_bp.route("/stats/global", methods=["GET"])
+@limiter.limit("30 per minute")
 def get_global_stats():
+    """Public aggregate counts only; rate-limited by client IP to mitigate scraping."""
     try:
         works_count = db.session.query(Work).count()
         manifestations_count = db.session.query(Manifestation).count()
@@ -267,8 +272,9 @@ def get_global_stats():
             ),
             200,
         )
-    except (SQLAlchemyError, DBAPIError) as e:
-        return jsonify({"error": str(e)}), 500
+    except (SQLAlchemyError, DBAPIError):
+        logger.exception("Failed to load public global statistics")
+        return jsonify({"error": "Unable to load global statistics"}), 500
 
 
 @api_bp.route("/admin/stats", methods=["GET"])
@@ -319,9 +325,13 @@ def import_data():
         else:
             return jsonify({"error": "No data provided"}), 400
 
-        counts = DataManager.import_data(data, clear_existing=clear_existing)
+        counts = DataManager.import_data(data, clear_existing=clear_existing, default_owner_id=g.user_id)
         return jsonify({"status": "success", "imported": counts})
-    except (ValueError, TypeError, KeyError, SQLAlchemyError) as e:
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+    except (TypeError, KeyError, SQLAlchemyError) as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 

@@ -14,11 +14,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import hashlib
 import logging
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import urlsplit
 
 import jwt as pyjwt
 import requests
@@ -28,13 +30,14 @@ from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from app.api.decorators import admin_required, require_auth
+from app.api.decorators import admin_required, cache_token_revoked, require_auth
 from app.config import Config
 from app.core.limiter import limiter
-from app.db.models import InstanceSettings, Role, TokenBlocklist, User, db
+from app.db.models import InstanceSettings, OAuthExchangeCode, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 
 logger = logging.getLogger(__name__)
+OAUTH_EXCHANGE_CODE_TTL_SECONDS = 60
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 oauth = OAuth()
@@ -102,6 +105,35 @@ def generate_internal_jwt(user: User) -> str:
     return pyjwt.encode(payload, current_app.config["JWT_SECRET_KEY"], algorithm="HS256")
 
 
+def _safe_oauth_callback_path(candidate: object) -> str | None:
+    """Accept only same-origin relative paths for the post-login redirect."""
+    if not isinstance(candidate, str) or not candidate.startswith("/") or candidate.startswith("//") or "\\" in candidate:
+        return None
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc:
+        return None
+    return candidate
+
+
+def _issue_oauth_exchange_code(user: User, callback_url: str | None) -> str:
+    """Persist a hashed, single-use code and return the raw browser handoff value."""
+    now = datetime.now(UTC)
+    db.session.execute(db.delete(OAuthExchangeCode).where(OAuthExchangeCode.expires_at <= now))
+
+    code = secrets.token_urlsafe(32)
+    code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    db.session.add(
+        OAuthExchangeCode(
+            code_hash=code_hash,
+            user_id=user.id,
+            callback_url=callback_url,
+            expires_at=now + timedelta(seconds=OAUTH_EXCHANGE_CODE_TTL_SECONDS),
+        )
+    )
+    db.session.commit()
+    return code
+
+
 @auth_bp.route("/login/google")
 def google_login():
     if not _ensure_google_oauth():
@@ -109,8 +141,8 @@ def google_login():
         frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
         return redirect(f"{frontend_url}/login?error=oauth_not_configured")
 
-    callback_url = request.args.get("callbackUrl") or request.args.get("redirect")
-    if callback_url and callback_url.startswith("/") and not callback_url.startswith("//"):
+    callback_url = _safe_oauth_callback_path(request.args.get("callbackUrl") or request.args.get("redirect"))
+    if callback_url:
         session["oauth_callback_url"] = callback_url
 
     redirect_uri = request.url_root + "api/auth/callback/google"
@@ -127,7 +159,7 @@ def google_login():
         return oauth.google.authorize_redirect(redirect_uri)
     except (OAuthError, AttributeError) as e:
         logger.error("Google OAuth authorize_redirect failed: %s", e, exc_info=True)
-        return jsonify({"error": f"OAuth init failed: {e}"}), 502
+        return jsonify({"error": "Google sign-in could not be started. Please try again later."}), 502
 
 
 @auth_bp.route("/callback/google")
@@ -193,13 +225,52 @@ def google_callback():
         return redirect(f"{frontend_url}/login?error=user_setup_failed")
 
     try:
-        internal_token = generate_internal_jwt(user)
-    except pyjwt.PyJWTError as e:
-        logger.error("Google OAuth JWT generation failed: %s", e, exc_info=True)
-        return redirect(f"{frontend_url}/login?error=jwt_generation_failed")
+        exchange_code = _issue_oauth_exchange_code(user, _safe_oauth_callback_path(callback_url))
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Google OAuth exchange-code creation failed: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=oauth_exchange_failed")
 
-    cb_param = f"&callbackUrl={quote(callback_url)}" if callback_url else ""
-    return redirect(f"{frontend_url}/api/auth-exchange?token={internal_token}{cb_param}")
+    response = redirect(f"{frontend_url.rstrip('/')}/api/auth-exchange?code={exchange_code}")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@auth_bp.route("/exchange", methods=["POST"])
+def exchange_oauth_code():
+    """Atomically consume a short-lived OAuth code and issue the iQoQo session JWT."""
+    data = request.get_json(silent=True)
+    code = data.get("code") if isinstance(data, dict) else None
+    if not isinstance(code, str) or len(code) != 43:
+        return jsonify({"error": "Invalid or expired authorization code"}), 400
+
+    code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    now = datetime.now(UTC)
+    try:
+        row = db.session.execute(
+            db.delete(OAuthExchangeCode)
+            .where(OAuthExchangeCode.code_hash == code_hash, OAuthExchangeCode.expires_at > now)
+            .returning(OAuthExchangeCode.user_id, OAuthExchangeCode.callback_url)
+        ).first()
+        if row is None:
+            db.session.rollback()
+            return jsonify({"error": "Invalid or expired authorization code"}), 400
+
+        user = db.session.get(User, row.user_id)
+        if not user or not user.is_active:
+            db.session.commit()
+            return jsonify({"error": "Invalid or expired authorization code"}), 400
+
+        token = generate_internal_jwt(user)
+        callback_url = _safe_oauth_callback_path(row.callback_url) or "/"
+        db.session.commit()
+    except (SQLAlchemyError, pyjwt.PyJWTError) as exc:
+        db.session.rollback()
+        logger.error("OAuth authorization-code exchange failed: %s", exc, exc_info=True)
+        return jsonify({"error": "Unable to complete OAuth exchange"}), 500
+
+    return jsonify({"token": token, "callbackUrl": callback_url}), 200
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -230,8 +301,11 @@ def local_register():
     password = data.get("password")
     display_name = data.get("display_name")
 
-    if not email or not password:
+    if not email or password is None:
         return jsonify({"error": "Email and password are required"}), 400
+
+    if not isinstance(password, str) or len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters long"}), 400
 
     # Check if user already exists
     if db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none():
@@ -270,6 +344,8 @@ def logout():
         token = request.cookies.get("iqoqo_session")
 
     if token:
+        jti = None
+        exp = None
         try:
             payload = pyjwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
             jti = payload.get("jti")
@@ -278,9 +354,11 @@ def logout():
             if jti:
                 db.session.add(TokenBlocklist(jti=jti, expires_at=expires_at))
                 db.session.commit()
+                cache_token_revoked(jti, exp)
         except IntegrityError:
             db.session.rollback()
             # Already revoked, treat as success (idempotent)
+            cache_token_revoked(jti, exp)
         except pyjwt.PyJWTError:
             pass  # Token is invalid or expired anyway
 

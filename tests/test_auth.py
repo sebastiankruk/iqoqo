@@ -14,7 +14,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import hashlib
 import json
+from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -168,3 +171,100 @@ def test_google_login_configured_in_db(client, app, monkeypatch):
     assert response.status_code == 302
     assert "accounts.google.com" in response.headers["Location"]
     assert "client_id=test-google-client-id.apps.googleusercontent.com" in response.headers["Location"]
+
+
+def test_google_oauth_initialization_error_is_sanitized(client, monkeypatch):
+    from app.api import auth as auth_module
+
+    class FailingGoogle:
+        @staticmethod
+        def authorize_redirect(_redirect_uri):
+            raise AttributeError("internal provider endpoint and secret details")
+
+    class FakeOAuth:
+        google = FailingGoogle()
+
+    monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
+    monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
+
+    response = client.get("/api/auth/login/google")
+
+    assert response.status_code == 502
+    assert response.get_json() == {"error": "Google sign-in could not be started. Please try again later."}
+    assert b"internal provider" not in response.data
+
+
+def test_google_callback_uses_one_time_code_instead_of_jwt_query(client, app, monkeypatch):
+    """The provider callback redirects with a short-lived code, never the session JWT."""
+    from app.api import auth as auth_module
+    from app.db.models import OAuthExchangeCode
+
+    class FakeGoogle:
+        @staticmethod
+        def authorize_access_token():
+            return {"id_token": "provider-id-token"}
+
+        @staticmethod
+        def parse_id_token(_token, nonce=None):
+            assert nonce is None
+            return {"email": "oauth-code-user@iqoqo.local", "name": "OAuth Code User", "sub": "google-oauth-code-sub"}
+
+    class FakeOAuth:
+        google = FakeGoogle()
+
+    monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
+    monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
+    monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    with client.session_transaction() as flask_session:
+        flask_session["oauth_callback_url"] = "/collection?view=roadmap"
+
+    callback = client.get("/api/auth/callback/google")
+    assert callback.status_code == 302
+    location = callback.headers["Location"]
+    parsed = urlparse(location)
+    params = parse_qs(parsed.query)
+    assert parsed.path == "/api/auth-exchange"
+    assert "token" not in params
+    code = params["code"][0]
+    assert len(code) == 43
+    assert callback.headers["Cache-Control"] == "no-store"
+    assert callback.headers["Referrer-Policy"] == "no-referrer"
+
+    with app.app_context():
+        stored = db.session.get(OAuthExchangeCode, hashlib.sha256(code.encode()).hexdigest())
+        assert stored is not None
+        assert stored.code_hash != code
+        assert stored.callback_url == "/collection?view=roadmap"
+
+    exchanged = client.post("/api/auth/exchange", json={"code": code})
+    assert exchanged.status_code == 200
+    exchange_data = exchanged.get_json()
+    assert exchange_data["callbackUrl"] == "/collection?view=roadmap"
+    assert "token" in exchange_data
+
+    replay = client.post("/api/auth/exchange", json={"code": code})
+    assert replay.status_code == 400
+    assert replay.get_json() == {"error": "Invalid or expired authorization code"}
+
+
+def test_oauth_exchange_rejects_expired_code(client, app):
+    """Expired code digests cannot be used to mint a session token."""
+    from app.db.models import OAuthExchangeCode
+
+    code = "E" * 43
+    with app.app_context():
+        user = User(email="expired-oauth-code@iqoqo.local", google_id="expired-code-subject")
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(
+            OAuthExchangeCode(
+                code_hash=hashlib.sha256(code.encode()).hexdigest(),
+                user_id=user.id,
+                expires_at=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        db.session.commit()
+
+    response = client.post("/api/auth/exchange", json={"code": code})
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid or expired authorization code"}

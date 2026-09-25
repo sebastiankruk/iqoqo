@@ -62,6 +62,7 @@ def test_list_llm_permissions(app):
 
         # 2. User with no special permissions
         user = User(email="test@example.local")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 

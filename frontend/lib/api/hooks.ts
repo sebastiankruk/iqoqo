@@ -31,10 +31,7 @@ import type {
   WorkPartEntry,
 } from "@/types/frbr";
 import type { FrbrTree } from "./admin";
-import {
-  updateFrbrEntity as updateFrbrEntityApi,
-  type FrbrItem as FrbrItemType,
-} from "./admin";
+import { updateFrbrEntity as updateFrbrEntityApi, type FrbrItem as FrbrItemType } from "./admin";
 import { ARRAY_META_FIELDS, ensureArray } from "@/components/admin/frbr/types";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
@@ -1602,7 +1599,9 @@ export function useUpdateFrbrEntity() {
           updated.manifestation = {
             ...updated.manifestation,
             ...rest,
-            meta: meta ? { ...updated.manifestation.meta, ...(meta as Record<string, unknown>) } : updated.manifestation.meta,
+            meta: meta
+              ? { ...updated.manifestation.meta, ...(meta as Record<string, unknown>) }
+              : updated.manifestation.meta,
           } as typeof updated.manifestation;
         } else if (type === "item") {
           updated.items = updated.items.map(item => {

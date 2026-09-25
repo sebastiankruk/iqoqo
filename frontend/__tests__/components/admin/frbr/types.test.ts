@@ -14,13 +14,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { describe, it, expect } from "vitest";
-import { 
-  formatKeyForDisplay, 
-  transformMetaToFields, 
+import {
+  formatKeyForDisplay,
+  transformMetaToFields,
   transformFieldsToMeta,
   normalizeMetaValue,
   ensureArray,
-  ARRAY_META_FIELDS
+  ARRAY_META_FIELDS,
 } from "@/components/admin/frbr/types";
 
 describe("formatKeyForDisplay", () => {
@@ -149,11 +149,7 @@ describe("normalizeMetaValue", () => {
   });
 
   it("splits comma-separated authors", () => {
-    expect(normalizeMetaValue("authors", "Author1, Author2, Author3")).toEqual([
-      "Author1",
-      "Author2",
-      "Author3",
-    ]);
+    expect(normalizeMetaValue("authors", "Author1, Author2, Author3")).toEqual(["Author1", "Author2", "Author3"]);
   });
 
   it("splits semicolon-separated authors", () => {
@@ -174,19 +170,11 @@ describe("normalizeMetaValue", () => {
   });
 
   it("handles mixed separators", () => {
-    expect(normalizeMetaValue("authors", "Author1, Author2; Author3")).toEqual([
-      "Author1",
-      "Author2",
-      "Author3",
-    ]);
+    expect(normalizeMetaValue("authors", "Author1, Author2; Author3")).toEqual(["Author1", "Author2", "Author3"]);
   });
 
   it("normalizes tags field", () => {
-    expect(normalizeMetaValue("tags", "fiction, sci-fi, adventure")).toEqual([
-      "fiction",
-      "sci-fi",
-      "adventure",
-    ]);
+    expect(normalizeMetaValue("tags", "fiction, sci-fi, adventure")).toEqual(["fiction", "sci-fi", "adventure"]);
   });
 
   it("normalizes genres field", () => {
@@ -247,10 +235,10 @@ describe("transformMetaToFields with arrays", () => {
   });
 
   it("handles mixed array and non-array fields", () => {
-    const meta = { 
-      authors: ["Author1", "Author2"], 
+    const meta = {
+      authors: ["Author1", "Author2"],
       title: "Some Title",
-      tags: ["fiction", "thriller"]
+      tags: ["fiction", "thriller"],
     };
     const fields = transformMetaToFields(meta);
     expect(fields).toEqual([
@@ -301,10 +289,10 @@ describe("transformFieldsToMeta with array normalization", () => {
   });
 
   it("handles round-trip conversion", () => {
-    const original = { 
-      authors: ["Author1", "Author2"], 
+    const original = {
+      authors: ["Author1", "Author2"],
       title: "Some Title",
-      tags: ["fiction", "thriller"]
+      tags: ["fiction", "thriller"],
     };
     const fields = transformMetaToFields(original);
     const result = transformFieldsToMeta(fields);

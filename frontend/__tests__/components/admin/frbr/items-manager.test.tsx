@@ -173,9 +173,7 @@ describe("ItemsManager", () => {
   });
 
   it("renders owner_id when owner_name is not available", () => {
-    const itemsNoName: FrbrItem[] = [
-      { id: 20, status: "available", condition: null, meta: {}, owner_id: "user99" },
-    ];
+    const itemsNoName: FrbrItem[] = [{ id: 20, status: "available", condition: null, meta: {}, owner_id: "user99" }];
     render(<ItemsManager {...defaultProps} items={itemsNoName} />);
     expect(screen.getByText("user99")).toBeInTheDocument();
   });
@@ -183,13 +181,7 @@ describe("ItemsManager", () => {
   it("passes onItemEscalate and onItemDelete to ItemEditor when expanded", async () => {
     const onItemEscalate = vi.fn();
     const onItemDelete = vi.fn();
-    render(
-      <ItemsManager
-        {...defaultProps}
-        onItemEscalate={onItemEscalate}
-        onItemDelete={onItemDelete}
-      />
-    );
+    render(<ItemsManager {...defaultProps} onItemEscalate={onItemEscalate} onItemDelete={onItemDelete} />);
 
     const expandButton = screen.getByText("Item #10").closest("button")!;
     fireEvent.click(expandButton);
@@ -201,13 +193,7 @@ describe("ItemsManager", () => {
   });
 
   it("does not pass escalate/delete callbacks when not provided", async () => {
-    render(
-      <ItemsManager
-        items={mockItems}
-        onItemSubmit={vi.fn().mockResolvedValue(undefined)}
-        lastFetched={0}
-      />
-    );
+    render(<ItemsManager items={mockItems} onItemSubmit={vi.fn().mockResolvedValue(undefined)} lastFetched={0} />);
 
     const expandButton = screen.getByText("Item #10").closest("button")!;
     fireEvent.click(expandButton);

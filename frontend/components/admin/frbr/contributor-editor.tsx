@@ -125,13 +125,7 @@ export function ContributorEditor({ entityType, entityId, contributors = [], onC
               <span>
                 {c.contributor_name} <span className="text-muted-foreground">({c.role})</span>
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => handleRemove(c.id)}
-              >
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemove(c.id)}>
                 <X className="w-3 h-3 text-destructive" />
               </Button>
             </div>
@@ -147,9 +141,7 @@ export function ContributorEditor({ entityType, entityId, contributors = [], onC
             onChange={e => setSearchQuery(e.target.value)}
             className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
           />
-          {searching && (
-            <Loader2 className="absolute right-2 top-2 animate-spin h-4 w-4 text-muted-foreground" />
-          )}
+          {searching && <Loader2 className="absolute right-2 top-2 animate-spin h-4 w-4 text-muted-foreground" />}
           {searchResults.length > 0 && (
             <div className="absolute z-50 w-full mt-1 border rounded-md bg-popover shadow-md max-h-40 overflow-auto">
               {searchResults.map(user => (
