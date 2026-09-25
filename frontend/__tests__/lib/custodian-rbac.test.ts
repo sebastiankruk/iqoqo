@@ -32,10 +32,7 @@ import { describe, it, expect } from "vitest";
  * @param permissions - Array of user permissions
  * @returns true if user should see Administration menu
  */
-export function canAccessAdministration(
-  roles: string[] | undefined,
-  permissions: string[] | undefined
-): boolean {
+export function canAccessAdministration(roles: string[] | undefined, permissions: string[] | undefined): boolean {
   // Admin role always has access
   if (roles?.includes("admin")) {
     return true;
@@ -166,13 +163,10 @@ describe("Custodian RBAC Authorization Logic", () => {
 
     it("should NOT grant access to users with only non-custodian permissions", () => {
       expect(
-        canAccessAdministration(["user"], [
-          "delete:item",
-          "update:item",
-          "read:owners",
-          "config:external_apis",
-          "config:federation",
-        ])
+        canAccessAdministration(
+          ["user"],
+          ["delete:item", "update:item", "read:owners", "config:external_apis", "config:federation"]
+        )
       ).toBe(false);
     });
 

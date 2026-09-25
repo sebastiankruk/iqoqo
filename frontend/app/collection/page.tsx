@@ -206,16 +206,11 @@ function CollectionContent() {
     return statuses.filter(s => s !== "borrowed");
   }, [activeFilters]);
 
-  const isWishlistFilterActive = useMemo(
-    () => statusFilters.includes("wish_list"),
-    [statusFilters]
-  );
+  const isWishlistFilterActive = useMemo(() => statusFilters.includes("wish_list"), [statusFilters]);
 
   // Fetch wishlist items separately when wish_list filter is active
   const { data: wishlistData } = useWishlist(
-    isWishlistFilterActive && viewMode === "items" && isLoggedIn
-      ? { limit: 100 }
-      : undefined,
+    isWishlistFilterActive && viewMode === "items" && isLoggedIn ? { limit: 100 } : undefined,
     isWishlistFilterActive && viewMode === "items" && isLoggedIn
   );
 
@@ -294,10 +289,7 @@ function CollectionContent() {
     router,
   ]);
 
-  const physicalStatusFilters = useMemo(
-    () => statusFilters.filter(status => status !== "wish_list"),
-    [statusFilters]
-  );
+  const physicalStatusFilters = useMemo(() => statusFilters.filter(status => status !== "wish_list"), [statusFilters]);
 
   const {
     data: itemsData,
@@ -453,7 +445,9 @@ function CollectionContent() {
       : viewMode === "expressions"
         ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
         : viewMode === "items"
-          ? isWishlistFilterActive ? (wishlistData?.total ?? 0) : (itemsData?.pages?.[0]?.meta?.total ?? 0)
+          ? isWishlistFilterActive
+            ? (wishlistData?.total ?? 0)
+            : (itemsData?.pages?.[0]?.meta?.total ?? 0)
           : viewMode === "manifestations"
             ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
             : 0;

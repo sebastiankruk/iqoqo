@@ -90,17 +90,13 @@ describe("ContributorEditor", () => {
 
   it("renders remove buttons for each contributor", () => {
     render(<ContributorEditor entityType="work" entityId={1} contributors={mockContributors} />);
-    const removeButtons = screen.getAllByRole("button").filter(btn =>
-      btn.querySelector("svg") !== null
-    );
+    const removeButtons = screen.getAllByRole("button").filter(btn => btn.querySelector("svg") !== null);
     expect(removeButtons.length).toBeGreaterThanOrEqual(2);
   });
 
   it("calls API to remove a contributor when remove button is clicked", async () => {
     render(<ContributorEditor entityType="work" entityId={1} contributors={mockContributors} />);
-    const removeButtons = screen.getAllByRole("button").filter(btn =>
-      btn.querySelector("svg") !== null
-    );
+    const removeButtons = screen.getAllByRole("button").filter(btn => btn.querySelector("svg") !== null);
     fireEvent.click(removeButtons[0]);
     await waitFor(() => {
       expect(apiClient.delete).toHaveBeenCalledWith("/v1/admin/frbr/contributions/1");
@@ -109,12 +105,8 @@ describe("ContributorEditor", () => {
 
   it("calls onChanged callback after successful removal", async () => {
     const onChanged = vi.fn();
-    render(
-      <ContributorEditor entityType="work" entityId={1} contributors={mockContributors} onChanged={onChanged} />
-    );
-    const removeButtons = screen.getAllByRole("button").filter(btn =>
-      btn.querySelector("svg") !== null
-    );
+    render(<ContributorEditor entityType="work" entityId={1} contributors={mockContributors} onChanged={onChanged} />);
+    const removeButtons = screen.getAllByRole("button").filter(btn => btn.querySelector("svg") !== null);
     fireEvent.click(removeButtons[0]);
     await waitFor(() => {
       expect(onChanged).toHaveBeenCalled();
@@ -124,9 +116,7 @@ describe("ContributorEditor", () => {
   it("handles remove error gracefully", async () => {
     vi.mocked(apiClient.delete).mockRejectedValueOnce(new Error("Network error"));
     render(<ContributorEditor entityType="work" entityId={1} contributors={mockContributors} />);
-    const removeButtons = screen.getAllByRole("button").filter(btn =>
-      btn.querySelector("svg") !== null
-    );
+    const removeButtons = screen.getAllByRole("button").filter(btn => btn.querySelector("svg") !== null);
     fireEvent.click(removeButtons[0]);
     await waitFor(() => {
       expect(apiClient.delete).toHaveBeenCalled();
@@ -196,9 +186,9 @@ describe("ContributorEditor", () => {
   it("renders with empty contributors array by default", () => {
     render(<ContributorEditor entityType="work" entityId={1} />);
     // No contributor entries should be rendered (only role dropdown has "author")
-    const removeButtons = screen.getAllByRole("button").filter(btn =>
-      btn.querySelector("svg.text-destructive") !== null
-    );
+    const removeButtons = screen
+      .getAllByRole("button")
+      .filter(btn => btn.querySelector("svg.text-destructive") !== null);
     expect(removeButtons.length).toBe(0);
   });
 

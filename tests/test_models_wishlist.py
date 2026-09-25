@@ -40,6 +40,7 @@ def frbr_stack(app):
     """Seed a full FRBR stack (Work → Expression → Manifestation) and a user."""
     with app.app_context():
         user = User(email="model_test@iqoqo.local", display_name="Model Tester")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 
@@ -305,6 +306,7 @@ class TestUserWorkIntentUniqueConstraint:
         """Given different users with the same work, both intents coexist."""
         with app.app_context():
             user2 = User(email="model_test2@iqoqo.local", display_name="Model Tester 2")
+            user2.set_password("test-password")
             db.session.add(user2)
             db.session.flush()
 

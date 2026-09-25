@@ -137,14 +137,12 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
   });
 
   it("shared collection page preserves description with HTML entities through SSR JSON-LD", async () => {
-    const maliciousDescription = "Items with <b>bold</b> & \"quotes\" and </script> breakout";
+    const maliciousDescription = 'Items with <b>bold</b> & "quotes" and </script> breakout';
     const mockSharedCollection = {
       author: "Collector </script>",
       collection_name: "My <Special> Collection",
       collection_description: maliciousDescription,
-      items: [
-        { id: 101, manifestation_id: 1996, title: "Item </script>", authors: ["Author & Friends"] },
-      ],
+      items: [{ id: 101, manifestation_id: 1996, title: "Item </script>", authors: ["Author & Friends"] }],
     };
 
     vi.spyOn(global, "fetch").mockResolvedValue({
@@ -166,7 +164,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
   });
 
   it("public profile page preserves bio with Unicode separators and multiline text", async () => {
-    const maliciousBio = "Line 1\u2028Line 2\u2029Line 3\n<b>bold</b> & \"quoted\" </script>";
+    const maliciousBio = 'Line 1\u2028Line 2\u2029Line 3\n<b>bold</b> & "quoted" </script>';
     const mockProfile = {
       username: "evil_user",
       display_name: "Display </script>",
@@ -202,7 +200,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
   });
 
   it("item page preserves FRBR hierarchy with malicious work title", async () => {
-    const maliciousTitle = 'Dune </script><script>alert(1)</script>';
+    const maliciousTitle = "Dune </script><script>alert(1)</script>";
     const mockItem = {
       id: 55,
       title: maliciousTitle,
@@ -242,11 +240,11 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
         data={{
           id: 1,
           title: 'Work </script> & "quoted"',
-          authors: ['Author <b>bold</b>'],
+          authors: ["Author <b>bold</b>"],
           manifestations: [
             {
               id: 10,
-              title: 'Manifestation </script>',
+              title: "Manifestation </script>",
               isbn: "978-0-441-17271-9",
               language: "eng",
               contentType: "book",
@@ -261,7 +259,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
     const parsed = parseJsonLd(container);
 
     expect(parsed["name"]).toBe('Work </script> & "quoted"');
-    expect(parsed["author"]["name"]).toBe('Author <b>bold</b>');
+    expect(parsed["author"]["name"]).toBe("Author <b>bold</b>");
     const examples = parsed["workExample"] as any[];
     expect(examples[0].name).toBe("Manifestation </script>");
     expect(examples[0].isbn).toBe("978-0-441-17271-9");
@@ -274,13 +272,13 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
           id: 5,
           workId: 1,
           workTitle: 'Work </script> & "quoted"',
-          authors: ['Author <b>bold</b>'],
+          authors: ["Author <b>bold</b>"],
           language: "eng",
           contentType: "text",
           manifestations: [
             {
               id: 10,
-              title: 'Manifestation </script>',
+              title: "Manifestation </script>",
               contentType: "book",
             },
           ],
@@ -292,7 +290,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
     const parsed = parseJsonLd(container);
 
     expect(parsed["name"]).toContain('Work </script> & "quoted"');
-    expect(parsed["author"]["name"]).toBe('Author <b>bold</b>');
+    expect(parsed["author"]["name"]).toBe("Author <b>bold</b>");
     expect(parsed["isPartOf"]["name"]).toBe('Work </script> & "quoted"');
   });
 

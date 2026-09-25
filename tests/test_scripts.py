@@ -281,6 +281,7 @@ def test_fix_invalid_item_statuses_script(app):
 
     with app.app_context():
         user = User(email="status_fixer@example.com")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 
@@ -322,6 +323,7 @@ def test_migrate_wishlist_intents_script(app):
 
     with app.app_context():
         user = User(email="wishlist_tester@example.com")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 

@@ -453,10 +453,13 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_1_frbr_relation_management"
+    assert heads[0] == "v0_8_1_oauth_exchange_codes"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_1_oauth_exchange_codes",
+        "v0_8_1_security_constraints",
+        "v0_8_1_lending_self_borrow",
         "v0_8_1_frbr_relation_management",
         "v0_8_1_wishlist_f2_f3_binding",
         "v0_7_19_f3_column_promotion",
@@ -718,3 +721,188 @@ def test_v0_7_19_f3_rollback_verification(app) -> None:
             row = conn.execute(sa.text("SELECT id FROM manifestations WHERE id = :id"), {"id": manif_id}).fetchone()
             assert row is not None
             assert row[0] == manif_id
+
+
+def test_v0_8_1_security_constraints_upgrade_and_downgrade() -> None:
+    """The security constraint migration upgrades legacy checks and rolls back cleanly."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy.exc import IntegrityError
+
+    migration: Any = import_module("migrations.versions.v0_8_1_security_constraints")
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    users = sa.Table(
+        "users",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("email", sa.String, nullable=False),
+        sa.Column("visibility", sa.String, nullable=False),
+        sa.Column("password_hash", sa.String, nullable=True),
+        sa.Column("google_id", sa.String, nullable=True),
+        sa.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
+    )
+    aggregations = sa.Table(
+        "container_aggregations",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("aggregated_type", sa.String, nullable=False),
+        sa.Column("aggregated_work_id", sa.Integer, nullable=True),
+        sa.Column("aggregated_item_id", sa.Integer, nullable=True),
+        sa.Column("component_name", sa.String, nullable=False),
+        sa.CheckConstraint(
+            "(aggregated_type = 'work' AND aggregated_work_id IS NOT NULL AND aggregated_item_id IS NULL) OR "
+            "(aggregated_type = 'item' AND aggregated_item_id IS NOT NULL AND aggregated_work_id IS NULL)",
+            name="ck_container_aggregation_type_match",
+        ),
+    )
+    metadata.create_all(engine)
+
+    with engine.begin() as connection:
+        connection.execute(users.insert().values(email="legacy-user@iqoqo.local", visibility="private", password_hash="test-hash"))
+        connection.execute(aggregations.insert().values(aggregated_type="work", aggregated_work_id=1, component_name="Rulebook"))
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        user_checks = {check["name"] for check in inspector.get_check_constraints("users")}
+        aggregation_checks = {check["name"] for check in inspector.get_check_constraints("container_aggregations")}
+        assert "ck_users_visibility" not in user_checks
+        assert {"check_user_visibility", "check_user_auth_method"} <= user_checks
+        assert "check_container_aggregation_type" in aggregation_checks
+
+        with engine.begin() as connection:
+            connection.execute(users.insert().values(email="shared-user@iqoqo.local", visibility="shared", google_id="shared-subject"))
+            connection.execute(users.delete().where(users.c.email == "shared-user@iqoqo.local"))
+
+        with pytest.raises(IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(users.insert().values(email="no-auth@iqoqo.local", visibility="private"))
+
+        run_migration(migration.downgrade)
+        downgraded_user_checks = {check["name"] for check in sa.inspect(engine).get_check_constraints("users")}
+        downgraded_aggregation_checks = {check["name"] for check in sa.inspect(engine).get_check_constraints("container_aggregations")}
+        assert "ck_users_visibility" in downgraded_user_checks
+        assert "check_user_auth_method" not in downgraded_user_checks
+        assert "check_container_aggregation_type" not in downgraded_aggregation_checks
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_1_security_constraints_handles_legacy_system_user() -> None:
+    """The security constraint migration cleans up the legacy transitional user but still rejects real unauthenticated users."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_1_security_constraints")
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    users = sa.Table(
+        "users",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("email", sa.String, nullable=False),
+        sa.Column("visibility", sa.String, nullable=False),
+        sa.Column("password_hash", sa.String, nullable=True),
+        sa.Column("google_id", sa.String, nullable=True),
+        sa.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
+    )
+    aggregations = sa.Table(
+        "container_aggregations",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("aggregated_type", sa.String, nullable=False),
+        sa.Column("aggregated_work_id", sa.Integer, nullable=True),
+        sa.Column("aggregated_item_id", sa.Integer, nullable=True),
+        sa.Column("component_name", sa.String, nullable=False),
+    )
+    metadata.create_all(engine)
+
+    # Scenario 1: Only legacy user without credentials exists -> migration cleans it up and succeeds
+    with engine.begin() as connection:
+        connection.execute(users.insert().values(email="legacy@iqoqo.cc", visibility="private"))
+        connection.execute(aggregations.insert().values(aggregated_type="work", aggregated_work_id=1, component_name="Rulebook"))
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        with engine.begin() as connection:
+            remaining = connection.execute(sa.text("SELECT email FROM users WHERE email = 'legacy@iqoqo.cc'")).fetchall()
+            assert len(remaining) == 0
+
+        run_migration(migration.downgrade)
+
+        # Scenario 2: A non-legacy user without credentials exists -> migration fails closed
+        with engine.begin() as connection:
+            connection.execute(users.insert().values(email="real-user-no-creds@iqoqo.local", visibility="private"))
+
+        with pytest.raises(RuntimeError, match="Cannot add check_user_auth_method"):
+            run_migration(migration.upgrade)
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_1_oauth_exchange_codes_upgrade_and_downgrade() -> None:
+    """The OAuth handoff-code table is reversible and cascades with its user."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_1_oauth_exchange_codes")
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    sa.Table("users", metadata, sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True))
+    metadata.create_all(engine)
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        assert inspector.has_table("oauth_exchange_codes")
+        assert {"code_hash", "user_id", "callback_url", "expires_at", "created_at"} <= {
+            column["name"] for column in inspector.get_columns("oauth_exchange_codes")
+        }
+        foreign_keys = inspector.get_foreign_keys("oauth_exchange_codes")
+        assert foreign_keys[0]["referred_table"] == "users"
+        assert foreign_keys[0]["options"].get("ondelete") == "CASCADE"
+
+        run_migration(migration.downgrade)
+        assert not sa.inspect(engine).has_table("oauth_exchange_codes")
+    finally:
+        engine.dispose()

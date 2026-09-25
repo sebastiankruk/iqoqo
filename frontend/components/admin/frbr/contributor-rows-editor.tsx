@@ -45,11 +45,7 @@ interface ContributorRowsEditorProps {
  * @param props.onChange - Callback when contributions change
  * @returns Contributor rows editor JSX element
  */
-export function ContributorRowsEditor({
-  roles,
-  contributions,
-  onChange,
-}: ContributorRowsEditorProps) {
+export function ContributorRowsEditor({ roles, contributions, onChange }: ContributorRowsEditorProps) {
   const [internalIdCounter, setInternalIdCounter] = useState(0);
   const [rows, setRows] = useState<(FrbrContribution & { _internalId: number })[]>(() =>
     contributions.map((c, i) => ({ ...c, _internalId: i }))
@@ -117,9 +113,7 @@ export function ContributorRowsEditor({
       <h4 className="text-sm font-semibold">Contributors</h4>
 
       {rows.length === 0 && (
-        <p className="text-sm text-muted-foreground italic">
-          No contributors yet. Click "Add Contributor" to begin.
-        </p>
+        <p className="text-sm text-muted-foreground italic">No contributors yet. Click "Add Contributor" to begin.</p>
       )}
 
       <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -139,7 +133,9 @@ export function ContributorRowsEditor({
               ))}
             </select>
             <input
-              ref={el => { nameInputRefs.current[idx] = el; }}
+              ref={el => {
+                nameInputRefs.current[idx] = el;
+              }}
               value={row.name}
               onChange={e => handleNameChange(idx, e.target.value)}
               onBlur={() => handleNameBlur(idx)}

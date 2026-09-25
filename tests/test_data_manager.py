@@ -19,6 +19,7 @@
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 import json
+import uuid
 
 import pytest
 import sqlalchemy as sa
@@ -29,7 +30,17 @@ from app.db.models import ITEM_STATUSES, Expression, Item, Manifestation, User, 
 
 
 @pytest.fixture
-def sample_data():
+def import_owner(app):
+    """Return a persisted, valid test account for imported Item ownership."""
+    with app.app_context():
+        owner = User(email="data_manager_owner@iqoqo.local", google_id="data-manager-import-owner")
+        db.session.add(owner)
+        db.session.commit()
+        return owner.id
+
+
+@pytest.fixture
+def sample_data(import_owner):
     """Create sample FRBR data for testing."""
     return {
         "version": "1.0",
@@ -47,7 +58,16 @@ def sample_data():
                 "year": 1937,
             }
         ],
-        "items": [{"id": 1, "manifestation_id": 1, "condition": "good", "location": "shelf-a", "notes": "First edition copy"}],
+        "items": [
+            {
+                "id": 1,
+                "manifestation_id": 1,
+                "owner_id": str(import_owner),
+                "condition": "good",
+                "location": "shelf-a",
+                "notes": "First edition copy",
+            }
+        ],
     }
 
 
@@ -182,7 +202,7 @@ def test_clear_all_data(app, sample_data):
         assert Item.query.count() == 0
 
 
-def test_import_foreign_key_remapping(app):
+def test_import_foreign_key_remapping(app, import_owner):
     """Test that foreign keys are correctly remapped during import."""
     with app.app_context():
         data = {
@@ -194,7 +214,7 @@ def test_import_foreign_key_remapping(app):
             "items": [{"id": 666, "manifestation_id": 777, "condition": "good"}],
         }
 
-        DataManager.import_data(data, clear_existing=False)
+        DataManager.import_data(data, clear_existing=False, default_owner_id=import_owner)
 
         # The IDs should be reassigned, but relationships should be preserved
         work = Work.query.first()
@@ -207,7 +227,7 @@ def test_import_foreign_key_remapping(app):
         assert item.manifestation_id == manifestation.id
 
 
-def test_import_handles_missing_optional_fields(app):
+def test_import_handles_missing_optional_fields(app, import_owner):
     """Test that import handles missing optional fields gracefully."""
     with app.app_context():
         data = {
@@ -231,12 +251,79 @@ def test_import_handles_missing_optional_fields(app):
             ],
         }
 
-        result = DataManager.import_data(data, clear_existing=False)
+        result = DataManager.import_data(data, clear_existing=False, default_owner_id=import_owner)
 
         assert result["works"] == 1
         assert result["expressions"] == 1
         assert result["manifestations"] == 1
         assert result["items"] == 1
+
+
+def test_import_preserves_existing_owner_and_uses_explicit_fallback(app, import_owner):
+    """Existing UUID owners stay intact; only unresolved owners use the fallback."""
+    with app.app_context():
+        second_owner = User(email="data_manager_second_owner@iqoqo.local", google_id="data-manager-second-owner")
+        db.session.add(second_owner)
+        db.session.commit()
+        data = {
+            "works": [{"id": 1, "title": "Ownership"}],
+            "expressions": [{"id": 1, "work_id": 1}],
+            "manifestations": [{"id": 1, "expression_id": 1}],
+            "items": [
+                {"manifestation_id": 1, "owner_id": str(second_owner.id)},
+                {"manifestation_id": 1, "owner_id": "not-a-uuid"},
+                {"manifestation_id": 1},
+                {"manifestation_id": 1, "owner_id": str(uuid.uuid4())},
+            ],
+        }
+
+        DataManager.import_data(data, default_owner_id=import_owner)
+        imported_owners = [item.owner_id for item in Item.query.order_by(Item.id).all()]
+
+        assert imported_owners == [second_owner.id, import_owner, import_owner, import_owner]
+
+
+def test_import_missing_owner_fails_before_writing_any_records(app):
+    """Imports requiring fallback ownership fail closed without synthetic users or partial data."""
+    with app.app_context():
+        data = {
+            "works": [{"id": 1, "title": "Must Roll Back"}],
+            "expressions": [{"id": 1, "work_id": 1}],
+            "manifestations": [{"id": 1, "expression_id": 1}],
+            "items": [{"manifestation_id": 1}],
+        }
+
+        with pytest.raises(ValueError, match="existing default_owner_id"):
+            DataManager.import_data(data)
+
+        assert Work.query.count() == 0
+        assert Expression.query.count() == 0
+        assert Manifestation.query.count() == 0
+        assert Item.query.count() == 0
+        assert User.query.filter_by(email="data_importer@iqoqo.local").count() == 0
+
+
+def test_import_failure_rolls_back_clear_and_partial_records(app, import_owner):
+    """A database constraint failure restores pre-import catalog data atomically."""
+    with app.app_context():
+        existing = Work(title="Existing record", meta={})
+        db.session.add(existing)
+        db.session.commit()
+        db.session.expunge_all()
+        data = {
+            "works": [{"id": 1, "title": "New record"}],
+            "expressions": [{"id": 1, "work_id": 1}],
+            "manifestations": [{"id": 1, "expression_id": 1}],
+            "items": [{"manifestation_id": 1, "owner_id": str(import_owner), "status": "invalid-status"}],
+        }
+
+        with pytest.raises(sa.exc.IntegrityError):
+            DataManager.import_data(data, clear_existing=True, default_owner_id=import_owner)
+
+        assert [work.title for work in Work.query.all()] == ["Existing record"]
+        assert Expression.query.count() == 0
+        assert Manifestation.query.count() == 0
+        assert Item.query.count() == 0
 
 
 def test_stats_accuracy(app, sample_data):
@@ -267,7 +354,7 @@ def test_stats_accuracy(app, sample_data):
 def test_get_stats_per_status_counts(app):
     """Test that get_stats() returns correct per-status counts for all ITEM_STATUSES."""
     with app.app_context():
-        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester", google_id="data-manager-status-user")
         db.session.add(test_user)
         db.session.commit()  # Commit to generate the UUID
 
@@ -313,8 +400,8 @@ def test_get_stats_owner_scopes_frbr_counts(app):
     even though the global database totals are 2.
     """
     with app.app_context():
-        user_a = User(email="user_a@iqoqo.local", display_name="User A")
-        user_b = User(email="user_b@iqoqo.local", display_name="User B")
+        user_a = User(email="user_a@iqoqo.local", display_name="User A", google_id="data-manager-owner-a")
+        user_b = User(email="user_b@iqoqo.local", display_name="User B", google_id="data-manager-owner-b")
         db.session.add_all([user_a, user_b])
         db.session.commit()
 
@@ -366,8 +453,8 @@ def test_get_stats_owner_shared_manifestation(app):
     is applied correctly.
     """
     with app.app_context():
-        user_a = User(email="shared_a@iqoqo.local", display_name="Shared A")
-        user_b = User(email="shared_b@iqoqo.local", display_name="Shared B")
+        user_a = User(email="shared_a@iqoqo.local", display_name="Shared A", google_id="data-manager-shared-a")
+        user_b = User(email="shared_b@iqoqo.local", display_name="Shared B", google_id="data-manager-shared-b")
         db.session.add_all([user_a, user_b])
         db.session.commit()
 
@@ -404,7 +491,7 @@ def test_get_stats_owner_shared_manifestation(app):
 def app_with_faceted_data(app):
     """Seed DB with items across categories, formats, tags, collections for faceted stats testing."""
     with app.app_context():
-        user = User(email="facet_test@iqoqo.local", display_name="Facet Tester")
+        user = User(email="facet_test@iqoqo.local", display_name="Facet Tester", google_id="data-manager-facet-user")
         db.session.add(user)
         db.session.flush()
 
@@ -530,7 +617,7 @@ def test_get_faceted_stats_filtered_by_tag(app_with_faceted_data, app):
 def test_get_faceted_stats_empty_filters(app):
     """get_faceted_stats with valid user_id but no items returns zeros/empty."""
     with app.app_context():
-        user = User(email="empty_test@iqoqo.local", display_name="Empty")
+        user = User(email="empty_test@iqoqo.local", display_name="Empty", google_id="data-manager-empty-user")
         db.session.add(user)
         db.session.flush()
         stats = DataManager.get_faceted_stats(owner_id=user.id)
@@ -551,7 +638,7 @@ def test_get_faceted_stats_empty_filters(app):
 def app_with_cross_frbr_data(app):
     """Seed DB with data spanning multiple FRBR levels for cross-FRBR tests."""
     with app.app_context():
-        user = User(email="cross_frbr@iqoqo.local", display_name="Cross FRBR")
+        user = User(email="cross_frbr@iqoqo.local", display_name="Cross FRBR", google_id="data-manager-cross-frbr-user")
         db.session.add(user)
         db.session.flush()
 

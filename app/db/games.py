@@ -39,6 +39,7 @@ class ContainerAggregation(db.Model):  # type: ignore[name-defined]
             "(aggregated_type = 'item' AND aggregated_item_id IS NOT NULL AND aggregated_work_id IS NULL)",
             name="ck_container_aggregation_type_match",
         ),
+        db.CheckConstraint("aggregated_type IN ('work', 'item')", name="check_container_aggregation_type"),
         *(({"schema": _CATALOG},) if _CATALOG else ()),
     )
 

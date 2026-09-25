@@ -31,8 +31,9 @@ test.describe("Phase 1 Ingestion Hardening - Allegro Strategy Cascade", () => {
     });
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
-    await page.goto(`/api/auth-exchange?token=${token}`);
-    await page.waitForURL(/\/(collection)?$/);
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
+    await page.goto("/");
   });
 
   test("should successfully ingest an item via Allegro fallback when standard ISBN search yields no results", async ({

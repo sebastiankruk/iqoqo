@@ -59,13 +59,11 @@ describe("Data Export i18n completeness", () => {
 
     if (hasExportNamespace) {
       const enExport =
-        (enMessages as Record<string, unknown>).Export ||
-        (enMessages as Record<string, unknown>).DataExport;
+        (enMessages as Record<string, unknown>).Export || (enMessages as Record<string, unknown>).DataExport;
       const plExport =
-        (plMessages as Record<string, unknown>).Export ||
-        (plMessages as Record<string, unknown>).DataExport;
+        (plMessages as Record<string, unknown>).Export || (plMessages as Record<string, unknown>).DataExport;
 
-      if (enExport && plExport && typeof enExport === 'object' && typeof plExport === 'object') {
+      if (enExport && plExport && typeof enExport === "object" && typeof plExport === "object") {
         const enExportObj = enExport as Record<string, unknown>;
         const plExportObj = plExport as Record<string, unknown>;
         const enExportKeys = Object.keys(enExportObj).sort();
@@ -74,12 +72,12 @@ describe("Data Export i18n completeness", () => {
 
         // Verify no empty translations
         for (const [key, value] of Object.entries(enExportObj)) {
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             expect(value.trim()).not.toBe("");
           }
         }
         for (const [key, value] of Object.entries(plExportObj)) {
-          if (typeof value === 'string') {
+          if (typeof value === "string") {
             expect(value.trim()).not.toBe("");
           }
         }
@@ -95,7 +93,7 @@ describe("Data Export i18n completeness", () => {
     const enProfile = (enMessages as Record<string, unknown>).Profile;
     const plProfile = (plMessages as Record<string, unknown>).Profile;
 
-    if (enProfile && plProfile && typeof enProfile === 'object' && typeof plProfile === 'object') {
+    if (enProfile && plProfile && typeof enProfile === "object" && typeof plProfile === "object") {
       const enProfileObj = enProfile as Record<string, unknown>;
       const plProfileObj = plProfile as Record<string, unknown>;
       const enProfileKeys = Object.keys(enProfileObj).sort();

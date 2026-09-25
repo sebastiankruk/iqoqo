@@ -42,6 +42,7 @@ def populated_library(app):
     """Seed an in-memory library with items spanning several statuses."""
     with app.app_context():
         test_user = User(email="frontend_test@iqoqo.local", display_name="Frontend Tester")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.commit()  # Commit to generate the UUID
 

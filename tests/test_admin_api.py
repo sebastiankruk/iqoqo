@@ -24,12 +24,15 @@ from io import BytesIO
 import pytest
 
 from app.core.data_manager import DataManager
-from app.db.models import Expression, InstanceSettings, Item, Manifestation, Work
+from app.db.models import Expression, InstanceSettings, Item, Manifestation, User, Work
 
 
 @pytest.fixture
-def sample_export_data():
+def sample_export_data(app, admin_headers):
     """Sample data in export format."""
+    with app.app_context():
+        owner = User.query.filter_by(email="test_admin@iqoqo.local").one()
+        owner_id = str(owner.id)
     return {
         "version": "1.0",
         "exported_at": "2026-01-30T12:00:00",
@@ -45,7 +48,7 @@ def sample_export_data():
                 "year": 1950,
             }
         ],
-        "items": [{"id": 1, "manifestation_id": 1, "condition": "good"}],
+        "items": [{"id": 1, "manifestation_id": 1, "owner_id": owner_id, "condition": "good"}],
     }
 
 
@@ -139,6 +142,25 @@ def test_admin_import_multipart_file(client, admin_headers, sample_export_data):
     data = response.json
     assert data["status"] == "success"
     assert data["imported"]["works"] == 1
+
+
+def test_admin_import_falls_back_to_authenticated_admin_owner(app, client, admin_headers):
+    """Unresolved seed owners are assigned to the authenticated importing admin."""
+    data = {
+        "works": [{"id": 1, "title": "Admin-owned import"}],
+        "expressions": [{"id": 1, "work_id": 1}],
+        "manifestations": [{"id": 1, "expression_id": 1}],
+        "items": [{"manifestation_id": 1, "owner_id": "invalid-owner-id"}],
+    }
+
+    response = client.post("/api/admin/import", json=data, headers=admin_headers)
+
+    assert response.status_code == 200
+    with app.app_context():
+        admin = User.query.filter_by(email="test_admin@iqoqo.local").one()
+        imported_item = Item.query.one()
+        assert imported_item.owner_id == admin.id
+        assert User.query.filter_by(email="data_importer@iqoqo.local").count() == 0
 
 
 def test_admin_import_with_clear(app, client, admin_headers, sample_export_data):

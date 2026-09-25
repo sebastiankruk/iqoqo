@@ -374,7 +374,7 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       const payload = buildProfileJsonLd({
         username: "evil_user",
         displayName: '</script><img src=x onerror="alert(1)">',
-        bio: "I love <b>bold</b> & \"quoted\" text\u2028with line separators",
+        bio: 'I love <b>bold</b> & "quoted" text\u2028with line separators',
         publicItemCount: 5,
       });
       const serialized = serializeJsonLdForHtml(payload);
@@ -387,16 +387,14 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(parsed["@type"]).toBe("ProfilePage");
       const person = parsed.mainEntity;
       expect(person.name).toBe('</script><img src=x onerror="alert(1)">');
-      expect(person.description).toBe(
-        "I love <b>bold</b> & \"quoted\" text\u2028with line separators"
-      );
+      expect(person.description).toBe('I love <b>bold</b> & "quoted" text\u2028with line separators');
     });
 
     it("handles combined dangerous characters in a realistic Work title", () => {
       const payload = buildWorkJsonLd({
         id: 1,
         title: 'Dune: Part <2> & "More"',
-        authors: ['O\'Brien </script>'],
+        authors: ["O'Brien </script>"],
         manifestations: [
           {
             id: 10,
@@ -415,7 +413,7 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       // Must be parseable and preserve all values
       const parsed = JSON.parse(serialized);
       expect(parsed.name).toBe('Dune: Part <2> & "More"');
-      expect(parsed.author.name).toBe('O\'Brien </script>');
+      expect(parsed.author.name).toBe("O'Brien </script>");
       const examples = parsed.workExample;
       expect(examples[0].name).toBe('Dune: Part <2> & "More" (Special)');
     });

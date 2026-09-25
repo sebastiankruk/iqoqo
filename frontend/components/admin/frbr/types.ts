@@ -171,9 +171,7 @@ export function formatKeyForDisplay(key: string): string {
 export function transformMetaToFields(meta: Record<string, unknown> | null | undefined): MetaField[] {
   if (!meta || typeof meta !== "object") return [];
   return Object.entries(meta).map(([key, value]) => {
-    const displayValue = Array.isArray(value)
-      ? value.join(", ")
-      : String(value ?? "");
+    const displayValue = Array.isArray(value) ? value.join(", ") : String(value ?? "");
     return { key, value: displayValue };
   });
 }

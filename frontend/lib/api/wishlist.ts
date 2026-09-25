@@ -17,20 +17,14 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
-import type {
-  ApiResponse,
-  WishlistItem,
-  WishlistCreateDTO,
-  WishlistUpdateDTO,
-} from "@/types/frbr";
+import type { ApiResponse, WishlistItem, WishlistCreateDTO, WishlistUpdateDTO } from "@/types/frbr";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
 export const wishlistQueryKeys = {
   all: ["wishlist"] as const,
   lists: () => [...wishlistQueryKeys.all, "list"] as const,
-  list: (params?: Record<string, unknown>) =>
-    [...wishlistQueryKeys.lists(), params] as const,
+  list: (params?: Record<string, unknown>) => [...wishlistQueryKeys.lists(), params] as const,
   details: () => [...wishlistQueryKeys.all, "detail"] as const,
   detail: (id: number) => [...wishlistQueryKeys.details(), id] as const,
 };
@@ -56,13 +50,8 @@ export async function fetchWishlistItem(id: number): Promise<WishlistItem> {
 }
 
 /** Create a new wishlist entry. */
-export async function createWishlistItem(
-  dto: WishlistCreateDTO
-): Promise<WishlistItem> {
-  const res = await apiClient.post<ApiResponse<WishlistItem>>(
-    "/wishlist",
-    dto
-  );
+export async function createWishlistItem(dto: WishlistCreateDTO): Promise<WishlistItem> {
+  const res = await apiClient.post<ApiResponse<WishlistItem>>("/wishlist", dto);
   if (!res.data.success || res.data.data === null) {
     throw new Error(res.data.error ?? "Failed to create wishlist entry");
   }
@@ -70,14 +59,8 @@ export async function createWishlistItem(
 }
 
 /** Update an existing wishlist entry. */
-export async function updateWishlistItem(
-  id: number,
-  dto: WishlistUpdateDTO
-): Promise<WishlistItem> {
-  const res = await apiClient.put<ApiResponse<WishlistItem>>(
-    `/wishlist/${id}`,
-    dto
-  );
+export async function updateWishlistItem(id: number, dto: WishlistUpdateDTO): Promise<WishlistItem> {
+  const res = await apiClient.put<ApiResponse<WishlistItem>>(`/wishlist/${id}`, dto);
   if (!res.data.success || res.data.data === null) {
     throw new Error(res.data.error ?? "Failed to update wishlist entry");
   }
@@ -86,9 +69,7 @@ export async function updateWishlistItem(
 
 /** Delete a wishlist entry. */
 export async function deleteWishlistItem(id: number): Promise<void> {
-  const res = await apiClient.delete<ApiResponse<{ id: number }>>(
-    `/wishlist/${id}`
-  );
+  const res = await apiClient.delete<ApiResponse<{ id: number }>>(`/wishlist/${id}`);
   if (!res.data.success) {
     throw new Error(res.data.error ?? "Failed to delete wishlist entry");
   }
@@ -131,8 +112,7 @@ export function useCreateWishlistItem() {
 export function useUpdateWishlistItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, dto }: { id: number; dto: WishlistUpdateDTO }) =>
-      updateWishlistItem(id, dto),
+    mutationFn: ({ id, dto }: { id: number; dto: WishlistUpdateDTO }) => updateWishlistItem(id, dto),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all });
       queryClient.invalidateQueries({

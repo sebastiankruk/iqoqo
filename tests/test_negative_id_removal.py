@@ -62,6 +62,7 @@ def mixed_setup(app):
         db.session.flush()
 
         user = User(email="neg_id_test@iqoqo.local", display_name="Neg ID Tester")
+        user.set_password("test-password")
         user.roles.append(user_role)
         db.session.add(user)
         db.session.flush()

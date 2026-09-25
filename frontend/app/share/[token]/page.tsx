@@ -51,6 +51,11 @@ interface SharedCollectionResponse {
   data: SharedCollectionData;
 }
 
+type SharedCollectionResult =
+  | { kind: "success"; response: SharedCollectionResponse }
+  | { kind: "not-found" }
+  | { kind: "error" };
+
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
 }
@@ -58,17 +63,21 @@ interface SharedCollectionPageProps {
 /**
  * Fetches a shared collection by its secure token.
  * @param token - The unique share token.
- * @returns The shared collection data or null if not found.
+ * @returns The shared collection data, a not-found result, or a server error result.
  */
-async function getSharedCollection(token: string): Promise<SharedCollectionResponse | null> {
+async function getSharedCollection(token: string): Promise<SharedCollectionResult> {
   try {
     const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
       next: { revalidate: 60 },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as SharedCollectionResponse;
+    if (res.status === 404) return { kind: "not-found" };
+    if (!res.ok) return { kind: "error" };
+
+    const response = (await res.json()) as SharedCollectionResponse;
+    if (!response.success || !response.data) return { kind: "error" };
+    return { kind: "success", response };
   } catch {
-    return null;
+    return { kind: "error" };
   }
 }
 
@@ -82,11 +91,13 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
   const { token } = await params;
   const collectionRes = await getSharedCollection(token);
 
-  if (!collectionRes || !collectionRes.success) {
-    return { title: "Collection Not Found - iqoqo" };
+  if (collectionRes.kind !== "success") {
+    return {
+      title: collectionRes.kind === "not-found" ? "Collection Not Found - iqoqo" : "Shared Collection - iqoqo",
+    };
   }
 
-  const collection = collectionRes.data;
+  const collection = collectionRes.response.data;
   return {
     title: `${collection.collection_name} - Shared by ${collection.author} - iqoqo`,
     description:
@@ -118,11 +129,25 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
   const t = await getTranslations("Public");
 
   const collectionRes = await getSharedCollection(token);
-  if (!collectionRes || !collectionRes.success) {
+  if (collectionRes.kind === "not-found") {
     notFound();
   }
+  if (collectionRes.kind === "error") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <main className="flex-1 mx-auto w-full max-w-5xl px-6 py-16">
+          <section role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
+            <h1 className="text-2xl font-serif font-bold">Server Error</h1>
+            <p className="mt-3 text-muted-foreground">Please Try Again Later</p>
+          </section>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
-  const collection = collectionRes.data;
+  const collection = collectionRes.response.data;
   const items = collection.items || [];
 
   const collectionJsonLd = buildCollectionJsonLd({

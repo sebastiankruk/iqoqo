@@ -29,13 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   reassignFrbrParent,
   mergeFrbrEntities,
@@ -121,7 +115,11 @@ export function RelationManagementDialog({
     if (!mergeSearchQuery.trim()) return;
     setIsSearchingMerge(true);
     try {
-      const results = await searchFrbrEntities(mergeSearchQuery, entityType as "work" | "expression" | "manifestation", 10);
+      const results = await searchFrbrEntities(
+        mergeSearchQuery,
+        entityType as "work" | "expression" | "manifestation",
+        10
+      );
       setMergeSearchResults(results.filter(r => r.id !== entityId));
     } catch (err) {
       toast.error(`Search failed: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -289,7 +287,11 @@ export function RelationManagementDialog({
                     onClick={handleReassignSearch}
                     disabled={isSearchingReassign}
                   >
-                    {isSearchingReassign ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    {isSearchingReassign ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
                 {reassignSearchResults.length > 0 && (
@@ -427,7 +429,10 @@ export function RelationManagementDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSplitSubmit} disabled={isSubmitting || !splitNewTitle.trim() || !splitChildIds.trim()}>
+              <Button
+                onClick={handleSplitSubmit}
+                disabled={isSubmitting || !splitNewTitle.trim() || !splitChildIds.trim()}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Split
               </Button>

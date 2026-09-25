@@ -14,23 +14,85 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import hmac
+import logging
+import time
 import uuid
 from functools import wraps
 
 import jwt
 from flask import current_app, g, jsonify, request
 
+from app.core.cache import cache
 from app.core.permissions import PermissionName
 from app.db.models import TokenBlocklist, User, db
 
+logger = logging.getLogger(__name__)
 
-def _is_token_revoked(jti: str | None) -> bool:
+_REVOCATION_CACHE_PREFIX = "token:revoked:"
+_CACHE_REVOKED = "revoked"
+_CACHE_ACTIVE = "active"
+_DEFAULT_TOKEN_CACHE_TTL = 60
+_MAX_TOKEN_CACHE_TTL = 7 * 24 * 60 * 60
+
+
+def _revocation_cache_timeout(expires_at: int | float | None) -> int:
+    """Return a bounded cache TTL that never extends beyond the JWT lifetime."""
+    if expires_at is None:
+        return _DEFAULT_TOKEN_CACHE_TTL
+    return max(1, min(int(expires_at - time.time()), _MAX_TOKEN_CACHE_TTL))
+
+
+def _cache_value(value: object) -> str | None:
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("ascii")
+        except UnicodeDecodeError:
+            return None
+    return value if isinstance(value, str) else None
+
+
+def cache_token_revoked(jti: str | None, expires_at: int | float | None) -> None:
+    """Publish a persisted revocation to the cache without weakening DB fallback."""
+    if not jti:
+        return
+    try:
+        cache.set(f"{_REVOCATION_CACHE_PREFIX}{jti}", _CACHE_REVOKED, timeout=_revocation_cache_timeout(expires_at))
+    except Exception:
+        logger.warning("Could not cache token revocation; PostgreSQL remains authoritative", exc_info=True)
+
+
+def _is_token_revoked(jti: str | None, expires_at: int | float | None = None) -> bool:
+    """Use Redis/Flask cache first and PostgreSQL on cache misses or failures."""
     if not jti:
         return False
-    entry = db.session.execute(db.select(TokenBlocklist).filter_by(jti=jti)).scalar_one_or_none()
-    if entry and entry.jti:
-        return hmac.compare_digest(entry.jti, jti)
-    return False
+
+    cache_key = f"{_REVOCATION_CACHE_PREFIX}{jti}"
+    cache_timeout = _revocation_cache_timeout(expires_at)
+    try:
+        cached = _cache_value(cache.get(cache_key))
+        if cached == _CACHE_REVOKED:
+            return True
+        if cached == _CACHE_ACTIVE:
+            return False
+    except Exception:
+        # Redis is an optimization only; PostgreSQL remains the source of truth.
+        logger.warning("Token revocation cache lookup failed; falling back to PostgreSQL", exc_info=True)
+
+    entry = db.session.execute(db.select(TokenBlocklist).filter_by(jti=jti)).scalars().first()
+    revoked = bool(entry and entry.jti and hmac.compare_digest(entry.jti, jti))
+
+    try:
+        if revoked:
+            cache.set(cache_key, _CACHE_REVOKED, timeout=cache_timeout)
+        elif not cache.add(cache_key, _CACHE_ACTIVE, timeout=cache_timeout):
+            # Do not overwrite a concurrent logout's positive cache entry with
+            # a stale negative lookup result.
+            if _cache_value(cache.get(cache_key)) == _CACHE_REVOKED:
+                revoked = True
+    except Exception:
+        logger.warning("Could not update token revocation cache; PostgreSQL remains authoritative", exc_info=True)
+
+    return revoked
 
 
 def require_auth(f):
@@ -49,7 +111,7 @@ def require_auth(f):
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
 
             # Check blocklist
-            if _is_token_revoked(payload.get("jti")):
+            if _is_token_revoked(payload.get("jti"), payload.get("exp")):
                 return jsonify({"error": "Token revoked"}), 401
 
             g.user_id = uuid.UUID(payload["sub"])
@@ -83,7 +145,7 @@ def optional_auth(f):
         if token:
             try:
                 payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-                if not _is_token_revoked(payload.get("jti")):
+                if not _is_token_revoked(payload.get("jti"), payload.get("exp")):
                     g.user_id = uuid.UUID(payload["sub"])
             except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError):
                 pass

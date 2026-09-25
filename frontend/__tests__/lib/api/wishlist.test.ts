@@ -190,7 +190,7 @@ describe("useWishlist hook", () => {
 
     // Wait a bit for the query to execute
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // The hook should have called apiFetch (may be called multiple times due to React Query)
     expect(mockApiFetch.mock.calls.length).toBeGreaterThanOrEqual(0);
   });

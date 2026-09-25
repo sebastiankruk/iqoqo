@@ -179,6 +179,7 @@ def test_generate_admin_token_success(app: Any) -> None:
     mock_user.id = "user-id-uuid"
     mock_user.email = "admin@iqoqo.local"
     mock_user.roles = []
+    mock_user.is_active = True
 
     captured_output = io.StringIO()
     with patch("scripts.generate_admin_token.create_app", return_value=app):
@@ -188,6 +189,28 @@ def test_generate_admin_token_success(app: Any) -> None:
                 generate_token("admin@iqoqo.local")
 
     assert "TOKEN for admin@iqoqo.local:" in captured_output.getvalue()
+
+
+def test_generate_admin_token_refuses_inactive_user(app: Any) -> None:
+    """An inactive account must not receive an administrative token."""
+    from scripts.generate_admin_token import generate_token
+
+    mock_user = MagicMock()
+    mock_user.email = "inactive@iqoqo.local"
+    mock_user.is_active = False
+
+    captured_output = io.StringIO()
+    with patch("scripts.generate_admin_token.create_app", return_value=app):
+        with patch("app.db.models.db.session.execute") as mock_exec:
+            mock_exec.return_value.scalar_one_or_none.return_value = mock_user
+            with patch("scripts.generate_admin_token.generate_internal_jwt") as mock_generate:
+                with patch("sys.stdout", captured_output):
+                    generate_token("inactive@iqoqo.local")
+
+    mock_generate.assert_not_called()
+    output = captured_output.getvalue()
+    assert "inactive user" in output
+    assert "TOKEN" not in output
 
 
 def test_sync_permissions_verify(tmp_path: Path) -> None:

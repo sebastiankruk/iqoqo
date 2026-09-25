@@ -21,22 +21,19 @@ from app.core.limiter import limiter
 
 
 def test_avatar_url_validation_blocks_unsafe_schemes(client, normal_user_headers):
-    """Ensure javascript: and non-HTTP(S) schemes are blocked with 400 Bad Request."""
-    res = client.put(
-        "/api/profile/",
-        json={"avatar_url": "javascript:alert(document.cookie)"},
-        headers=normal_user_headers,
-    )
-    assert res.status_code == 400
-    assert "Invalid or unsafe avatar URL" in res.get_json()["error"]
+    """Ensure non-HTTPS schemes, including HTTP, are rejected."""
+    for url in ("javascript:alert(document.cookie)", "http://example.com/avatar.png"):
+        res = client.put("/api/profile/", json={"avatar_url": url}, headers=normal_user_headers)
+        assert res.status_code == 400
+        assert "Invalid or unsafe avatar URL" in res.get_json()["error"]
 
 
 def test_avatar_url_validation_blocks_ssrf_vectors(client, normal_user_headers):
     """Ensure loopback and metadata internal IPs are blocked with 400 Bad Request."""
     ssrf_payloads = [
-        "http://127.0.0.1/admin",
-        "http://localhost:5000/api/admin",
-        "http://169.254.169.254/latest/meta-data/",
+        "https://127.0.0.1/admin",
+        "https://localhost:5000/api/admin",
+        "https://169.254.169.254/latest/meta-data/",
     ]
     for url in ssrf_payloads:
         res = client.put(
@@ -140,3 +137,42 @@ def test_rate_limit_sharing_creation(app, normal_user_headers):
         limiter.enabled = False
         limiter._enabled = False
         app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_rate_limit_global_stats(app):
+    """Verify the existing public aggregate statistics route is limited to 30 per minute."""
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        statuses = [test_client.get("/api/stats/global").status_code for _ in range(31)]
+        assert statuses[:30] == [200] * 30
+        assert statuses[30] == 429
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_global_stats_database_error_is_sanitized(client, monkeypatch):
+    """Database diagnostics are logged, not disclosed by the public endpoint."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    class BrokenSession:
+        @staticmethod
+        def query(_model):
+            raise SQLAlchemyError("private database schema and query details")
+
+    monkeypatch.setattr("app.api.system.db.session", BrokenSession())
+    response = client.get("/api/stats/global")
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Unable to load global statistics"}
+    assert "private database schema" not in response.get_data(as_text=True)

@@ -19,23 +19,13 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import {
-  Loader2,
-  RotateCcw,
-  X,
-} from "lucide-react";
+import { Loader2, RotateCcw, X } from "lucide-react";
 import Link from "next/link";
 import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,12 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { WorkEditor } from "./frbr/work-editor";
 import { ExpressionEditor } from "./frbr/expression-editor";
@@ -73,8 +58,21 @@ import { RelationManagementDialog } from "./relation-management-dialog";
 
 /** Cultural surname particles that remain lowercase when interior. */
 const NAME_PARTICLES = new Set([
-  "van", "von", "der", "den", "de", "del", "da", "di", "du",
-  "la", "le", "lo", "te", "ter", "ten",
+  "van",
+  "von",
+  "der",
+  "den",
+  "de",
+  "del",
+  "da",
+  "di",
+  "du",
+  "la",
+  "le",
+  "lo",
+  "te",
+  "ter",
+  "ten",
 ]);
 
 /**
@@ -516,7 +514,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       <FRBRTreeView
         tree={tree}
         selectedLevel={activeTab === "items" ? "item" : activeTab}
-        onSelect={(level) => handleTreeSelect(level)}
+        onSelect={level => handleTreeSelect(level)}
         onAddChild={handleAddChild}
         onEscalate={handleEscalate}
         onDelete={handleDelete}
@@ -607,8 +605,8 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             <ItemsManager
               items={tree.items}
               onItemSubmit={handleItemSubmit}
-              onItemEscalate={hasEscalateRequest ? (itemId) => handleEscalate("item", itemId) : undefined}
-              onItemDelete={hasWriteMetadata ? (itemId) => handleDelete("item", itemId) : undefined}
+              onItemEscalate={hasEscalateRequest ? itemId => handleEscalate("item", itemId) : undefined}
+              onItemDelete={hasWriteMetadata ? itemId => handleDelete("item", itemId) : undefined}
               lastFetched={lastFetched}
             />
           </CardContent>
@@ -620,7 +618,12 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Add Child {addChildDialog.parentLevel === "work" ? "Expression" : addChildDialog.parentLevel === "expression" ? "Manifestation" : "Item"}
+              Add Child{" "}
+              {addChildDialog.parentLevel === "work"
+                ? "Expression"
+                : addChildDialog.parentLevel === "expression"
+                  ? "Manifestation"
+                  : "Item"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -651,7 +654,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

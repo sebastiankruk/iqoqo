@@ -60,6 +60,11 @@ extract_example_keys() {
   fi
 }
 
+@test ".env.example disables optional LLM features by default" {
+  run grep -Eq '^\s*ALLOW_LLM=false\s*$' "$EXAMPLE_FILE"
+  [ "$status" -eq 0 ]
+}
+
 @test ".env.example covers all os.getenv / os.environ calls in code" {
   extract_code_vars > "$TEMP_NEED"
   extract_example_keys > "$TEMP_GOT"

@@ -32,8 +32,9 @@ test.describe("Manual Verification Integration E2E", () => {
     });
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
-    await page.goto(`/api/auth-exchange?token=${token}`);
-    await page.waitForURL(/\/(collection|dashboard|profile|admin)?$/);
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
+    await page.goto("/");
 
     // 2. Mock default profile endpoint (real login step above already provides iqoqo_session cookie)
     await page.route("**/api/profile**", async route => {

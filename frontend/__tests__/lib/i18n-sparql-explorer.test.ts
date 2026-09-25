@@ -122,14 +122,10 @@ describe("SPARQL Explorer i18n completeness", () => {
     // For now, we just verify the test infrastructure works
     // When SPARQL translations are added, this test should be updated
     if (hasSparqlNamespace) {
-      const enSparql =
-        (enMessages as Record<string, unknown>).SPARQL ||
-        (enMessages as Record<string, unknown>).Sparql;
-      const plSparql =
-        (plMessages as Record<string, unknown>).SPARQL ||
-        (plMessages as Record<string, unknown>).Sparql;
+      const enSparql = (enMessages as Record<string, unknown>).SPARQL || (enMessages as Record<string, unknown>).Sparql;
+      const plSparql = (plMessages as Record<string, unknown>).SPARQL || (plMessages as Record<string, unknown>).Sparql;
 
-      if (enSparql && plSparql && typeof enSparql === 'object' && typeof plSparql === 'object') {
+      if (enSparql && plSparql && typeof enSparql === "object" && typeof plSparql === "object") {
         const enSparqlObj = enSparql as Record<string, unknown>;
         const plSparqlObj = plSparql as Record<string, unknown>;
         const enSparqlKeys = Object.keys(enSparqlObj).sort();
@@ -152,7 +148,7 @@ describe("SPARQL Explorer error message translations", () => {
     expect(plCommon).toBeDefined();
 
     // Verify error-related keys exist in both locales
-    if (enCommon && plCommon && typeof enCommon === 'object' && typeof plCommon === 'object') {
+    if (enCommon && plCommon && typeof enCommon === "object" && typeof plCommon === "object") {
       const enCommonObj = enCommon as Record<string, unknown>;
       const plCommonObj = plCommon as Record<string, unknown>;
       const enKeys = Object.keys(enCommonObj);
