@@ -16,11 +16,29 @@
 
 "use client";
 
-import React, { useState } from "react";
-import { Folder, Trash2, Edit2, Loader2, AlertCircle, X, Plus } from "lucide-react";
+import { useState } from "react";
+import { Folder, Trash2, Edit2, Loader2, AlertCircle, Plus } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface UserCollection {
   id: number;
@@ -47,6 +65,7 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [collectionToDelete, setCollectionToDelete] = useState<UserCollection | null>(null);
 
   const { data: collections, isLoading } = useQuery<UserCollection[]>({
     queryKey: ["user-collections"],
@@ -74,10 +93,11 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
       const res = await apiClient.delete(`/collections/${id}`);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, deletedCollectionId) => {
       queryClient.invalidateQueries({ queryKey: ["user-collections"] });
       queryClient.invalidateQueries({ queryKey: ["taxonomies"] });
       toast.success("Collection removed");
+      setCollectionToDelete(current => (current?.id === deletedCollectionId ? null : current));
     },
     onError: (err: Error) => {
       toast.error(err.message);
@@ -105,21 +125,20 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="bg-background w-full max-w-md rounded-lg shadow-xl flex flex-col overflow-hidden border border-border">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-muted/20">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
+    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <DialogContent className="flex w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] max-w-md flex-col gap-0 overflow-hidden rounded-lg border border-border bg-background p-0 shadow-xl">
+        <DialogHeader className="relative flex-row items-center border-b border-border bg-muted/20 px-4 py-3 pr-12 text-left space-y-0">
+          <div className="flex items-center gap-2">
             <Folder className="h-5 w-5 text-primary" />
-            Manage Collections
-          </h2>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors">
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
+            <DialogTitle className="text-lg font-semibold">Manage Collections</DialogTitle>
+          </div>
+          <DialogDescription className="sr-only">
+            Create, rename, and delete your custom collections.
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Content */}
-        <div className="p-4 flex flex-col gap-3 min-h-[300px] max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <div className="p-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto custom-scrollbar">
           {/* Create new collection */}
           <form
             className="flex items-center gap-2"
@@ -130,7 +149,11 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
               }
             }}
           >
+            <label htmlFor="new-collection-name" className="sr-only">
+              New collection name
+            </label>
             <input
+              id="new-collection-name"
               type="text"
               placeholder="New collection name"
               value={createName}
@@ -173,7 +196,11 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
                         updateMutation.mutate({ id: col.id, name: editName });
                       }}
                     >
+                      <label htmlFor={`rename-collection-${col.id}`} className="sr-only">
+                        Rename collection {col.name}
+                      </label>
                       <input
+                        id={`rename-collection-${col.id}`}
                         autoFocus
                         className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:ring-1 focus-visible:ring-ring outline-none"
                         value={editName}
@@ -208,17 +235,15 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
                             setEditName(col.name);
                           }}
                           className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={`Edit collection ${col.name}`}
                           title="Edit Name"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Delete collection "${col.name}"?`)) {
-                              deleteMutation.mutate(col.id);
-                            }
-                          }}
-                          disabled={deleteMutation.isPending && deleteMutation.variables === col.id}
+                          onClick={() => setCollectionToDelete(col)}
+                          disabled={deleteMutation.isPending}
+                          aria-label={`Delete collection ${col.name}`}
                           className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-md transition-colors"
                           title="Delete Collection"
                         >
@@ -238,15 +263,52 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-border bg-muted/20 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+        <DialogFooter className="border-t border-border bg-muted/20 px-4 py-3 sm:space-x-0">
+          <DialogClose asChild>
+            <button
+              type="button"
+              className="px-4 py-1.5 text-sm font-medium rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            >
+              Close
+            </button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+      <AlertDialog
+        open={collectionToDelete !== null}
+        onOpenChange={open => {
+          if (!open && !deleteMutation.isPending) setCollectionToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete collection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete collection &quot;{collectionToDelete?.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+            {deleteMutation.isError && deleteMutation.variables === collectionToDelete?.id && (
+              <p role="alert" className="text-sm text-destructive">
+                {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Collection deletion failed."}
+                {" You can retry."}
+              </p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <button
+              type="button"
+              onClick={() => {
+                if (collectionToDelete) deleteMutation.mutate(collectionToDelete.id);
+              }}
+              disabled={deleteMutation.isPending || collectionToDelete === null}
+              aria-label="Confirm collection deletion"
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Dialog>
   );
 }

@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
 
 SHELL := /bin/bash
 
@@ -76,7 +76,7 @@ PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
 endif
 
 # AiOps / Terse mode flags and banner suppression
-ifdef IQOQO_AI_MODE
+ifeq ($(IQOQO_AI_MODE),1)
 RUFF_FLAGS    ?= --output-format=concise
 PYLINT_FLAGS  ?= --msg-template='{path}:{line}: {msg} ({symbol})'
 MYPY_FLAGS    ?= --no-error-summary
@@ -101,7 +101,8 @@ help:
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
 	@echo "Code quality:"
-	@echo "  lint           - Run all linting checks"
+	@echo "  lint           - Run checks that actually gate GitHub quality CI"
+	@echo "  lint-all       - Run canonical lint plus stricter local-only checks"
 	@echo "  lint-python    - Run Python linters (ruff, mypy, pylint)"
 	@echo "  lint-format    - Check Python code formatting (black)"
 	@echo "  lint-js        - Run legacy JavaScript linter (eslint)"
@@ -117,7 +118,7 @@ help:
 	@echo "  test-backend   - Run backend tests (pytest, defaults to SQLite)"
 	@echo "  test-backend-pg - Run backend integration tests requiring PostgreSQL"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
-	@echo "  test-e2e       - Run end-to-end tests (Playwright). Loads .env.test automatically."
+	@echo "  test-e2e       - Run Playwright against an isolated E2E-only PostgreSQL service."
 	@echo ""
 	@echo "Deployment:"
 	@echo "  start          - Start development environment (DB, Flask API, Next.js frontend)"
@@ -373,13 +374,27 @@ bump-version: .venv/bin/activate
 	@.venv/bin/python scripts/sync_version.py --bump $(v)
 
 .venv/bin/activate: requirements.txt
-	@if [ ! -d ".venv" ]; then \
-		echo "🔧 Creating virtual environment..."; \
-		python3 -m venv .venv; \
-	fi
-	@echo "🔧 Syncing python dependencies..."
-	@.venv/bin/pip install -r requirements.txt
-	@touch .venv/bin/activate
+	@set -e; \
+		if [ ! -d ".venv" ]; then \
+			if [ "$(IQOQO_AI_MODE)" != "1" ]; then echo "🔧 Creating virtual environment..."; fi; \
+			python3 -m venv .venv; \
+		fi; \
+		if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+			if ! .venv/bin/pip install black ruff mypy isort >.venv/requirements-install.log 2>&1; then \
+				.venv/bin/python -c "from pathlib import Path; print(Path('.venv/requirements-install.log').read_text(), end='')"; \
+				exit 1; \
+			fi; \
+			if ! .venv/bin/pip install -r requirements.txt >.venv/requirements-install.log 2>&1; then \
+				.venv/bin/python -c "from pathlib import Path; print(Path('.venv/requirements-install.log').read_text(), end='')"; \
+				exit 1; \
+			fi; \
+			rm -f .venv/requirements-install.log; \
+		else \
+			echo "🔧 Syncing python dependencies..."; \
+			.venv/bin/pip install black ruff mypy isort; \
+			.venv/bin/pip install -r requirements.txt; \
+		fi; \
+		touch .venv/bin/activate
 
 # Development targets
 init: .venv/bin/activate
@@ -499,9 +514,13 @@ validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
 
-# Run all linting checks (stops on first failure)
-lint: lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-license validate-yaml
-	$(AI_ECHO) "All linting checks passed!"
+# Compatibility baseline: executable checks that gate .github/workflows/quality.yml.
+lint: .venv/bin/activate
+	@PATH="$(NODE_DIR):$$PATH" .venv/bin/python scripts/run_lint.py
+
+# Stricter checks that are intentionally not part of the existing CI baseline.
+lint-all: .venv/bin/activate
+	@PATH="$(NODE_DIR):$$PATH" .venv/bin/python scripts/run_lint.py --all
 
 # Formatting targets
 format-python: .venv/bin/activate
@@ -567,64 +586,45 @@ pg-create-schemas:
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS social;" 2>&1 | grep -v 'already exists' || true; \
 	fi
 
-# Start the Docker DB (and Redis) for E2E tests, then wait until pg_isready.
-# Also creates the dedicated test database (iqoqo_test) if it doesn't exist.
-test-e2e-db-up:
-	@echo "Ensuring Docker DB and Redis are running for E2E tests..."
-	@docker compose up -d db redis
-	@echo "Waiting for PostgreSQL to be ready..."
-	@for i in $$(seq 1 30); do \
-		if docker compose exec -T db pg_isready -U "$${POSTGRES_USER:-iqoqo}" -d "$${POSTGRES_DB:-iqoqo}" > /dev/null 2>&1; then \
-			echo "PostgreSQL is ready."; \
-			break; \
-		fi; \
-		if [ "$$i" = "30" ]; then echo "ERROR: PostgreSQL did not become ready in time."; exit 1; fi; \
-		echo "Waiting... ($$i/30)"; \
-		sleep 1; \
-	done
-	@echo "Ensuring test database exists..."
-	@docker compose exec -T db psql -U "$${POSTGRES_USER:-iqoqo}" -d postgres \
-		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" \
-		| grep -q 1 \
-		|| docker compose exec -T db createdb -U "$${POSTGRES_USER:-iqoqo}" iqoqo_test \
-		&& echo "Test database iqoqo_test ready." || true
+# This dedicated Compose file/project has its own PostgreSQL service, port, and
+# project-scoped volume. No default, preview, or production stack is referenced.
+override E2E_COMPOSE := docker compose --project-name iqoqo-e2e-test -f docker-compose.e2e.yml
+E2E_DATABASE_URL = postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/iqoqo_e2e_test
+E2E_SELECTED_DATABASE_URL = $(if $(DATABASE_URL_TEST),$(DATABASE_URL_TEST),$(E2E_DATABASE_URL))
+export E2E_SELECTED_DATABASE_URL
+
+# Preflight checks the selected URL and rendered Compose isolation before startup.
+test-e2e-db-up: .venv/bin/activate
+	@set -euo pipefail; \
+		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
+		echo "Starting only the isolated E2E PostgreSQL service..."; \
+		$(E2E_COMPOSE) up -d e2e-db; \
+		for i in $$(seq 1 45); do \
+			if $(E2E_COMPOSE) exec -T e2e-db pg_isready -U iqoqo_e2e -d iqoqo_e2e_test >/dev/null 2>&1; then break; fi; \
+			if [ "$$i" = 45 ]; then echo "ERROR: isolated E2E PostgreSQL did not become ready." >&2; exit 1; fi; \
+			sleep 1; \
+		done; \
+		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml
 
 test-e2e: test-e2e-db-up
-	@# Load .env.test to provide DATABASE_URL_TEST (and other test settings) when
-	@# they are not already present in the shell environment. This file is safe to
-	@# commit because it contains only non-secret test credentials.
-	@if [ -z "$$DATABASE_URL_TEST" ] && [ -f .env.test ]; then \
-		echo "Loading test environment from .env.test..."; \
-		export $$(grep -v '^#' .env.test | grep -v '^$$' | xargs); \
-		$(MAKE) _test-e2e-run DATABASE_URL_TEST="$$DATABASE_URL_TEST" NO_RESET="$(NO_RESET)"; \
-	else \
-		$(MAKE) _test-e2e-run DATABASE_URL_TEST="$$DATABASE_URL_TEST" NO_RESET="$(NO_RESET)"; \
-	fi
+	@$(MAKE) --no-print-directory _test-e2e-run NO_RESET='$(NO_RESET)' args='$(args)'
 
-# Internal target — called by test-e2e after env vars are resolved.
+# Internal: verify runtime identity immediately before reset and again before
+# Playwright startup. set -e makes every failed prepare step fail closed.
 _test-e2e-run:
-	@if [ -z "$(NO_RESET)" ]; then \
-		if [ -z "$(DATABASE_URL_TEST)" ]; then \
-			echo "ERROR: DATABASE_URL_TEST is not set."; \
-			echo "  E2E tests reset the database and MUST use a dedicated test DB."; \
-			echo "  Either:"; \
-			echo "    1. Create .env.test with DATABASE_URL_TEST=postgresql://... (recommended)"; \
-			echo "    2. Set DATABASE_URL_TEST in your shell before running make test-e2e"; \
-			echo "    3. Use NO_RESET=1 to skip the DB reset (dangerous — stale data!)"; \
-			exit 1; \
-		fi; \
-		echo "Resetting test database for E2E tests (DATABASE_URL_TEST=$(DATABASE_URL_TEST))..."; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) pg-create-schemas; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! $(MAKE) db-reset; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! $(MAKE) init-auth; \
-		DATABASE_URL="$(DATABASE_URL_TEST)" $(MAKE) db-seed-e2e; \
-		echo "Killing old Flask server on port 5002 (if any) to ensure clean start against test DB..."; \
-		lsof -ti tcp:5002 | xargs kill -9 2>/dev/null || true; \
-	else \
-		echo "Skipping database reset (NO_RESET is set)..."; \
-	fi
-	@echo "Running end-to-end tests (Playwright)..."
-	cd frontend && FLASK_API_URL="http://127.0.0.1:5002/api" DATABASE_URL_TEST="$(DATABASE_URL_TEST)" $(NPX) playwright test --project=chromium $(args)
+	@set -euo pipefail; \
+		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
+		if [ -z '$(NO_RESET)' ]; then \
+			echo "Resetting the verified dedicated E2E database..."; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social'; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset --force; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" SECRET_KEY=test-secret-key-not-for-production ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_auth.py; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py; \
+		else echo "Skipping E2E database reset (NO_RESET=1); isolated target identity was still verified."; fi; \
+		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
+		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
+		echo "Running Playwright against the verified isolated E2E database..."; \
+		cd frontend; FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e

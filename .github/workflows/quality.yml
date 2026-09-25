@@ -82,7 +82,7 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run Markdownlint
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github" "!.pytest_cache" "!.agent" "!.agents" "!.gemini" "!frontend/playwright-report" "!frontend/test-results" "!graphify-out" "!mykg_sessions" "!.context" "!openspec/changes"
+        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github" "!.pytest_cache" "!.agent" "!.agents" "!.gemini" "!.caim" "!frontend/playwright-report" "!frontend/test-results" "!graphify-out" "!mykg_sessions" "!.context" "!openspec/changes"
 
   lint-license:
     runs-on: ubuntu-latest
@@ -212,21 +212,7 @@ jobs:
     env:
       ADMIN_EMAIL: ci-admin@iqoqo.cc
       ADMIN_PASSWORD: E2EBootstrapPassword123!
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: iqoqo_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+      DATABASE_URL_TEST: postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/iqoqo_e2e_test
     steps:
       - uses: actions/checkout@v7
 
@@ -254,31 +240,8 @@ jobs:
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install --with-deps chromium
 
-      - name: Create Postgres schemas
-        run: |
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;"
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;"
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;"
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS social;"
-
-      - name: Prepare E2E database
-        run: |
-          python scripts/init_db.py --seed-file data/seed_example.json --reset --force
-          PYTHONPATH=. python scripts/init_auth.py
-          PYTHONPATH=. python tests/e2e/scripts/seed_e2e.py
-        env:
-          SECRET_KEY: test-secret-key-not-for-production
-          ADMIN_EMAIL: ci-admin@iqoqo.cc
-          ADMIN_PASSWORD: E2EBootstrapPassword123!
-
-      - name: Run Playwright E2E tests
-        run: cd frontend && npx playwright test --project=chromium
-        env:
-          CI: true
-          FLASK_API_URL: http://127.0.0.1:5002/api
-          ADMIN_EMAIL: ci-admin@iqoqo.cc
-          ADMIN_PASSWORD: E2EBootstrapPassword123!
-          SECRET_KEY: test-secret-key-not-for-production
+      - name: Run isolated E2E setup and Playwright tests
+        run: make test-e2e DATABASE_URL_TEST="$DATABASE_URL_TEST"
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7

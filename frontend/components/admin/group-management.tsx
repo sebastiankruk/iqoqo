@@ -16,7 +16,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Users, ChevronDown, ChevronUp, Save, Trash2, X } from "lucide-react";
+import { Plus, Users, ChevronDown, ChevronUp, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   getRoles,
   getPermissions,
@@ -48,8 +57,21 @@ interface RoleData {
   permissionCount: number;
 }
 
+type RolePermissionStatus = "loading" | "loaded" | "error";
+
 interface GroupManagementProps {
   canEdit?: boolean;
+}
+
+/**
+ * Returns a useful message for an asynchronous role-management failure.
+ *
+ * @param error - The caught error value.
+ * @param fallback - Message to use when the error has no message.
+ * @returns The error message or fallback.
+ */
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 /**
@@ -64,7 +86,9 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
   const [roles, setRoles] = useState<RoleData[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Record<number, number[]>>({});
+  const [rolePermissionStatus, setRolePermissionStatus] = useState<Record<number, RolePermissionStatus>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState<number | null>(null);
 
   // Create role modal state
@@ -78,6 +102,7 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [roleData, permData] = await Promise.all([getRoles(), getPermissions()]);
       const protectedRoles = ["admin", "user", "contributor"];
@@ -93,7 +118,9 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
       setRoles(mappedRoles);
       setPermissions(permData);
     } catch (err) {
-      console.error("Failed to load data:", err);
+      const message = getErrorMessage(err, "Failed to load roles and permissions");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -105,8 +132,20 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
     loadData();
   }, []);
 
+  const loadRolePermissions = async (roleId: number) => {
+    setRolePermissionStatus(prev => ({ ...prev, [roleId]: "loading" }));
+    try {
+      const perms = await getRolePermissions(roleId);
+      setRolePermissions(prev => ({ ...prev, [roleId]: perms.permission_ids }));
+      setRolePermissionStatus(prev => ({ ...prev, [roleId]: "loaded" }));
+    } catch (err) {
+      setRolePermissionStatus(prev => ({ ...prev, [roleId]: "error" }));
+      toast.error(getErrorMessage(err, "Failed to fetch role permissions"));
+    }
+  };
+
   // Load role permissions when a role is expanded
-  const handleExpand = async (roleId: number) => {
+  const handleExpand = (roleId: number) => {
     if (expandedRole === roleId) {
       setExpandedRole(null);
       return;
@@ -114,14 +153,7 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
 
     setExpandedRole(roleId);
 
-    if (rolePermissions[roleId] === undefined) {
-      try {
-        const perms = await getRolePermissions(roleId);
-        setRolePermissions(prev => ({ ...prev, [roleId]: perms.permission_ids }));
-      } catch (err) {
-        console.error("Failed to fetch role permissions:", err);
-      }
-    }
+    if (rolePermissionStatus[roleId] !== "loaded") void loadRolePermissions(roleId);
   };
 
   const togglePermission = (roleId: number, permId: number) => {
@@ -135,12 +167,14 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
   };
 
   const handleSavePermissions = async (roleId: number) => {
+    if (rolePermissionStatus[roleId] !== "loaded") return;
     setSaving(roleId);
     try {
       const perms = rolePermissions[roleId] || [];
       await updateRolePermissions(roleId, perms);
+      toast.success("Role permissions saved");
     } catch (err) {
-      console.error("Failed to save role permissions:", err);
+      toast.error(getErrorMessage(err, "Failed to save role permissions"));
     } finally {
       setSaving(null);
     }
@@ -164,8 +198,9 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
       setRoles(prev => [...prev, roleData]);
       setShowCreateModal(false);
       setNewRoleName("");
+      toast.success(`Role "${newRole.name}" created`);
     } catch (err) {
-      console.error("Failed to create role:", err);
+      toast.error(getErrorMessage(err, "Failed to create role"));
     } finally {
       setCreating(false);
     }
@@ -178,8 +213,9 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
       await deleteRole(roleToDelete.id);
       setRoles(prev => prev.filter(r => r.id !== roleToDelete.id));
       setRoleToDelete(null);
+      toast.success(`Role "${roleToDelete.name}" deleted`);
     } catch (err) {
-      console.error("Failed to delete role:", err);
+      toast.error(getErrorMessage(err, "Failed to delete role"));
     } finally {
       setDeleting(false);
     }
@@ -189,6 +225,21 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="flex flex-col items-center gap-4 p-8 text-center">
+        <p className="text-sm text-destructive">Could not load roles and permissions: {loadError}</p>
+        <button
+          type="button"
+          onClick={() => void loadData()}
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -246,7 +297,7 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm font-medium text-foreground">
-                      {isExpanded ? currentPerms.length : role.permissionCount} permissions
+                      {rolePermissionStatus[role.id] === "loaded" ? currentPerms.length : role.permissionCount} permissions
                     </p>
                     <p className="text-xs text-muted-foreground">{role.memberCount || 0} users</p>
                   </div>
@@ -265,26 +316,44 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
                     Assign permissions to control what users with this role can do.
                   </p>
 
-                  {/* Permissions Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {permissions.map(perm => (
-                      <label
-                        key={perm.id}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                  {rolePermissionStatus[role.id] === "loading" && (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      Loading permissions…
+                    </p>
+                  )}
+                  {rolePermissionStatus[role.id] === "error" && (
+                    <div role="alert" className="flex items-center justify-between gap-4 text-sm text-destructive">
+                      <span>Could not load permissions for this role.</span>
+                      <button
+                        type="button"
+                        onClick={() => void loadRolePermissions(role.id)}
+                        className="rounded-md border border-border px-3 py-1.5 text-foreground hover:bg-muted"
                       >
-                        <input
-                          type="checkbox"
-                          checked={currentPerms.includes(perm.id)}
-                          onChange={() => togglePermission(role.id, perm.id)}
-                          className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{perm.name}</p>
-                          {perm.description && <p className="text-xs text-muted-foreground">{perm.description}</p>}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  {rolePermissionStatus[role.id] === "loaded" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {permissions.map(perm => (
+                        <label
+                          key={perm.id}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-muted/50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={currentPerms.includes(perm.id)}
+                            onChange={() => togglePermission(role.id, perm.id)}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{perm.name}</p>
+                            {perm.description && <p className="text-xs text-muted-foreground">{perm.description}</p>}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="mt-6 flex justify-between">
@@ -301,7 +370,7 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
                       {canEdit && (
                         <button
                           onClick={() => handleSavePermissions(role.id)}
-                          disabled={saving === role.id}
+                          disabled={saving === role.id || rolePermissionStatus[role.id] !== "loaded"}
                           className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {saving === role.id ? (
@@ -327,29 +396,39 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
       </div>
 
       {/* Create Role Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">Add New Role</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={open => {
+          if (!creating) setShowCreateModal(open);
+        }}
+      >
+        <DialogContent
+          closeDisabled={creating}
+          aria-busy={creating}
+          className="w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg"
+        >
+          <DialogHeader>
+            <DialogTitle>Add New Role</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-foreground">Role Name</label>
+                <label htmlFor="new-role-name" className="text-sm font-medium text-foreground">
+                  Role Name
+                </label>
                 <input
+                  id="new-role-name"
                   type="text"
                   value={newRoleName}
                   onChange={e => setNewRoleName(e.target.value)}
                   placeholder="e.g., moderator, editor"
+                  disabled={creating}
                   className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
-              <div className="flex justify-end gap-3">
+              <DialogFooter>
                 <button
                   onClick={() => setShowCreateModal(false)}
+                  disabled={creating}
                   className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
                 >
                   Cancel
@@ -361,23 +440,33 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
                 >
                   {creating ? "Creating..." : "Create Role"}
                 </button>
-              </div>
-            </div>
+              </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Role Modal */}
-      {roleToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-foreground">Delete Role</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete the role &quot;{roleToDelete.name}&quot;? This action cannot be undone.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
+      <Dialog
+        open={roleToDelete !== null}
+        onOpenChange={open => {
+          if (!open && !deleting) setRoleToDelete(null);
+        }}
+      >
+        <DialogContent
+          closeDisabled={deleting}
+          aria-busy={deleting}
+          className="w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg"
+        >
+          <DialogHeader>
+            <DialogTitle>Delete Role</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the role &quot;{roleToDelete?.name}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
               <button
                 onClick={() => setRoleToDelete(null)}
+                disabled={deleting}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Cancel
@@ -389,10 +478,9 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -13,11 +13,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { ItemActions } from "@/components/item/item-actions";
 import * as hooks from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
+import { useQuery } from "@tanstack/react-query";
 
 vi.mock("@/lib/api/hooks", () => ({
   useProfile: vi.fn(),
@@ -86,7 +87,7 @@ describe("ItemActions Component", () => {
     expect(screen.getByText(/Remove from library/i)).toBeInTheDocument();
   });
 
-  it("starts polling invalidateQueries every 3s when cover_status is pending", () => {
+  it("configures declarative polling while the cover is pending", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
@@ -94,18 +95,13 @@ describe("ItemActions Component", () => {
     const pendingItem = { ...mockItem, cover_status: "pending" } as unknown as Item;
     render(<ItemActions item={pendingItem} />);
 
-    expect(mockInvalidateQueries).not.toHaveBeenCalled();
-
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["item", pendingItem.id] });
-
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
+    const options = vi.mocked(useQuery).mock.calls.find(call => call[0].queryKey[0] === "item")?.[0];
+    expect(options?.enabled).toBe(true);
+    const refetchInterval = options?.refetchInterval as (
+      query: { state: { data: Item | null | undefined } }
+    ) => number | false;
+    expect(refetchInterval({ state: { data: undefined } })).toBe(3000);
+    expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
   });
 
   it("does not poll when cover_status is ready", () => {
@@ -115,13 +111,11 @@ describe("ItemActions Component", () => {
 
     render(<ItemActions item={mockItem} />);
 
-    act(() => {
-      vi.advanceTimersByTime(30000);
-    });
-    expect(mockInvalidateQueries).not.toHaveBeenCalled();
+    const options = vi.mocked(useQuery).mock.calls.find(call => call[0].queryKey[0] === "item")?.[0];
+    expect(options?.enabled).toBe(false);
   });
 
-  it("stops polling when cover_status changes from pending to ready", () => {
+  it("stops declarative polling when cover_status changes from pending to ready", () => {
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
@@ -129,19 +123,18 @@ describe("ItemActions Component", () => {
     const pendingItem = { ...mockItem, cover_status: "pending" } as unknown as Item;
     const { rerender } = render(<ItemActions item={pendingItem} />);
 
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
-
     // Cover becomes ready - rerender with updated prop
     rerender(<ItemActions item={mockItem} />);
 
-    act(() => {
-      vi.advanceTimersByTime(6000);
-    });
-    // Should remain at 1 call since polling stopped
-    expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
+    const options = vi
+      .mocked(useQuery)
+      .mock.calls.filter(call => call[0].queryKey[0] === "item")
+      .at(-1)?.[0];
+    expect(options?.enabled).toBe(false);
+    const refetchInterval = options?.refetchInterval as (
+      query: { state: { data: Item | null | undefined } }
+    ) => number | false;
+    expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
   });
 
   describe("Polymorphic Quick Actions", () => {

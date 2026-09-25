@@ -20,6 +20,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type { ApiResponse } from "@/types/frbr";
 
+export const DEFAULT_INFINITE_PAGE_SIZE = 20;
+
 interface FetchItemsParams {
   viewMode: "manifestations" | "works" | "items";
   filters: Record<string, string | string[]>;
@@ -39,9 +41,9 @@ export function useInfiniteCollection({ viewMode, filters }: FetchItemsParams) {
     queryKey: ["collection-grid", viewMode, filters],
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams();
-      params.append("limit", "20");
+      params.append("limit", DEFAULT_INFINITE_PAGE_SIZE.toString());
       params.append("offset", pageParam.toString());
-      params.append("page", (Math.floor(pageParam / 20) + 1).toString());
+      params.append("page", (Math.floor(pageParam / DEFAULT_INFINITE_PAGE_SIZE) + 1).toString());
 
       // Merge active sidebar filters
       Object.entries(filters).forEach(([key, val]) => {

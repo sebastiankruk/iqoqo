@@ -16,6 +16,7 @@
 import { render } from "@testing-library/react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ThemeProvider } from "@/components/theme-provider";
+import { JsonLdConsoleFilter } from "@/components/json-ld-console-filter";
 
 describe("ThemeProvider", () => {
   let originalConsoleError: typeof console.error;
@@ -45,9 +46,7 @@ describe("ThemeProvider", () => {
     console.error = spy;
 
     const { unmount } = render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
+      <JsonLdConsoleFilter />
     );
 
     console.error("Encountered a script tag while rendering React component");
@@ -62,9 +61,7 @@ describe("ThemeProvider", () => {
     console.error = spy;
 
     render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
+      <JsonLdConsoleFilter />
     );
 
     console.error("Some other real error");
@@ -77,9 +74,7 @@ describe("ThemeProvider", () => {
     console.error = spy;
 
     const { unmount } = render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
+      <JsonLdConsoleFilter />
     );
 
     // console.error was swapped out for the filtering wrapper.
@@ -97,9 +92,7 @@ describe("ThemeProvider", () => {
     console.error = spy;
 
     render(
-      <ThemeProvider>
-        <div>content</div>
-      </ThemeProvider>
+      <JsonLdConsoleFilter />
     );
 
     expect(console.error).toBe(spy);

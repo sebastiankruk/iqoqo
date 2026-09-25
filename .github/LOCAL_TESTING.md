@@ -13,12 +13,24 @@ npm install
 
 ## Quick Test Commands
 
-### Run ALL Tests (Same as GitHub)
+### Run Canonical GitHub Quality Checks
 
 ```bash
-make lint    # Run all linting
+IQOQO_AI_MODE=1 make lint # Run the effective quality.yml lint checks
 make test    # Run all pytest tests
 ```
+
+`make lint` is the compatibility baseline for the executable lint steps in
+`.github/workflows/quality.yml`. It gates Ruff, Black, isort, Markdownlint, and
+license checks. Mypy runs with the workflow's `continue-on-error: true`
+semantics: its failure diagnostics are retained, but it does not fail
+`make lint`. The JavaScript quality job installs ESLint, Prettier, and Stylelint
+but does not execute any of them; the separate frontend test job does run
+TypeScript `type-check`, but it is not part of the lint jobs.
+
+`make lint-all` additionally runs local-only Pylint, ESLint, TypeScript,
+Stylelint, and YAML validation checks. These stricter checks are intentionally
+not CI compatibility gates.
 
 ### Individual Test Categories
 
@@ -76,27 +88,12 @@ from scripts.sql_to_json import parse_sql_dump
 **Error:** `B025 try-except block with duplicate exception`
 **Fix:** Remove duplicate exception handlers in your code
 
-## GitHub Actions Workflow
-
-The `.github/workflows/quality.yml` runs:
-
-1. **lint-python** - Ruff, Black, isort, and mypy (NOT pylint)
-2. **lint-javascript** - ESLint, Prettier, and Stylelint
-3. **lint-markdown** - markdownlint-cli2
-4. **test** - Full pytest suite
-
-**Note:** The local test `test_pylint_linting` may fail due to virtual environment detection issues, but this is NOT run in GitHub CI. You can skip it with:
-
-```bash
-pytest tests/ -k "not test_pylint_linting"
-```
-
 ## Tips
 
-- Run `make lint-css` and `make lint-js` before every commit (these match GitHub exactly)
+- Run `make lint` for the GitHub lint baseline; use `make lint-all` for stricter local diagnostics.
 - Use `ruff check app/ tests/ scripts/` - this is what GitHub uses
 - Use `make format` to auto-format Python code
-- Most important: ruff, mypy, pytest, and stylelint must pass cleanly
+- Mypy diagnostics are advisory in the existing workflow; Ruff, Black, isort, Markdownlint, and license checks gate it.
 - To run the exact same tests as GitHub CI:
 
   ```bash
@@ -104,7 +101,7 @@ pytest tests/ -k "not test_pylint_linting"
   ruff check app/ tests/ scripts/
   black --check app/ tests/ scripts/
   isort --check-only app/ tests/ scripts/
-  mypy app/ tests/
+  mypy app/ tests/ scripts/ # advisory only: workflow continue-on-error
 
   # Tests (what GitHub runs)
   pytest tests/ -v

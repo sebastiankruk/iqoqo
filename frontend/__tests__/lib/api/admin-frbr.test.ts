@@ -71,7 +71,7 @@ describe("Admin API - FRBR endpoints", () => {
         config: {} as any,
       });
 
-      const result = await updateFrbrEntity("work", 1, mockPayload);
+      const result = await updateFrbrEntity({ type: "work", id: 1, data: mockPayload });
 
       expect(apiClient.put).toHaveBeenCalledWith("/v1/admin/frbr/work/1", mockPayload);
       expect(result).toEqual({ id: 1 });
@@ -87,7 +87,7 @@ describe("Admin API - FRBR endpoints", () => {
         config: {} as any,
       });
 
-      const result = await updateFrbrEntity("expression", 2, mockPayload);
+      const result = await updateFrbrEntity({ type: "expression", id: 2, data: mockPayload });
 
       expect(apiClient.put).toHaveBeenCalledWith("/v1/admin/frbr/expression/2", mockPayload);
       expect(result).toEqual({ id: 2 });
@@ -103,7 +103,7 @@ describe("Admin API - FRBR endpoints", () => {
         config: {} as any,
       });
 
-      const result = await updateFrbrEntity("manifestation", 3, mockPayload);
+      const result = await updateFrbrEntity({ type: "manifestation", id: 3, data: mockPayload });
 
       expect(apiClient.put).toHaveBeenCalledWith("/v1/admin/frbr/manifestation/3", mockPayload);
       expect(result).toEqual({ id: 3 });
@@ -119,7 +119,7 @@ describe("Admin API - FRBR endpoints", () => {
         config: {} as any,
       });
 
-      const result = await updateFrbrEntity("item", 10, mockPayload);
+      const result = await updateFrbrEntity({ type: "item", id: 10, data: mockPayload });
 
       expect(apiClient.put).toHaveBeenCalledWith("/v1/admin/frbr/item/10", mockPayload);
       expect(result).toEqual({ id: 10 });
@@ -134,7 +134,7 @@ describe("Admin API - FRBR endpoints", () => {
         config: {} as any,
       });
 
-      await expect(updateFrbrEntity("expression", 2, {})).rejects.toThrow("Validation failed");
+      await expect(updateFrbrEntity({ type: "expression", id: 2, data: {} })).rejects.toThrow("Validation failed");
     });
   });
 

@@ -47,6 +47,11 @@ describe("getTargetHref", () => {
     expect(getTargetHref(esc)).toBe("/collection?work_id=7");
   });
 
+  it("links expressions to their parent work with an expression anchor", () => {
+    const esc = makeEsc({ work_id: 7, expression_id: 12 });
+    expect(getTargetHref(esc)).toBe("/work/7#expression-12");
+  });
+
   it("returns item link when item_id is set", () => {
     const esc = makeEsc({ item_id: 99 });
     expect(getTargetHref(esc)).toBe("/item/99");
@@ -72,6 +77,11 @@ describe("getAdminTargetHref", () => {
   it("returns work collection link for work", () => {
     const esc = makeEsc({ work_id: 5 });
     expect(getAdminTargetHref(esc)).toBe("/collection?work_id=5");
+  });
+
+  it("links expression escalations to the parent work anchor", () => {
+    const esc = makeEsc({ work_id: 5, expression_id: 8 });
+    expect(getAdminTargetHref(esc)).toBe("/work/5#expression-8");
   });
 
   it("returns item link for item", () => {

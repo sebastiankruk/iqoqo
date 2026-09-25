@@ -421,32 +421,45 @@ export async function updateFrbrItem(
  * @param data - Update data
  * @returns The updated entity ID
  */
-export async function updateFrbrEntity(
-  type: "work" | "expression" | "manifestation" | "item",
-  id: number,
-  data: Record<string, unknown>
-): Promise<{ id: number }> {
-  switch (type) {
+/** A discriminated payload for updating a single FRBR entity. */
+export type FrbrEntityUpdatePayload =
+  | {
+      type: "work";
+      id: number;
+      data: Parameters<typeof updateFrbrWork>[1];
+    }
+  | {
+      type: "expression";
+      id: number;
+      data: Parameters<typeof updateFrbrExpression>[1];
+    }
+  | {
+      type: "manifestation";
+      id: number;
+      data: Parameters<typeof updateFrbrManifestation>[1];
+    }
+  | {
+      type: "item";
+      id: number;
+      data: Parameters<typeof updateFrbrItem>[1];
+    };
+
+/**
+ * Update one FRBR entity through its level-specific API operation.
+ *
+ * @param payload - The discriminated entity update and typed fields.
+ * @returns The updated entity ID.
+ */
+export async function updateFrbrEntity(payload: FrbrEntityUpdatePayload): Promise<{ id: number }> {
+  switch (payload.type) {
     case "work":
-      return updateFrbrWork(id, data as { title?: string; meta?: Record<string, unknown> });
+      return updateFrbrWork(payload.id, payload.data);
     case "expression":
-      return updateFrbrExpression(
-        id,
-        data as {
-          work_id?: number;
-          content_type?: string;
-          language?: string;
-          kind?: string;
-          meta?: Record<string, unknown>;
-        }
-      );
+      return updateFrbrExpression(payload.id, payload.data);
     case "manifestation":
-      return updateFrbrManifestation(id, data as Parameters<typeof updateFrbrManifestation>[1]);
+      return updateFrbrManifestation(payload.id, payload.data);
     case "item":
-      return updateFrbrItem(
-        id,
-        data as { manifestation_id?: number; status?: string; condition?: string; meta?: Record<string, unknown> }
-      );
+      return updateFrbrItem(payload.id, payload.data);
   }
 }
 

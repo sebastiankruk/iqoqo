@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Globe, Check } from "lucide-react";
 import { useLocale } from "next-intl";
+import { setLocaleCookie } from "@/lib/locale-cookie";
 
 /**
  * Component to switch between languages (English and Polish).
@@ -35,7 +36,7 @@ export function LanguageToggle() {
   const locale = useLocale();
 
   const setLanguage = (locale: string) => {
-    document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; SameSite=Lax`;
+    setLocaleCookie(locale);
     router.refresh();
   };
 
