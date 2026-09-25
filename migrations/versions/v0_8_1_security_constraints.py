@@ -41,8 +41,47 @@ def upgrade():
     auth_schema, catalog_schema = _schema_names(bind)
     inspector = sa.inspect(bind)
 
-    # Fail closed rather than inventing credentials or silently deleting accounts.
+    is_pg = bind.dialect.name == "postgresql"
     users_table = _table_name(auth_schema, "users")
+
+    # Clean up or lock the transitional legacy system user (00000000-0000-4000-a000-000000000000 / legacy@iqoqo.cc)
+    # seeded by 2973a4475ace_add_user_profiles_auth_and_rbac during v0.2.0 before authentication constraints existed.
+    legacy_user_id = "00000000-0000-4000-a000-000000000000"
+    if is_pg:
+        has_items = False
+        try:
+            has_items = bool(
+                bind.execute(
+                    sa.text(f"SELECT 1 FROM inventory.items WHERE owner_id::text = '{legacy_user_id}' LIMIT 1")
+                ).scalar()
+            )
+        except Exception:
+            has_items = False
+
+        if not has_items:
+            bind.execute(
+                sa.text(
+                    f"DELETE FROM {users_table} WHERE (id::text = '{legacy_user_id}' OR email = 'legacy@iqoqo.cc') "
+                    "AND password_hash IS NULL AND google_id IS NULL"
+                )
+            )
+        else:
+            bind.execute(
+                sa.text(
+                    f"UPDATE {users_table} SET password_hash = '!disabled', is_active = false "
+                    f"WHERE (id::text = '{legacy_user_id}' OR email = 'legacy@iqoqo.cc') "
+                    "AND password_hash IS NULL AND google_id IS NULL"
+                )
+            )
+    else:
+        bind.execute(
+            sa.text(
+                f"DELETE FROM {users_table} WHERE email = 'legacy@iqoqo.cc' "
+                "AND password_hash IS NULL AND google_id IS NULL"
+            )
+        )
+
+    # Fail closed rather than inventing credentials or silently deleting accounts.
     users_without_auth = bind.execute(
         sa.text(f"SELECT COUNT(*) FROM {users_table} WHERE password_hash IS NULL AND google_id IS NULL")
     ).scalar_one()

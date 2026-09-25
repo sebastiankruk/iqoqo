@@ -726,13 +726,14 @@ def test_v0_7_19_f3_rollback_verification(app) -> None:
 def test_v0_8_1_security_constraints_upgrade_and_downgrade() -> None:
     """The security constraint migration upgrades legacy checks and rolls back cleanly."""
     from importlib import import_module
+    from typing import Any
 
     import sqlalchemy as sa
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
     from sqlalchemy.exc import IntegrityError
 
-    migration = import_module("migrations.versions.v0_8_1_security_constraints")
+    migration: Any = import_module("migrations.versions.v0_8_1_security_constraints")
     engine = sa.create_engine("sqlite://")
     metadata = sa.MetaData()
     users = sa.Table(
@@ -801,15 +802,81 @@ def test_v0_8_1_security_constraints_upgrade_and_downgrade() -> None:
         engine.dispose()
 
 
-def test_v0_8_1_oauth_exchange_codes_upgrade_and_downgrade() -> None:
-    """The OAuth handoff-code table is reversible and cascades with its user."""
+def test_v0_8_1_security_constraints_handles_legacy_system_user() -> None:
+    """The security constraint migration cleans up the legacy transitional user but still rejects real unauthenticated users."""
     from importlib import import_module
+    from typing import Any
 
     import sqlalchemy as sa
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
 
-    migration = import_module("migrations.versions.v0_8_1_oauth_exchange_codes")
+    migration: Any = import_module("migrations.versions.v0_8_1_security_constraints")
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    users = sa.Table(
+        "users",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("email", sa.String, nullable=False),
+        sa.Column("visibility", sa.String, nullable=False),
+        sa.Column("password_hash", sa.String, nullable=True),
+        sa.Column("google_id", sa.String, nullable=True),
+        sa.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
+    )
+    aggregations = sa.Table(
+        "container_aggregations",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("aggregated_type", sa.String, nullable=False),
+        sa.Column("aggregated_work_id", sa.Integer, nullable=True),
+        sa.Column("aggregated_item_id", sa.Integer, nullable=True),
+        sa.Column("component_name", sa.String, nullable=False),
+    )
+    metadata.create_all(engine)
+
+    # Scenario 1: Only legacy user without credentials exists -> migration cleans it up and succeeds
+    with engine.begin() as connection:
+        connection.execute(users.insert().values(email="legacy@iqoqo.cc", visibility="private"))
+        connection.execute(aggregations.insert().values(aggregated_type="work", aggregated_work_id=1, component_name="Rulebook"))
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        with engine.begin() as connection:
+            remaining = connection.execute(sa.text("SELECT email FROM users WHERE email = 'legacy@iqoqo.cc'")).fetchall()
+            assert len(remaining) == 0
+
+        run_migration(migration.downgrade)
+
+        # Scenario 2: A non-legacy user without credentials exists -> migration fails closed
+        with engine.begin() as connection:
+            connection.execute(users.insert().values(email="real-user-no-creds@iqoqo.local", visibility="private"))
+
+        with pytest.raises(RuntimeError, match="Cannot add check_user_auth_method"):
+            run_migration(migration.upgrade)
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_1_oauth_exchange_codes_upgrade_and_downgrade() -> None:
+    """The OAuth handoff-code table is reversible and cascades with its user."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_1_oauth_exchange_codes")
     engine = sa.create_engine("sqlite://")
     metadata = sa.MetaData()
     sa.Table("users", metadata, sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True))

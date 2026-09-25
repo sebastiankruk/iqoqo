@@ -24,6 +24,7 @@ from flask import Flask
 load_dotenv()
 
 import yaml
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import create_app
 from app.core.permissions import PermissionName
@@ -168,6 +169,18 @@ def run_init_auth(app: Flask | None = None) -> None:
         if migrated > 0:
             db.session.commit()
             print(f"Migrated {migrated} items to admin user.")
+
+        # Clean up legacy transitional user if unreferenced
+        try:
+            legacy_user = db.session.execute(
+                db.select(User).filter((User.email == "legacy@iqoqo.cc") | (User.id == uuid.UUID(LEGACY_USER_ID)))
+            ).scalar_one_or_none()
+            if legacy_user:
+                db.session.delete(legacy_user)
+                db.session.commit()
+                print("Cleaned up orphaned legacy system user.")
+        except (SQLAlchemyError, ValueError):
+            db.session.rollback()
 
 
 if __name__ == "__main__":

@@ -99,7 +99,9 @@ def test_roadmap_item_constraint_preserves_expression_target_and_rejects_invalid
         expression_only = RoadmapItem(roadmap_id=roadmap.id, expression_id=expression.id, position=1)
         db.session.add(expression_only)
         db.session.commit()
-        assert db.session.get(RoadmapItem, expression_only.id).expression_id == expression.id
+        retrieved = db.session.get(RoadmapItem, expression_only.id)
+        assert retrieved is not None
+        assert retrieved.expression_id == expression.id
 
         no_target = RoadmapItem(roadmap_id=roadmap.id, position=2)
         db.session.add(no_target)
