@@ -110,8 +110,11 @@ All code must pass quality checks before being merged. Run these before committi
 
 ```bash
 
-# Check everything
+# Run lint checks that gate the GitHub quality workflow
 make lint
+
+# Run additional local-only Pylint/frontend source checks
+make lint-all
 
 # Auto-fix formatting
 make format
@@ -181,7 +184,8 @@ make start          # Start Colima, PostgreSQL, and Flask server
 make stop           # Stop Flask and database (keeps Colima running)
 
 # Code Quality
-make lint           # Run all linting checks (Python, JS, CSS, Markdown)
+make lint           # Run checks that gate GitHub quality CI
+make lint-all       # Add local-only Pylint, ESLint, TypeScript, Stylelint, YAML
 make format         # Auto-format all code
 make test           # Run all tests (includes linting)
 

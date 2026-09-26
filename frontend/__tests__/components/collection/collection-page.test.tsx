@@ -55,6 +55,7 @@
  * 3. Filter changes forwarded as server-side params.
  */
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -96,7 +97,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useFacetStats: vi.fn().mockReturnValue({
     data: {
       status_counts: { available: 150, lent: 5, lost: 2, wish_list: 21, reading: 10, read: 50, want_to_read: 23 },
-      category_counts: { movie: 20 },
+      category_counts: { movie: 20, text: 3 },
       format_counts: { dvd: 20 },
     },
   }),
@@ -136,6 +137,7 @@ import {
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
+  useFacetStats,
 } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
@@ -146,6 +148,7 @@ const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseProfile = vi.mocked(useProfile);
 const mockUseWorksShelf = vi.mocked(useInfiniteWorksShelf);
 const mockUseExpressionsShelf = vi.mocked(useInfiniteExpressionsShelf);
+const mockUseFacetStats = vi.mocked(useFacetStats);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
@@ -155,6 +158,7 @@ const queryClient = new QueryClient({
  * Render component with QueryClientProvider.
  *
  * @param ui - Component to render
+ * @returns Rendered component wrapper.
  */
 function renderWithProviders(ui: React.ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
@@ -360,6 +364,24 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
     expect(lastCall[1]).toEqual(["available"]);
   });
 
+  it("renders the API category count and forwards a selected category to item fetching", async () => {
+    const user = userEvent.setup();
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({ total: 3 }, 1)] },
+      })
+    );
+
+    renderWithProviders(<CollectionPage />);
+
+    const textFacet = screen.getByRole("checkbox", { name: /text\s+3/i });
+    expect(textFacet).toBeEnabled();
+    await user.click(textFacet);
+
+    const latestItemsCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    expect(latestItemsCall[5]).toBe("text");
+  });
+
   it("removes the status filter when toggled off", () => {
     mockUseItems.mockReturnValue(
       infiniteQueryResult({
@@ -563,5 +585,27 @@ describe("CollectionPage – Sorting Behavior", () => {
       // Non-owner viewing a shared collection should see content
       expect(screen.queryByTestId("collection-grid")).toBeTruthy();
     });
+  });
+});
+
+describe("CollectionPage – facet stats loading state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient.clear();
+    mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
+    mockUseItems.mockReturnValue(infiniteQueryResult());
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
+    mockUseFacetStats.mockReturnValue({ data: undefined, isLoading: true } as ReturnType<typeof useFacetStats>);
+  });
+
+  it("does not present unavailable facet counts as true zeroes", () => {
+    renderWithProviders(<CollectionPage />);
+
+    const textFacet = screen.getByRole("checkbox", { name: /text/i });
+    expect(textFacet).toBeEnabled();
+    expect(screen.queryByRole("checkbox", { name: /text\s+0/i })).not.toBeInTheDocument();
   });
 });

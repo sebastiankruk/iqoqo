@@ -408,7 +408,11 @@ function CollectionContent() {
     isLoggedIn,
   ]);
 
-  const { data: facetStatsData } = useFacetStats(isLoggedIn ? "user" : "global", filtersForFacets, true);
+  const {
+    data: facetStatsData,
+    isError: facetStatsError,
+    refetch: refetchFacetStats,
+  } = useFacetStats(isLoggedIn ? "user" : "global", filtersForFacets, true);
 
   const isLoading =
     viewMode === "roadmap"
@@ -533,17 +537,11 @@ function CollectionContent() {
     setActiveFilters([]);
   }, []);
 
-  const formatCounts = useMemo<Record<string, number>>(() => {
-    return facetStatsData?.format_counts ?? ({} as Record<string, number>);
-  }, [facetStatsData]);
+  const formatCounts = useMemo(() => facetStatsData?.format_counts, [facetStatsData]);
 
-  const categoryCounts = useMemo<Record<string, number>>(() => {
-    return facetStatsData?.category_counts ?? ({} as Record<string, number>);
-  }, [facetStatsData]);
+  const categoryCounts = useMemo(() => facetStatsData?.category_counts, [facetStatsData]);
 
-  const statusCounts = useMemo<Record<string, number>>(() => {
-    return facetStatsData?.status_counts ?? ({} as Record<string, number>);
-  }, [facetStatsData]);
+  const statusCounts = useMemo(() => facetStatsData?.status_counts, [facetStatsData]);
 
   const filteredItems = useMemo(() => {
     const items = [...allItems];
@@ -737,6 +735,22 @@ function CollectionContent() {
             resultCount={total}
           />
         </div>
+
+        {facetStatsError && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+          >
+            <span>Filter counts are unavailable. Filters remain usable without counts.</span>
+            <button
+              type="button"
+              onClick={() => void refetchFacetStats()}
+              className="shrink-0 font-medium text-primary hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="flex gap-8">
           <div className="hidden w-56 shrink-0 lg:block">

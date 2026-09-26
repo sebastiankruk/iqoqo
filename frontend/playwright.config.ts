@@ -75,7 +75,8 @@ export default defineConfig({
     {
       command: "IS_E2E=true NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
       url: "http://localhost:3002",
-      reuseExistingServer: true,
+      // Never reuse an unrelated dev/preview server during an E2E run.
+      reuseExistingServer: !process.env.IS_E2E,
       timeout: 120000,
     },
     {

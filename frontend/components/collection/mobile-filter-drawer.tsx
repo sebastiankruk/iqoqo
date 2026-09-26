@@ -29,7 +29,7 @@ interface MobileFilterDrawerProps {
   onClose: () => void;
   activeFilters: ActiveFilter[];
   onToggleFilter: (filter: ActiveFilter) => void;
-  statusCounts: Record<string, number>;
+  statusCounts?: Record<string, number>;
   formatCounts?: Record<string, number>;
   categoryCounts?: Record<string, number>;
   viewMode?: "items" | "manifestations" | "works" | "expressions" | "roadmap";
@@ -77,7 +77,7 @@ export function MobileFilterDrawer({
   onToggleFilter,
   statusCounts,
   formatCounts,
-  categoryCounts = {},
+  categoryCounts,
   viewMode = "items",
   isLoggedIn = false,
   isCurator = false,
@@ -85,10 +85,10 @@ export function MobileFilterDrawer({
   onChangeMissingCover,
   onChangeMissingId,
   missingId = false,
-  tagCounts = {},
-  collectionCounts: collCounts = {},
-  genreCounts = {},
-  publisherCounts = {},
+  tagCounts,
+  collectionCounts: collCounts,
+  genreCounts,
+  publisherCounts,
   borrowedCount,
 }: MobileFilterDrawerProps) {
   const t = useTranslations("CollectionFilters");

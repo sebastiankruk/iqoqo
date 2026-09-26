@@ -103,7 +103,7 @@ export interface ExpressionDetail {
   manifestations: WorkDetailManifestation[];
 }
 
-import type { MediaFormat, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
+import type { MediaFormat, MediaCategory, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
 export * from "./taxonomy";
 
 /** Additional image attached to a manifestation (e.g., disc, inlay). */
@@ -112,6 +112,9 @@ export interface AdditionalImage {
   label: ImageType | string;
   added_at: string;
 }
+
+/** Metadata lookup providers selected according to the manifestation's media category. */
+export type MediaStrategy = "google_books" | "tmdb" | "discogs" | "musicbrainz" | "bgg" | "igdb";
 
 /**
  * The physical embodiment of an expression of a work.
@@ -133,7 +136,9 @@ export interface Manifestation {
   owner_count?: number;
   meta: {
     additional_images?: AdditionalImage[];
-    format?: MediaFormat | string;
+    format?: MediaFormat | "series" | "Series";
+    content_type?: MediaCategory;
+    media_strategy?: MediaStrategy;
     catalog_number?: string;
     pressing_number?: string;
     matrix_number?: string;

@@ -45,6 +45,39 @@ from app.db.models import (
 )
 
 
+def _build_format_facet_query(target_clause: Any, from_clause: Any, filter_column: Any, filtered_ids: Any):
+    """Build a format-count query with a single shared JSON key bind parameter.
+
+    PostgreSQL requires the grouped expression to be structurally identical to
+    the selected expression. Reusing this SQLAlchemy expression ensures both
+    occurrences compile with the same JSON path bind parameter.
+    """
+    format_expression = Manifestation.meta["format"].as_string()
+    return (
+        select(
+            format_expression,
+            func.count(distinct(target_clause)).label("cnt"),
+        )
+        .select_from(from_clause)
+        .where(filter_column.in_(select(filtered_ids)))
+        .group_by(format_expression)
+    )
+
+
+def _build_collection_status_facet_query(target_clause: Any, from_clause: Any, filter_column: Any, filtered_ids: Any):
+    """Build the collection-status count query with one shared COALESCE expression."""
+    status_expression = func.coalesce(Item.collection_status, "available")
+    return (
+        select(
+            status_expression.label("c_status"),
+            func.count(distinct(target_clause)).label("cnt"),
+        )
+        .select_from(from_clause)
+        .where(filter_column.in_(select(filtered_ids)))
+        .group_by(status_expression)
+    )
+
+
 class DataManager:
     """Manages import and export of iqoqo database content."""
 
@@ -240,6 +273,11 @@ class DataManager:
                 old_expr_id = manif_data.get("expression_id")
                 new_expr_id = expr_id_map.get(old_expr_id, old_expr_id)
                 pub_date = datetime.fromisoformat(manif_data["publication_date"]).date() if manif_data.get("publication_date") else None
+                manifestation_meta = dict(manif_data.get("meta") or {})
+                cover_url = manif_data.get("cover_url")
+                local_cover_url = cover_url if isinstance(cover_url, str) and cover_url.startswith("/static/covers/") else None
+                if isinstance(cover_url, str) and cover_url and local_cover_url is None:
+                    manifestation_meta.setdefault("cover_url", cover_url)
                 manif = Manifestation(
                     expression_id=new_expr_id,
                     isbn13=manif_data.get("isbn13"),
@@ -247,7 +285,8 @@ class DataManager:
                     ean=manif_data.get("ean"),
                     publisher=manif_data.get("publisher"),
                     publication_date=pub_date,
-                    meta=manif_data.get("meta", {}),
+                    cover_url=local_cover_url,
+                    meta=manifestation_meta,
                 )
                 db.session.add(manif)
                 db.session.flush()
@@ -938,15 +977,7 @@ class DataManager:
                 category_counts[ct] = cnt
 
         # ── Format counts (grouped by Manifestation.meta->'format') ───────
-        fmt_query = (
-            select(
-                Manifestation.meta["format"].as_string(),
-                func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
-            )
-            .select_from(cfg["from_clause"])
-            .where(subq_filter_col.in_(select(fmt_subq.c.id)))
-            .group_by(Manifestation.meta["format"].as_string())
-        )
+        fmt_query = _build_format_facet_query(cfg["target_clause"], cfg["from_clause"], subq_filter_col, fmt_subq.c.id)
         fmt_query = _join_to_manifestation(fmt_query)
         fmt_rows = db.session.execute(fmt_query).all()
         format_counts: dict[str, int] = {}
@@ -975,14 +1006,11 @@ class DataManager:
                 if s in db_statuses:
                     db_statuses[s] += cnt
 
-            coll_status_query = (
-                select(
-                    func.coalesce(Item.collection_status, "available").label("c_status"),
-                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
-                )
-                .select_from(cfg["from_clause"])
-                .where(subq_filter_col.in_(select(status_subq.c.id)))
-                .group_by(func.coalesce(Item.collection_status, "available"))
+            coll_status_query = _build_collection_status_facet_query(
+                cfg["target_clause"],
+                cfg["from_clause"],
+                subq_filter_col,
+                status_subq.c.id,
             )
             coll_status_query = _join_full_chain(coll_status_query)
             coll_status_rows = db.session.execute(coll_status_query).all()

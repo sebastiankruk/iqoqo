@@ -154,6 +154,19 @@ def test_export_and_reimport(app, sample_data):
         assert result["items"] == 1
 
 
+def test_import_preserves_external_cover_source_for_local_copy_processing(app, sample_data):
+    """A legacy top-level cover_url must survive import as a pipeline source."""
+    source_url = "https://a.allegroimg.com/original/legacy-cover.jpg"
+    imported = json.loads(json.dumps(sample_data))
+    imported["manifestations"][0]["cover_url"] = source_url
+
+    with app.app_context():
+        DataManager.import_data(imported)
+
+        manifestation = Manifestation.query.one()
+        assert manifestation.meta["cover_url"] == source_url
+
+
 def test_export_to_file(app, sample_data, tmp_path):
     """Test exporting to a file."""
     with app.app_context():

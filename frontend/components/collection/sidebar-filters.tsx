@@ -162,11 +162,11 @@ export function SearchableFacet({ options, activeFilters, type, onToggle, placeh
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredOptions = useMemo(() => {
-    // Filter out options with 0 counts unless they are currently active
+    // Keep options available while counts are unknown; successful empty counts remain authoritative.
     const availableOptions = options.filter(opt => {
       const active = isActive(activeFilters, type, opt);
-      const count = counts?.[opt] ?? 0;
-      return active || count > 0;
+      const count = counts?.[opt];
+      return active || counts === undefined || (count !== undefined && count > 0);
     });
 
     if (!searchQuery.trim()) return availableOptions;
@@ -248,9 +248,9 @@ import { useTaxonomies } from "@/lib/api/hooks";
 export function SidebarFilters({
   activeFilters,
   onToggleFilter,
-  statusCounts = {},
-  formatCounts = {},
-  categoryCounts = {},
+  statusCounts,
+  formatCounts,
+  categoryCounts,
   isLoggedIn = false,
   isCurator = false,
   viewMode,
@@ -258,10 +258,10 @@ export function SidebarFilters({
   onChangeMissingCover,
   onChangeMissingId,
   missingId = false,
-  tagCounts = {},
-  collectionCounts: collCountsFromProps = {},
-  genreCounts = {},
-  publisherCounts = {},
+  tagCounts,
+  collectionCounts: collCountsFromProps,
+  genreCounts,
+  publisherCounts,
   borrowedCount,
 }: SidebarFiltersProps) {
   const t = useTranslations("CollectionFilters");
@@ -296,8 +296,8 @@ export function SidebarFilters({
         <div className="flex flex-col gap-1">
           {Object.entries(MEDIA_HIERARCHY).map(([id]) => {
             const active = isActive(activeFilters, "category", id);
-            const count = categoryCounts[id] ?? 0;
-            const disabled = !active && count === 0;
+            const count = categoryCounts === undefined ? undefined : (categoryCounts[id] ?? 0);
+            const disabled = !active && categoryCounts !== undefined && count === 0;
             return (
               <label
                 key={id}
@@ -315,7 +315,9 @@ export function SidebarFilters({
                   {categoryIcons[id] || <LayoutGrid className="h-3.5 w-3.5" />}
                 </span>
                 <span className="flex-1 font-medium">{t(`cat_${id}`)}</span>
-                <span className="text-xs tabular-nums text-muted-foreground mr-1">{count}</span>
+                {count !== undefined && (
+                  <span className="text-xs tabular-nums text-muted-foreground mr-1">{count}</span>
+                )}
                 {active && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </label>
             );
@@ -357,9 +359,10 @@ export function SidebarFilters({
 
       {isLoggedIn &&
         taxonomies?.collections &&
-        taxonomies.collections.some(
-          c => (collCountsFromProps?.[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)
-        ) && (
+        (collCountsFromProps === undefined ||
+          taxonomies.collections.some(
+            c => (collCountsFromProps[c] ?? 0) > 0 || isActive(activeFilters, "collection", c)
+          )) && (
           <AccordionSection title={t("secMyCollections")}>
             <SearchableFacet
               options={taxonomies.collections}
@@ -374,7 +377,8 @@ export function SidebarFilters({
 
       {isLoggedIn &&
         taxonomies?.tags &&
-        taxonomies.tags.some(t => (tagCounts?.[t] ?? 0) > 0 || isActive(activeFilters, "tag", t)) && (
+        (tagCounts === undefined ||
+          taxonomies.tags.some(t => (tagCounts[t] ?? 0) > 0 || isActive(activeFilters, "tag", t))) && (
           <AccordionSection title={t("secTags")} defaultOpen={false}>
             <SearchableFacet
               options={taxonomies?.tags ?? []}
@@ -388,7 +392,8 @@ export function SidebarFilters({
         )}
 
       {taxonomies?.genres &&
-        taxonomies.genres.some(g => (genreCounts?.[g] ?? 0) > 0 || isActive(activeFilters, "genre", g)) && (
+        (genreCounts === undefined ||
+          taxonomies.genres.some(g => (genreCounts[g] ?? 0) > 0 || isActive(activeFilters, "genre", g))) && (
           <AccordionSection title={t("secGenres")} defaultOpen={false}>
             <SearchableFacet
               options={taxonomies?.genres ?? []}
@@ -402,7 +407,10 @@ export function SidebarFilters({
         )}
 
       {taxonomies?.publishers &&
-        taxonomies.publishers.some(p => (publisherCounts?.[p] ?? 0) > 0 || isActive(activeFilters, "publisher", p)) && (
+        (publisherCounts === undefined ||
+          taxonomies.publishers.some(
+            p => (publisherCounts[p] ?? 0) > 0 || isActive(activeFilters, "publisher", p)
+          )) && (
           <AccordionSection title={t("secPublishers")} defaultOpen={false}>
             <SearchableFacet
               options={taxonomies?.publishers ?? []}
@@ -420,8 +428,8 @@ export function SidebarFilters({
           <div className="flex flex-col gap-1">
             {validFormats.map(fmt => {
               const active = isActive(activeFilters, "format", fmt.id);
-              const count = formatCounts[fmt.id] ?? 0;
-              const disabled = !active && count === 0;
+              const count = formatCounts === undefined ? undefined : (formatCounts[fmt.id] ?? 0);
+              const disabled = !active && formatCounts !== undefined && count === 0;
               const isUnknown = fmt.id.startsWith("unknown_");
               return (
                 <label
@@ -439,7 +447,7 @@ export function SidebarFilters({
                   <span className={`flex-1 ${isUnknown ? "italic" : ""}`}>
                     {t(`fmt_${fmt.id}`, { defaultValue: fmt.label })}
                   </span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                  {count !== undefined && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
                 </label>
               );
             })}
@@ -455,8 +463,16 @@ export function SidebarFilters({
                 {collectionStatuses.map(({ value, label, dot }) => {
                   const active = isActive(activeFilters, "status", value);
                   const count =
-                    value === "borrowed" ? (borrowedCount ?? statusCounts[value] ?? 0) : (statusCounts[value] ?? 0);
-                  const disabled = !active && count === 0;
+                    value === "borrowed"
+                      ? (borrowedCount ?? (statusCounts === undefined ? undefined : (statusCounts[value] ?? 0)))
+                      : statusCounts === undefined
+                        ? undefined
+                        : (statusCounts[value] ?? 0);
+                  const hasStatusCounts =
+                    value === "borrowed"
+                      ? borrowedCount !== undefined || statusCounts !== undefined
+                      : statusCounts !== undefined;
+                  const disabled = !active && hasStatusCounts && count === 0;
                   return (
                     <label
                       key={value}
@@ -471,7 +487,9 @@ export function SidebarFilters({
                       />
                       <span className={`h-2 w-2 rounded-full ${dot}`} />
                       <span className="flex-1">{t(`status_${value}`, { defaultValue: label })}</span>
-                      <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                      {count !== undefined && (
+                        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                      )}
                     </label>
                   );
                 })}
@@ -487,8 +505,8 @@ export function SidebarFilters({
             {validProgressStatuses.map(status => {
               const info = progressLabels[status] || { label: status, dot: "bg-muted" };
               const active = isActive(activeFilters, "status", status);
-              const count = statusCounts[status] ?? 0;
-              const disabled = !active && count === 0;
+              const count = statusCounts === undefined ? undefined : (statusCounts[status] ?? 0);
+              const disabled = !active && statusCounts !== undefined && count === 0;
               return (
                 <label
                   key={status}
@@ -503,7 +521,7 @@ export function SidebarFilters({
                   />
                   <span className={`h-2 w-2 rounded-full ${info.dot}`} />
                   <span className="flex-1">{t(`progress_${status}`, { defaultValue: info.label })}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                  {count !== undefined && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
                 </label>
               );
             })}

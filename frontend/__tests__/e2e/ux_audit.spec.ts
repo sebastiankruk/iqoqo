@@ -218,7 +218,7 @@ test.describe("UX/UI Audit Workflow", () => {
       await page.waitForLoadState("networkidle");
 
       // Screenshot 1: Scan Page initial view
-        await page.screenshot({ path: auditScreenshotPath("ux_scan_page.png") });
+      await page.screenshot({ path: auditScreenshotPath("ux_scan_page.png") });
       console.log("Scan page initial screenshot saved");
 
       let clickCount = 0;

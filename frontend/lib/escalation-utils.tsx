@@ -23,6 +23,7 @@ import type { EscalationRequest } from "@/types/frbr";
  */
 export function getTargetHref(esc: EscalationRequest): string | null {
   if (esc.manifestation_id) return `/manifestation/${esc.manifestation_id}`;
+  if (esc.expression_id && esc.work_id) return `/work/${esc.work_id}#expression-${esc.expression_id}`;
   if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
   if (esc.item_id) return `/item/${esc.item_id}`;
   return null;
@@ -37,6 +38,7 @@ export function getTargetHref(esc: EscalationRequest): string | null {
  */
 export function getAdminTargetHref(esc: EscalationRequest): string | null {
   if (esc.manifestation_id) return `/admin/content?tab=metadata&manifestationId=${esc.manifestation_id}`;
+  if (esc.expression_id && esc.work_id) return `/work/${esc.work_id}#expression-${esc.expression_id}`;
   if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
   if (esc.item_id) return `/item/${esc.item_id}`;
   return null;

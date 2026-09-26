@@ -1,0 +1,33 @@
+# Gitleaks configuration for iqoqo project
+# Rules target known leaked credentials and prevent monitoring secrets regressions.
+
+title = "iqoqo secret scan config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "iqoqo-openobserve-base64-auth"
+description = "Hardcoded OpenObserve Base64 Basic Auth token (admin@iqoqo.local:*)"
+regex = '''YWRtaW5AaXFvcW8ubG9jYWw6[A-Za-z0-9+/=]{10,}'''
+tags = ["monitoring", "openobserve", "credentials"]
+
+[[rules]]
+id = "iqoqo-openobserve-hardcoded-password"
+description = "Hardcoded legacy OpenObserve fallback password"
+regex = '''(?i)(?:SuperSecret!123|supersecret)'''
+tags = ["monitoring", "openobserve", "credentials"]
+
+[allowlist]
+description = "Global allowlist for build artifacts, dependencies, changelogs, and specs"
+paths = [
+    '''(^|/)\.venv/''',
+    '''(^|/)node_modules/''',
+    '''(^|/)\.next/''',
+    '''(^|/)graphify-out/''',
+    '''(^|/)mykg_sessions/''',
+    '''(^|/)\.mempalace/''',
+    '''docs/CHANGELOG\.md''',
+    '''\.gitleaks\.toml''',
+    '''openspec/.*''',
+]
