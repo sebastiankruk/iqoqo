@@ -76,7 +76,8 @@ PREVIEW_ENV_FILE ?= $(PREVIEW_DIR)/.env
 ifeq ($(USE_DOCKER),true)
 PYTHON_CMD = ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python
 else
-PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
+PYTHON_BIN ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 2>/dev/null || echo python)
+PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. $(PYTHON_BIN)
 endif
 
 # AiOps / Terse mode flags and banner suppression

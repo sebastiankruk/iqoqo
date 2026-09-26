@@ -16,6 +16,7 @@
 """Automated test suite for SHACL service and sync_ontology script."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -394,7 +395,7 @@ class TestSyncOntologyScript:
         drift_path = tmp_path / "make-drift.ttl"
         drift_path.write_text(ontology.replace("rdfs:range :Work .", "rdfs:range :Item .", 1), encoding="utf-8")
         result = subprocess.run(
-            ["make", "sync-ontology", f"ARGS=--ontology-path={drift_path}"],
+            ["make", "sync-ontology", f"ARGS=--ontology-path={drift_path}", f"PYTHON_BIN={sys.executable}"],
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
