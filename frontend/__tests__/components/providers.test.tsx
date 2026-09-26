@@ -16,7 +16,7 @@
 
 import { render, screen, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Providers } from "@/components/providers";
+import { createAppQueryClient, Providers } from "@/components/providers";
 
 // Mock sonner Toaster to inspect passed props
 vi.mock("sonner", () => ({
@@ -38,6 +38,12 @@ describe("Providers Component", () => {
       configurable: true,
       value: originalInnerWidth,
     });
+  });
+
+  it("sets a 60-second default query stale time and preserves query-level overrides", () => {
+    const client = createAppQueryClient();
+    expect(client.getDefaultOptions().queries).toMatchObject({ staleTime: 60_000, retry: 1 });
+    expect(client.defaultQueryOptions({ queryKey: ["volatile"], staleTime: 0 }).staleTime).toBe(0);
   });
 
   it("renders children successfully", () => {

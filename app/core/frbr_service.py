@@ -24,13 +24,14 @@ from collections.abc import Generator, Iterable
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
+from app.core.iri import canonical_frbr_iri, canonical_related_iri
 from app.core.ontology_validation import (
     validate_container_not_linked_as_expansion,
     validate_work_not_expansion_aggregated,
@@ -42,6 +43,7 @@ from app.db.core import (
     EXPRESSION_KINDS,
     WORK_LINK_TYPE_IS_EXPANSION_OF,
     WORK_LINK_TYPES,
+    EntityAuditLog,
     Expression,
     ImageScan,
     Item,
@@ -100,6 +102,169 @@ def derive_sort_title(title: str) -> str:
     if not title:
         return ""
     return _LEADING_ARTICLES_RE.sub("", title).strip()
+
+
+# Cultural surname particles that stay lowercase when they appear as interior
+# words in a personal name (e.g. "Ludwig van Beethoven", "Leonardo da Vinci").
+_NAME_PARTICLES: frozenset[str] = frozenset(
+    {
+        "van",
+        "von",
+        "der",
+        "den",
+        "de",
+        "del",
+        "da",
+        "di",
+        "du",
+        "la",
+        "le",
+        "lo",
+        "te",
+        "ter",
+        "ten",
+    }
+)
+
+_INITIAL_RE = re.compile(r"^[a-zA-Z]\.?$")
+
+
+def _capitalize_name_word(word: str, *, is_first: bool) -> str:
+    """Capitalize a single name token according to FRBR cataloging rules.
+
+    Handles hyphenated compounds (``jean-luc`` → ``Jean-Luc``), single-letter
+    initials (``j.`` → ``J.``), and cultural particles that remain lowercase
+    when they appear as interior words (``van``, ``von``, ``de`` …).
+    """
+    if not word:
+        return word
+
+    # Hyphenated compound: capitalize each segment independently.
+    if "-" in word:
+        return "-".join(_capitalize_name_word(seg, is_first=is_first and idx == 0) for idx, seg in enumerate(word.split("-")))
+
+    lower = word.lower()
+
+    # Interior cultural particle stays lowercase.
+    if not is_first and lower in _NAME_PARTICLES:
+        return lower
+
+    # Single-letter initial (``j`` or ``j.``) → ``J.``
+    if _INITIAL_RE.match(word):
+        return lower.upper() + ("." if not word.endswith(".") else "")
+
+    # Default: capitalize first letter, lowercase the rest.
+    return lower[0].upper() + lower[1:]
+
+
+def normalize_contributor_name(name: str) -> str:
+    """Normalize whitespace and capitalize a contributor display name.
+
+    Rules:
+      * Strip leading/trailing whitespace; collapse internal runs to one space.
+      * Capitalize each word, preserving interior lowercase cultural particles
+        (``van``, ``von``, ``de``, ``da``, ``del``, ``di``, ``le``, ``la``,
+        ``der``, ``den``, ``du``, ``lo``, ``te``, ``ter``, ``ten``).
+      * Hyphenated compounds capitalize each segment (``jean-luc`` → ``Jean-Luc``).
+      * Single-letter initials collapse with dots (``j. r. r.`` → ``J.R.R.``).
+
+    Examples:
+        >>> normalize_contributor_name("gabriel garcia marquez")
+        'Gabriel Garcia Marquez'
+        >>> normalize_contributor_name("ludwig van beethoven")
+        'Ludwig van Beethoven'
+        >>> normalize_contributor_name("jean-luc godard")
+        'Jean-Luc Godard'
+        >>> normalize_contributor_name("j. r. r. tolkien")
+        'J.R.R. Tolkien'
+    """
+    if not name:
+        return ""
+    cleaned = " ".join(name.split())
+    if not cleaned:
+        return ""
+
+    words = cleaned.split(" ")
+    capitalized: list[str] = []
+
+    # Detect initials-only prefix so we can collapse "j. r. r." → "J.R.R."
+    initial_run_end = 0
+    for idx, w in enumerate(words):
+        bare = w.rstrip(".")
+        if len(bare) == 1 and bare.isalpha():
+            initial_run_end = idx + 1
+        else:
+            break
+
+    if initial_run_end > 1:
+        collapsed = "".join(words[i].rstrip(".").upper() + "." for i in range(initial_run_end))
+        # Remove trailing space after last initial dot — initials run together.
+        collapsed = collapsed.strip()
+        capitalized.append(collapsed)
+        remaining_start = initial_run_end
+    else:
+        remaining_start = 0
+
+    for idx in range(remaining_start, len(words)):
+        is_first = len(capitalized) == 0
+        capitalized.append(_capitalize_name_word(words[idx], is_first=is_first))
+
+    return " ".join(capitalized)
+
+
+def parse_agent_input(
+    raw_agents: Any,
+    default_role: str = "author",
+) -> list[dict[str, Any]]:
+    """Parse heterogeneous contributor payloads into a uniform list of dicts.
+
+    Accepts:
+      * A list of dicts with ``name`` and optional ``role`` / ``sequence`` keys.
+      * A list of plain strings (each string becomes one contributor with
+        *default_role*).
+      * A single comma- or semicolon-separated string (legacy ``meta.authors``
+        style).
+      * ``None`` / empty values → empty list.
+
+    Each name is run through :func:`normalize_contributor_name` so that
+    downstream persistence always stores consistently capitalized display
+    names.  Empty / whitespace-only names are filtered out.
+
+    Returns:
+        A list of ``{"name": str, "role": str, "sequence": int}`` dicts.
+    """
+    if raw_agents is None:
+        return []
+
+    items: list[dict[str, Any]] = []
+
+    if isinstance(raw_agents, str):
+        # Legacy comma/semicolon separated string.
+        parts = [p.strip() for p in re.split(r"[;,]", raw_agents) if p.strip()]
+        for seq, part in enumerate(parts):
+            name = normalize_contributor_name(part)
+            if name:
+                items.append({"name": name, "role": default_role, "sequence": seq})
+        return items
+
+    if isinstance(raw_agents, list):
+        for seq, entry in enumerate(raw_agents):
+            if isinstance(entry, dict):
+                raw_name = entry.get("name") or entry.get("display_name") or ""
+                name = normalize_contributor_name(str(raw_name))
+                if not name:
+                    continue
+                role = str(entry.get("role") or default_role).strip() or default_role
+                sequence = int(entry.get("sequence", seq))
+                items.append({"name": name, "role": role, "sequence": sequence})
+            elif isinstance(entry, str):
+                name = normalize_contributor_name(entry)
+                if name:
+                    items.append({"name": name, "role": default_role, "sequence": seq})
+            # Skip unrecognized entry types silently.
+        return items
+
+    return []
 
 
 def create_work(
@@ -725,12 +890,103 @@ def serialize_container_aggregation(container_work: Work | None) -> dict[str, An
 # --- UPDATE METHODS ---
 
 
+def sync_entity_contributions(
+    entity: Work | Expression | Manifestation,
+    contributions: list[dict[str, Any]],
+) -> None:
+    """Reconcile an entity's contribution rows with *contributions*.
+
+    Accepts a list of dicts shaped ``{"name": str, "role": str, "sequence": int}``
+    (as produced by :func:`parse_agent_input`).  For each entry the function
+    resolves (or creates) a :class:`Contributor` row and then:
+
+      * Adds missing contribution links.
+      * Updates ``sequence`` on existing links.
+      * Removes contribution links that are no longer present in *contributions*.
+
+    The entire reconciliation runs inside a single database transaction so
+    partial failures roll back cleanly.
+
+    The correct contribution table is chosen based on the concrete type of
+    *entity* (``Work`` → :class:`WorkContribution`, ``Expression`` →
+    :class:`ExpressionContribution`, ``Manifestation`` →
+    :class:`ManifestationContribution`).
+    """
+    if entity is None:
+        return
+
+    # Pick the right contribution model and FK column.
+    if isinstance(entity, Work):
+        contrib_cls = WorkContribution
+        fk_attr = "work_id"
+    elif isinstance(entity, Expression):
+        contrib_cls = ExpressionContribution
+        fk_attr = "expression_id"
+    elif isinstance(entity, Manifestation):
+        contrib_cls = ManifestationContribution
+        fk_attr = "manifestation_id"
+    else:
+        return
+
+    entity_id = entity.id
+
+    # Fetch existing contribution rows for this entity.
+    existing: list[Any] = list(db.session.execute(select(contrib_cls).where(getattr(contrib_cls, fk_attr) == entity_id)).scalars().all())
+
+    # Build lookup: (contributor_id, role) → contribution row
+    existing_lookup: dict[tuple[int, str], Any] = {}
+    for row in existing:
+        existing_lookup[(row.contributor_id, row.role)] = row
+
+    desired_keys: set[tuple[int, str]] = set()
+
+    for entry in contributions:
+        name = entry.get("name")
+        if not name:
+            continue
+        role = str(entry.get("role") or "contributor").strip()
+        sequence = int(entry.get("sequence", 0))
+
+        contributor = get_or_create_contributor(name, contributor_type="person")
+        if contributor is None:
+            continue
+
+        key = (contributor.id, role)
+        desired_keys.add(key)
+
+        if key in existing_lookup:
+            row = existing_lookup[key]
+            if row.sequence != sequence:
+                row.sequence = sequence
+        else:
+            new_row = contrib_cls(
+                **{fk_attr: entity_id},
+                contributor_id=contributor.id,
+                role=role,
+                sequence=sequence,
+            )
+            db.session.add(new_row)
+
+    # Remove obsolete rows.
+    for key, row in existing_lookup.items():
+        if key not in desired_keys:
+            db.session.delete(row)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        _logger_frbr.exception("sync_entity_contributions failed for %s id=%s", type(entity).__name__, entity_id)
+        raise
+
+
 def update_work(
     work_id: int,
     title: str | None = None,
     sort_title: str | None = None,
     meta: dict[str, Any] | None = None,
     raw_payload: dict[str, Any] | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Work:
     """
     Update an existing Work.
@@ -741,6 +997,7 @@ def update_work(
         sort_title: New alphabetical sort title
         meta: Metadata to merge with existing
         raw_payload: Verbatim provider payload JSON
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Work object
@@ -762,6 +1019,8 @@ def update_work(
         current_meta.update(meta)
         work.meta = current_meta
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(work, contributions)
     return work
 
 
@@ -773,6 +1032,7 @@ def update_expression(
     meta: dict[str, Any] | None = None,
     kind: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Expression:
     """
     Update an existing Expression.
@@ -786,6 +1046,7 @@ def update_expression(
         kind: New expression kind (``live_performance`` or ``None`` to clear
               via :func:`clear_expression_kind`).
         raw_payload: Verbatim provider payload JSON
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Expression object
@@ -825,6 +1086,8 @@ def update_expression(
         current_meta.update(meta)
         expr.meta = current_meta
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(expr, contributions)
     return expr
 
 
@@ -1004,6 +1267,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     catalog_number: str | None = None,
     raw_payload: dict[str, Any] | None = None,
     format_type: str | None = None,
+    contributions: list[dict[str, Any]] | None = None,
 ) -> Manifestation:
     """
     Update an existing Manifestation.
@@ -1023,6 +1287,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         catalog_number: New catalog number
         raw_payload: Verbatim provider payload JSON
         format_type: New physical format type (e.g., 'hardcover', 'paperback', 'vinyl')
+        contributions: Optional structured contribution list to reconcile.
 
     Returns:
         The updated Manifestation object
@@ -1120,6 +1385,8 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
                 manif.meta = current_meta
 
     db.session.commit()
+    if contributions is not None:
+        sync_entity_contributions(manif, contributions)
     return manif
 
 
@@ -1166,6 +1433,338 @@ def update_item(
         item.meta = current_meta
     db.session.commit()
     return item
+
+
+# ---------------------------------------------------------------------------
+# FRBR Relation Management Services
+# ---------------------------------------------------------------------------
+
+
+#: Allowed entity types for reassign (child levels).
+_REASSIGN_ALLOWED_TYPES: frozenset[str] = frozenset({"expression", "manifestation", "item"})
+#: Allowed entity types for merge (parent levels).
+_MERGE_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifestation"})
+#: Allowed entity types for split (parent levels).
+_SPLIT_ALLOWED_TYPES: frozenset[str] = frozenset({"work", "expression", "manifestation"})
+
+#: Map from child entity type to its parent entity class and FK attribute.
+_REASSIGN_PARENT_MAP: dict[str, tuple[Any, str]] = {
+    "expression": (Work, "work_id"),
+    "manifestation": (Expression, "expression_id"),
+    "item": (Manifestation, "manifestation_id"),
+}
+
+#: Map from entity type to its child entity class and FK attribute.
+_ENTITY_CHILD_MAP: dict[str, tuple[Any, str]] = {
+    "work": (Expression, "work_id"),
+    "expression": (Manifestation, "expression_id"),
+    "manifestation": (Item, "manifestation_id"),
+}
+
+#: Map from entity type to its ORM class.
+_ENTITY_CLASS_MAP: dict[str, Any] = {
+    "work": Work,
+    "expression": Expression,
+    "manifestation": Manifestation,
+    "item": Item,
+}
+
+
+def _get_entity_or_raise(entity_type: str, entity_id: int) -> Any:
+    """Fetch an entity by type and ID, raising ValueError if not found."""
+    cls = _ENTITY_CLASS_MAP.get(entity_type)
+    if cls is None:
+        raise ValueError(f"Invalid entity_type: {entity_type!r}")
+    entity = db.session.get(cls, entity_id)
+    if entity is None:
+        raise ValueError(f"{cls.__name__} with id {entity_id} not found")
+    return entity
+
+
+def _has_cycle(entity_type: str, entity_id: int, new_parent_id: int) -> bool:
+    """Return True if assigning new_parent_id would create a cycle."""
+    parent_cls, _ = _REASSIGN_PARENT_MAP[entity_type]
+    # Check if the new parent is the entity itself (only possible if same type)
+    if entity_type == "work" and new_parent_id == entity_id:
+        return True
+    # Walk up the parent chain to detect cycles.
+    # We track (class, id) pairs since IDs are not globally unique across tables.
+    entity_cls = _ENTITY_CLASS_MAP[entity_type]
+    visited: set[tuple[type, int]] = {(entity_cls, entity_id)}
+    current_id: int | None = new_parent_id
+    current_cls = parent_cls
+    while current_id is not None:
+        if (current_cls, current_id) in visited:
+            return True
+        visited.add((current_cls, current_id))
+        parent = db.session.get(current_cls, current_id)
+        if parent is None:
+            break
+        # Determine the parent's parent
+        if isinstance(parent, Work):
+            break  # Work has no parent in FRBR hierarchy
+        if isinstance(parent, Expression):
+            current_id = parent.work_id
+            current_cls = Work
+        elif isinstance(parent, Manifestation):
+            current_id = parent.expression_id
+            current_cls = Expression
+        elif isinstance(parent, Item):
+            current_id = parent.manifestation_id
+            current_cls = Manifestation
+        else:
+            break
+    return False
+
+
+def _merge_metadata(target_meta: dict[str, Any] | None, source_meta: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge source metadata into target, preserving target keys and deduping lists."""
+    result = dict(target_meta or {})
+    source = dict(source_meta or {})
+    for key, value in source.items():
+        if key not in result:
+            result[key] = value
+        else:
+            # If both are lists, merge and dedupe
+            if isinstance(result[key], list) and isinstance(value, list):
+                merged = list(result[key])
+                for item in value:
+                    if item not in merged:
+                        merged.append(item)
+                result[key] = merged
+    return result
+
+
+def reassign_frbr_parent(
+    entity_type: str,
+    entity_id: int,
+    new_parent_id: int,
+    user_id: Any | None = None,
+) -> Any:
+    """Reassign an entity's parent to a new parent at the adjacent FRBR level.
+
+    Args:
+        entity_type: One of ``"expression"``, ``"manifestation"``, or ``"item"``.
+        entity_id: The ID of the entity to reassign.
+        new_parent_id: The ID of the new parent entity.
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The updated entity.
+
+    Raises:
+        ValueError: If validation fails (invalid type, not found, cycle detected).
+    """
+    if entity_type not in _REASSIGN_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for reassign: {entity_type!r}. " f"Must be one of {sorted(_REASSIGN_ALLOWED_TYPES)}")
+
+    entity = _get_entity_or_raise(entity_type, entity_id)
+    parent_cls, parent_fk_attr = _REASSIGN_PARENT_MAP[entity_type]
+
+    new_parent = db.session.get(parent_cls, new_parent_id)
+    if new_parent is None:
+        raise ValueError(f"{parent_cls.__name__} with id {new_parent_id} not found")
+
+    old_parent_id = getattr(entity, parent_fk_attr)
+
+    # Prevent cycles
+    if _has_cycle(entity_type, entity_id, new_parent_id):
+        raise ValueError("Reassignment would create a cycle in the FRBR hierarchy")
+
+    # Perform reassignment
+    setattr(entity, parent_fk_attr, new_parent_id)
+
+    # Record audit log
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        actor_id=user_id,
+        change_type="reassign",
+        diff={
+            "parent_fk": parent_fk_attr,
+            "old_parent_id": old_parent_id,
+            "new_parent_id": new_parent_id,
+        },
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return entity
+
+
+def merge_frbr_entities(
+    entity_type: str,
+    source_id: int,
+    target_id: int,
+    user_id: Any | None = None,
+) -> Any:
+    """Merge two entities at the same FRBR level, reparenting children and contributions.
+
+    Args:
+        entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+        source_id: The ID of the source entity (to be deleted).
+        target_id: The ID of the target entity (to be kept).
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The target entity (with merged children and metadata).
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    if entity_type not in _MERGE_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for merge: {entity_type!r}. " f"Must be one of {sorted(_MERGE_ALLOWED_TYPES)}")
+    if source_id == target_id:
+        raise ValueError("Cannot merge an entity with itself")
+
+    source = _get_entity_or_raise(entity_type, source_id)
+    target = _get_entity_or_raise(entity_type, target_id)
+
+    child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
+
+    # Reparent all children from source to target
+    children: list[Any] = list(db.session.execute(select(child_cls).where(getattr(child_cls, child_fk_attr) == source_id)).scalars().all())
+    migrated_count = 0
+    for child in children:
+        setattr(child, child_fk_attr, target_id)
+        migrated_count += 1
+
+    # Re-link contributions, avoiding duplicates
+    contrib_migrated = 0
+    if entity_type == "work":
+        contrib_cls = WorkContribution
+        contrib_fk = "work_id"
+    elif entity_type == "expression":
+        contrib_cls = ExpressionContribution
+        contrib_fk = "expression_id"
+    else:  # manifestation
+        contrib_cls = ManifestationContribution
+        contrib_fk = "manifestation_id"
+
+    source_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == source_id)).scalars().all()
+    target_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == target_id)).scalars().all()
+
+    # Build set of existing (contributor_id, role) on target
+    existing_keys = {(c.contributor_id, c.role) for c in target_contribs}
+    for sc in source_contribs:
+        key = (sc.contributor_id, sc.role)
+        if key not in existing_keys:
+            # Re-link to target
+            setattr(sc, contrib_fk, target_id)
+            contrib_migrated += 1
+            existing_keys.add(key)
+        else:
+            # Duplicate — delete the source contribution
+            db.session.delete(sc)
+
+    # Merge metadata
+    merged_meta = _merge_metadata(target.meta, source.meta)
+    target.meta = merged_meta
+
+    # Record audit log
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=source_id,
+        actor_id=user_id,
+        change_type="merge",
+        diff={
+            "source_id": source_id,
+            "target_id": target_id,
+            "migrated_children": migrated_count,
+            "migrated_contributions": contrib_migrated,
+        },
+    )
+    db.session.add(audit)
+
+    # Delete source entity
+    db.session.delete(source)
+    db.session.commit()
+    return target
+
+
+def split_frbr_entity(
+    entity_type: str,
+    source_id: int,
+    child_ids_to_split: list[int],
+    new_entity_attrs: dict[str, Any],
+    user_id: Any | None = None,
+) -> Any:
+    """Split selected children from an entity into a newly created sibling entity.
+
+    Args:
+        entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+        source_id: The ID of the source entity.
+        child_ids_to_split: IDs of children to move to the new entity.
+        new_entity_attrs: Attributes for the new entity (e.g., ``{"title": "..."}``
+            for a Work).
+        user_id: Optional UUID of the acting user for audit logging.
+
+    Returns:
+        The newly created entity.
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    if entity_type not in _SPLIT_ALLOWED_TYPES:
+        raise ValueError(f"Invalid entity_type for split: {entity_type!r}. " f"Must be one of {sorted(_SPLIT_ALLOWED_TYPES)}")
+    if not child_ids_to_split:
+        raise ValueError("child_ids_to_split must not be empty")
+
+    source = _get_entity_or_raise(entity_type, source_id)
+    child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
+
+    # Validate all children exist and belong to source
+    children: list[Any] = list(
+        db.session.execute(
+            select(child_cls).where(
+                child_cls.id.in_(child_ids_to_split),
+                getattr(child_cls, child_fk_attr) == source_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(children) != len(child_ids_to_split):
+        raise ValueError(f"Some child IDs do not exist or do not belong to {entity_type} {source_id}")
+
+    # Determine the parent of the source (so the new entity inherits it)
+    if entity_type == "work":
+        # Work has no parent; new Work is standalone
+        new_entity_parent_attrs: dict[str, Any] = {}
+    elif entity_type == "expression":
+        new_entity_parent_attrs = {"work_id": source.work_id}
+    else:  # manifestation
+        new_entity_parent_attrs = {"expression_id": source.expression_id}
+
+    # Build attributes for the new entity
+    entity_cls = _ENTITY_CLASS_MAP[entity_type]
+    create_attrs = {**new_entity_parent_attrs, **new_entity_attrs}
+
+    # Create the new entity
+    new_entity = entity_cls(**create_attrs)
+    db.session.add(new_entity)
+    db.session.flush()  # Get the new entity's ID
+
+    # Reparent selected children from source to new entity
+    reparented_count = 0
+    for child in children:
+        setattr(child, child_fk_attr, new_entity.id)
+        reparented_count += 1
+
+    # Record audit log on the source entity
+    audit = EntityAuditLog(
+        entity_type=entity_type,
+        entity_id=source_id,
+        actor_id=user_id,
+        change_type="split",
+        diff={
+            "new_entity_id": new_entity.id,
+            "reparented_children": reparented_count,
+            "child_ids": child_ids_to_split,
+        },
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return new_entity
 
 
 #: Media category → its canonical ``unknown_*`` placeholder format,
@@ -1295,11 +1894,25 @@ def update_frbr_entity_type(
     return entity
 
 
-# Define Namespaces
-FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+# FRBR entity classes use the documented PURL namespace. Structural
+# relationships use the IFLA FRBRer namespace (as in the JSON-LD context).
+FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+FRBRER = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
 PROV = Namespace("http://www.w3.org/ns/prov#")
+IQOQO = Namespace("https://iqoqo.org/ontology#")
+
+
+def _frbr_uri(entity_type: str, entity_id: object, base_url: str) -> URIRef:
+    """Return one of the four canonical FRBR identity IRIs."""
+    return URIRef(canonical_frbr_iri(entity_type, entity_id, base_url))
+
+
+def _related_uri(entity_type: str, entity_id: object, base_url: str) -> URIRef:
+    """Return a canonical IRI for an enriched related entity."""
+    return URIRef(canonical_related_iri(entity_type, entity_id, base_url))
+
 
 # Schema.org type mapping for content types
 SCHEMA_TYPE_MAP = {
@@ -1375,8 +1988,8 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
     item_id = item.get("id")
     m_id = item.get("manifestation_id", item_id)
     w_id = item.get("work_id", m_id)
-    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
-    w_uri = URIRef(f"{base_url}/api/public/works/{w_id}")
+    m_uri = _frbr_uri("manifestation", m_id, base_url)
+    w_uri = _frbr_uri("work", w_id, base_url)
 
     if item.get("publisher"):
         g.add((m_uri, SCHEMA.publisher, Literal(str(item["publisher"]))))
@@ -1400,13 +2013,13 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
             c_name = c.get("name")
             c_type = c.get("type", "person")
             c_id = c.get("id", c_name)
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{c_id}")
+            c_uri = _related_uri("contributors", c_id, base_url)
             g.add((c_uri, RDF.type, SCHEMA.Person if c_type == "person" else SCHEMA.Organization))
             if c_name:
                 g.add((c_uri, SCHEMA.name, Literal(c_name)))
             g.add((m_uri, SCHEMA.contributor, c_uri))
         elif isinstance(c, str):
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{c}")
+            c_uri = _related_uri("contributors", c, base_url)
             g.add((c_uri, RDF.type, SCHEMA.Person))
             g.add((c_uri, SCHEMA.name, Literal(c)))
             g.add((m_uri, SCHEMA.contributor, c_uri))
@@ -1415,7 +2028,7 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
 
     is_part_of = item.get("is_part_of") or item.get("container_work_id")
     if is_part_of:
-        p_uri = URIRef(str(is_part_of) if str(is_part_of).startswith("http") else f"{base_url}/api/public/works/{is_part_of}")
+        p_uri = URIRef(str(is_part_of)) if str(is_part_of).startswith("http") else _frbr_uri("work", is_part_of, base_url)
         g.add((w_uri, SCHEMA.isPartOf, p_uri))
         g.add((p_uri, SCHEMA.hasPart, w_uri))
 
@@ -1423,7 +2036,7 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
     if has_part:
         p_list = has_part if isinstance(has_part, list) else [has_part]
         for p in p_list:
-            p_uri = URIRef(str(p) if str(p).startswith("http") else f"{base_url}/api/public/works/{p}")
+            p_uri = URIRef(str(p)) if str(p).startswith("http") else _frbr_uri("work", p, base_url)
             g.add((w_uri, SCHEMA.hasPart, p_uri))
             g.add((p_uri, SCHEMA.isPartOf, w_uri))
 
@@ -1464,11 +2077,11 @@ def _enrich_graph_from_db(
                     i_id = None
 
             if m_id:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
+                m_uri = _frbr_uri("manifestation", m_id, base_url)
                 g.add((coll_uri_ref, SCHEMA.hasPart, m_uri))
                 g.add((m_uri, SCHEMA.isPartOf, coll_uri_ref))
             if i_id and i_id != m_id:
-                i_uri = URIRef(f"{base_url}/api/public/items/{i_id}")
+                i_uri = _frbr_uri("item", i_id, base_url)
                 g.add((coll_uri_ref, SCHEMA.hasPart, i_uri))
                 g.add((i_uri, SCHEMA.isPartOf, coll_uri_ref))
 
@@ -1520,13 +2133,15 @@ def _enrich_graph_from_db(
         if seen_works:
             contribs = db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(seen_works))).scalars().all()
             for wc in contribs:
-                w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
+                w_uri = _frbr_uri("work", wc.work_id, base_url)
+                c_uri = _related_uri("contributors", wc.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
                 if wc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
                 g.add((w_uri, SCHEMA.contributor, c_uri))
-                g.add((w_uri, FRBR.creator, c_uri))
+                g.add((w_uri, FRBRER.creator, c_uri))
+                if wc.role.lower() in {"author", "creator"}:
+                    g.add((w_uri, SCHEMA.author, c_uri))
 
         # ExpressionContributions
         if seen_expressions:
@@ -1536,12 +2151,13 @@ def _enrich_graph_from_db(
                 .all()
             )
             for ec in expr_contribs:
-                e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
+                e_uri = _frbr_uri("expression", ec.expression_id, base_url)
+                c_uri = _related_uri("contributors", ec.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
                 if ec.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
                 g.add((e_uri, SCHEMA.contributor, c_uri))
+                g.add((e_uri, SCHEMA.performer, c_uri))
 
         # ManifestationContributions
         if seen_manifestations:
@@ -1553,8 +2169,8 @@ def _enrich_graph_from_db(
                 .all()
             )
             for mc in m_contribs:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{mc.manifestation_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{mc.contributor_id}")
+                m_uri = _frbr_uri("manifestation", mc.manifestation_id, base_url)
+                c_uri = _related_uri("contributors", mc.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if mc.contributor and mc.contributor.type == "person" else SCHEMA.Organization))
                 if mc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(mc.contributor.name)))
@@ -1564,8 +2180,8 @@ def _enrich_graph_from_db(
         if seen_works:
             parts = db.session.execute(select(WorkPart).where(WorkPart.container_work_id.in_(seen_works))).scalars().all()
             for wp in parts:
-                container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
-                part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
+                container_uri = _frbr_uri("work", wp.container_work_id, base_url)
+                part_uri = _frbr_uri("work", wp.part_work_id, base_url)
                 g.add((part_uri, SCHEMA.isPartOf, container_uri))
                 g.add((container_uri, SCHEMA.hasPart, part_uri))
 
@@ -1573,7 +2189,7 @@ def _enrich_graph_from_db(
         if enrichment_profile == "full" and seen_manifestations:
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
             for scan in scans:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
+                m_uri = _frbr_uri("manifestation", scan.manifestation_id, base_url)
                 encoded_path = _safe_iri(str(scan.file_path))
                 if encoded_path is not None:
                     img_uri = URIRef(f"{base_url}/{encoded_path}")
@@ -1588,8 +2204,8 @@ def _enrich_graph_from_db(
             for link in links:
                 coll = link.collection
                 if coll:
-                    coll_uri = URIRef(f"{base_url}/api/public/collections/{coll.id}")
-                    i_uri = URIRef(f"{base_url}/api/public/items/{link.item_id}")
+                    coll_uri = _related_uri("collections", coll.id, base_url)
+                    i_uri = _frbr_uri("item", link.item_id, base_url)
                     g.add((coll_uri, RDF.type, SCHEMA.Collection))
                     g.add((coll_uri, SCHEMA.name, Literal(coll.name)))
                     g.add((coll_uri, SCHEMA.hasPart, i_uri))
@@ -1599,7 +2215,7 @@ def _enrich_graph_from_db(
         if seen_manifestations:
             manifests = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
             for m in manifests:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                m_uri = _frbr_uri("manifestation", m.id, base_url)
                 if m.publisher:
                     g.add((m_uri, SCHEMA.publisher, Literal(m.publisher)))
                 pub_date = (
@@ -1624,10 +2240,30 @@ def _enrich_graph_from_db(
         if seen_expressions:
             exprs = db.session.execute(select(Expression).where(Expression.id.in_(seen_expressions))).scalars().all()
             for expr in exprs:
-                if getattr(expr, "language", None):
-                    for m in getattr(expr, "manifestations", []):
-                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                for m in getattr(expr, "manifestations", []):
+                    m_uri = _frbr_uri("manifestation", m.id, base_url)
+                    if getattr(expr, "language", None):
                         g.add((m_uri, SCHEMA.inLanguage, Literal(expr.language)))
+                    if expr.kind != EXPRESSION_KIND_LIVE_PERFORMANCE:
+                        continue
+                    g.add((m_uri, RDF.type, SCHEMA.MusicEvent))
+                    expression_meta = expr.meta or {}
+                    event_date = (
+                        expression_meta.get("start_date") or expression_meta.get("performance_date") or expression_meta.get("event_date")
+                    )
+                    venue = expression_meta.get("location") or expression_meta.get("venue")
+                    if event_date:
+                        g.add((m_uri, SCHEMA.startDate, Literal(str(event_date))))
+                    if venue:
+                        g.add((m_uri, SCHEMA.location, Literal(str(venue))))
+                    for contribution in getattr(expr, "contributions", []) or []:
+                        contributor = getattr(contribution, "contributor", None)
+                        contributor_uri = _related_uri("contributors", contribution.contributor_id, base_url)
+                        contributor_type = SCHEMA.Person if contributor and contributor.type == "person" else SCHEMA.Organization
+                        g.add((contributor_uri, RDF.type, contributor_type))
+                        if contributor:
+                            g.add((contributor_uri, SCHEMA.name, Literal(contributor.name)))
+                        g.add((m_uri, SCHEMA.performer, contributor_uri))
     except (SQLAlchemyError, AttributeError, KeyError):
         pass
 
@@ -1651,9 +2287,11 @@ def build_collection_rdf_graph(
     """
     g = Graph()
     g.bind("frbr", FRBR)
+    g.bind("frbrer", FRBRER)
     g.bind("sioc", SIOC)
     g.bind("schema", SCHEMA)
     g.bind("prov", PROV)
+    g.bind("iqoqo", IQOQO)
 
     for item in items:
         # Resolve whether dict or db object
@@ -1666,8 +2304,12 @@ def build_collection_rdf_graph(
             authors = item.get("authors", [])
             tags = item.get("tags", [])
             status = item.get("status")
+            collection_status = item.get("collection_status")
+            condition = item.get("condition")
             work_id = item.get("work_id", manifestation_id)
             content_type = item.get("content_type")
+            expression_kind = item.get("expression_kind")
+            expression_meta = item.get("expression_meta") or {}
             publisher = item.get("publisher")
             language = item.get("language")
             publication_date = item.get("publication_date") or item.get("date_published") or item.get("year")
@@ -1684,7 +2326,11 @@ def build_collection_rdf_graph(
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                collection_status = getattr(item, "collection_status", None)
+                condition = getattr(item, "condition", None)
                 content_type = None
+                expression_kind = None
+                expression_meta: dict[str, Any] = {}
                 publisher = None
                 language = None
                 publication_date = None
@@ -1707,6 +2353,8 @@ def build_collection_rdf_graph(
                         expression_id = m.expression.id
                         work_id = m.expression.work_id
                         content_type = m.expression.content_type
+                        expression_kind = m.expression.kind
+                        expression_meta = m.expression.meta or {}
                         language = getattr(m.expression, "language", None)
                         if m.expression.work:
                             work_id = m.expression.work.id
@@ -1729,27 +2377,32 @@ def build_collection_rdf_graph(
                 expression_id = item.id
                 work_id = item.work_id
                 content_type = getattr(item, "content_type", None)
+                expression_kind = getattr(item, "kind", None)
+                expression_meta = getattr(item, "meta", None) or {}
                 w_title = getattr(item.work, "title", "Untitled") if getattr(item, "work", None) else "Untitled"
                 authors = []
                 if getattr(item, "work", None) and item.work.meta:
                     authors = item.work.meta.get("authors", []) or item.work.meta.get("Authors", [])
 
-                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
-                e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
+                w_uri = _frbr_uri("work", work_id, base_url)
+                e_uri = _frbr_uri("expression", expression_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(w_title)))
                 for author in authors:
-                    g.add((w_uri, FRBR.creator, Literal(author)))
-                    g.add((w_uri, SCHEMA.author, Literal(author)))
+                    author_node = BNode()
+                    g.add((author_node, RDF.type, SCHEMA.Person))
+                    g.add((author_node, SCHEMA.name, Literal(author)))
+                    g.add((w_uri, FRBRER.creator, author_node))
+                    g.add((w_uri, SCHEMA.author, author_node))
                 g.add((e_uri, RDF.type, FRBR.Expression))
-                g.add((e_uri, FRBR.expressionOf, w_uri))
+                g.add((e_uri, FRBRER.expressionOf, w_uri))
 
                 for m_elem in getattr(item, "manifestations", []):
-                    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                    m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                     g.add((m_uri, RDF.type, FRBR.Manifestation))
                     g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-                    g.add((m_uri, FRBR.embodimentOf, e_uri))
+                    g.add((m_uri, FRBRER.embodimentOf, e_uri))
                     if m_elem.title:
                         g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                     if m_elem.isbn13:
@@ -1770,23 +2423,26 @@ def build_collection_rdf_graph(
                 if getattr(item, "meta", None):
                     authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
 
-                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+                w_uri = _frbr_uri("work", work_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(title)))
                 for author in authors:
-                    g.add((w_uri, FRBR.creator, Literal(author)))
-                    g.add((w_uri, SCHEMA.author, Literal(author)))
+                    author_node = BNode()
+                    g.add((author_node, RDF.type, SCHEMA.Person))
+                    g.add((author_node, SCHEMA.name, Literal(author)))
+                    g.add((w_uri, FRBRER.creator, author_node))
+                    g.add((w_uri, SCHEMA.author, author_node))
 
                 for expr_elem in getattr(item, "expressions", []):
-                    e_uri = URIRef(f"{base_url}/api/public/expressions/{expr_elem.id}")
+                    e_uri = _frbr_uri("expression", expr_elem.id, base_url)
                     g.add((e_uri, RDF.type, FRBR.Expression))
-                    g.add((e_uri, FRBR.expressionOf, w_uri))
+                    g.add((e_uri, FRBRER.expressionOf, w_uri))
                     for m_elem in getattr(expr_elem, "manifestations", []):
-                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                        m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                         g.add((m_uri, RDF.type, FRBR.Manifestation))
                         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-                        g.add((m_uri, FRBR.embodimentOf, e_uri))
+                        g.add((m_uri, FRBRER.embodimentOf, e_uri))
                         if m_elem.title:
                             g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                         if m_elem.isbn13:
@@ -1811,7 +2467,11 @@ def build_collection_rdf_graph(
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                collection_status = getattr(item, "collection_status", None)
+                condition = getattr(item, "condition", None)
                 content_type = None
+                expression_kind = None
+                expression_meta = {}
                 publisher = getattr(item, "publisher", None)
                 language = None
                 publication_date = (
@@ -1826,6 +2486,8 @@ def build_collection_rdf_graph(
                     expression_id = expr.id
                     work_id = expr.work_id
                     content_type = expr.content_type
+                    expression_kind = expr.kind
+                    expression_meta = expr.meta or {}
                     language = getattr(expr, "language", None)
                     if expr.work:
                         work_id = expr.work.id
@@ -1844,9 +2506,9 @@ def build_collection_rdf_graph(
                 if work_id is None:
                     work_id = expression_id
 
-        m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
-        e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
-        w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+        m_uri = _frbr_uri("manifestation", manifestation_id, base_url)
+        e_uri = _frbr_uri("expression", expression_id, base_url)
+        w_uri = _frbr_uri("work", work_id, base_url)
 
         # FRBR Core Declarations
         g.add((m_uri, RDF.type, FRBR.Manifestation))
@@ -1854,8 +2516,8 @@ def build_collection_rdf_graph(
         g.add((w_uri, RDF.type, FRBR.Work))
 
         # Manifestation embodies Expression, Expression is expression of Work
-        g.add((m_uri, FRBR.embodimentOf, e_uri))
-        g.add((e_uri, FRBR.expressionOf, w_uri))
+        g.add((m_uri, FRBRER.embodimentOf, e_uri))
+        g.add((e_uri, FRBRER.expressionOf, w_uri))
 
         # High-level Schema.org Mapping for AI Agent Interoperability
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
@@ -1890,9 +2552,14 @@ def build_collection_rdf_graph(
                 _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
         for author in authors:
-            g.add((m_uri, SCHEMA.author, Literal(author)))
-            g.add((w_uri, FRBR.creator, Literal(author)))
-            g.add((w_uri, SCHEMA.author, Literal(author)))
+            author_name = author.get("name") if isinstance(author, dict) else author
+            if not author_name:
+                continue
+            author_node = BNode()
+            g.add((author_node, RDF.type, SCHEMA.Person))
+            g.add((author_node, SCHEMA.name, Literal(str(author_name))))
+            g.add((w_uri, FRBRER.creator, author_node))
+            g.add((w_uri, SCHEMA.author, author_node))
 
         # SIOC Semantics for Tagging / Folksonomy categorization
         for tag in tags:
@@ -1900,14 +2567,19 @@ def build_collection_rdf_graph(
 
         # Handle specific item tracking if item instances exist
         if item_id:
-            i_uri = URIRef(f"{base_url}/api/public/items/{item_id}")
+            i_uri = _frbr_uri("item", item_id, base_url)
             g.add((i_uri, RDF.type, FRBR.Item))
-            g.add((i_uri, FRBR.exemplarOf, m_uri))
+            g.add((i_uri, FRBRER.exemplarOf, m_uri))
             if status:
-                g.add((i_uri, SCHEMA.itemCondition, Literal(status)))
+                g.add((i_uri, IQOQO.status, Literal(status)))
+            if collection_status:
+                g.add((i_uri, IQOQO.collection_status, Literal(collection_status)))
+            if condition:
+                g.add((i_uri, IQOQO.condition, Literal(condition)))
 
         # Specialized domain mapping for Concerts
-        is_concert = (content_type in ("concert", "live_performance")) or (isinstance(item, dict) and item.get("is_concert"))
+        is_concert = content_type == "concert" or expression_kind == EXPRESSION_KIND_LIVE_PERFORMANCE
+        is_concert = is_concert or (isinstance(item, dict) and item.get("is_concert"))
         if not is_concert and not isinstance(item, dict):
             expr = getattr(item, "expression", None) or (
                 item.manifestation.expression if hasattr(item, "manifestation") and item.manifestation else None
@@ -1922,21 +2594,25 @@ def build_collection_rdf_graph(
             g.add((m_uri, RDF.type, SCHEMA.MusicEvent))
             p_list = None
             if isinstance(item, dict):
-                p_list = item.get("performers") or item.get("performer") or authors
-                c_date = item.get("start_date") or item.get("date") or publication_date
+                p_list = item.get("performers") or item.get("performer")
+                c_date = item.get("start_date") or item.get("performance_date")
                 c_loc = item.get("location") or item.get("venue")
             else:
-                m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
-                meta_dict = (m_obj.meta or {}) if m_obj else {}
-                p_list = meta_dict.get("performers") or meta_dict.get("performer") or authors
-                c_date = meta_dict.get("start_date") or meta_dict.get("event_date") or publication_date
+                meta_dict = expression_meta if isinstance(expression_meta, dict) else {}
+                p_list = []
+                c_date = meta_dict.get("start_date") or meta_dict.get("performance_date") or meta_dict.get("event_date")
                 c_loc = meta_dict.get("location") or meta_dict.get("venue")
 
             if p_list:
                 if isinstance(p_list, str):
                     p_list = [p_list]
                 for p in p_list:
-                    g.add((m_uri, SCHEMA.performer, Literal(str(p))))
+                    performer_name = p.get("name") if isinstance(p, dict) else p
+                    if performer_name:
+                        performer_node = BNode()
+                        g.add((performer_node, RDF.type, SCHEMA.Person))
+                        g.add((performer_node, SCHEMA.name, Literal(str(performer_name))))
+                        g.add((m_uri, SCHEMA.performer, performer_node))
             if c_date:
                 g.add((m_uri, SCHEMA.startDate, Literal(str(c_date))))
             if c_loc:

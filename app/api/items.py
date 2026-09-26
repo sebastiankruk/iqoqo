@@ -32,6 +32,7 @@ from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.export_service import ExportService
+from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -358,10 +359,12 @@ def export_user_items():
     """Stream export of the authenticated user's library items in Linked Data or JSON format.
 
     Query parameter:
-        format: 'json-ld' (default), 'turtle', or 'json'
+        format: 'json-ld' (default), 'turtle', 'nt', or 'json'
     """
     export_format = request.args.get("format", "json-ld").lower().strip()
-    valid_formats = {"json-ld", "turtle", "json"}
+    valid_formats = {"json-ld", "turtle", "nt", "n-triples", "json"}
+    if export_format == "n-triples":
+        export_format = "nt"
     if export_format not in valid_formats:
         return (
             jsonify(
@@ -381,6 +384,7 @@ def export_user_items():
     format_metadata = {
         "json-ld": ("application/ld+json", "jsonld"),
         "turtle": ("text/turtle", "ttl"),
+        "nt": ("application/n-triples", "nt"),
         "json": ("application/json", "json"),
     }
     content_type, ext = format_metadata[export_format]
@@ -389,7 +393,7 @@ def export_user_items():
     generator = ExportService.stream_user_collection(
         user_id=user_id,
         export_format=export_format,
-        base_url=request.host_url.rstrip("/"),
+        base_url=current_app.config.get("BASE_URL") or get_lod_base_url(),
     )
 
     return Response(
@@ -450,23 +454,17 @@ def get_items():
     page = max(page, 1)
     offset = (page - 1) * limit
 
-    virtual_items = get_virtual_items(
-        user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list
-    )
-
     combined_items_data = []
 
     if q:
         from app.core.search_service import SearchService
 
         statuses_list = parse_csv_param(statuses_filter)
-        search_limit = 1000 if virtual_items else limit
-        search_offset = 0 if virtual_items else offset
         total_count, results = SearchService.search_items(
             q,
             user_id,
-            search_limit,
-            search_offset,
+            limit,
+            offset,
             statuses=statuses_list,
             category=category_list,
             format_filter=format_list,
@@ -615,10 +613,7 @@ def get_items():
         else:
             query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
 
-        if not virtual_items:
-            physical_items = query.limit(limit).offset(offset).all()
-        else:
-            physical_items = query.all()
+        physical_items = query.limit(limit).offset(offset).all()
 
         for item in physical_items:
             manifestation = item.manifestation
@@ -664,44 +659,8 @@ def get_items():
                 }
             )
 
-    if virtual_items:
-        combined_items_data.extend(virtual_items)
-
-        if sort_by == "title":
-            combined_items_data.sort(key=lambda x: (x["title"] or "").lower())
-        elif sort_by == "title-desc":
-            combined_items_data.sort(key=lambda x: (x["title"] or "").lower(), reverse=True)
-        elif sort_by == "author":
-            combined_items_data.sort(key=lambda x: (x["authors"][0] if x["authors"] else "").lower())
-        elif sort_by == "added":
-
-            def get_added(x):
-                val = x["added_at"]
-                if not val:
-                    return ""
-                if isinstance(val, str):
-                    return val
-                return val.isoformat() if hasattr(val, "isoformat") else str(val)
-
-            combined_items_data.sort(key=get_added, reverse=True)
-        else:
-
-            def get_updated(x):
-                val = x.get("updated_at") or x.get("added_at")
-                if not val:
-                    return ""
-                if isinstance(val, str):
-                    return val
-                return val.isoformat() if hasattr(val, "isoformat") else str(val)
-
-            combined_items_data.sort(key=get_updated, reverse=True)
-
-        # Offset pagination
-        total = len(combined_items_data)
-        paginated_items = combined_items_data[offset : offset + limit]
-    else:
-        total = total_count if q else total_physical
-        paginated_items = combined_items_data
+    total = total_count if q else total_physical
+    paginated_items = combined_items_data
 
     return jsonify(
         {
@@ -915,12 +874,12 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     return jsonify({"success": True, "data": item_data, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["GET"])
+@api_bp.route("/items/<int:item_id>", methods=["GET"])
 @limiter.limit("300 per hour", override_defaults=True)
 @optional_auth
 def get_item_detail(item_id: int):
-    if item_id < 0:
-        return _get_virtual_item_detail(item_id)
+    if item_id <= 0:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
     return _get_physical_item_detail(item_id)
 
 
@@ -1141,27 +1100,17 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["PUT"])
+@api_bp.route("/items/<int:item_id>", methods=["PUT"])
 @require_auth
+@require_physical_item
 def update_item(item_id: int):
-    """Update an item by ID.
+    """Update a physical item by ID.
 
-    Negative IDs are virtual wishlist intents (``UserWorkIntent``) and are
-    routed to ``_update_virtual_item``.  Zero and positive IDs that do not
-    exist are handled by ``_update_physical_item``.  ``@require_physical_item``
-    is intentionally **not** applied here because this route also accepts
-    virtual-item transitions (wishlist → library); the FRBR boundary for
-    irreversible physical mutations is enforced inside ``_update_virtual_item``.
+    Only positive IDs are accepted. Wishlist operations are handled by
+    the dedicated ``/api/wishlist`` blueprint.
     """
     user_id = getattr(g, "user_id", None)
     user = db.session.get(User, user_id) if user_id else None
-
-    # Route virtual wishlist items to their dedicated handler.
-    # ID == 0 explicitly returns a 400 Bad Request to enforce strictly positive IDs.
-    if item_id < 0:
-        return _update_virtual_item(item_id, user_id)
-    if item_id == 0:
-        return jsonify({"error": "Cannot mutate virtual items (id <= 0). Physical item IDs must be strictly positive.", "code": 400}), 400
     return _update_physical_item(item_id, user_id, user)
 
 
@@ -1192,22 +1141,21 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["DELETE"])
+@api_bp.route("/items/<int:item_id>", methods=["DELETE"])
 @require_auth
 @require_permission(PermissionName.DELETE_ITEM)
+@require_physical_item
 @require_item_access()
 def delete_item(item_id: int):
     user_id = getattr(g, "user_id", None)
     try:
-        if item_id < 0:
-            return _delete_virtual_item(item_id, user_id)
         return _delete_physical_item(item_id, user_id)
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["GET"])
+@api_bp.route("/items/<int:item_id>/collections", methods=["GET"])
 @require_auth
 @require_physical_item
 @require_item_access()
@@ -1276,7 +1224,7 @@ def _guard_add_item_to_collection(item_id: int) -> tuple[dict | None, tuple[Resp
     return {"collection_id": payload.collection_id}, None
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
+@api_bp.route("/items/<int:item_id>/collections", methods=["POST"])
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -1307,7 +1255,7 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "error": "An internal database error occurred while processing the request."}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections/<int:collection_id>", methods=["DELETE"])
+@api_bp.route("/items/<int:item_id>/collections/<int:collection_id>", methods=["DELETE"])
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -1713,13 +1661,10 @@ def add_item_manual() -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/logs", methods=["GET"])
+@api_bp.route("/items/<int:item_id>/logs", methods=["GET"])
 @require_auth
 def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     """Get the status timeline for an item."""
-    if item_id < 0:
-        return jsonify({"success": True, "data": []})
-
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
@@ -1783,7 +1728,7 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     return jsonify({"success": True, "data": data, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/visibility", methods=["PATCH"])
+@api_bp.route("/items/<int:item_id>/visibility", methods=["PATCH"])
 @require_auth
 def toggle_item_visibility(item_id: int):
     """
@@ -1800,23 +1745,6 @@ def toggle_item_visibility(item_id: int):
     new_val = data["is_hidden"]
     if not isinstance(new_val, bool):
         return jsonify({"error": "Field 'is_hidden' must be a boolean.", "code": 400}), 400
-
-    if item_id < 0:
-        intent = db.session.get(UserWorkIntent, -item_id)
-        if not intent or str(intent.user_id) != str(user_id):
-            # Return 404 even if forbidden to prevent data leakage (BOLA protection)
-            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-        intent.is_hidden = new_val
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Item visibility updated to {'hidden' if intent.is_hidden else 'public'}.",
-                "is_hidden": intent.is_hidden,
-            }
-        )
 
     item = db.session.get(Item, item_id)
 
@@ -1836,7 +1764,7 @@ def toggle_item_visibility(item_id: int):
     )
 
 
-@api_bp.route("/qrcode/<int(signed=True):item_id>", methods=["GET"])
+@api_bp.route("/qrcode/<int:item_id>", methods=["GET"])
 @require_auth
 @require_item_access(bola=True)
 def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
@@ -1847,10 +1775,6 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     import os
 
     from app.utils.qrcode import generate_item_qrcode
-
-    if item_id < 0:
-        # Wishlist entries have no physical copy to tag.
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     item = db.session.get(Item, item_id)
     if not item:

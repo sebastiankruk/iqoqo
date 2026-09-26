@@ -75,21 +75,21 @@ describe("ManifestationActions Component", () => {
     expect(screen.queryByText(/Delete manifestation/i)).not.toBeInTheDocument();
   });
 
-  it("configures declarative useQuery refetchInterval for 3s polling when cover is pending or processing", async () => {
+  it("configures declarative polling while cover processing is in progress", async () => {
     const { useQuery } = await import("@tanstack/react-query");
     vi.mocked(hooks.useProfile).mockReturnValue({
       data: { id: "test-id", email: "test@example.com", permissions: [] },
     } as unknown as ReturnType<typeof hooks.useProfile>);
 
-    const pendingManifestation = {
+    const processingManifestation = {
       ...mockManifestation,
-      meta: { cover_status: "pending" },
+      meta: { cover_status: "processing" },
     } as unknown as Manifestation;
-    render(<ManifestationActions manifestation={pendingManifestation} />);
+    render(<ManifestationActions manifestation={processingManifestation} />);
 
     expect(useQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["manifestation", pendingManifestation.id],
+        queryKey: ["manifestation", processingManifestation.id],
         enabled: true,
         refetchInterval: expect.any(Function),
       })
@@ -98,11 +98,11 @@ describe("ManifestationActions Component", () => {
     const call = vi
       .mocked(useQuery)
       .mock.calls.find(
-        c => JSON.stringify(c[0]?.queryKey) === JSON.stringify(["manifestation", pendingManifestation.id])
+        c => JSON.stringify(c[0]?.queryKey) === JSON.stringify(["manifestation", processingManifestation.id])
       );
     const refetchInterval = call?.[0]?.refetchInterval as (query: any) => number | false;
-    expect(refetchInterval({ state: { data: { meta: { cover_status: "pending" } } } })).toBe(3000);
     expect(refetchInterval({ state: { data: { meta: { cover_status: "processing" } } } })).toBe(3000);
+    expect(refetchInterval({ state: { data: { meta: { cover_status: "pending" } } } })).toBe(false);
     expect(refetchInterval({ state: { data: { meta: { cover_status: "ready" } } } })).toBe(false);
   });
 

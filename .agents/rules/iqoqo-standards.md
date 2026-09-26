@@ -93,7 +93,7 @@ Talk like caveman
 - **Typing:** Use strict Python type hints (`typing` module) for all function signatures and return types.
 - **ORM:** Use SQLAlchemy 2.0 style syntax (e.g., `select()`, `session.execute()`). Avoid legacy `Query` usage.
 - **Formatting:** ALWAYS run `make format-python` after changing Python code.
-- **Linting:** Code must pass `pylint`, `ruff`, and `mypy` without warnings (`make lint`). Use `# noqa` only when absolutely necessary and add a comment explaining why. Do not mute return values: handle or propagate them instead of silencing warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`.
+- **Linting:** The CI compatibility gate is `make lint`; stricter local checks are available through `make lint-all` (including Pylint and frontend source linters). Do not mute return values: handle or propagate them instead of silencing warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`.
 - **Pylint & SQLAlchemy:** `pylint` falsely flags SQLAlchemy's `func.count` as not callable (`E1102`). Whenever you write `func.count()`, immediately append `# pylint: disable=not-callable` to the line to prevent CI failures.
 - **Alembic Migrations:** Revision identifiers (the `revision` variable in migration files) MUST NOT exceed 32 characters (`len(revision) <= 32`). PostgreSQL default `alembic_version.version_num` is `VARCHAR(32)`; longer identifiers cause `StringDataRightTruncation` errors during `flask db upgrade`.
 - **API Responses:** All API responses must be JSON. Use consistent error formatting: `{"error": "description", "code": 400}`.
@@ -125,5 +125,6 @@ Talk like caveman
 
 - **Commits:** Strictly use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`, `docs:`).
 - **Local Testing First:** NEVER push code before running all CI tests locally. Ensure the build is clean locally.
+- **Secret Scanning Pre-Commit Gate:** NEVER commit or push code without running `make secret-scan` (or ensuring `make lint` passes secret scanning). Committing plaintext API keys, passwords, bearer tokens, or Base64 auth headers is strictly prohibited. If Gitleaks flags any finding, remove the secret or dynamically generate fake test tokens (e.g., using `base64.b64encode`) rather than hardcoding credentials into repo files.
 - **PR Finalization:** All code pushed to a `release/*` branch must be accompanied by updated documentation in `docs/CHANGELOG.md` and pass `make lint` and `make test`.
 - **Review Pauses:** Wait 15 minutes after pushing before moving to the next task to review the PR and pipeline results (if applicable).

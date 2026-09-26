@@ -55,7 +55,9 @@
  * 3. Filter changes forwarded as server-side params.
  */
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
  * Build a standard infinite query mock return value.
@@ -95,7 +97,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useFacetStats: vi.fn().mockReturnValue({
     data: {
       status_counts: { available: 150, lent: 5, lost: 2, wish_list: 21, reading: 10, read: 50, want_to_read: 23 },
-      category_counts: { movie: 20 },
+      category_counts: { movie: 20, text: 3 },
       format_counts: { dvd: 20 },
     },
   }),
@@ -135,6 +137,7 @@ import {
   useProfile,
   useInfiniteWorksShelf,
   useInfiniteExpressionsShelf,
+  useFacetStats,
 } from "@/lib/api/hooks";
 import CollectionPage from "@/app/collection/page";
 import type { ApiResponse, DashboardStats, UserProfile, Item } from "@/types/frbr";
@@ -145,6 +148,21 @@ const mockUseManifestations = vi.mocked(useInfiniteManifestations);
 const mockUseProfile = vi.mocked(useProfile);
 const mockUseWorksShelf = vi.mocked(useInfiniteWorksShelf);
 const mockUseExpressionsShelf = vi.mocked(useInfiniteExpressionsShelf);
+const mockUseFacetStats = vi.mocked(useFacetStats);
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+/**
+ * Render component with QueryClientProvider.
+ *
+ * @param ui - Component to render
+ * @returns Rendered component wrapper.
+ */
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -236,6 +254,7 @@ function makeItemsResponse(
 describe("CollectionPage – statusCounts from useStats()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     // Simulate a logged-in user so the page renders normally
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseItems.mockReturnValue(
@@ -253,18 +272,18 @@ describe("CollectionPage – statusCounts from useStats()", () => {
   });
 
   it("shows the global 'available' count from useStats, not the page count", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     // FULL_STATS.items_available = 150. The page only loaded 2 "available" items.
     expect(screen.getByText("150")).toBeInTheDocument();
   });
 
   it("shows the global 'lent' count from useStats", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     expect(screen.getByText("5")).toBeInTheDocument();
   });
 
   it("shows the global 'wish_list' count from useStats", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     expect(screen.getByText("21")).toBeInTheDocument();
   });
 
@@ -273,7 +292,7 @@ describe("CollectionPage – statusCounts from useStats()", () => {
       data: undefined,
       isLoading: true,
     } as ReturnType<typeof useStats>);
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     const zeros = screen.getAllByText("0");
     expect(zeros.length).toBeGreaterThan(0);
   });
@@ -282,6 +301,7 @@ describe("CollectionPage – statusCounts from useStats()", () => {
 describe("CollectionPage – resultCount from meta.total", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseStats.mockReturnValue({
       data: FULL_STATS,
@@ -298,7 +318,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
         data: { pages: [makeItemsResponse({ total: 237 }, 2)] },
       })
     );
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     expect(screen.getByText("237")).toBeInTheDocument();
   });
 
@@ -309,7 +329,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
         isLoading: true,
       })
     );
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     expect(screen.getByTestId("result-count")).toHaveTextContent("0 items");
   });
 });
@@ -317,6 +337,7 @@ describe("CollectionPage – resultCount from meta.total", () => {
 describe("CollectionPage – filter toggles forward params to useInfiniteItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseStats.mockReturnValue({
       data: FULL_STATS,
@@ -334,13 +355,31 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
       })
     );
 
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
 
     const lastCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
     // useInfiniteItems params: (limit, statuses, query, sortBy, enabled, ...)
     expect(lastCall[1]).toEqual(["available"]);
+  });
+
+  it("renders the API category count and forwards a selected category to item fetching", async () => {
+    const user = userEvent.setup();
+    mockUseItems.mockReturnValue(
+      infiniteQueryResult({
+        data: { pages: [makeItemsResponse({ total: 3 }, 1)] },
+      })
+    );
+
+    renderWithProviders(<CollectionPage />);
+
+    const textFacet = screen.getByRole("checkbox", { name: /text\s+3/i });
+    expect(textFacet).toBeEnabled();
+    await user.click(textFacet);
+
+    const latestItemsCall = mockUseItems.mock.calls.at(-1) as Parameters<typeof useInfiniteItems>;
+    expect(latestItemsCall[5]).toBe("text");
   });
 
   it("removes the status filter when toggled off", () => {
@@ -350,7 +389,7 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
       })
     );
 
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
     fireEvent.click(checkbox);
@@ -366,7 +405,7 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
       })
     );
 
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     const checkbox = screen.getByRole("checkbox", { name: /on shelf/i });
     fireEvent.click(checkbox);
@@ -384,6 +423,7 @@ describe("CollectionPage – filter toggles forward params to useInfiniteItems",
 describe("CollectionPage – Authentication & View Modes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseManifestations.mockReturnValue(infiniteQueryResult());
@@ -393,7 +433,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
 
   it("switches to Global Library manifestations via tabs when logged in", () => {
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     const libraryBtn = screen.getByRole("tab", { name: /Global Library/i });
     fireEvent.click(libraryBtn);
@@ -407,7 +447,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
 
   it("hides My Items toggle and defaults to Global Library when logged out", () => {
     mockUseProfile.mockReturnValue({ data: null, isLoading: false } as ReturnType<typeof useProfile>);
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     // Toggle should not exist
     expect(screen.queryByRole("tab", { name: /My Items/i })).not.toBeInTheDocument();
@@ -424,6 +464,7 @@ describe("CollectionPage – Authentication & View Modes", () => {
 describe("CollectionPage – Advanced Organization Views (Works & Expressions)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
     mockUseItems.mockReturnValue(
@@ -438,7 +479,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     mockUseWorksShelf.mockReturnValue(infiniteQueryResult({ data: { pages: [MOCK_WORKS_DATA] } }));
     mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
 
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     const worksBtn = screen.getByRole("tab", { name: /Works/i });
     fireEvent.click(worksBtn);
@@ -453,7 +494,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
     mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
     mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult({ data: { pages: [MOCK_EXPRS_DATA] } }));
 
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
 
     const exprBtn = screen.getByRole("tab", { name: /Expressions/i });
     fireEvent.click(exprBtn);
@@ -469,6 +510,7 @@ describe("CollectionPage – Advanced Organization Views (Works & Expressions)",
 describe("CollectionPage – Sorting Behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
     mockUseItems.mockReturnValue(infiniteQueryResult());
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
@@ -478,7 +520,7 @@ describe("CollectionPage – Sorting Behavior", () => {
   });
 
   it("defaults to recently updated sorting when entering the collection", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     const calls = mockUseItems.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     // useInfiniteItems parameters: (limit, statuses, query, sortBy, enabled, ...)
@@ -488,7 +530,7 @@ describe("CollectionPage – Sorting Behavior", () => {
   });
 
   it("defaults to includePublic=false when viewing my items collection", () => {
-    render(<CollectionPage />);
+    renderWithProviders(<CollectionPage />);
     const calls = mockUseItems.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     const lastCall = calls.at(-1) as Parameters<typeof useInfiniteItems>;
@@ -502,7 +544,7 @@ describe("CollectionPage – Sorting Behavior", () => {
       mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
       mockUseItems.mockReturnValue(infiniteQueryResult());
 
-      render(<CollectionPage />);
+      renderWithProviders(<CollectionPage />);
 
       // Collection page should still render for unauthenticated users
       // (shared/public collections are browseable without login)
@@ -513,7 +555,7 @@ describe("CollectionPage – Sorting Behavior", () => {
       mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
       mockUseItems.mockReturnValue(infiniteQueryResult());
 
-      render(<CollectionPage />);
+      renderWithProviders(<CollectionPage />);
 
       // Admin-only controls should not be present
       expect(screen.queryByText(/Admin Actions/i)).not.toBeTruthy();
@@ -523,7 +565,7 @@ describe("CollectionPage – Sorting Behavior", () => {
       mockUseProfile.mockReturnValue({ data: undefined, isLoading: false } as ReturnType<typeof useProfile>);
       mockUseItems.mockReturnValue(infiniteQueryResult());
 
-      render(<CollectionPage />);
+      renderWithProviders(<CollectionPage />);
 
       // Management/edit controls should not render for unauth users
       expect(screen.queryByText(/Manage Collections/i)).not.toBeTruthy();
@@ -538,10 +580,32 @@ describe("CollectionPage – Sorting Behavior", () => {
       } as unknown as ReturnType<typeof useProfile>);
       mockUseItems.mockReturnValue(infiniteQueryResult());
 
-      render(<CollectionPage />);
+      renderWithProviders(<CollectionPage />);
 
       // Non-owner viewing a shared collection should see content
       expect(screen.queryByTestId("collection-grid")).toBeTruthy();
     });
+  });
+});
+
+describe("CollectionPage – facet stats loading state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryClient.clear();
+    mockUseProfile.mockReturnValue({ data: MOCK_PROFILE, isLoading: false } as ReturnType<typeof useProfile>);
+    mockUseItems.mockReturnValue(infiniteQueryResult());
+    mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false } as ReturnType<typeof useStats>);
+    mockUseManifestations.mockReturnValue(infiniteQueryResult());
+    mockUseWorksShelf.mockReturnValue(infiniteQueryResult());
+    mockUseExpressionsShelf.mockReturnValue(infiniteQueryResult());
+    mockUseFacetStats.mockReturnValue({ data: undefined, isLoading: true } as ReturnType<typeof useFacetStats>);
+  });
+
+  it("does not present unavailable facet counts as true zeroes", () => {
+    renderWithProviders(<CollectionPage />);
+
+    const textFacet = screen.getByRole("checkbox", { name: /text/i });
+    expect(textFacet).toBeEnabled();
+    expect(screen.queryByRole("checkbox", { name: /text\s+0/i })).not.toBeInTheDocument();
   });
 });

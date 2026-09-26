@@ -38,6 +38,7 @@ def admin_headers(app):
 
         # Create admin user
         admin_user = User(email="test_admin@iqoqo.local", display_name="Admin")
+        admin_user.set_password("test-password")
         admin_user.roles.append(admin_role)
         db.session.add(admin_user)
         db.session.commit()

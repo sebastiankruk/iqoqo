@@ -31,7 +31,7 @@ services:
       - "127.0.0.1:${OPENOBSERVE_HOST_PORT:-5080}:5080"
     environment:
       - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
-      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD}
+      - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:?OPENOBSERVE_ROOT_PASSWORD must be set in environment or .env}
       - ZO_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
       - ZO_DATA_DIR=/data
     volumes:
@@ -59,7 +59,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-iqoqo}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - POSTGRES_DB=${POSTGRES_DB:-iqoqo}
-      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH}
+      - OPENOBSERVE_BASIC_AUTH=${OPENOBSERVE_BASIC_AUTH:?OPENOBSERVE_BASIC_AUTH must be set in environment or .env}
       - FRONTEND_PORT=${FRONTEND_PORT:-3000}
     ports:
       # Loopback-only exposure allows host-level AI agents and dev tools to push OTLP.

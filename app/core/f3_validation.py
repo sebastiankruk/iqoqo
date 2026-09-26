@@ -262,7 +262,7 @@ def normalize_manifestation_meta(
     isbn13: str | None = None,
     publisher: str | None = None,
     format_type: str | None = None,
-    format: str | None = None,
+    format_val: str | None = None,
     strict: bool = False,
 ) -> tuple[str | None, str | None, str | None, dict[str, Any]]:
     """Normalize and validate F3 physical attributes from metadata.
@@ -275,7 +275,7 @@ def normalize_manifestation_meta(
         isbn13: Current isbn13 column value
         publisher: Current publisher column value
         format_type: Current format_type column value
-        format: Current format column value
+        format_val: Current format column value
         strict: If True, raise errors on invalid values
 
     Returns:
@@ -325,7 +325,7 @@ def normalize_manifestation_meta(
         # Try multiple possible keys
         raw_format = (
             extract_promoted_key_case_insensitive(meta_copy, "format_type")
-            or format
+            or format_val
             or extract_promoted_key_case_insensitive(meta_copy, "format")
             or extract_promoted_key_case_insensitive(meta_copy, "video_format")
         )

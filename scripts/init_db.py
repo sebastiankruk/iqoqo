@@ -26,12 +26,13 @@ Usage:
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
 # Add the parent directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
@@ -39,6 +40,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 from app import create_app
 from app.core.data_manager import DataManager
 from app.db import db
+
+
+def _validated_seed_admin(app):
+    """Require explicit, usable bootstrap credentials before importing seed Items."""
+    from scripts.init_auth import validate_admin_password
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip()
+    if not admin_email or admin_email != app.config.get("ADMIN_EMAIL"):
+        raise ValueError("Set an explicit ADMIN_EMAIL before importing seed data.")
+    if not re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,63}", admin_email):
+        raise ValueError("ADMIN_EMAIL must be a valid email address for the bootstrap administrator.")
+    domain = admin_email.rsplit("@", 1)[1].lower()
+    placeholder_domains = {"example.com", "example.org", "example.net", "localhost", "iqoqo.local"}
+    non_routable_suffixes = (".local", ".localhost", ".test", ".example", ".invalid")
+    if domain in placeholder_domains or domain.endswith(non_routable_suffixes):
+        raise ValueError("ADMIN_EMAIL must not use a placeholder or non-routable example domain.")
+    admin_password = validate_admin_password(app.config.get("ADMIN_PASSWORD"))
+    return admin_email, admin_password
 
 
 def init_database(seed_file: Path | None = None, reset: bool = False, force: bool = False):
@@ -133,13 +152,25 @@ def init_database(seed_file: Path | None = None, reset: bool = False, force: boo
         if seed_file and seed_file.exists():
             print(f"\nLoading seed data from {seed_file}...")
             try:
-                counts = DataManager.import_from_file(str(seed_file))
+                # Do not import seed Items until a configured, validated
+                # bootstrap account exists. This account is the explicit
+                # owner fallback for legacy Items without a resolvable UUID.
+                admin_email, admin_password = _validated_seed_admin(app)
+                from scripts.init_auth import run_init_auth
+
+                run_init_auth(app)
+                from app.db.models import User
+
+                bootstrap_admin = db.session.execute(db.select(User).filter_by(email=admin_email)).scalar_one_or_none()
+                if bootstrap_admin is None or not bootstrap_admin.password_hash or not admin_password:
+                    raise ValueError("Could not initialize the configured bootstrap administrator.")
+                counts = DataManager.import_from_file(str(seed_file), default_owner_id=bootstrap_admin.id)
                 print("\nSeed data imported successfully:")
                 print(f"  Works: {counts['works']}")
                 print(f"  Expressions: {counts['expressions']}")
                 print(f"  Manifestations: {counts['manifestations']}")
                 print(f"  Items: {counts['items']}")
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, SQLAlchemyError) as e:
                 print(f"Error importing seed data: {e}", file=sys.stderr)
                 sys.exit(1)
         else:

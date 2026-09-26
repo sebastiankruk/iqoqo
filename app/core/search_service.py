@@ -37,6 +37,15 @@ logger = logging.getLogger(__name__)
 _USE_PG = os.environ.get("DATABASE_URL", "").startswith("postgresql")
 _CATALOG = "catalog." if _USE_PG else ""
 _INVENTORY = "inventory." if _USE_PG else ""
+_ALLOWED_SCHEMA_PREFIXES = frozenset({("", ""), ("catalog.", "inventory.")})
+
+
+def _validated_schema_prefixes() -> tuple[str, str]:
+    """Fail closed unless raw SQL uses the application's fixed schema pair."""
+    prefixes = (_CATALOG, _INVENTORY)
+    if prefixes not in _ALLOWED_SCHEMA_PREFIXES:
+        raise ValueError("Unexpected database schema prefix configuration")
+    return prefixes
 
 
 def sanitize_search_query(q: str) -> str:
@@ -151,6 +160,7 @@ class SearchService:
         missing_cover: bool = False,
         missing_id: bool = False,
     ) -> tuple[int, list[int]]:
+        catalog_prefix, _ = _validated_schema_prefixes()
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
         w_search_vector_expr = "w.search_vector"
@@ -178,17 +188,17 @@ class SearchService:
             )
 
         count_sql = f"""
-        SELECT count(*) FROM {_CATALOG}manifestations m
-        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
-        JOIN {_CATALOG}works w ON w.id = e.work_id
+        SELECT count(*) FROM {catalog_prefix}manifestations m
+        JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
+        JOIN {catalog_prefix}works w ON w.id = e.work_id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {extra_filters_sql}
         """
         rows_sql = f"""
         SELECT m.id, ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-        FROM {_CATALOG}manifestations m
-        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
-        JOIN {_CATALOG}works w ON w.id = e.work_id
+        FROM {catalog_prefix}manifestations m
+        JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
+        JOIN {catalog_prefix}works w ON w.id = e.work_id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {extra_filters_sql}
         ORDER BY rank DESC
@@ -337,6 +347,7 @@ class SearchService:
         missing_cover: bool = False,
         missing_id: bool = False,
     ) -> tuple[int, list[dict]]:
+        catalog_prefix, inventory_prefix = _validated_schema_prefixes()
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
         w_search_vector_expr = "w.search_vector"
@@ -375,10 +386,10 @@ class SearchService:
             )
 
         count_sql = f"""
-        SELECT count(i.id) FROM {_CATALOG}manifestations m
-        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
-        JOIN {_CATALOG}works w ON w.id = e.work_id
-        JOIN {_INVENTORY}items i ON i.manifestation_id = m.id
+        SELECT count(i.id) FROM {catalog_prefix}manifestations m
+        JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
+        JOIN {catalog_prefix}works w ON w.id = e.work_id
+        JOIN {inventory_prefix}items i ON i.manifestation_id = m.id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {extra_filters_sql}
         """
@@ -389,10 +400,10 @@ class SearchService:
                m.publisher,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
-        FROM {_CATALOG}manifestations m
-        JOIN {_CATALOG}expressions e ON e.id = m.expression_id
-        JOIN {_CATALOG}works w ON w.id = e.work_id
-        JOIN {_INVENTORY}items i ON i.manifestation_id = m.id
+        FROM {catalog_prefix}manifestations m
+        JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
+        JOIN {catalog_prefix}works w ON w.id = e.work_id
+        JOIN {inventory_prefix}items i ON i.manifestation_id = m.id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
         {extra_filters_sql}
         ORDER BY rank DESC

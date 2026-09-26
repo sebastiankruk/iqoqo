@@ -31,6 +31,7 @@ from app.db.models import Expression, Manifestation, Work
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
 from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
+from scripts.backfill_legacy_covers import DatabaseConnectivityError, database_target, run_backfill
 from scripts.fetch_covers import run_batch
 from scripts.restore_covers import restore_covers
 
@@ -109,6 +110,172 @@ def test_schedule_missing_covers_file_absent(app, tmp_path):
             "Some Author",
             llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
         )
+
+
+def test_legacy_cover_backfill_dry_run_selects_only_allowlisted_sources(app, capsys):
+    """Dry-run selects legacy column/meta sources but does not mutate or process them."""
+    with app.app_context():
+        work = Work(title="Legacy Cover Book", meta={"authors": ["Test Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text", meta={})
+        db.session.add(expression)
+        db.session.flush()
+
+        column_source = Manifestation(
+            expression_id=expression.id,
+            cover_url="https://i.discogs.com/covers/column.jpg?X-Amz-Signature=column-secret",
+            meta={},
+        )
+        meta_source = Manifestation(
+            expression_id=expression.id,
+            cover_url=None,
+            meta={"cover_url": "HTTPS://a.allegroimg.com/original/meta.jpg?token=meta-secret"},
+        )
+        unsupported = Manifestation(
+            expression_id=expression.id,
+            cover_url="https://unknown.example/cover.jpg?signature=unknown-secret",
+            meta={},
+        )
+        already_local = Manifestation(
+            expression_id=expression.id,
+            cover_url="/static/covers/already-local.jpg",
+            meta={
+                "cover_url": "https://i.discogs.com/covers/already-local-source.jpg",
+                "cover_status": "ready",
+            },
+        )
+        db.session.add_all([column_source, meta_source, unsupported, already_local])
+        db.session.commit()
+        original_ids = {m.id for m in (column_source, meta_source, unsupported, already_local)}
+        original_url_values = {
+            column_source.id: column_source.cover_url,
+            meta_source.id: meta_source.cover_url,
+            unsupported.id: unsupported.cover_url,
+            already_local.id: already_local.cover_url,
+        }
+        original_meta_values = {
+            column_source.id: dict(column_source.meta),
+            meta_source.id: dict(meta_source.meta),
+            unsupported.id: dict(unsupported.meta),
+            already_local.id: dict(already_local.meta),
+        }
+
+    with patch("scripts.backfill_legacy_covers.process_cover_pipeline") as pipeline:
+        counts = run_backfill(app=app)
+
+    output = capsys.readouterr().out
+    assert counts == {
+        "candidates": 4,
+        "eligible": 2,
+        "already_local_ready": 1,
+        "unsupported_host": 1,
+        "processed": 0,
+        "failed": 0,
+    }
+    pipeline.assert_not_called()
+    assert "column-secret" not in output
+    assert "meta-secret" not in output
+    assert "unknown-secret" not in output
+
+    with app.app_context():
+        persisted = {m.id: m for m in Manifestation.query.filter(Manifestation.id.in_(original_ids)).all()}
+        for manifestation_id, cover_url in original_url_values.items():
+            assert persisted[manifestation_id].cover_url == cover_url
+            assert persisted[manifestation_id].meta == original_meta_values[manifestation_id]
+
+
+def test_legacy_cover_backfill_apply_requires_target_and_is_idempotent(app):
+    """Apply processes only allowlisted inputs and skips completed copies on rerun."""
+    with app.app_context():
+        work = Work(title="Backfill Target", meta={"authors": ["Test Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text", meta={})
+        db.session.add(expression)
+        db.session.flush()
+        source = Manifestation(
+            expression_id=expression.id,
+            cover_url=None,
+            meta={"cover_url": "https://i.discogs.com/covers/backfill.jpg?X-Amz-Signature=private-value"},
+        )
+        unsupported = Manifestation(
+            expression_id=expression.id,
+            cover_url="https://attacker.example/cover.jpg",
+            meta={},
+        )
+        db.session.add_all([source, unsupported])
+        db.session.commit()
+        source_id = source.id
+        unsupported_id = unsupported.id
+        target = database_target(db.engine.url)
+
+    with (
+        patch("scripts.backfill_legacy_covers.process_cover_pipeline") as pipeline,
+        pytest.raises(ValueError, match="confirm-target"),
+    ):
+        run_backfill(app=app, apply=True, confirm_target="wrong-target")
+    pipeline.assert_not_called()
+
+    def complete_cover(manifestation_id, *_args, legacy_source_only=False, **_kwargs):
+        assert legacy_source_only is True
+        manifestation = db.session.get(Manifestation, manifestation_id)
+        manifestation.cover_url = f"/static/covers/backfill-{manifestation_id}.jpg"
+        manifestation.update_meta(cover_status="ready", cover_source="api_direct_download")
+        db.session.commit()
+
+    with patch("scripts.backfill_legacy_covers.process_cover_pipeline", side_effect=complete_cover) as pipeline:
+        applied = run_backfill(app=app, apply=True, confirm_target=target)
+
+    assert applied["candidates"] == 2
+    assert applied["eligible"] == 1
+    assert applied["unsupported_host"] == 1
+    assert applied["processed"] == 1
+    assert applied["failed"] == 0
+    pipeline.assert_called_once()
+    assert pipeline.call_args.args[0] == source_id
+    assert pipeline.call_args.kwargs["legacy_source_only"] is True
+    assert pipeline.call_args.kwargs["llm_permissions"] == {"allow_generate_cover": False, "allow_cloud_llm": False}
+
+    with patch("scripts.backfill_legacy_covers.process_cover_pipeline") as pipeline:
+        rerun = run_backfill(app=app, apply=True, confirm_target=target)
+
+    assert rerun["already_local_ready"] == 1
+    assert rerun["eligible"] == 0
+    assert rerun["processed"] == 0
+    pipeline.assert_not_called()
+
+    with app.app_context():
+        assert db.session.get(Manifestation, source_id).cover_url == f"/static/covers/backfill-{source_id}.jpg"
+        assert db.session.get(Manifestation, unsupported_id).cover_url == "https://attacker.example/cover.jpg"
+
+
+def test_database_target_redacts_credentials_and_query_values():
+    """The operator confirmation identity must not expose database secrets."""
+    from sqlalchemy.engine import make_url
+
+    target = database_target(make_url("postgresql://db-user:db-password@preview-clone.internal:5432/iqoqo?token=db-token"))
+
+    assert target == "postgresql://preview-clone.internal:5432/iqoqo"
+    assert "db-password" not in target
+    assert "db-token" not in target
+
+
+def test_legacy_cover_backfill_stops_before_scanning_when_database_is_unreachable(app):
+    """A bad container DB hostname fails before candidate queries or processing."""
+    from sqlalchemy.exc import OperationalError
+
+    with (
+        patch(
+            "scripts.backfill_legacy_covers.db.session.execute",
+            side_effect=OperationalError("SELECT 1", {}, OSError("connection refused")),
+        ),
+        patch("scripts.backfill_legacy_covers._iter_candidates") as candidates,
+        pytest.raises(DatabaseConnectivityError, match="configured database target"),
+    ):
+        run_backfill(app=app)
+
+    candidates.assert_not_called()
 
 
 def test_restore_covers(app, tmp_path):
@@ -281,6 +448,7 @@ def test_fix_invalid_item_statuses_script(app):
 
     with app.app_context():
         user = User(email="status_fixer@example.com")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 
@@ -322,6 +490,7 @@ def test_migrate_wishlist_intents_script(app):
 
     with app.app_context():
         user = User(email="wishlist_tester@example.com")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 

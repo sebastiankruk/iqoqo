@@ -162,10 +162,65 @@ describe("ItemCard", () => {
   });
 
   it("renders a cover image when coverUrl is provided in meta", () => {
-    renderWithQuery(<ItemCard item={makeItem({ meta: { cover_url: "https://example.com/cover.jpg" } })} />);
+    renderWithQuery(<ItemCard item={makeItem({ meta: { cover_url: "/static/covers/cover.jpg" } })} />);
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://example.com/cover.jpg");
+    expect(img).toHaveAttribute("src", "/api/static/covers/cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
+  });
+
+  it("does not turn a legacy external source URL into a broken same-origin API image", () => {
+    renderWithQuery(
+      <ItemCard
+        item={makeItem({
+          cover_url: "https://i.discogs.com/legacy-cover.jpeg",
+          manifestation_meta: {
+            cover_url: "https://i.discogs.com/legacy-cover.jpeg",
+            cover_status_updated_at: "2026-09-25T20:47:56.000Z",
+          },
+        })}
+      />
+    );
+
+    // External source URLs are inputs to the backend local-copy pipeline, not
+    // browser image URLs. Until a local copy is available, show the placeholder.
+    expect(screen.queryByRole("img", { name: "Cover of Dune" })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-cover-type="placeholder"]')).toBeInTheDocument();
+  });
+
+  it("renders a migrated local copy for an Item without emitting a broken API root URL", () => {
+    renderWithQuery(
+      <ItemCard
+        item={makeItem({
+          cover_url: "/static/covers/legacy-item.jpg",
+          manifestation_meta: {
+            cover_url: "https://i.discogs.com/legacy-cover.jpeg",
+            cover_status_updated_at: "2026-09-25T20:47:56.000Z",
+          },
+        })}
+      />
+    );
+
+    const image = screen.getByRole("img", { name: "Cover of Dune" });
+    expect(image).toHaveAttribute("src", "/api/static/covers/legacy-item.jpg?t=1790369276000");
+    expect(image.getAttribute("src")).not.toContain("/api/?t=");
+    expect(image.getAttribute("src")).not.toContain("/api?t=");
+  });
+
+  it("keeps local manifestation cover assets working in the Global Library card", () => {
+    renderWithQuery(
+      <ItemCard
+        item={makeCatalogEntry({
+          cover_url: "/static/covers/manifestation-cover.jpg",
+          meta: { cover_status_updated_at: "2026-09-25T20:47:56.000Z" },
+        })}
+        isManifestationView
+      />
+    );
+
+    expect(screen.getByRole("img", { name: "Cover of Dune" })).toHaveAttribute(
+      "src",
+      "/api/static/covers/manifestation-cover.jpg?t=1790369276000"
+    );
   });
 
   it("links to the manifestation detail page when isManifestationView is true", () => {
@@ -206,13 +261,13 @@ describe("ItemCard", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ItemCard
-          item={makeItem({ meta: { cover_url: "https://example.com/horizontal-cover.jpg" } })}
+          item={makeItem({ meta: { cover_url: "/static/covers/horizontal-cover.jpg" } })}
           variant="horizontal"
         />
       </QueryClientProvider>
     );
     const img = screen.getByRole("img");
-    expect(img).toHaveAttribute("src", "https://example.com/horizontal-cover.jpg");
+    expect(img).toHaveAttribute("src", "/api/static/covers/horizontal-cover.jpg");
     expect(img).toHaveAttribute("alt", "Cover of Dune");
   });
 
@@ -268,7 +323,7 @@ describe("ItemCard", () => {
     fireEvent.click(removeBtn);
 
     await waitFor(() => {
-      expect(apiClient.delete).toHaveBeenCalledWith("/items/-10");
+      expect(apiClient.delete).toHaveBeenCalledWith("/wishlist/10");
       expect(onWishlistRemove).toHaveBeenCalledWith(-10);
     });
   });

@@ -126,3 +126,15 @@ def test_board_game_invalid_aggregation(app):
         with pytest.raises(IntegrityError):
             db.session.commit()
         db.session.rollback()
+
+        # 5. An unrecognized discriminator is rejected even if its work target is populated.
+        invalid_type = ContainerAggregation(
+            container_work_id=box_work.id,
+            aggregated_type="collection",
+            aggregated_work_id=rulebook.id,
+            component_name="Invalid Type",
+        )
+        db.session.add(invalid_type)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()

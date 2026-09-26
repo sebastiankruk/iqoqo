@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import os
 import uuid
 from pathlib import Path
 
@@ -23,15 +24,28 @@ from flask import Flask
 load_dotenv()
 
 import yaml
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import create_app
 from app.core.permissions import PermissionName
 from app.db.models import Item, Permission, Role, User, db
 
 
+def validate_admin_password(password: object) -> str:
+    """Reject blank or weak bootstrap passwords before any database changes."""
+    if not isinstance(password, str) or not password.strip():
+        raise ValueError("ADMIN_PASSWORD must not be empty or whitespace-only.")
+    if len(password) < 8:
+        raise ValueError("ADMIN_PASSWORD must be at least 8 characters long.")
+    return password
+
+
 def run_init_auth(app: Flask | None = None) -> None:
     if app is None:
-        app = create_app()
+        admin_password = validate_admin_password(os.environ.get("ADMIN_PASSWORD"))
+        app = create_app(config_override={"ADMIN_PASSWORD": admin_password})
+    else:
+        admin_password = validate_admin_password(app.config.get("ADMIN_PASSWORD"))
 
     with app.app_context():
         # 1. Create permissions from shared/permissions.yaml
@@ -118,7 +132,6 @@ def run_init_auth(app: Flask | None = None) -> None:
         admin_user = db.session.execute(db.select(User).filter_by(email=admin_email)).scalar_one_or_none()
         if not admin_user:
             admin_user = User(email=admin_email, display_name="Administrator", is_active=True)
-            admin_password = str(app.config.get("ADMIN_PASSWORD") or "")
             admin_user.set_password(admin_password)
             if admin_role is not None:
                 admin_user.roles.append(admin_role)
@@ -126,13 +139,11 @@ def run_init_auth(app: Flask | None = None) -> None:
             db.session.commit()
             print(f"Created admin user: {admin_email}")
         else:
-            admin_password = str(app.config.get("ADMIN_PASSWORD") or "")
-            if admin_password:
-                admin_user.set_password(admin_password)
-                if admin_role is not None and admin_role not in admin_user.roles:
-                    admin_user.roles.append(admin_role)
-                db.session.commit()
-                print(f"Synchronized admin user password: {admin_email}")
+            admin_user.set_password(admin_password)
+            if admin_role is not None and admin_role not in admin_user.roles:
+                admin_user.roles.append(admin_role)
+            db.session.commit()
+            print(f"Synchronized admin user password: {admin_email}")
 
         # 4. Migrate items to Admin UUID (including those of the legacy system user)
         legacy_items = db.session.execute(db.select(Item)).scalars().all()
@@ -158,6 +169,18 @@ def run_init_auth(app: Flask | None = None) -> None:
         if migrated > 0:
             db.session.commit()
             print(f"Migrated {migrated} items to admin user.")
+
+        # Clean up legacy transitional user if unreferenced
+        try:
+            legacy_user = db.session.execute(
+                db.select(User).filter((User.email == "legacy@iqoqo.cc") | (User.id == uuid.UUID(LEGACY_USER_ID)))
+            ).scalar_one_or_none()
+            if legacy_user:
+                db.session.delete(legacy_user)
+                db.session.commit()
+                print("Cleaned up orphaned legacy system user.")
+        except (SQLAlchemyError, ValueError):
+            db.session.rollback()
 
 
 if __name__ == "__main__":

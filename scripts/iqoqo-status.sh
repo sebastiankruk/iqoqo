@@ -19,7 +19,7 @@
 #
 set -euo pipefail
 
-IQOQO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+IQOQO_ROOT="${IQOQO_STATUS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -288,9 +288,26 @@ otel_cname=$(find_container "otel-collector")
 if [[ -n "$oo_cname" ]]; then
     oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
     oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
-    oo_health=""
-    oo_auth="${OPENOBSERVE_BASIC_AUTH:-YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz}"
-    if python3 -c "
+    oo_auth="${OPENOBSERVE_BASIC_AUTH:-}"
+    if [[ -z "$oo_auth" ]]; then
+        oo_auth=$(python3 -c "
+try:
+    from app import create_app
+    from app.db.settings import InstanceSettings
+    app = create_app()
+    with app.app_context():
+        val = InstanceSettings.get_value('OPENOBSERVE_BASIC_AUTH')
+        if val:
+            print(val)
+except Exception:
+    pass
+" 2>/dev/null || true)
+    fi
+
+    if [[ -z "$oo_auth" ]]; then
+        check "OpenObserve API" info "unconfigured (OPENOBSERVE_BASIC_AUTH not set in environment or DB) [${oo_status}]"
+    else
+        if python3 -c "
 import urllib.request, sys
 req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
 req.add_header('Authorization', 'Basic ${oo_auth}')
@@ -300,12 +317,13 @@ try:
 except Exception:
     sys.exit(1)
 " 2>/dev/null; then
-        oo_health="ok"
-    fi
-    if echo "$oo_health" | grep -iq "ok"; then
-        check "OpenObserve API" pass "HTTP 200, status=ok (:5080/healthz) [${oo_status}]"
-    else
-        check "OpenObserve API" warn "container running but health endpoint unreachable [${oo_status}]"
+            oo_health="ok"
+        fi
+        if echo "$oo_health" | grep -iq "ok"; then
+            check "OpenObserve API" pass "HTTP 200, status=ok (:5080/healthz) [${oo_status}]"
+        else
+            check "OpenObserve API" warn "container running but health endpoint unreachable [${oo_status}]"
+        fi
     fi
 else
     check "OpenObserve" info "not running (optional default stack)"
@@ -765,7 +783,7 @@ if [[ -f "$EXAMPLE_FILE" ]]; then
         fi
     done < "$EXAMPLE_FILE"
 else
-    check "Template" warn ".env.example not found"
+    check "Template" info ".env.example not bundled (optional for prebuilt deployments)"
     expected_keys=()
     declare -A example_defaults
 fi

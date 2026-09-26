@@ -24,8 +24,8 @@ from app.db.models import Item, User, db
 
 def test_get_profile(client):
     # Register and login first (using the test_auth flow)
-    client.post("/api/auth/register", json={"email": "prof@iqoqo.local", "password": "pass"})
-    res = client.post("/api/auth/login", json={"email": "prof@iqoqo.local", "password": "pass"})
+    client.post("/api/auth/register", json={"email": "prof@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "prof@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
 
     response = client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"})
@@ -37,6 +37,7 @@ def test_get_profile(client):
 def test_profile_includes_avatar_field(client):
     # Create a user directly with avatar_url and ensure the profile endpoint returns it
     user = User(email="avatar@iqoqo.local", display_name="Avatar Test", avatar_url="https://lh3.googleusercontent.com/a/test")
+    user.set_password("test-password")
     db.session.add(user)
     db.session.commit()
 
@@ -58,8 +59,8 @@ def test_profile_includes_avatar_field(client):
 
 
 def test_update_profile(client):
-    client.post("/api/auth/register", json={"email": "update@iqoqo.local", "password": "pass"})
-    res = client.post("/api/auth/login", json={"email": "update@iqoqo.local", "password": "pass"})
+    client.post("/api/auth/register", json={"email": "update@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "update@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
 
     response = client.put("/api/profile/", headers={"Authorization": f"Bearer {token}"}, json={"display_name": "New Name"})
@@ -68,8 +69,8 @@ def test_update_profile(client):
 
 
 def test_delete_account_right_to_be_forgotten(client):
-    client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "pass"})
-    res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "pass"})
+    client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
 
     # Verify user exists
@@ -86,6 +87,7 @@ def test_delete_account_right_to_be_forgotten(client):
 
 def test_user_to_dict_includes_avatar(client):
     test_user = User(email="test@example.com", display_name="Test", avatar_url="https://lh3.googleusercontent.com/a/test")
+    test_user.set_password("test-password")
     db.session.add(test_user)
     db.session.commit()
 

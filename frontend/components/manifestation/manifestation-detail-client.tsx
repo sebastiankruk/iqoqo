@@ -45,6 +45,20 @@ export interface ManifestationDetailClientProps {
 }
 
 /**
+ * Normalizes authors to always be an array.
+ * Handles cases where authors might be stored as a string instead of an array.
+ *
+ * @param authors - The authors value (string, array, or null/undefined)
+ * @returns An array of author strings
+ */
+function normalizeAuthors(authors: unknown): string[] {
+  if (!authors) return [];
+  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
+  if (typeof authors === "string") return [authors];
+  return [];
+}
+
+/**
  * Client-side interactive view for a manifestation.
  * Renders cover preview, actions, series parts, and feedback tabs.
  *
@@ -232,8 +246,8 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 itemScope
                 itemType="https://schema.org/Person"
               >
-                {(manifestation.authors ?? []).length > 0 ? (
-                  (manifestation.authors ?? []).map((author, idx, arr) => (
+                {normalizeAuthors(manifestation.authors).length > 0 ? (
+                  normalizeAuthors(manifestation.authors).map((author, idx, arr) => (
                     <span key={author} property="schema:name" itemProp="name">
                       <span
                         role="button"

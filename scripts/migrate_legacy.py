@@ -36,6 +36,7 @@ then map everything to the new FRBR hierarchy.
 import argparse
 import json
 import os
+import secrets
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -228,6 +229,9 @@ def migrate_legacy_data(legacy_data: dict, clear_existing: bool = False, force: 
     default_owner = User.query.first()
     if not default_owner:
         default_owner = User(email="admin_migrator@iqoqo.local", display_name="Legacy Migrator", is_active=True)
+        # This system owner is not meant for interactive login, but must still
+        # satisfy the database's one-authentication-method invariant.
+        default_owner.set_password(secrets.token_urlsafe(32))
         db.session.add(default_owner)
         db.session.commit()
 

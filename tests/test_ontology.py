@@ -189,7 +189,7 @@ def test_model_check_constraints_defined() -> None:
     assert "ck_user_work_intents_status" in intent_ck_names
 
     user_ck_names = {c.name for c in User.__table__.constraints if isinstance(c, CheckConstraint)}
-    assert "ck_users_visibility" in user_ck_names
+    assert "check_user_visibility" in user_ck_names
 
     loan_ck_names = {c.name for c in LoanRequest.__table__.constraints if isinstance(c, CheckConstraint)}
     assert "ck_loan_requests_status" in loan_ck_names

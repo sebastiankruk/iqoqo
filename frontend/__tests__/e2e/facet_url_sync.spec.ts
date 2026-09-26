@@ -101,7 +101,7 @@ test.describe("Facet URL Sync", () => {
       });
     });
 
-    await page.route("**/api/facets/stats**", async route => {
+    await page.route("**/api/stats/facets**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -139,6 +139,43 @@ test.describe("Facet URL Sync", () => {
 
     // The mocked "Combined Filter Item" should be visible in results
     await expect(page.getByText("Combined Filter Item").first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test("renders API facet counts and sends a selected category to the item request", async ({ page }) => {
+    const itemRequests: URL[] = [];
+    await page.route("**/api/items**", async route => {
+      const url = new URL(route.request().url());
+      itemRequests.push(url);
+      const filtered = url.searchParams.get("category") === "text";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: filtered ? [{ id: 3, title: "Filtered Text Item", cover_url: null }] : [],
+          meta: { page: 1, pages: 1, total: filtered ? 1 : 0, limit: 20 },
+        }),
+      });
+    });
+    await page.route("**/api/stats/facets**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { category_counts: { text: 3 } },
+        }),
+      });
+    });
+
+    await page.goto("/collection?view=items");
+    const textFacet = page.getByRole("checkbox", { name: /Text\s+3/ }).first();
+    await expect(textFacet).toBeEnabled();
+    await textFacet.check({ force: true });
+
+    await expect(page).toHaveURL(/category=text/);
+    await expect(page.getByText("Filtered Text Item").first()).toBeVisible();
+    await expect.poll(() => itemRequests.some(url => url.searchParams.get("category") === "text")).toBe(true);
   });
 
   test("should restore filter state via URL params on page reload", async ({ page }) => {

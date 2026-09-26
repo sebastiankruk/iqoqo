@@ -15,9 +15,49 @@
 #
 
 import pytest
+from sqlalchemy import event
 
 from app.db import db
 from app.db.models import Expression, Item, Manifestation, User, Work
+
+
+def _count_selects(app, client, path):
+    """Count SELECT statements for one API request, excluding fixture setup."""
+    with app.app_context():
+        engine = db.engine
+    statements = []
+
+    def before_cursor_execute(_conn, _cursor, statement, _params, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        response = client.get(path)
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    return len(statements)
+
+
+def test_catalog_list_views_eager_load_related_frbr_rows(client, app):
+    """Manifestation.author and Work.expressions access stays batched as rows grow."""
+    with app.app_context():
+        for index in range(6):
+            work = Work(title=f"Eager-load Work {index}", meta={"authors": [f"Author {index}"]})
+            db.session.add(work)
+            db.session.flush()
+            expression = Expression(work_id=work.id, content_type="text")
+            db.session.add(expression)
+            db.session.flush()
+            db.session.add(Manifestation(expression_id=expression.id, meta={"format": "book"}))
+        db.session.commit()
+
+    for endpoint in ("/api/manifestations", "/api/works/shelf"):
+        small_page_queries = _count_selects(app, client, f"{endpoint}?limit=2")
+        larger_page_queries = _count_selects(app, client, f"{endpoint}?limit=20")
+        assert larger_page_queries == small_page_queries
 
 
 def test_works_shelf_pagination(client, normal_user_headers, app):

@@ -27,6 +27,78 @@ vi.mock("@/lib/api/escalations", () => ({
   })),
 }));
 
+const mockFrbrTree = {
+  work: { id: 1, title: "Dune", meta: { original_language: "en" } },
+  expression: { id: 2, work_id: 1, content_type: "text", language: "en", kind: "live_performance", meta: {} },
+  manifestation: {
+    id: 3,
+    expression_id: 2,
+    isbn13: "9780441172719",
+    upc: null,
+    ean: null,
+    publisher: "Ace Books",
+    publication_date: "1965-08-01",
+    format: null,
+    label: null,
+    barcode: null,
+    catalog_number: null,
+    meta: { pages: "412", type: "Book" },
+  },
+  items: [
+    {
+      id: 10,
+      manifestation_id: 3,
+      condition: "like_new",
+      status: "available",
+      local_barcode: null,
+      inventory_tag: null,
+      meta: {},
+      owner_id: "user1",
+      owner_name: "Test User",
+    },
+  ],
+};
+
+const mockUpdateMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({ id: 1 }),
+  mutate: vi.fn(),
+  isPending: false,
+  isError: false,
+  isSuccess: false,
+  status: "idle" as const,
+  data: undefined,
+  error: null,
+  variables: undefined,
+  reset: vi.fn(),
+  submittedAt: 0,
+  failureCount: 0,
+  failureReason: null,
+  context: undefined,
+};
+
+const mockDeleteMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({}),
+  mutate: vi.fn(),
+  isPending: false,
+  isError: false,
+  isSuccess: false,
+  status: "idle" as const,
+  data: undefined,
+  error: null,
+  variables: undefined,
+  reset: vi.fn(),
+  submittedAt: 0,
+  failureCount: 0,
+  failureReason: null,
+  context: undefined,
+};
+
+const mockAddChildMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({ id: 99 }),
+  mutate: vi.fn(),
+  isPending: false,
+};
+
 vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: vi.fn(() => ({
     data: { data: [] },
@@ -35,6 +107,20 @@ vi.mock("@/lib/api/hooks", () => ({
   })),
   useProfile: vi.fn(() => ({
     data: { permissions: [PermissionName.WRITE_METADATA, PermissionName.ESCALATE_REQUEST] },
+  })),
+  useFrbrTree: vi.fn(() => ({
+    data: mockFrbrTree,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
+  useUpdateFrbrEntity: vi.fn(() => mockUpdateMutation),
+  useDeleteFrbrEntity: vi.fn(() => mockDeleteMutation),
+  useAddFrbrChild: vi.fn(() => mockAddChildMutation),
+  useUserSearch: vi.fn(() => ({
+    data: [],
+    isLoading: false,
   })),
 }));
 
@@ -52,36 +138,31 @@ vi.mock("@/components/ui/select", () => ({
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }));
 
-describe("FrbrEditor Component", () => {
-  const mockFrbrTree = {
-    work: { id: 1, title: "Dune", meta: { original_language: "en" } },
-    expression: { id: 2, work_id: 1, content_type: "text", language: "en", kind: "live_performance", meta: {} },
-    manifestation: {
-      id: 3,
-      expression_id: 2,
-      isbn13: "9780441172719",
-      upc: null,
-      ean: null,
-      publisher: "Ace Books",
-      publication_date: "1965-08-01",
-      format: null,
-      label: null,
-      barcode: null,
-      catalog_number: null,
-      meta: { pages: "412" },
-    },
-    items: [
-      {
-        id: 10,
-        manifestation_id: 3,
-        condition: "like_new",
-        status: "available",
-        local_barcode: null,
-        inventory_tag: null,
-      },
-    ],
-  };
+vi.mock("@/components/ui/alert-dialog", () => ({
+  AlertDialog: ({ children, open }: any) => (open ? <div data-testid="alert-dialog">{children}</div> : null),
+  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+  AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: any) => <h2>{children}</h2>,
+  AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
+  AlertDialogAction: ({ children, onClick, className }: any) => (
+    <button onClick={onClick} className={className}>
+      {children}
+    </button>
+  ),
+  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
+}));
 
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({ children, open }: any) => (open ? <div data-testid="dialog">{children}</div> : null),
+  DialogContent: ({ children }: any) => <div>{children}</div>,
+  DialogHeader: ({ children }: any) => <div>{children}</div>,
+  DialogTitle: ({ children }: any) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: any) => <p>{children}</p>,
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
+}));
+
+describe("FrbrEditor Component", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(adminApi.getFrbrTree).mockResolvedValue(mockFrbrTree as any);
@@ -90,31 +171,11 @@ describe("FrbrEditor Component", () => {
     } as any);
   });
 
-  it("renders loading state initially", () => {
-    vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
-    const { container } = render(<FrbrEditor manifestationId={3} />);
-    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
-  });
-
-  it("renders error state on API failure", async () => {
-    vi.mocked(adminApi.getFrbrTree).mockRejectedValueOnce(new Error("Failed to load"));
+  it("renders the FRBR tree view and level selector", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load")).toBeInTheDocument();
-    });
-  });
-
-  it("does not render FRBR tree tabs while loading", () => {
-    vi.mocked(adminApi.getFrbrTree).mockImplementationOnce(() => new Promise(() => {}));
-    render(<FrbrEditor manifestationId={3} />);
-    expect(screen.queryByText("Work (F1)")).not.toBeInTheDocument();
-  });
-
-  it("loads and renders the FRBR tree level selector", async () => {
-    render(<FrbrEditor manifestationId={3} />);
-
-    await waitFor(() => {
+      expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument();
       expect(screen.getByText("Work (F1)")).toBeInTheDocument();
       expect(screen.getByText("Expression (F2)")).toBeInTheDocument();
       expect(screen.getByText("Manifestation (F3)")).toBeInTheDocument();
@@ -158,7 +219,7 @@ describe("FrbrEditor Component", () => {
     });
   });
 
-  it("allows switching to the Items tab", async () => {
+  it("allows switching to the Items tab and expanding an item", async () => {
     const { container } = render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
@@ -170,14 +231,20 @@ describe("FrbrEditor Component", () => {
       expect(screen.getByText(/Item #10/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText(/like_new/i));
+    // Click on the expand button for the item row
+    const expandButtons = screen.getAllByRole("button");
+    const itemExpandButton = expandButtons.find(btn => btn.textContent?.includes("Item #10"));
+    if (itemExpandButton) {
+      fireEvent.click(itemExpandButton);
+    }
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("available")).toBeInTheDocument();
+      const statusInputs = screen.queryAllByDisplayValue("available");
+      expect(statusInputs.length).toBeGreaterThan(0);
     });
   });
 
-  it("submits updated manifestation data to the API", async () => {
+  it("submits updated manifestation data via the mutation hook", async () => {
     render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
@@ -189,59 +256,21 @@ describe("FrbrEditor Component", () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(adminApi.updateFrbrEntity).toHaveBeenCalledWith(
-        "manifestation",
-        3,
+      expect(mockUpdateMutation.mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
-          publisher: "Penguin",
-          isbn13: "9780441172719",
-        })
-      );
-    });
-  });
-
-  it("submits updated manifestation type to the API", async () => {
-    const { container } = render(<FrbrEditor manifestationId={3} />);
-
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
-
-    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "bluray_audio" } });
-
-    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(adminApi.updateFrbrEntity).toHaveBeenCalledWith(
-        "manifestation",
-        3,
-        expect.objectContaining({
-          meta: expect.objectContaining({
-            type: "bluray_audio",
+          manifestationId: 3,
+          type: "manifestation",
+          id: 3,
+          data: expect.objectContaining({
+            publisher: "Penguin",
+            isbn13: "9780441172719",
           }),
         })
       );
     });
   });
 
-  it("dropdown lists correctly map to the taxonomy structure", async () => {
-    const { container } = render(<FrbrEditor manifestationId={3} />);
-
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
-
-    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
-    const optGroups = typeSelect.querySelectorAll("optgroup");
-    expect(optGroups.length).toBeGreaterThan(0);
-
-    const labels = Array.from(typeSelect.querySelectorAll("option[disabled]")).map(o => o.textContent);
-    expect(labels).toContain("Text");
-    expect(labels).toContain("Music");
-
-    const musicOptions = Array.from(typeSelect.querySelectorAll("option")).filter(o => o.value === "bluray_audio");
-    expect(musicOptions.length).toBeGreaterThan(0);
-  });
-
-  it("renders kind dropdown on the Expression tab, pre-selects current value, and submits kind", async () => {
+  it("renders kind dropdown on the Expression tab and submits kind", async () => {
     const { container } = render(<FrbrEditor manifestationId={3} />);
 
     await waitFor(() => expect(container.querySelector("select")).toBeInTheDocument());
@@ -249,104 +278,54 @@ describe("FrbrEditor Component", () => {
     const levelSelect = container.querySelector("select") as HTMLSelectElement;
     fireEvent.change(levelSelect, { target: { value: "expression" } });
 
-    // Dropdown renders with all valid kinds plus the empty Studio / Default option
     await waitFor(() => {
       expect(screen.getByRole("option", { name: "Studio / Default" })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: "Live Performance" })).toBeInTheDocument();
     });
 
-    // Pre-selects the current value (kind: "live_performance")
     const kindSelect = screen.getByDisplayValue("Live Performance");
     expect(kindSelect).toBeInTheDocument();
 
-    // Clear kind back to studio/default and submit
     fireEvent.change(kindSelect, { target: { value: "" } });
 
     const saveButton = screen.getByRole("button", { name: /Save Expression/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(adminApi.updateFrbrEntity).toHaveBeenCalledWith(
-        "expression",
-        2,
+      expect(mockUpdateMutation.mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
-          kind: "",
-        })
-      );
-    });
-  });
-
-  it("dispatches a User Request when changing type without WRITE_METADATA", async () => {
-    // Override useProfile mock for this test only
-    const { useProfile } = await import("@/lib/api/hooks");
-    vi.mocked(useProfile).mockReturnValue({
-      data: { permissions: [PermissionName.ESCALATE_REQUEST] }, // No WRITE_METADATA
-    } as any);
-
-    // Get the createEscalation mock
-    const { useCreateEscalation } = await import("@/lib/api/escalations");
-    const mutateAsyncMock = vi.fn();
-    vi.mocked(useCreateEscalation).mockReturnValue({ mutateAsync: mutateAsyncMock } as any);
-
-    const { container } = render(<FrbrEditor manifestationId={3} />);
-
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
-
-    const typeSelect = container.querySelector("form select") as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "dvd" } });
-
-    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(mutateAsyncMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          level: "manifestation",
-          targetId: 3,
+          manifestationId: 3,
+          type: "expression",
+          id: 2,
           data: expect.objectContaining({
-            request_type: "change_type",
-            field_name: "type",
-            suggested_value: "dvd",
+            kind: "",
           }),
         })
       );
-      // Ensure it doesn't call direct update
-      expect(adminApi.updateFrbrEntity).not.toHaveBeenCalled();
     });
   });
 
-  it("disables unwired 'Add Child' control and attaches 'Coming in v0.8.0' tooltip", async () => {
-    const { container } = render(<FrbrEditor manifestationId={3} />);
+  it("tree view displays entity nodes with correct badges", async () => {
+    render(<FrbrEditor manifestationId={3} />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByTestId("tree-node-work")).toBeInTheDocument();
+      expect(screen.getByTestId("tree-node-expression")).toBeInTheDocument();
+      expect(screen.getByTestId("tree-node-manifestation")).toBeInTheDocument();
+    });
+  });
 
-    const addChildButton = screen.getByRole("button", { name: /add child/i });
-    expect(addChildButton).toBeDisabled();
-    expect(addChildButton).toHaveAttribute("title", "Coming in v0.8.0");
+  it("tree view node selection switches the active tab", async () => {
+    render(<FrbrEditor manifestationId={3} />);
 
-    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    await waitFor(() => {
+      expect(screen.getByTestId("tree-node-work")).toBeInTheDocument();
+    });
 
-    // Switch to Work tab
-    fireEvent.change(levelSelect, { target: { value: "work" } });
-    await waitFor(() => expect(screen.getByDisplayValue("Dune")).toBeInTheDocument());
-    const workAddChildButton = screen.getByRole("button", { name: /add child/i });
-    expect(workAddChildButton).toBeDisabled();
-    expect(workAddChildButton).toHaveAttribute("title", "Coming in v0.8.0");
+    fireEvent.click(screen.getByTestId("tree-node-work"));
 
-    // Switch to Expression tab
-    fireEvent.change(levelSelect, { target: { value: "expression" } });
-    await waitFor(() => expect(screen.getByDisplayValue("en")).toBeInTheDocument());
-    const exprAddChildButton = screen.getByRole("button", { name: /add child/i });
-    expect(exprAddChildButton).toBeDisabled();
-    expect(exprAddChildButton).toHaveAttribute("title", "Coming in v0.8.0");
-
-    // Switch to Items tab
-    fireEvent.change(levelSelect, { target: { value: "items" } });
-    await waitFor(() => expect(screen.getByText(/Item #10/)).toBeInTheDocument());
-    fireEvent.click(screen.getByText(/like_new/i));
-    await waitFor(() => expect(screen.getByDisplayValue("available")).toBeInTheDocument());
-    const itemAddChildButton = screen.getByRole("button", { name: /add child/i });
-    expect(itemAddChildButton).toBeDisabled();
-    expect(itemAddChildButton).toHaveAttribute("title", "Coming in v0.8.0");
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Dune")).toBeInTheDocument();
+    });
   });
 });

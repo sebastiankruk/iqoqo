@@ -18,6 +18,7 @@
 import { useState, useEffect } from "react";
 import { AdminUser, updateUser, getRoles } from "@/lib/api/admin";
 import { Loader2, X, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 
 /** Descriptions for system roles */
 const ROLE_DESCRIPTIONS: Record<string, string> = {
@@ -50,37 +51,46 @@ interface RbacSheetProps {
 export function RbacSheet({ user, onClose, onUpdate, canEdit = false }: RbacSheetProps) {
   const [loading, setLoading] = useState(false);
   const [rolesLoading, setRolesLoading] = useState(true);
+  const [rolesLoadError, setRolesLoadError] = useState<string | null>(null);
+  const [rolesLoadAttempt, setRolesLoadAttempt] = useState(0);
   const [availableRoles, setAvailableRoles] = useState<{ id: number; name: string }[]>([]);
   const [isActive, setIsActive] = useState(user.is_active);
   const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles || []);
 
   useEffect(() => {
+    let isCurrentRequest = true;
     getRoles()
-      .then(setAvailableRoles)
-      .catch(err => {
-        console.error("Failed to load roles:", err);
-        // Fallback to hardcoded roles if API fails
-        setAvailableRoles([
-          { id: 1, name: "admin" },
-          { id: 2, name: "custodian" },
-          { id: 3, name: "user" },
-        ]);
+      .then(roles => {
+        if (isCurrentRequest) setAvailableRoles(roles);
       })
-      .finally(() => setRolesLoading(false));
-  }, []);
+      .catch(err => {
+        if (!isCurrentRequest) return;
+        const message = err instanceof Error ? err.message : "Failed to load roles";
+        setRolesLoadError(message);
+        toast.error(message);
+      })
+      .finally(() => {
+        if (isCurrentRequest) setRolesLoading(false);
+      });
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [rolesLoadAttempt]);
 
   const toggleRole = (roleName: string) => {
     setSelectedRoles(prev => (prev.includes(roleName) ? prev.filter(r => r !== roleName) : [...prev, roleName]));
   };
 
   const handleSave = async () => {
+    if (rolesLoading || rolesLoadError) return;
     setLoading(true);
     try {
       const updated = await updateUser(user.id, { is_active: isActive, roles: selectedRoles });
       onUpdate(updated);
+      toast.success("User roles and permissions updated");
       onClose();
     } catch (e) {
-      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to update user roles and permissions");
     } finally {
       setLoading(false);
     }
@@ -154,6 +164,21 @@ export function RbacSheet({ user, onClose, onUpdate, canEdit = false }: RbacShee
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">Loading roles...</span>
               </div>
+            ) : rolesLoadError ? (
+              <div role="alert" className="flex flex-col items-start gap-3 text-sm text-destructive">
+                <p>Could not load available roles: {rolesLoadError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRolesLoadError(null);
+                    setRolesLoading(true);
+                    setRolesLoadAttempt(attempt => attempt + 1);
+                  }}
+                  className="rounded-md border border-border px-3 py-1.5 text-foreground hover:bg-accent"
+                >
+                  Retry
+                </button>
+              </div>
             ) : (
               <div className="space-y-3 mt-2">
                 {availableRoles.map(role => (
@@ -194,7 +219,7 @@ export function RbacSheet({ user, onClose, onUpdate, canEdit = false }: RbacShee
           {canEdit && (
             <button
               onClick={handleSave}
-              disabled={loading || rolesLoading}
+              disabled={loading || rolesLoading || rolesLoadError !== null}
               className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 font-medium hover:opacity-90 disabled:opacity-50"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}

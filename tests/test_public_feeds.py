@@ -34,6 +34,7 @@ def public_user(app):
         user = User(
             email="public@iqoqo.local", display_name="Public User", public_username="sebastiankruk", visibility="public", bio="Cave man bio"
         )
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
         return user.public_username
@@ -202,7 +203,7 @@ class TestContentNegotiation:
         g.parse(data=response.data, format="json-ld")
 
         # Test for FRBR layer types
-        FRBR_Manifestation = URIRef("http://iflastandards.info/ns/frbr/frbrer/Manifestation")
+        FRBR_Manifestation = URIRef("http://purl.org/vocab/frbr/core#Manifestation")
         assert (None, RDF.type, FRBR_Manifestation) in g
 
         # Test for Schema.org alignments
@@ -267,7 +268,7 @@ class TestPublicSemanticEndpoints:
 
         g_jsonld = Graph()
         g_jsonld.parse(data=resp_jsonld.data, format="json-ld")
-        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Manifestation")) in g_jsonld
+        assert (None, RDF.type, URIRef("http://purl.org/vocab/frbr/core#Manifestation")) in g_jsonld
         assert (None, RDF.type, URIRef("https://schema.org/CreativeWork")) in g_jsonld
         assert (None, URIRef("https://schema.org/name"), None) in g_jsonld
 
@@ -281,7 +282,7 @@ class TestPublicSemanticEndpoints:
 
         g_turtle = Graph()
         g_turtle.parse(data=resp_turtle.data, format="turtle")
-        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Manifestation")) in g_turtle
+        assert (None, RDF.type, URIRef("http://purl.org/vocab/frbr/core#Manifestation")) in g_turtle
 
     def test_get_public_manifestation_not_found(self, client):
         """Verifies 404 is returned when manifestation does not exist."""
@@ -305,7 +306,7 @@ class TestPublicSemanticEndpoints:
 
         g = Graph()
         g.parse(data=response.data, format="json-ld")
-        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Work")) in g
+        assert (None, RDF.type, URIRef("http://purl.org/vocab/frbr/core#Work")) in g
         assert (None, RDF.type, URIRef("https://schema.org/CreativeWork")) in g
         assert (None, URIRef("https://schema.org/name"), None) in g
 
@@ -327,7 +328,7 @@ class TestPublicSemanticEndpoints:
 
         g = Graph()
         g.parse(data=response.data, format="json-ld")
-        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Expression")) in g
+        assert (None, RDF.type, URIRef("http://purl.org/vocab/frbr/core#Expression")) in g
 
     def test_get_public_item_jsonld_and_hidden_guard(self, client, app, public_user, sample_data):
         """Verifies Item entity serves RDF and respects privacy flag."""
@@ -350,7 +351,7 @@ class TestPublicSemanticEndpoints:
 
         g = Graph()
         g.parse(data=resp_pub.data, format="json-ld")
-        assert (None, RDF.type, URIRef("http://iflastandards.info/ns/frbr/frbrer/Item")) in g
+        assert (None, RDF.type, URIRef("http://purl.org/vocab/frbr/core#Item")) in g
 
         # Hidden item
         resp_hid = client.get(f"/api/public/items/{hidden_item_id}")

@@ -13,93 +13,139 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { describe, it, expect, vi } from "vitest";
-import { GET } from "@/app/api/auth-exchange/route";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { GET, POST } from "@/app/api/auth-exchange/route";
+
+const { mockCookieSet } = vi.hoisted(() => ({ mockCookieSet: vi.fn() }));
+const originalFlaskApiUrl = process.env.FLASK_API_URL;
+const originalFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
 
 vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    set: vi.fn(),
-  }),
+  cookies: async () => ({ set: mockCookieSet }),
 }));
 
-describe("auth-exchange route handler", () => {
-  it("redirects to login error if token is missing", async () => {
-    const req = new Request("http://localhost:3000/api/auth-exchange");
-    const res = await GET(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toContain("/login?error=MissingToken");
-  });
-
-  it("redirects to callbackUrl after successful token exchange if provided", async () => {
-    const req = new Request(
-      "http://localhost:3000/api/auth-exchange?token=abc123&callbackUrl=%2Fcollection%3Fstatuses%3Dwishlist"
+function installExchangeResponse(payload: object, status = 200) {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } })
     );
-    const res = await GET(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/collection?statuses=wishlist");
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+afterEach(() => {
+  mockCookieSet.mockReset();
+  vi.unstubAllGlobals();
+  if (originalFlaskApiUrl === undefined) delete process.env.FLASK_API_URL;
+  else process.env.FLASK_API_URL = originalFlaskApiUrl;
+  if (originalFrontendUrl === undefined) delete process.env.NEXT_PUBLIC_FRONTEND_URL;
+  else process.env.NEXT_PUBLIC_FRONTEND_URL = originalFrontendUrl;
+});
+
+describe("auth-exchange route handler", () => {
+  it("rejects requests without a one-time code", async () => {
+    const fetchMock = installExchangeResponse({ token: "must-not-be-used" });
+    const response = await GET(new Request("http://localhost:3000/api/auth-exchange"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/login?error=oauth_exchange_failed");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockCookieSet).not.toHaveBeenCalled();
   });
 
-  it("redirects to / after successful token exchange if callbackUrl is missing", async () => {
-    const req = new Request("http://localhost:3000/api/auth-exchange?token=abc123");
-    const res = await GET(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/");
+  it("never accepts a persistent JWT from a query parameter", async () => {
+    const fetchMock = installExchangeResponse({ token: "must-not-be-used" });
+    const response = await GET(new Request("http://localhost:3000/api/auth-exchange?token=legacy-jwt"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/login?error=oauth_exchange_failed");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockCookieSet).not.toHaveBeenCalled();
   });
 
-  it("respects x-forwarded-host and x-forwarded-proto headers", async () => {
-    const req = new Request("http://internal-node:3000/api/auth-exchange?token=abc123", {
-      headers: {
-        "x-forwarded-host": "pre.iqoqo.cc:8000",
-        "x-forwarded-proto": "http",
-      },
+  it("exchanges the one-time code with Flask via POST and redirects to a clean URL", async () => {
+    process.env.FLASK_API_URL = "http://flask.internal:5000/api/";
+    const fetchMock = installExchangeResponse({
+      token: "internal-session-jwt",
+      callbackUrl: "/collection?view=roadmap",
     });
-    const res = await GET(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://pre.iqoqo.cc:8000/");
+    const response = await GET(new Request("https://localhost:3000/api/auth-exchange?code=ephemeral-code"));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://flask.internal:5000/api/auth/exchange",
+      expect.objectContaining({
+        method: "POST",
+        cache: "no-store",
+        redirect: "error",
+        body: JSON.stringify({ code: "ephemeral-code" }),
+      })
+    );
+    expect(mockCookieSet).toHaveBeenCalledWith(
+      "iqoqo_session",
+      "internal-session-jwt",
+      expect.objectContaining({ httpOnly: true, secure: true, sameSite: "lax", path: "/" })
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://localhost:3000/collection?view=roadmap");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("location")).not.toContain("ephemeral-code");
   });
 
-  it("rejects poisoned x-forwarded-host header from unauthorized domains and falls back to request url host", async () => {
-    const req = new Request("http://localhost:3000/api/auth-exchange?token=abc123", {
-      headers: {
-        "x-forwarded-host": "evil.com",
-        "x-forwarded-proto": "https",
-      },
-    });
-    const res = await GET(req);
-    expect(res.status).toBe(307);
-    // Should NOT redirect to evil.com
-    expect(res.headers.get("location")).not.toContain("evil.com");
-    expect(res.headers.get("location")).toBe("https://localhost:3000/");
+  it("does not set a cookie when Flask rejects or cannot exchange the code", async () => {
+    installExchangeResponse({ error: "Invalid code" }, 400);
+    const response = await GET(new Request("http://localhost:3000/api/auth-exchange?code=expired-code"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/login?error=oauth_exchange_failed");
+    expect(mockCookieSet).not.toHaveBeenCalled();
   });
 
-  it("prioritizes NEXT_PUBLIC_FRONTEND_URL environment variable over request host", async () => {
-    const originalEnv = process.env.NEXT_PUBLIC_FRONTEND_URL;
-    process.env.NEXT_PUBLIC_FRONTEND_URL = "https://custom.iqoqo.local:9000";
-    try {
-      const req = new Request("http://localhost:3000/api/auth-exchange?token=abc123");
-      const res = await GET(req);
-      expect(res.status).toBe(307);
-      expect(res.headers.get("location")).toBe("https://custom.iqoqo.local:9000/");
-    } finally {
-      process.env.NEXT_PUBLIC_FRONTEND_URL = originalEnv;
-    }
+  it("preserves local-login JWT exchange in a POST body", async () => {
+    const response = await POST(
+      new Request("http://localhost:3000/api/auth-exchange?token=ignored", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "local-login-jwt", callbackUrl: "/collection" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCookieSet).toHaveBeenCalledWith(
+      "iqoqo_session",
+      "local-login-jwt",
+      expect.objectContaining({ httpOnly: true, path: "/" })
+    );
+    expect((await response.json()).redirectUrl).toBe("http://localhost:3000/collection");
   });
 
-  it("rejects poisoned host header and falls back securely to localhost:3000", async () => {
-    const originalEnv = process.env.NEXT_PUBLIC_FRONTEND_URL;
-    delete process.env.NEXT_PUBLIC_FRONTEND_URL;
-    try {
-      const req = new Request("http://evil.com/api/auth-exchange?token=abc123", {
-        headers: {
-          host: "evil.com",
-        },
-      });
-      const res = await GET(req);
-      expect(res.status).toBe(307);
-      expect(res.headers.get("location")).not.toContain("evil.com");
-      expect(res.headers.get("location")).toBe("http://localhost:3000/");
-    } finally {
-      process.env.NEXT_PUBLIC_FRONTEND_URL = originalEnv;
-    }
+  it("exchanges an authorization code submitted in a POST body", async () => {
+    process.env.FLASK_API_URL = "http://flask.internal:5000/api";
+    const fetchMock = installExchangeResponse({ token: "exchanged-jwt", callbackUrl: "/" });
+    const response = await POST(
+      new Request("http://localhost:3000/api/auth-exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: "ephemeral-code" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockCookieSet).toHaveBeenCalledWith("iqoqo_session", "exchanged-jwt", expect.any(Object));
+  });
+
+  it("rejects poisoned forwarded hosts and keeps redirects on an allowed host", async () => {
+    installExchangeResponse({ token: "internal-session-jwt", callbackUrl: "/" });
+    const response = await GET(
+      new Request("http://localhost:3000/api/auth-exchange?code=ephemeral-code", {
+        headers: { "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://localhost:3000/");
+    expect(response.headers.get("location")).not.toContain("evil.example");
   });
 });

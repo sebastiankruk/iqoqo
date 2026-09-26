@@ -16,6 +16,22 @@
 """Utilities for JSON serialization/deserialization of metadata fields."""
 
 import json
+import re
+
+ARRAY_META_FIELDS = frozenset(
+    [
+        "authors",
+        "translators",
+        "illustrators",
+        "editors",
+        "contributors",
+        "tags",
+        "genres",
+        "mechanics",
+        "narrators",
+        "publishers",
+    ]
+)
 
 
 def sanitize_meta(meta: dict | None) -> dict | None:
@@ -36,6 +52,9 @@ def parse_meta(meta: dict | None) -> dict | None:
 
     Only attempts to parse strings that look like JSON containers (start with
     '{' or '[') to avoid unintended type coercion (e.g. "00123" -> 123).
+
+    Also normalizes known array fields (authors, tags, etc.) by splitting
+    comma/semicolon-separated strings into arrays.
     """
     if not meta:
         return meta
@@ -44,8 +63,21 @@ def parse_meta(meta: dict | None) -> dict | None:
         if isinstance(value, str) and value.strip().startswith(("{", "[")):
             try:
                 result[key] = json.loads(value)
+                continue
             except (ValueError, TypeError):
-                result[key] = value
+                pass
+
+        if key in ARRAY_META_FIELDS:
+            if isinstance(value, str):
+                # Split on comma or semicolon using regex
+                parts = [p.strip() for p in re.split(r"[,;]", value) if p.strip()]
+                result[key] = parts if parts else []
+            elif isinstance(value, list):
+                result[key] = [str(item) for item in value if item is not None]
+            elif value is None:
+                result[key] = []
+            else:
+                result[key] = [str(value)]
         else:
             result[key] = value
     return result

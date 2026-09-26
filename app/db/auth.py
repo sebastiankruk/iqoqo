@@ -106,6 +106,27 @@ class TokenBlocklist(db.Model):  # type: ignore[name-defined]
         return False
 
 
+class OAuthExchangeCode(db.Model):  # type: ignore[name-defined]
+    """Short-lived, single-use OAuth handoff code; only its SHA-256 digest is stored."""
+
+    __tablename__ = "oauth_exchange_codes"
+    __table_args__ = (
+        db.Index("ix_auth_oauth_exchange_codes_expires_at" if _AUTH else "ix_oauth_exchange_codes_expires_at", "expires_at"),
+        *(({"schema": _AUTH},) if _AUTH else ()),
+    )
+
+    code_hash = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    callback_url = db.Column(db.String(2048), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+
 # ---------------------------------------------------------------------------
 # RBAC
 # ---------------------------------------------------------------------------
@@ -140,7 +161,8 @@ class User(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "users"
     __table_args__ = (
-        db.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
+        db.CheckConstraint("visibility IN ('private', 'shared', 'public')", name="check_user_visibility"),
+        db.CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL", name="check_user_auth_method"),
         *(({"schema": _AUTH},) if _AUTH else ()),
     )
 

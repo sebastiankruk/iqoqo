@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { apiFetch, apiClient } from "./client";
-import type { ApiResponse } from "@/types/frbr";
+import type { ApiResponse, FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/types/frbr";
 
 export interface AdminUser {
   id: string;
@@ -229,10 +229,21 @@ export async function revealSettingValue(key: string): Promise<{ value: string }
 
 // --- FRBR ENTITY TYPES ---
 
+/**
+ * A structured contribution entry attached to an FRBR entity.
+ */
+export interface FrbrContribution {
+  role: string;
+  name: string;
+  sequence?: number;
+  contributor_id?: number;
+}
+
 export interface FrbrWork {
   id: number;
   title: string;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrExpression {
@@ -242,6 +253,7 @@ export interface FrbrExpression {
   language: string;
   kind?: string | null;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrManifestation {
@@ -253,6 +265,7 @@ export interface FrbrManifestation {
   publisher: string | null;
   publication_date: string | null;
   meta: Record<string, unknown>;
+  contributions?: FrbrContribution[];
 }
 
 export interface FrbrItem {
@@ -298,11 +311,12 @@ export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
  * @param data - The update data
  * @param data.title - Optional new title
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated work ID
  */
 export async function updateFrbrWork(
   workId: number,
-  data: { title?: string; meta?: Record<string, unknown> }
+  data: { title?: string; meta?: Record<string, unknown>; contributions?: FrbrContribution[] }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/work/${workId}`, data);
   if (!res.data.success || !res.data.data) {
@@ -321,11 +335,19 @@ export async function updateFrbrWork(
  * @param data.language - Optional new language
  * @param data.kind - Optional new expression kind (e.g. "live_performance"; empty string clears to studio/default)
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated expression ID
  */
 export async function updateFrbrExpression(
   expressionId: number,
-  data: { work_id?: number; content_type?: string; language?: string; kind?: string; meta?: Record<string, unknown> }
+  data: {
+    work_id?: number;
+    content_type?: string;
+    language?: string;
+    kind?: string;
+    meta?: Record<string, unknown>;
+    contributions?: FrbrContribution[];
+  }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/expression/${expressionId}`, data);
   if (!res.data.success || !res.data.data) {
@@ -346,6 +368,7 @@ export async function updateFrbrExpression(
  * @param data.publisher - Optional new publisher name
  * @param data.publication_date - Optional new publication date string
  * @param data.meta - Optional new metadata
+ * @param data.contributions - Optional structured contributions
  * @returns The updated manifestation ID
  */
 export async function updateFrbrManifestation(
@@ -358,6 +381,7 @@ export async function updateFrbrManifestation(
     publisher?: string;
     publication_date?: string;
     meta?: Record<string, unknown>;
+    contributions?: FrbrContribution[];
   }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/manifestation/${manifestationId}`, data);
@@ -397,32 +421,45 @@ export async function updateFrbrItem(
  * @param data - Update data
  * @returns The updated entity ID
  */
-export async function updateFrbrEntity(
-  type: "work" | "expression" | "manifestation" | "item",
-  id: number,
-  data: Record<string, unknown>
-): Promise<{ id: number }> {
-  switch (type) {
+/** A discriminated payload for updating a single FRBR entity. */
+export type FrbrEntityUpdatePayload =
+  | {
+      type: "work";
+      id: number;
+      data: Parameters<typeof updateFrbrWork>[1];
+    }
+  | {
+      type: "expression";
+      id: number;
+      data: Parameters<typeof updateFrbrExpression>[1];
+    }
+  | {
+      type: "manifestation";
+      id: number;
+      data: Parameters<typeof updateFrbrManifestation>[1];
+    }
+  | {
+      type: "item";
+      id: number;
+      data: Parameters<typeof updateFrbrItem>[1];
+    };
+
+/**
+ * Update one FRBR entity through its level-specific API operation.
+ *
+ * @param payload - The discriminated entity update and typed fields.
+ * @returns The updated entity ID.
+ */
+export async function updateFrbrEntity(payload: FrbrEntityUpdatePayload): Promise<{ id: number }> {
+  switch (payload.type) {
     case "work":
-      return updateFrbrWork(id, data as { title?: string; meta?: Record<string, unknown> });
+      return updateFrbrWork(payload.id, payload.data);
     case "expression":
-      return updateFrbrExpression(
-        id,
-        data as {
-          work_id?: number;
-          content_type?: string;
-          language?: string;
-          kind?: string;
-          meta?: Record<string, unknown>;
-        }
-      );
+      return updateFrbrExpression(payload.id, payload.data);
     case "manifestation":
-      return updateFrbrManifestation(id, data as Parameters<typeof updateFrbrManifestation>[1]);
+      return updateFrbrManifestation(payload.id, payload.data);
     case "item":
-      return updateFrbrItem(
-        id,
-        data as { manifestation_id?: number; status?: string; condition?: string; meta?: Record<string, unknown> }
-      );
+      return updateFrbrItem(payload.id, payload.data);
   }
 }
 
@@ -479,4 +516,50 @@ export async function uploadEntityCover(
   });
 
   return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// FRBR Relation Management API Client
+// ---------------------------------------------------------------------------
+
+/**
+ * Reassign an entity's parent to a new parent at the adjacent FRBR level.
+ *
+ * @param payload - The reassign payload
+ * @returns The updated entity ID
+ */
+export async function reassignFrbrParent(payload: FrbrReassignPayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/reassign", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to reassign FRBR parent");
+  }
+  return res.data.data;
+}
+
+/**
+ * Merge two entities at the same FRBR level, reparenting children and contributions.
+ *
+ * @param payload - The merge payload
+ * @returns The target entity ID
+ */
+export async function mergeFrbrEntities(payload: FrbrMergePayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/merge", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to merge FRBR entities");
+  }
+  return res.data.data;
+}
+
+/**
+ * Split selected children from an entity into a newly created sibling entity.
+ *
+ * @param payload - The split payload
+ * @returns The new entity ID
+ */
+export async function splitFrbrEntity(payload: FrbrSplitPayload): Promise<{ id: number }> {
+  const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/split", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to split FRBR entity");
+  }
+  return res.data.data;
 }

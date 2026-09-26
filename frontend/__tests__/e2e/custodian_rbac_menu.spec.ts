@@ -121,9 +121,7 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
-    await page.context().addCookies([
-      { name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" },
-    ]);
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
 
     await page.route("**/api/config**", route =>
       route.fulfill({
@@ -238,9 +236,7 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
   });
 
   test.describe("Negative cases - Regular users should NOT see Administration menu", () => {
-    test("regular user without custodian permissions does not see Administration menu", async ({
-      page,
-    }) => {
+    test("regular user without custodian permissions does not see Administration menu", async ({ page }) => {
       await mockRegularUserProfile(page);
 
       await page.goto("/");
@@ -253,9 +249,7 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
       await expect(menu.getByText("Administration")).not.toBeVisible();
     });
 
-    test("user with only non-custodian permissions does not see Administration menu", async ({
-      page,
-    }) => {
+    test("user with only non-custodian permissions does not see Administration menu", async ({ page }) => {
       await page.route("**/api/profile**", route =>
         route.fulfill({
           status: 200,
@@ -363,9 +357,7 @@ test.describe("Custodian RBAC Menu Access - Regression Tests", () => {
   });
 
   test.describe("Edge cases", () => {
-    test("user with empty permissions array and no custodian role does not see menu", async ({
-      page,
-    }) => {
+    test("user with empty permissions array and no custodian role does not see menu", async ({ page }) => {
       await page.route("**/api/profile**", route =>
         route.fulfill({
           status: 200,

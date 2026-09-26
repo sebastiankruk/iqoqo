@@ -189,7 +189,7 @@ class TestISBNScanning:
         # 9780000000002 is a valid ISBN-13 that is not present in the database.
         response = client.get("/api/isbn/9780000000002")
         assert response.status_code == 404
-        assert response.json.get("error", None) == "Metadata not found for ISBN = 9780000000002"
+        assert response.json.get("error", None) == "Metadata not found"
 
     @patch("app.strategies.book.fetch_allegro_metadata")
     @patch("app.strategies.book.fetch_isbn_metadata", return_value=None)

@@ -78,6 +78,7 @@ test-results/
 playwright-report/
 scratch/
 frontend/.next-e2e/
+frontend/.next-e2e-*/
 
 # External services
 .allegro_token.json

@@ -33,6 +33,20 @@ export interface WorkDetailClientProps {
 }
 
 /**
+ * Normalizes authors to always be an array.
+ * Handles cases where authors might be stored as a string instead of an array.
+ *
+ * @param authors - The authors value (string, array, or null/undefined)
+ * @returns An array of author strings
+ */
+function normalizeAuthors(authors: unknown): string[] {
+  if (!authors) return [];
+  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
+  if (typeof authors === "string") return [authors];
+  return [];
+}
+
+/**
  * Resolves an icon representing the physical format or content type.
  *
  * @param {string | null} [format] - Physical media format.
@@ -160,7 +174,7 @@ export function WorkDetailClient({ initialWork }: WorkDetailClientProps) {
                   {work.title}
                 </h1>
 
-                {work.authors && work.authors.length > 0 && (
+                {normalizeAuthors(work.authors).length > 0 && (
                   <div
                     className="flex flex-wrap items-center gap-1.5 text-lg font-medium text-muted-foreground"
                     property="schema:author"
@@ -170,7 +184,7 @@ export function WorkDetailClient({ initialWork }: WorkDetailClientProps) {
                     itemType="https://schema.org/Person"
                   >
                     <span>By</span>
-                    {work.authors.map((author, idx) => (
+                    {normalizeAuthors(work.authors).map((author, idx) => (
                       <span key={author} property="schema:name" itemProp="name">
                         <Link
                           href={`/collection?q=${encodeURIComponent(author)}`}

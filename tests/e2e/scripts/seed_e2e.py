@@ -151,25 +151,31 @@ def seed_e2e_data():
             private_user = User(
                 email="private@example.com", display_name="Private User", public_username="privateuser", visibility="private"
             )
+            private_user.set_password(E2E_SHARED_PASSWORD)
             db.session.add(private_user)
         else:
             private_user.visibility = "private"
+            private_user.set_password(E2E_SHARED_PASSWORD)
 
         # Create testuser
         test_user = User.query.filter_by(public_username="testuser").first()
         if not test_user:
             test_user = User(email="test@example.com", display_name="Test User", public_username="testuser", visibility="public")
+            test_user.set_password(E2E_SHARED_PASSWORD)
             db.session.add(test_user)
         else:
             test_user.visibility = "public"
+            test_user.set_password(E2E_SHARED_PASSWORD)
 
         # Create emptyuser
         empty_user = User.query.filter_by(public_username="emptyuser").first()
         if not empty_user:
             empty_user = User(email="empty@example.com", display_name="Empty User", public_username="emptyuser", visibility="public")
+            empty_user.set_password(E2E_SHARED_PASSWORD)
             db.session.add(empty_user)
         else:
             empty_user.visibility = "public"
+            empty_user.set_password(E2E_SHARED_PASSWORD)
 
         db.session.commit()
 

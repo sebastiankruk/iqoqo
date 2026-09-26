@@ -13,145 +13,161 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-// frontend/app/api/auth-exchange/route.ts
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-/**
- * Validates whether a hostname belongs to an allowed deployment domain.
- *
- * @param hostWithPort - The hostname, optionally including a port
- * @returns {boolean} True if the host is allowed, false otherwise
- */
+type ExchangeResult = { token: string; callbackUrl: string } | null;
+
+/** Validate deployment hosts before using request forwarding headers. */
 function isAllowedHost(hostWithPort: string): boolean {
   const host = hostWithPort.split(":")[0].toLowerCase();
   return host === "localhost" || host === "127.0.0.1" || host === "iqoqo.cc" || host.endsWith(".iqoqo.cc");
 }
 
-/**
- * Handle GET requests to exchange a short-lived token for a session cookie.
- *
- * @param request - The incoming Next.js request
- * @returns {Promise<NextResponse>} The Next.js response redirecting to the dashboard
- */
-export async function GET(request: Request) {
+function resolveFrontendOrigin(request: Request): string {
   const url = new URL(request.url);
-  const { searchParams } = url;
-  const token = searchParams.get("token");
-
-  const rawForwardedHost = request.headers.get("x-forwarded-host");
-  const rawHostHeader = request.headers.get("host") || "";
-
-  // Fail-closed fallback: never trust raw request host if validation fails
-  const fallbackHost = process.env.NEXT_PUBLIC_FRONTEND_URL
-    ? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).host
-    : "localhost:3000";
-
-  // Enforce host validation to prevent arbitrary open redirects via poisoned headers
-  const effectiveHost =
-    rawForwardedHost && isAllowedHost(rawForwardedHost)
-      ? rawForwardedHost
-      : isAllowedHost(rawHostHeader)
-        ? rawHostHeader
-        : fallbackHost; // Fail closed; do not reflect poisoned url.host
-
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const effectiveProto =
-    forwardedProto === "https" || forwardedProto === "http"
-      ? forwardedProto
-      : url.protocol.startsWith("https")
-        ? "https"
-        : "http";
-
-  const isHttps = effectiveProto === "https";
-  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${effectiveProto}://${effectiveHost}`;
-
-  if (!token) {
-    return NextResponse.redirect(new URL("/login?error=MissingToken", baseUrl));
+  const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
+  if (configuredFrontendUrl) {
+    const configuredUrl = new URL(configuredFrontendUrl);
+    if (configuredUrl.protocol === "https:" || configuredUrl.protocol === "http:") {
+      return configuredUrl.origin;
+    }
   }
 
-  // Set the HttpOnly cookie (secure only when served over HTTPS)
+  const rawForwardedHost = request.headers.get("x-forwarded-host");
+  const rawHost = request.headers.get("host") || "";
+  const host =
+    rawForwardedHost && isAllowedHost(rawForwardedHost)
+      ? rawForwardedHost
+      : isAllowedHost(rawHost)
+        ? rawHost
+        : "localhost:3000";
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const protocol =
+    forwardedProto === "https" || forwardedProto === "http"
+      ? forwardedProto
+      : url.protocol === "https:"
+        ? "https"
+        : "http";
+  return `${protocol}://${host}`;
+}
+
+function safeCallbackPath(value: unknown): string {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    return "/";
+  }
+  try {
+    const origin = "https://iqoqo.invalid";
+    const target = new URL(value, origin);
+    if (target.origin !== origin) return "/";
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return "/";
+  }
+}
+
+function noStore(response: NextResponse): NextResponse {
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
+async function exchangeCode(code: string): Promise<ExchangeResult> {
+  const apiBase = (process.env.FLASK_API_URL || "http://127.0.0.1:5000/api").replace(/\/+$/, "");
+  const response = await fetch(`${apiBase}/auth/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+    cache: "no-store",
+    redirect: "error",
+  });
+  if (!response.ok) return null;
+
+  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!payload || typeof payload.token !== "string" || !payload.token) return null;
+  return {
+    token: payload.token,
+    callbackUrl: safeCallbackPath(payload.callbackUrl),
+  };
+}
+
+function redirectToLogin(origin: string): NextResponse {
+  return noStore(NextResponse.redirect(new URL("/login?error=oauth_exchange_failed", origin)));
+}
+
+async function setSessionCookie(token: string, isHttps: boolean): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set("iqoqo_session", token, {
     httpOnly: true,
     secure: isHttps,
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 7,
   });
-
-  // Redirect to specified callbackUrl or default target explicitly using the correct domain
-  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect");
-  const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
-  return NextResponse.redirect(new URL(target, baseUrl));
 }
 
 /**
- * Handle POST requests to exchange a short-lived token or code for a session cookie.
- *
- * @param request - The incoming Next.js request with JSON body { token, callbackUrl }
- * @returns {Promise<NextResponse>} The Next.js response setting the cookie and returning redirect info
+ * Google callback lands here with a short-lived, single-use code—not an iQoQo JWT.
+ * This server-side handler exchanges it with Flask using POST, then sets the
+ * HttpOnly cookie and redirects to a clean URL without the code.
  */
-export async function POST(request: Request) {
-  let token: string | null = null;
-  let callbackUrl: string | null = null;
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const origin = resolveFrontendOrigin(request);
+  if (!code || code.length > 128) return redirectToLogin(origin);
 
   try {
-    const body = await request.json();
-    token = body?.token || body?.code || null;
-    callbackUrl = body?.callbackUrl || body?.redirect || null;
+    const exchanged = await exchangeCode(code);
+    if (!exchanged) return redirectToLogin(origin);
+
+    await setSessionCookie(exchanged.token, new URL(origin).protocol === "https:");
+    return noStore(NextResponse.redirect(new URL(exchanged.callbackUrl, origin)));
   } catch {
-    // Body is empty or not JSON
+    return redirectToLogin(origin);
+  }
+}
+
+/**
+ * POST supports local login/registration tokens in the request body, and also
+ * permits a client-side code exchange. Query-string tokens/codes are never read.
+ */
+export async function POST(request: Request) {
+  let body: Record<string, unknown>;
+  try {
+    const value = await request.json();
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return noStore(NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 }));
+    }
+    body = value as Record<string, unknown>;
+  } catch {
+    return noStore(NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 }));
   }
 
-  // Fallback to query params if not provided in JSON body
-  if (!token) {
-    const url = new URL(request.url);
-    token = url.searchParams.get("token") || url.searchParams.get("code");
-    callbackUrl = callbackUrl || url.searchParams.get("callbackUrl") || url.searchParams.get("redirect");
+  if (body.token && body.code) {
+    return noStore(NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 }));
   }
 
-  const url = new URL(request.url);
-  const rawForwardedHost = request.headers.get("x-forwarded-host");
-  const rawHostHeader = request.headers.get("host") || "";
-
-  const fallbackHost = process.env.NEXT_PUBLIC_FRONTEND_URL
-    ? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).host
-    : "localhost:3000";
-
-  const effectiveHost =
-    rawForwardedHost && isAllowedHost(rawForwardedHost)
-      ? rawForwardedHost
-      : isAllowedHost(rawHostHeader)
-        ? rawHostHeader
-        : fallbackHost;
-
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const effectiveProto =
-    forwardedProto === "https" || forwardedProto === "http"
-      ? forwardedProto
-      : url.protocol.startsWith("https")
-        ? "https"
-        : "http";
-
-  const isHttps = effectiveProto === "https";
-  const baseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || `${effectiveProto}://${effectiveHost}`;
-
-  if (!token) {
-    return NextResponse.json({ error: "MissingToken", success: false }, { status: 400 });
+  let token = typeof body.token === "string" ? body.token : null;
+  let callbackUrl = safeCallbackPath(body.callbackUrl);
+  if (typeof body.code === "string") {
+    try {
+      const exchanged = await exchangeCode(body.code);
+      if (!exchanged)
+        return noStore(NextResponse.json({ success: false, error: "Invalid or expired code" }, { status: 400 }));
+      token = exchanged.token;
+      callbackUrl = exchanged.callbackUrl;
+    } catch {
+      return noStore(NextResponse.json({ success: false, error: "OAuth exchange failed" }, { status: 502 }));
+    }
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set("iqoqo_session", token, {
-    httpOnly: true,
-    secure: isHttps,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
+  if (!token || token.length > 8192) {
+    return noStore(NextResponse.json({ success: false, error: "Missing token or code" }, { status: 400 }));
+  }
 
-  const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/";
-  const redirectUrl = new URL(target, baseUrl).toString();
-
-  return NextResponse.json({ success: true, redirectUrl });
+  const origin = resolveFrontendOrigin(request);
+  await setSessionCookie(token, new URL(origin).protocol === "https:");
+  const redirectUrl = new URL(callbackUrl, origin).toString();
+  return noStore(NextResponse.json({ success: true, redirectUrl }));
 }

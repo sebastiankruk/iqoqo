@@ -33,6 +33,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.api import api_bp
 from app.api.auth import auth_bp, init_oauth
 from app.api.profile import profile_bp
+from app.api.public import lod_bp
 from app.core.scheduler import init_scheduler
 
 from .config import Config
@@ -188,12 +189,15 @@ def create_app(config_class=Config, config_override=None):
     from app.api.docs import docs_bp
     from app.api.lending import lending_bp
     from app.api.roadmap import roadmap_bp
+    from app.api.wishlist import wishlist_bp
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(lod_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(roadmap_bp)
     app.register_blueprint(lending_bp)
+    app.register_blueprint(wishlist_bp)
     app.register_blueprint(docs_bp, url_prefix="/api/docs")
 
     from app.core.telemetry import init_telemetry
@@ -205,12 +209,13 @@ def create_app(config_class=Config, config_override=None):
         """Ensure scoped sessions are returned to the pool after each request."""
         db.session.remove()
 
-    with app.app_context():
-        try:
-            from app.utils.covers import cleanup_stuck_pending_covers
+    if not app.config.get("SKIP_STARTUP_COVER_CLEANUP", False):
+        with app.app_context():
+            try:
+                from app.utils.covers import cleanup_stuck_pending_covers
 
-            cleanup_stuck_pending_covers(timeout_minutes=30)
-        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
-            app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
+                cleanup_stuck_pending_covers(timeout_minutes=30)
+            except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
+                app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
 
     return app

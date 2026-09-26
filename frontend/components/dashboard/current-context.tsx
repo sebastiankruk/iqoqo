@@ -16,8 +16,10 @@
 "use client";
 
 import { useItems } from "@/lib/api/hooks";
+import { useWishlist } from "@/lib/api/wishlist";
 import Link from "next/link";
 import { ItemCard } from "../collection/item-card";
+import { WishlistCard } from "../collection/wishlist-card";
 import { useTranslations } from "next-intl";
 
 /**
@@ -29,10 +31,10 @@ import { useTranslations } from "next-intl";
 export function CurrentContext() {
   const t = useTranslations("CurrentContext");
   const { data: readingData, isLoading: isLoadingReading } = useItems(1, 10, ["reading"]);
-  const { data: wishListData, isLoading: isLoadingWishList } = useItems(1, 10, ["wish_list"]);
+  const { data: wishListData, isLoading: isLoadingWishList } = useWishlist({ limit: 10 });
 
   const readingItems = readingData?.data?.filter(item => item.status === "reading") ?? [];
-  const wishListItems = wishListData?.data?.filter(item => item.collection_status === "wish_list") ?? [];
+  const wishListItems = wishListData?.data ?? [];
   const isLoading = isLoadingReading || isLoadingWishList;
 
   if (isLoading) {
@@ -100,7 +102,7 @@ export function CurrentContext() {
           <div className="flex gap-5 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-1 lg:grid-cols-2 sm:pb-0 sm:overflow-visible">
             {wishListItems.map(item => (
               <div key={item.id} className="min-w-[280px] shrink-0 sm:min-w-0 sm:shrink">
-                <ItemCard item={item} variant="horizontal" />
+                <WishlistCard item={item} variant="horizontal" />
               </div>
             ))}
           </div>

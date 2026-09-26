@@ -143,8 +143,8 @@ test.describe("Manage Collections Modal Workflow", () => {
     const heading = page.getByRole("heading", { name: "Manage Collections" });
     await expect(heading).toBeVisible();
 
-    // Scope to the modal dialog to avoid matching sidebar filter elements
-    const modal = page.locator(".fixed.inset-0.z-50").filter({ has: heading });
+    // Scope by accessible dialog semantics rather than implementation-specific overlay classes.
+    const modal = page.getByRole("dialog", { name: "Manage Collections" });
 
     // Verify existing collections are listed
     await expect(modal.getByText("Fantasy")).toBeVisible();
@@ -168,9 +168,11 @@ test.describe("Manage Collections Modal Workflow", () => {
     await expect(modal.getByText("High Fantasy")).toBeVisible();
 
     // Delete a collection
-    page.on("dialog", d => d.accept());
     const sciFiRow = modal.locator(".flex.items-center.justify-between").filter({ hasText: "Sci-Fi" });
     await sciFiRow.getByTitle("Delete Collection").click();
+    const deleteDialog = page.getByRole("alertdialog", { name: "Delete collection?" });
+    await expect(deleteDialog).toBeVisible();
+    await deleteDialog.getByRole("button", { name: "Confirm collection deletion" }).click();
 
     await expect(page.getByText("Collection removed")).toBeVisible();
   });

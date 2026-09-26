@@ -127,6 +127,19 @@ def test_get_public_work_content_negotiation_html(client, sample_data):
     assert response.headers["Location"] == f"/work/{work.id}"
 
 
+def test_canonical_work_iri_dereferences_to_public_linked_data(client, sample_data):
+    work = Work.query.filter_by(title="The Cave Bible").first()
+    assert work is not None
+
+    response = client.get(f"{work.iri}?format=turtle", follow_redirects=False)
+
+    assert response.status_code == 308
+    assert response.headers["Location"] == f"/api/public/works/{work.id}?format=turtle"
+    rdf_response = client.get(response.headers["Location"], headers={"Accept": "text/turtle"})
+    assert rdf_response.status_code == 200
+    assert "text/turtle" in rdf_response.content_type
+
+
 def test_get_public_manifestation_content_negotiation_html(client, sample_data):
     mani = Manifestation.query.first()
     assert mani is not None

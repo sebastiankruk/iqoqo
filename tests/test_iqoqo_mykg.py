@@ -546,3 +546,400 @@ def test_opencode_process_task_sanitizes_prompt_and_injects_guardrail(opencode_d
         assert "storage.googleapis.com" not in prompt
         assert "[REDACTED_GOOGLEAPIS_URL]" in prompt
         assert "[REDACTED_GOOGLEAPIS_DOMAIN]" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tests for daemon_core shared module (Tasks 4.1 - 4.9 + security tests)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def daemon_core_module():
+    """Load daemon_core module (Task 4.1)."""
+    script_path = Path(__file__).parent.parent / ".agents" / "skills" / "iqoqo-mykg" / "scripts" / "daemon_core.py"
+    return _load_module("iqoqo_mykg_daemon_core", script_path)
+
+
+def test_compute_effective_timeout_honors_task_timeout(daemon_core_module):
+    """Task timeout wins over dynamic formula (Task 4.2).
+
+    compute_effective_timeout(1800, 72000) returns 1800
+    because max(1800, 600 + 72) = max(1800, 672) = 1800.
+    """
+    assert daemon_core_module.compute_effective_timeout(1800, 72000) == 1800
+
+
+def test_compute_effective_timeout_dynamic_formula(daemon_core_module):
+    """Dynamic formula used when no task timeout (Task 4.3).
+
+    compute_effective_timeout(None, 10000) returns 610
+    because max(300, 600 + 10) = max(300, 610) = 610.
+    """
+    assert daemon_core_module.compute_effective_timeout(None, 10000) == 610
+
+
+def test_compute_effective_timeout_base_floor(daemon_core_module):
+    """Base timeout floor when prompt is small (Task 4.4).
+
+    compute_effective_timeout(None, 500) returns 600
+    because max(300, 600 + 0) = max(300, 600) = 600.
+    """
+    assert daemon_core_module.compute_effective_timeout(None, 500) == 600
+
+
+def test_compute_effective_timeout_hard_cap(daemon_core_module):
+    """SECURITY: Timeout is capped at MAX_TIMEOUT_CAP to prevent DoS."""
+    # A malicious 999999s timeout should be clamped to 3600
+    result = daemon_core_module.compute_effective_timeout(999999, 500)
+    assert result == 3600
+    assert result == daemon_core_module.MAX_TIMEOUT_CAP
+
+
+def test_compute_effective_timeout_negative_input(daemon_core_module):
+    """SECURITY: Negative timeout values fall back to default."""
+    result = daemon_core_module.compute_effective_timeout(-1, 500)
+    # -1 is invalid, so default_timeout=300 is used; max(300, 600) = 600
+    assert result == 600
+
+
+def test_sanitize_task_payload_redacts_googleapis(daemon_core_module):
+    """Task 4.5: googleapis URLs are redacted."""
+    result = daemon_core_module.sanitize_task_payload("Send to https://storage.googleapis.com/bucket/obj now")
+    assert "storage.googleapis.com" not in result
+    assert "[REDACTED_GOOGLEAPIS_URL]" in result
+
+
+def test_build_combined_prompt_prepends_guardrail(daemon_core_module):
+    """Task 4.6: Combined prompt starts with SECURITY_GUARDRAIL."""
+    result = daemon_core_module.build_combined_prompt({"system": "sys", "user": "usr"})
+    assert result.startswith(daemon_core_module.SECURITY_GUARDRAIL)
+    assert "sys" in result
+    assert "usr" in result
+
+
+def test_write_answer_envelope_atomic(daemon_core_module, tmp_path):
+    """Task 4.7: Answer envelope and done sentinel written correctly."""
+    daemon_core_module.write_answer_envelope("tid", '{"nodes":[]}', tmp_path)
+    answer_file = tmp_path / "tid.answer.json"
+    done_file = tmp_path / "tid.done"
+    assert answer_file.exists()
+    assert done_file.exists()
+    data = json.loads(answer_file.read_text(encoding="utf-8"))
+    assert data["task_id"] == "tid"
+    assert data["answer"] == '{"nodes":[]}'
+
+
+def test_load_and_validate_task_rejects_oversized(daemon_core_module, tmp_path):
+    """SECURITY: Oversized task files are rejected."""
+    task_file = tmp_path / "big.task.json"
+    # Write a file that exceeds MAX_TASK_SIZE_BYTES
+    task_file.write_bytes(b"x" * (daemon_core_module.MAX_TASK_SIZE_BYTES + 1))
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_rejects_non_dict(daemon_core_module, tmp_path):
+    """SECURITY: Non-object JSON is rejected."""
+    task_file = tmp_path / "list.task.json"
+    task_file.write_text("[1, 2, 3]", encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_rejects_invalid_json(daemon_core_module, tmp_path):
+    """SECURITY: Malformed JSON is rejected."""
+    task_file = tmp_path / "bad.task.json"
+    task_file.write_text("{invalid json", encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is None
+
+
+def test_load_and_validate_task_accepts_valid(daemon_core_module, tmp_path):
+    """Valid task JSON is accepted."""
+    task_file = tmp_path / "good.task.json"
+    task_file.write_text(json.dumps({"task_id": "t1", "system": "s", "user": "u"}), encoding="utf-8")
+    result = daemon_core_module.load_and_validate_task(task_file)
+    assert result is not None
+    assert result["task_id"] == "t1"
+
+
+def test_agy_process_task_uses_task_timeout(agy_daemon_module, tmp_path):
+    """Task 4.8: agy daemon honors timeout_seconds from task JSON."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_timeout_test"
+    task_file = inbox / f"{task_id}.task.json"
+    # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
+    large_prompt = "x" * 72000
+    task_file.write_text(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "system": large_prompt,
+                "user": "extract",
+                "timeout_seconds": 1800,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock('{"nodes": []}', "")) as mock_run:
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is True
+        mock_run.assert_called_once()
+        timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
+        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+
+
+def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_path):
+    """Task 4.9: opencode daemon honors timeout_seconds from task JSON."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_timeout_test"
+    task_file = inbox / f"{task_id}.task.json"
+    # 72KB prompt + timeout_seconds=1800 -> effective = max(1800, 600+72) = 1800
+    large_prompt = "x" * 72000
+    task_file.write_text(
+        json.dumps(
+            {
+                "task_id": task_id,
+                "system": large_prompt,
+                "user": "extract",
+                "timeout_seconds": 1800,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "")) as mock_run:
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is True
+        mock_run.assert_called_once()
+        timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
+        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+
+
+def test_daemon_core_guardrail_not_empty(daemon_core_module):
+    """SECURITY: Guardrail is non-trivial and contains key prohibitions."""
+    guardrail = daemon_core_module.SECURITY_GUARDRAIL
+    assert len(guardrail) > 200
+    assert "PROHIBITED" in guardrail
+    assert "network" in guardrail.lower()
+    assert "credentials" in guardrail.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests for error envelope protocol (mykg-sandbox-reliability change)
+# ---------------------------------------------------------------------------
+
+
+def test_write_error_envelope_atomic(daemon_core_module, tmp_path):
+    """Task 4.1: Error envelope creates .error file atomically with correct content."""
+    result = daemon_core_module.write_error_envelope("task_abc123", "Something went wrong", tmp_path)
+    assert result is True
+
+    error_file = tmp_path / "task_abc123.error"
+    assert error_file.exists()
+
+    data = json.loads(error_file.read_text(encoding="utf-8"))
+    assert data["task_id"] == "task_abc123"
+    assert "Something went wrong" in data["error"]
+    assert "timestamp" in data
+
+
+def test_write_error_envelope_does_not_overwrite(daemon_core_module, tmp_path):
+    """SECURITY: First error wins — existing .error files are not overwritten."""
+    # Write first error
+    daemon_core_module.write_error_envelope("task_dup", "First error", tmp_path)
+    # Attempt to write second error
+    result = daemon_core_module.write_error_envelope("task_dup", "Second error", tmp_path)
+    assert result is False
+
+    data = json.loads((tmp_path / "task_dup.error").read_text(encoding="utf-8"))
+    assert "First error" in data["error"]
+
+
+def test_sanitize_error_text_redacts_paths(daemon_core_module):
+    """SECURITY: Absolute paths are redacted from error messages."""
+    result = daemon_core_module.sanitize_error_text("Error at /home/user/secret/credentials.json")
+    assert "/home/user" not in result
+    assert "[PATH_REDACTED]" in result
+
+
+def test_sanitize_error_text_redacts_env_vars(daemon_core_module):
+    """SECURITY: Environment variable references are redacted."""
+    result = daemon_core_module.sanitize_error_text("Failed with HOME=/home/user/secret")
+    assert "/home/user" not in result
+    assert "[ENV_REDACTED]" in result
+
+
+def test_sanitize_error_text_redacts_tokens(daemon_core_module):
+    """SECURITY: Long alphanumeric strings (potential tokens) are redacted."""
+    long_token = "a" * 40
+    result = daemon_core_module.sanitize_error_text(f"Auth failed with key {long_token}")
+    assert long_token not in result
+    assert "[TOKEN_REDACTED]" in result
+
+
+def test_sanitize_error_text_truncates_long_messages(daemon_core_module):
+    """SECURITY: Error messages are truncated to prevent disk exhaustion."""
+    # Use varied content that won't be caught by token redaction
+    long_error = "Error: " + ("segment " * 2000)
+    result = daemon_core_module.sanitize_error_text(long_error, max_length=500)
+    assert len(result) <= 520  # 500 + "... [TRUNCATED]"
+    assert "[TRUNCATED]" in result
+
+
+def test_sanitize_error_text_handles_empty(daemon_core_module):
+    """Empty error text returns 'Unknown error'."""
+    assert daemon_core_module.sanitize_error_text("") == "Unknown error"
+    assert daemon_core_module.sanitize_error_text(None) == "Unknown error"
+
+
+def test_validate_task_id_accepts_normal(daemon_core_module):
+    """Normal task IDs (SHA-256 hashes, alphanumeric) are accepted."""
+    assert daemon_core_module.validate_task_id("abc123def456") is True
+    assert daemon_core_module.validate_task_id("a" * 64) is True  # SHA-256 hex
+
+
+def test_validate_task_id_rejects_traversal(daemon_core_module):
+    """SECURITY: Path traversal characters are rejected."""
+    assert daemon_core_module.validate_task_id("../etc/passwd") is False
+    assert daemon_core_module.validate_task_id("foo/bar") is False
+    assert daemon_core_module.validate_task_id("foo\\bar") is False
+    assert daemon_core_module.validate_task_id("foo..bar") is False
+
+
+def test_validate_task_id_rejects_control_chars(daemon_core_module):
+    """SECURITY: Control characters are rejected."""
+    assert daemon_core_module.validate_task_id("task\x00id") is False
+    assert daemon_core_module.validate_task_id("task\nid") is False
+
+
+def test_validate_task_id_rejects_empty_and_oversized(daemon_core_module):
+    """SECURITY: Empty and oversized task IDs are rejected."""
+    assert daemon_core_module.validate_task_id("") is False
+    assert daemon_core_module.validate_task_id("x" * 200) is False
+
+
+def test_write_error_envelope_rejects_invalid_task_id(daemon_core_module, tmp_path):
+    """SECURITY: write_error_envelope rejects invalid task IDs."""
+    result = daemon_core_module.write_error_envelope("../etc/passwd", "error", tmp_path)
+    assert result is False
+    assert not (tmp_path / "../etc/passwd.error").exists()
+
+
+def test_is_task_done_includes_error_sentinel(daemon_core_module, tmp_path):
+    """is_task_done returns True when .error sentinel exists."""
+    # No files → not done
+    assert daemon_core_module.is_task_done("t1", tmp_path) is False
+
+    # .error file → done
+    (tmp_path / "t1.error").write_text('{"error": "fail"}', encoding="utf-8")
+    assert daemon_core_module.is_task_done("t1", tmp_path) is True
+
+
+def test_agy_daemon_writes_error_on_failure(agy_daemon_module, tmp_path):
+    """Task 4.2: agy daemon writes .error sentinel when subprocess raises an exception."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_error_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    # Mock subprocess.run to raise a generic exception
+    with patch("subprocess.run", side_effect=OSError("Mock subprocess failure")):
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        # Verify .error sentinel was created
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel file to be created"
+
+        data = json.loads(error_file.read_text(encoding="utf-8"))
+        assert data["task_id"] == task_id
+        assert "error" in data
+
+
+def test_agy_daemon_writes_error_on_nonzero_exit(agy_daemon_module, tmp_path):
+    """agy daemon writes .error sentinel when subprocess returns non-zero exit code."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "agy_nonzero_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_capture_mock("", "Error output", returncode=1)):
+        success = agy_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel for non-zero exit"
+
+
+def test_opencode_daemon_writes_error_on_failure(opencode_daemon_module, tmp_path):
+    """Task 4.2: opencode daemon writes .error sentinel when subprocess raises an exception."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_error_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    # Mock subprocess.run to raise a generic exception
+    with patch("subprocess.run", side_effect=OSError("Mock subprocess failure")):
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        # Verify .error sentinel was created
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel file to be created"
+
+        data = json.loads(error_file.read_text(encoding="utf-8"))
+        assert data["task_id"] == task_id
+        assert "error" in data
+
+
+def test_opencode_daemon_writes_error_on_nonzero_exit(opencode_daemon_module, tmp_path):
+    """opencode daemon writes .error sentinel when subprocess returns non-zero exit code."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_nonzero_test"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(
+        json.dumps({"task_id": task_id, "system": "test", "user": "extract"}),
+        encoding="utf-8",
+    )
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock("", "Error output", returncode=1)):
+        success = opencode_daemon_module.process_task(task_file, outbox)
+        assert success is False
+
+        error_file = outbox / f"{task_id}.error"
+        assert error_file.exists(), "Expected .error sentinel for non-zero exit"
