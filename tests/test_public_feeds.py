@@ -96,7 +96,7 @@ class TestPublicFeeds:
 
     def test_global_fresh_feed_default(self, client, monkeypatch, mock_manifestation_data):
         """Verifies global feed defaults to application/rss+xml and contains item properties."""
-        monkeypatch.setattr("app.api.public.fetch_global_fresh_arrivals", lambda *args, **kwargs: mock_manifestation_data)
+        monkeypatch.setattr("app.api.public_items.fetch_global_fresh_arrivals", lambda *args, **kwargs: mock_manifestation_data)
 
         response = client.get("/api/public/feed.xml")
         assert response.status_code == 200
@@ -121,7 +121,7 @@ class TestPublicFeeds:
             called_args.append((limit, level))
             return mock_manifestation_data
 
-        monkeypatch.setattr("app.api.public.fetch_global_fresh_arrivals", mock_fetch)
+        monkeypatch.setattr("app.api.public_items.fetch_global_fresh_arrivals", mock_fetch)
 
         response = client.get("/api/public/feed.xml?view=works")
         assert response.status_code == 200
@@ -132,7 +132,7 @@ class TestPublicFeeds:
 
     def test_user_collection_feed(self, client, monkeypatch, mock_manifestation_data):
         """Verifies user-scoped profile feed isolation rules execute cleanly."""
-        monkeypatch.setattr("app.api.public.fetch_user_public_collection", lambda *args, **kwargs: mock_manifestation_data)
+        monkeypatch.setattr("app.api.public_items.fetch_user_public_collection", lambda *args, **kwargs: mock_manifestation_data)
 
         response = client.get("/api/public/u/sebastiankruk/feed.xml")
         assert response.status_code == 200
@@ -143,7 +143,7 @@ class TestPublicFeeds:
 
     def test_shared_collection_feed(self, client, monkeypatch, mock_manifestation_data):
         """Verifies secret token sharing feed channels function properly."""
-        monkeypatch.setattr("app.api.public.fetch_shared_collection_by_token", lambda *args, **kwargs: mock_manifestation_data)
+        monkeypatch.setattr("app.api.public_items.fetch_shared_collection_by_token", lambda *args, **kwargs: mock_manifestation_data)
 
         response = client.get("/api/public/share/wishlist-token-xyz/feed.xml")
         assert response.status_code == 200
@@ -190,7 +190,7 @@ class TestContentNegotiation:
 
     def test_user_items_json_ld(self, client, monkeypatch, mock_manifestation_data):
         """Enforces application/ld+json negotiation and checks semantic graph structures."""
-        monkeypatch.setattr("app.api.public.fetch_user_public_collection", lambda *args, **kwargs: mock_manifestation_data)
+        monkeypatch.setattr("app.api.public_items.fetch_user_public_collection", lambda *args, **kwargs: mock_manifestation_data)
 
         headers = {"Accept": "application/ld+json"}
         response = client.get("/api/public/u/sebastiankruk/items", headers=headers)
@@ -212,7 +212,7 @@ class TestContentNegotiation:
 
     def test_shared_collection_turtle(self, client, monkeypatch, mock_manifestation_data):
         """Enforces text/turtle serialization mechanics on shared token targets."""
-        monkeypatch.setattr("app.api.public.fetch_shared_collection_by_token", lambda *args, **kwargs: mock_manifestation_data)
+        monkeypatch.setattr("app.api.public_items.fetch_shared_collection_by_token", lambda *args, **kwargs: mock_manifestation_data)
 
         headers = {"Accept": "text/turtle"}
         response = client.get("/api/public/share/wishlist-token-xyz", headers=headers)

@@ -104,27 +104,40 @@ def upgrade():
         .values(expression_id=None)
     )
 
-    # For rows where all three are NULL, set work_id to a sentinel value (0)
-    # so the CHECK constraint passes. This handles legacy rows without any FRBR ref.
-    # NOTE: We use 0 as a sentinel since FK allows NULL but CHECK counts non-NULL.
-    # Actually, we should delete rows with no FRBR reference at all, or assign them
-    # a default. For safety, we'll just leave them as-is and skip the constraint
-    # for SQLite (which doesn't enforce CHECK on existing rows by default).
-    # For PostgreSQL, we need to handle this.
+    # For rows where all three are NULL, assign a sentinel work_id so the CHECK
+    # constraint passes without deleting orphan items and causing data loss.
+    orphan_condition = sa.and_(
+        roadmap_items.c.work_id.is_(None),
+        roadmap_items.c.expression_id.is_(None),
+        roadmap_items.c.manifestation_id.is_(None),
+    )
+    has_orphans = bind.execute(
+        sa.select(roadmap_items.c.id).where(orphan_condition).limit(1)
+    ).scalar() is not None
+
+    if has_orphans:
+        works = sa.table(
+            "works",
+            sa.column("id", sa.Integer),
+            sa.column("title", sa.String),
+            schema=s_cat,
+        )
+        first_work_id = bind.execute(sa.select(works.c.id).order_by(works.c.id.asc()).limit(1)).scalar()
+        if first_work_id is None:
+            bind.execute(
+                works.insert().values(title="[Placeholder Work for Legacy Roadmap Items]")
+            )
+            first_work_id = bind.execute(sa.select(works.c.id).order_by(works.c.id.desc()).limit(1)).scalar()
+
+        op.execute(
+            roadmap_items.update()
+            .where(orphan_condition)
+            .values(work_id=first_work_id)
+        )
 
     # STEP 4: Apply CHECK constraint (PostgreSQL only, as SQLite batch mode
     # recreates the table and may fail on existing invalid rows).
     if is_pg:
-        # First, delete rows that still have zero FRBR references (all NULL).
-        op.execute(
-            roadmap_items.delete().where(
-                sa.and_(
-                    roadmap_items.c.work_id.is_(None),
-                    roadmap_items.c.expression_id.is_(None),
-                    roadmap_items.c.manifestation_id.is_(None),
-                )
-            )
-        )
         op.create_check_constraint(
             "check_roadmap_item_single_frbr_level",
             "roadmap_items",

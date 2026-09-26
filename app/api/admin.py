@@ -21,6 +21,7 @@ from datetime import date
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
@@ -79,7 +80,7 @@ def get_users():
     # QA FIX: Clamp limit to prevent DB/Memory DoS attacks
     limit = min(request.args.get("limit", 50, type=int), 100)
 
-    stmt = db.select(User)
+    stmt = db.select(User).options(selectinload(User.roles))
 
     if search:
         stmt = stmt.filter(db.or_(User.email.ilike(f"%{search}%"), User.display_name.ilike(f"%{search}%")))
@@ -158,7 +159,7 @@ def get_roles():
     if not _has_permission(user, PermissionName.READ_ROLES):
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
-    roles = db.session.execute(db.select(Role)).scalars().all()
+    roles = db.session.execute(db.select(Role).options(selectinload(Role.permissions))).scalars().all()
     protected_roles = {"admin", "user", "contributor"}
     return jsonify(
         {

@@ -379,6 +379,7 @@ def shared_collection_feed(token: str):
 
 
 @public_bp.route("/u/<string:username>/items", methods=["GET"])
+@limiter.limit("60 per minute")
 def get_public_items(username: str):
     """Retrieve public items for a user."""
     accept_header = request.headers.get("Accept", "")
@@ -465,6 +466,7 @@ def get_public_items(username: str):
 
 
 @public_bp.route("/share/<string:token>", methods=["GET"])
+@limiter.limit("60 per minute")
 def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")

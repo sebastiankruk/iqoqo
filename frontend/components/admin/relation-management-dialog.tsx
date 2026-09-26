@@ -36,7 +36,9 @@ import {
   splitFrbrEntity,
   searchFrbrEntities,
   type FrbrSearchResult,
+  type FrbrTree,
 } from "@/lib/api/admin";
+import { queryKeys } from "@/lib/api/hooks/query-keys";
 import type { FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/types/frbr";
 
 type ActionTab = "reassign" | "merge" | "split";
@@ -144,7 +146,18 @@ export function RelationManagementDialog({
       await reassignFrbrParent(payload);
       toast.success(`Successfully reassigned ${entityType} to new parent`);
       if (manifestationId) {
-        qc.invalidateQueries({ queryKey: ["frbr-tree", manifestationId] });
+        const queryKey = queryKeys.frbrTree(manifestationId);
+        qc.setQueryData<FrbrTree>(queryKey, old => {
+          if (!old) return old;
+          if (entityType === "item") {
+            return {
+              ...old,
+              items: old.items.filter(it => it.id !== entityId),
+            };
+          }
+          return old;
+        });
+        qc.invalidateQueries({ queryKey });
       }
       onOpenChange(false);
     } catch (err) {
@@ -170,7 +183,8 @@ export function RelationManagementDialog({
       await mergeFrbrEntities(payload);
       toast.success(`Successfully merged ${entityType} into target`);
       if (manifestationId) {
-        qc.invalidateQueries({ queryKey: ["frbr-tree", manifestationId] });
+        const queryKey = queryKeys.frbrTree(manifestationId);
+        qc.invalidateQueries({ queryKey });
       }
       onOpenChange(false);
     } catch (err) {
@@ -205,7 +219,19 @@ export function RelationManagementDialog({
       await splitFrbrEntity(payload);
       toast.success(`Successfully split ${entityType} — new entity created`);
       if (manifestationId) {
-        qc.invalidateQueries({ queryKey: ["frbr-tree", manifestationId] });
+        const queryKey = queryKeys.frbrTree(manifestationId);
+        qc.setQueryData<FrbrTree>(queryKey, old => {
+          if (!old) return old;
+          if (entityType === "manifestation") {
+            const splitSet = new Set(childIds);
+            return {
+              ...old,
+              items: old.items.filter(it => !splitSet.has(it.id)),
+            };
+          }
+          return old;
+        });
+        qc.invalidateQueries({ queryKey });
       }
       onOpenChange(false);
     } catch (err) {

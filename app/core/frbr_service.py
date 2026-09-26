@@ -2131,7 +2131,15 @@ def _enrich_graph_from_db(
     try:
         # WorkContributions
         if seen_works:
-            contribs = db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(seen_works))).scalars().all()
+            contribs = (
+                db.session.execute(
+                    select(WorkContribution)
+                    .options(joinedload(WorkContribution.contributor))
+                    .where(WorkContribution.work_id.in_(seen_works))
+                )
+                .scalars()
+                .all()
+            )
             for wc in contribs:
                 w_uri = _frbr_uri("work", wc.work_id, base_url)
                 c_uri = _related_uri("contributors", wc.contributor_id, base_url)
@@ -2146,7 +2154,11 @@ def _enrich_graph_from_db(
         # ExpressionContributions
         if seen_expressions:
             expr_contribs = (
-                db.session.execute(select(ExpressionContribution).where(ExpressionContribution.expression_id.in_(seen_expressions)))
+                db.session.execute(
+                    select(ExpressionContribution)
+                    .options(joinedload(ExpressionContribution.contributor))
+                    .where(ExpressionContribution.expression_id.in_(seen_expressions))
+                )
                 .scalars()
                 .all()
             )
@@ -2163,7 +2175,9 @@ def _enrich_graph_from_db(
         if seen_manifestations:
             m_contribs = (
                 db.session.execute(
-                    select(ManifestationContribution).where(ManifestationContribution.manifestation_id.in_(seen_manifestations))
+                    select(ManifestationContribution)
+                    .options(joinedload(ManifestationContribution.contributor))
+                    .where(ManifestationContribution.manifestation_id.in_(seen_manifestations))
                 )
                 .scalars()
                 .all()

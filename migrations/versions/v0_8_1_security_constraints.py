@@ -74,12 +74,44 @@ def upgrade():
                 )
             )
     else:
-        bind.execute(
-            sa.text(
-                f"DELETE FROM {users_table} WHERE email = 'legacy@iqoqo.cc' "
-                "AND password_hash IS NULL AND google_id IS NULL"
+        has_items = False
+        try:
+            has_items = bool(
+                bind.execute(
+                    sa.text(
+                        f"SELECT 1 FROM items WHERE (owner_id = '{legacy_user_id}' OR owner_id IN "
+                        f"(SELECT id FROM {users_table} WHERE email = 'legacy@iqoqo.cc')) LIMIT 1"
+                    )
+                ).scalar()
             )
-        )
+        except Exception:
+            has_items = False
+
+        if not has_items:
+            bind.execute(
+                sa.text(
+                    f"DELETE FROM {users_table} WHERE email = 'legacy@iqoqo.cc' "
+                    "AND password_hash IS NULL AND google_id IS NULL"
+                )
+            )
+        else:
+            user_cols = {col["name"] for col in inspector.get_columns("users")}
+            if "is_active" in user_cols:
+                bind.execute(
+                    sa.text(
+                        f"UPDATE {users_table} SET password_hash = '!disabled', is_active = 0 "
+                        "WHERE email = 'legacy@iqoqo.cc' "
+                        "AND password_hash IS NULL AND google_id IS NULL"
+                    )
+                )
+            else:
+                bind.execute(
+                    sa.text(
+                        f"UPDATE {users_table} SET password_hash = '!disabled' "
+                        "WHERE email = 'legacy@iqoqo.cc' "
+                        "AND password_hash IS NULL AND google_id IS NULL"
+                    )
+                )
 
     # Fail closed rather than inventing credentials or silently deleting accounts.
     users_without_auth = bind.execute(

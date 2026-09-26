@@ -308,22 +308,25 @@ def get_wishlist() -> Response | tuple[Response, int]:
             )
         )
 
-    # Pre-filter for work_type and medium_type (applied post-serialization)
-    all_intents = query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).all()
-
-    data = []
-    for intent in all_intents:
-        serialized = _serialize_intent(intent, user_id)
-
-        if work_type_filter and serialized.get("work_type") != work_type_filter:
-            continue
-        if medium_type_filter and serialized.get("medium_type") != medium_type_filter:
-            continue
-
-        data.append(serialized)
-
-    total = len(data)
-    paginated = data[offset : offset + limit]
+    if not (work_type_filter or medium_type_filter):
+        total = query.order_by(None).count()  # pylint: disable=not-callable
+        paginated_intents = (
+            query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).limit(limit).offset(offset).all()
+        )
+        paginated = [_serialize_intent(intent, user_id) for intent in paginated_intents]
+    else:
+        # Pre-filter for work_type and medium_type (applied post-serialization)
+        all_intents = query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).all()
+        data = []
+        for intent in all_intents:
+            serialized = _serialize_intent(intent, user_id)
+            if work_type_filter and serialized.get("work_type") != work_type_filter:
+                continue
+            if medium_type_filter and serialized.get("medium_type") != medium_type_filter:
+                continue
+            data.append(serialized)
+        total = len(data)
+        paginated = data[offset : offset + limit]
 
     return jsonify(
         {

@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.decorators import require_auth
+from app.core.limiter import limiter
 from app.db.auth import User
 from app.db.core import Item, ItemStatusLog
 from app.db.lending import LoanRequest
@@ -40,6 +41,7 @@ lending_bp = Blueprint("lending", __name__, url_prefix="/api/lending")
 
 
 @lending_bp.route("/items/<int:item_id>/loan-request", methods=["POST"])
+@limiter.limit("30 per minute")
 @require_auth
 def request_loan(item_id: int) -> Response | tuple[Response, int]:
     """Borrower submits a request to loan an available item from its owner."""
@@ -114,6 +116,7 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
 
 
 @lending_bp.route("/requests", methods=["GET"])
+@limiter.limit("60 per minute")
 @require_auth
 def list_loan_requests() -> Response | tuple[Response, int]:
     """Owner or admin retrieves pending loan requests for their items."""
@@ -146,6 +149,7 @@ def list_loan_requests() -> Response | tuple[Response, int]:
 
 
 @lending_bp.route("/requests/<int:request_id>", methods=["PATCH"])
+@limiter.limit("30 per minute")
 @require_auth
 def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
     """Owner approves or rejects a pending loan request.
@@ -218,6 +222,7 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
 
 
 @lending_bp.route("/items/<int:item_id>/loan-status", methods=["GET"])
+@limiter.limit("60 per minute")
 @require_auth
 def get_loan_status(item_id: int) -> Response | tuple[Response, int]:
     """Returns the active loan request status for an item (from the borrower's perspective)."""
@@ -244,6 +249,7 @@ def get_loan_status(item_id: int) -> Response | tuple[Response, int]:
 
 
 @lending_bp.route("/test/reset", methods=["POST"])
+@limiter.limit("30 per minute")
 def reset_lending_test_state() -> Response | tuple[Response, int]:
     """E2E test helper: resets all lender items to available and deletes loan requests."""
     from flask import current_app

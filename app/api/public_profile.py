@@ -23,10 +23,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.api.public_rdf import public_bp
+from app.core.limiter import limiter
 from app.db.models import Item, Manifestation, User, Work, db
 
 
 @public_bp.route("/u/<string:username>", methods=["GET"])
+@limiter.limit("60 per minute")
 def get_public_profile(username: str):
     """Retrieve a user's public profile stats and basic info."""
     stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
@@ -53,6 +55,7 @@ def get_public_profile(username: str):
 
 
 @public_bp.route("/u/<string:username>/check", methods=["POST"])
+@limiter.limit("30 per minute")
 def check_inventory(username: str):
     """
     Smart check if a user has a specific item.

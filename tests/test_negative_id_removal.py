@@ -123,7 +123,6 @@ class TestGetItemsPhysicalOnly:
     They are marked xfail until the implementation removes virtual item synthesis from get_items().
     """
 
-    @pytest.mark.xfail(reason="Virtual items still included until Task 3.1 implementation")
     def test_items_list_excludes_virtual(self, client, mixed_setup, app):
         """Given a user with both physical items and intents, GET /api/items returns only physical items."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -141,7 +140,6 @@ class TestGetItemsPhysicalOnly:
         titles = [i.get("title") for i in physical_items]
         assert "Physical Book" in titles
 
-    @pytest.mark.xfail(reason="Virtual items still included until Task 3.1 implementation")
     def test_items_list_with_wish_list_status_filter(self, client, mixed_setup, app):
         """Given statuses=wish_list filter, GET /api/items should NOT return virtual items."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -153,7 +151,6 @@ class TestGetItemsPhysicalOnly:
         virtual_items = [i for i in data if i.get("is_virtual")]
         assert len(virtual_items) == 0
 
-    @pytest.mark.xfail(reason="Virtual items still included until Task 3.1 implementation")
     def test_items_list_no_negative_ids(self, client, mixed_setup, app):
         """Given a user with intents, no returned item should have a negative ID."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -177,7 +174,6 @@ class TestNegativeIdRejection:
     They are marked xfail until the implementation removes negative-ID handling.
     """
 
-    @pytest.mark.xfail(reason="Negative IDs still handled until Task 3.2 implementation")
     def test_get_item_negative_id_returns_404_or_422(self, client, mixed_setup, app):
         """Given a negative ID, GET /api/items/<negative_id> returns 404 or 422."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -185,7 +181,6 @@ class TestNegativeIdRejection:
         response = client.get(f"/api/items/{negative_id}", headers=headers)
         assert response.status_code in (404, 422), f"Expected 404 or 422 for negative ID, got {response.status_code}"
 
-    @pytest.mark.xfail(reason="Negative IDs still handled until Task 3.2 implementation")
     def test_update_item_negative_id_returns_404_or_422(self, client, mixed_setup, app):
         """Given a negative ID, PUT /api/items/<negative_id> returns 404 or 422."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -197,7 +192,6 @@ class TestNegativeIdRejection:
         )
         assert response.status_code in (400, 404, 422), f"Expected 400/404/422 for negative ID update, got {response.status_code}"
 
-    @pytest.mark.xfail(reason="Negative IDs still handled until Task 3.2 implementation")
     def test_delete_item_negative_id_returns_404_or_422(self, client, mixed_setup, app):
         """Given a negative ID, DELETE /api/items/<negative_id> returns 404 or 422."""
         headers = _headers(app, mixed_setup["user_id"])
@@ -244,7 +238,6 @@ class TestItemAccessNegativeIdRejection:
     They are marked xfail until the implementation removes negative-ID resolution.
     """
 
-    @pytest.mark.xfail(reason="Negative IDs still resolved until Task 3.3 implementation")
     def test_verify_item_ownership_rejects_negative_id(self, app, mixed_setup):
         """Given a negative item_id, verify_item_ownership returns False."""
         from app.core.item_access import verify_item_ownership
@@ -308,7 +301,6 @@ class TestSchemaNonPositiveIdRejection:
         with pytest.raises(ValidationError):
             ItemCreateSchema(id=0)
 
-    @pytest.mark.xfail(reason="ItemCreateSchema does not yet reject negative IDs until Task 3.4")
     def test_item_create_schema_rejects_negative_id(self):
         """Given id=-5 in ItemCreateSchema, validation raises ValidationError."""
         from app.api.schemas import ItemCreateSchema

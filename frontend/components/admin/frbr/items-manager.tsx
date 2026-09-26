@@ -30,7 +30,7 @@ interface ItemsManagerProps {
   onItemSubmit: (data: ItemFormData, itemId: number) => Promise<void>;
   onItemEscalate?: (itemId: number) => void;
   onItemDelete?: (itemId: number) => void;
-  lastFetched: number;
+  lastFetched?: number;
 }
 
 /**
@@ -166,7 +166,7 @@ export function ItemsManager({ items, onItemSubmit, onItemEscalate, onItemDelete
             {expandedItems.has(item.id) && (
               <div className="p-4 pt-0 border-t bg-muted/20">
                 <ItemEditor
-                  key={`${item.id}-${lastFetched}`}
+                  key={item.id}
                   item={item}
                   onSubmit={data => onItemSubmit(data, item.id)}
                   onEscalate={onItemEscalate ? () => onItemEscalate(item.id) : undefined}

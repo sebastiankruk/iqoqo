@@ -18,7 +18,7 @@
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 
-from app.api.public import generate_sitemap_xml
+from app.api.public_items import generate_sitemap_xml
 from app.db.models import Expression, Manifestation, SharedCollection, User, Work, db
 
 

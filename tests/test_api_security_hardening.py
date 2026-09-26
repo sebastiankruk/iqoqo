@@ -176,3 +176,55 @@ def test_global_stats_database_error_is_sanitized(client, monkeypatch):
     assert response.status_code == 500
     assert response.get_json() == {"error": "Unable to load global statistics"}
     assert "private database schema" not in response.get_data(as_text=True)
+
+
+def test_rate_limit_public_profile_endpoints(app):
+    """Verify rate limit triggers 429 on public profile read endpoint."""
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        hit_429 = False
+        for _ in range(65):
+            res = test_client.get("/api/public/u/nonexistent_user")
+            if res.status_code == 429:
+                hit_429 = True
+                break
+        assert hit_429, "Expected 429 response on public profile when exceeding rate limit"
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_rate_limit_public_items_endpoint(app):
+    """Verify rate limit triggers 429 on public items endpoint."""
+    app.config["RATELIMIT_ENABLED"] = True
+    app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+    limiter.enabled = True
+    limiter._enabled = True
+    limiter.init_app(app)
+    limiter.reset()
+
+    test_client = app.test_client()
+
+    try:
+        hit_429 = False
+        for _ in range(65):
+            res = test_client.get("/api/public/u/test_user/items")
+            if res.status_code == 429:
+                hit_429 = True
+                break
+        assert hit_429, "Expected 429 response on public items when exceeding rate limit"
+    finally:
+        limiter.reset()
+        limiter.enabled = False
+        limiter._enabled = False
+        app.config["RATELIMIT_ENABLED"] = False

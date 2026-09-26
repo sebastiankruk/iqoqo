@@ -612,7 +612,7 @@ class TestQueryOptimizationAndFallback:
     def test_eager_loading_eliminates_n_plus_one_queries(self, app):
         from sqlalchemy import event
 
-        from app.api.public import fetch_user_public_collection
+        from app.api.public_items import fetch_user_public_collection
 
         with app.app_context():
             user = User(

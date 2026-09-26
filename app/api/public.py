@@ -22,10 +22,6 @@ The implementation has been decomposed into:
 - app.api.public_items: Item grids, collection feeds, shared tokens, and sitemaps.
 """
 
-import sys
-from typing import Any
-
-from app.api import public_items, public_profile, public_rdf
 from app.api.public_items import (
     fetch_global_fresh_arrivals,
     fetch_shared_collection_by_token,
@@ -95,18 +91,3 @@ __all__ = [
     "sitemap",
     "user_collection_feed",
 ]
-
-
-class _PublicModuleShim(sys.modules[__name__].__class__):
-    """Shim module class to propagate monkeypatched attributes to child modules."""
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        super().__setattr__(name, value)
-        if name.startswith("__"):
-            return
-        for submod in (public_items, public_profile, public_rdf):
-            if hasattr(submod, name):
-                setattr(submod, name, value)
-
-
-sys.modules[__name__].__class__ = _PublicModuleShim

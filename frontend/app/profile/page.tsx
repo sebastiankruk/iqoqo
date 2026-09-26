@@ -452,8 +452,13 @@ export default function ProfilePage() {
             Log Out
           </Button>
 
-          <div className="text-right">
-            <Button variant="destructive" onClick={handleDeleteAccount}>
+          <div className="text-right flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Coming in v0.8.2</span>
+            <Button
+              variant="destructive"
+              disabled
+              title="Account deletion temporarily disabled — email confirmation required (Coming in v0.8.2)"
+            >
               Delete Account
             </Button>
           </div>

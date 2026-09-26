@@ -33,7 +33,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.api import api_bp
 from app.api.auth import auth_bp, init_oauth
 from app.api.profile import profile_bp
-from app.api.public import lod_bp
+from app.api.public_rdf import lod_bp
 from app.core.scheduler import init_scheduler
 
 from .config import Config

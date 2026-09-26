@@ -189,7 +189,7 @@ def test_items_pagination(client, normal_user_headers, app):
 
 def test_fresh_arrivals_pagination_deduplication(app):
     """Test fetch_global_fresh_arrivals database-level deduplication and limits."""
-    from app.api.public import fetch_global_fresh_arrivals
+    from app.api.public_items import fetch_global_fresh_arrivals
 
     with app.app_context():
         # Create a public user

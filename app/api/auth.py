@@ -20,7 +20,7 @@ import os
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlsplit
+from urllib.parse import urlparse, urlsplit
 
 import jwt as pyjwt
 import requests
@@ -35,6 +35,7 @@ from app.config import Config
 from app.core.limiter import limiter
 from app.db.models import InstanceSettings, OAuthExchangeCode, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
+from app.utils.http_client import is_safe_url
 
 logger = logging.getLogger(__name__)
 OAUTH_EXCHANGE_CODE_TTL_SECONDS = 60
@@ -196,7 +197,18 @@ def google_callback():
     if error_code:
         return redirect(f"{frontend_url}/login?error={error_code}")
 
-    picture = user_info.get("picture") if user_info else None
+    raw_picture = user_info.get("picture") if user_info else None
+    picture: str | None = None
+    if raw_picture:
+        candidate_picture = str(raw_picture).strip()
+        try:
+            if urlparse(candidate_picture).scheme == "https" and is_safe_url(candidate_picture):
+                picture = candidate_picture
+            else:
+                logger.warning("Unsafe or non-HTTPS OAuth avatar_url rejected: %s", candidate_picture)
+        except Exception:
+            logger.warning("Failed to validate OAuth avatar_url: %s", candidate_picture, exc_info=True)
+            picture = None
 
     try:
         user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()

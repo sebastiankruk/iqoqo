@@ -268,3 +268,71 @@ def test_oauth_exchange_rejects_expired_code(client, app):
     response = client.post("/api/auth/exchange", json={"code": code})
     assert response.status_code == 400
     assert response.get_json() == {"error": "Invalid or expired authorization code"}
+
+
+def test_google_callback_accepts_safe_https_avatar(client, app, monkeypatch):
+    """Safe HTTPS avatar URL from OAuth provider is saved to user."""
+    from app.api import auth as auth_module
+
+    class FakeGoogle:
+        @staticmethod
+        def authorize_access_token():
+            return {"id_token": "safe-avatar-token"}
+
+        @staticmethod
+        def parse_id_token(_token, nonce=None):
+            return {
+                "email": "safe-avatar@iqoqo.local",
+                "name": "Safe Avatar User",
+                "sub": "safe-avatar-sub",
+                "picture": "https://lh3.googleusercontent.com/a/safe_pic.jpg",
+            }
+
+    class FakeOAuth:
+        google = FakeGoogle()
+
+    monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
+    monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
+    monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+
+    callback = client.get("/api/auth/callback/google")
+    assert callback.status_code == 302
+
+    with app.app_context():
+        user = User.query.filter_by(email="safe-avatar@iqoqo.local").first()
+        assert user is not None
+        assert user.avatar_url == "https://lh3.googleusercontent.com/a/safe_pic.jpg"
+
+
+def test_google_callback_rejects_unsafe_avatar(client, app, monkeypatch):
+    """Unsafe or non-HTTPS avatar URL from OAuth provider is rejected and falls back to None."""
+    from app.api import auth as auth_module
+
+    class FakeGoogle:
+        @staticmethod
+        def authorize_access_token():
+            return {"id_token": "unsafe-avatar-token"}
+
+        @staticmethod
+        def parse_id_token(_token, nonce=None):
+            return {
+                "email": "unsafe-avatar@iqoqo.local",
+                "name": "Unsafe Avatar User",
+                "sub": "unsafe-avatar-sub",
+                "picture": "http://127.0.0.1/evil.jpg",
+            }
+
+    class FakeOAuth:
+        google = FakeGoogle()
+
+    monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
+    monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
+    monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+
+    callback = client.get("/api/auth/callback/google")
+    assert callback.status_code == 302
+
+    with app.app_context():
+        user = User.query.filter_by(email="unsafe-avatar@iqoqo.local").first()
+        assert user is not None
+        assert user.avatar_url is None

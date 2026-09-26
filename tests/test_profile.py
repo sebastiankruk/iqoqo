@@ -68,7 +68,7 @@ def test_update_profile(client):
     assert json.loads(response.data)["data"]["display_name"] == "New Name"
 
 
-def test_delete_account_right_to_be_forgotten(client):
+def test_delete_account_temporarily_disabled(client):
     client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "test-password"})
     res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
@@ -78,11 +78,12 @@ def test_delete_account_right_to_be_forgotten(client):
     assert user is not None
 
     response = client.delete("/api/profile/", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 200
+    assert response.status_code == 501
+    assert "email confirmation required" in response.get_json()["error"]
 
-    # Verify user is completely removed
+    # Verify user is NOT removed (blocked)
     user_after = User.query.filter_by(email="delete@iqoqo.local").first()
-    assert user_after is None
+    assert user_after is not None
 
 
 def test_user_to_dict_includes_avatar(client):
@@ -94,3 +95,44 @@ def test_user_to_dict_includes_avatar(client):
     user_dict = test_user.to_dict()
     assert "avatar_url" in user_dict
     assert user_dict["avatar_url"] == "https://lh3.googleusercontent.com/a/test"
+
+
+def test_update_profile_bio_length_limit(client):
+    client.post("/api/auth/register", json={"email": "biotest@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "biotest@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Bio exceeding 500 characters
+    oversized_bio = "a" * 501
+    resp = client.put("/api/profile/", headers=headers, json={"bio": oversized_bio})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "Biography cannot exceed 500 characters"
+
+    # Bio exactly 500 characters
+    valid_bio = "b" * 500
+    resp_valid = client.put("/api/profile/", headers=headers, json={"bio": valid_bio})
+    assert resp_valid.status_code == 200
+    assert resp_valid.get_json()["data"]["bio"] == valid_bio
+
+
+def test_update_profile_html_sanitization(client):
+    """HTML tags in bio and display_name must be stripped by bleach.clean()."""
+    client.post("/api/auth/register", json={"email": "xss@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "xss@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "display_name": "<b>Evil</b> <script>alert('xss')</script>Name",
+        "bio": "<p>Hello</p> <img src=x onerror=alert(1)>World<iframe src='//bad.site'></iframe>",
+    }
+    resp = client.put("/api/profile/", headers=headers, json=payload)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["display_name"] == "Evil alert('xss')Name"
+    assert "<" not in data["display_name"]
+    assert ">" not in data["display_name"]
+    assert data["bio"] == "Hello World"
+    assert "<" not in data["bio"]
+    assert ">" not in data["bio"]

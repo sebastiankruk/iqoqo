@@ -863,6 +863,95 @@ def test_v0_8_1_security_constraints_handles_legacy_system_user() -> None:
 
         with pytest.raises(RuntimeError, match="Cannot add check_user_auth_method"):
             run_migration(migration.upgrade)
+
+        with engine.begin() as connection:
+            connection.execute(users.delete().where(users.c.email == "real-user-no-creds@iqoqo.local"))
+
+        # Scenario 3: Legacy user owns items -> user is disabled instead of deleted
+        items = sa.Table(
+            "items",
+            metadata,
+            sa.Column("id", sa.Integer, primary_key=True),
+            sa.Column("owner_id", sa.Integer, nullable=True),
+        )
+        items.create(engine)
+        with engine.begin() as connection:
+            connection.execute(users.insert().values(id=99, email="legacy@iqoqo.cc", visibility="private"))
+            connection.execute(items.insert().values(id=1, owner_id=99))
+
+        run_migration(migration.upgrade)
+        with engine.begin() as connection:
+            user_row = connection.execute(sa.text("SELECT email, password_hash FROM users WHERE email = 'legacy@iqoqo.cc'")).fetchone()
+            assert user_row is not None
+            assert user_row[1] == "!disabled"
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_1_frbr_relation_management_preserves_orphan_roadmap_items() -> None:
+    """The FRBR relation management migration assigns sentinel work_id to orphan roadmap items instead of deleting them."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_1_frbr_relation_management")
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    works = sa.Table(
+        "works",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("title", sa.String, nullable=True),
+    )
+    sa.Table(
+        "expressions",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("work_id", sa.Integer, nullable=True),
+    )
+    reading_roadmaps = sa.Table(
+        "reading_roadmaps",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+    )
+    roadmap_items = sa.Table(
+        "roadmap_items",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("roadmap_id", sa.Integer, nullable=False),
+        sa.Column("work_id", sa.Integer, nullable=True),
+        sa.Column("manifestation_id", sa.Integer, nullable=True),
+    )
+    metadata.create_all(engine)
+
+    with engine.begin() as connection:
+        connection.execute(works.insert().values(id=42, title="Existing Work"))
+        connection.execute(reading_roadmaps.insert().values(id=1))
+        # Insert orphan roadmap item: work_id=None, manifestation_id=None
+        connection.execute(roadmap_items.insert().values(id=100, roadmap_id=1, work_id=None, manifestation_id=None))
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        with engine.begin() as connection:
+            items = connection.execute(sa.text("SELECT id, work_id, expression_id FROM roadmap_items WHERE id = 100")).fetchall()
+            assert len(items) == 1
+            assert items[0][0] == 100
+            # work_id should have been assigned sentinel work (42)
+            assert items[0][1] == 42
+
+        run_migration(migration.downgrade)
     finally:
         engine.dispose()
 

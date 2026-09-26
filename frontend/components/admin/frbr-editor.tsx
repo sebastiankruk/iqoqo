@@ -180,7 +180,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const hasEscalateRequest = Boolean(profile?.permissions?.includes(PermissionName.ESCALATE_REQUEST));
 
   const [activeTab, setActiveTab] = useState<"work" | "expression" | "manifestation" | "items">("manifestation");
-  const [lastFetched, setLastFetched] = useState(0);
 
   // Add Child dialog state
   const [addChildDialog, setAddChildDialog] = useState<{
@@ -223,7 +222,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           id: tree.work.id,
           data: { title: data.title, meta, contributions: data.contributions },
         });
-        setLastFetched(Date.now());
         toast.success("Work updated successfully");
       } catch (err) {
         toast.error(`Failed to update work: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -249,7 +247,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             contributions: data.contributions,
           },
         });
-        setLastFetched(Date.now());
         toast.success("Expression updated successfully");
       } catch (err) {
         toast.error(`Failed to update expression: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -304,7 +301,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             contributions: data.contributions,
           },
         });
-        setLastFetched(Date.now());
         toast.success("Manifestation updated successfully");
       } catch (err) {
         toast.error(`Failed to update manifestation: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -327,7 +323,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
             meta,
           },
         });
-        setLastFetched(Date.now());
         toast.success("Item updated successfully");
       } catch (err) {
         toast.error(`Failed to update item: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -536,7 +531,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           <CardContent>
             {tree.work ? (
               <WorkEditor
-                key={`${tree.work.id}-${lastFetched}`}
+                key={tree.work.id}
                 tree={tree}
                 onSubmit={handleWorkSubmit}
                 onAddChild={() => handleAddChild("work")}
@@ -559,7 +554,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           <CardContent>
             {tree.expression ? (
               <ExpressionEditor
-                key={`${tree.expression.id}-${lastFetched}`}
+                key={tree.expression.id}
                 tree={tree}
                 onSubmit={handleExpressionSubmit}
                 onAddChild={() => handleAddChild("expression")}
@@ -590,7 +585,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           </CardHeader>
           <CardContent>
             <ManifestationEditor
-              key={`${tree.manifestation.id}-${lastFetched}`}
+              key={tree.manifestation.id}
               tree={tree}
               onSubmit={handleManifestationSubmit}
               onAddChild={() => handleAddChild("manifestation")}
@@ -613,7 +608,6 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
               onItemSubmit={handleItemSubmit}
               onItemEscalate={hasEscalateRequest ? itemId => handleEscalate("item", itemId) : undefined}
               onItemDelete={hasWriteMetadata ? itemId => handleDelete("item", itemId) : undefined}
-              lastFetched={lastFetched}
             />
           </CardContent>
         </Card>

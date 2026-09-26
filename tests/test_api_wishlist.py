@@ -218,6 +218,37 @@ class TestGetWishlist:
         # Pagination metadata should be present
         assert "meta" in data or "pagination" in data
 
+    def test_pagination_multipage(self, client, wishlist_setup, app):
+        """Given multiple intents, limit and page return expected slices and pagination metadata."""
+        headers = _headers(app, wishlist_setup["user_id"])
+        with app.app_context():
+            for i in range(4):
+                w = Work(title=f"Paged Book {i}", meta={"authors": ["Author"]})
+                db.session.add(w)
+                db.session.flush()
+                intent = UserWorkIntent(user_id=wishlist_setup["user_id"], work_id=w.id, status="want_to_read")
+                db.session.add(intent)
+            db.session.commit()
+
+        # Page 1, limit 2
+        resp1 = client.get("/api/wishlist?page=1&limit=2", headers=headers)
+        assert resp1.status_code == 200
+        d1 = resp1.json
+        assert len(d1["data"]) == 2
+        assert d1["meta"]["total"] >= 5
+        assert d1["pagination"]["has_more"] is True
+        assert d1["pagination"]["offset"] == 0
+
+        # Page 2, limit 2
+        resp2 = client.get("/api/wishlist?page=2&limit=2", headers=headers)
+        assert resp2.status_code == 200
+        d2 = resp2.json
+        assert len(d2["data"]) == 2
+        assert d2["pagination"]["offset"] == 2
+        page1_ids = {item["id"] for item in d1["data"]}
+        page2_ids = {item["id"] for item in d2["data"]}
+        assert page1_ids.isdisjoint(page2_ids)
+
     def test_filter_by_status(self, client, wishlist_setup, app):
         """Given status filter, only matching intents are returned."""
         headers = _headers(app, wishlist_setup["user_id"])
