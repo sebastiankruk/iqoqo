@@ -17,10 +17,12 @@
 
 import logging
 import time
+from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from rdflib import Graph
 from sqlalchemy import or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.decorators import require_auth, require_permission
@@ -69,6 +71,36 @@ def _get_sparql_items(user: User | None) -> list[Item]:
     stmt = stmt.limit(MAX_GRAPH_ITEMS)
 
     return list(db.session.execute(stmt).scalars().all())
+
+
+def _format_select_ask(result: Any, accept: str) -> tuple[bytes | str, str]:
+    """Format SELECT/ASK result into (payload, mimetype)."""
+    if "application/sparql-results+xml" in accept or "application/xml" in accept or "text/xml" in accept:
+        return result.serialize(format="xml") or b"", "application/sparql-results+xml"
+    if "text/csv" in accept:
+        return result.serialize(format="csv") or b"", "text/csv"
+    if "text/tab-separated-values" in accept or "text/tsv" in accept:
+        return result.serialize(format="tsv") or b"", "text/tab-separated-values"
+    data = format_select_results(result)
+    return jsonify(data).get_data(as_text=True), "application/sparql-results+json"
+
+
+def _format_graph(result: Any, accept: str) -> tuple[bytes | str, str]:
+    """Format CONSTRUCT/DESCRIBE result into (payload, mimetype)."""
+    if "application/ld+json" in accept:
+        return format_graph_results(result, output_format="json-ld"), "application/ld+json"
+    if "application/rdf+xml" in accept:
+        g_res = result.graph if hasattr(result, "graph") and result.graph is not None else Graph()
+        return g_res.serialize(format="xml"), "application/rdf+xml"
+    return format_graph_results(result, output_format="turtle"), "text/turtle"
+
+
+_FORMATTERS = {
+    "SELECT": _format_select_ask,
+    "ASK": _format_select_ask,
+    "CONSTRUCT": _format_graph,
+    "DESCRIBE": _format_graph,
+}
 
 
 def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
@@ -131,8 +163,8 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         error_msg = str(e)
         status_code = 500
         rejection_reason = "internal_error"
-    except Exception:
-        # Catch-all: convert any uncaught exception into a structured error response
+    except (SQLAlchemyError, ValueError, TypeError, KeyError, AttributeError, RuntimeError, OSError):
+        # Catch known execution exceptions: convert into a structured error response
         # so clients never see an uncaught Flask traceback.
         logger.exception("SPARQL endpoint uncaught exception in phase=%s", phase)
         error_msg = "Internal server error during SPARQL execution."
@@ -163,57 +195,12 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
     )
 
     accept = request.headers.get("Accept", "")
-    output_payload: str | bytes
+    formatter = _FORMATTERS.get(result.type, _format_graph)
+    output_payload, mimetype = formatter(result, accept)
 
-    # Determine result type and format accordingly
-    if result.type in ("SELECT", "ASK"):
-        if "application/sparql-results+xml" in accept or "application/xml" in accept or "text/xml" in accept:
-            output_payload = result.serialize(format="xml") or b""
-            if len(output_payload) > MAX_SERIALIZED_BYTES:
-                return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-            mimetype = "application/sparql-results+xml"
-            return Response(response=output_payload, status=200, mimetype=mimetype)
-        if "text/csv" in accept:
-            output_payload = result.serialize(format="csv") or b""
-            if len(output_payload) > MAX_SERIALIZED_BYTES:
-                return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-            mimetype = "text/csv"
-            return Response(response=output_payload, status=200, mimetype=mimetype)
-        if "text/tab-separated-values" in accept or "text/tsv" in accept:
-            output_payload = result.serialize(format="tsv") or b""
-            if len(output_payload) > MAX_SERIALIZED_BYTES:
-                return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-            mimetype = "text/tab-separated-values"
-            return Response(response=output_payload, status=200, mimetype=mimetype)
-
-        # Default: SPARQL JSON
-        data = format_select_results(result)
-        json_response = jsonify(data)
-        if len(json_response.get_data()) > MAX_SERIALIZED_BYTES:
-            return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-        return Response(
-            response=json_response.get_data(as_text=True),
-            status=200,
-            mimetype="application/sparql-results+json",
-        )
-
-    # CONSTRUCT or DESCRIBE — return RDF
-    if "application/ld+json" in accept:
-        output_payload = format_graph_results(result, output_format="json-ld")
-        if len(output_payload.encode("utf-8")) > MAX_SERIALIZED_BYTES:
-            return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-        mimetype = "application/ld+json"
-    elif "application/rdf+xml" in accept:
-        g_res = result.graph if hasattr(result, "graph") and result.graph is not None else Graph()
-        output_payload = g_res.serialize(format="xml")
-        if len(output_payload.encode("utf-8")) > MAX_SERIALIZED_BYTES:
-            return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-        mimetype = "application/rdf+xml"
-    else:
-        output_payload = format_graph_results(result, output_format="turtle")
-        if len(output_payload.encode("utf-8")) > MAX_SERIALIZED_BYTES:
-            return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
-        mimetype = "text/turtle"
+    payload_len = len(output_payload.encode("utf-8")) if isinstance(output_payload, str) else len(output_payload)
+    if payload_len > MAX_SERIALIZED_BYTES:
+        return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
 
     return Response(response=output_payload, status=200, mimetype=mimetype)
 

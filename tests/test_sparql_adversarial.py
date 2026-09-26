@@ -22,6 +22,7 @@ import pytest
 
 from app.core.sparql_service import (
     SPARQLConcurrencyLimit,
+    SPARQLError,
     SPARQLResourceLimit,
     SPARQLTimeout,
     build_graph,
@@ -125,7 +126,7 @@ class TestAdversarialQueries:
                 return "concurrency_limit"
             except SPARQLTimeout:
                 return "timeout"
-            except Exception as e:
+            except (SPARQLError, RuntimeError, OSError) as e:
                 return f"error: {e}"
 
         # Launch 10 concurrent queries

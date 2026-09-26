@@ -19,6 +19,7 @@ import json
 
 import pytest
 from rdflib import Graph
+from rdflib.exceptions import ParserError
 
 from app.api.auth import generate_internal_jwt
 from app.db.models import (
@@ -216,7 +217,7 @@ class TestPublicRDFFormatValidity:
         try:
             g.parse(data=response.data, format="turtle")
             assert len(g) > 0
-        except Exception as e:
+        except (ParserError, ValueError, SyntaxError) as e:
             pytest.fail(f"Streaming Turtle is not valid: {e}")
 
     def test_ntriples_streaming_produces_valid_document(self, client, public_rdf_test_data):
@@ -231,7 +232,7 @@ class TestPublicRDFFormatValidity:
         try:
             g.parse(data=response.data, format="nt")
             assert len(g) > 0
-        except Exception as e:
+        except (ParserError, ValueError, SyntaxError) as e:
             pytest.fail(f"Streaming N-Triples is not valid: {e}")
 
 

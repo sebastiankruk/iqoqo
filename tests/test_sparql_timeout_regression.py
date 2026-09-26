@@ -40,6 +40,7 @@ from app.core.sparql_service import (
     MAX_GRAPH_TRIPLES,
     QUERY_TIMEOUT,
     SPARQLConcurrencyLimit,
+    SPARQLError,
     SPARQLTimeout,
     build_graph,
     execute_sparql,
@@ -422,7 +423,7 @@ class TestSPARQLConcurrentQueryStability:
                 return "success"
             except SPARQLConcurrencyLimit:
                 return "rejected"
-            except Exception:
+            except (SPARQLError, RuntimeError, OSError):
                 return "error"
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_queries) as executor:
