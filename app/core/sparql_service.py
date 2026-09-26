@@ -15,16 +15,19 @@
 #
 """SPARQL query service with resource isolation and killable execution boundary."""
 
+import contextlib
 import logging
 import multiprocessing
 import threading
 import time
 from typing import Any
 
+from pyparsing.exceptions import ParseBaseException
 from rdflib import Graph
 from rdflib.plugins.sparql.algebra import translateQuery
 from rdflib.plugins.sparql.parser import parseQuery
 from rdflib.query import Result
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.frbr_service import build_collection_rdf_graph
 from app.core.iri import get_lod_base_url
@@ -36,7 +39,7 @@ try:
     from opentelemetry import metrics as _otel_metrics
 
     _sparql_meter = _otel_metrics.get_meter("iqoqo.sparql")
-except Exception:  # pragma: no cover - telemetry optional
+except (ImportError, AttributeError, ValueError):  # pragma: no cover - telemetry optional
     _sparql_meter = None  # type: ignore[assignment]
 
 
@@ -45,7 +48,7 @@ def _sparql_counter(name: str, description: str):  # type: ignore[no-untyped-def
         return None
     try:
         return _sparql_meter.create_counter(name=name, description=description)
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return None
 
 
@@ -118,6 +121,20 @@ class SPARQLChildProcessError(SPARQLError):
     """Raised when the isolated query child exits without a valid result."""
 
 
+_OPERATION_MAP: dict[str, str] = {
+    "SelectQuery": "SELECT",
+    "Select": "SELECT",
+    "AskQuery": "ASK",
+    "Ask": "ASK",
+    "ConstructQuery": "CONSTRUCT",
+    "Construct": "CONSTRUCT",
+    "DescribeQuery": "DESCRIBE",
+    "Describe": "DESCRIBE",
+}
+
+_FORBIDDEN_OPERATIONS = frozenset({"Update", "Insert", "Delete", "Load", "Clear", "Drop", "Create", "Add", "Move", "Copy"})
+
+
 def classify_operation(query: str) -> str:
     """
     Classify a SPARQL query into its operation type using parsed algebra.
@@ -135,22 +152,18 @@ def classify_operation(query: str) -> str:
         # Get the query type from the algebra
         query_type = algebra.algebra.name if hasattr(algebra.algebra, "name") else None
 
-        if query_type in ("SelectQuery", "Select"):
-            return "SELECT"
-        if query_type in ("AskQuery", "Ask"):
-            return "ASK"
-        if query_type in ("ConstructQuery", "Construct"):
-            return "CONSTRUCT"
-        if query_type in ("DescribeQuery", "Describe"):
-            return "DESCRIBE"
-        if query_type in ("Update", "Insert", "Delete", "Load", "Clear", "Drop", "Create", "Add", "Move", "Copy"):
+        if query_type in _FORBIDDEN_OPERATIONS:
             raise SPARQLWriteRejected("Write operations (INSERT, DELETE, etc.) are not permitted")
+
+        if query_type in _OPERATION_MAP:
+            return _OPERATION_MAP[query_type]
+
         # Fallback: check for update keywords in a more sophisticated way
         # This handles edge cases where the parser might not classify correctly
         return _fallback_classify(query)
     except SPARQLWriteRejected:
         raise
-    except Exception:
+    except (ParseBaseException, ValueError, TypeError, KeyError, AttributeError, SPARQLError):
         # If parsing fails, try fallback classification
         return _fallback_classify(query)
 
@@ -216,7 +229,7 @@ def validate_query(query: str) -> str:
     # Try to parse to catch syntax errors early
     try:
         parseQuery(query)
-    except Exception as e:
+    except (ParseBaseException, SPARQLError, ValueError, TypeError) as e:
         raise SPARQLSyntaxError(f"SPARQL syntax error: {e}") from e
 
     return operation
@@ -277,15 +290,15 @@ def _execute_query_in_process(graph_data: bytes, query: str, conn) -> None:  # t
             result_data = {"type": "GRAPH", "data": result_graph.serialize(format="nt")}
 
         conn.send(("success", result_data))
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, OSError, RuntimeError, SPARQLError) as e:
         try:
             conn.send(("error", str(e)))
-        except Exception:
+        except (OSError, EOFError, ValueError):
             pass
     finally:
         try:
             conn.close()
-        except Exception:
+        except (OSError, EOFError, ValueError):
             pass
 
 
@@ -299,6 +312,49 @@ _MP_CONTEXT = multiprocessing.get_context("fork")
 
 # Maximum serialized-byte limit for result payloads (10 MB)
 MAX_SERIALIZED_BYTES = 10 * 1024 * 1024
+
+
+@contextlib.contextmanager
+def _acquire_query_semaphore() -> Any:
+    """Non-blocking query semaphore acquisition context manager."""
+    if not _query_semaphore.acquire(blocking=False):
+        if _sparql_capacity_rejections_total is not None:
+            try:
+                _sparql_capacity_rejections_total.add(1, {"reason": "concurrency_limit"})
+            except (ValueError, TypeError, AttributeError):
+                pass
+        raise SPARQLConcurrencyLimit("Too many concurrent queries. Please retry later.")
+    try:
+        yield
+    finally:
+        _query_semaphore.release()
+
+
+@contextlib.contextmanager
+def _managed_pipe() -> Any:
+    """Context manager ensuring pipe resources are properly closed."""
+    parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)
+    try:
+        yield parent_conn, child_conn
+    finally:
+        try:
+            parent_conn.close()
+        except (OSError, EOFError, ValueError):
+            pass
+        try:
+            child_conn.close()
+        except (OSError, EOFError, ValueError):
+            pass
+
+
+@contextlib.contextmanager
+def _managed_process(process: Any) -> Any:
+    """Context manager ensuring child process lifecycle is handled cleanly."""
+    try:
+        yield process
+    finally:
+        if process is not None and process.is_alive():
+            _terminate_process(process)
 
 
 def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> Result:
@@ -326,27 +382,16 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
     start_time = time.time()
     deadline = start_time + timeout
 
-    # Check concurrency limit
-    if not _query_semaphore.acquire(blocking=False):
-        if _sparql_capacity_rejections_total is not None:
-            try:
-                _sparql_capacity_rejections_total.add(1, {"reason": "concurrency_limit"})
-            except Exception:
-                pass
-        raise SPARQLConcurrencyLimit("Too many concurrent queries. Please retry later.")
-
-    process = None
-    parent_conn = None
-    try:
+    with _acquire_query_semaphore():
         # Serialize graph for transfer to child process
         try:
             graph_data = graph.serialize(format="nt")
-        except Exception as exc:
+        except (ValueError, TypeError, KeyError, AttributeError, OSError, RuntimeError) as exc:
             logger.exception("SPARQL graph serialization failed")
             if _sparql_graph_build_failures_total is not None:
                 try:
                     _sparql_graph_build_failures_total.add(1, {"phase": "serialize"})
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     pass
             raise SPARQLGraphBuildError("RDF graph serialization failed.") from exc
 
@@ -359,112 +404,99 @@ def execute_sparql(graph: Graph, query: str, timeout: float = QUERY_TIMEOUT) -> 
             if _sparql_limit_rejections_total is not None:
                 try:
                     _sparql_limit_rejections_total.add(1, {"reason": "graph_size"})
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
                     pass
             raise SPARQLResourceLimit(f"Serialized graph ({len(graph_bytes)} bytes) exceeds limit of {MAX_SERIALIZED_BYTES}.")
 
         # Create one-way pipe and child process using explicit context
-        parent_conn, child_conn = _MP_CONTEXT.Pipe(duplex=False)
-        process = _MP_CONTEXT.Process(
-            target=_execute_query_in_process,
-            args=(graph_bytes, query, child_conn),
-            daemon=True,
-        )
-
-        try:
-            process.start()
-        except Exception as proc_err:
-            # Subprocess creation failed (e.g., memory pressure, resource limits)
-            # Close pipe ends to prevent resource leaks
-            child_conn.close()
-            parent_conn.close()
-            logger.error("SPARQL subprocess creation failed: %s", proc_err)
-            if _sparql_child_crashes_total is not None:
+        with _managed_pipe() as (parent_conn, child_conn):
+            process = _MP_CONTEXT.Process(
+                target=_execute_query_in_process,
+                args=(graph_bytes, query, child_conn),
+                daemon=True,
+            )
+            with _managed_process(process):
                 try:
-                    _sparql_child_crashes_total.add(1, {"reason": "spawn_failed", "error": str(proc_err)})
-                except Exception:
-                    pass
-            raise SPARQLChildProcessError(f"Failed to create isolated query process: {proc_err}") from proc_err
+                    process.start()
+                except (OSError, ValueError, RuntimeError) as proc_err:
+                    # Subprocess creation failed (e.g., memory pressure, resource limits)
+                    child_conn.close()
+                    parent_conn.close()
+                    logger.error("SPARQL subprocess creation failed: %s", proc_err)
+                    if _sparql_child_crashes_total is not None:
+                        try:
+                            _sparql_child_crashes_total.add(1, {"reason": "spawn_failed", "error": str(proc_err)})
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                    raise SPARQLChildProcessError(f"Failed to create isolated query process: {proc_err}") from proc_err
 
-        # Close child end in parent immediately
-        child_conn.close()
+                # Close child end in parent immediately
+                child_conn.close()
 
-        # Deadline-aware receive: compute remaining time
-        remaining = max(0.0, deadline - time.time())
-        if remaining <= 0:
-            raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout (deadline expired before IPC)")
+                # Deadline-aware receive: compute remaining time
+                remaining = max(0.0, deadline - time.time())
+                if remaining <= 0:
+                    raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout (deadline expired before IPC)")
 
-        try:
-            if not parent_conn.poll(remaining):
-                # Timeout - no data received within deadline
-                _terminate_process(process)
-                if _sparql_timeouts_total is not None:
+                try:
+                    if not parent_conn.poll(remaining):
+                        # Timeout - no data received within deadline
+                        _terminate_process(process)
+                        if _sparql_timeouts_total is not None:
+                            try:
+                                _sparql_timeouts_total.add(1, {"reason": "ipc_deadline"})
+                            except (ValueError, TypeError, AttributeError):
+                                pass
+                        raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout")
+
+                    # Data available - receive it
+                    status, result_data = parent_conn.recv()
+                except (EOFError, OSError) as ipc_err:
+                    # Child exited without sending data
+                    _terminate_process(process)
+                    exit_code = process.exitcode
+                    logger.warning("SPARQL child process exited without result: exitcode=%s", exit_code)
+                    if _sparql_child_crashes_total is not None:
+                        try:
+                            _sparql_child_crashes_total.add(1, {"exit_code": str(exit_code)})
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                    raise SPARQLChildProcessError(f"Isolated query process exited unexpectedly (code={exit_code}).") from ipc_err
+
+                # Wait for child to finish cleanly
+                process.join(timeout=2.0)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=1.0)
+                    if process.is_alive():
+                        process.kill()
+                        process.join()
+
+                # Check child exit status
+                if process.exitcode is not None and process.exitcode != 0:
+                    logger.warning("SPARQL child process exited with code %s", process.exitcode)
+
+                if status == "error":
+                    error_msg = result_data
+                    if "Parse" in error_msg or "Syntax" in error_msg or "Expected" in error_msg:
+                        raise SPARQLSyntaxError(f"SPARQL syntax error: {error_msg}")
+                    raise SPARQLError(f"Query execution failed: {error_msg}")
+
+                # Reconstruct Result object from serialized data
+                duration = time.time() - start_time
+                logger.info(
+                    "SPARQL query completed in %.3fs, type=%s, graph_bytes=%d",
+                    duration,
+                    result_data.get("type"),
+                    len(graph_bytes),
+                )
+                if _sparql_queries_total is not None:
                     try:
-                        _sparql_timeouts_total.add(1, {"reason": "ipc_deadline"})
-                    except Exception:
+                        _sparql_queries_total.add(1, {"type": result_data.get("type", "unknown")})
+                    except (ValueError, TypeError, AttributeError):
                         pass
-                raise SPARQLTimeout(f"Query execution exceeded {timeout}s timeout")
 
-            # Data available - receive it
-            status, result_data = parent_conn.recv()
-        except (EOFError, OSError) as ipc_err:
-            # Child exited without sending data
-            _terminate_process(process)
-            exit_code = process.exitcode
-            logger.warning("SPARQL child process exited without result: exitcode=%s", exit_code)
-            if _sparql_child_crashes_total is not None:
-                try:
-                    _sparql_child_crashes_total.add(1, {"exit_code": str(exit_code)})
-                except Exception:
-                    pass
-            raise SPARQLChildProcessError(f"Isolated query process exited unexpectedly (code={exit_code}).") from ipc_err
-
-        # Wait for child to finish cleanly
-        process.join(timeout=2.0)
-        if process.is_alive():
-            process.terminate()
-            process.join(timeout=1.0)
-            if process.is_alive():
-                process.kill()
-                process.join()
-
-        # Check child exit status
-        if process.exitcode is not None and process.exitcode != 0:
-            logger.warning("SPARQL child process exited with code %s", process.exitcode)
-
-        if status == "error":
-            error_msg = result_data
-            if "Parse" in error_msg or "Syntax" in error_msg or "Expected" in error_msg:
-                raise SPARQLSyntaxError(f"SPARQL syntax error: {error_msg}")
-            raise SPARQLError(f"Query execution failed: {error_msg}")
-
-        # Reconstruct Result object from serialized data
-        duration = time.time() - start_time
-        logger.info(
-            "SPARQL query completed in %.3fs, type=%s, graph_bytes=%d",
-            duration,
-            result_data.get("type"),
-            len(graph_bytes),
-        )
-        if _sparql_queries_total is not None:
-            try:
-                _sparql_queries_total.add(1, {"type": result_data.get("type", "unknown")})
-            except Exception:
-                pass
-
-        return _reconstruct_result(result_data)
-
-    finally:
-        # Clean up IPC resources
-        if parent_conn is not None:
-            try:
-                parent_conn.close()
-            except Exception:
-                pass
-        # Ensure process is cleaned up
-        if process is not None and process.is_alive():
-            _terminate_process(process)
-        _query_semaphore.release()
+                return _reconstruct_result(result_data)
 
 
 def _terminate_process(process: Any) -> None:
@@ -479,7 +511,7 @@ def _terminate_process(process: Any) -> None:
         if process.is_alive():
             process.kill()
             process.join(timeout=1.0)
-    except Exception:
+    except (OSError, ValueError, AttributeError):
         logger.debug("Failed to terminate SPARQL child process", exc_info=True)
 
 
@@ -606,9 +638,7 @@ def build_graph(
 
     try:
         graph = build_collection_rdf_graph(entities_to_serialize, base_url or get_lod_base_url())
-    except SPARQLGraphBuildError:
-        raise
-    except Exception as exc:
+    except (SQLAlchemyError, ValueError, TypeError, KeyError, AttributeError, RuntimeError, OSError) as exc:
         logger.exception("SPARQL graph construction failed")
         raise SPARQLGraphBuildError("RDF graph construction failed; please retry or reduce collection size.") from exc
 

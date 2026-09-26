@@ -406,10 +406,12 @@ class TestLiveModeWithBackup:
         """Verify live mode creates complete backup and verifies coverage."""
         with app.app_context():
             result = run_safe_etl_pipeline(dry_run=False, backup_dir=tmp_path, verbose=False)
+            assert isinstance(result, dict)
             assert result["dry_run"] is False
             assert result["backup_file"] is not None
-            assert result["backup_verification"] is not None
-            assert result["backup_verification"]["valid"] is True  # type: ignore[index]  # pylint: disable=unsubscriptable-object
+            backup_verification = result.get("backup_verification")
+            assert isinstance(backup_verification, dict)
+            assert backup_verification["valid"] is True
 
     def test_live_mode_applies_merge_plans(self, app, comprehensive_work_fixture, tmp_path):
         """Verify live mode applies merge plans and reparents all dependents."""

@@ -562,7 +562,9 @@ class TestSPARQLIPCAndLimits:
         """Graph build failures must return structured JSON error, not uncaught 500."""
         from unittest.mock import patch
 
-        with patch("app.api.sparql.build_graph", side_effect=Exception("graph build boom")):
+        from app.core.sparql_service import SPARQLGraphBuildError
+
+        with patch("app.api.sparql.build_graph", side_effect=SPARQLGraphBuildError("graph build boom")):
             response = client.post(
                 "/api/sparql",
                 json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},

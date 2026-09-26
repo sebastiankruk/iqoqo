@@ -409,7 +409,7 @@ class TestLimitEnforcement:
                 return "success"
             except SPARQLConcurrencyLimit:
                 return "concurrency_limit"
-            except Exception:
+            except (SPARQLError, RuntimeError, OSError):
                 return "other_error"
 
         # Launch more concurrent queries than the limit
@@ -559,7 +559,7 @@ class TestConcurrency:
                 return "success"
             except SPARQLConcurrencyLimit:
                 return "concurrency_limit"
-            except Exception as e:
+            except (SPARQLError, RuntimeError, OSError) as e:
                 return f"error: {e}"
 
         # Launch exactly MAX_CONCURRENT_QUERIES
@@ -592,7 +592,7 @@ class TestConcurrency:
                 return "success"
             except SPARQLConcurrencyLimit:
                 return "concurrency_limit"
-            except Exception:
+            except (SPARQLError, RuntimeError, OSError):
                 return "other_error"
 
         # Launch more than MAX_CONCURRENT_QUERIES
@@ -669,7 +669,7 @@ class TestErrorPaths:
 
     def test_graph_build_error_returns_structured_response(self, client, sparql_user):
         """SPARQLGraphBuildError must return structured error, not 500."""
-        with patch("app.api.sparql.build_graph", side_effect=Exception("graph build boom")):
+        with patch("app.api.sparql.build_graph", side_effect=SPARQLGraphBuildError("graph build boom")):
             response = client.post(
                 "/api/sparql",
                 json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},
