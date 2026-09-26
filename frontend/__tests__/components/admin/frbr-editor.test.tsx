@@ -13,8 +13,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { toast } from "sonner";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
 import * as adminApi from "@/lib/api/admin";
 import { PermissionName } from "@/lib/permissions";
@@ -23,16 +24,21 @@ import {
   useFrbrTree,
   useUpdateFrbrEntity,
   useDeleteFrbrEntity,
+  useAddFrbrChild,
   useWorkParts,
   useUserSearch,
 } from "@/lib/api/hooks";
 
 vi.mock("@/lib/api/admin");
 
+const mockCreateEscalationMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({ id: 99 }),
+  mutate: vi.fn(),
+  isPending: false as const,
+};
+
 vi.mock("@/lib/api/escalations", () => ({
-  useCreateEscalation: vi.fn(() => ({
-    mutateAsync: vi.fn(),
-  })),
+  useCreateEscalation: vi.fn(() => mockCreateEscalationMutation),
 }));
 
 const mockFrbrTree = {
@@ -105,6 +111,38 @@ const mockDeleteMutation = {
   context: undefined,
 };
 
+const mockAddChildMutation = {
+  mutateAsync: vi.fn(async (vars: any) => {
+    const { apiClient } = await import("@/lib/api/client");
+    if (typeof apiClient.post === "function") {
+      const res = await apiClient.post(
+        `/v1/admin/frbr/${vars.parentType}/${vars.parentId}/${vars.childType}`,
+        vars.data
+      );
+      if (res && res.data && !res.data.success && res.data.error) {
+        throw new Error(res.data.error);
+      }
+      return res?.data?.data ?? { id: 99 };
+    }
+    return { id: 99 };
+  }),
+  mutate: vi.fn(),
+  isPending: false as const,
+  isError: false as const,
+  isSuccess: false as const,
+  isIdle: true as const,
+  isPaused: false as const,
+  status: "idle" as const,
+  data: undefined,
+  error: null,
+  variables: undefined,
+  reset: vi.fn(),
+  submittedAt: 0,
+  failureCount: 0,
+  failureReason: null,
+  context: undefined,
+};
+
 vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: vi.fn(() => ({
     data: { data: [] },
@@ -123,6 +161,7 @@ vi.mock("@/lib/api/hooks", () => ({
   })),
   useUpdateFrbrEntity: vi.fn(() => mockUpdateMutation),
   useDeleteFrbrEntity: vi.fn(() => mockDeleteMutation),
+  useAddFrbrChild: vi.fn(() => mockAddChildMutation),
   useUserSearch: vi.fn(() => ({
     data: [],
     isLoading: false,
@@ -143,24 +182,54 @@ vi.mock("@/components/ui/select", () => ({
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }));
 
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick, disabled, className }: any) => (
+    <button type="button" onClick={onClick} disabled={disabled} className={className}>
+      {children}
+    </button>
+  ),
+}));
+
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open, onOpenChange }: any) =>
-    open ? <div data-testid="alert-dialog">{children}</div> : null,
+    open ? (
+      <div data-testid="alert-dialog">
+        <button type="button" data-testid="alert-dialog-backdrop" onClick={() => onOpenChange?.(false)}>
+          Backdrop
+        </button>
+        {children}
+      </div>
+    ) : null,
   AlertDialogContent: ({ children }: any) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: any) => <h2>{children}</h2>,
   AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
   AlertDialogAction: ({ children, onClick, className }: any) => (
-    <button onClick={onClick} className={className}>
+    <button type="button" onClick={onClick} className={className}>
       {children}
     </button>
   ),
-  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
+  AlertDialogCancel: ({ children, onClick }: any) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: any) => (open ? <div data-testid="dialog">{children}</div> : null),
+  Dialog: ({ children, open, onOpenChange }: any) =>
+    open ? (
+      <div data-testid="dialog">
+        <button type="button" data-testid="dialog-backdrop" onClick={() => onOpenChange?.(false)}>
+          Backdrop
+        </button>
+        {children}
+      </div>
+    ) : null,
   DialogContent: ({ children }: any) => <div>{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
@@ -183,13 +252,29 @@ describe("FrbrEditor Component", () => {
     } as any);
     vi.mocked(useUpdateFrbrEntity).mockReturnValue(mockUpdateMutation);
     vi.mocked(useDeleteFrbrEntity).mockReturnValue(mockDeleteMutation);
+    vi.mocked(useAddFrbrChild).mockReturnValue(mockAddChildMutation as any);
     vi.mocked(adminApi.getFrbrTree).mockResolvedValue(mockFrbrTree as any);
     vi.mocked(adminApi.updateFrbrEntity).mockResolvedValue({
       data: { success: true },
     } as any);
     // Reset mutation mock states
-    mockUpdateMutation.mutateAsync.mockResolvedValue({ id: 1 });
-    mockDeleteMutation.mutateAsync.mockResolvedValue({});
+    mockUpdateMutation.mutateAsync.mockReset().mockResolvedValue({ id: 1 });
+    mockDeleteMutation.mutateAsync.mockReset().mockResolvedValue({});
+    mockCreateEscalationMutation.mutateAsync.mockReset().mockResolvedValue({ id: 99 });
+    mockAddChildMutation.mutateAsync.mockReset().mockImplementation(async (vars: any) => {
+      const { apiClient } = await import("@/lib/api/client");
+      if (typeof apiClient.post === "function") {
+        const res = await apiClient.post(
+          `/v1/admin/frbr/${vars.parentType}/${vars.parentId}/${vars.childType}`,
+          vars.data
+        );
+        if (res && res.data && !res.data.success && res.data.error) {
+          throw new Error(res.data.error);
+        }
+        return res?.data?.data ?? { id: 99 };
+      }
+      return { id: 99 };
+    });
   });
 
   it("renders the FRBR tree view and level selector", async () => {
@@ -791,27 +876,345 @@ describe("FrbrEditor Component", () => {
     });
   });
 
-  it("handles manifestation type change with escalation when no WRITE_METADATA", async () => {
-    // This test verifies the component renders without crashing when permissions are limited
-    render(<FrbrEditor manifestationId={3} />);
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /Save Manifestation/i })).toBeInTheDocument();
+  it("completes full Delete dialog flow and resets active tab", async () => {
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "work" } });
+    await waitFor(() => expect(screen.getByText("Edit Work")).toBeInTheDocument());
+
+    const deleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+
+    const confirmButton = within(screen.getByTestId("alert-dialog")).getByRole("button", { name: "Delete" });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(mockDeleteMutation.mutateAsync).toHaveBeenCalledWith({
+        manifestationId: 3,
+        type: "work",
+        id: 1,
+      });
+      expect(toast.success).toHaveBeenCalledWith("Entity deleted");
+      expect(screen.queryByTestId("alert-dialog")).not.toBeInTheDocument();
+      expect(screen.getByText("Edit Manifestation")).toBeInTheDocument();
+    });
   });
 
-  it("shows error toast when manifestation update fails without permissions", async () => {
-    // This test verifies the component renders the manifestation editor
-    render(<FrbrEditor manifestationId={3} />);
-    await waitFor(() => expect(screen.getByDisplayValue("Ace Books")).toBeInTheDocument());
-    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
-    expect(saveButton).toBeInTheDocument();
+  it("renders cascade warning text for Work, Expression, and Manifestation deletion", async () => {
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+
+    // 1. Work cascade warning
+    fireEvent.change(levelSelect, { target: { value: "work" } });
+    await waitFor(() => expect(screen.getByText("Edit Work")).toBeInTheDocument());
+
+    const workDeleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(workDeleteButtons[workDeleteButtons.length - 1]);
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+    expect(screen.getByText(/and all its expressions, manifestations, and items/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("alert-dialog-backdrop"));
+    await waitFor(() => expect(screen.queryByTestId("alert-dialog")).not.toBeInTheDocument());
+
+    // 2. Expression cascade warning
+    fireEvent.change(levelSelect, { target: { value: "expression" } });
+    await waitFor(() => expect(screen.getByText("Edit Expression")).toBeInTheDocument());
+
+    const exprDeleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(exprDeleteButtons[exprDeleteButtons.length - 1]);
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+    expect(screen.getByText(/and all its manifestations and items/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("alert-dialog-backdrop"));
+    await waitFor(() => expect(screen.queryByTestId("alert-dialog")).not.toBeInTheDocument());
+
+    // 3. Manifestation cascade warning
+    fireEvent.change(levelSelect, { target: { value: "manifestation" } });
+    await waitFor(() => expect(screen.getByText("Edit Manifestation")).toBeInTheDocument());
+
+    const manDeleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(manDeleteButtons[manDeleteButtons.length - 1]);
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+    expect(screen.getByText(/and all its items/i)).toBeInTheDocument();
   });
 
-  it("calls refetch after successful child creation", async () => {
-    // Verify the Add Child dialog can be opened
+  it("handles Delete dialog error: shows error toast and keeps dialog open", async () => {
+    mockDeleteMutation.mutateAsync.mockRejectedValueOnce(new Error("Cannot delete entity"));
+
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "work" } });
+    await waitFor(() => expect(screen.getByText("Edit Work")).toBeInTheDocument());
+
+    const deleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+
+    const confirmButton = within(screen.getByTestId("alert-dialog")).getByRole("button", { name: "Delete" });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Cannot delete entity");
+      expect(screen.getByTestId("alert-dialog")).toBeInTheDocument();
+    });
+  });
+
+  it("completes full Escalate dialog flow and submits escalation note", async () => {
     render(<FrbrEditor manifestationId={3} />);
     await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const escalateButtons = screen.getAllByRole("button", { name: /^Escalate$/i });
+    fireEvent.click(escalateButtons[0]);
+
+    await waitFor(() => expect(screen.getByText("Request Escalation")).toBeInTheDocument());
+
+    const noteInput = screen.getByPlaceholderText("Describe the change you are requesting...");
+    fireEvent.change(noteInput, { target: { value: "Need revision on author attribution" } });
+
+    const submitButton = screen.getByRole("button", { name: /Submit Request/i });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockCreateEscalationMutation.mutateAsync).toHaveBeenCalledWith({
+        level: "work",
+        targetId: 1,
+        data: {
+          field_name: "general",
+          suggested_value: "",
+          note: "Need revision on author attribution",
+        },
+      });
+      expect(toast.success).toHaveBeenCalledWith("Escalation request submitted");
+      expect(screen.queryByTestId("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("handles Escalate dialog error: shows error toast and keeps dialog open", async () => {
+    mockCreateEscalationMutation.mutateAsync.mockRejectedValueOnce(new Error("Escalation failed"));
+
+    render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const escalateButtons = screen.getAllByRole("button", { name: /^Escalate$/i });
+    fireEvent.click(escalateButtons[0]);
+
+    await waitFor(() => expect(screen.getByText("Request Escalation")).toBeInTheDocument());
+
+    const submitButton = screen.getByRole("button", { name: /Submit Request/i });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Escalation failed");
+      expect(screen.getByRole("button", { name: /Submit Request/i })).toBeInTheDocument();
+    });
+  });
+
+  it("creates Manifestation child when Add Child is confirmed on Expression parent", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValueOnce({
+      data: { success: true, data: { id: 201 } },
+    } as any);
+
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "expression" } });
+    await waitFor(() => expect(screen.getByText("Edit Expression")).toBeInTheDocument());
+
+    const addChildButtons = screen.getAllByRole("button", { name: /Add Child/i });
+    fireEvent.click(addChildButtons[addChildButtons.length - 1]);
+
+    await waitFor(() => expect(screen.getByText("Add Child Manifestation")).toBeInTheDocument());
+
+    const titleInput = screen.getByPlaceholderText("Enter title...");
+    fireEvent.change(titleInput, { target: { value: "Paperback Edition" } });
+
+    const createButton = screen.getByRole("button", { name: /Create/i });
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledWith("/v1/admin/frbr/expression/2/manifestation", {
+        title: "Paperback Edition",
+      });
+      expect(toast.success).toHaveBeenCalledWith("Created new manifestation");
+    });
+  });
+
+  it("creates Item child when Add Child is confirmed on Manifestation parent", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValueOnce({
+      data: { success: true, data: { id: 301 } },
+    } as any);
+
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const levelSelect = container.querySelector("select") as HTMLSelectElement;
+    fireEvent.change(levelSelect, { target: { value: "manifestation" } });
+    await waitFor(() => expect(screen.getByText("Edit Manifestation")).toBeInTheDocument());
+
+    const addChildButtons = screen.getAllByRole("button", { name: /Add Child/i });
+    fireEvent.click(addChildButtons[addChildButtons.length - 1]);
+
+    await waitFor(() => expect(screen.getByText("Add Child Item")).toBeInTheDocument());
+
+    const titleInput = screen.getByPlaceholderText("Enter title...");
+    fireEvent.change(titleInput, { target: { value: "Copy #1" } });
+
+    const createButton = screen.getByRole("button", { name: /Create/i });
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(postSpy).toHaveBeenCalledWith("/v1/admin/frbr/manifestation/3/item", {
+        title: "Copy #1",
+      });
+      expect(toast.success).toHaveBeenCalledWith("Created new item");
+    });
+  });
+
+  it("handles Add Child API failure: shows error toast and keeps dialog open", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    vi.spyOn(apiClient, "post").mockRejectedValueOnce(new Error("API creation error"));
+
+    render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
     const addChildButtons = screen.getAllByText("Add Child");
-    expect(addChildButtons.length).toBeGreaterThan(0);
+    fireEvent.click(addChildButtons[0]);
+
+    await waitFor(() => expect(screen.getByPlaceholderText("Enter title...")).toBeInTheDocument());
+
+    const titleInput = screen.getByPlaceholderText("Enter title...");
+    fireEvent.change(titleInput, { target: { value: "Invalid Title" } });
+
+    const createButton = screen.getByRole("button", { name: /Create/i });
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("API creation error");
+      expect(screen.getByPlaceholderText("Enter title...")).toBeInTheDocument();
+    });
+  });
+
+  it("manifestation type change invokes createEscalation when user lacks WRITE_METADATA but has ESCALATE_REQUEST", async () => {
+    vi.mocked(useProfile).mockReturnValue({
+      data: { permissions: [PermissionName.ESCALATE_REQUEST] },
+    } as any);
+
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Edit Manifestation")).toBeInTheDocument());
+
+    const typeSelect = container.querySelectorAll("select")[1];
+    fireEvent.change(typeSelect, { target: { value: "ebook" } });
+
+    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockCreateEscalationMutation.mutateAsync).toHaveBeenCalledWith({
+        level: "manifestation",
+        targetId: 3,
+        data: {
+          request_type: "change_type",
+          field_name: "type",
+          current_value: "Book",
+          suggested_value: "ebook",
+          note: "Type change suggested via editor",
+        },
+      });
+      expect(mockUpdateMutation.mutateAsync).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith("Type change requested via User Requests.");
+    });
+  });
+
+  it("manifestation type change denied with error toast when user lacks WRITE_METADATA and ESCALATE_REQUEST", async () => {
+    vi.mocked(useProfile).mockReturnValue({
+      data: { permissions: [] },
+    } as any);
+
+    const { container } = render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Edit Manifestation")).toBeInTheDocument());
+
+    const typeSelect = container.querySelectorAll("select")[1];
+    fireEvent.change(typeSelect, { target: { value: "ebook" } });
+
+    const saveButton = screen.getByRole("button", { name: /Save Manifestation/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("You do not have permission to update metadata.");
+      expect(mockCreateEscalationMutation.mutateAsync).not.toHaveBeenCalled();
+      expect(mockUpdateMutation.mutateAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  it("invokes onClose callback prop when close button is clicked", async () => {
+    const onClose = vi.fn();
+    render(<FrbrEditor manifestationId={3} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    const closeButton = screen.getByRole("button", { name: /Close/i });
+    fireEvent.click(closeButton);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls refetch when retry button is clicked in error state", async () => {
+    const mockRefetch = vi.fn();
+    vi.mocked(useFrbrTree).mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: true,
+      error: new Error("Failed to load hierarchy"),
+      refetch: mockRefetch,
+    } as any);
+
+    render(<FrbrEditor manifestationId={3} />);
+    expect(screen.getByText("Failed to load hierarchy")).toBeInTheDocument();
+
+    const retryButton = screen.getByRole("button", { name: /Retry/i });
+    fireEvent.click(retryButton);
+
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets dialog open state when dismissed via backdrop", async () => {
+    render(<FrbrEditor manifestationId={3} />);
+    await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+    // 1. Add Child Dialog
+    const addChildButtons = screen.getAllByText("Add Child");
+    fireEvent.click(addChildButtons[0]);
+    await waitFor(() => expect(screen.getByTestId("dialog")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("dialog-backdrop"));
+    await waitFor(() => expect(screen.queryByTestId("dialog")).not.toBeInTheDocument());
+
+    // 2. Delete Dialog
+    const deleteButtons = screen.getAllByRole("button", { name: /^Delete$/i });
+    fireEvent.click(deleteButtons[0]);
+    await waitFor(() => expect(screen.getByTestId("alert-dialog")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("alert-dialog-backdrop"));
+    await waitFor(() => expect(screen.queryByTestId("alert-dialog")).not.toBeInTheDocument());
+
+    // 3. Escalate Dialog
+    const escalateButtons = screen.getAllByRole("button", { name: /^Escalate$/i });
+    fireEvent.click(escalateButtons[0]);
+    await waitFor(() => expect(screen.getByTestId("dialog")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("dialog-backdrop"));
+    await waitFor(() => expect(screen.queryByTestId("dialog")).not.toBeInTheDocument());
   });
 });
 

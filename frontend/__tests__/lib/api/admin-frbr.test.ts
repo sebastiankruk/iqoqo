@@ -21,6 +21,8 @@ vi.mock("@/lib/api/client", () => ({
   apiFetch: vi.fn(),
   apiClient: {
     put: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 

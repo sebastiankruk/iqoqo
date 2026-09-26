@@ -21,8 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Loader2, RotateCcw, X } from "lucide-react";
 import Link from "next/link";
-import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity } from "@/lib/api/hooks";
-import { apiClient } from "@/lib/api/client";
+import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity, useAddFrbrChild } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import { useCreateEscalation } from "@/lib/api/escalations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -174,6 +173,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
   const { data: tree, isLoading, isError, error, refetch } = useFrbrTree(manifestationId);
   const updateEntity = useUpdateFrbrEntity();
   const deleteEntity = useDeleteFrbrEntity();
+  const addChild = useAddFrbrChild();
   const { data: profile } = useProfile();
   const createEscalation = useCreateEscalation();
   const hasWriteMetadata = Boolean(profile?.permissions?.includes(PermissionName.WRITE_METADATA));
@@ -355,7 +355,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
     try {
       let parentId: number;
-      let childType: string;
+      let childType: "expression" | "manifestation" | "item";
 
       if (parentLevel === "work" && tree.work) {
         parentId = tree.work.id;
@@ -370,8 +370,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         return;
       }
 
-      await apiClient.post(`/v1/admin/frbr/${parentLevel}/${parentId}/${childType}`, {
-        title: newChildTitle.trim(),
+      await addChild.mutateAsync({
+        manifestationId,
+        parentType: parentLevel,
+        parentId,
+        childType,
+        data: {
+          title: newChildTitle.trim(),
+        },
       });
       toast.success(`Created new ${childType}`);
       setAddChildDialog({ open: false, parentLevel: null });
@@ -379,7 +385,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create child entity");
     }
-  }, [addChildDialog.parentLevel, tree, newChildTitle, refetch]);
+  }, [addChildDialog.parentLevel, tree, newChildTitle, addChild, manifestationId, refetch]);
 
   /**
    * Handles the "Escalate" action.
