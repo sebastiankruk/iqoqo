@@ -173,6 +173,34 @@ def test_lookup_isbn_not_found(mock_fetch, client):
     """Test ISBN lookup for a valid ISBN not found in any upstream source returns 404."""
     response = client.get("/api/isbn/9780000000002")
     assert response.status_code == 404
+    assert response.json["error"] == "Metadata not found"
+    assert "9780000000002" not in response.get_data(as_text=True)
+
+
+def test_lookup_isbn_invalid_value_is_not_echoed(client):
+    """Invalid ISBN input must not be reflected in client-visible errors."""
+    raw_isbn = "private-isbn-payload"
+    response = client.get(f"/api/isbn/{raw_isbn}")
+
+    assert response.status_code == 400
+    assert response.json["error"] == "Invalid ISBN"
+    assert raw_isbn not in response.get_data(as_text=True)
+
+
+def test_lookup_isbn_provider_exception_is_sanitized_and_logged(client, monkeypatch, caplog):
+    """Unexpected provider diagnostics are logged but not disclosed to clients."""
+    secret_detail = "internal provider credentials and endpoint details"
+
+    def fail_provider(_isbn):
+        raise RuntimeError(secret_detail)
+
+    monkeypatch.setattr("app.api.manifestations.isbn_utils.fetch_isbn_metadata", fail_provider)
+    response = client.get("/api/isbn/9780451524935")
+
+    assert response.status_code == 502
+    assert response.json["error"] == "Unable to retrieve ISBN metadata"
+    assert secret_detail not in response.get_data(as_text=True)
+    assert secret_detail in caplog.text
 
 
 @patch("app.utils.isbn.fetch_isbn_metadata")

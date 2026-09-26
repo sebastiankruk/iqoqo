@@ -24,7 +24,9 @@ from . import (
     items,
     manifestations,
     profile,
-    public,
+    public_items,
+    public_profile,
+    public_rdf,
     scanner,
     sharing,
     social,
@@ -38,11 +40,28 @@ from .core import api_bp
 if hasattr(admin, "admin_bp"):
     api_bp.register_blueprint(admin.admin_bp)
 
-api_bp.register_blueprint(public.public_bp)
+api_bp.register_blueprint(public_rdf.public_bp)
 api_bp.register_blueprint(sharing.sharing_bp)
 api_bp.register_blueprint(sparql.sparql_bp)
 
 # By simply importing these, Python runs the `@api_bp.route(...)` decorators
 # inside them, successfully hooking up the endpoints to the main API blueprint.
 # Note: These must remain imported to register routes.
-_ = (auth, collections, feedback, items, manifestations, profile, scanner, sharing, social, sparql, system, taxonomies, works)
+_ = (
+    auth,
+    collections,
+    feedback,
+    items,
+    manifestations,
+    profile,
+    public_items,
+    public_profile,
+    public_rdf,
+    scanner,
+    sharing,
+    social,
+    sparql,
+    system,
+    taxonomies,
+    works,
+)

@@ -212,4 +212,17 @@ describe("ProfilePage", () => {
       expect(downloadCollectionExport).toHaveBeenCalledWith("turtle");
     });
   });
+
+  it("renders delete account button disabled with v0.8.2 tooltip", async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Delete Account" })).toBeInTheDocument();
+    });
+
+    const deleteBtn = screen.getByRole("button", { name: "Delete Account" });
+    expect(deleteBtn).toBeDisabled();
+    expect(deleteBtn).toHaveAttribute("title", expect.stringContaining("Coming in v0.8.2"));
+    expect(screen.getByText("Coming in v0.8.2")).toBeInTheDocument();
+  });
 });

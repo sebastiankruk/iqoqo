@@ -269,7 +269,8 @@ iqoqo/
 | `make test-backend` | Run backend pytest suite |
 | `make test-frontend` | Run frontend Vitest suite |
 | `make test-e2e` | Run Playwright end-to-end tests |
-| `make lint` | Run all linters (ruff, mypy, pylint, eslint, markdownlint) |
+| `make lint` | Run the effective GitHub quality-workflow checks (Ruff, Black, isort, advisory mypy, Markdownlint, license) |
+| `make lint-all` | Add stricter local-only Pylint, ESLint, TypeScript, and Stylelint checks |
 | `make format` | Format Python and TypeScript codebases |
 | `make status` | Check service health and database migrations |
 | `make migrate-secrets` | Migrate API secrets from `.env` into encrypted database settings |

@@ -34,6 +34,7 @@ def test_item_detail_anonymization_for_guests(client, app):
         db.session.flush()
 
         owner = User(email="owner@example.com", display_name="Owner")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -54,6 +55,7 @@ def test_item_detail_anonymization_for_guests(client, app):
 def test_item_detail_anonymization_for_other_user(client, normal_user_headers, app):
     with app.app_context():
         owner = User(email="owner_other@example.com", display_name="Owner Other")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -84,6 +86,7 @@ def test_item_detail_anonymization_for_other_user(client, normal_user_headers, a
 def test_item_modification_blocked_for_non_owner(client, normal_user_headers, app):
     with app.app_context():
         owner = User(email="owner_blocked@example.com", display_name="Owner Blocked")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -139,6 +142,7 @@ def test_owner_can_view_own_item(client, normal_user_headers, app):
 def test_admin_can_view_any_item(client, admin_headers, app):
     with app.app_context():
         owner = User(email="owner_admin@example.com", display_name="Owner Admin")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -193,6 +197,7 @@ def test_owner_can_modify_own_item(client, normal_user_headers, app):
 def test_item_detail_includes_owner_count(client, normal_user_headers, app):
     with app.app_context():
         user = User(email="owner_count_test@example.com", display_name="Owner Count Test")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 
@@ -210,6 +215,7 @@ def test_item_detail_includes_owner_count(client, normal_user_headers, app):
         db.session.add(item1)
 
         other_user = User(email="other_owner@example.com", display_name="Other Owner")
+        other_user.set_password("test-password")
         db.session.add(other_user)
         db.session.flush()
         item2 = Item(manifestation_id=manif.id, owner_id=other_user.id, status="available", meta={})
@@ -240,9 +246,11 @@ def test_manifestation_detail_includes_owner_count(client, app):
         db.session.flush()
 
         owner1 = User(email="manif_owner1@example.com", display_name="Manif Owner 1")
+        owner1.set_password("test-password")
         db.session.add(owner1)
         db.session.flush()
         owner2 = User(email="manif_owner2@example.com", display_name="Manif Owner 2")
+        owner2.set_password("test-password")
         db.session.add(owner2)
         db.session.flush()
 
@@ -265,6 +273,7 @@ def test_manifestation_detail_includes_owner_count(client, app):
 def test_admin_can_see_owner_name(client, admin_headers, app):
     with app.app_context():
         owner = User(email="owner_admin_test@example.com", display_name="Admin Test Owner")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -295,6 +304,7 @@ def test_admin_can_see_owner_name(client, admin_headers, app):
 def test_regular_user_without_read_owners_cannot_see_owner_name(client, normal_user_headers, app):
     with app.app_context():
         owner = User(email="owner_hidden@example.com", display_name="Hidden Owner")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 
@@ -326,6 +336,7 @@ def test_regular_user_without_read_owners_cannot_see_owner_name(client, normal_u
 def test_admin_can_delete_any_item(client, admin_headers, app):
     with app.app_context():
         owner = User(email="owner_delete@example.com", display_name="Owner Delete")
+        owner.set_password("test-password")
         db.session.add(owner)
         db.session.flush()
 

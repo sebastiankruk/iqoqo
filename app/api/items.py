@@ -24,7 +24,7 @@ from typing import Any
 from flask import Response, current_app, g, jsonify, request, send_file, stream_with_context
 from pydantic import ValidationError
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
@@ -32,6 +32,7 @@ from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.export_service import ExportService
+from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -166,191 +167,6 @@ def _extract_intent_media_info(work: Any, primary_expr: Any, manifestation: Any)
     return work_type, medium_type
 
 
-def get_virtual_items(
-    user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list=None
-):
-    virtual_items = []
-
-    is_wish_list_requested = True
-    if statuses_filter:
-        statuses_list = parse_csv_param(statuses_filter) or []
-        is_wish_list_requested = any(
-            s in statuses_list for s in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play")
-        )
-
-    if not is_wish_list_requested:
-        return []
-
-    # "wish_list" is a collection_status concept, not a UserWorkIntent.status value.
-    # UserWorkIntent.status stores progress values like "want_to_read", "want_to_listen", etc.
-    # When the frontend filters by statuses=wish_list, we must include all non-fulfilled intents
-    # (because every intent IS a wishlist item).  Only narrow by actual intent-level statuses
-    # (want_to_read, want_to_listen, …) when those are explicitly present in the filter.
-    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
-
-    intent_query = (
-        db.session.query(UserWorkIntent)
-        .options(joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations))
-        .join(Work, UserWorkIntent.work_id == Work.id)
-    )
-    if statuses_filter:
-        statuses_list = parse_csv_param(statuses_filter) or []
-        intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
-        if intent_statuses:
-            # Filter to specific intent progress statuses (e.g. "want_to_read")
-            intent_query = intent_query.filter(UserWorkIntent.status.in_(intent_statuses))
-        else:
-            # "wish_list" (or other non-intent status) → include all non-fulfilled intents
-            intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
-    else:
-        intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
-
-    if genres_list:
-        intent_query = apply_genre_filter(intent_query, genres_list)
-
-    if q:
-        pattern = f"%{q.strip().lower()}%"
-        intent_query = intent_query.filter(db.or_(Work.title.ilike(pattern), db.cast(Work.meta["authors"], db.String).ilike(pattern)))
-
-    if category_list or format_list or publishers_list or missing_cover or missing_id:
-        intent_query = intent_query.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
-            Manifestation, Manifestation.expression_id == Expression.id
-        )
-        if category_list:
-            intent_query = intent_query.filter(db.or_(Expression.content_type.in_(category_list), Expression.content_type.is_(None)))
-        if format_list:
-            intent_query = intent_query.filter(Manifestation.meta["format"].as_string().in_(format_list))
-        if publishers_list:
-            pubs_conditions = []
-            for p in publishers_list:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            intent_query = intent_query.filter(db.or_(*pubs_conditions))
-        if missing_cover:
-            intent_query = intent_query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            intent_query = intent_query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                )
-            )
-
-    intents = intent_query.filter(UserWorkIntent.user_id == user_id).all()
-
-    for intent in intents:
-        work = intent.work
-        manifestation = None
-        primary_expr = None
-        for expr in work.expressions:
-            if category_list and expr.content_type not in category_list:
-                continue
-            if primary_expr is None:
-                primary_expr = expr
-            if expr.manifestations:
-                manifestation = expr.manifestations[0]
-                primary_expr = expr
-                break
-
-        if primary_expr is None and work.expressions:
-            primary_expr = work.expressions[0]
-
-        work_type, medium_type = _extract_intent_media_info(work, primary_expr, manifestation)
-
-        if not manifestation:
-            # Build virtual item from Work-level data only (B8 fix)
-            virtual_items.append(
-                {
-                    "is_virtual": True,
-                    "id": -intent.id,
-                    "owner_id": str(user_id) if user_id else None,
-                    "status": intent.status,
-                    "collection_status": "wish_list",
-                    "lent_to_user_id": None,
-                    "lent_to_name": None,
-                    "manifestation_id": None,
-                    "isbn": None,
-                    "title": work.title,
-                    "publisher": None,
-                    "cover_url": None,
-                    "cover_status": None,
-                    "authors": work.meta.get("authors", []) if work.meta else [],
-                    "content_type": primary_expr.content_type if primary_expr else None,
-                    "work_type": work_type,
-                    "medium_type": medium_type,
-                    "is_owner": True,
-                    "is_borrowed": False,
-                    "is_hidden": intent.is_hidden,
-                    "tags": [],
-                    "added_at": intent.created_at.isoformat() if hasattr(intent.created_at, "isoformat") else intent.created_at,
-                    "updated_at": (
-                        (intent.updated_at or intent.created_at).isoformat()
-                        if hasattr((intent.updated_at or intent.created_at), "isoformat")
-                        else (intent.updated_at or intent.created_at)
-                    ),
-                }
-            )
-            continue
-
-        virtual_items.append(
-            {
-                "is_virtual": True,
-                "id": -intent.id,
-                "owner_id": str(user_id) if user_id else None,
-                "status": intent.status,
-                "collection_status": "wish_list",
-                "lent_to_user_id": None,
-                "lent_to_name": None,
-                "manifestation_id": manifestation.id,
-                "isbn": manifestation.isbn13,
-                "title": work.title,
-                "publisher": manifestation.publisher if manifestation else None,
-                "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
-                "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
-                "authors": work.meta.get("authors", []) if work.meta else [],
-                "content_type": (
-                    manifestation.expression.content_type
-                    if manifestation.expression
-                    else (primary_expr.content_type if primary_expr else None)
-                ),
-                "work_type": work_type,
-                "medium_type": medium_type,
-                "is_owner": True,
-                "is_borrowed": False,
-                "is_hidden": intent.is_hidden,
-                "tags": [],
-                "added_at": intent.created_at.isoformat() if hasattr(intent.created_at, "isoformat") else intent.created_at,
-                "updated_at": (
-                    (intent.updated_at or intent.created_at).isoformat()
-                    if hasattr((intent.updated_at or intent.created_at), "isoformat")
-                    else (intent.updated_at or intent.created_at)
-                ),
-            }
-        )
-
-    return virtual_items
-
-
 @api_bp.route("/v1/items/export", methods=["GET"])
 @api_bp.route("/items/export", methods=["GET"])
 @require_auth
@@ -358,10 +174,12 @@ def export_user_items():
     """Stream export of the authenticated user's library items in Linked Data or JSON format.
 
     Query parameter:
-        format: 'json-ld' (default), 'turtle', or 'json'
+        format: 'json-ld' (default), 'turtle', 'nt', or 'json'
     """
     export_format = request.args.get("format", "json-ld").lower().strip()
-    valid_formats = {"json-ld", "turtle", "json"}
+    valid_formats = {"json-ld", "turtle", "nt", "n-triples", "json"}
+    if export_format == "n-triples":
+        export_format = "nt"
     if export_format not in valid_formats:
         return (
             jsonify(
@@ -381,6 +199,7 @@ def export_user_items():
     format_metadata = {
         "json-ld": ("application/ld+json", "jsonld"),
         "turtle": ("text/turtle", "ttl"),
+        "nt": ("application/n-triples", "nt"),
         "json": ("application/json", "json"),
     }
     content_type, ext = format_metadata[export_format]
@@ -389,7 +208,7 @@ def export_user_items():
     generator = ExportService.stream_user_collection(
         user_id=user_id,
         export_format=export_format,
-        base_url=request.host_url.rstrip("/"),
+        base_url=current_app.config.get("BASE_URL") or get_lod_base_url(),
     )
 
     return Response(
@@ -450,23 +269,17 @@ def get_items():
     page = max(page, 1)
     offset = (page - 1) * limit
 
-    virtual_items = get_virtual_items(
-        user_id, statuses_filter, category_list, format_list, q, publishers_list, missing_cover, missing_id, genres_list
-    )
-
     combined_items_data = []
 
     if q:
         from app.core.search_service import SearchService
 
         statuses_list = parse_csv_param(statuses_filter)
-        search_limit = 1000 if virtual_items else limit
-        search_offset = 0 if virtual_items else offset
         total_count, results = SearchService.search_items(
             q,
             user_id,
-            search_limit,
-            search_offset,
+            limit,
+            offset,
             statuses=statuses_list,
             category=category_list,
             format_filter=format_list,
@@ -615,10 +428,7 @@ def get_items():
         else:
             query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
 
-        if not virtual_items:
-            physical_items = query.limit(limit).offset(offset).all()
-        else:
-            physical_items = query.all()
+        physical_items = query.limit(limit).offset(offset).all()
 
         for item in physical_items:
             manifestation = item.manifestation
@@ -664,44 +474,8 @@ def get_items():
                 }
             )
 
-    if virtual_items:
-        combined_items_data.extend(virtual_items)
-
-        if sort_by == "title":
-            combined_items_data.sort(key=lambda x: (x["title"] or "").lower())
-        elif sort_by == "title-desc":
-            combined_items_data.sort(key=lambda x: (x["title"] or "").lower(), reverse=True)
-        elif sort_by == "author":
-            combined_items_data.sort(key=lambda x: (x["authors"][0] if x["authors"] else "").lower())
-        elif sort_by == "added":
-
-            def get_added(x):
-                val = x["added_at"]
-                if not val:
-                    return ""
-                if isinstance(val, str):
-                    return val
-                return val.isoformat() if hasattr(val, "isoformat") else str(val)
-
-            combined_items_data.sort(key=get_added, reverse=True)
-        else:
-
-            def get_updated(x):
-                val = x.get("updated_at") or x.get("added_at")
-                if not val:
-                    return ""
-                if isinstance(val, str):
-                    return val
-                return val.isoformat() if hasattr(val, "isoformat") else str(val)
-
-            combined_items_data.sort(key=get_updated, reverse=True)
-
-        # Offset pagination
-        total = len(combined_items_data)
-        paginated_items = combined_items_data[offset : offset + limit]
-    else:
-        total = total_count if q else total_physical
-        paginated_items = combined_items_data
+    total = total_count if q else total_physical
+    paginated_items = combined_items_data
 
     return jsonify(
         {
@@ -712,126 +486,6 @@ def get_items():
             "error": None,
         }
     )
-
-
-def _get_virtual_item_detail(item_id: int) -> tuple[Response, int] | Response:
-    intent_id = -item_id
-    intent = db.session.get(UserWorkIntent, intent_id)
-    if not intent:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    # Wishlist entries are shareable with other authenticated users by default
-    # (e.g. gift ideas for friends/family) unless the owner hides them --
-    # mirrors Item.is_hidden. Anonymous callers never see wishlist items,
-    # regardless of is_hidden (BOLA: 404, not 401, to avoid confirming the id
-    # exists to an unauthenticated caller).
-    user_id = getattr(g, "user_id", None)
-    if user_id is None:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    is_owner = str(intent.user_id) == str(user_id)
-    user = db.session.get(User, user_id)
-    is_admin = bool(user) and any(role.name == "admin" for role in getattr(user, "roles", []))
-
-    if not (is_owner or is_admin) and intent.is_hidden:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    work = intent.work
-    manifestation = None
-    primary_expr = None
-    for expr in work.expressions:
-        if primary_expr is None:
-            primary_expr = expr
-        if expr.manifestations:
-            manifestation = expr.manifestations[0]
-            primary_expr = expr
-            break
-
-    if primary_expr is None and work.expressions:
-        primary_expr = work.expressions[0]
-
-    work_type, medium_type = _extract_intent_media_info(work, primary_expr, manifestation)
-
-    owner = db.session.get(User, intent.user_id)
-    owner_name = (owner.display_name or owner.email) if owner else None
-
-    if not manifestation:
-        # Build work-level-only detail (mirrors get_virtual_items list view behavior)
-        item_data = {
-            "id": item_id,
-            "owner_id": str(intent.user_id),
-            "is_owner": is_owner,
-            "is_borrowed": False,
-            "owner_name": owner_name,
-            "owner_count": 0,
-            "status": intent.status,
-            "collection_status": "wish_list",
-            "is_hidden": intent.is_hidden,
-            "manifestation_id": None,
-            "tags": [],
-            "meta": {},
-            "isbn": None,
-            "manifestation_meta": None,
-            "cover_url": None,
-            "cover_status": None,
-            "content_type": primary_expr.content_type if primary_expr else None,
-            "work_type": work_type,
-            "medium_type": medium_type,
-            "work": {
-                "id": work.id,
-                "title": work.title,
-                "authors": work.meta.get("authors", []) if work.meta else [],
-                "meta": work.meta,
-                "container_work_id": None,
-            },
-        }
-        return jsonify({"success": True, "data": item_data, "error": None})
-
-    item_data = {
-        "id": item_id,
-        "owner_id": str(intent.user_id),
-        "is_owner": is_owner,
-        "is_borrowed": False,
-        "owner_name": owner_name,
-        "owner_count": 0,
-        "status": intent.status,
-        "collection_status": "wish_list",
-        "is_hidden": intent.is_hidden,
-        "manifestation_id": manifestation.id,
-        "tags": [],
-        "meta": {},
-        "isbn": manifestation.isbn13,
-        "manifestation_meta": manifestation.meta,
-        "cover_url": manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None),
-        "cover_status": manifestation.meta.get("cover_status") if manifestation.meta else None,
-        "content_type": (
-            manifestation.expression.content_type if manifestation.expression else (primary_expr.content_type if primary_expr else None)
-        ),
-        "work_type": work_type,
-        "medium_type": medium_type,
-    }
-
-    if manifestation.expression:
-        expression = manifestation.expression
-        item_data["expression"] = {
-            "id": expression.id,
-            "content_type": expression.content_type,
-            "language": expression.language,
-            "kind": expression.kind,
-        }
-
-        if expression.work:
-            work = expression.work
-            container_work_id = work.member_of[0].container_work_id if work.member_of else None
-            item_data["work"] = {
-                "id": work.id,
-                "title": work.title,
-                "authors": work.meta.get("authors", []) if work.meta else [],
-                "meta": work.meta,
-                "container_work_id": container_work_id,
-            }
-
-    return jsonify({"success": True, "data": item_data, "error": None})
 
 
 def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
@@ -915,12 +569,12 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     return jsonify({"success": True, "data": item_data, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["GET"])
+@api_bp.route("/items/<int:item_id>", methods=["GET"])
 @limiter.limit("300 per hour", override_defaults=True)
 @optional_auth
 def get_item_detail(item_id: int):
-    if item_id < 0:
-        return _get_virtual_item_detail(item_id)
+    if item_id <= 0:
+        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
     return _get_physical_item_detail(item_id)
 
 
@@ -934,127 +588,6 @@ def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tupl
         return ItemUpdateSchema(**data), None
     except ValidationError as e:
         return None, (jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400)
-
-
-def _update_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
-    intent_id = -item_id
-    returned_id = None
-    err = None
-
-    try:
-        with db.session.begin_nested():
-            intent = UserWorkIntent.query.filter_by(id=intent_id).with_for_update().first()
-
-            if not intent or not user_id or not verify_item_ownership(item_id, user_id):
-                return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-            payload, parse_err = _parse_update_payload(request)
-            if parse_err:
-                return parse_err
-            assert payload is not None
-
-            # Enforce FRBR Ontology Boundary Rules:
-            # If not transitioning away from wishlist status, reject physical traits
-            wants_tags = payload.tags is not None
-            is_transitioning = payload.collection_status != "wish_list" if payload.collection_status else wants_tags
-            if not is_transitioning:
-                data = request.get_json(silent=True) or {}
-                physical_fields = {
-                    "barcode",
-                    "condition",
-                    "physical_condition",
-                    "lent_to",
-                    "lent_to_user_id",
-                    "lent_to_name",
-                    "loan_status",
-                }
-                if any(field in data for field in physical_fields) or (payload.lent_to_user_id or payload.lent_to_name):
-                    err = (
-                        jsonify(
-                            {
-                                "success": False,
-                                "error": "FRBR Ontology Violation: Wishlist placeholder items (ID < 0) cannot accept physical state mutations.",
-                            }
-                        ),
-                        400,
-                    )
-
-            if not err and payload.is_hidden is not None:
-                intent.is_hidden = payload.is_hidden
-
-            # If transitioning away from wishlist status, convert to physical item
-            if not err and is_transitioning:
-                data = request.get_json(silent=True) or {}
-                manifestation_id = data.get("manifestation_id")
-                manifestation = None
-
-                if manifestation_id:
-                    manifestation = db.session.get(Manifestation, manifestation_id)
-                    if not manifestation:
-                        err = jsonify({"success": False, "data": None, "error": "Invalid manifestation_id"}), 400
-                else:
-                    work = intent.work
-                    for expr in work.expressions:
-                        if expr.manifestations:
-                            manifestation = expr.manifestations[0]
-                            break
-
-                    if not manifestation:
-                        # Auto-create placeholder expression and manifestation to preserve FRBR graph purity
-                        expr = Expression(work_id=work.id, content_type="text", language="en")
-                        db.session.add(expr)
-                        db.session.flush()
-
-                        manifestation = Manifestation(expression_id=expr.id, meta={"Title": work.title, "placeholder": True})
-                        db.session.add(manifestation)
-                        db.session.flush()
-
-                if not err:
-                    assert manifestation is not None
-                    # Assign dynamically passed collection_status (Library vs Wishlist)
-                    item_meta = dict(payload.meta) if payload.meta else {}
-                    item_meta["intent_id"] = intent.id
-                    item_meta["origin"] = "wishlist_transition"
-
-                    new_item = Item(
-                        manifestation_id=manifestation.id,
-                        owner_id=intent.user_id,
-                        status=payload.status or intent.status,
-                        collection_status=payload.collection_status if payload.collection_status else "wish_list",
-                        is_hidden=payload.is_hidden or False,
-                        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
-                        lent_to_name=payload.lent_to_name,
-                        meta=item_meta,
-                    )
-                    db.session.add(new_item)
-                    db.session.flush()
-
-                    sync_tags(new_item.id, intent.user_id, payload.tags)
-
-                    # Implement state machine: do not delete intent, set status to fulfilled
-                    intent.status = "fulfilled"
-                    db.session.add(intent)
-                    db.session.flush()
-                    returned_id = new_item.id
-            elif not err:
-                if payload.status:
-                    intent.status = payload.status
-                    db.session.add(intent)
-                returned_id = item_id
-
-        if err:
-            db.session.rollback()
-            return err
-
-        db.session.commit()
-        return jsonify({"success": True, "data": {"id": returned_id}})
-
-    except db.exc.SQLAlchemyError as exc:
-        db.session.rollback()
-        current_app.logger.critical(
-            "Database mutation failure handling resource transition for virtual ID %s: %s", item_id, str(exc), exc_info=True
-        )
-        return jsonify({"success": False, "error": "Internal storage transaction failure encountered during state resolution."}), 500
 
 
 def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | None) -> tuple[Response, int] | Response:
@@ -1141,42 +674,18 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["PUT"])
+@api_bp.route("/items/<int:item_id>", methods=["PUT"])
 @require_auth
+@require_physical_item
 def update_item(item_id: int):
-    """Update an item by ID.
+    """Update a physical item by ID.
 
-    Negative IDs are virtual wishlist intents (``UserWorkIntent``) and are
-    routed to ``_update_virtual_item``.  Zero and positive IDs that do not
-    exist are handled by ``_update_physical_item``.  ``@require_physical_item``
-    is intentionally **not** applied here because this route also accepts
-    virtual-item transitions (wishlist → library); the FRBR boundary for
-    irreversible physical mutations is enforced inside ``_update_virtual_item``.
+    Only positive IDs are accepted. Wishlist operations are handled by
+    the dedicated ``/api/wishlist`` blueprint.
     """
     user_id = getattr(g, "user_id", None)
     user = db.session.get(User, user_id) if user_id else None
-
-    # Route virtual wishlist items to their dedicated handler.
-    # ID == 0 explicitly returns a 400 Bad Request to enforce strictly positive IDs.
-    if item_id < 0:
-        return _update_virtual_item(item_id, user_id)
-    if item_id == 0:
-        return jsonify({"error": "Cannot mutate virtual items (id <= 0). Physical item IDs must be strictly positive.", "code": 400}), 400
     return _update_physical_item(item_id, user_id, user)
-
-
-def _delete_virtual_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
-    intent_id = -item_id
-    intent = db.session.get(UserWorkIntent, intent_id)
-    if not intent:
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-    if not user_id or not verify_item_ownership(item_id, user_id):
-        return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
-
-    db.session.delete(intent)
-    db.session.commit()
-    return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
 def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Response, int] | Response:
@@ -1192,22 +701,21 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>", methods=["DELETE"])
+@api_bp.route("/items/<int:item_id>", methods=["DELETE"])
 @require_auth
 @require_permission(PermissionName.DELETE_ITEM)
+@require_physical_item
 @require_item_access()
 def delete_item(item_id: int):
     user_id = getattr(g, "user_id", None)
     try:
-        if item_id < 0:
-            return _delete_virtual_item(item_id, user_id)
         return _delete_physical_item(item_id, user_id)
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["GET"])
+@api_bp.route("/items/<int:item_id>/collections", methods=["GET"])
 @require_auth
 @require_physical_item
 @require_item_access()
@@ -1276,7 +784,7 @@ def _guard_add_item_to_collection(item_id: int) -> tuple[dict | None, tuple[Resp
     return {"collection_id": payload.collection_id}, None
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections", methods=["POST"])
+@api_bp.route("/items/<int:item_id>/collections", methods=["POST"])
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -1307,7 +815,7 @@ def add_item_to_collection(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "error": "An internal database error occurred while processing the request."}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/collections/<int:collection_id>", methods=["DELETE"])
+@api_bp.route("/items/<int:item_id>/collections/<int:collection_id>", methods=["DELETE"])
 @limiter.limit("60 per minute", override_defaults=True)
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -1713,13 +1221,10 @@ def add_item_manual() -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/logs", methods=["GET"])
+@api_bp.route("/items/<int:item_id>/logs", methods=["GET"])
 @require_auth
 def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     """Get the status timeline for an item."""
-    if item_id < 0:
-        return jsonify({"success": True, "data": []})
-
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
@@ -1783,7 +1288,7 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     return jsonify({"success": True, "data": data, "error": None})
 
 
-@api_bp.route("/items/<int(signed=True):item_id>/visibility", methods=["PATCH"])
+@api_bp.route("/items/<int:item_id>/visibility", methods=["PATCH"])
 @require_auth
 def toggle_item_visibility(item_id: int):
     """
@@ -1800,23 +1305,6 @@ def toggle_item_visibility(item_id: int):
     new_val = data["is_hidden"]
     if not isinstance(new_val, bool):
         return jsonify({"error": "Field 'is_hidden' must be a boolean.", "code": 400}), 400
-
-    if item_id < 0:
-        intent = db.session.get(UserWorkIntent, -item_id)
-        if not intent or str(intent.user_id) != str(user_id):
-            # Return 404 even if forbidden to prevent data leakage (BOLA protection)
-            return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
-
-        intent.is_hidden = new_val
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Item visibility updated to {'hidden' if intent.is_hidden else 'public'}.",
-                "is_hidden": intent.is_hidden,
-            }
-        )
 
     item = db.session.get(Item, item_id)
 
@@ -1836,7 +1324,7 @@ def toggle_item_visibility(item_id: int):
     )
 
 
-@api_bp.route("/qrcode/<int(signed=True):item_id>", methods=["GET"])
+@api_bp.route("/qrcode/<int:item_id>", methods=["GET"])
 @require_auth
 @require_item_access(bola=True)
 def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
@@ -1847,10 +1335,6 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     import os
 
     from app.utils.qrcode import generate_item_qrcode
-
-    if item_id < 0:
-        # Wishlist entries have no physical copy to tag.
-        return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     item = db.session.get(Item, item_id)
     if not item:

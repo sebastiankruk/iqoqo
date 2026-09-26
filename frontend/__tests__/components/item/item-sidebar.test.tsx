@@ -235,16 +235,16 @@ describe("ItemSidebar Component", () => {
       expect(screen.getByText(/Not in any named collections yet/i)).toBeInTheDocument();
     });
 
-    it("hides named collections section for virtual items (id < 0)", () => {
-      const virtualItem = { ...mockItem, id: -1 };
+    it("shows named collections section for all items with modify permission", () => {
+      const itemWithModifyPermission = { ...mockItem, id: 1 };
       vi.mocked(hooks.useUpdateItem).mockReturnValue({
         mutate: vi.fn(),
         isPending: false,
       } as unknown as ReturnType<typeof hooks.useUpdateItem>);
 
-      render(<ItemSidebar item={virtualItem} />);
+      render(<ItemSidebar item={itemWithModifyPermission} />);
 
-      expect(screen.queryByText("Named Collections")).not.toBeInTheDocument();
+      expect(screen.queryByText("Named Collections")).toBeInTheDocument();
     });
   });
 
@@ -301,6 +301,22 @@ describe("ItemSidebar Component", () => {
 
       render(<ItemSidebar item={availableItem} />);
       expect(screen.getByRole("button", { name: /Request Loan/i })).toBeInTheDocument();
+    });
+
+    it("hides Request Loan button when the authenticated user owns the item", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: { id: "owner1", permissions: [] },
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      const ownedItem = {
+        ...mockItem,
+        owner_id: "owner1",
+        is_owner: false,
+        collection_status: "available",
+      } as unknown as Item;
+
+      render(<ItemSidebar item={ownedItem} />);
+      expect(screen.queryByRole("button", { name: /Request Loan/i })).not.toBeInTheDocument();
     });
   });
 });

@@ -191,7 +191,7 @@ class TestCanonicalJsonLdContext:
         assert CANONICAL_JSONLD_CONTEXT["Manifestation"] == "frbr:Manifestation"
         assert CANONICAL_JSONLD_CONTEXT["Item"] == "frbr:Item"
         assert CANONICAL_JSONLD_CONTEXT["title"] == "dc:title"
-        assert CANONICAL_JSONLD_CONTEXT["creator"] == "dc:creator"
+        assert CANONICAL_JSONLD_CONTEXT["creator"] == "frbrer:creator"
         assert CANONICAL_JSONLD_CONTEXT["isbn"] == "schema:isbn"
         assert CANONICAL_JSONLD_CONTEXT["publisher"] == "schema:publisher"
         assert CANONICAL_JSONLD_CONTEXT["format"] == "schema:bookFormat"
@@ -297,17 +297,18 @@ class TestShaclConformityAndSemanticValidation:
 
         # Verify Dune Work creator and Manifestation ISBN in graph
         work_query = graph.query("""
-            SELECT ?title ?creator ?isbn
+            SELECT ?title ?creatorName ?isbn
             WHERE {
-                ?w a <http://iflastandards.info/ns/frbr/frbrer/Work> ;
+                ?w a <http://purl.org/vocab/frbr/core#Work> ;
                    <https://schema.org/name> ?title ;
                    <http://iflastandards.info/ns/frbr/frbrer/creator> ?creator .
-                ?e a <http://iflastandards.info/ns/frbr/frbrer/Expression> ;
+                ?creator <https://schema.org/name> ?creatorName .
+                ?e a <http://purl.org/vocab/frbr/core#Expression> ;
                    <http://iflastandards.info/ns/frbr/frbrer/expressionOf> ?w .
-                ?m a <http://iflastandards.info/ns/frbr/frbrer/Manifestation> ;
+                ?m a <http://purl.org/vocab/frbr/core#Manifestation> ;
                    <http://iflastandards.info/ns/frbr/frbrer/embodimentOf> ?e ;
                    <https://schema.org/isbn> ?isbn .
-                ?i a <http://iflastandards.info/ns/frbr/frbrer/Item> ;
+                ?i a <http://purl.org/vocab/frbr/core#Item> ;
                    <http://iflastandards.info/ns/frbr/frbrer/exemplarOf> ?m .
                 FILTER(?title = "Dune")
             }

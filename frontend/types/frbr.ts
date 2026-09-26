@@ -103,7 +103,7 @@ export interface ExpressionDetail {
   manifestations: WorkDetailManifestation[];
 }
 
-import type { MediaFormat, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
+import type { MediaFormat, MediaCategory, ImageType, CollectionStatus, ProgressStatus } from "./taxonomy";
 export * from "./taxonomy";
 
 /** Additional image attached to a manifestation (e.g., disc, inlay). */
@@ -112,6 +112,9 @@ export interface AdditionalImage {
   label: ImageType | string;
   added_at: string;
 }
+
+/** Metadata lookup providers selected according to the manifestation's media category. */
+export type MediaStrategy = "google_books" | "tmdb" | "discogs" | "musicbrainz" | "bgg" | "igdb";
 
 /**
  * The physical embodiment of an expression of a work.
@@ -133,7 +136,9 @@ export interface Manifestation {
   owner_count?: number;
   meta: {
     additional_images?: AdditionalImage[];
-    format?: MediaFormat | string;
+    format?: MediaFormat | "series" | "Series";
+    content_type?: MediaCategory;
+    media_strategy?: MediaStrategy;
     catalog_number?: string;
     pressing_number?: string;
     matrix_number?: string;
@@ -419,4 +424,87 @@ export interface EscalationRequest {
   resolution_note?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * A wishlist entry representing a user's intent toward a Conceptual Work (F1),
+ * optionally bound to a specific Expression (F2) and/or Manifestation (F3).
+ * Managed through the dedicated /api/wishlist endpoint.
+ */
+export interface WishlistItem {
+  id: number;
+  work_id: number;
+  expression_id: number | null;
+  manifestation_id: number | null;
+  owner_id: string;
+  status: ProgressStatus;
+  collection_status: "wish_list";
+  is_hidden: boolean;
+  title: string | null;
+  authors: string[];
+  isbn: string | null;
+  publisher: string | null;
+  cover_url: string | null;
+  cover_status: string | null;
+  content_type: string | null;
+  work_type: string | null;
+  medium_type: string | null;
+  is_owner: boolean;
+  tags: string[];
+  added_at: string;
+  updated_at: string;
+  expression?: Pick<Expression, "id" | "content_type" | "language" | "kind">;
+  work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
+  manifestation_meta?: Record<string, unknown>;
+}
+
+/** DTO for creating a new wishlist entry. */
+export interface WishlistCreateDTO {
+  work_id: number;
+  expression_id?: number | null;
+  manifestation_id?: number | null;
+  status?: ProgressStatus;
+  is_hidden?: boolean;
+}
+
+/** DTO for updating an existing wishlist entry. */
+export interface WishlistUpdateDTO {
+  expression_id?: number | null;
+  manifestation_id?: number | null;
+  status?: ProgressStatus;
+  is_hidden?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// FRBR Relation Management Types
+// ---------------------------------------------------------------------------
+
+/** Payload for reassigning an entity's parent in the FRBR hierarchy. */
+export interface FrbrReassignPayload {
+  entity_type: "expression" | "manifestation" | "item";
+  entity_id: number;
+  new_parent_id: number;
+}
+
+/** Payload for merging two entities at the same FRBR level. */
+export interface FrbrMergePayload {
+  entity_type: "work" | "expression" | "manifestation";
+  source_id: number;
+  target_id: number;
+}
+
+/** Payload for splitting children from an entity into a new sibling entity. */
+export interface FrbrSplitPayload {
+  entity_type: "work" | "expression" | "manifestation";
+  source_id: number;
+  child_ids: number[];
+  new_entity_attrs: Record<string, unknown>;
+}
+
+/** Preview of the impact of a relation management operation. */
+export interface FrbrImpactPreview {
+  entity_type: string;
+  entity_id: number;
+  children_count: number;
+  children: Array<{ id: number; label: string }>;
 }

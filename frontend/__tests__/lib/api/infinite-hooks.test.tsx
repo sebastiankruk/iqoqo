@@ -21,6 +21,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useInfiniteItems, useInfiniteManifestations } from "@/lib/api/hooks";
 import { apiClient } from "@/lib/api/client";
+import { DEFAULT_INFINITE_PAGE_SIZE } from "@/lib/api/infinite-hooks";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
@@ -47,6 +48,10 @@ describe("useInfiniteItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queryClient.clear();
+  });
+
+  it("exports the shared collection page size", () => {
+    expect(DEFAULT_INFINITE_PAGE_SIZE).toBe(20);
   });
 
   it("fetches the first page and computes hasNextPage=true when more pages exist", async () => {

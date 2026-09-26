@@ -200,16 +200,17 @@ class TestSHACLImportValidation:
     def test_import_valid_turtle_passes_shacl(self, app, client, admin_headers):
         """Valid RDF import passes SHACL validation."""
         valid_turtle = """
-        @prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+        @prefix frbr: <http://purl.org/vocab/frbr/core#> .
+        @prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
         @prefix schema: <https://schema.org/> .
 
         <http://example.org/m/1> a frbr:Manifestation, schema:CreativeWork ;
-            frbr:embodimentOf <http://example.org/e/1> ;
+            frbrer:embodimentOf <http://example.org/e/1> ;
             schema:name "Valid Book" ;
             schema:isbn "9781234567890" .
 
         <http://example.org/e/1> a frbr:Expression ;
-            frbr:expressionOf <http://example.org/w/1> .
+            frbrer:expressionOf <http://example.org/w/1> .
 
         <http://example.org/w/1> a frbr:Work .
         """
@@ -226,11 +227,12 @@ class TestSHACLImportValidation:
     def test_import_invalid_turtle_fails_shacl(self, app, client, admin_headers):
         """Invalid RDF (missing required name) fails SHACL validation with 422."""
         invalid_turtle = """
-        @prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+        @prefix frbr: <http://purl.org/vocab/frbr/core#> .
+        @prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
         @prefix schema: <https://schema.org/> .
 
         <http://example.org/m/1> a frbr:Manifestation, schema:CreativeWork ;
-            frbr:embodimentOf <http://example.org/e/1> ;
+            frbrer:embodimentOf <http://example.org/e/1> ;
             schema:isbn "bad" .
         """
         resp = client.post(

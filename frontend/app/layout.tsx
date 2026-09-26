@@ -20,6 +20,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { CookieConsent } from "@/components/cookie-consent";
 import { BrowserTelemetry } from "@/components/browser-telemetry";
 import { BrowserOpenObserveRum } from "@/components/browser-openobserve-rum";
+import { JsonLdConsoleFilter } from "@/components/json-ld-console-filter";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getMessages, getLocale } from "next-intl/server";
@@ -84,6 +85,7 @@ export default async function RootLayout({
       <body className="font-sans antialiased">
         {/* Layer 5: Browser Web Vitals — client-side OTel initialisation (loads asynchronously, never blocks render) */}
         <BrowserTelemetry />
+        <JsonLdConsoleFilter />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <Providers>

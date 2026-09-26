@@ -115,6 +115,18 @@ auto_generate_or_rotate_keys() {
         target_file=".env.$MODE"
     fi
 
+    # Run Python pre-flight to guarantee all core secrets and OpenObserve credentials exist
+    if command -v python3 &>/dev/null && [ -f "scripts/ensure_env_secrets.py" ]; then
+        python3 scripts/ensure_env_secrets.py --env-file "$target_file"
+        # Re-source target file to pull in any generated secrets
+        if [ -f "$target_file" ]; then
+            set -a
+            # shellcheck disable=SC1090
+            source "$target_file" 2>/dev/null || true
+            set +a
+        fi
+    fi
+
     local current_key="${SECRET_KEY}"
     local last_rotated="${SECRET_KEY_LAST_ROTATED}"
     local current_jwt_key="${JWT_SECRET_KEY}"
@@ -468,8 +480,10 @@ if [ "$MODE" == "dev" ]; then
 
         # Wait for OpenObserve readiness and fetch the dynamic RUM client token
         echo "📊 Waiting for OpenObserve to be ready..."
-        auth_header="Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz"
-        if [ -n "$OPENOBSERVE_ROOT_USER" ] && [ -n "$OPENOBSERVE_ROOT_PASSWORD" ]; then
+        auth_header=""
+        if [ -n "$OPENOBSERVE_BASIC_AUTH" ]; then
+            auth_header="Basic $OPENOBSERVE_BASIC_AUTH"
+        elif [ -n "$OPENOBSERVE_ROOT_USER" ] && [ -n "$OPENOBSERVE_ROOT_PASSWORD" ]; then
             encoded=$(python3 -c "import base64; print(base64.b64encode(b'${OPENOBSERVE_ROOT_USER}:${OPENOBSERVE_ROOT_PASSWORD}').decode('utf-8'))" 2>/dev/null)
             if [ -n "$encoded" ]; then
                 auth_header="Basic $encoded"

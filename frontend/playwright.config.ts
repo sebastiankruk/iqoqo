@@ -75,7 +75,8 @@ export default defineConfig({
     {
       command: "IS_E2E=true NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
       url: "http://localhost:3002",
-      reuseExistingServer: true,
+      // Never reuse an unrelated dev/preview server during an E2E run.
+      reuseExistingServer: !process.env.IS_E2E,
       timeout: 120000,
     },
     {
@@ -85,7 +86,7 @@ export default defineConfig({
       // to ensure the server always starts fresh against the test DB.
       command:
         (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
-        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
+        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5002",
       url: "http://127.0.0.1:5002/api/health",

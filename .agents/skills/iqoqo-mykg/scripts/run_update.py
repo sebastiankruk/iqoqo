@@ -24,12 +24,136 @@ Supports --grow-schema to use --append-with-grow-schema.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+
+# ---------------------------------------------------------------------------
+# Security: Error text sanitization (mirrors daemon_core.sanitize_error_text)
+# ---------------------------------------------------------------------------
+
+def _sanitize_error_text(error_text: str, max_length: int = 500) -> str:
+    """Sanitize error text to prevent information disclosure in logs/errors."""
+    if not error_text:
+        return "Unknown error"
+    sanitized = str(error_text)[:2000]
+    sanitized = re.sub(r'/[a-zA-Z0-9_./-]+', '[PATH_REDACTED]', sanitized)
+    sanitized = re.sub(r'[A-Z]:\\[^\s]+', '[PATH_REDACTED]', sanitized)
+    sanitized = re.sub(r'\b[A-Z_]{3,}=[^\s,;]+', '[ENV_REDACTED]', sanitized)
+    sanitized = re.sub(r'\b[a-zA-Z0-9_\-]{32,}\b', '[TOKEN_REDACTED]', sanitized)
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "... [TRUNCATED]"
+    return sanitized
+
+
+# ---------------------------------------------------------------------------
+# Monkeypatch: Fail-fast .error sentinel detection for mykg AgentAdapter
+# ---------------------------------------------------------------------------
+
+# This code is injected via `python -c` before calling mykg's CLI.
+# It monkeypatches AgentAdapter.complete() to check for .error sentinels
+# in the polling loop, enabling fail-fast behavior instead of waiting
+# the full timeout (up to 30 minutes) when a daemon has crashed.
+_AGENT_ADAPTER_MONKEYPATCH = '''
+import json as _json
+import re as _re
+import time as _time
+from pathlib import Path as _Path
+
+def _sanitize_for_error_report(text, max_length=500):
+    """Sanitize error text to prevent information disclosure."""
+    if not text:
+        return "Unknown error"
+    s = str(text)[:2000]
+    s = _re.sub(r'/[a-zA-Z0-9_./-]+', '[PATH_REDACTED]', s)
+    s = _re.sub(r'[A-Z]:\\\\[^\\s]+', '[PATH_REDACTED]', s)
+    s = _re.sub(r'\\b[A-Z_]{3,}=[^\\s,;]+', '[ENV_REDACTED]', s)
+    s = _re.sub(r'\\b[a-zA-Z0-9_\\-]{32,}\\b', '[TOKEN_REDACTED]', s)
+    if len(s) > max_length:
+        s = s[:max_length] + "... [TRUNCATED]"
+    return s
+
+try:
+    from mykg.llm.agent_adapter import AgentAdapter as _AgentAdapter
+
+    _original_complete = _AgentAdapter.complete
+
+    def _patched_complete(self, system, user, context_label="", max_tokens=None, timeout=None):
+        """Patched complete() that checks for .error sentinels (fail-fast)."""
+        effective_max_tokens = max_tokens if max_tokens is not None else self._max_tokens
+        effective_timeout = timeout if timeout is not None else self._timeout
+
+        task_id = self._make_task_id(system, user, context_label)
+        task_path = self._inbox / f"{task_id}.task.json"
+        answer_path = self._outbox / f"{task_id}.answer.json"
+        done_path = self._outbox / f"{task_id}.done"
+        error_path = self._outbox / f"{task_id}.error"
+
+        t0 = _time.monotonic()
+
+        # Cache hit: re-use an existing answer from a prior run or duplicate task.
+        if done_path.exists() and answer_path.exists():
+            return self._finish(answer_path, context_label, system, user, t0)
+
+        # Fail-fast: check if error sentinel already exists
+        if error_path.exists():
+            try:
+                error_data = _json.loads(error_path.read_text(encoding="utf-8"))
+                error_msg = _sanitize_for_error_report(error_data.get("error", "Unknown error"))
+            except (OSError, _json.JSONDecodeError):
+                error_msg = "Error sentinel found but unreadable"
+            raise RuntimeError(f"Agent task {task_id[:12]} failed: {error_msg}")
+
+        step_label = context_label.split(None, 1)[0] if context_label else ""
+
+        from mykg.llm.agent_adapter import TaskEnvelope
+        envelope = TaskEnvelope(
+            task_id=task_id,
+            step=step_label,
+            context_label=context_label,
+            system=system,
+            user=user,
+            max_tokens=effective_max_tokens,
+            timeout_seconds=effective_timeout,
+        )
+        self._atomic_write_json(task_path, envelope.model_dump())
+
+        deadline = _time.monotonic() + effective_timeout
+        while _time.monotonic() < deadline:
+            if done_path.exists():
+                return self._finish(answer_path, context_label, system, user, t0)
+            # FAIL-FAST: Check for error sentinel on each poll iteration
+            if error_path.exists():
+                try:
+                    error_data = _json.loads(error_path.read_text(encoding="utf-8"))
+                    error_msg = _sanitize_for_error_report(error_data.get("error", "Unknown error"))
+                except (OSError, _json.JSONDecodeError):
+                    error_msg = "Error sentinel found but unreadable"
+                exc = RuntimeError(f"Agent task {task_id[:12]} failed: {error_msg}")
+                if self._error_gate is not None:
+                    self._error_gate.record_error(exc)
+                raise exc
+            _time.sleep(self._poll_interval)
+
+        exc = TimeoutError(
+            f"agent task {task_id[:12]} timed out after {effective_timeout}s "
+            f"(inbox={self._inbox}, no .done sentinel appeared)"
+        )
+        if self._error_gate is not None:
+            self._error_gate.record_error(exc)
+        raise exc
+
+    _AgentAdapter.complete = _patched_complete
+    print("[run_update] Monkeypatch applied: AgentAdapter.complete() now checks .error sentinels", flush=True)
+except (ImportError, AttributeError) as _e:
+    print(f"[run_update] WARNING: Could not apply fail-fast monkeypatch: {_e}", flush=True)
+    print("[run_update] Falling back to default timeout behavior", flush=True)
+'''
 
 
 def get_mykg_profile() -> str:
@@ -100,15 +224,41 @@ def prepare_scope_path(paths: List[str]) -> Tuple[str, bool]:
     return temp_dir, True
 
 
+def get_python_path() -> str:
+    """Find the Python interpreter from the venv."""
+    venv_python = Path.cwd() / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    return sys.executable
+
+
 def run_extract(mykg_path: str, scope_path: str, session: str, grow_schema: bool = False) -> bool:
-    """Run mykg extract-graph for a scope. Returns success."""
-    cmd = [mykg_path, "extract-graph", scope_path, "--append", "--session", session, "--profile", get_mykg_profile()]
+    """Run mykg extract-graph for a scope with fail-fast monkeypatch. Returns success.
+
+    SECURITY: Invokes mykg via `python -c` with a monkeypatch that adds .error
+    sentinel checking to AgentAdapter.complete(), enabling fail-fast behavior
+    when agent daemons crash instead of waiting the full timeout (up to 30 min).
+    """
+    mykg_args = ["extract-graph", scope_path, "--append", "--session", session, "--profile", get_mykg_profile()]
 
     if grow_schema:
-        cmd.append("--append-with-grow-schema")
+        mykg_args.append("--append-with-grow-schema")
+
+    # Build the python -c command with monkeypatch + mykg CLI invocation
+    python_path = get_python_path()
+    invoke_code = f"""
+{_AGENT_ADAPTER_MONKEYPATCH}
+
+import sys
+sys.argv = ["mykg", {', '.join(repr(a) for a in mykg_args)}]
+from mykg.cli import main
+sys.exit(main() or 0)
+"""
+
+    cmd = [python_path, "-c", invoke_code]
 
     print(f"\n{'='*60}")
-    print(f"Running: {' '.join(cmd)}")
+    print(f"Running: mykg {' '.join(mykg_args)} (with fail-fast monkeypatch)")
     print(f"{'='*60}")
 
     result = subprocess.run(cmd, capture_output=False, text=True)

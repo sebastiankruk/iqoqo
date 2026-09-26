@@ -56,6 +56,7 @@ import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
+import { setLocaleCookie } from "@/lib/locale-cookie";
 
 /**
  * Sticky top navigation bar – "Modern Athenaeum" style.
@@ -82,7 +83,7 @@ export function Navbar() {
   const pendingCount = myEscalations?.filter(e => e.status === "pending").length ?? 0;
 
   const setLanguage = (newLocale: string) => {
-    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    setLocaleCookie(newLocale);
     router.refresh();
   };
 

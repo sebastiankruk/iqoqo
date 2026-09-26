@@ -19,6 +19,7 @@ import { createRequire } from "module";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+const e2eDistDir = process.env.IQOQO_E2E_NEXT_DIST_DIR ?? ".next-e2e";
 
 // Read version from package.json so NEXT_PUBLIC_APP_VERSION is always in sync
 // with the canonical semver set by `make bump-version` / `scripts/sync_version.py`.
@@ -27,7 +28,7 @@ const { version: APP_VERSION } = require("./package.json") as { version: string 
 
 const nextConfig: NextConfig = {
   // Use a custom build directory for E2E testing to avoid process locks with the active dev server
-  distDir: process.env.IS_E2E ? ".next-e2e" : undefined,
+  distDir: process.env.IS_E2E ? e2eDistDir : undefined,
   // Expose the canonical version to client-side code via lib/version.ts
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,

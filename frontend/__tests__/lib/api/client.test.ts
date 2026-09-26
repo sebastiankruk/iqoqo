@@ -21,6 +21,7 @@
  * backend integration tests in tests/test_phase2_frontend.py.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import axios from "axios";
 
 // Set env before importing client so the baseURL is built correctly.
 const ORIGINAL_ENV = process.env.NEXT_PUBLIC_API_URL;
@@ -95,5 +96,26 @@ describe("apiFetch helper", () => {
     } as never);
 
     await expect(apiFetch("/items/999")).rejects.toThrow("Unknown error");
+  });
+});
+
+describe("apiClient response error interceptor", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("preserves Axios response status while applying the API error message", async () => {
+    const { apiClient } = await import("@/lib/api/client");
+    const interceptor = vi.mocked(apiClient.interceptors.response.use).mock.calls[0]?.[1];
+    const axiosError = Object.assign(new axios.AxiosError("Request failed"), {
+      response: { status: 401, data: { error: "Token expired" } },
+    });
+
+    expect(interceptor).toBeDefined();
+    await expect(interceptor?.(axiosError)).rejects.toMatchObject({
+      isAxiosError: true,
+      message: "Token expired",
+      response: { status: 401 },
+    });
   });
 });

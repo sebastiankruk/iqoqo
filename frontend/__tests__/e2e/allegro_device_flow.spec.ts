@@ -78,8 +78,9 @@ test.describe("Allegro OAuth Device Flow E2E Contract Tests", () => {
     });
     expect(loginRes.ok()).toBeTruthy();
     const { token } = await loginRes.json();
-    await page.goto(`/api/auth-exchange?token=${token}`);
-    await page.waitForURL(/\/(collection)?$/);
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
+    await page.goto("/");
   });
 
   test("Happy Path: Admin initiates device flow, views code/link, and successfully polls token", async ({ page }) => {

@@ -66,8 +66,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const timestamp = getCoverTimestamp(item.manifestation_meta, item.meta);
   const coverUrl =
     getCoverUrl(item.cover_url || undefined, timestamp) ||
-    ((item.manifestation_meta?.["cover_url"] as string | undefined) ??
-      (item.meta?.["cover_url"] as string | undefined));
+    getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ||
+    getCoverUrl(item.meta?.["cover_url"] as string | undefined, timestamp);
 
   return {
     title: `${title} - iqoqo`,

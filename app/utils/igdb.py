@@ -77,7 +77,15 @@ def get_igdb_token() -> str | None:
         response = requests.post(url, data=data, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         new_tokens = response.json()
-        with open(_TOKEN_FILE, "w", encoding="utf-8") as wf:
+        token_fd = os.open(
+            _TOKEN_FILE,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        with os.fdopen(token_fd, "w", encoding="utf-8") as wf:
+            # os.open's mode only applies to new files; also tighten an existing
+            # cache file before writing a newly fetched credential.
+            os.fchmod(wf.fileno(), 0o600)
             json.dump(new_tokens, wf)
         access_token = new_tokens.get("access_token")
         return str(access_token) if isinstance(access_token, str) else None
@@ -104,8 +112,9 @@ def fetch_game_metadata(query: str) -> dict[str, Any] | None:
         "Accept": "application/json",
     }
 
-    # Escape double quotes in the search query to prevent payload injection errors
-    escaped_query = query.replace('"', '\\"')
+    # Escape backslashes first, then quotes, so attacker-supplied sequences
+    # cannot consume the escaping applied to a quote.
+    escaped_query = query.replace("\\", "\\\\").replace('"', '\\"')
     body = f'search "{escaped_query}"; fields name, cover.url, first_release_date, summary; limit 1;'
 
     try:

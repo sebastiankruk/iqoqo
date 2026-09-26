@@ -268,13 +268,13 @@ class TestSPARQLService:
         ]
         graph = build_graph(items, "http://localhost:5000", user_id="user-me")
         # Check that pub-item is in graph
-        res_pub = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/pub-item> ?p ?o }")
+        res_pub = execute_sparql(graph, "ASK { <http://localhost:5000/items/pub-item> ?p ?o }")
         assert res_pub.askAnswer is True
         # Check that priv-item-mine is in graph
-        res_mine = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/priv-item-mine> ?p ?o }")
+        res_mine = execute_sparql(graph, "ASK { <http://localhost:5000/items/priv-item-mine> ?p ?o }")
         assert res_mine.askAnswer is True
         # Check that priv-item-other is EXCLUDED
-        res_other = execute_sparql(graph, "ASK { <http://localhost:5000/api/public/items/priv-item-other> ?p ?o }")
+        res_other = execute_sparql(graph, "ASK { <http://localhost:5000/items/priv-item-other> ?p ?o }")
         assert res_other.askAnswer is False
 
 
@@ -319,7 +319,7 @@ class TestSPARQLEndpoint:
 
     def test_get_query(self, client, sparql_user):
         response = client.get(
-            "/api/sparql?query=SELECT+%3Fs+WHERE+%7B+%3Fs+a+%3Chttp%3A%2F%2Fiflastandards.info%2Fns%2Ffrbr%2Ffrbrer%2FManifestation%3E+%7D",
+            "/api/sparql?query=SELECT+%3Fs+WHERE+%7B+%3Fs+a+%3Chttp%3A%2F%2Fpurl.org%2Fvocab%2Ffrbr%2Fcore%23Manifestation%3E+%7D",
             headers=sparql_user,
         )
         assert response.status_code == 200
@@ -522,9 +522,9 @@ class TestSPARQLURIEdgeCases:
         example_queries = [
             "SELECT ?title WHERE { ?s <https://schema.org/name> ?title } LIMIT 10",
             "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 5",
-            "ASK { ?s a <http://iflastandards.info/ns/frbr/frbrer/Work> }",
+            "ASK { ?s a <http://purl.org/vocab/frbr/core#Work> }",
             "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o } LIMIT 10",
-            "DESCRIBE <http://iflastandards.info/ns/frbr/frbrer/Work>",
+            "DESCRIBE <http://purl.org/vocab/frbr/core#Work>",
         ]
         for query in example_queries:
             response = client.post(
@@ -562,7 +562,9 @@ class TestSPARQLIPCAndLimits:
         """Graph build failures must return structured JSON error, not uncaught 500."""
         from unittest.mock import patch
 
-        with patch("app.api.sparql.build_graph", side_effect=Exception("graph build boom")):
+        from app.core.sparql_service import SPARQLGraphBuildError
+
+        with patch("app.api.sparql.build_graph", side_effect=SPARQLGraphBuildError("graph build boom")):
             response = client.post(
                 "/api/sparql",
                 json={"query": "SELECT ?s WHERE { ?s ?p ?o }"},

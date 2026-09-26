@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import UUID
 
+from app.core.iri import canonical_frbr_iri
 from app.core.taxonomy import (  # noqa: F401
     CATEGORY_PROGRESS_STATUSES,
     COLLECTION_STATUSES,
@@ -84,12 +85,6 @@ EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 #: Controlled vocabulary for :attr:`WorkExpansionLink.link_type`.
 WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
 WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
-
-
-def _get_lod_base_url() -> str:
-    """Return the canonical base URL for Linked Open Data entity IRIs."""
-    base = os.environ.get("BASE_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or "https://iqoqo.cc"
-    return base.rstrip("/")
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -178,7 +173,7 @@ class Work(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Work."""
-        return f"{_get_lod_base_url()}/works/{self.id}"
+        return canonical_frbr_iri("work", self.id)
 
 
 class WorkExpansionLink(db.Model):  # type: ignore[name-defined]
@@ -284,7 +279,7 @@ class Expression(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Expression."""
-        return f"{_get_lod_base_url()}/expressions/{self.id}"
+        return canonical_frbr_iri("expression", self.id)
 
 
 class Manifestation(db.Model):  # type: ignore[name-defined]
@@ -414,7 +409,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Manifestation."""
-        return f"{_get_lod_base_url()}/manifestations/{self.id}"
+        return canonical_frbr_iri("manifestation", self.id)
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -468,19 +463,30 @@ class Item(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Item."""
-        return f"{_get_lod_base_url()}/items/{self.id}"
+        return canonical_frbr_iri("item", self.id)
 
 
 class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     """
-    User intent toward a Conceptual Work (F1).
-    E.g., "want_to_read" or other progress intent.
+    User intent toward a Conceptual Work (F1), optionally bound to a specific
+    Expression (F2) and/or Manifestation (F3).
+
+    Supports F15 Complex Works and F16 Container Works by allowing granular
+    FRBR binding: a user may express desire for a specific translation
+    (Expression) or a specific printing/edition (Manifestation) rather than
+    only the abstract Work.
     """
 
     __tablename__ = "user_work_intents"
     __table_args__: tuple = (
         (
-            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            db.UniqueConstraint(
+                "user_id",
+                "work_id",
+                "expression_id",
+                "manifestation_id",
+                name="uq_user_work_intent_target",
+            ),
             db.CheckConstraint(
                 f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
                 name="ck_user_work_intents_status",
@@ -489,7 +495,13 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
         )
         if _INVENTORY
         else (
-            db.UniqueConstraint("user_id", "work_id", name="uq_user_work_intent"),
+            db.UniqueConstraint(
+                "user_id",
+                "work_id",
+                "expression_id",
+                "manifestation_id",
+                name="uq_user_work_intent_target",
+            ),
             db.CheckConstraint(
                 f"status IN ({', '.join(repr(s) for s in WORK_INTENT_STATUSES)})",
                 name="ck_user_work_intents_status",
@@ -499,6 +511,22 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: Optional FK to a specific Expression (F2) the user desires (e.g. a
+    #: particular translation or audiobook realization).
+    expression_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    #: Optional FK to a specific Manifestation (F3) the user desires (e.g. a
+    #: particular printing, F16 container box, or F15 complex-work part).
+    manifestation_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
     status = db.Column(db.String(50), default="want_to_read", nullable=False)
     # Mirrors Item.is_hidden: lets a user share their wishlist (e.g. as gift ideas
@@ -509,6 +537,8 @@ class UserWorkIntent(db.Model):  # type: ignore[name-defined]
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     work = db.relationship("Work", backref=db.backref("intents", cascade="all, delete-orphan", lazy="dynamic"))
+    expression = db.relationship("Expression", backref=db.backref("intents", lazy="dynamic"))
+    manifestation = db.relationship("Manifestation", backref=db.backref("intents", lazy="dynamic"))
     user = db.relationship("User", backref=db.backref("work_intents", cascade="all, delete-orphan", lazy="dynamic"))
 
 

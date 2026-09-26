@@ -194,7 +194,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_isbn_from_meta(self):
         """Test ISBN normalization from metadata."""
         meta = {"isbn": "0-306-40615-2"}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta)
+        isbn, _, _, pruned = normalize_manifestation_meta(meta)
         assert isbn == "9780306406157"
         assert "isbn" not in pruned
         assert "ISBN" not in pruned
@@ -202,7 +202,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_publisher_from_meta(self):
         """Test publisher normalization from metadata."""
         meta = {"Publisher": "  Test Publisher  "}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta)
+        _, pub, _, pruned = normalize_manifestation_meta(meta)
         assert pub == "Test Publisher"
         assert "Publisher" not in pruned
         assert "publisher" not in pruned
@@ -210,7 +210,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_format_type_from_meta(self):
         """Test format_type normalization from metadata."""
         meta = {"FORMAT_TYPE": "  BOOK  "}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta)
+        _, _, fmt, pruned = normalize_manifestation_meta(meta)
         assert fmt == "book"
         assert "FORMAT_TYPE" not in pruned
         assert "format_type" not in pruned
@@ -218,7 +218,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_column_precedence(self):
         """Test that column values take precedence over metadata."""
         meta = {"isbn13": "9780000000000", "publisher": "Meta Publisher"}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta, isbn13="9781111111111", publisher="Column Publisher")
+        isbn, pub, _, _ = normalize_manifestation_meta(meta, isbn13="9781111111111", publisher="Column Publisher")
         assert isbn == "9781111111111"  # Column value wins
         assert pub == "Column Publisher"  # Column value wins
 
@@ -231,7 +231,7 @@ class TestNormalizeManifestationMeta:
     def test_normalize_invalid_isbn_non_strict(self):
         """Test invalid ISBN in non-strict mode."""
         meta = {"isbn13": "invalid"}
-        isbn, pub, fmt, pruned = normalize_manifestation_meta(meta, strict=False)
+        isbn, _, _, _ = normalize_manifestation_meta(meta, strict=False)
         assert isbn is None  # Invalid ISBN rejected
 
 

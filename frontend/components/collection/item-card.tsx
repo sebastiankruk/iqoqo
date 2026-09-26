@@ -134,9 +134,9 @@ export function ItemCard({
   const coverUrl =
     getCoverUrl(itemCoverUrl || undefined, timestamp) ||
     (isCatalog
-      ? ((item as CatalogEntry).meta?.["cover_url"] as string | undefined)
-      : (((item as Item).manifestation_meta?.["cover_url"] as string | undefined) ??
-        ((item as Item).meta?.["cover_url"] as string | undefined)));
+      ? getCoverUrl((item as CatalogEntry).meta?.["cover_url"] as string | undefined, timestamp)
+      : (getCoverUrl((item as Item).manifestation_meta?.["cover_url"] as string | undefined, timestamp) ??
+        getCoverUrl((item as Item).meta?.["cover_url"] as string | undefined, timestamp)));
 
   const hasLegacyCoverUrl = isCatalog
     ? Boolean((item as CatalogEntry).meta?.["cover_url"])
@@ -214,7 +214,13 @@ export function ItemCard({
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";
-  const authorsList = item.authors ?? [];
+  // Normalize authors to always be an array (handles string or array)
+  const rawAuthors = item.authors;
+  const authorsList: string[] = Array.isArray(rawAuthors)
+    ? rawAuthors.filter(a => typeof a === "string")
+    : typeof rawAuthors === "string"
+      ? [rawAuthors]
+      : [];
 
   const renderAuthors = () => {
     if (authorsList.length === 0) return <span>Unknown author</span>;
@@ -254,8 +260,11 @@ export function ItemCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      await apiClient.delete(`/items/${itemId}`);
+      // Wishlist items use positive IDs in the API, convert from negative if needed
+      const wishlistId = Math.abs(itemId);
+      await apiClient.delete(`/wishlist/${wishlistId}`);
       queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       toast.success("Removed from wishlist");
       onWishlistRemove?.(itemId);
@@ -435,6 +444,9 @@ export function ItemCard({
               {title}
             </p>
             <div className="truncate text-xs text-muted-foreground relative z-10">{renderAuthors()}</div>
+            <div className="mt-1 truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {mediaLabel}
+            </div>
             {isCatalog && userOwns && userItemId && (
               <button
                 type="button"

@@ -31,7 +31,7 @@ const EXAMPLE_QUERIES = [
     label: "All Works",
     query: `SELECT ?work ?title ?author
 WHERE {
-  ?work a <http://iflastandards.info/ns/frbr/frbrer/Work> .
+  ?work a <http://purl.org/vocab/frbr/core#Work> .
   OPTIONAL { ?work <https://schema.org/name> ?title } .
   OPTIONAL { ?work <https://schema.org/author> ?author } .
 }
@@ -41,7 +41,7 @@ LIMIT 50`,
     label: "Manifestations by format",
     query: `SELECT ?manif ?title ?isbn
 WHERE {
-  ?manif a <http://iflastandards.info/ns/frbr/frbrer/Manifestation> .
+  ?manif a <http://purl.org/vocab/frbr/core#Manifestation> .
   OPTIONAL { ?manif <https://schema.org/name> ?title } .
   OPTIONAL { ?manif <https://schema.org/isbn> ?isbn } .
 }
@@ -51,7 +51,7 @@ LIMIT 50`,
     label: "Recent Items",
     query: `SELECT ?item ?status
 WHERE {
-  ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
+  ?item a <http://purl.org/vocab/frbr/core#Item> .
   OPTIONAL { ?item <https://schema.org/itemCondition> ?status } .
 }
 LIMIT 50`,

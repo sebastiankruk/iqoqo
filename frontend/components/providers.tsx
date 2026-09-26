@@ -19,6 +19,24 @@ import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
+export const DEFAULT_QUERY_STALE_TIME = 60_000;
+
+/**
+ * Creates the app's query client with the shared cache defaults.
+ *
+ * @returns A query client configured for application data.
+ */
+export function createAppQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: DEFAULT_QUERY_STALE_TIME,
+        retry: 1,
+      },
+    },
+  });
+}
+
 /**
  * Global client-side providers: React Query + Sonner toasts.
  * Wraps the entire application via `app/layout.tsx`.
@@ -30,17 +48,7 @@ import { Toaster } from "sonner";
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create a stable QueryClient per render tree (avoids shared state across
   // server renders when running in SSR mode).
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 10_000,
-            retry: 1,
-          },
-        },
-      })
-  );
+  const [queryClient] = useState(createAppQueryClient);
 
   // Responsive toast placement: top-center on mobile (< 640px) to prevent bottom nav bar collision
   const [isMobile, setIsMobile] = useState(false);

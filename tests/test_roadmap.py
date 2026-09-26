@@ -22,9 +22,10 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.db.auth import User
-from app.db.core import db
+from app.db.core import Expression, Work, db
 from app.db.roadmap import ReadingRoadmap, RoadmapItem
 
 
@@ -80,6 +81,47 @@ def test_add_item_to_roadmap(client, normal_user_headers, app) -> None:
     assert data["work_id"] == 42
     assert data["position"] == 1
     assert data["status"] == "queued"
+
+
+def test_roadmap_item_constraint_preserves_expression_target_and_rejects_invalid_target_sets(app) -> None:
+    """Exactly one existing FRBR target is required; an Expression-only target remains valid."""
+    with app.app_context():
+        user = User(email="roadmap-frbr-constraint@iqoqo.local", google_id="roadmap-frbr-constraint")
+        work = Work(title="Roadmap Expression Target")
+        db.session.add_all([user, work])
+        db.session.flush()
+
+        expression = Expression(work_id=work.id, content_type="text")
+        roadmap = ReadingRoadmap(user_id=user.id, title="Expression Target Queue")
+        db.session.add_all([expression, roadmap])
+        db.session.commit()
+
+        expression_only = RoadmapItem(roadmap_id=roadmap.id, expression_id=expression.id, position=1)
+        db.session.add(expression_only)
+        db.session.commit()
+        retrieved = db.session.get(RoadmapItem, expression_only.id)
+        assert retrieved is not None
+        assert retrieved.expression_id == expression.id
+
+        no_target = RoadmapItem(roadmap_id=roadmap.id, position=2)
+        db.session.add(no_target)
+        with pytest.raises(IntegrityError):
+            db.session.flush()
+        db.session.rollback()
+
+        multiple_targets = RoadmapItem(
+            roadmap_id=roadmap.id,
+            work_id=work.id,
+            expression_id=expression.id,
+            position=2,
+        )
+        db.session.add(multiple_targets)
+        with pytest.raises(IntegrityError):
+            db.session.flush()
+        db.session.rollback()
+
+        check_names = {constraint.name for constraint in RoadmapItem.__table__.constraints}
+        assert "check_roadmap_item_single_frbr_level" in check_names
 
 
 def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
@@ -164,7 +206,7 @@ def test_reorder_roadmap_items(client, normal_user_headers, app) -> None:
 def test_roadmap_cascade_deletion(app) -> None:
     """Verify that deleting a roadmap correctly purges all child items from the database."""
     with app.app_context():
-        user = User(email="cascade@iqoqo.local", display_name="Cascade")
+        user = User(email="cascade@iqoqo.local", display_name="Cascade", google_id="cascade-user")
         db.session.add(user)
         db.session.commit()
 

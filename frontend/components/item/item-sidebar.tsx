@@ -118,9 +118,6 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const isOwner = !!item.is_owner || (!!profile && item.owner_id === profile.id);
   const isAdmin = !!profile?.roles?.includes("admin");
   const canModifyItem = isOwner || isAdmin;
-  // FRBR ontology boundary: virtual wishlist entries have id < 0 (mapped from UserWorkIntent.id).
-  // They have no physical copy on a shelf, so QR code generation is not applicable.
-  const isVirtual = item.id < 0;
   // Media type detection
   const format =
     (item.manifestation_meta?.["format"] as string | undefined) ??
@@ -164,9 +161,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
   const { data: loanStatus } = useLoanStatus(isOwner ? null : item.id);
   const requestLoan = useRequestLoan();
 
-  const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(
-    canModifyItem && !isVirtual ? item.id : null
-  );
+  const { data: itemCollections, isLoading: collectionsLoading } = useItemCollections(canModifyItem ? item.id : null);
   const addToCollection = useAddItemToCollection();
   const removeFromCollection = useRemoveItemFromCollection();
   const { data: userCollections } = useUserCollections();
@@ -388,13 +383,11 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
                 className="w-full rounded-lg bg-secondary/80 px-3 py-2 text-sm font-medium text-foreground outline-none ring-1 ring-border transition-all hover:bg-secondary focus:ring-primary/50 disabled:opacity-60 cursor-pointer appearance-none"
               >
                 <optgroup label="Availability & Condition">
-                  {["available", "lent", "damaged", "lost"]
-                    .filter(key => !isVirtual || key === "available")
-                    .map(key => (
-                      <option key={key} value={key} className="bg-card py-2">
-                        {STATUS_LABELS[key]?.label || key}
-                      </option>
-                    ))}
+                  {["available", "lent", "damaged", "lost"].map(key => (
+                    <option key={key} value={key} className="bg-card py-2">
+                      {STATUS_LABELS[key]?.label || key}
+                    </option>
+                  ))}
                 </optgroup>
                 <optgroup label="Acquisition">
                   {["wish_list", "ordered"].map(key => (
@@ -562,7 +555,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
 
             {/* Lending Actions for borrower/public user */}
-            {!isOwner && !isVirtual && profile && item.collection_status !== "wish_list" && (
+            {!isOwner && profile && item.collection_status !== "wish_list" && (
               <div className="mt-4 border-t border-border/40 pt-4 flex flex-col gap-2">
                 {item.collection_status === "lent" && item.lent_to_user_id === profile?.id ? (
                   <span
@@ -638,8 +631,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
             )}
           </button>
         )}
-        {/* Print QR Code — hidden for virtual wishlist items (id < 0): they have no physical copy to tag. */}
-        {canModifyItem && !isVirtual && (
+        {/* Print QR Code — hidden for items without manifestation_id: they have no physical copy to tag. */}
+        {canModifyItem && item.manifestation_id && (
           <button
             data-testid="qrcode-btn"
             onClick={() => setIsQrOpen(true)}
@@ -676,7 +669,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           />
         )}
 
-        {canModifyItem && !isVirtual && (
+        {canModifyItem && (
           <div className="flex flex-col gap-2">
             <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
               Named Collections

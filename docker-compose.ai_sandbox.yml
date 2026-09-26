@@ -97,12 +97,13 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 2G
-    # 3. Read-Only Filesystem with strict ephemeral tmpfs (opencode needs space for cache/config/db)
+          memory: 3G
+    # 3. Read-Only Filesystem with strict ephemeral tmpfs
+    #    Bun JIT cache fills /tmp aggressively (~500MB+); home dir holds opencode cache/config/db
     read_only: true
     tmpfs:
-      - /tmp:size=256M
-      - /home/appuser:uid=1000,gid=1000,mode=0700,size=512M
+      - /tmp:size=1G
+      - /home/appuser:uid=1000,gid=1000,mode=0700,size=1G
     # 4. Strict, Minimal Volume Mounts
     volumes:
       - ./mykg_sessions:/workspace/mykg_sessions:rw

@@ -21,7 +21,7 @@ from rdflib.namespace import RDF
 
 from app.core.frbr_service import SCHEMA, SCHEMA_TYPE_MAP, serialize_collection_to_rdf
 
-FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+FRBR = Namespace("http://purl.org/vocab/frbr/core#")
 
 
 class TestSchemaOrgTypeMapping:
@@ -50,7 +50,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.Book) in g
         assert (m_uri, RDF.type, SCHEMA.CreativeWork) in g
 
@@ -71,7 +71,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.MusicAlbum) in g
 
     def test_movie_maps_to_movie(self):
@@ -91,7 +91,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.Movie) in g
 
     def test_board_game_maps_to_game(self):
@@ -111,7 +111,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.Game) in g
 
     def test_puzzle_maps_to_product(self):
@@ -131,7 +131,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.Product) in g
 
     def test_audiobook_maps_to_audiobook(self):
@@ -151,7 +151,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.Audiobook) in g
 
     def test_publisher_included(self):
@@ -171,7 +171,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, SCHEMA.publisher, Literal("Test Publisher")) in g
 
     def test_language_included(self):
@@ -191,7 +191,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, SCHEMA.inLanguage, Literal("fr")) in g
 
     def test_no_content_type_still_has_creative_work(self):
@@ -211,7 +211,7 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.CreativeWork) in g
         # Should NOT have a specific type
         for specific_type in SCHEMA_TYPE_MAP.values():
@@ -233,6 +233,6 @@ class TestSchemaOrgTypeMapping:
             }
         ]
         g = self._serialize_and_parse(items)
-        m_uri = URIRef("http://localhost:5000/api/public/manifestations/m1")
+        m_uri = URIRef("http://localhost:5000/manifestations/m1")
         assert (m_uri, RDF.type, SCHEMA.CreativeWork) in g
         assert (m_uri, SCHEMA.name, Literal("Old Format")) in g

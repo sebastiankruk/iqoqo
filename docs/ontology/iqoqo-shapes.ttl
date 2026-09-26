@@ -24,7 +24,8 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
-@prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+@prefix frbr: <http://purl.org/vocab/frbr/core#> .
+@prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
 @prefix schema: <https://schema.org/> .
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
 
@@ -38,10 +39,9 @@ iqoqo: a sh:Ontology ;
 # ---------------------------------------------------------------------------
 
 iqoqo:WorkShape a sh:NodeShape ;
-    sh:targetClass iqoqo:Work ;
-    sh:name "Work is FRBRoo F1_Work" ;
-    sh:description "Every iqoqo Work is an FRBRoo F1_Work." ;
-    sh:class frbroo:F1_Work .
+    sh:targetClass frbr:Work ;
+    sh:name "Work is an FRBR Work" ;
+    sh:description "Every canonical FRBR Work is validated against the shared Work contract." .
 
 # ---------------------------------------------------------------------------
 # Work-to-Work expansion links
@@ -178,7 +178,7 @@ iqoqo:FeedbackCommentShape a sh:NodeShape ;
 iqoqo:FRBRExpressionShape a sh:NodeShape ;
     sh:targetClass frbr:Expression ;
     sh:property [
-        sh:path frbr:expressionOf ;
+        sh:path frbrer:expressionOf ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -188,7 +188,7 @@ iqoqo:FRBRExpressionShape a sh:NodeShape ;
 iqoqo:FRBRManifestationShape a sh:NodeShape ;
     sh:targetClass frbr:Manifestation ;
     sh:property [
-        sh:path frbr:embodimentOf ;
+        sh:path frbrer:embodimentOf ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -210,7 +210,7 @@ iqoqo:FRBRManifestationShape a sh:NodeShape ;
 iqoqo:FRBRItemShape a sh:NodeShape ;
     sh:targetClass frbr:Item ;
     sh:property [
-        sh:path frbr:exemplarOf ;
+        sh:path frbrer:exemplarOf ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -220,10 +220,17 @@ iqoqo:FRBRItemShape a sh:NodeShape ;
 iqoqo:FRBRWorkShape a sh:NodeShape ;
     sh:targetClass frbr:Work ;
     sh:property [
-        sh:path frbr:creator ;
-        sh:datatype xsd:string ;
-        sh:message "Work creator must be a string literal." ;
+        sh:path frbrer:creator ;
+        sh:nodeKind sh:BlankNodeOrIRI ;
+        sh:node iqoqo:ContributorAgentShape ;
+        sh:message "Work creator must be a Person or Organization resource." ;
     ] .
+
+iqoqo:ContributorAgentShape a sh:NodeShape ;
+    sh:or (
+        [ sh:class schema:Person ]
+        [ sh:class schema:Organization ]
+    ) .
 
 iqoqo:CreativeWorkShape a sh:NodeShape ;
     sh:targetClass schema:CreativeWork ;
@@ -235,8 +242,9 @@ iqoqo:CreativeWorkShape a sh:NodeShape ;
     ] ;
     sh:property [
         sh:path schema:author ;
-        sh:datatype xsd:string ;
-        sh:message "schema:author must be a string literal." ;
+        sh:nodeKind sh:BlankNodeOrIRI ;
+        sh:node iqoqo:ContributorAgentShape ;
+        sh:message "schema:author must be a Person or Organization resource." ;
     ] .
 
 # ---------------------------------------------------------------------------
@@ -477,5 +485,4 @@ iqoqo:EntityAuditLogShape a sh:NodeShape ;
         sh:datatype xsd:dateTime ;
         sh:message "An EntityAuditLog must record auditLoggedAt dateTime." ;
     ] .
-
 

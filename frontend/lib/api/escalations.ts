@@ -110,7 +110,7 @@ export function useMyEscalations(enabled = true) {
     queryKey: escalationQueryKeys.mine,
     queryFn: () => getMyEscalations(),
     enabled,
-    staleTime: 10_000,
+    staleTime: 30_000,
   });
 }
 
@@ -126,7 +126,7 @@ export function useEscalationQueue(status = "pending", enabled = true) {
     queryKey: [...escalationQueryKeys.queue, status],
     queryFn: () => getEscalationQueue(status),
     enabled,
-    staleTime: 10_000,
+    staleTime: 30_000,
   });
 }
 

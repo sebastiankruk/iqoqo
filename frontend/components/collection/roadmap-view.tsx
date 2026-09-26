@@ -78,7 +78,6 @@ export function RoadmapView() {
       await addRoadmapItemMutation.mutateAsync({
         roadmapId: activeRoadmap.id,
         manifestationId: selectedResult.id,
-        workId: selectedResult.work_id || undefined,
         notes: notes || undefined,
       });
       setSearchQuery("");

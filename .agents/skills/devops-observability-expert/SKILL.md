@@ -46,7 +46,7 @@ ANSI SQL** — no PromQL, no LogQL.
 
 | Endpoint                                         | Purpose                                                     |
 | ------------------------------------------------ | ----------------------------------------------------------- |
-| `http://localhost:5080`                          | OpenObserve UI (login: `admin@iqoqo.local` / `supersecret`) |
+| `http://localhost:5080`                          | OpenObserve UI (login: `admin@iqoqo.local` / `<auto-provisioned in .env>`) |
 | `POST http://localhost:5080/api/default/_search` | SQL search across all signals                               |
 | `GET http://localhost:5080/api/default/traces`   | Trace search                                                |
 | `http://localhost:4318`                          | OTLP HTTP ingestion (OTel Collector, for AI agent push)     |
@@ -56,10 +56,10 @@ ANSI SQL** — no PromQL, no LogQL.
 All API calls require:
 
 ```http
-Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=
+Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}
 ```
 
-(Base64 of `admin@iqoqo.local:supersecret`. Override with `OPENOBSERVE_ROOT_USER`/`OPENOBSERVE_ROOT_PASSWORD`.)
+(Retrieve from `.env` or DB: `flask shell -c "from app.db.settings import InstanceSettings; print(InstanceSettings.get_value('OPENOBSERVE_BASIC_AUTH'))"`)
 
 ## Offline Diagnostics: `make status`
 
@@ -100,7 +100,7 @@ Use the output to decide whether to:
 
 ```bash
 curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
-  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" \
   -H "Content-Type: application/json" \
   -d '{
     "query": {
@@ -113,7 +113,7 @@ curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
 
 ```bash
 curl -s -X POST "http://127.0.0.1:5080/api/default/_search" \
-  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" \
+  -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" \
   -H "Content-Type: application/json" \
   -d '{"query": {"sql": "SELECT _timestamp, http_target, http_status_code, duration_nano / 1000000 AS duration_ms FROM default WHERE http_status_code >= 500 ORDER BY _timestamp DESC LIMIT 20"}}' \
   | jq '.hits'
@@ -166,5 +166,5 @@ To fetch recent traces for a specific service:
 
 ```bash
 curl -s "http://127.0.0.1:5080/api/default/traces?service=iqoqo-api&limit=10" \
-  -H "Authorization: Basic YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=" | jq '.'
+  -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" | jq '.'
 ```

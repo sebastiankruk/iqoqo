@@ -15,6 +15,29 @@
 #
 
 
+import pytest
+
+
+def test_search_schema_prefix_allowlist_rejects_unexpected_values(monkeypatch):
+    import app.core.search_service as search_service
+
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog; DROP SCHEMA auth CASCADE; --.")
+    with pytest.raises(ValueError, match="Unexpected database schema prefix configuration"):
+        search_service.SearchService._pg_manifestation_fts("needle", limit=10, offset=0)
+
+
+def test_search_schema_prefix_allowlist_accepts_supported_pairs(monkeypatch):
+    import app.core.search_service as search_service
+
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog.")
+    monkeypatch.setattr(search_service, "_INVENTORY", "inventory.")
+    assert search_service._validated_schema_prefixes() == ("catalog.", "inventory.")
+
+    monkeypatch.setattr(search_service, "_CATALOG", "")
+    monkeypatch.setattr(search_service, "_INVENTORY", "")
+    assert search_service._validated_schema_prefixes() == ("", "")
+
+
 def test_search_items_by_title(app, client, normal_user_headers):
     """Ensure full-text search endpoint responds and that `q` filters results."""
     from app.db.models import Expression, Item, Manifestation, User, Work, db

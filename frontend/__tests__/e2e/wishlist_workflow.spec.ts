@@ -394,13 +394,13 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
 
     // Mock DELETE endpoint for wishlist removal
     let deleteCalled = false;
-    await page.route("**/api/items/-10**", async route => {
+    const handleDelete = async (route: any) => {
       if (route.request().method() === "DELETE") {
         deleteCalled = true;
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true, data: { id: -10 } }),
+          body: JSON.stringify({ success: true, data: { id: 10 } }),
         });
       } else {
         await route.fulfill({
@@ -418,7 +418,9 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
           }),
         });
       }
-    });
+    };
+    await page.route("**/api/wishlist/**", handleDelete);
+    await page.route("**/api/items/-10**", handleDelete);
 
     await page.route("**/api/stats**", async route => {
       await route.fulfill({

@@ -240,9 +240,7 @@ export default function ProfilePage() {
           <div className="p-6 flex flex-col gap-6">
             <div>
               <h2 className="text-xl font-semibold">Profile Settings</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage your public identity and account preferences.
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">Manage your public identity and account preferences.</p>
             </div>
 
             {/* Display Name */}
@@ -266,8 +264,7 @@ export default function ProfilePage() {
                 Public Username
               </label>
               <p className="text-xs text-muted-foreground mb-2">
-                Setting a public username allows sharing your collection at{" "}
-                <code>/u/[username]</code>.
+                Setting a public username allows sharing your collection at <code>/u/[username]</code>.
               </p>
               <div className="flex items-center gap-2 max-w-md">
                 <span className="text-sm text-muted-foreground">
@@ -455,8 +452,13 @@ export default function ProfilePage() {
             Log Out
           </Button>
 
-          <div className="text-right">
-            <Button variant="destructive" onClick={handleDeleteAccount}>
+          <div className="text-right flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Coming in v0.8.2</span>
+            <Button
+              variant="destructive"
+              disabled
+              title="Account deletion temporarily disabled — email confirmation required (Coming in v0.8.2)"
+            >
               Delete Account
             </Button>
           </div>

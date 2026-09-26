@@ -53,7 +53,7 @@ export async function setWorkIntent(workId: number, status: string | null): Prom
  */
 export async function deleteWorkIntent(workId: number): Promise<null> {
   const res = await apiClient.delete<ApiResponse<{ status: null }>>(`/works/${workId}/intent`);
-  if (!res.data.success || res.data.data === null) {
+  if (!res.data.success) {
     throw new Error(res.data.error ?? "Failed to delete work intent");
   }
   return null;

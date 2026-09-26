@@ -14,7 +14,9 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
+import bleach
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
@@ -92,7 +94,11 @@ def update_profile():
         return jsonify({"error": "User not found"}), 404
 
     if "display_name" in data:
-        user.display_name = data["display_name"]
+        raw_name = data["display_name"]
+        if raw_name is not None:
+            user.display_name = bleach.clean(str(raw_name).strip(), tags=[], attributes={}, protocols=[], strip=True)
+        else:
+            user.display_name = None
 
     if "public_username" in data:
         err = _set_public_username(user, data["public_username"])
@@ -100,7 +106,14 @@ def update_profile():
             return err
 
     if "bio" in data:
-        user.bio = data["bio"].strip()
+        bio_val = data["bio"]
+        if bio_val is not None:
+            clean_bio = bleach.clean(str(bio_val).strip(), tags=[], attributes={}, protocols=[], strip=True)
+            if len(clean_bio) > 500:
+                return jsonify({"error": "Biography cannot exceed 500 characters", "code": 400}), 400
+            user.bio = clean_bio
+        else:
+            user.bio = None
 
     if "visibility" in data:
         val = data["visibility"]
@@ -111,7 +124,7 @@ def update_profile():
         raw_avatar = data["avatar_url"]
         if raw_avatar:
             avatar_url = str(raw_avatar).strip()
-            if not is_safe_url(avatar_url):
+            if urlparse(avatar_url).scheme != "https" or not is_safe_url(avatar_url):
                 return jsonify({"error": "Invalid or unsafe avatar URL", "code": 400}), 400
             user.avatar_url = avatar_url
         else:
@@ -124,17 +137,16 @@ def update_profile():
 @profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
 @require_auth
 def delete_profile():
-    """Right to be forgotten: Deletes user, their items, and consents."""
-    user = db.session.get(User, getattr(g, "user_id", None))
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    # Because of foreign key constraints with ondelete="CASCADE" in DB models,
-    # deleting the user will automatically remove their Item and ConsentRecord entries.
-    db.session.delete(user)
-    db.session.commit()
-
-    return jsonify({"message": "Account and all associated data permanently deleted."}), 200
+    """Right to be forgotten: Temporarily disabled pending email confirmation flow (C33, v0.8.2)."""
+    return (
+        jsonify(
+            {
+                "error": "Account deletion temporarily disabled — email confirmation required (v0.8.2)",
+                "code": 501,
+            }
+        ),
+        501,
+    )
 
 
 def _set_public_username(user: User, new_username: str | None) -> Response | tuple[Response, int] | None:

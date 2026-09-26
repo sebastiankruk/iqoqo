@@ -298,6 +298,50 @@ docker compose logs web | grep "SPARQL"
 
 ## Backup and Recovery Procedures
 
+### Legacy external cover backfill
+
+After deploying the backend fix to an isolated preview stack, use the
+operator-invoked backfill to copy existing allowlisted legacy cover sources to
+the local covers directory. The command is read-only by default. It uses the
+standard image validation/optimization pipeline and SSRF-safe downloader, and
+does not invoke provider fallbacks or LLM generation.
+
+1. Verify the preview stack is using the intended **cloned preview database**
+   and that its clone/backup is complete. Do not point this operation at the
+   production database. Run the command from that deployed preview stack's
+   compose directory/environment; the script reports the database identity
+   selected by the container's active configuration.
+2. Run a dry-run in the deployed preview `web` container. It prints a
+   credential-free database target, candidate IDs, and aggregate counts, but
+   does not change rows or download covers:
+
+   ```bash
+   docker compose -p iqoqo-preview exec web python scripts/backfill_legacy_covers.py
+   ```
+
+3. Confirm the printed target exactly matches the approved cloned preview
+   database. Apply only after the dry-run is reviewed, supplying that exact
+   credential-free target identity:
+
+   ```bash
+   docker compose -p iqoqo-preview exec web python scripts/backfill_legacy_covers.py \
+     --apply \
+     --confirm-target 'postgresql://<cloned-preview-db-host>:5432/<cloned-preview-db-name>'
+   ```
+
+   Substitute the sanitized target shown by the dry-run. This confirmation is
+   only a credential-free host/database identity; never put a connection URL,
+   username, password, signed cover URL, or other secret in command arguments.
+   `--limit N` can cap a dry-run or a deliberately bounded apply; omit it for a
+   full pass after reviewing the dry-run. Apply mode requires an explicit
+   `--apply` and target confirmation. Rows already carrying a
+   ready local cover are skipped, unsupported hosts are left untouched, and
+   repeated runs are idempotent for completed rows. The final output reports
+   candidate, eligible, skipped, processed, and failed counts without printing
+   full source URLs.
+
+---
+
 ### Pre-Maintenance Backup
 
 Always backup before running ETL or migration operations:

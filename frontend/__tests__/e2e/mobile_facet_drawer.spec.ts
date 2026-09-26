@@ -81,7 +81,7 @@ test.describe("Mobile Facet Drawer", () => {
       });
     });
 
-    await page.route("**/api/facets/stats**", async route => {
+    await page.route("**/api/stats/facets**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

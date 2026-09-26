@@ -180,7 +180,7 @@ class TestSPARQLAuthScoping:
 
     def test_user_sees_own_private_items_but_not_other_users_private_items(self, client, sparql_test_data):
         """User A sees public items and User A private item, but never User B private item."""
-        query = "SELECT ?item WHERE { ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> }"
+        query = "SELECT ?item WHERE { ?item a <http://purl.org/vocab/frbr/core#Item> }"
         res = client.post(
             "/api/sparql",
             json={"query": query},
@@ -291,7 +291,7 @@ class TestSPARQLProtocolsAndFormats:
         """ASK query returns SPARQL JSON with boolean key."""
         res = client.post(
             "/api/sparql",
-            json={"query": "ASK { ?s a <http://iflastandards.info/ns/frbr/frbrer/Work> }"},
+            json={"query": "ASK { ?s a <http://purl.org/vocab/frbr/core#Work> }"},
             headers=sparql_test_data["user_a_headers"],
         )
         assert res.status_code == 200

@@ -50,7 +50,7 @@ Before branching a release, complete the following verification steps:
    - **DevOps/SRE Expert**: Checks Docker build specs, database migrations, and background jobs context safety.
    - **Test Craftsman / QA**: Ensures unit, integration, and E2E coverage.
    - **TechComm Specialist**: Validates documentation currency, ATX markdown syntax, and code block tags.
-   - **Code Quality / Linter**: Runs `make lint-python` and `make lint-js`.
+   - **Code Quality / Linter**: Run `make lint` for the GitHub quality-workflow gates; `make lint-all` adds stricter local-only checks.
 4. **Commit and Push**: `git commit -am "chore(release): prep release v0.7.17"` and push the branch.
 5. **Create & Merge Pull Request**: Open a PR from `release/0.7.17` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
 6. **Memory Graph Synchronization**:

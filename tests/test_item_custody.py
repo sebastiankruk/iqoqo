@@ -30,6 +30,7 @@ def custody_user(app):
     """Create a user for custody tests and return its ID."""
     with app.app_context():
         user = User(email="custody_tester@iqoqo.local", display_name="Custody Tester")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
         return user.id

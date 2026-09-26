@@ -62,7 +62,9 @@ export function getCoverTimestamp(
   fallbackMeta?: Record<string, unknown> | null
 ): number | "" {
   const updatedAt = meta?.["cover_status_updated_at"] ?? fallbackMeta?.["cover_status_updated_at"];
-  return typeof updatedAt === "string" ? new Date(updatedAt).getTime() : "";
+  if (typeof updatedAt !== "string") return "";
+  const timestamp = new Date(updatedAt).getTime();
+  return Number.isNaN(timestamp) ? "" : timestamp;
 }
 
 /**
@@ -75,7 +77,38 @@ export function getCoverTimestamp(
  * @returns {string} The fully resolved URL
  */
 export function resolveApiUrl(path: string, isServer = false): string {
-  if (path.startsWith("http")) return path;
+  const hasUrlScheme = /^[a-z][a-z\d+.-]*:/i.test(path);
+  if (hasUrlScheme) {
+    try {
+      const url = new URL(path);
+      const allowedOrigins = new Set<string>();
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+        if (!configuredUrl) continue;
+        try {
+          allowedOrigins.add(new URL(configuredUrl).origin);
+        } catch {
+          // Relative API paths do not add an external host to the allowlist.
+        }
+      }
+      if (typeof window !== "undefined") allowedOrigins.add(window.location.origin);
+      if (isServer) {
+        allowedOrigins.add("http://127.0.0.1:5000");
+        allowedOrigins.add("http://localhost:5000");
+        if (process.env.NEXT_PUBLIC_APP_VERSION) allowedOrigins.add("http://web:5000");
+      }
+      if (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        !url.username &&
+        !url.password &&
+        allowedOrigins.has(url.origin)
+      ) {
+        return path;
+      }
+    } catch {
+      return "/api";
+    }
+    return "/api";
+  }
 
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -84,7 +117,7 @@ export function resolveApiUrl(path: string, isServer = false): string {
   if (isServer) {
     const apiBase = process.env.FLASK_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000/api";
     let cleanBase = apiBase === "/" ? "" : apiBase.replace(/\/$/, "");
-    if (!cleanBase.startsWith("http")) {
+    if (!/^https?:\/\//i.test(cleanBase)) {
       // In Docker, the host is usually 'web'. For local dev it's 127.0.0.1.
       // Default to web:5000 if running in a typical docker setup without FLASK_API_URL.
       // NEXT_PUBLIC_APP_VERSION is set in Docker builds via Dockerfile.prod args.
@@ -117,7 +150,27 @@ export function resolveApiUrl(path: string, isServer = false): string {
  */
 export function getCoverUrl(path: string | undefined, timestamp?: number | string): string | undefined {
   if (!path) return undefined;
-  const url = resolveApiUrl(path);
+  let coverPath = path;
+  if (/^[a-z][a-z\d+.-]*:/i.test(path)) {
+    try {
+      const parsed = new URL(path);
+      const allowedOrigins = new Set<string>();
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+        if (!configuredUrl) continue;
+        try {
+          allowedOrigins.add(new URL(configuredUrl).origin);
+        } catch {
+          // Relative API paths do not add an external host to the allowlist.
+        }
+      }
+      if (!allowedOrigins.has(parsed.origin)) return undefined;
+      coverPath = parsed.pathname;
+    } catch {
+      return undefined;
+    }
+  }
+  if (!/^\/(?:api\/)?static\/covers\/[^/?#]+$/.test(coverPath)) return undefined;
+  const url = resolveApiUrl(coverPath);
   if (timestamp) {
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}t=${timestamp}`;

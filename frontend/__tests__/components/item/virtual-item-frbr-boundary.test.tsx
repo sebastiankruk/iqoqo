@@ -104,16 +104,6 @@ describe("ItemSidebar FRBR Virtual Item Boundary", () => {
     vi.clearAllMocks();
   });
 
-  it("hides the QR Code button for virtual wishlist items (id < 0)", () => {
-    // Virtual item: UserWorkIntent adapter — id < 0, no physical copy on shelf
-    const virtualItem = makeItem({ id: -10, manifestation_id: undefined });
-    render(<ItemSidebar item={virtualItem} />);
-
-    // The QR Code button must not be rendered for virtual items
-    expect(screen.queryByTestId("qrcode-btn")).not.toBeInTheDocument();
-    expect(screen.queryByText("Print QR Code")).not.toBeInTheDocument();
-  });
-
   it("shows the QR Code button for physical items (id > 0)", () => {
     // Physical item: concrete Item record with a positive ID
     const physicalItem = makeItem({ id: 5, manifestation_id: 10 });
@@ -124,10 +114,11 @@ describe("ItemSidebar FRBR Virtual Item Boundary", () => {
     expect(screen.getByText("Print QR Code")).toBeInTheDocument();
   });
 
-  it("hides the QR Code button for edge case id=-1 (single virtual item)", () => {
-    const virtualItem = makeItem({ id: -1, manifestation_id: undefined });
-    render(<ItemSidebar item={virtualItem} />);
+  it("hides the QR Code button for items without manifestation_id", () => {
+    // Items without manifestation_id cannot have QR codes generated
+    const itemWithoutManifestation = makeItem({ id: 10, manifestation_id: undefined });
+    render(<ItemSidebar item={itemWithoutManifestation} />);
 
-    expect(screen.queryByText("Print QR Code")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("qrcode-btn")).not.toBeInTheDocument();
   });
 });

@@ -62,10 +62,22 @@ def test_update_item_lent_with_name_success(client, sample_item, normal_user_hea
         assert item.lent_to_user_id is None
 
 
+def test_owner_cannot_request_loan_for_own_item(client, sample_item, normal_user_headers, app):
+    response = client.post(f"/api/lending/items/{sample_item}/loan-request", json={}, headers=normal_user_headers)
+
+    assert response.status_code == 400
+    assert response.json["error"] == "Cannot request to loan your own item"
+    with app.app_context():
+        from app.db.models import LoanRequest
+
+        assert LoanRequest.query.filter_by(item_id=sample_item).count() == 0
+
+
 def test_update_item_lent_with_user_id_success(client, sample_item, normal_user_headers, app):
     """Verify item update to 'lent' succeeds when a borrower user ID is provided."""
     with app.app_context():
         borrower = User(email="borrower@iqoqo.local", display_name="Borrower Caveman")
+        borrower.set_password("test-password")
         db.session.add(borrower)
         db.session.commit()
         borrower_id = str(borrower.id)

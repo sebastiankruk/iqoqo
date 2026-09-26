@@ -45,6 +45,39 @@ from app.db.models import (
 )
 
 
+def _build_format_facet_query(target_clause: Any, from_clause: Any, filter_column: Any, filtered_ids: Any):
+    """Build a format-count query with a single shared JSON key bind parameter.
+
+    PostgreSQL requires the grouped expression to be structurally identical to
+    the selected expression. Reusing this SQLAlchemy expression ensures both
+    occurrences compile with the same JSON path bind parameter.
+    """
+    format_expression = Manifestation.meta["format"].as_string()
+    return (
+        select(
+            format_expression,
+            func.count(distinct(target_clause)).label("cnt"),
+        )
+        .select_from(from_clause)
+        .where(filter_column.in_(select(filtered_ids)))
+        .group_by(format_expression)
+    )
+
+
+def _build_collection_status_facet_query(target_clause: Any, from_clause: Any, filter_column: Any, filtered_ids: Any):
+    """Build the collection-status count query with one shared COALESCE expression."""
+    status_expression = func.coalesce(Item.collection_status, "available")
+    return (
+        select(
+            status_expression.label("c_status"),
+            func.count(distinct(target_clause)).label("cnt"),
+        )
+        .select_from(from_clause)
+        .where(filter_column.in_(select(filtered_ids)))
+        .group_by(status_expression)
+    )
+
+
 class DataManager:
     """Manages import and export of iqoqo database content."""
 
@@ -143,152 +176,177 @@ class DataManager:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     @staticmethod
-    def import_data(data: dict[str, Any], clear_existing: bool = False) -> dict[str, int]:
+    def import_data(
+        data: dict[str, Any],
+        clear_existing: bool = False,
+        default_owner_id: uuid.UUID | str | None = None,
+    ) -> dict[str, int]:
         """
         Import data from a JSON structure.
 
         Args:
             data: Dictionary containing works, expressions, manifestations, and items.
             clear_existing: If True, clears all existing data before importing.
+            default_owner_id: Existing user ID used only for Items whose imported
+                owner is missing, invalid, or does not resolve to a user.
 
         Returns:
             Dictionary with counts of imported records.
         """
-        if clear_existing:
-            DataManager.clear_all_data()
-
-        # Track ID mappings (old_id -> new_id)
-        work_id_map: dict[int, int] = {}
-        expr_id_map: dict[int, int] = {}
-        manif_id_map: dict[int, int] = {}
-
-        counts = {
-            "works": 0,
-            "expressions": 0,
-            "manifestations": 0,
-            "items": 0,
-        }
-
-        # Ensure a fallback user exists for imported items lacking valid UUID owners
-        default_owner = User.query.first()
-        if not default_owner:
-            default_owner = User(email="data_importer@iqoqo.local", display_name="Data Importer")
-            db.session.add(default_owner)
-            db.session.flush()
-
-        # Import works
-        for work_data in data.get("works", []):
-            old_id = work_data.get("id")
-            work = Work(
-                title=work_data["title"],
-                meta=work_data.get("meta", {}),
-            )
-            db.session.add(work)
-            db.session.flush()  # Get the new ID
-            if old_id:
-                work_id_map[old_id] = work.id
-            counts["works"] += 1
-
-        # Import expressions
-        for expr_data in data.get("expressions", []):
-            old_id = expr_data.get("id")
-            old_work_id = expr_data.get("work_id")
-            new_work_id = work_id_map.get(old_work_id, old_work_id)
-
-            expr = Expression(
-                work_id=new_work_id,
-                content_type=expr_data.get("content_type"),
-                language=expr_data.get("language"),
-                meta=expr_data.get("meta", {}),
-            )
-            db.session.add(expr)
-            db.session.flush()
-            if old_id:
-                expr_id_map[old_id] = expr.id
-            counts["expressions"] += 1
-
-        # Import manifestations
-        for manif_data in data.get("manifestations", []):
-            old_id = manif_data.get("id")
-            old_expr_id = manif_data.get("expression_id")
-            new_expr_id = expr_id_map.get(old_expr_id, old_expr_id)
-
-            pub_date = None
-            if manif_data.get("publication_date"):
-                pub_date = datetime.fromisoformat(manif_data["publication_date"]).date()
-
-            manif = Manifestation(
-                expression_id=new_expr_id,
-                isbn13=manif_data.get("isbn13"),
-                upc=manif_data.get("upc"),
-                ean=manif_data.get("ean"),
-                publisher=manif_data.get("publisher"),
-                publication_date=pub_date,
-                meta=manif_data.get("meta", {}),
-            )
-            db.session.add(manif)
-            db.session.flush()
-            if old_id:
-                manif_id_map[old_id] = manif.id
-            counts["manifestations"] += 1
-
-        # Import items
-        for item_data in data.get("items", []):
-            old_manif_id = item_data.get("manifestation_id")
-            new_manif_id = manif_id_map.get(old_manif_id, old_manif_id)
-
-            added_at = None
-            if item_data.get("added_at"):
-                added_at = datetime.fromisoformat(item_data["added_at"])
-
-            # Resolve Owner ID (fallback to default if invalid/missing)
-            raw_owner_id = item_data.get("owner_id")
-            owner_id = default_owner.id
-            if raw_owner_id:
+        try:
+            # Resolve ownership before adding or deleting any catalog data. A
+            # missing/unresolvable owner must never silently become an
+            # arbitrary account, nor leave a partially imported catalog.
+            imported_items = data.get("items", [])
+            parsed_owners: list[uuid.UUID | None] = []
+            candidate_ids: set[uuid.UUID] = set()
+            for item_data in imported_items:
+                raw_owner_id = item_data.get("owner_id")
                 try:
-                    owner_id = uuid.UUID(str(raw_owner_id))
-                except ValueError:
-                    pass
+                    owner_id = uuid.UUID(str(raw_owner_id)) if raw_owner_id is not None else None
+                except (ValueError, TypeError, AttributeError):
+                    owner_id = None
+                parsed_owners.append(owner_id)
+                if owner_id is not None:
+                    candidate_ids.add(owner_id)
 
-            item = Item(
-                manifestation_id=new_manif_id,
-                owner_id=owner_id,
-                status=item_data.get("status", "want_to_read"),
-                collection_status=item_data.get("collection_status", "available"),
-                condition=item_data.get("condition"),
-                added_at=added_at,
-                meta=item_data.get("meta", {}),
-            )
-            db.session.add(item)
-            counts["items"] += 1
+            existing_owner_ids: set[uuid.UUID] = set()
+            # Keep bind parameter usage bounded for large backup files.
+            candidate_list = list(candidate_ids)
+            for start in range(0, len(candidate_list), 500):
+                owner_batch = candidate_list[start : start + 500]
+                existing_owner_ids.update(db.session.execute(select(User.id).where(User.id.in_(owner_batch))).scalars())
 
-        db.session.commit()
-        return counts
+            resolved_owners = [owner_id if owner_id in existing_owner_ids else None for owner_id in parsed_owners]
+            fallback_needed = any(owner_id is None for owner_id in resolved_owners)
+            fallback_owner_id: uuid.UUID | None = None
+            if fallback_needed:
+                if default_owner_id is None:
+                    raise ValueError("Imported Items require an existing default_owner_id when an owner is missing or unresolved.")
+                try:
+                    fallback_owner_id = uuid.UUID(str(default_owner_id))
+                except (ValueError, TypeError, AttributeError) as exc:
+                    raise ValueError("default_owner_id must be a valid UUID for an existing user.") from exc
+                if db.session.get(User, fallback_owner_id) is None:
+                    raise ValueError("default_owner_id does not identify an existing user.")
+
+            if clear_existing:
+                DataManager.clear_all_data(commit=False)
+
+            # Track ID mappings (old_id -> new_id)
+            work_id_map: dict[int, int] = {}
+            expr_id_map: dict[int, int] = {}
+            manif_id_map: dict[int, int] = {}
+
+            counts = {"works": 0, "expressions": 0, "manifestations": 0, "items": 0}
+
+            # Import works
+            for work_data in data.get("works", []):
+                old_id = work_data.get("id")
+                work = Work(title=work_data["title"], meta=work_data.get("meta", {}))
+                db.session.add(work)
+                db.session.flush()
+                if old_id:
+                    work_id_map[old_id] = work.id
+                counts["works"] += 1
+
+            # Import expressions
+            for expr_data in data.get("expressions", []):
+                old_id = expr_data.get("id")
+                old_work_id = expr_data.get("work_id")
+                new_work_id = work_id_map.get(old_work_id, old_work_id)
+                expr = Expression(
+                    work_id=new_work_id,
+                    content_type=expr_data.get("content_type"),
+                    language=expr_data.get("language"),
+                    meta=expr_data.get("meta", {}),
+                )
+                db.session.add(expr)
+                db.session.flush()
+                if old_id:
+                    expr_id_map[old_id] = expr.id
+                counts["expressions"] += 1
+
+            # Import manifestations
+            for manif_data in data.get("manifestations", []):
+                old_id = manif_data.get("id")
+                old_expr_id = manif_data.get("expression_id")
+                new_expr_id = expr_id_map.get(old_expr_id, old_expr_id)
+                pub_date = datetime.fromisoformat(manif_data["publication_date"]).date() if manif_data.get("publication_date") else None
+                manifestation_meta = dict(manif_data.get("meta") or {})
+                cover_url = manif_data.get("cover_url")
+                local_cover_url = cover_url if isinstance(cover_url, str) and cover_url.startswith("/static/covers/") else None
+                if isinstance(cover_url, str) and cover_url and local_cover_url is None:
+                    manifestation_meta.setdefault("cover_url", cover_url)
+                manif = Manifestation(
+                    expression_id=new_expr_id,
+                    isbn13=manif_data.get("isbn13"),
+                    upc=manif_data.get("upc"),
+                    ean=manif_data.get("ean"),
+                    publisher=manif_data.get("publisher"),
+                    publication_date=pub_date,
+                    cover_url=local_cover_url,
+                    meta=manifestation_meta,
+                )
+                db.session.add(manif)
+                db.session.flush()
+                if old_id:
+                    manif_id_map[old_id] = manif.id
+                counts["manifestations"] += 1
+
+            # Import items
+            for item_data, owner_id in zip(imported_items, resolved_owners, strict=True):
+                old_manif_id = item_data.get("manifestation_id")
+                new_manif_id = manif_id_map.get(old_manif_id, old_manif_id)
+                added_at = datetime.fromisoformat(item_data["added_at"]) if item_data.get("added_at") else None
+                item = Item(
+                    manifestation_id=new_manif_id,
+                    owner_id=owner_id or fallback_owner_id,
+                    status=item_data.get("status", "want_to_read"),
+                    collection_status=item_data.get("collection_status", "available"),
+                    condition=item_data.get("condition"),
+                    added_at=added_at,
+                    meta=item_data.get("meta", {}),
+                )
+                db.session.add(item)
+                counts["items"] += 1
+
+            db.session.commit()
+            return counts
+        except Exception:
+            db.session.rollback()
+            raise
 
     @staticmethod
-    def import_from_file(filepath: str, clear_existing: bool = False) -> dict[str, int]:
+    def import_from_file(
+        filepath: str,
+        clear_existing: bool = False,
+        default_owner_id: uuid.UUID | str | None = None,
+    ) -> dict[str, int]:
         """
         Import data from a JSON file.
 
         Args:
             filepath: Path to the input JSON file.
             clear_existing: If True, clears all existing data before importing.
+            default_owner_id: Existing user ID used only for Items with an unresolved owner.
 
         Returns:
             Dictionary with counts of imported records.
         """
         with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
-        return DataManager.import_data(data, clear_existing=clear_existing)
+        return DataManager.import_data(data, clear_existing=clear_existing, default_owner_id=default_owner_id)
 
     @staticmethod
-    def clear_all_data() -> None:
+    def clear_all_data(commit: bool = True) -> None:
         """Clear all data from the database. Use with caution!"""
         Item.query.delete()
         Manifestation.query.delete()
         Expression.query.delete()
         Work.query.delete()
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @staticmethod
     def verify_column_meta_drift() -> dict[str, Any]:
@@ -919,15 +977,7 @@ class DataManager:
                 category_counts[ct] = cnt
 
         # ── Format counts (grouped by Manifestation.meta->'format') ───────
-        fmt_query = (
-            select(
-                Manifestation.meta["format"].as_string(),
-                func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
-            )
-            .select_from(cfg["from_clause"])
-            .where(subq_filter_col.in_(select(fmt_subq.c.id)))
-            .group_by(Manifestation.meta["format"].as_string())
-        )
+        fmt_query = _build_format_facet_query(cfg["target_clause"], cfg["from_clause"], subq_filter_col, fmt_subq.c.id)
         fmt_query = _join_to_manifestation(fmt_query)
         fmt_rows = db.session.execute(fmt_query).all()
         format_counts: dict[str, int] = {}
@@ -956,14 +1006,11 @@ class DataManager:
                 if s in db_statuses:
                     db_statuses[s] += cnt
 
-            coll_status_query = (
-                select(
-                    func.coalesce(Item.collection_status, "available").label("c_status"),
-                    func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
-                )
-                .select_from(cfg["from_clause"])
-                .where(subq_filter_col.in_(select(status_subq.c.id)))
-                .group_by(func.coalesce(Item.collection_status, "available"))
+            coll_status_query = _build_collection_status_facet_query(
+                cfg["target_clause"],
+                cfg["from_clause"],
+                subq_filter_col,
+                status_subq.c.id,
             )
             coll_status_query = _join_full_chain(coll_status_query)
             coll_status_rows = db.session.execute(coll_status_query).all()

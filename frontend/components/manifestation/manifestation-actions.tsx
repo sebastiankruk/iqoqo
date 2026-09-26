@@ -87,7 +87,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
   const pendingEscalation = manifestationEscalations.find(e => e.status === "pending");
 
   // Declarative polling for cover generation/processing state via TanStack Query refetchInterval
-  const isProcessing = isPending || manifestation.meta?.cover_status === "processing";
+  const isProcessing = manifestation.meta?.cover_status === "processing";
   useQuery({
     queryKey: queryKeys.manifestation(manifestation.id ?? 0),
     queryFn: async () => {
@@ -96,8 +96,8 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
     },
     enabled: Boolean(manifestation.id && isProcessing),
     refetchInterval: query => {
-      const status = query.state.data?.meta?.cover_status ?? manifestation.meta?.cover_status;
-      return status === "pending" || status === "processing" ? 3000 : false;
+      const status = query.state.data ? query.state.data.meta?.cover_status : manifestation.meta?.cover_status;
+      return status === "processing" ? 3000 : false;
     },
   });
 

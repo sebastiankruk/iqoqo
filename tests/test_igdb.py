@@ -17,6 +17,7 @@
 
 import json
 import os
+import stat
 import time
 from unittest.mock import MagicMock, patch
 
@@ -82,6 +83,25 @@ def test_get_igdb_token_refresh_on_expiry(mock_post):
 
 
 @patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})
+@patch("app.utils.igdb.requests.post")
+def test_get_igdb_token_cache_file_is_owner_only(mock_post):
+    """Refreshing even a pre-existing token file enforces mode 0o600."""
+    from app.utils.igdb import _TOKEN_FILE
+
+    with open(_TOKEN_FILE, "w", encoding="utf-8") as wf:
+        json.dump({"access_token": "old_token", "expires_in": 3600}, wf)
+    os.chmod(_TOKEN_FILE, 0o644)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"access_token": "new_token", "expires_in": 360000}
+    mock_post.return_value = mock_resp
+
+    assert get_igdb_token() == "new_token"
+    assert stat.S_IMODE(os.stat(_TOKEN_FILE).st_mode) == 0o600
+
+
+@patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})
 @patch("app.utils.igdb.get_igdb_token", return_value="mocked_token")
 @patch("app.utils.igdb.requests.post")
 def test_fetch_game_metadata_success(mock_post, mock_get_token):
@@ -125,6 +145,24 @@ def test_fetch_game_metadata_no_results(mock_post, mock_get_token):
 
     meta = fetch_game_metadata("NonexistentGame12345")
     assert meta is None
+
+
+@patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})
+@patch("app.utils.igdb.get_igdb_token", return_value="mocked_token")
+@patch("app.utils.igdb.requests.post")
+def test_fetch_game_metadata_escapes_backslashes_before_quotes(mock_post, mock_get_token):
+    """An injected backslash cannot escape quote delimiters in the IGDB query."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = []
+    mock_post.return_value = mock_resp
+    query = r"foo\"; fields id; //"
+
+    fetch_game_metadata(query)
+
+    body = mock_post.call_args.kwargs["data"]
+    assert ("foo" + ("\\" * 3) + '"; fields id; //') in body
+    assert body == 'search "foo\\\\\\"; fields id; //"; fields name, cover.url, first_release_date, summary; limit 1;'
 
 
 @patch.dict(os.environ, {"IGDB_CLIENT_ID": "dummy_client", "IGDB_CLIENT_SECRET": "dummy_secret"})

@@ -99,3 +99,18 @@
   [ "$status" -eq 0 ]
   [[ "$output" != *"echo \"Running backend tests...\""* ]]
 }
+
+@test "Makefile status can retrieve the helper from the preview backend image" {
+  run make -n status STACK=preview
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"docker compose -p \"iqoqo-preview\""* ]]
+  [[ "$output" == *"ps --all -q web"* ]]
+  [[ "$output" == *"config --format json"* ]]
+  [[ "$output" == *"/usr/src/app/scripts/iqoqo-status.sh"* ]]
+  [[ "$output" == *"IQOQO_STATUS_ROOT"* ]]
+}
+
+@test "status helper accepts an explicit host deployment root" {
+  run grep -F 'IQOQO_ROOT="${IQOQO_STATUS_ROOT:-' scripts/iqoqo-status.sh
+  [ "$status" -eq 0 ]
+}

@@ -24,6 +24,7 @@ from app.db.models import SharedCollection, User, db
 def test_shared_collection_token_generation(app):
     with app.app_context():
         user = User(email="token@iqoqo.local")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 
@@ -42,6 +43,7 @@ def test_shared_collection_token_generation(app):
 def test_shared_collection_tokens_are_unique(app):
     with app.app_context():
         user = User(email="token_unique@iqoqo.local")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 
@@ -58,6 +60,7 @@ def test_shared_collection_expiry(app):
 
     with app.app_context():
         user = User(email="expiry@iqoqo.local")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
 
@@ -81,10 +84,12 @@ def test_shared_collection_expiry(app):
 def test_public_username_uniqueness(app):
     with app.app_context():
         u1 = User(email="u1@iqoqo.local", public_username="same")
+        u1.set_password("test-password")
         db.session.add(u1)
         db.session.commit()
 
         u2 = User(email="u2@iqoqo.local", public_username="same")
+        u2.set_password("test-password")
         db.session.add(u2)
         with pytest.raises(IntegrityError):
             db.session.commit()
@@ -93,6 +98,7 @@ def test_public_username_uniqueness(app):
 def test_cascade_delete_user(app):
     with app.app_context():
         user = User(email="cascade@iqoqo.local")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 

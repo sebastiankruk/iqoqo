@@ -15,11 +15,12 @@
 //
 
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 // Mock apiClient
 vi.mock("@/lib/api/client", () => ({
@@ -38,7 +39,6 @@ const queryClient = new QueryClient({
 describe("ManageCollectionsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.confirm = vi.fn(() => true);
 
     vi.mocked(apiClient.get).mockImplementation((url: string) => {
       if (url === "/collections") {
@@ -66,6 +66,9 @@ describe("ManageCollectionsModal", () => {
   it("renders collections from the API", async () => {
     renderComponent();
 
+    const dialog = await screen.findByRole("dialog", { name: "Manage Collections" });
+    expect(dialog).toHaveClass("max-h-[calc(100dvh-2rem)]");
+    expect(screen.getByRole("textbox", { name: "New collection name" })).toBeInTheDocument();
     expect(await screen.findByText("Fantasy")).toBeInTheDocument();
     expect(await screen.findByText("Sci-Fi")).toBeInTheDocument();
   });
@@ -74,9 +77,10 @@ describe("ManageCollectionsModal", () => {
     renderComponent();
 
     const editButtons = await screen.findAllByTitle("Edit Name");
+    expect(editButtons[0]).toHaveAccessibleName("Edit collection Fantasy");
     fireEvent.click(editButtons[0]);
 
-    const editInput = screen.getByDisplayValue("Fantasy");
+    const editInput = screen.getByRole("textbox", { name: "Rename collection Fantasy" });
     fireEvent.change(editInput, { target: { value: "High Fantasy" } });
 
     vi.mocked(apiClient.put).mockResolvedValueOnce({ data: { success: true } });
@@ -93,15 +97,75 @@ describe("ManageCollectionsModal", () => {
     renderComponent();
 
     const deleteButtons = await screen.findAllByTitle("Delete Collection");
+    expect(deleteButtons[0]).toHaveAccessibleName("Delete collection Fantasy");
 
     vi.mocked(apiClient.delete).mockResolvedValueOnce({ data: { success: true } });
 
     fireEvent.click(deleteButtons[0]);
 
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent('Delete collection "Fantasy"?');
+    expect(apiClient.delete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm collection deletion" }));
+
     await waitFor(() => {
-      expect(global.confirm).toHaveBeenCalled();
       expect(apiClient.delete).toHaveBeenCalledWith("/collections/1");
     });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the selected collection and dialog available after a failed delete", async () => {
+    let rejectDelete: ((reason: Error) => void) | undefined;
+    const failedAttempt = new Promise((_resolve, reject) => {
+      rejectDelete = reject;
+    });
+    vi.mocked(apiClient.delete)
+      .mockReturnValueOnce(failedAttempt as never)
+      .mockResolvedValueOnce({ data: { success: true } });
+
+    renderComponent();
+    fireEvent.click(await screen.findByRole("button", { name: "Delete collection Fantasy" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirmButton = screen.getByRole("button", { name: "Confirm collection deletion" });
+    fireEvent.click(confirmButton);
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+      expect(confirmButton).toBeDisabled();
+    });
+
+    await act(async () => {
+      rejectDelete?.(new Error("Collection could not be removed"));
+      await failedAttempt.catch(() => undefined);
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Collection could not be removed");
+    expect(toast.error).toHaveBeenCalledWith("Collection could not be removed");
+    expect(screen.getByRole("alertdialog")).toBe(dialog);
+    expect(screen.getByRole("button", { name: "Confirm collection deletion" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm collection deletion" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(apiClient.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not delete a collection when confirmation is canceled", async () => {
+    renderComponent();
+    fireEvent.click((await screen.findAllByTitle("Delete Collection"))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(apiClient.delete).not.toHaveBeenCalled();
+  });
+
+  it("allows keyboard dismissal of the deletion confirmation without deleting", async () => {
+    renderComponent();
+    fireEvent.click(await screen.findByRole("button", { name: "Delete collection Fantasy" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(apiClient.delete).not.toHaveBeenCalled();
   });
 
   it("creates a new collection via the form", async () => {
@@ -111,7 +175,7 @@ describe("ManageCollectionsModal", () => {
       data: { success: true, collection: { id: 3, name: "History" } },
     });
 
-    const input = screen.getByPlaceholderText("New collection name");
+    const input = screen.getByRole("textbox", { name: "New collection name" });
     fireEvent.change(input, { target: { value: "History" } });
 
     const addButton = screen.getByText("Add");
@@ -138,7 +202,7 @@ describe("ManageCollectionsModal", () => {
       data: { success: true, collection: { id: 4, name: "Poetry" } },
     });
 
-    const input = screen.getByPlaceholderText("New collection name");
+    const input = screen.getByRole("textbox", { name: "New collection name" });
     fireEvent.change(input, { target: { value: "Poetry" } });
     fireEvent.click(screen.getByText("Add"));
 

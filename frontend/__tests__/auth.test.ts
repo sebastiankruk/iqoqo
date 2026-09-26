@@ -13,9 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { POST as apiPost } from "@/app/api/auth-exchange/route";
-import { POST as authPost } from "@/app/auth/exchange/route";
 
 const mockCookieSet = vi.fn();
 
@@ -24,6 +23,11 @@ vi.mock("next/headers", () => ({
     set: mockCookieSet,
   }),
 }));
+
+afterEach(() => {
+  mockCookieSet.mockReset();
+  vi.unstubAllGlobals();
+});
 
 describe("Auth Exchange POST Handler", () => {
   it("exchanges token via POST JSON body and sets session cookie", async () => {
@@ -52,21 +56,32 @@ describe("Auth Exchange POST Handler", () => {
 
   it("exchanges code via POST JSON body", async () => {
     mockCookieSet.mockClear();
-    const req = new Request("http://localhost:3000/auth/exchange", {
+    const backendFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ token: "exchanged-session-jwt", callbackUrl: "/" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", backendFetch);
+    const req = new Request("http://localhost:3000/api/auth-exchange", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: "oauth-code-xyz" }),
     });
 
-    const res = await authPost(req);
+    const res = await apiPost(req);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
     expect(data.redirectUrl).toBe("http://localhost:3000/");
+    expect(backendFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/auth\/exchange$/),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "oauth-code-xyz" }) })
+    );
 
     expect(mockCookieSet).toHaveBeenCalledWith(
       "iqoqo_session",
-      "oauth-code-xyz",
+      "exchanged-session-jwt",
       expect.objectContaining({
         httpOnly: true,
         path: "/",
@@ -86,6 +101,6 @@ describe("Auth Exchange POST Handler", () => {
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.success).toBe(false);
-    expect(data.error).toBe("MissingToken");
+    expect(data.error).toBe("Missing token or code");
   });
 });

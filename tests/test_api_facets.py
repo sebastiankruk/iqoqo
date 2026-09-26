@@ -13,7 +13,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import pytest
+from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
 
+from app.core.data_manager import _build_collection_status_facet_query, _build_format_facet_query
 from app.db.models import Expression, Item, Manifestation, Work, db
 
 
@@ -338,3 +341,61 @@ class TestCrossFRBRMultiFilter:
             cached = cache.get("taxonomies:global:/api/taxonomies?")
             assert cached is not None
             assert cached["success"] is True
+
+
+def test_faceted_stats_endpoint_returns_counts_in_the_frontend_contract(client, normal_user_headers, app):
+    """The live stats endpoint returns the named count maps consumed by the UI."""
+    with app.app_context():
+        from app.db.models import User
+
+        user = User.query.filter_by(email="test_user@iqoqo.local").first()
+        work = Work(title="Facet Contract Book", meta={"genres": ["Fiction"]})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text")
+        db.session.add(expression)
+        db.session.flush()
+        manifestation = Manifestation(
+            expression_id=expression.id,
+            publisher="Fixture Press",
+            meta={"format": "book"},
+        )
+        db.session.add(manifestation)
+        db.session.flush()
+        db.session.add(Item(manifestation_id=manifestation.id, owner_id=user.id, status="unread", collection_status="available"))
+        db.session.commit()
+
+    response = client.get("/api/stats/facets?scope=user&view=items", headers=normal_user_headers)
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["data"]["category_counts"]["text"] == 1
+    assert payload["data"]["format_counts"]["book"] == 1
+    assert payload["data"]["genre_counts"]["Fiction"] == 1
+    assert payload["data"]["publisher_counts"]["Fixture Press"] == 1
+    assert payload["data"]["status_counts"]["available"] == 1
+
+
+def test_postgresql_format_facet_grouping_reuses_json_path_bind_parameter():
+    """PostgreSQL requires selected and grouped JSONB expressions to be identical."""
+    filtered_ids = select(Item.id).subquery().c.id
+    statement = _build_format_facet_query(Item.id, Item, Item.id, filtered_ids)
+    compiled = statement.compile(dialect=postgresql.dialect())
+    format_bind_names = [name for name, value in compiled.params.items() if value == "format"]
+
+    assert len(format_bind_names) == 1
+    format_placeholder = f"%({format_bind_names[0]})s"
+    assert compiled.string.count(format_placeholder) == 2
+
+
+def test_postgresql_collection_status_grouping_reuses_coalesce_bind_parameter():
+    """PostgreSQL requires select/group-by COALESCE expressions to share binds."""
+    filtered_ids = select(Item.id).subquery().c.id
+    statement = _build_collection_status_facet_query(Item.id, Item, Item.id, filtered_ids)
+    compiled = statement.compile(dialect=postgresql.dialect())
+    available_bind_names = [name for name, value in compiled.params.items() if value == "available"]
+
+    assert len(available_bind_names) == 1
+    available_placeholder = f"%({available_bind_names[0]})s"
+    assert compiled.string.count(available_placeholder) == 2

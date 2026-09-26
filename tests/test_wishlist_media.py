@@ -145,20 +145,20 @@ def test_wishlist_vinyl_serialization(client, media_test_setup, app):
         db.session.commit()
         intent_id = intent.id
 
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
     assert len(data) >= 1
 
-    vinyl_item = next((item for item in data if item["id"] == -intent_id), None)
+    vinyl_item = next((item for item in data if item["id"] == intent_id), None)
     assert vinyl_item is not None
     assert vinyl_item["title"] == "Abbey Road"
     assert vinyl_item["work_type"] == "AudioWork"
     assert vinyl_item["medium_type"] in ("Vinyl", "vinyl")
     assert vinyl_item["content_type"] == "music"
 
-    # Also test detail endpoint
-    detail_resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    # Also test detail endpoint via /api/wishlist
+    detail_resp = client.get(f"/api/wishlist/{intent_id}", headers=headers)
     assert detail_resp.status_code == 200
     detail_data = detail_resp.json["data"]
     assert detail_data["work_type"] == "AudioWork"
@@ -176,11 +176,11 @@ def test_wishlist_audio_serialization(client, media_test_setup, app):
         db.session.commit()
         intent_id = intent.id
 
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
 
-    audio_item = next((item for item in data if item["id"] == -intent_id), None)
+    audio_item = next((item for item in data if item["id"] == intent_id), None)
     assert audio_item is not None
     assert audio_item["title"] == "Dune Audiobook"
     assert audio_item["work_type"] == "AudioWork"
@@ -199,11 +199,11 @@ def test_wishlist_game_serialization(client, media_test_setup, app):
         db.session.commit()
         intent_id = intent.id
 
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
 
-    game_item = next((item for item in data if item["id"] == -intent_id), None)
+    game_item = next((item for item in data if item["id"] == intent_id), None)
     assert game_item is not None
     assert game_item["title"] == "Catan"
     assert game_item["work_type"] == "GameWork"
@@ -233,10 +233,10 @@ def test_wishlist_work_level_only_inferred_serialization(client, app):
         intent_id = intent.id
 
     headers = get_headers(app, user_id)
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
-    item = next((i for i in data if i["id"] == -intent_id), None)
+    item = next((i for i in data if i["id"] == intent_id), None)
     assert item is not None
     assert item["work_type"] == "AudioWork"
     assert item["medium_type"] == "Vinyl"
@@ -280,18 +280,18 @@ def test_wishlist_video_serialization(client, app):
         intent_id = intent.id
 
     headers = get_headers(app, user_id)
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
-    video_item = next((i for i in data if i["id"] == -intent_id), None)
+    video_item = next((i for i in data if i["id"] == intent_id), None)
     assert video_item is not None
     assert video_item["title"] == "The Matrix"
     assert video_item["work_type"] == "VideoWork"
     assert video_item["medium_type"] in ("DVD", "dvd")
     assert video_item["content_type"] == "movie"
 
-    # Verify detail view
-    detail_resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    # Verify detail view via /api/wishlist
+    detail_resp = client.get(f"/api/wishlist/{intent_id}", headers=headers)
     assert detail_resp.status_code == 200
     detail_data = detail_resp.json["data"]
     assert detail_data["work_type"] == "VideoWork"
@@ -320,16 +320,16 @@ def test_wishlist_empty_metadata_safe_fallback(client, app):
         intent_id = intent.id
 
     headers = get_headers(app, user_id)
-    response = client.get("/api/items?statuses=wish_list", headers=headers)
+    response = client.get("/api/wishlist", headers=headers)
     assert response.status_code == 200
     data = response.json["data"]
-    item = next((i for i in data if i["id"] == -intent_id), None)
+    item = next((i for i in data if i["id"] == intent_id), None)
     assert item is not None
     assert item["title"] == "Book Without Meta"
     assert item["work_type"] is None
     assert item["medium_type"] is None
 
-    detail_resp = client.get(f"/api/items/{-intent_id}", headers=headers)
+    detail_resp = client.get(f"/api/wishlist/{intent_id}", headers=headers)
     assert detail_resp.status_code == 200
     detail_data = detail_resp.json["data"]
     assert detail_data["work_type"] is None

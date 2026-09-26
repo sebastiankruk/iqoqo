@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -32,6 +33,8 @@ from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image, validate_upload_file
+
+logger = logging.getLogger(__name__)
 
 
 @api_bp.route("/manifestations", methods=["GET"])
@@ -401,8 +404,9 @@ def get_recent_manifestations() -> tuple[Response, int]:
             )
 
         return jsonify({"success": True, "data": result, "error": None}), 200
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
-        return jsonify({"success": False, "data": None, "error": str(e)}), 500
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
+        logger.exception("Failed to load recent manifestations")
+        return jsonify({"success": False, "data": None, "error": "Unable to load recent manifestations"}), 500
 
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])
@@ -427,11 +431,16 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
 
     canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
     if not canonical_isbn:
-        return jsonify({"success": False, "data": None, "error": f"Invalid ISBN = {isbn}"}), 400
+        return jsonify({"success": False, "data": None, "error": "Invalid ISBN"}), 400
 
-    metadata: dict[str, Any] | None = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+    try:
+        metadata: dict[str, Any] | None = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+    except Exception:
+        logger.exception("External provider failed during ISBN metadata lookup")
+        return jsonify({"success": False, "data": None, "error": "Unable to retrieve ISBN metadata"}), 502
+
     if not metadata:
-        return jsonify({"success": False, "data": None, "error": f"Metadata not found for ISBN = {canonical_isbn}"}), 404
+        return jsonify({"success": False, "data": None, "error": "Metadata not found"}), 404
 
     if not manifestation:
         from app.core.ingest import _extract_genres
@@ -481,7 +490,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
 def update_manifestation(isbn: str) -> tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
-        return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
+        return jsonify({"error": "Manifestation not found"}), 404
 
     payload_json = request.get_json(silent=True)
     if not isinstance(payload_json, dict):
@@ -915,6 +924,7 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         db.session.delete(manif)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
         db.session.rollback()
-        return jsonify({"success": False, "data": None, "error": str(e)}), 500
+        logger.exception("Failed to delete manifestation")
+        return jsonify({"success": False, "data": None, "error": "Unable to delete manifestation"}), 500

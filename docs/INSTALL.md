@@ -900,8 +900,11 @@ and the Physical Kind facet and `?format=` filter work correctly.
 Before committing code, ensure quality standards are met:
 
 ```bash
-# Run all linters
+# Run the effective GitHub quality-workflow lint checks
 make lint
+
+# Run additional, stricter local-only linters
+make lint-all
 
 # Auto-format code
 make format
@@ -914,7 +917,7 @@ make test
 
 ```bash
 # Python
-make lint-python    # Ruff + mypy
+make lint-python    # Ruff + mypy + Pylint (stricter local target)
 make format-python  # Black + isort
 
 # JavaScript/CSS
@@ -924,6 +927,11 @@ make lint-css       # stylelint
 # Markdown
 make lint-markdown  # markdownlint
 ```
+
+`make lint` is the CI compatibility baseline: Ruff, Black, isort, advisory
+mypy, Markdownlint, and license checks. The GitHub JavaScript lint job currently
+only installs ESLint/Prettier/Stylelint; `make lint-all` runs those local source
+checks (including Pylint) and YAML validation without changing the CI baseline.
 
 ## Next Steps
 

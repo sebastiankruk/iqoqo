@@ -27,6 +27,7 @@ from app.db.models import Expression, Item, Manifestation, Role, User, Work, db
 def user_with_item(app):
     with app.app_context():
         user = User(email="test@example.com", display_name="Test User")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.flush()
 
@@ -125,6 +126,7 @@ def test_admin_required_refactored(client, app):
     # Create normal user
     with app.app_context():
         user = User(email="normal@example.com")
+        user.set_password("test-password")
         db.session.add(user)
         db.session.commit()
         token = generate_internal_jwt(user)

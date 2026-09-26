@@ -26,6 +26,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.decorators import require_auth
+from app.core.limiter import limiter
 from app.db.core import db
 from app.db.roadmap import ReadingRoadmap, RoadmapItem
 
@@ -35,6 +36,7 @@ roadmap_bp = Blueprint("roadmap", __name__, url_prefix="/api/v1/roadmaps")
 
 
 @roadmap_bp.route("", methods=["GET"])
+@limiter.limit("60 per minute")
 @require_auth
 def get_roadmaps() -> Response | tuple[Response, int]:
     """Retrieves all pipelines configured by the currently authenticated user session."""
@@ -56,6 +58,7 @@ def get_roadmaps() -> Response | tuple[Response, int]:
 
 
 @roadmap_bp.route("", methods=["POST"])
+@limiter.limit("30 per minute")
 @require_auth
 def create_roadmap() -> Response | tuple[Response, int]:
     """Creates a clean roadmap bucket for personal item sequencing tracking execution."""
@@ -85,6 +88,7 @@ def create_roadmap() -> Response | tuple[Response, int]:
 
 
 @roadmap_bp.route("/<int:roadmap_id>/items", methods=["POST"])
+@limiter.limit("30 per minute")
 @require_auth
 def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
     """Appends an item at the final tail boundary of the tracking collection order chain."""
@@ -99,6 +103,22 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
             return jsonify({"error": "Roadmap not found", "code": 404}), 404
 
         data = request.get_json() or {}
+
+        # Validate exactly one FRBR level reference is provided.
+        work_id = data.get("work_id")
+        expression_id = data.get("expression_id")
+        manifestation_id = data.get("manifestation_id")
+        frbr_refs = [r for r in (work_id, expression_id, manifestation_id) if r is not None]
+        if len(frbr_refs) != 1:
+            return (
+                jsonify(
+                    {
+                        "error": "Exactly one of work_id, expression_id, or manifestation_id must be provided",
+                        "code": 400,
+                    }
+                ),
+                400,
+            )
 
         # Pylint & SQLAlchemy func.count E1102 warning disable rule:
         count_stmt = select(func.count(RoadmapItem.id)).filter(RoadmapItem.roadmap_id == roadmap.id)  # pylint: disable=not-callable
@@ -116,8 +136,9 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
 
         item = RoadmapItem(
             roadmap_id=roadmap.id,
-            work_id=data.get("work_id"),
-            manifestation_id=data.get("manifestation_id"),
+            work_id=work_id,
+            expression_id=expression_id,
+            manifestation_id=manifestation_id,
             position=current_count + 1,
             notes=data.get("notes"),
             target_date=target_date,
@@ -132,6 +153,7 @@ def add_item_to_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
 
 
 @roadmap_bp.route("/items/<int:item_id>/position", methods=["PATCH"])
+@limiter.limit("30 per minute")
 @require_auth
 def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
     """Handles mutation reposition commands safely minimizing relational row collateral write shifts."""
@@ -197,6 +219,7 @@ def reorder_roadmap_item(item_id: int) -> Response | tuple[Response, int]:
 
 
 @roadmap_bp.route("/<int:roadmap_id>", methods=["DELETE"])
+@limiter.limit("30 per minute")
 @require_auth
 def delete_roadmap(roadmap_id: int) -> Response | tuple[Response, int]:
     """Deletes a roadmap pipeline and cascades to its items."""

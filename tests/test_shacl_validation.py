@@ -16,12 +16,13 @@
 """Tests for SHACL validation service."""
 
 import pytest
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, XSD
 
 from app.core.shacl_service import validate_graph, validate_rdf_string
 
-FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+FRBRER = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SCHEMA = Namespace("https://schema.org/")
 
 
@@ -32,6 +33,7 @@ class TestSHACLValidation:
         """Build a minimal valid FRBR graph for testing."""
         g = Graph()
         g.bind("frbr", FRBR)
+        g.bind("frbrer", FRBRER)
         g.bind("schema", SCHEMA)
 
         w_uri = URIRef("http://example.org/works/1")
@@ -41,22 +43,28 @@ class TestSHACLValidation:
 
         # Work
         g.add((w_uri, RDF.type, FRBR.Work))
-        g.add((w_uri, FRBR.creator, Literal("Test Author")))
+        g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
+        g.add((w_uri, SCHEMA.name, Literal("Test Work")))
+        author = BNode("author")
+        g.add((author, RDF.type, SCHEMA.Person))
+        g.add((author, SCHEMA.name, Literal("Test Author")))
+        g.add((w_uri, FRBRER.creator, author))
+        g.add((w_uri, SCHEMA.author, author))
 
         # Expression
         g.add((e_uri, RDF.type, FRBR.Expression))
-        g.add((e_uri, FRBR.expressionOf, w_uri))
+        g.add((e_uri, FRBRER.expressionOf, w_uri))
 
         # Manifestation
         g.add((m_uri, RDF.type, FRBR.Manifestation))
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-        g.add((m_uri, FRBR.embodimentOf, e_uri))
+        g.add((m_uri, FRBRER.embodimentOf, e_uri))
         g.add((m_uri, SCHEMA.name, Literal("Test Book")))
         g.add((m_uri, SCHEMA.isbn, Literal("9780123456789")))
 
         # Item
         g.add((i_uri, RDF.type, FRBR.Item))
-        g.add((i_uri, FRBR.exemplarOf, m_uri))
+        g.add((i_uri, FRBRER.exemplarOf, m_uri))
 
         return g
 
@@ -68,18 +76,19 @@ class TestSHACLValidation:
     def test_manifestation_without_name_fails(self):
         g = Graph()
         g.bind("frbr", FRBR)
+        g.bind("frbrer", FRBRER)
         g.bind("schema", SCHEMA)
 
         m_uri = URIRef("http://example.org/manifestations/1")
         e_uri = URIRef("http://example.org/expressions/1")
 
         g.add((e_uri, RDF.type, FRBR.Expression))
-        g.add((e_uri, FRBR.expressionOf, URIRef("http://example.org/works/1")))
+        g.add((e_uri, FRBRER.expressionOf, URIRef("http://example.org/works/1")))
         g.add((URIRef("http://example.org/works/1"), RDF.type, FRBR.Work))
 
         g.add((m_uri, RDF.type, FRBR.Manifestation))
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-        g.add((m_uri, FRBR.embodimentOf, e_uri))
+        g.add((m_uri, FRBRER.embodimentOf, e_uri))
         # Missing schema:name intentionally
 
         conforms, _, results_text = validate_graph(g)
@@ -100,6 +109,7 @@ class TestSHACLValidation:
     def test_item_without_exemplarof_fails(self):
         g = Graph()
         g.bind("frbr", FRBR)
+        g.bind("frbrer", FRBRER)
         g.bind("schema", SCHEMA)
 
         i_uri = URIRef("http://example.org/items/1")
@@ -113,6 +123,7 @@ class TestSHACLValidation:
     def test_expression_without_expressionof_fails(self):
         g = Graph()
         g.bind("frbr", FRBR)
+        g.bind("frbrer", FRBRER)
 
         e_uri = URIRef("http://example.org/expressions/1")
         g.add((e_uri, RDF.type, FRBR.Expression))
@@ -124,30 +135,35 @@ class TestSHACLValidation:
 
     def test_validate_rdf_string_turtle(self):
         turtle = """
-        @prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+        @prefix frbr: <http://purl.org/vocab/frbr/core#> .
+        @prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
         @prefix schema: <https://schema.org/> .
 
-        <http://ex.org/w/1> a frbr:Work ;
-            frbr:creator "Author A" .
+        <http://ex.org/w/1> a frbr:Work, schema:CreativeWork ;
+            schema:name "A Work" ;
+            frbrer:creator _:author ;
+            schema:author _:author .
+        _:author a schema:Person ; schema:name "Author A" .
         <http://ex.org/e/1> a frbr:Expression ;
-            frbr:expressionOf <http://ex.org/w/1> .
+            frbrer:expressionOf <http://ex.org/w/1> .
         <http://ex.org/m/1> a frbr:Manifestation, schema:CreativeWork ;
-            frbr:embodimentOf <http://ex.org/e/1> ;
+            frbrer:embodimentOf <http://ex.org/e/1> ;
             schema:name "A Book" ;
             schema:isbn "9781234567890" .
         <http://ex.org/i/1> a frbr:Item ;
-            frbr:exemplarOf <http://ex.org/m/1> .
+            frbrer:exemplarOf <http://ex.org/m/1> .
         """
         conforms, report = validate_rdf_string(turtle, "turtle")
         assert conforms, f"Valid Turtle should conform: {report}"
 
     def test_validate_rdf_string_invalid(self):
         turtle = """
-        @prefix frbr: <http://iflastandards.info/ns/frbr/frbrer/> .
+        @prefix frbr: <http://purl.org/vocab/frbr/core#> .
+        @prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
         @prefix schema: <https://schema.org/> .
 
         <http://ex.org/m/1> a frbr:Manifestation, schema:CreativeWork ;
-            frbr:embodimentOf <http://ex.org/e/1> ;
+            frbrer:embodimentOf <http://ex.org/e/1> ;
             schema:isbn "bad" .
         """
         conforms, _results_text = validate_rdf_string(turtle, "turtle")

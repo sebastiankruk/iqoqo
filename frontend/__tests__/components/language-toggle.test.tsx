@@ -65,4 +65,14 @@ describe("LanguageToggle", () => {
     expect(document.cookie).toContain("NEXT_LOCALE=pl");
     expect(mockRefresh).toHaveBeenCalled();
   });
+
+  it("sets Secure and SameSite=Lax on the locale cookie", async () => {
+    const cookieSetter = vi.spyOn(document, "cookie", "set");
+    render(<LanguageToggle />);
+
+    await userEvent.click(screen.getByRole("button", { name: /toggle language/i }));
+    await userEvent.click(screen.getByText("Polski"));
+
+    expect(cookieSetter).toHaveBeenCalledWith("NEXT_LOCALE=pl; path=/; max-age=31536000; Secure; SameSite=Lax");
+  });
 });

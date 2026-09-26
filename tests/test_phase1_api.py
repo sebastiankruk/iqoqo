@@ -33,6 +33,7 @@ def sample_work(app):
     # 1. Create a test user first so we have a valid UUID for the foreign key
     with app.app_context():
         test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.flush()  # Commit so the DB generates the UUID
 
@@ -192,6 +193,7 @@ def test_stats_cors_headers(cors_client):
     # cors_client has its own isolated in-memory DB — create the user inside its context
     with cors_client.application.app_context():
         cors_user = User(email="cors_test@iqoqo.local", display_name="CORS User")
+        cors_user.set_password("test-password")
         db.session.add(cors_user)
         db.session.commit()
         token = generate_internal_jwt(cors_user)
@@ -249,6 +251,7 @@ def test_get_items_pagination(client, app):
     # Create multiple items
     with app.app_context():
         test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.flush()  # Commit so the DB generates the UUID
 
@@ -315,6 +318,7 @@ def test_get_items_single_status_filter(client, app):
         db.session.flush()
 
         test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.flush()  # Commit so the DB generates the UUID
 
@@ -353,6 +357,7 @@ def test_get_items_multi_status_filter(client, app):
         db.session.flush()
 
         test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.flush()  # Commit so the DB generates the UUID
 
@@ -419,6 +424,7 @@ def test_get_items_ordering_by_updated_at(client, app):
         db.session.flush()
 
         test_user = User(email="testuser_phase1@iqoqo.local", display_name="Test User")
+        test_user.set_password("test-password")
         db.session.add(test_user)
         db.session.flush()  # Commit so the DB generates the UUID
 

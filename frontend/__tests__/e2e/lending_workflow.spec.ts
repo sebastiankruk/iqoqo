@@ -223,8 +223,9 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     });
     expect(lenderLoginRes.ok).toBe(true);
     const { token: lenderToken } = await lenderLoginRes.json();
-    await lenderPage.goto(`/api/auth-exchange?token=${lenderToken}`);
-    await lenderPage.waitForURL(/\/(collection)?$/);
+    const lenderExchangeRes = await lenderPage.request.post("/api/auth-exchange", { data: { token: lenderToken } });
+    expect(lenderExchangeRes.ok()).toBe(true);
+    await lenderPage.goto("/");
 
     // 2. Create isolated context for Borrower (User A)
     const borrowerContext = await browser.newContext();
@@ -241,8 +242,11 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     });
     expect(borrowerLoginRes.ok).toBe(true);
     const { token: borrowerToken } = await borrowerLoginRes.json();
-    await borrowerPage.goto(`/api/auth-exchange?token=${borrowerToken}`);
-    await borrowerPage.waitForURL(/\/(collection)?$/);
+    const borrowerExchangeRes = await borrowerPage.request.post("/api/auth-exchange", {
+      data: { token: borrowerToken },
+    });
+    expect(borrowerExchangeRes.ok()).toBe(true);
+    await borrowerPage.goto("/");
 
     // 3. Borrower finds Lender's copy and requests a loan
     await borrowerPage.goto("/u/lender");

@@ -57,7 +57,7 @@ const SAMPLE_MANIFESTATIONS: CatalogEntry[] = [
     title: "Dune",
     authors: ["Frank Herbert"],
     meta: {},
-    cover_url: "/test-cover.jpg",
+    cover_url: "/static/covers/test-cover.jpg",
     user_owns: false,
   },
   {
@@ -78,7 +78,7 @@ describe("FreshArrivals", () => {
       data: undefined,
       isLoading: false,
       isError: false,
-    } as ReturnType<typeof useRecentManifestations>);
+    } as unknown as ReturnType<typeof useRecentManifestations>);
   });
 
   it("renders the section heading", () => {
@@ -125,6 +125,24 @@ describe("FreshArrivals", () => {
     render(<FreshArrivals />);
     const img = screen.getByAltText("Cover of Dune");
     expect(img).toBeInTheDocument();
+  });
+
+  it("does not render an external legacy cover URL directly", () => {
+    mockUseRecentManifestations.mockReturnValue({
+      data: [
+        {
+          ...SAMPLE_MANIFESTATIONS[0],
+          cover_url: undefined,
+          meta: { cover_url: "https://i.discogs.com/legacy-cover.jpeg" },
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useRecentManifestations>);
+
+    render(<FreshArrivals />);
+
+    expect(screen.queryByAltText("Cover of Dune")).not.toBeInTheDocument();
   });
 
   it("shows an error message when the API fails", () => {

@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -57,7 +57,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { CameraCapture } from "@/components/scanner/camera-capture";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
  * Item actions component.
@@ -94,20 +94,21 @@ export function ItemActions({ item }: { item: Item }) {
   const itemEscalations = myEscalations?.filter(e => e.item_id === item.id) ?? [];
   const pendingEscalation = itemEscalations.find(e => e.status === "pending");
 
-  // Poll server state every 3s if we are waiting for a cover generation to fix infinite spinner UX
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
-    if (isPending) {
-      interval = setInterval(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.item(item.id) });
-      }, 3000);
-    }
-    return () => {
-      if (interval !== undefined) {
-        clearInterval(interval);
-      }
-    };
-  }, [isPending, item.id, qc]);
+  const isProcessing = item.cover_status === "processing" || item.meta?.cover_status === "processing";
+  useQuery({
+    queryKey: queryKeys.item(item.id),
+    queryFn: async () => {
+      const response = await apiClient.get<{ data?: Item }>(`/items/${item.id}`);
+      return response.data.data ?? null;
+    },
+    enabled: isPending || isProcessing,
+    refetchInterval: query => {
+      const status = query.state.data
+        ? (query.state.data.cover_status ?? query.state.data.meta?.cover_status)
+        : (item.cover_status ?? item.meta?.cover_status);
+      return status === "pending" || status === "processing" ? 3000 : false;
+    },
+  });
 
   if (!profile) return null;
 

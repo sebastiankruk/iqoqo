@@ -43,6 +43,8 @@ def social_setup(app):
         # Create two users
         u1 = User(email="critic1@iqoqo.local", display_name="Critic One", public_username="critic1")
         u2 = User(email="critic2@iqoqo.local", display_name="Critic Two", public_username="critic2")
+        u1.set_password("test-password")
+        u2.set_password("test-password")
         u1.roles.append(user_role)
         u2.roles.append(user_role)
         db.session.add_all([u1, u2])
