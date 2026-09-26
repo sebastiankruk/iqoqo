@@ -827,7 +827,7 @@ class TestIntegration:
         queries = [
             "SELECT ?title WHERE { ?s <https://schema.org/name> ?title } LIMIT 10",
             "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 5",
-            "ASK { ?s a <http://iflastandards.info/ns/frbr/frbrer/Work> }",
+            "ASK { ?s a <http://purl.org/vocab/frbr/core#Work> }",
             "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o } LIMIT 10",
         ]
 

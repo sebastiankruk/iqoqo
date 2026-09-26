@@ -25,14 +25,17 @@ Validates:
 - HTTP content negotiation and streaming in public API endpoints
 """
 
+import datetime
 import json
 
 import pytest
 from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib.compare import isomorphic
 from rdflib.namespace import RDF
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.export_service import ExportService
 from app.core.frbr_service import (
     FRBR,
     PROV,
@@ -45,13 +48,17 @@ from app.core.frbr_service import (
     serialize_collection_to_rdf,
     stream_collection_to_rdf,
 )
+from app.core.shacl_service import validate_graph
 from app.db.audio import ExpressionContribution, WorkContribution, WorkPart
 from app.db.contributions import Contributor, ManifestationContribution
 from app.db.core import (
     ImageScan,
+    UserCollection,
     UserCollectionItem,
 )
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+
+IQOQO = Namespace("https://iqoqo.org/ontology#")
 
 
 class TestSchemaOrgTypeMapping:
@@ -80,7 +87,7 @@ class TestSchemaOrgTypeMapping:
         ttl = serialize_collection_to_rdf(items, "http://testserver", output_format="turtle")
         g = Graph()
         g.parse(data=ttl, format="turtle")
-        m_uri = URIRef("http://testserver/api/public/manifestations/m1")
+        m_uri = URIRef("http://testserver/manifestations/m1")
 
         assert (m_uri, RDF.type, FRBR.Manifestation) in g
         assert (m_uri, RDF.type, SCHEMA.CreativeWork) in g
@@ -107,7 +114,7 @@ class TestRelationalAndProvenanceEnrichment:
         ttl = serialize_collection_to_rdf(items, "http://testserver", output_format="turtle")
         g = Graph()
         g.parse(data=ttl, format="turtle")
-        m_uri = URIRef("http://testserver/api/public/manifestations/m1")
+        m_uri = URIRef("http://testserver/manifestations/m1")
 
         assert (m_uri, SCHEMA.publisher, Literal("Wydawnictwo Literackie")) in g
         assert (m_uri, SCHEMA.inLanguage, Literal("pl")) in g
@@ -132,9 +139,9 @@ class TestRelationalAndProvenanceEnrichment:
         g = Graph()
         g.parse(data=ttl, format="turtle")
 
-        m_uri = URIRef("http://testserver/api/public/manifestations/m1")
-        c1_uri = URIRef("http://testserver/api/public/contributors/c1")
-        c2_uri = URIRef("http://testserver/api/public/contributors/c2")
+        m_uri = URIRef("http://testserver/manifestations/m1")
+        c1_uri = URIRef("http://testserver/contributors/c1")
+        c2_uri = URIRef("http://testserver/contributors/c2")
 
         assert (c1_uri, RDF.type, SCHEMA.Person) in g
         assert (c1_uri, SCHEMA.name, Literal("Stanislaw Lem")) in g
@@ -185,10 +192,10 @@ class TestRelationalAndProvenanceEnrichment:
         g = Graph()
         g.parse(data=ttl, format="turtle")
 
-        m1 = URIRef("http://testserver/api/public/manifestations/m1")
-        m2 = URIRef("http://testserver/api/public/manifestations/m2")
-        m3 = URIRef("http://testserver/api/public/manifestations/m3")
-        m4 = URIRef("http://testserver/api/public/manifestations/m4")
+        m1 = URIRef("http://testserver/manifestations/m1")
+        m2 = URIRef("http://testserver/manifestations/m2")
+        m3 = URIRef("http://testserver/manifestations/m3")
+        m4 = URIRef("http://testserver/manifestations/m4")
 
         assert (m1, PROV.wasDerivedFrom, URIRef("https://openlibrary.org/books/OL123M")) in g
         assert (m2, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org/release/mb-456")) in g
@@ -212,9 +219,9 @@ class TestRelationalAndProvenanceEnrichment:
         g.parse(data=ttl, format="turtle")
 
         coll_node = URIRef(coll_uri)
-        m_uri = URIRef("http://testserver/api/public/manifestations/m1")
-        w_uri = URIRef("http://testserver/api/public/works/w1")
-        parent_uri = URIRef("http://testserver/api/public/works/parent-boxset")
+        m_uri = URIRef("http://testserver/manifestations/m1")
+        w_uri = URIRef("http://testserver/works/w1")
+        parent_uri = URIRef("http://testserver/works/parent-boxset")
 
         # Collection root
         assert (coll_node, RDF.type, SCHEMA.Collection) in g
@@ -274,10 +281,10 @@ class TestRelationalAndProvenanceEnrichment:
             g = Graph()
             g.parse(data=ttl, format="turtle")
 
-            m_uri = URIRef(f"http://testserver/api/public/manifestations/{m.id}")
-            w_uri = URIRef(f"http://testserver/api/public/works/{w.id}")
-            part_uri = URIRef(f"http://testserver/api/public/works/{part_w.id}")
-            c_uri = URIRef(f"http://testserver/api/public/contributors/{contrib.id}")
+            m_uri = URIRef(f"http://testserver/manifestations/{m.id}")
+            w_uri = URIRef(f"http://testserver/works/{w.id}")
+            part_uri = URIRef(f"http://testserver/works/{part_w.id}")
+            c_uri = URIRef(f"http://testserver/contributors/{contrib.id}")
             img_uri = URIRef("http://testserver/scans/m_cover.jpg")
 
             assert (m_uri, SCHEMA.contributor, c_uri) in g
@@ -307,10 +314,13 @@ class TestDomainSpecificMappings:
         ttl = serialize_collection_to_rdf(items, "http://testserver", output_format="turtle")
         g = Graph()
         g.parse(data=ttl, format="turtle")
-        m_uri = URIRef("http://testserver/api/public/manifestations/mc1")
+        m_uri = URIRef("http://testserver/manifestations/mc1")
 
         assert (m_uri, RDF.type, SCHEMA.MusicEvent) in g
-        assert (m_uri, SCHEMA.performer, Literal("Pink Floyd")) in g
+        performers = list(g.objects(m_uri, SCHEMA.performer))
+        assert len(performers) == 1
+        assert (performers[0], RDF.type, SCHEMA.Person) in g
+        assert (performers[0], SCHEMA.name, Literal("Pink Floyd")) in g
         assert (m_uri, SCHEMA.startDate, Literal("1971-10-04")) in g
         assert (m_uri, SCHEMA.location, Literal("Pompeii Amphitheatre")) in g
 
@@ -341,8 +351,8 @@ class TestDomainSpecificMappings:
         g = Graph()
         g.parse(data=ttl, format="turtle")
 
-        m1 = URIRef("http://testserver/api/public/manifestations/mg1")
-        m2 = URIRef("http://testserver/api/public/manifestations/mg2")
+        m1 = URIRef("http://testserver/manifestations/mg1")
+        m2 = URIRef("http://testserver/manifestations/mg2")
 
         assert (m1, RDF.type, SCHEMA.Game) in g
         assert (m1, SCHEMA.numberOfPlayers, Literal("3-4")) in g
@@ -377,7 +387,7 @@ class TestMultiFormatAndStreamingSerialization:
         g = Graph()
         g.parse(data=nt_payload, format="nt")
         assert len(g) > 0
-        m1 = URIRef("http://testserver/api/public/manifestations/mani-1")
+        m1 = URIRef("http://testserver/manifestations/mani-1")
         assert (m1, RDF.type, SCHEMA.Book) in g
 
     def test_jsonld_serialization(self, sample_items):
@@ -397,6 +407,120 @@ class TestMultiFormatAndStreamingSerialization:
         g.parse(data=ttl_payload, format="turtle")
         assert len(g) > 0
 
+    def test_linked_data_contract_across_formats_and_profiles(self, app, monkeypatch):
+        """Enriched public and authenticated graphs share canonical terms across formats."""
+        base_url = "https://contract.example"
+        monkeypatch.setenv("BASE_URL", base_url)
+        with app.app_context():
+            user = User(
+                email="linked_data_contract@iqoqo.local",
+                display_name="Contract User",
+                public_username="contractuser",
+                visibility="public",
+            )
+            work = Work(title="Contract Work", meta={"authors": ["Catalog Author"]})
+            part_work = Work(title="Contract Part")
+            db.session.add_all([user, work, part_work])
+            db.session.flush()
+
+            expression = Expression(
+                work_id=work.id,
+                content_type="music",
+                kind="live_performance",
+                language="en",
+                meta={"performance_date": "1971-10-04", "venue": "Pompeii Amphitheatre"},
+            )
+            db.session.add(expression)
+            db.session.flush()
+            manifestation = Manifestation(
+                expression_id=expression.id,
+                isbn13="9781111111111",
+                publisher="Contract Press",
+                publication_date=datetime.date(1972, 3, 1),
+                cover_url="https://covers.example/contract.jpg",
+                meta={"source_url": "https://catalog.example/record/1"},
+            )
+            db.session.add(manifestation)
+            db.session.flush()
+            item = Item(
+                owner_id=user.id,
+                manifestation_id=manifestation.id,
+                status="read",
+                collection_status="available",
+                condition="good",
+                is_hidden=False,
+            )
+            contributor = Contributor(name="Performance Ensemble", type="organization")
+            db.session.add_all([item, contributor])
+            db.session.flush()
+            db.session.add_all(
+                [
+                    WorkContribution(work_id=work.id, contributor_id=contributor.id, role="author"),
+                    ExpressionContribution(expression_id=expression.id, contributor_id=contributor.id, role="band"),
+                    WorkPart(container_work_id=work.id, part_work_id=part_work.id, sequence=1),
+                    ImageScan(manifestation_id=manifestation.id, file_path="private-scans/contract-back.jpg"),
+                ]
+            )
+            collection = UserCollection(owner_id=user.id, name="Private Contract Collection")
+            db.session.add(collection)
+            db.session.flush()
+            db.session.add(UserCollectionItem(collection_id=collection.id, item_id=item.id))
+            db.session.commit()
+
+            assert work.iri == f"{base_url}/works/{work.id}"
+            assert expression.iri == f"{base_url}/expressions/{expression.id}"
+            assert manifestation.iri == f"{base_url}/manifestations/{manifestation.id}"
+            assert item.iri == f"{base_url}/items/{item.id}"
+
+            public_graphs: dict[str, Graph] = {}
+            for rdf_format, rdflib_format in (("json-ld", "json-ld"), ("turtle", "turtle"), ("nt", "nt")):
+                payload = serialize_collection_to_rdf([item], base_url, output_format=rdf_format)
+                graph = Graph()
+                graph.parse(data=payload, format=rdflib_format)
+                public_graphs[rdf_format] = graph
+            assert isomorphic(public_graphs["json-ld"], public_graphs["turtle"])
+            assert isomorphic(public_graphs["turtle"], public_graphs["nt"])
+
+            public_graph = public_graphs["turtle"]
+            work_uri = URIRef(work.iri)
+            expression_uri = URIRef(expression.iri)
+            manifestation_uri = URIRef(manifestation.iri)
+            item_uri = URIRef(item.iri)
+            assert (work_uri, RDF.type, Namespace("http://purl.org/vocab/frbr/core#").Work) in public_graph
+            assert (expression_uri, Namespace("http://iflastandards.info/ns/frbr/frbrer/").expressionOf, work_uri) in public_graph
+            assert (manifestation_uri, Namespace("http://iflastandards.info/ns/frbr/frbrer/").embodimentOf, expression_uri) in public_graph
+            assert (item_uri, Namespace("http://iflastandards.info/ns/frbr/frbrer/").exemplarOf, manifestation_uri) in public_graph
+            assert (manifestation_uri, RDF.type, SCHEMA.MusicEvent) in public_graph
+            assert (manifestation_uri, SCHEMA.startDate, Literal("1971-10-04")) in public_graph
+            assert (manifestation_uri, SCHEMA.datePublished, Literal("1972-03-01")) in public_graph
+            assert (manifestation_uri, SCHEMA.performer, None) in public_graph
+            assert (item_uri, SCHEMA.itemCondition, None) not in public_graph
+            assert (item_uri, IQOQO.status, Literal("read")) in public_graph
+            assert not any("/api/public/" in str(term) for triple in public_graph for term in triple if isinstance(term, URIRef))
+            assert not any(
+                str(term).startswith("http://iflastandards.info/ns/frbr/frbrer/")
+                and str(term).rsplit("/", 1)[-1] in {"Work", "Expression", "Manifestation", "Item"}
+                for triple in public_graph
+                for term in triple
+                if isinstance(term, URIRef)
+            )
+            assert not any("Private Contract Collection" in str(term) for triple in public_graph for term in triple)
+            assert not any("private-scans/" in str(term) for triple in public_graph for term in triple)
+
+            authenticated_graphs: dict[str, Graph] = {}
+            for rdf_format, rdflib_format in (("json-ld", "json-ld"), ("turtle", "turtle"), ("nt", "nt")):
+                payload = "".join(ExportService.stream_export([item], export_format=rdf_format, base_url=base_url))
+                graph = Graph()
+                graph.parse(data=payload, format=rdflib_format)
+                authenticated_graphs[rdf_format] = graph
+            assert isomorphic(authenticated_graphs["json-ld"], authenticated_graphs["turtle"])
+            assert isomorphic(authenticated_graphs["turtle"], authenticated_graphs["nt"])
+            full_graph = authenticated_graphs["turtle"]
+            assert any(str(term) == "Private Contract Collection" for triple in full_graph for term in triple)
+            assert any("private-scans/contract-back.jpg" in str(term) for triple in full_graph for term in triple)
+            conforms, _, report = validate_graph(full_graph)
+            assert conforms, report
+
     def test_stream_collection_to_rdf_ntriples(self, sample_items):
         chunks = list(stream_collection_to_rdf(sample_items, "http://testserver", output_format="nt", chunk_size=3))
         # 10 items in chunks of 3 = 4 chunks
@@ -407,7 +531,7 @@ class TestMultiFormatAndStreamingSerialization:
         g = Graph()
         g.parse(data=combined_nt, format="nt")
         for i in range(1, 11):
-            m = URIRef(f"http://testserver/api/public/manifestations/mani-{i}")
+            m = URIRef(f"http://testserver/manifestations/mani-{i}")
             assert (m, RDF.type, SCHEMA.Book) in g
 
     def test_stream_collection_to_rdf_turtle(self, sample_items):
@@ -430,7 +554,7 @@ class TestMultiFormatAndStreamingSerialization:
         g.parse(data=combined_jsonld, format="json-ld")
         # Should have all 10 manifestations
         for i in range(1, 11):
-            m = URIRef(f"http://testserver/api/public/manifestations/mani-{i}")
+            m = URIRef(f"http://testserver/manifestations/mani-{i}")
             assert (m, RDF.type, SCHEMA.Book) in g
 
 
@@ -481,7 +605,7 @@ class TestQueryOptimizationAndFallback:
             ttl = serialize_collection_to_rdf([bare_item], "http://testserver", output_format="turtle")
             g = Graph()
             g.parse(data=ttl, format="turtle")
-            m_uri = URIRef(f"http://testserver/api/public/manifestations/{mani.id}")
+            m_uri = URIRef(f"http://testserver/manifestations/{mani.id}")
             assert (m_uri, RDF.type, SCHEMA.Book) in g
             assert (m_uri, SCHEMA.publisher, Literal("Eager House")) in g
 

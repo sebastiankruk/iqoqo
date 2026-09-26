@@ -20,20 +20,48 @@ Handles public profile retrieval, public item grids, and "check if I have it" fu
 import datetime
 from typing import Any, cast
 
-from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context
+from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context, url_for
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
+from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
+lod_bp = Blueprint("lod", __name__)
 
 # Public RDF request policy constants
 MAX_PUBLIC_RDF_LIMIT = 1000  # Maximum items allowed in a single public RDF request
 DEFAULT_PUBLIC_RDF_LIMIT = 100  # Default limit when not specified
 MIN_PUBLIC_RDF_LIMIT = 1  # Minimum valid limit
+
+
+@lod_bp.route("/works/<int:work_id>", methods=["GET"])
+def canonical_work_iri(work_id: int) -> Response:
+    """Dereference a canonical Work IRI through its negotiated public endpoint."""
+    return redirect(url_for("api.public.get_public_work", work_id=work_id, **request.args.to_dict(flat=False)), code=308)
+
+
+@lod_bp.route("/expressions/<int:expression_id>", methods=["GET"])
+def canonical_expression_iri(expression_id: int) -> Response:
+    """Dereference a canonical Expression IRI through its negotiated public endpoint."""
+    return redirect(url_for("api.public.get_public_expression", expression_id=expression_id, **request.args.to_dict(flat=False)), code=308)
+
+
+@lod_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
+def canonical_manifestation_iri(manifestation_id: int) -> Response:
+    """Dereference a canonical Manifestation IRI through its negotiated public endpoint."""
+    return redirect(
+        url_for("api.public.get_public_manifestation", manifestation_id=manifestation_id, **request.args.to_dict(flat=False)), code=308
+    )
+
+
+@lod_bp.route("/items/<int:item_id>", methods=["GET"])
+def canonical_item_iri(item_id: int) -> Response:
+    """Dereference a canonical Item IRI through its visibility-aware public endpoint."""
+    return redirect(url_for("api.public.get_public_item", item_id=item_id, **request.args.to_dict(flat=False)), code=308)
 
 
 @public_bp.after_request
@@ -405,7 +433,7 @@ def global_fresh_feed():
     view_filter = request.args.get("view", "manifestations")  # manifestations | expressions | works
     items = fetch_global_fresh_arrivals(limit=50, level=view_filter)
 
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rss_data = generate_rss_xml(
         title=f"iqoqo Fresh Arrivals - {view_filter.capitalize()}",
         link=base_url,
@@ -420,7 +448,7 @@ def global_fresh_feed():
 def user_collection_feed(username: str):
     """Exposes personal collection feed streams."""
     items = fetch_user_public_collection(username=username, limit=50)
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rss_data = generate_rss_xml(
         title=f"{username}'s Library Feed",
         link=f"{base_url}/u/{username}",
@@ -436,7 +464,7 @@ def user_collection_feed(username: str):
 def shared_collection_feed(token: str):
     """Exposes public shared collection feed streams via safe access token lookup."""
     items = fetch_shared_collection_by_token(token=token, limit=50)
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rss_data = generate_rss_xml(
         title="Shared Collection Catalog Feed",
         link=f"{base_url}/share/{token}",
@@ -477,7 +505,7 @@ def get_public_profile(username: str):
 def get_public_items(username: str):
     """Retrieve public items for a user."""
     accept_header = request.headers.get("Accept", "")
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     format_arg = request.args.get("format", "").lower()
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
@@ -563,7 +591,7 @@ def get_public_items(username: str):
 def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     format_arg = request.args.get("format", "").lower()
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
@@ -887,7 +915,7 @@ def generate_sitemap_xml(base_url: str) -> str:
 @limiter.limit("60 per minute")
 def sitemap() -> Response:
     """Generate an XML sitemap listing public user profiles, shared collections, and catalog items."""
-    base_url = request.url_root.rstrip("/")
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     xml = generate_sitemap_xml(base_url)
     resp = Response(xml, content_type="application/xml; charset=utf-8")
     resp.headers["Cache-Control"] = "public, max-age=3600"
@@ -915,7 +943,7 @@ def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response
     if _prefers_html():
         return cast(Response, redirect(f"/manifestation/{manifestation.id}", code=303))
 
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
 
     collection_uri = f"{base_url}/manifestation/{manifestation.id}"
@@ -956,7 +984,7 @@ def get_public_work(work_id: int) -> Response | tuple[Response, int]:
     if _prefers_html():
         return cast(Response, redirect(f"/work/{work.id}", code=303))
 
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
 
     collection_uri = f"{base_url}/work/{work.id}"
@@ -1001,7 +1029,7 @@ def get_public_expression(expression_id: int) -> Response | tuple[Response, int]
     if _prefers_html():
         return cast(Response, redirect(f"/expression/{expression.id}", code=303))
 
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
 
     collection_uri = f"{base_url}/expression/{expression.id}"
@@ -1045,7 +1073,7 @@ def get_public_item(item_id: int) -> Response | tuple[Response, int]:
     if _prefers_html():
         return cast(Response, redirect(f"/item/{item.id}", code=303))
 
-    base_url = current_app.config.get("BASE_URL", request.url_root.rstrip("/"))
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
 
     collection_uri = f"{base_url}/item/{item.id}"

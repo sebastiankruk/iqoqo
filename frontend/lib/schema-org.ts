@@ -53,6 +53,12 @@ export function resolveSchemaType(
 ): string {
   const normFormat = (format || "").toLowerCase().trim();
   const normType = (contentType || "").toLowerCase().trim();
+  const normExpressionKind = (expressionKind || "").toLowerCase().trim();
+
+  // Expression semantics take precedence over content type and physical format.
+  if (normExpressionKind === "live_performance") {
+    return "MusicEvent";
+  }
 
   // Check format-specific overrides first
   if (normFormat === "comic_book" || normFormat === "graphic_novel") {
@@ -171,8 +177,16 @@ export function buildOfferJsonLd(options?: OfferOptions): Record<string, unknown
   };
 }
 
+/** Event-specific fields that can be included in a Schema.org JSON-LD payload. */
+export interface EventJsonLdOptions {
+  performer?: string | string[] | null;
+  performers?: string | string[] | null;
+  startDate?: string | number | null;
+  location?: string | Record<string, unknown> | null;
+}
+
 /** Options for generating a Manifestation JSON-LD payload. */
-export interface ManifestationJsonLdOptions {
+export interface ManifestationJsonLdOptions extends EventJsonLdOptions {
   id: number | string;
   title: string;
   authors?: string[] | string | null;
@@ -222,6 +236,18 @@ export function buildManifestationJsonLd(options: ManifestationJsonLdOptions): R
   if (options.datePublished !== undefined && options.datePublished !== null) {
     jsonLd.datePublished = options.datePublished;
   }
+
+  const performers = options.performers ?? options.performer;
+  if (performers !== undefined && performers !== null) {
+    jsonLd.performer = performers;
+  }
+  if (options.startDate !== undefined && options.startDate !== null) {
+    jsonLd.startDate = options.startDate;
+  }
+  if (options.location !== undefined && options.location !== null) {
+    jsonLd.location = options.location;
+  }
+
   const normalizedLang = resolveInLanguage(options.language);
   if (normalizedLang) {
     jsonLd.inLanguage = normalizedLang;

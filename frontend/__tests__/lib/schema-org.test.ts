@@ -34,6 +34,17 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(resolveSchemaType("book")).toBe("Book");
     });
 
+    it("maps live performances to MusicEvent ahead of content type and format", () => {
+      expect(resolveSchemaType("music", "live_performance")).toBe("MusicEvent");
+      expect(resolveSchemaType("text", "live_performance", "comic_book")).toBe("MusicEvent");
+    });
+
+    it("preserves ordinary content type and format mappings", () => {
+      expect(resolveSchemaType("text", "translation")).toBe("Book");
+      expect(resolveSchemaType("text", "translation", "comic_book")).toBe("ComicStory");
+      expect(resolveSchemaType("music", "studio_recording")).toBe("MusicAlbum");
+    });
+
     it("maps comics and graphic novels to ComicStory", () => {
       expect(resolveSchemaType("text", undefined, "comic_book")).toBe("ComicStory");
       expect(resolveSchemaType("book", undefined, "graphic_novel")).toBe("ComicStory");
@@ -183,6 +194,41 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(jsonLd["inLanguage"]).toBe("en");
       expect(Array.isArray(jsonLd["offers"])).toBe(true);
       expect((jsonLd["offers"] as any[])[0]["availability"]).toBe("https://schema.org/InStock");
+    });
+
+    it("builds MusicEvent JSON-LD with event metadata and independent publication date", () => {
+      const jsonLd = buildManifestationJsonLd({
+        id: 84,
+        title: "Live at Pompeii",
+        authors: "Pink Floyd",
+        contentType: "music",
+        expressionKind: "live_performance",
+        datePublished: 1972,
+        performers: ["Pink Floyd", "David Gilmour"],
+        startDate: "1971-10-04",
+        location: "Pompeii Amphitheatre",
+      });
+
+      expect(jsonLd["@type"]).toBe("MusicEvent");
+      expect(jsonLd["performer"]).toEqual(["Pink Floyd", "David Gilmour"]);
+      expect(jsonLd["startDate"]).toBe("1971-10-04");
+      expect(jsonLd["location"]).toBe("Pompeii Amphitheatre");
+      expect(jsonLd["datePublished"]).toBe(1972);
+    });
+
+    it("does not infer an event start date from datePublished", () => {
+      const jsonLd = buildManifestationJsonLd({
+        id: 85,
+        title: "Concert recording",
+        expressionKind: "live_performance",
+        datePublished: 2024,
+      });
+
+      expect(jsonLd["@type"]).toBe("MusicEvent");
+      expect(jsonLd["datePublished"]).toBe(2024);
+      expect(jsonLd["startDate"]).toBeUndefined();
+      expect(jsonLd["performer"]).toBeUndefined();
+      expect(jsonLd["location"]).toBeUndefined();
     });
   });
 

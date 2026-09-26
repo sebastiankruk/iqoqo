@@ -32,6 +32,7 @@ from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv
 from app.api.manifestations import lookup_isbn
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.export_service import ExportService
+from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
@@ -358,10 +359,12 @@ def export_user_items():
     """Stream export of the authenticated user's library items in Linked Data or JSON format.
 
     Query parameter:
-        format: 'json-ld' (default), 'turtle', or 'json'
+        format: 'json-ld' (default), 'turtle', 'nt', or 'json'
     """
     export_format = request.args.get("format", "json-ld").lower().strip()
-    valid_formats = {"json-ld", "turtle", "json"}
+    valid_formats = {"json-ld", "turtle", "nt", "n-triples", "json"}
+    if export_format == "n-triples":
+        export_format = "nt"
     if export_format not in valid_formats:
         return (
             jsonify(
@@ -381,6 +384,7 @@ def export_user_items():
     format_metadata = {
         "json-ld": ("application/ld+json", "jsonld"),
         "turtle": ("text/turtle", "ttl"),
+        "nt": ("application/n-triples", "nt"),
         "json": ("application/json", "json"),
     }
     content_type, ext = format_metadata[export_format]
@@ -389,7 +393,7 @@ def export_user_items():
     generator = ExportService.stream_user_collection(
         user_id=user_id,
         export_format=export_format,
-        base_url=request.host_url.rstrip("/"),
+        base_url=current_app.config.get("BASE_URL") or get_lod_base_url(),
     )
 
     return Response(

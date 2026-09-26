@@ -27,12 +27,12 @@ import uuid
 from collections.abc import Generator, Iterable
 from typing import Any
 
-from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.namespace import RDF
+from rdflib import Graph, Namespace
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app.db.core import Expression, Item, Manifestation, _get_lod_base_url, db
+from app.core.iri import get_lod_base_url as _get_lod_base_url
+from app.db.core import Expression, Item, Manifestation, db
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ IQOQO = Namespace("https://iqoqo.org/ontology#")
 
 # Canonical JSON-LD @context dictionary
 CANONICAL_JSONLD_CONTEXT: dict[str, Any] = {
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
     "frbr": "http://purl.org/vocab/frbr/core#",
     "frbrer": "http://iflastandards.info/ns/frbr/frbrer/",
     "schema": "https://schema.org/",
@@ -55,7 +56,11 @@ CANONICAL_JSONLD_CONTEXT: dict[str, Any] = {
     "Manifestation": "frbr:Manifestation",
     "Item": "frbr:Item",
     "title": "dc:title",
-    "creator": "dc:creator",
+    "creator": "frbrer:creator",
+    "author": "schema:author",
+    "contributor": "schema:contributor",
+    "performer": "schema:performer",
+    "name": "schema:name",
     "language": "dc:language",
     "isbn": "schema:isbn",
     "publisher": "schema:publisher",
@@ -63,6 +68,16 @@ CANONICAL_JSONLD_CONTEXT: dict[str, Any] = {
     "exemplarOf": {"@id": "frbrer:exemplarOf", "@type": "@id"},
     "embodimentOf": {"@id": "frbrer:embodimentOf", "@type": "@id"},
     "expressionOf": {"@id": "frbrer:expressionOf", "@type": "@id"},
+    "isPartOf": {"@id": "schema:isPartOf", "@type": "@id"},
+    "hasPart": {"@id": "schema:hasPart", "@type": "@id"},
+    "wasDerivedFrom": {"@id": "http://www.w3.org/ns/prov#wasDerivedFrom", "@type": "@id"},
+    "image": {"@id": "schema:image", "@type": "@id"},
+    "datePublished": {"@id": "schema:datePublished"},
+    "startDate": {"@id": "schema:startDate"},
+    "location": {"@id": "schema:location"},
+    "itemCondition": {"@id": "schema:itemCondition", "@type": "@id"},
+    "status": "iqoqo:status",
+    "prov": "http://www.w3.org/ns/prov#",
 }
 
 
@@ -97,43 +112,42 @@ class ExportService:
         graph.bind("dc", DC)
         graph.bind("iqoqo", IQOQO)
 
-        for item in items:
-            item_id = item.id
-            m = item.manifestation
-            expr = m.expression if m else None
-            work = expr.work if expr else None
-
-            m_id = m.id if m else item_id
-            e_id = expr.id if expr else m_id
-            w_id = work.id if work else e_id
-
-            w_uri = URIRef(f"{base_url}/api/public/works/{w_id}")
-            e_uri = URIRef(f"{base_url}/api/public/expressions/{e_id}")
-            m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
-            i_uri = URIRef(f"{base_url}/api/public/items/{item_id}")
-
-            # PURL FRBR types and Dublin Core alignments
-            graph.add((w_uri, RDF.type, FRBR_PURL.Work))
-            w_title = (work.title if work else getattr(m, "title", "Untitled")) or "Untitled"
-            graph.add((w_uri, DC.title, Literal(w_title)))
-
-            graph.add((e_uri, RDF.type, FRBR_PURL.Expression))
-            graph.add((e_uri, FRBR_PURL.expressionOf, w_uri))
-
-            graph.add((m_uri, RDF.type, FRBR_PURL.Manifestation))
-            graph.add((m_uri, FRBR_PURL.embodimentOf, e_uri))
-            m_title = (m.title if m else w_title) or "Untitled"
-            graph.add((m_uri, DC.title, Literal(m_title)))
-
-            graph.add((i_uri, RDF.type, FRBR_PURL.Item))
-            graph.add((i_uri, FRBR_PURL.exemplarOf, m_uri))
-            if item.status:
-                graph.add((i_uri, IQOQO.status, Literal(item.status)))
-
         return graph
 
     @classmethod
     def stream_jsonld(
+        cls,
+        items_iterable: Iterable[Item],
+        batch_size: int = 100,
+        base_url: str | None = None,
+    ) -> Generator[str, None, None]:
+        """Stream JSON-LD generated from the same enriched RDF graph as Turtle/NT."""
+        resolved_base_url = cls.get_lod_base_url(base_url)
+        yield '{\n  "@context": ' + json.dumps(CANONICAL_JSONLD_CONTEXT, indent=2) + ',\n  "@graph": [\n'
+
+        iterator = iter(items_iterable)
+        first_node = True
+        while True:
+            batch = list(itertools.islice(iterator, batch_size))
+            if not batch:
+                break
+            graph = cls.build_batch_rdf_graph(batch, resolved_base_url)
+            serialized = graph.serialize(format="json-ld", context=CANONICAL_JSONLD_CONTEXT, auto_compact=True)
+            data = json.loads(serialized)
+            if isinstance(data, dict):
+                nodes = data.get("@graph", [data])
+            else:
+                nodes = data
+            for node in nodes:
+                if not first_node:
+                    yield ",\n"
+                first_node = False
+                yield "    " + json.dumps(node, ensure_ascii=False, separators=(",", ": "))
+
+        yield "\n  ]\n}\n"
+
+    @classmethod
+    def _stream_jsonld_legacy(
         cls,
         items_iterable: Iterable[Item],
         batch_size: int = 100,
@@ -313,6 +327,24 @@ class ExportService:
             yield empty_g.serialize(format="turtle")
 
     @classmethod
+    def stream_ntriples(
+        cls,
+        items_iterable: Iterable[Item],
+        batch_size: int = 100,
+        base_url: str | None = None,
+    ) -> Generator[str, None, None]:
+        """Stream N-Triples batches from the canonical enriched RDF graph."""
+        resolved_base_url = cls.get_lod_base_url(base_url)
+        iterator = iter(items_iterable)
+        while True:
+            batch = list(itertools.islice(iterator, batch_size))
+            if not batch:
+                break
+            payload = cls.build_batch_rdf_graph(batch, resolved_base_url).serialize(format="nt")
+            if payload:
+                yield payload
+
+    @classmethod
     def stream_json(
         cls,
         items_iterable: Iterable[Item],
@@ -404,10 +436,12 @@ class ExportService:
             yield from cls.stream_jsonld(items_iterable, batch_size=batch_size, base_url=base_url)
         elif fmt == "turtle":
             yield from cls.stream_turtle(items_iterable, batch_size=batch_size, base_url=base_url)
+        elif fmt in {"nt", "n-triples"}:
+            yield from cls.stream_ntriples(items_iterable, batch_size=batch_size, base_url=base_url)
         elif fmt == "json":
             yield from cls.stream_json(items_iterable)
         else:
-            raise ValueError(f"Unsupported export format '{fmt}'. Supported: json-ld, turtle, json")
+            raise ValueError(f"Unsupported export format '{fmt}'. Supported: json-ld, turtle, nt, json")
 
     @classmethod
     def stream_user_collection(

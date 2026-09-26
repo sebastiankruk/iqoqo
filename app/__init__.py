@@ -33,6 +33,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from app.api import api_bp
 from app.api.auth import auth_bp, init_oauth
 from app.api.profile import profile_bp
+from app.api.public import lod_bp
 from app.core.scheduler import init_scheduler
 
 from .config import Config
@@ -191,6 +192,7 @@ def create_app(config_class=Config, config_override=None):
     from app.api.wishlist import wishlist_bp
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(lod_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(roadmap_bp)

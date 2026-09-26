@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import UUID
 
+from app.core.iri import canonical_frbr_iri
 from app.core.taxonomy import (  # noqa: F401
     CATEGORY_PROGRESS_STATUSES,
     COLLECTION_STATUSES,
@@ -84,12 +85,6 @@ EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 #: Controlled vocabulary for :attr:`WorkExpansionLink.link_type`.
 WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
 WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
-
-
-def _get_lod_base_url() -> str:
-    """Return the canonical base URL for Linked Open Data entity IRIs."""
-    base = os.environ.get("BASE_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL") or "https://iqoqo.cc"
-    return base.rstrip("/")
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -178,7 +173,7 @@ class Work(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Work."""
-        return f"{_get_lod_base_url()}/works/{self.id}"
+        return canonical_frbr_iri("work", self.id)
 
 
 class WorkExpansionLink(db.Model):  # type: ignore[name-defined]
@@ -284,7 +279,7 @@ class Expression(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Expression."""
-        return f"{_get_lod_base_url()}/expressions/{self.id}"
+        return canonical_frbr_iri("expression", self.id)
 
 
 class Manifestation(db.Model):  # type: ignore[name-defined]
@@ -414,7 +409,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Manifestation."""
-        return f"{_get_lod_base_url()}/manifestations/{self.id}"
+        return canonical_frbr_iri("manifestation", self.id)
 
 
 class Item(db.Model):  # type: ignore[name-defined]
@@ -468,7 +463,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Item."""
-        return f"{_get_lod_base_url()}/items/{self.id}"
+        return canonical_frbr_iri("item", self.id)
 
 
 class UserWorkIntent(db.Model):  # type: ignore[name-defined]

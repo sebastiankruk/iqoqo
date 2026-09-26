@@ -76,7 +76,8 @@ PREVIEW_ENV_FILE ?= $(PREVIEW_DIR)/.env
 ifeq ($(USE_DOCKER),true)
 PYTHON_CMD = ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python
 else
-PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. .venv/bin/python
+PYTHON_BIN ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 2>/dev/null || echo python)
+PYTHON_CMD = ADMIN_PASSWORD=admin PYTHONPATH=. $(PYTHON_BIN)
 endif
 
 # AiOps / Terse mode flags and banner suppression
@@ -881,15 +882,15 @@ etl-frbr: ## Running FRBR ETL strict cleanup (idempotent, USE_DOCKER=true for pr
 		$(PYTHON_CMD) scripts/etl_frbr_strict.py $(ARGS); \
 	fi
 
-sync-ontology: ## Checking ontology sync with DB models (USE_DOCKER=true for production)
+sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production)
 	@echo "Checking ontology sync with DB models..."
 	@if [ "$(USE_DOCKER)" = "true" ]; then \
-		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/sync_ontology.py $(ARGS); \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T -e DATABASE_URL=$$(grep '^DATABASE_URL=' $(COMPOSE_ENV_FILE) | cut -d'=' -f2- | sed 's/"//g' | sed 's/@localhost:/@db:/') web env PYTHONPATH=. python scripts/sync_ontology.py --check $(ARGS); \
 	else \
 		if [ -f ".env" ]; then \
 			set -a; . ./.env; set +a; \
 		fi; \
 		export DATABASE_URL=$$(echo "$$DATABASE_URL" | sed "s/@db:5432/@localhost:$${DB_PORT:-5432}/" | sed "s/@db:/@localhost:/"); \
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
-		$(PYTHON_CMD) scripts/sync_ontology.py $(ARGS); \
+		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi

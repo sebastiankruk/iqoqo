@@ -18,12 +18,13 @@
 import logging
 import time
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 from rdflib import Graph
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from app.api.decorators import require_auth, require_permission
+from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.sparql_service import (
@@ -85,7 +86,7 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         phase = "build_graph"
         user = db.session.get(User, g.user_id) if hasattr(g, "user_id") and g.user_id else None
         items = _get_sparql_items(user)
-        base_url = request.url_root.rstrip("/")
+        base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
         graph_build_start = time.time()
         graph = build_graph(items, base_url, user_id=user.id if user else None)
         graph_build_duration = time.time() - graph_build_start
