@@ -61,10 +61,9 @@ export function BrowserOpenObserveRum(): null {
         const apiVersion = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION ?? "v1";
         const configuredPrivacyLevel = process.env.NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL;
         const isProduction = process.env.NODE_ENV === "production" || env === "production";
-        const defaultPrivacyLevel =
-          isProduction
-            ? "mask-user-input"
-            : (configuredPrivacyLevel as "allow" | "mask-user-input" | "mask" | undefined) ?? "mask-user-input";
+        const defaultPrivacyLevel = isProduction
+          ? "mask-user-input"
+          : ((configuredPrivacyLevel as "allow" | "mask-user-input" | "mask" | undefined) ?? "mask-user-input");
 
         openobserveRum.init({
           applicationId,

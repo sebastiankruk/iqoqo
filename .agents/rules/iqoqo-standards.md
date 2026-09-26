@@ -125,5 +125,6 @@ Talk like caveman
 
 - **Commits:** Strictly use Conventional Commits (e.g., `feat:`, `fix:`, `chore:`, `docs:`).
 - **Local Testing First:** NEVER push code before running all CI tests locally. Ensure the build is clean locally.
+- **Secret Scanning Pre-Commit Gate:** NEVER commit or push code without running `make secret-scan` (or ensuring `make lint` passes secret scanning). Committing plaintext API keys, passwords, bearer tokens, or Base64 auth headers is strictly prohibited. If Gitleaks flags any finding, remove the secret or dynamically generate fake test tokens (e.g., using `base64.b64encode`) rather than hardcoding credentials into repo files.
 - **PR Finalization:** All code pushed to a `release/*` branch must be accompanied by updated documentation in `docs/CHANGELOG.md` and pass `make lint` and `make test`.
 - **Review Pauses:** Wait 15 minutes after pushing before moving to the next task to review the PR and pipeline results (if applicable).

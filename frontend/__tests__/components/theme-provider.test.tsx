@@ -45,9 +45,7 @@ describe("ThemeProvider", () => {
     const spy = vi.fn();
     console.error = spy;
 
-    const { unmount } = render(
-      <JsonLdConsoleFilter />
-    );
+    const { unmount } = render(<JsonLdConsoleFilter />);
 
     console.error("Encountered a script tag while rendering React component");
     expect(spy).not.toHaveBeenCalled();
@@ -60,9 +58,7 @@ describe("ThemeProvider", () => {
     const spy = vi.fn();
     console.error = spy;
 
-    render(
-      <JsonLdConsoleFilter />
-    );
+    render(<JsonLdConsoleFilter />);
 
     console.error("Some other real error");
     expect(spy).toHaveBeenCalledWith("Some other real error");
@@ -73,9 +69,7 @@ describe("ThemeProvider", () => {
     const spy = vi.fn();
     console.error = spy;
 
-    const { unmount } = render(
-      <JsonLdConsoleFilter />
-    );
+    const { unmount } = render(<JsonLdConsoleFilter />);
 
     // console.error was swapped out for the filtering wrapper.
     expect(console.error).not.toBe(spy);
@@ -91,9 +85,7 @@ describe("ThemeProvider", () => {
     const spy = vi.fn();
     console.error = spy;
 
-    render(
-      <JsonLdConsoleFilter />
-    );
+    render(<JsonLdConsoleFilter />);
 
     expect(console.error).toBe(spy);
   });

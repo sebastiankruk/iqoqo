@@ -97,9 +97,9 @@ describe("ItemActions Component", () => {
 
     const options = vi.mocked(useQuery).mock.calls.find(call => call[0].queryKey[0] === "item")?.[0];
     expect(options?.enabled).toBe(true);
-    const refetchInterval = options?.refetchInterval as (
-      query: { state: { data: Item | null | undefined } }
-    ) => number | false;
+    const refetchInterval = options?.refetchInterval as (query: {
+      state: { data: Item | null | undefined };
+    }) => number | false;
     expect(refetchInterval({ state: { data: undefined } })).toBe(3000);
     expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
   });
@@ -131,9 +131,9 @@ describe("ItemActions Component", () => {
       .mock.calls.filter(call => call[0].queryKey[0] === "item")
       .at(-1)?.[0];
     expect(options?.enabled).toBe(false);
-    const refetchInterval = options?.refetchInterval as (
-      query: { state: { data: Item | null | undefined } }
-    ) => number | false;
+    const refetchInterval = options?.refetchInterval as (query: {
+      state: { data: Item | null | undefined };
+    }) => number | false;
     expect(refetchInterval({ state: { data: { ...pendingItem, cover_status: "ready" } } })).toBe(false);
   });
 

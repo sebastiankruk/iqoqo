@@ -132,9 +132,7 @@ export function ManageCollectionsModal({ isOpen, onClose }: ManageCollectionsMod
             <Folder className="h-5 w-5 text-primary" />
             <DialogTitle className="text-lg font-semibold">Manage Collections</DialogTitle>
           </div>
-          <DialogDescription className="sr-only">
-            Create, rename, and delete your custom collections.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Create, rename, and delete your custom collections.</DialogDescription>
         </DialogHeader>
 
         {/* Content */}

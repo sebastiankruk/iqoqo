@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
 
 SHELL := /bin/bash
 
@@ -61,6 +61,10 @@ ifeq ($(MODE),prod)
   endif
   USE_DOCKER ?= true
 endif
+
+PREVIEW_DIR      ?= /opt/pre.iqoqo
+PREVIEW_ENV_FILE ?= $(PREVIEW_DIR)/.env
+
 
 # When adding a Make target that writes files inside a Docker container, ensure
 # the output directory is mounted as a volume in docker-compose.yml under `web`
@@ -428,6 +432,11 @@ clone:
 	fi
 	FORCE="$(FORCE)" ./scripts/clone.sh "$(src_loc)" "$(src_name)" "$(dst_loc)" "$(dst_name)" "$(src_host)"
 
+ensure-secrets: ## Ensure required secrets exist in environment file (ENV_FILE defaults to COMPOSE_ENV_FILE)
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file $(if $(ENV_FILE),$(ENV_FILE),$(COMPOSE_ENV_FILE)); \
+	fi
+
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
 start:
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
@@ -442,9 +451,22 @@ start:
 else
 start:
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file $(if $(wildcard $(COMPOSE_ENV_FILE)),$(COMPOSE_ENV_FILE),.env); \
+	fi
 	@echo "Starting $(MODE) environment..."
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 endif
+
+preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local preview images
+	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
+	fi
+	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+
+preview-down: ## Stop preview stack in PREVIEW_DIR (/opt/pre.iqoqo) cleanly
+	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml down
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -546,6 +568,10 @@ lint-markdown:
 validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
+
+secret-scan: .venv/bin/activate ## Scan repository working tree and branch commits for secrets using Gitleaks
+	$(AI_ECHO) "Scanning code for secrets (Gitleaks)..."
+	@.venv/bin/python scripts/run_secret_scan.py
 
 # Compatibility baseline: executable checks that gate .github/workflows/quality.yml.
 lint: .venv/bin/activate

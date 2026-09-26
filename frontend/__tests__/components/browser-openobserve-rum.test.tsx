@@ -49,10 +49,12 @@ describe("BrowserOpenObserveRum privacy defaults", () => {
     render(<BrowserOpenObserveRum />);
 
     await waitFor(() => expect(rum.init).toHaveBeenCalledTimes(1));
-    expect(rum.init).toHaveBeenCalledWith(expect.objectContaining({
-      insecureHTTP: false,
-      defaultPrivacyLevel: "mask-user-input",
-    }));
+    expect(rum.init).toHaveBeenCalledWith(
+      expect.objectContaining({
+        insecureHTTP: false,
+        defaultPrivacyLevel: "mask-user-input",
+      })
+    );
   });
 
   it("does not allow production configuration to disable input masking", async () => {

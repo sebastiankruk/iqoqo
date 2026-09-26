@@ -52,7 +52,8 @@ vi.mock("next/link", async () => {
      * @returns {JSX.Element} Plain anchor element
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    default: ({ href, children, className, ...rest }: any) => createElement("a", { href, className, ...rest }, children),
+    default: ({ href, children, className, ...rest }: any) =>
+      createElement("a", { href, className, ...rest }, children),
   };
 });
 
@@ -153,24 +154,24 @@ vi.mock("next-intl", async () => {
   return {
     useLocale: () => "en",
     useTranslations: (namespace: string) => {
-    const dictionary = messages[namespace as keyof typeof messages] as Record<string, unknown> | undefined;
-    return (key: string, values?: Record<string, string>) => {
-      let translation: unknown = dictionary;
-      for (const segment of key.split(".")) {
-        if (!translation || typeof translation !== "object") {
-          translation = undefined;
-          break;
+      const dictionary = messages[namespace as keyof typeof messages] as Record<string, unknown> | undefined;
+      return (key: string, values?: Record<string, string>) => {
+        let translation: unknown = dictionary;
+        for (const segment of key.split(".")) {
+          if (!translation || typeof translation !== "object") {
+            translation = undefined;
+            break;
+          }
+          translation = (translation as Record<string, unknown>)[segment];
         }
-        translation = (translation as Record<string, unknown>)[segment];
-      }
 
-      if (typeof translation !== "string") return key;
-      if (!values) return translation;
-      return Object.entries(values).reduce(
-        (result, [name, value]) => result.replaceAll(`{${name}}`, value),
-        translation
-      );
-    };
+        if (typeof translation !== "string") return key;
+        if (!values) return translation;
+        return Object.entries(values).reduce(
+          (result, [name, value]) => result.replaceAll(`{${name}}`, value),
+          translation
+        );
+      };
     },
   };
 });

@@ -22,7 +22,9 @@ describe("getCoverTimestamp", () => {
   });
 
   it("returns a parsed timestamp", () => {
-    expect(getCoverTimestamp({ cover_status_updated_at: "2026-01-01T00:00:00.000Z" })).toBe(Date.parse("2026-01-01T00:00:00.000Z"));
+    expect(getCoverTimestamp({ cover_status_updated_at: "2026-01-01T00:00:00.000Z" })).toBe(
+      Date.parse("2026-01-01T00:00:00.000Z")
+    );
   });
 });
 

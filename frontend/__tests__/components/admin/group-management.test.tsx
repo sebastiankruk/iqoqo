@@ -27,7 +27,14 @@ vi.mock("@/lib/api/admin", () => ({
   deleteRole: vi.fn(),
 }));
 
-import { getRoles, getPermissions, getRolePermissions, createRole, deleteRole, updateRolePermissions } from "@/lib/api/admin";
+import {
+  getRoles,
+  getPermissions,
+  getRolePermissions,
+  createRole,
+  deleteRole,
+  updateRolePermissions,
+} from "@/lib/api/admin";
 import { toast } from "sonner";
 
 vi.mocked(getRoles).mockResolvedValue([

@@ -19,7 +19,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
 import type { ApiResponse } from "@/types/frbr";
 import type { FrbrTree } from "../admin";
-import { updateFrbrEntity as updateFrbrEntityApi, type FrbrEntityUpdatePayload, type FrbrItem as FrbrItemType } from "../admin";
+import {
+  updateFrbrEntity as updateFrbrEntityApi,
+  type FrbrEntityUpdatePayload,
+  type FrbrItem as FrbrItemType,
+} from "../admin";
 import { ARRAY_META_FIELDS, ensureArray } from "@/components/admin/frbr/types";
 import { getFrbrTree } from "../admin";
 import { queryKeys } from "./query-keys";
@@ -86,10 +90,7 @@ export function useFrbrTree(manifestationId: number) {
 export function useUpdateFrbrEntity() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      manifestationId,
-      ...payload
-    }: { manifestationId: number } & FrbrEntityUpdatePayload) => {
+    mutationFn: async ({ manifestationId, ...payload }: { manifestationId: number } & FrbrEntityUpdatePayload) => {
       void manifestationId;
       return updateFrbrEntityApi(normalizeFrbrUpdate(payload));
     },

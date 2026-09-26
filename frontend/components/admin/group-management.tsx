@@ -297,7 +297,8 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm font-medium text-foreground">
-                      {rolePermissionStatus[role.id] === "loaded" ? currentPerms.length : role.permissionCount} permissions
+                      {rolePermissionStatus[role.id] === "loaded" ? currentPerms.length : role.permissionCount}{" "}
+                      permissions
                     </p>
                     <p className="text-xs text-muted-foreground">{role.memberCount || 0} users</p>
                   </div>
@@ -411,36 +412,36 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
             <DialogTitle>Add New Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-              <div>
-                <label htmlFor="new-role-name" className="text-sm font-medium text-foreground">
-                  Role Name
-                </label>
-                <input
-                  id="new-role-name"
-                  type="text"
-                  value={newRoleName}
-                  onChange={e => setNewRoleName(e.target.value)}
-                  placeholder="e.g., moderator, editor"
-                  disabled={creating}
-                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <DialogFooter>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={creating}
-                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateRole}
-                  disabled={!newRoleName.trim() || creating}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                >
-                  {creating ? "Creating..." : "Create Role"}
-                </button>
-              </DialogFooter>
+            <div>
+              <label htmlFor="new-role-name" className="text-sm font-medium text-foreground">
+                Role Name
+              </label>
+              <input
+                id="new-role-name"
+                type="text"
+                value={newRoleName}
+                onChange={e => setNewRoleName(e.target.value)}
+                placeholder="e.g., moderator, editor"
+                disabled={creating}
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <DialogFooter>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                disabled={creating}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRole}
+                disabled={!newRoleName.trim() || creating}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {creating ? "Creating..." : "Create Role"}
+              </button>
+            </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
@@ -464,20 +465,20 @@ export function GroupManagement({ canEdit = false }: GroupManagementProps) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-              <button
-                onClick={() => setRoleToDelete(null)}
-                disabled={deleting}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteRole}
-                disabled={deleting}
-                className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
+            <button
+              onClick={() => setRoleToDelete(null)}
+              disabled={deleting}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteRole}
+              disabled={deleting}
+              className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -80,9 +80,6 @@ describe("query staleness configuration", () => {
     renderHook(() => useEscalationQueue("pending", false), { wrapper });
 
     expect(getQueryStaleTime(client, ["escalations", "mine"])).toBe(30_000);
-    expect(
-      getQueryStaleTime(client, ["escalations", "queue", "pending"])
-    ).toBe(30_000);
+    expect(getQueryStaleTime(client, ["escalations", "queue", "pending"])).toBe(30_000);
   });
-
 });

@@ -28,10 +28,7 @@ export function JsonLdConsoleFilter(): null {
 
     const originalError = console.error;
     console.error = (...args: unknown[]) => {
-      if (
-        typeof args[0] === "string" &&
-        args[0].includes("Encountered a script tag while rendering React component")
-      ) {
+      if (typeof args[0] === "string" && args[0].includes("Encountered a script tag while rendering React component")) {
         return;
       }
       originalError.apply(console, args);

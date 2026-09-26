@@ -42,8 +42,12 @@ test.describe("OpenObserve RUM Integration & Telemetry Validation", () => {
     // Wait a brief moment to allow telemetry buffers to flush/ship
     await page.waitForTimeout(5000);
 
-    const openobserveUrl = "http://localhost:5080";
-    const basicAuth = "Basic YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz";
+    const openobserveUrl = process.env.NEXT_PUBLIC_OPENOBSERVE_API_URL || "http://localhost:5080";
+    const basicAuth = process.env.OPENOBSERVE_BASIC_AUTH ? `Basic ${process.env.OPENOBSERVE_BASIC_AUTH}` : "";
+    if (!basicAuth) {
+      console.warn("⚠️ OPENOBSERVE_BASIC_AUTH is not set. Skipping backend telemetry verification.");
+      return;
+    }
 
     // Check if OpenObserve is reachable
     let isReachable = false;

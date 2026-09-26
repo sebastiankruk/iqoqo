@@ -107,6 +107,7 @@ CANONICAL_JOBS: list[tuple[str, list[Check]]] = [
         ],
     ),
     ("lint-license", [("License headers", ["./scripts/check_license.sh"], ROOT, True)]),
+    ("secret-scan", [("Secret scanning", [tool("python"), "scripts/run_secret_scan.py"], ROOT, True)]),
 ]
 
 STRICT_LOCAL_CHECKS: list[tuple[str, list[str], Path, bool]] = [
