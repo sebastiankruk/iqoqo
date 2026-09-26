@@ -27,6 +27,7 @@ from rdflib.plugins.sparql.parser import parseQuery
 from rdflib.query import Result
 
 from app.core.frbr_service import build_collection_rdf_graph
+from app.core.iri import get_lod_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ MAX_RESULT_ROWS = 1000
 MAX_GRAPH_ITEMS = 5000
 
 # Maximum number of triples in materialized graph
-MAX_GRAPH_TRIPLES = 100000
+MAX_GRAPH_TRIPLES = 200000
 
 # Maximum number of triples in CONSTRUCT/DESCRIBE result graph
 MAX_RESULT_TRIPLES = 50000
@@ -541,7 +542,7 @@ def _reconstruct_result(result_data: dict) -> Result:
 
 def build_graph(
     items: list[Any] | None = None,
-    base_url: str = "http://localhost:5000",
+    base_url: str | None = None,
     user_id: Any | None = None,
 ) -> Graph:
     """
@@ -604,7 +605,7 @@ def build_graph(
             entities_to_serialize.append(it)
 
     try:
-        graph = build_collection_rdf_graph(entities_to_serialize, base_url)
+        graph = build_collection_rdf_graph(entities_to_serialize, base_url or get_lod_base_url())
     except SPARQLGraphBuildError:
         raise
     except Exception as exc:

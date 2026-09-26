@@ -24,13 +24,14 @@ from collections.abc import Generator, Iterable
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
+from app.core.iri import canonical_frbr_iri, canonical_related_iri
 from app.core.ontology_validation import (
     validate_container_not_linked_as_expansion,
     validate_work_not_expansion_aggregated,
@@ -1893,11 +1894,25 @@ def update_frbr_entity_type(
     return entity
 
 
-# Define Namespaces
-FRBR = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+# FRBR entity classes use the documented PURL namespace. Structural
+# relationships use the IFLA FRBRer namespace (as in the JSON-LD context).
+FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+FRBRER = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
 PROV = Namespace("http://www.w3.org/ns/prov#")
+IQOQO = Namespace("https://iqoqo.org/ontology#")
+
+
+def _frbr_uri(entity_type: str, entity_id: object, base_url: str) -> URIRef:
+    """Return one of the four canonical FRBR identity IRIs."""
+    return URIRef(canonical_frbr_iri(entity_type, entity_id, base_url))
+
+
+def _related_uri(entity_type: str, entity_id: object, base_url: str) -> URIRef:
+    """Return a canonical IRI for an enriched related entity."""
+    return URIRef(canonical_related_iri(entity_type, entity_id, base_url))
+
 
 # Schema.org type mapping for content types
 SCHEMA_TYPE_MAP = {
@@ -1973,8 +1988,8 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
     item_id = item.get("id")
     m_id = item.get("manifestation_id", item_id)
     w_id = item.get("work_id", m_id)
-    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
-    w_uri = URIRef(f"{base_url}/api/public/works/{w_id}")
+    m_uri = _frbr_uri("manifestation", m_id, base_url)
+    w_uri = _frbr_uri("work", w_id, base_url)
 
     if item.get("publisher"):
         g.add((m_uri, SCHEMA.publisher, Literal(str(item["publisher"]))))
@@ -1998,13 +2013,13 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
             c_name = c.get("name")
             c_type = c.get("type", "person")
             c_id = c.get("id", c_name)
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{c_id}")
+            c_uri = _related_uri("contributors", c_id, base_url)
             g.add((c_uri, RDF.type, SCHEMA.Person if c_type == "person" else SCHEMA.Organization))
             if c_name:
                 g.add((c_uri, SCHEMA.name, Literal(c_name)))
             g.add((m_uri, SCHEMA.contributor, c_uri))
         elif isinstance(c, str):
-            c_uri = URIRef(f"{base_url}/api/public/contributors/{c}")
+            c_uri = _related_uri("contributors", c, base_url)
             g.add((c_uri, RDF.type, SCHEMA.Person))
             g.add((c_uri, SCHEMA.name, Literal(c)))
             g.add((m_uri, SCHEMA.contributor, c_uri))
@@ -2013,7 +2028,7 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
 
     is_part_of = item.get("is_part_of") or item.get("container_work_id")
     if is_part_of:
-        p_uri = URIRef(str(is_part_of) if str(is_part_of).startswith("http") else f"{base_url}/api/public/works/{is_part_of}")
+        p_uri = URIRef(str(is_part_of)) if str(is_part_of).startswith("http") else _frbr_uri("work", is_part_of, base_url)
         g.add((w_uri, SCHEMA.isPartOf, p_uri))
         g.add((p_uri, SCHEMA.hasPart, w_uri))
 
@@ -2021,7 +2036,7 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
     if has_part:
         p_list = has_part if isinstance(has_part, list) else [has_part]
         for p in p_list:
-            p_uri = URIRef(str(p) if str(p).startswith("http") else f"{base_url}/api/public/works/{p}")
+            p_uri = URIRef(str(p)) if str(p).startswith("http") else _frbr_uri("work", p, base_url)
             g.add((w_uri, SCHEMA.hasPart, p_uri))
             g.add((p_uri, SCHEMA.isPartOf, w_uri))
 
@@ -2062,11 +2077,11 @@ def _enrich_graph_from_db(
                     i_id = None
 
             if m_id:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_id}")
+                m_uri = _frbr_uri("manifestation", m_id, base_url)
                 g.add((coll_uri_ref, SCHEMA.hasPart, m_uri))
                 g.add((m_uri, SCHEMA.isPartOf, coll_uri_ref))
             if i_id and i_id != m_id:
-                i_uri = URIRef(f"{base_url}/api/public/items/{i_id}")
+                i_uri = _frbr_uri("item", i_id, base_url)
                 g.add((coll_uri_ref, SCHEMA.hasPart, i_uri))
                 g.add((i_uri, SCHEMA.isPartOf, coll_uri_ref))
 
@@ -2118,13 +2133,15 @@ def _enrich_graph_from_db(
         if seen_works:
             contribs = db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(seen_works))).scalars().all()
             for wc in contribs:
-                w_uri = URIRef(f"{base_url}/api/public/works/{wc.work_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{wc.contributor_id}")
+                w_uri = _frbr_uri("work", wc.work_id, base_url)
+                c_uri = _related_uri("contributors", wc.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if wc.contributor and wc.contributor.type == "person" else SCHEMA.Organization))
                 if wc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(wc.contributor.name)))
                 g.add((w_uri, SCHEMA.contributor, c_uri))
-                g.add((w_uri, FRBR.creator, c_uri))
+                g.add((w_uri, FRBRER.creator, c_uri))
+                if wc.role.lower() in {"author", "creator"}:
+                    g.add((w_uri, SCHEMA.author, c_uri))
 
         # ExpressionContributions
         if seen_expressions:
@@ -2134,12 +2151,13 @@ def _enrich_graph_from_db(
                 .all()
             )
             for ec in expr_contribs:
-                e_uri = URIRef(f"{base_url}/api/public/expressions/{ec.expression_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{ec.contributor_id}")
+                e_uri = _frbr_uri("expression", ec.expression_id, base_url)
+                c_uri = _related_uri("contributors", ec.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if ec.contributor and ec.contributor.type == "person" else SCHEMA.Organization))
                 if ec.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(ec.contributor.name)))
                 g.add((e_uri, SCHEMA.contributor, c_uri))
+                g.add((e_uri, SCHEMA.performer, c_uri))
 
         # ManifestationContributions
         if seen_manifestations:
@@ -2151,8 +2169,8 @@ def _enrich_graph_from_db(
                 .all()
             )
             for mc in m_contribs:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{mc.manifestation_id}")
-                c_uri = URIRef(f"{base_url}/api/public/contributors/{mc.contributor_id}")
+                m_uri = _frbr_uri("manifestation", mc.manifestation_id, base_url)
+                c_uri = _related_uri("contributors", mc.contributor_id, base_url)
                 g.add((c_uri, RDF.type, SCHEMA.Person if mc.contributor and mc.contributor.type == "person" else SCHEMA.Organization))
                 if mc.contributor:
                     g.add((c_uri, SCHEMA.name, Literal(mc.contributor.name)))
@@ -2162,8 +2180,8 @@ def _enrich_graph_from_db(
         if seen_works:
             parts = db.session.execute(select(WorkPart).where(WorkPart.container_work_id.in_(seen_works))).scalars().all()
             for wp in parts:
-                container_uri = URIRef(f"{base_url}/api/public/works/{wp.container_work_id}")
-                part_uri = URIRef(f"{base_url}/api/public/works/{wp.part_work_id}")
+                container_uri = _frbr_uri("work", wp.container_work_id, base_url)
+                part_uri = _frbr_uri("work", wp.part_work_id, base_url)
                 g.add((part_uri, SCHEMA.isPartOf, container_uri))
                 g.add((container_uri, SCHEMA.hasPart, part_uri))
 
@@ -2171,7 +2189,7 @@ def _enrich_graph_from_db(
         if enrichment_profile == "full" and seen_manifestations:
             scans = db.session.execute(select(ImageScan).where(ImageScan.manifestation_id.in_(seen_manifestations))).scalars().all()
             for scan in scans:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{scan.manifestation_id}")
+                m_uri = _frbr_uri("manifestation", scan.manifestation_id, base_url)
                 encoded_path = _safe_iri(str(scan.file_path))
                 if encoded_path is not None:
                     img_uri = URIRef(f"{base_url}/{encoded_path}")
@@ -2186,8 +2204,8 @@ def _enrich_graph_from_db(
             for link in links:
                 coll = link.collection
                 if coll:
-                    coll_uri = URIRef(f"{base_url}/api/public/collections/{coll.id}")
-                    i_uri = URIRef(f"{base_url}/api/public/items/{link.item_id}")
+                    coll_uri = _related_uri("collections", coll.id, base_url)
+                    i_uri = _frbr_uri("item", link.item_id, base_url)
                     g.add((coll_uri, RDF.type, SCHEMA.Collection))
                     g.add((coll_uri, SCHEMA.name, Literal(coll.name)))
                     g.add((coll_uri, SCHEMA.hasPart, i_uri))
@@ -2197,7 +2215,7 @@ def _enrich_graph_from_db(
         if seen_manifestations:
             manifests = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
             for m in manifests:
-                m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                m_uri = _frbr_uri("manifestation", m.id, base_url)
                 if m.publisher:
                     g.add((m_uri, SCHEMA.publisher, Literal(m.publisher)))
                 pub_date = (
@@ -2222,10 +2240,30 @@ def _enrich_graph_from_db(
         if seen_expressions:
             exprs = db.session.execute(select(Expression).where(Expression.id.in_(seen_expressions))).scalars().all()
             for expr in exprs:
-                if getattr(expr, "language", None):
-                    for m in getattr(expr, "manifestations", []):
-                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m.id}")
+                for m in getattr(expr, "manifestations", []):
+                    m_uri = _frbr_uri("manifestation", m.id, base_url)
+                    if getattr(expr, "language", None):
                         g.add((m_uri, SCHEMA.inLanguage, Literal(expr.language)))
+                    if expr.kind != EXPRESSION_KIND_LIVE_PERFORMANCE:
+                        continue
+                    g.add((m_uri, RDF.type, SCHEMA.MusicEvent))
+                    expression_meta = expr.meta or {}
+                    event_date = (
+                        expression_meta.get("start_date") or expression_meta.get("performance_date") or expression_meta.get("event_date")
+                    )
+                    venue = expression_meta.get("location") or expression_meta.get("venue")
+                    if event_date:
+                        g.add((m_uri, SCHEMA.startDate, Literal(str(event_date))))
+                    if venue:
+                        g.add((m_uri, SCHEMA.location, Literal(str(venue))))
+                    for contribution in getattr(expr, "contributions", []) or []:
+                        contributor = getattr(contribution, "contributor", None)
+                        contributor_uri = _related_uri("contributors", contribution.contributor_id, base_url)
+                        contributor_type = SCHEMA.Person if contributor and contributor.type == "person" else SCHEMA.Organization
+                        g.add((contributor_uri, RDF.type, contributor_type))
+                        if contributor:
+                            g.add((contributor_uri, SCHEMA.name, Literal(contributor.name)))
+                        g.add((m_uri, SCHEMA.performer, contributor_uri))
     except (SQLAlchemyError, AttributeError, KeyError):
         pass
 
@@ -2249,9 +2287,11 @@ def build_collection_rdf_graph(
     """
     g = Graph()
     g.bind("frbr", FRBR)
+    g.bind("frbrer", FRBRER)
     g.bind("sioc", SIOC)
     g.bind("schema", SCHEMA)
     g.bind("prov", PROV)
+    g.bind("iqoqo", IQOQO)
 
     for item in items:
         # Resolve whether dict or db object
@@ -2264,8 +2304,12 @@ def build_collection_rdf_graph(
             authors = item.get("authors", [])
             tags = item.get("tags", [])
             status = item.get("status")
+            collection_status = item.get("collection_status")
+            condition = item.get("condition")
             work_id = item.get("work_id", manifestation_id)
             content_type = item.get("content_type")
+            expression_kind = item.get("expression_kind")
+            expression_meta = item.get("expression_meta") or {}
             publisher = item.get("publisher")
             language = item.get("language")
             publication_date = item.get("publication_date") or item.get("date_published") or item.get("year")
@@ -2282,7 +2326,11 @@ def build_collection_rdf_graph(
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                collection_status = getattr(item, "collection_status", None)
+                condition = getattr(item, "condition", None)
                 content_type = None
+                expression_kind = None
+                expression_meta: dict[str, Any] = {}
                 publisher = None
                 language = None
                 publication_date = None
@@ -2305,6 +2353,8 @@ def build_collection_rdf_graph(
                         expression_id = m.expression.id
                         work_id = m.expression.work_id
                         content_type = m.expression.content_type
+                        expression_kind = m.expression.kind
+                        expression_meta = m.expression.meta or {}
                         language = getattr(m.expression, "language", None)
                         if m.expression.work:
                             work_id = m.expression.work.id
@@ -2327,27 +2377,32 @@ def build_collection_rdf_graph(
                 expression_id = item.id
                 work_id = item.work_id
                 content_type = getattr(item, "content_type", None)
+                expression_kind = getattr(item, "kind", None)
+                expression_meta = getattr(item, "meta", None) or {}
                 w_title = getattr(item.work, "title", "Untitled") if getattr(item, "work", None) else "Untitled"
                 authors = []
                 if getattr(item, "work", None) and item.work.meta:
                     authors = item.work.meta.get("authors", []) or item.work.meta.get("Authors", [])
 
-                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
-                e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
+                w_uri = _frbr_uri("work", work_id, base_url)
+                e_uri = _frbr_uri("expression", expression_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(w_title)))
                 for author in authors:
-                    g.add((w_uri, FRBR.creator, Literal(author)))
-                    g.add((w_uri, SCHEMA.author, Literal(author)))
+                    author_node = BNode()
+                    g.add((author_node, RDF.type, SCHEMA.Person))
+                    g.add((author_node, SCHEMA.name, Literal(author)))
+                    g.add((w_uri, FRBRER.creator, author_node))
+                    g.add((w_uri, SCHEMA.author, author_node))
                 g.add((e_uri, RDF.type, FRBR.Expression))
-                g.add((e_uri, FRBR.expressionOf, w_uri))
+                g.add((e_uri, FRBRER.expressionOf, w_uri))
 
                 for m_elem in getattr(item, "manifestations", []):
-                    m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                    m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                     g.add((m_uri, RDF.type, FRBR.Manifestation))
                     g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-                    g.add((m_uri, FRBR.embodimentOf, e_uri))
+                    g.add((m_uri, FRBRER.embodimentOf, e_uri))
                     if m_elem.title:
                         g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                     if m_elem.isbn13:
@@ -2368,23 +2423,26 @@ def build_collection_rdf_graph(
                 if getattr(item, "meta", None):
                     authors = item.meta.get("authors", []) or item.meta.get("Authors", [])
 
-                w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+                w_uri = _frbr_uri("work", work_id, base_url)
                 g.add((w_uri, RDF.type, FRBR.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(title)))
                 for author in authors:
-                    g.add((w_uri, FRBR.creator, Literal(author)))
-                    g.add((w_uri, SCHEMA.author, Literal(author)))
+                    author_node = BNode()
+                    g.add((author_node, RDF.type, SCHEMA.Person))
+                    g.add((author_node, SCHEMA.name, Literal(author)))
+                    g.add((w_uri, FRBRER.creator, author_node))
+                    g.add((w_uri, SCHEMA.author, author_node))
 
                 for expr_elem in getattr(item, "expressions", []):
-                    e_uri = URIRef(f"{base_url}/api/public/expressions/{expr_elem.id}")
+                    e_uri = _frbr_uri("expression", expr_elem.id, base_url)
                     g.add((e_uri, RDF.type, FRBR.Expression))
-                    g.add((e_uri, FRBR.expressionOf, w_uri))
+                    g.add((e_uri, FRBRER.expressionOf, w_uri))
                     for m_elem in getattr(expr_elem, "manifestations", []):
-                        m_uri = URIRef(f"{base_url}/api/public/manifestations/{m_elem.id}")
+                        m_uri = _frbr_uri("manifestation", m_elem.id, base_url)
                         g.add((m_uri, RDF.type, FRBR.Manifestation))
                         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
-                        g.add((m_uri, FRBR.embodimentOf, e_uri))
+                        g.add((m_uri, FRBRER.embodimentOf, e_uri))
                         if m_elem.title:
                             g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                         if m_elem.isbn13:
@@ -2409,7 +2467,11 @@ def build_collection_rdf_graph(
                 authors = []
                 tags = []
                 status = getattr(item, "status", None)
+                collection_status = getattr(item, "collection_status", None)
+                condition = getattr(item, "condition", None)
                 content_type = None
+                expression_kind = None
+                expression_meta = {}
                 publisher = getattr(item, "publisher", None)
                 language = None
                 publication_date = (
@@ -2424,6 +2486,8 @@ def build_collection_rdf_graph(
                     expression_id = expr.id
                     work_id = expr.work_id
                     content_type = expr.content_type
+                    expression_kind = expr.kind
+                    expression_meta = expr.meta or {}
                     language = getattr(expr, "language", None)
                     if expr.work:
                         work_id = expr.work.id
@@ -2442,9 +2506,9 @@ def build_collection_rdf_graph(
                 if work_id is None:
                     work_id = expression_id
 
-        m_uri = URIRef(f"{base_url}/api/public/manifestations/{manifestation_id}")
-        e_uri = URIRef(f"{base_url}/api/public/expressions/{expression_id}")
-        w_uri = URIRef(f"{base_url}/api/public/works/{work_id}")
+        m_uri = _frbr_uri("manifestation", manifestation_id, base_url)
+        e_uri = _frbr_uri("expression", expression_id, base_url)
+        w_uri = _frbr_uri("work", work_id, base_url)
 
         # FRBR Core Declarations
         g.add((m_uri, RDF.type, FRBR.Manifestation))
@@ -2452,8 +2516,8 @@ def build_collection_rdf_graph(
         g.add((w_uri, RDF.type, FRBR.Work))
 
         # Manifestation embodies Expression, Expression is expression of Work
-        g.add((m_uri, FRBR.embodimentOf, e_uri))
-        g.add((e_uri, FRBR.expressionOf, w_uri))
+        g.add((m_uri, FRBRER.embodimentOf, e_uri))
+        g.add((e_uri, FRBRER.expressionOf, w_uri))
 
         # High-level Schema.org Mapping for AI Agent Interoperability
         g.add((m_uri, RDF.type, SCHEMA.CreativeWork))
@@ -2488,9 +2552,14 @@ def build_collection_rdf_graph(
                 _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
         for author in authors:
-            g.add((m_uri, SCHEMA.author, Literal(author)))
-            g.add((w_uri, FRBR.creator, Literal(author)))
-            g.add((w_uri, SCHEMA.author, Literal(author)))
+            author_name = author.get("name") if isinstance(author, dict) else author
+            if not author_name:
+                continue
+            author_node = BNode()
+            g.add((author_node, RDF.type, SCHEMA.Person))
+            g.add((author_node, SCHEMA.name, Literal(str(author_name))))
+            g.add((w_uri, FRBRER.creator, author_node))
+            g.add((w_uri, SCHEMA.author, author_node))
 
         # SIOC Semantics for Tagging / Folksonomy categorization
         for tag in tags:
@@ -2498,14 +2567,19 @@ def build_collection_rdf_graph(
 
         # Handle specific item tracking if item instances exist
         if item_id:
-            i_uri = URIRef(f"{base_url}/api/public/items/{item_id}")
+            i_uri = _frbr_uri("item", item_id, base_url)
             g.add((i_uri, RDF.type, FRBR.Item))
-            g.add((i_uri, FRBR.exemplarOf, m_uri))
+            g.add((i_uri, FRBRER.exemplarOf, m_uri))
             if status:
-                g.add((i_uri, SCHEMA.itemCondition, Literal(status)))
+                g.add((i_uri, IQOQO.status, Literal(status)))
+            if collection_status:
+                g.add((i_uri, IQOQO.collection_status, Literal(collection_status)))
+            if condition:
+                g.add((i_uri, IQOQO.condition, Literal(condition)))
 
         # Specialized domain mapping for Concerts
-        is_concert = (content_type in ("concert", "live_performance")) or (isinstance(item, dict) and item.get("is_concert"))
+        is_concert = content_type == "concert" or expression_kind == EXPRESSION_KIND_LIVE_PERFORMANCE
+        is_concert = is_concert or (isinstance(item, dict) and item.get("is_concert"))
         if not is_concert and not isinstance(item, dict):
             expr = getattr(item, "expression", None) or (
                 item.manifestation.expression if hasattr(item, "manifestation") and item.manifestation else None
@@ -2520,21 +2594,25 @@ def build_collection_rdf_graph(
             g.add((m_uri, RDF.type, SCHEMA.MusicEvent))
             p_list = None
             if isinstance(item, dict):
-                p_list = item.get("performers") or item.get("performer") or authors
-                c_date = item.get("start_date") or item.get("date") or publication_date
+                p_list = item.get("performers") or item.get("performer")
+                c_date = item.get("start_date") or item.get("performance_date")
                 c_loc = item.get("location") or item.get("venue")
             else:
-                m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
-                meta_dict = (m_obj.meta or {}) if m_obj else {}
-                p_list = meta_dict.get("performers") or meta_dict.get("performer") or authors
-                c_date = meta_dict.get("start_date") or meta_dict.get("event_date") or publication_date
+                meta_dict = expression_meta if isinstance(expression_meta, dict) else {}
+                p_list = []
+                c_date = meta_dict.get("start_date") or meta_dict.get("performance_date") or meta_dict.get("event_date")
                 c_loc = meta_dict.get("location") or meta_dict.get("venue")
 
             if p_list:
                 if isinstance(p_list, str):
                     p_list = [p_list]
                 for p in p_list:
-                    g.add((m_uri, SCHEMA.performer, Literal(str(p))))
+                    performer_name = p.get("name") if isinstance(p, dict) else p
+                    if performer_name:
+                        performer_node = BNode()
+                        g.add((performer_node, RDF.type, SCHEMA.Person))
+                        g.add((performer_node, SCHEMA.name, Literal(str(performer_name))))
+                        g.add((m_uri, SCHEMA.performer, performer_node))
             if c_date:
                 g.add((m_uri, SCHEMA.startDate, Literal(str(c_date))))
             if c_loc:

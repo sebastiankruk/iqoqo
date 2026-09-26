@@ -135,6 +135,22 @@
     rdfs:range :ProgressStatus ;
     rdfs:label "hasProgressStatus" .
 
+iqoqo:status a owl:DatatypeProperty ;
+    rdfs:label "item progress status" ;
+    rdfs:comment "Legacy progress status stored on an Item; it is not an item condition." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
+iqoqo:collection_status a owl:DatatypeProperty ;
+    rdfs:label "item collection status" ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
+iqoqo:condition a owl:DatatypeProperty ;
+    rdfs:label "item condition detail" ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
 :applicableToCategory a owl:ObjectProperty ;
     rdfs:domain :ProgressStatus ;
     rdfs:range :MediaCategory ;
@@ -591,4 +607,3 @@ iqoqo:FeedbackComment a owl:Class ;
     rdfs:comment "Timestamp when the audit log was recorded." ;
     rdfs:domain :EntityAuditLog ;
     rdfs:range xsd:dateTime .
-

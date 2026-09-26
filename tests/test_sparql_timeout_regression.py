@@ -167,7 +167,7 @@ class TestSPARQLQueryCompletionWithRealisticData:
         complex_query = """
         SELECT ?title ?status
         WHERE {
-            ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
+            ?item a <http://purl.org/vocab/frbr/core#Item> .
             ?item <http://purl.org/dc/terms/title> ?title .
             ?item <http://purl.org/ontology/bibo/status> ?status .
             FILTER (CONTAINS(LCASE(?title), "book"))
@@ -210,7 +210,7 @@ class TestSPARQLQueryCompletionWithRealisticData:
             ?item <http://purl.org/dc/terms/title> ?title .
         }
         WHERE {
-            ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
+            ?item a <http://purl.org/vocab/frbr/core#Item> .
             ?item <http://purl.org/dc/terms/title> ?title .
         }
         LIMIT 100
@@ -245,7 +245,7 @@ class TestSPARQLQueryCompletionWithRealisticData:
         graph = build_graph(items, "http://localhost:5000")
 
         # ASK query
-        ask_query = "ASK { ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> }"
+        ask_query = "ASK { ?item a <http://purl.org/vocab/frbr/core#Item> }"
 
         start = time.time()
         result = execute_sparql(graph, ask_query)
@@ -564,7 +564,7 @@ class TestSPARQLProductionDataVolumeSimulation:
         query = """
         SELECT ?title ?status
         WHERE {
-            ?item a <http://iflastandards.info/ns/frbr/frbrer/Item> .
+            ?item a <http://purl.org/vocab/frbr/core#Item> .
             ?item <http://purl.org/dc/terms/title> ?title .
             ?item <http://purl.org/ontology/bibo/status> ?status .
         }
