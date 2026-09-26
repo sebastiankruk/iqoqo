@@ -93,6 +93,12 @@ const mockDeleteMutation = {
   context: undefined,
 };
 
+const mockAddChildMutation = {
+  mutateAsync: vi.fn().mockResolvedValue({ id: 99 }),
+  mutate: vi.fn(),
+  isPending: false,
+};
+
 vi.mock("@/lib/api/hooks", () => ({
   useWorkParts: vi.fn(() => ({
     data: { data: [] },
@@ -111,6 +117,7 @@ vi.mock("@/lib/api/hooks", () => ({
   })),
   useUpdateFrbrEntity: vi.fn(() => mockUpdateMutation),
   useDeleteFrbrEntity: vi.fn(() => mockDeleteMutation),
+  useAddFrbrChild: vi.fn(() => mockAddChildMutation),
   useUserSearch: vi.fn(() => ({
     data: [],
     isLoading: false,
