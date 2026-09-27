@@ -108,6 +108,8 @@ export const queryKeys = {
       ownership?.join(",") ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  semanticLinks: (manifestationId: number) => ["manifestation", manifestationId, "semantic-links"] as const,
+
   worksShelf: (
     query?: string,
     category?: string,

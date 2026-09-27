@@ -25,6 +25,7 @@ import subprocess
 from collections.abc import Callable
 from typing import Any
 
+import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
@@ -250,3 +251,76 @@ def refresh_taxonomies_cache() -> dict[str, Any]:
     cache_key = "taxonomies:global:/api/taxonomies?"
     cache.set(cache_key, {"success": True, "data": data}, timeout=3600)
     return {"status": "refreshed", "data": data}
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.link_manifestation_lod_task",
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def link_manifestation_lod_task(self, manifestation_id: int) -> dict[str, Any]:
+    """Resolve and persist Linked Open Data links for a single manifestation asynchronously."""
+    from app.core.lod_linking_service import get_manifestation_semantic_links_dict, resolve_manifestation_links
+
+    self.update_state(state="STARTED", meta={"manifestation_id": manifestation_id})
+    links = resolve_manifestation_links(manifestation_id)
+    summary = get_manifestation_semantic_links_dict(manifestation_id)
+    return {
+        "status": "completed",
+        "manifestation_id": manifestation_id,
+        "resolved_count": len(links),
+        "summary": summary,
+    }
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.batch_link_catalog_lod_task",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def batch_link_catalog_lod_task(
+    self,
+    manifestation_ids: list[int],
+    chunk_size: int = 10,
+    throttle_delay: float = 0.5,
+) -> dict[str, Any]:
+    """Batch reconcile Linked Open Data links for multiple catalog manifestations with chunking and throttling."""
+    import time
+
+    from app.core.lod_linking_service import resolve_manifestation_links
+
+    total = len(manifestation_ids)
+    self.update_state(state="STARTED", meta={"total": total, "processed": 0, "total_resolved": 0})
+
+    processed = 0
+    total_resolved = 0
+
+    for i in range(0, total, chunk_size):
+        chunk = manifestation_ids[i : i + chunk_size]
+        for mid in chunk:
+            try:
+                links = resolve_manifestation_links(mid)
+                total_resolved += len(links)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning("Batch LOD resolution failed for manifestation %d: %s", mid, exc)
+            processed += 1
+
+        self.update_state(
+            state="PROGRESS",
+            meta={"total": total, "processed": processed, "total_resolved": total_resolved},
+        )
+        if i + chunk_size < total and throttle_delay > 0:
+            time.sleep(throttle_delay)
+
+    return {
+        "status": "completed",
+        "total": total,
+        "processed": processed,
+        "total_resolved": total_resolved,
+    }

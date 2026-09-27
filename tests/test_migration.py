@@ -453,10 +453,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_1_oauth_exchange_codes"
+    assert heads[0] == "v0_8_2_semantic_links"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_2_semantic_links",
         "v0_8_1_oauth_exchange_codes",
         "v0_8_1_security_constraints",
         "v0_8_1_lending_self_borrow",
@@ -993,5 +994,54 @@ def test_v0_8_1_oauth_exchange_codes_upgrade_and_downgrade() -> None:
 
         run_migration(migration.downgrade)
         assert not sa.inspect(engine).has_table("oauth_exchange_codes")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_semantic_links_upgrade_and_downgrade() -> None:
+    """The semantic_links table is reversible and creates proper columns and indexes."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_2_semantic_links")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        assert inspector.has_table("semantic_links")
+        assert {
+            "id",
+            "entity_type",
+            "entity_id",
+            "authority",
+            "external_uri",
+            "pref_label",
+            "confidence",
+            "match_strategy",
+            "attributes",
+            "verified",
+            "created_at",
+            "updated_at",
+        } <= {column["name"] for column in inspector.get_columns("semantic_links")}
+        indexes = {idx["name"] for idx in inspector.get_indexes("semantic_links")}
+        assert "ix_semantic_links_entity" in indexes
+        assert "ix_semantic_links_authority_uri" in indexes
+
+        run_migration(migration.downgrade)
+        assert not sa.inspect(engine).has_table("semantic_links")
     finally:
         engine.dispose()

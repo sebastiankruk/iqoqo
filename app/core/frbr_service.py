@@ -461,6 +461,14 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     )
     db.session.add(manifestation)
     db.session.commit()
+
+    try:
+        from app.core.tasks import link_manifestation_lod_task
+
+        link_manifestation_lod_task.delay(manifestation.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        _logger_frbr.debug("Failed to dispatch LOD task for manifestation %d: %s", manifestation.id, exc)
+
     return manifestation
 
 

@@ -462,5 +462,32 @@
       "lookupFailed": "Nie udało się znaleźć tej pozycji. Spróbuj ponownie.",
       "cameraUnavailable": "Aparat jest niedostępny"
     }
+  },
+  "SemanticLinks": {
+    "title": "Połączone otwarte dane",
+    "description": "Zewnętrzne powiązania grafu wiedzy semantycznej połączone z tym dziełem i wydaniem.",
+    "scanButton": "Skanuj zewnętrzne LOD",
+    "scanning": "Skanowanie LOD...",
+    "scanStarted": "Zaplanowano uzgadnianie w tle.",
+    "scanFailed": "Nie udało się uruchomić uzgadniania LOD.",
+    "noLinks": "Brak zewnętrznych powiązań Linked Open Data.",
+    "noLinksHint": "Przeskanuj zewnętrzne autorytety, aby wzbogacić o encje DBpedia, GeoNames i WordNet.",
+    "confidence": "{score}% pewności",
+    "verified": "Zweryfikowany",
+    "unverified": "Dopasowany automatycznie",
+    "deleteLink": "Usuń powiązanie",
+    "linkDeleted": "Usunięto powiązanie semantyczne.",
+    "deleteFailed": "Nie udało się usunąć powiązania semantycznego.",
+    "authorities": {
+      "dbpedia": "DBpedia",
+      "geonames": "GeoNames",
+      "wordnet": "WordNet",
+      "other": "Zewnętrzny autorytet"
+    },
+    "levels": {
+      "work": "Poziom dzieła",
+      "manifestation": "Poziom wydania"
+    }
   }
 }
+

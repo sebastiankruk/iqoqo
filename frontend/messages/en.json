@@ -462,5 +462,32 @@
       "lookupFailed": "Could not look up this item. Please try again.",
       "cameraUnavailable": "Camera unavailable"
     }
+  },
+  "SemanticLinks": {
+    "title": "Linked Open Data",
+    "description": "External semantic knowledge graph links connected to this work and edition.",
+    "scanButton": "Scan External LOD",
+    "scanning": "Scanning LOD...",
+    "scanStarted": "LOD background reconciliation scheduled.",
+    "scanFailed": "Failed to trigger LOD reconciliation.",
+    "noLinks": "No external Linked Open Data authorities linked yet.",
+    "noLinksHint": "Scan external authorities to enrich with DBpedia, GeoNames, and WordNet entities.",
+    "confidence": "{score}% confidence",
+    "verified": "Verified",
+    "unverified": "Auto-matched",
+    "deleteLink": "Remove link",
+    "linkDeleted": "Semantic link removed.",
+    "deleteFailed": "Failed to remove semantic link.",
+    "authorities": {
+      "dbpedia": "DBpedia",
+      "geonames": "GeoNames",
+      "wordnet": "WordNet",
+      "other": "External Authority"
+    },
+    "levels": {
+      "work": "Work Level",
+      "manifestation": "Edition Level"
+    }
   }
 }
+

@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
+import { SemanticLinks } from "@/components/manifestation/semantic-links";
 import { useTranslations } from "next-intl";
 
 /** Props for the client manifestation detail view. */
@@ -508,6 +509,9 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 <ManifestationActions manifestation={manifestation} />
               </div>
             )}
+
+            {/* Linked Open Data (LOD) Entities */}
+            <SemanticLinks manifestationId={manifestation.id} canEdit={!!userProfile} />
           </div>
         </div>
 

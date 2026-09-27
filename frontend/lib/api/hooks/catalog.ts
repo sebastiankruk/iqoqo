@@ -26,7 +26,9 @@ import type {
   ExpressionShelfEntry,
   WorkPartEntry,
   TaxonomiesResponse,
+  SemanticLinksData,
 } from "@/types/frbr";
+
 import { queryKeys } from "./query-keys";
 
 /**
@@ -857,6 +859,65 @@ export function useTaxonomies(options?: { scope?: "global" | "user"; filters?: R
       return res.data.data;
     },
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Custom hook to fetch Linked Open Data external semantic links for a manifestation.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns Query result containing SemanticLinksData.
+ */
+export function useSemanticLinks(manifestationId: number) {
+  return useQuery({
+    queryKey: queryKeys.semanticLinks(manifestationId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<SemanticLinksData>>(
+        `/manifestations/${manifestationId}/semantic-links`
+      );
+      return res.data.data;
+    },
+    enabled: !!manifestationId && manifestationId > 0,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Mutation hook to trigger on-demand background LOD re-linking for a manifestation.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns TanStack Mutation result object.
+ */
+export function useTriggerRelink(manifestationId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post<ApiResponse<{ task_id: string; message: string; status: string }>>(
+        `/manifestations/${manifestationId}/semantic-links/relink`
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.semanticLinks(manifestationId) });
+    },
+  });
+}
+
+/**
+ * Mutation hook to delete/dismiss an incorrect semantic link.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns TanStack Mutation result object.
+ */
+export function useDeleteSemanticLink(manifestationId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (linkId: number) => {
+      await apiClient.delete(`/manifestations/${manifestationId}/semantic-links/${linkId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.semanticLinks(manifestationId) });
+    },
   });
 }
 
