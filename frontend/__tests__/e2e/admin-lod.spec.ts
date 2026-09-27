@@ -195,17 +195,28 @@ test.describe("LOD Reconciliation Dashboard End-to-End Suite", () => {
 
     await expect(page.getByRole("heading", { name: /LOD reconciliation/i })).toBeVisible();
 
+    const startButton = page.getByTestId("lod-start-scan-button");
+    // By default, "unlinked only" is active
+    await expect(startButton).toContainText(/Scan unlinked/i);
+
     // Open options dropdown
     const optionsButton = page.getByTestId("lod-scan-options-button");
     await optionsButton.click();
 
-    // Toggle "Unlinked entities only"
+    // Toggle off "Unlinked entities only" -> updates CTA to "Start full scan"
     const unlinkedOption = page.getByTestId("lod-option-unlinked-only");
     await expect(unlinkedOption).toBeVisible();
     await unlinkedOption.click();
 
-    // Primary CTA updates to "Scan unlinked only"
-    const startButton = page.getByTestId("lod-start-scan-button");
+    await expect(startButton).toContainText(/Start full scan/i);
+
+    // Toggle back on "Unlinked entities only" -> updates CTA to "Scan unlinked only"
+    if (!(await unlinkedOption.isVisible())) {
+      await optionsButton.click();
+    }
+    await expect(unlinkedOption).toBeVisible();
+    await unlinkedOption.click();
+
     await expect(startButton).toContainText(/Scan unlinked/i);
   });
 });
