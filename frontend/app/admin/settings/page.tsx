@@ -33,6 +33,7 @@ import {
   Image as ImageIcon,
   LifeBuoy,
   Code2,
+  Network,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -216,6 +217,13 @@ function SettingsContent(): React.JSX.Element {
                     href="/admin/sparql"
                   />
                 )}
+                <NavItem
+                  label="LOD Reconciliation"
+                  icon={Network}
+                  isActive={false}
+                  onClick={() => {}}
+                  href="/admin/lod"
+                />
               </nav>
             </div>
           )}

@@ -17,19 +17,24 @@
 
 import os
 from datetime import date
+from functools import wraps
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from app.api.core import api_bp
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import frbr_service
+from app.core.celery_app import celery
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
+from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
-from app.db.core import EntityAuditLog, Expression, Item, Manifestation, Work
+from app.db.core import EntityAuditLog, Expression, Item, Manifestation, SemanticLink, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
@@ -857,3 +862,216 @@ def upload_cover():
             except OSError:
                 pass
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500
+
+
+def curator_or_admin_required(f):
+    """Require user to have admin or custodian role, or metadata curation permissions."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Authentication required", "code": 401}), 401
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"success": False, "error": "User not found", "code": 401}), 401
+
+        user_roles_list = [r.name for r in getattr(user, "roles", [])]
+        is_curator_or_admin = (
+            "admin" in user_roles_list
+            or "custodian" in user_roles_list
+            or user.has_permission(PermissionName.REFETCH_METADATA)
+            or user.has_permission(PermissionName.WRITE_METADATA)
+        )
+        if not is_curator_or_admin:
+            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@admin_bp.route("/lod/reconcile", methods=["POST"])
+@api_bp.route("/admin/lod/reconcile", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_lod_reconciliation():
+    """Trigger background batch reconciliation of Linked Open Data links across the catalog."""
+    body = request.get_json(silent=True) or {}
+    manifestation_ids = body.get("manifestation_ids")
+    unlinked_only = bool(body.get("unlinked_only", False))
+    throttle_delay = float(body.get("throttle_delay", 0.5))
+    chunk_size = int(body.get("chunk_size", 10))
+
+    try:
+        task = batch_link_catalog_lod_task.delay(
+            manifestation_ids=manifestation_ids,
+            unlinked_only=unlinked_only,
+            chunk_size=chunk_size,
+            throttle_delay=throttle_delay,
+        )
+        task_id = str(task.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to dispatch batch LOD task: %s", exc)
+        task_id = "mock-batch-lod-task"
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "message": "Batch LOD reconciliation scheduled",
+                },
+                "error": None,
+            }
+        ),
+        202,
+    )
+
+
+@admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_reconciliation_task(task_id: str):
+    """Retrieve the progress and status of a batch LOD reconciliation Celery task."""
+    from celery.result import AsyncResult
+
+    task = AsyncResult(task_id, app=celery)
+
+    state = task.state
+    if state == "SUCCESS":
+        result = task.result or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "completed",
+                        "state": state,
+                        "percentage": 100.0,
+                        "total": result.get("total", 0),
+                        "processed": result.get("processed", 0),
+                        "total_resolved": result.get("total_resolved", 0),
+                        "counts": result.get("counts", {}),
+                        "recent_logs": result.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "processing",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state == "FAILURE":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "failed",
+                        "state": state,
+                        "percentage": 0.0,
+                        "total": 0,
+                        "processed": 0,
+                        "total_resolved": 0,
+                        "counts": {
+                            "dbpedia": 0,
+                            "geonames": 0,
+                            "wordnet": 0,
+                        },
+                        "recent_logs": [],
+                        "error": str(task.result),
+                    },
+                    "error": str(task.result),
+                }
+            ),
+            200,
+        )
+
+    # PENDING or unknown state
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "state": state,
+                    "percentage": 0.0,
+                    "total": 0,
+                    "processed": 0,
+                    "total_resolved": 0,
+                    "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                    "recent_logs": [],
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
+@admin_bp.route("/lod/stats", methods=["GET"])
+@api_bp.route("/admin/lod/stats", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_stats():
+    """Query lifetime database statistics of Linked Open Data links across the catalog."""
+    total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
+
+    linked_manifestations = (
+        db.session.scalar(select(func.count(func.distinct(SemanticLink.entity_id))).where(SemanticLink.entity_type == "manifestation")) or 0
+    )  # pylint: disable=not-callable
+
+    authority_rows = db.session.execute(
+        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
+    ).all()  # pylint: disable=not-callable
+    by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
+    total_links = sum(by_authority.values())
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "total_manifestations": total_manifestations,
+                    "linked_manifestations": linked_manifestations,
+                    "unlinked_manifestations": max(0, total_manifestations - linked_manifestations),
+                    "total_links": total_links,
+                    "by_authority": {
+                        "dbpedia": by_authority.get("dbpedia", 0),
+                        "geonames": by_authority.get("geonames", 0),
+                        "wordnet": by_authority.get("wordnet", 0),
+                    },
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )

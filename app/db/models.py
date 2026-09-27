@@ -57,6 +57,7 @@ from app.db.core import (  # noqa: F401
     MediaCategory,
     MediaFormat,
     MetadataRefetchLog,
+    SemanticLink,
     Tag,
     UserCollection,
     UserCollectionItem,

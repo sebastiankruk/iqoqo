@@ -166,5 +166,7 @@ export const queryKeys = {
    * @returns The query key for the FRBR tree
    */
   frbrTree: (id: number) => ["admin", "frbr", "tree", id] as const,
+  lodStats: ["admin", "lod", "stats"] as const,
+  lodTaskStatus: (taskId: string | null) => ["admin", "lod", "task", taskId] as const,
   config: ["config"] as const,
 };

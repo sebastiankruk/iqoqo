@@ -15,6 +15,12 @@
 //
 import { apiFetch, apiClient } from "./client";
 import type { ApiResponse, FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/types/frbr";
+import type {
+  LODReconciliationTaskStatus,
+  LODStats,
+  LODReconciliationTriggerParams,
+  LODReconciliationTriggerResponse,
+} from "@/types/admin";
 
 export interface AdminUser {
   id: string;
@@ -560,6 +566,56 @@ export async function splitFrbrEntity(payload: FrbrSplitPayload): Promise<{ id: 
   const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/split", payload);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to split FRBR entity");
+  }
+  return res.data.data;
+}
+
+// ---------------------------------------------------------------------------
+// Linked Open Data (LOD) Reconciliation Management API Client
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger background batch reconciliation of Linked Open Data links across the catalog.
+ *
+ * @param params - Optional reconciliation filter and throttling parameters
+ * @returns The scheduled task information
+ */
+export async function triggerLodReconciliation(
+  params?: LODReconciliationTriggerParams
+): Promise<LODReconciliationTriggerResponse> {
+  const res = await apiClient.post<ApiResponse<LODReconciliationTriggerResponse>>(
+    "/v1/admin/lod/reconcile",
+    params ?? {}
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to trigger LOD reconciliation");
+  }
+  return res.data.data;
+}
+
+/**
+ * Retrieve the status and progress of a batch LOD reconciliation task.
+ *
+ * @param taskId - The Celery task ID
+ * @returns The task status and metrics
+ */
+export async function getLodTaskStatus(taskId: string): Promise<LODReconciliationTaskStatus> {
+  const res = await apiClient.get<ApiResponse<LODReconciliationTaskStatus>>(`/v1/admin/lod/tasks/${taskId}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch LOD task status");
+  }
+  return res.data.data;
+}
+
+/**
+ * Retrieve lifetime statistics for Linked Open Data links in the catalog.
+ *
+ * @returns Aggregate LOD link counts by authority
+ */
+export async function getLodStats(): Promise<LODStats> {
+  const res = await apiClient.get<ApiResponse<LODStats>>("/v1/admin/lod/stats");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch LOD stats");
   }
   return res.data.data;
 }
