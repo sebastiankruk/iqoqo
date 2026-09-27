@@ -324,11 +324,13 @@ def batch_link_catalog_lod_task(
     from app.core.lod_linking_service import resolve_manifestation_links
     from app.db import db
     from app.db.core import Expression, Manifestation, SemanticLink
+    from app.db.models import InstanceSettings
 
     task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
     if task_id:
         try:
             cache.set("lod:active_task_id", task_id, timeout=86400)
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
         except Exception:  # pylint: disable=broad-except
             pass
 
@@ -469,21 +471,22 @@ def batch_link_catalog_lod_task(
                 if len(recent_logs) > 50:
                     recent_logs.pop(0)
 
-            percentage = round((processed / total) * 100, 1)
-            try:
-                self.update_state(
-                    state="PROGRESS",
-                    meta={
-                        "total": total,
-                        "processed": processed,
-                        "percentage": percentage,
-                        "total_resolved": total_resolved,
-                        "counts": counts,
-                        "recent_logs": list(recent_logs),
-                    },
-                )
-            except (ValueError, AttributeError):
-                pass
+                percentage = round((processed / total) * 100, 1)
+                try:
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "total": total,
+                            "processed": processed,
+                            "percentage": percentage,
+                            "total_resolved": total_resolved,
+                            "counts": counts,
+                            "recent_logs": list(recent_logs),
+                        },
+                    )
+                except (ValueError, AttributeError):
+                    pass
+
             if i + chunk_size < total and throttle_delay > 0:
                 time.sleep(throttle_delay)
 
@@ -501,5 +504,7 @@ def batch_link_catalog_lod_task(
             try:
                 if cache.get("lod:active_task_id") == task_id:
                     cache.delete("lod:active_task_id")
+                if InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") == task_id:
+                    InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
             except Exception:  # pylint: disable=broad-except
                 pass

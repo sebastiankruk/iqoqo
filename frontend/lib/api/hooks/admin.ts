@@ -283,7 +283,10 @@ export function useLodTaskStatus(taskId: string | null) {
     enabled: Boolean(taskId),
     refetchInterval: query => {
       const status = query.state.data?.status;
-      return status === "pending" || status === "processing" ? 1500 : false;
+      if (status === "completed" || status === "failed") {
+        return false;
+      }
+      return 1500;
     },
     refetchIntervalInBackground: true,
   });
@@ -321,6 +324,7 @@ export function useActiveLodTask() {
   return useQuery({
     queryKey: queryKeys.lodActiveTask,
     queryFn: () => getActiveLodTask(),
-    staleTime: 5_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }

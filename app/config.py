@@ -73,6 +73,7 @@ class Config:
     # Protect against huge payload attacks
     MAX_CONTENT_LENGTH = _get_int_env("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)  # 16 MB max
 
+    REDIS_URL = os.environ.get("REDIS_URL")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console

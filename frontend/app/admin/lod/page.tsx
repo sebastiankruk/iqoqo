@@ -44,18 +44,35 @@ export default function LodReconciliationPage() {
   const { data: profile, isLoading: isProfileLoading } = useProfile();
 
   const { data: activeTaskData } = useActiveLodTask();
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        return localStorage.getItem("iqoqo_active_lod_task_id");
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   // Automatically reconnect to active running task on page load/reload
   useEffect(() => {
-    if (!activeTaskId && activeTaskData?.active_task_id) {
+    if (activeTaskData?.active_task_id) {
       setActiveTaskId(activeTaskData.active_task_id);
+      try {
+        localStorage.setItem("iqoqo_active_lod_task_id", activeTaskData.active_task_id);
+      } catch {
+        // ignore
+      }
     }
-  }, [activeTaskId, activeTaskData]);
+  }, [activeTaskData]);
 
   const { data: stats, isLoading: isStatsLoading, isFetching: isFetchingStats, refetch: refetchStats } = useLodStats();
   const { data: taskStatus } = useLodTaskStatus(activeTaskId);
   const triggerMutation = useTriggerLodReconciliation();
+
+  // If activeTaskData has task snapshot from /active endpoint, use it before or alongside taskStatus
+  const effectiveTaskStatus = taskStatus ?? activeTaskData?.task ?? undefined;
 
   const roles = profile?.roles ?? [];
   const permissions = profile?.permissions ?? [];
@@ -66,10 +83,21 @@ export default function LodReconciliationPage() {
     permissions.includes(PermissionName.REFETCH_METADATA) ||
     permissions.includes(PermissionName.WRITE_METADATA);
 
-  // Monitor task completion to refresh catalog statistics
+  // Monitor task completion to refresh catalog statistics and clean active storage
   useEffect(() => {
     if (taskStatus?.status === "completed") {
       refetchStats();
+      try {
+        localStorage.removeItem("iqoqo_active_lod_task_id");
+      } catch {
+        // ignore
+      }
+    } else if (taskStatus?.status === "failed") {
+      try {
+        localStorage.removeItem("iqoqo_active_lod_task_id");
+      } catch {
+        // ignore
+      }
     }
   }, [taskStatus?.status, refetchStats]);
 
@@ -87,6 +115,11 @@ export default function LodReconciliationPage() {
 
       if (result?.task_id) {
         setActiveTaskId(result.task_id);
+        try {
+          localStorage.setItem("iqoqo_active_lod_task_id", result.task_id);
+        } catch {
+          // ignore
+        }
         toast.success(result.message || t("batchControl.statusPending"));
       }
     } catch (err: unknown) {
@@ -98,6 +131,11 @@ export default function LodReconciliationPage() {
         const runningId = axiosErr.response.data?.data?.active_task_id;
         if (runningId) {
           setActiveTaskId(runningId);
+          try {
+            localStorage.setItem("iqoqo_active_lod_task_id", runningId);
+          } catch {
+            // ignore
+          }
         }
         toast.warning(axiosErr.response.data?.error || "A reconciliation scan is already running");
         return;
@@ -109,6 +147,11 @@ export default function LodReconciliationPage() {
 
   const handleCancel = () => {
     setActiveTaskId(null);
+    try {
+      localStorage.removeItem("iqoqo_active_lod_task_id");
+    } catch {
+      // ignore
+    }
     toast.info(t("batchControl.cancelScan"));
   };
 
@@ -139,7 +182,7 @@ export default function LodReconciliationPage() {
     );
   }
 
-  const isProcessing = taskStatus?.status === "processing" || taskStatus?.status === "pending";
+  const isProcessing = effectiveTaskStatus?.status === "processing" || effectiveTaskStatus?.status === "pending";
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -197,8 +240,8 @@ export default function LodReconciliationPage() {
         <section aria-label="Authority Metrics">
           <MetricCards
             stats={stats}
-            taskCounts={taskStatus?.counts}
-            totalProcessed={taskStatus?.processed}
+            taskCounts={effectiveTaskStatus?.counts}
+            totalProcessed={effectiveTaskStatus?.processed}
             isProcessing={isProcessing}
           />
         </section>
@@ -206,7 +249,7 @@ export default function LodReconciliationPage() {
         {/* 2. Batch Execution Control & Progress Bar */}
         <section aria-label="Batch Control">
           <BatchControl
-            status={taskStatus}
+            status={effectiveTaskStatus}
             isTriggering={triggerMutation.isPending}
             onTrigger={handleTrigger}
             onCancel={handleCancel}
@@ -215,7 +258,7 @@ export default function LodReconciliationPage() {
 
         {/* 3. Live Item Resolution Audit Log Stream */}
         <section aria-label="Resolution Audit Stream">
-          <AuditLogStream logs={taskStatus?.recent_logs ?? []} isLoading={isProcessing} />
+          <AuditLogStream logs={effectiveTaskStatus?.recent_logs ?? []} isLoading={isProcessing} />
         </section>
       </main>
 

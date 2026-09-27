@@ -901,7 +901,7 @@ def trigger_lod_reconciliation():
 
     from app.core.cache import cache
 
-    active_task_id = cache.get("lod:active_task_id")
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
     if active_task_id:
         active_task = AsyncResult(active_task_id, app=celery)
         if active_task.state in ("PENDING", "STARTED", "PROGRESS"):
@@ -919,6 +919,10 @@ def trigger_lod_reconciliation():
                 409,
             )
         cache.delete("lod:active_task_id")
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+        except Exception:  # pylint: disable=broad-except
+            pass
 
     body = request.get_json(silent=True) or {}
     manifestation_ids = body.get("manifestation_ids")
@@ -935,6 +939,10 @@ def trigger_lod_reconciliation():
         )
         task_id = str(task.id)
         cache.set("lod:active_task_id", task_id, timeout=86400)
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
+        except Exception:  # pylint: disable=broad-except
+            pass
     except Exception as exc:  # pylint: disable=broad-except
         current_app.logger.warning("Failed to dispatch batch LOD task: %s", exc)
         task_id = "mock-batch-lod-task"
@@ -965,7 +973,7 @@ def get_active_lod_task():
 
     from app.core.cache import cache
 
-    active_task_id = cache.get("lod:active_task_id")
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
     if not active_task_id:
         return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
@@ -1019,8 +1027,12 @@ def get_active_lod_task():
             200,
         )
 
-    # State is SUCCESS, FAILURE, or revoked; clear stale cache key
+    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
     cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
     return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
 

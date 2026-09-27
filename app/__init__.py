@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 import logging
+import os
 from typing import Any
 
 # Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
@@ -157,7 +158,7 @@ def create_app(config_class=Config, config_override=None):
     from app.core.cache import cache
     from app.core.limiter import limiter
 
-    redis_url = app.config.get("REDIS_URL")
+    redis_url = app.config.get("REDIS_URL") or os.environ.get("REDIS_URL")
     if redis_url:
         redis_available = False
         try:

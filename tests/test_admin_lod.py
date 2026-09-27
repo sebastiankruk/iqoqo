@@ -98,8 +98,10 @@ def test_lod_reconcile_access_control(app, client):
 
             # 5. Custodian user after task finishes -> 202 Accepted
             from app.core.cache import cache
+            from app.db.models import InstanceSettings
 
             cache.delete("lod:active_task_id")
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
             with (
                 patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti4", "exp": 9999999999}),
                 patch("app.api.decorators._is_token_revoked", return_value=False),
@@ -119,9 +121,11 @@ def test_lod_active_task_query(app, client):
     with app.app_context():
         custodian_user = _create_user_with_role("custodian_active@iqoqo.org", "custodian")
         from app.core.cache import cache
+        from app.db.models import InstanceSettings
 
         # When no task is active -> active_task_id is None
         cache.delete("lod:active_task_id")
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
         with (
             patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti_act1", "exp": 9999999999}),
             patch("app.api.decorators._is_token_revoked", return_value=False),
@@ -157,6 +161,7 @@ def test_lod_active_task_query(app, client):
             assert data["task"]["percentage"] == 50.0
 
         cache.delete("lod:active_task_id")
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
 
 
 def test_lod_task_status_polling(app, client):
