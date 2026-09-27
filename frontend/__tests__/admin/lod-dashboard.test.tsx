@@ -93,6 +93,7 @@ vi.mock("@/lib/api/hooks/admin", () => ({
   useLodTaskStatus: vi.fn(),
   useTriggerLodReconciliation: vi.fn(),
   useActiveLodTask: vi.fn(),
+  useCancelLodTask: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/components/dashboard/navbar-wrapper", () => ({

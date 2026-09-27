@@ -215,6 +215,8 @@ def get_faceted_stats():
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    lod_authority = request.args.get("lod_authority")
+    lod_status = request.args.get("lod_status")
 
     category_list = parse_csv_param(category_str)
     fmt_list_raw = parse_csv_param(fmt_str)
@@ -243,6 +245,8 @@ def get_faceted_stats():
         missing_id=missing_id,
         view=view,
         ownership=ownership_list,
+        lod_authority=lod_authority,
+        lod_status=lod_status,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 

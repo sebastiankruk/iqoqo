@@ -100,6 +100,8 @@ def get_manifestations() -> tuple[Response, int]:
             statuses=statuses_list,
             ownership=ownership_list,
             user_id=user_id,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
         )
 
         if result_ids:

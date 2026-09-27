@@ -386,6 +386,7 @@ export type FacetStatsResponse = {
   tag_counts: Record<string, number>;
   genre_counts: Record<string, number>;
   publisher_counts: Record<string, number>;
+  lod_counts?: Record<string, number>;
   borrowed_count?: number;
 };
 

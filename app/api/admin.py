@@ -1036,6 +1036,34 @@ def get_active_lod_task():
     return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
 
+@admin_bp.route("/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@admin_bp.route("/lod/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/cancel", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def cancel_lod_reconciliation_task(task_id: str | None = None):
+    """Cancel the active batch LOD reconciliation task."""
+    from app.core.cache import cache
+
+    target_task_id = task_id or cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+
+    if target_task_id:
+        cache.set(f"lod:cancel_task:{target_task_id}", True, timeout=86400)
+        try:
+            celery.control.revoke(target_task_id, terminate=True)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+    return jsonify({"success": True, "data": {"task_id": target_task_id}, "message": "LOD reconciliation task cancelled"}), 200
+
+
 @admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
 @api_bp.route("/admin/lod/tasks/<string:task_id>", methods=["GET"])
 @require_auth
@@ -1115,6 +1143,29 @@ def get_lod_reconciliation_task(task_id: str):
                         "error": str(task.result),
                     },
                     "error": str(task.result),
+                }
+            ),
+            200,
+        )
+
+    if state == "REVOKED":
+        meta = task.info if isinstance(task.info, dict) else {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "cancelled",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
                 }
             ),
             200,

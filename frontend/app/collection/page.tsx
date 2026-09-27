@@ -112,6 +112,8 @@ function CollectionContent() {
   const initialGenres = searchParams?.get("genres") || "";
   const initialPublishers = searchParams?.get("publishers") || "";
   const initialOwnership = searchParams?.get("ownership") || "";
+  const initialLodAuthority = searchParams?.get("lod_authority") || "";
+  const initialLodStatus = searchParams?.get("lod_status") || "";
 
   const initialCategories = searchParams?.get("category") || "";
   const initialFormats = searchParams?.get("format") || "";
@@ -125,6 +127,8 @@ function CollectionContent() {
     ...(initialCategories ? initialCategories.split(",").map(s => ({ type: "category" as const, value: s })) : []),
     ...(initialFormats ? initialFormats.split(",").map(s => ({ type: "format" as const, value: s })) : []),
     ...(initialOwnership ? initialOwnership.split(",").map(s => ({ type: "ownership" as const, value: s })) : []),
+    ...(initialLodAuthority ? [{ type: "lod_authority" as const, value: initialLodAuthority }] : []),
+    ...(initialLodStatus ? [{ type: "lod_status" as const, value: initialLodStatus }] : []),
   ];
 
   const initialViewMode = (searchParams?.get("view") || "items") as
@@ -243,6 +247,8 @@ function CollectionContent() {
     () => activeFilters.filter(f => f.type === "ownership").map(f => f.value),
     [activeFilters]
   );
+  const lodAuthorityFilter = useMemo(() => activeFilters.find(f => f.type === "lod_authority")?.value, [activeFilters]);
+  const lodStatusFilter = useMemo(() => activeFilters.find(f => f.type === "lod_status")?.value, [activeFilters]);
 
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
@@ -259,6 +265,8 @@ function CollectionContent() {
     if (ownershipFilters.length > 0) params.set("ownership", ownershipFilters.join(","));
     if (categoryFilters.length > 0) params.set("category", categoryFilters.join(","));
     if (formatFilters.length > 0) params.set("format", formatFilters.join(","));
+    if (lodAuthorityFilter) params.set("lod_authority", lodAuthorityFilter);
+    if (lodStatusFilter) params.set("lod_status", lodStatusFilter);
 
     if (appliedQuery) params.set("q", appliedQuery);
     if (viewMode !== "items") params.set("view", viewMode);
@@ -277,6 +285,8 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     ownershipFilters,
+    lodAuthorityFilter,
+    lodStatusFilter,
     appliedQuery,
     viewMode,
     isLoggedIn,
@@ -312,7 +322,9 @@ function CollectionContent() {
     collectionFilters,
     genreFilters,
     publisherFilters,
-    false
+    false,
+    lodAuthorityFilter,
+    lodStatusFilter
   );
 
   const {
@@ -334,7 +346,9 @@ function CollectionContent() {
     genreFilters,
     publisherFilters,
     statusFilters,
-    ownershipFilters
+    ownershipFilters,
+    lodAuthorityFilter,
+    lodStatusFilter
   );
 
   const {
@@ -386,6 +400,8 @@ function CollectionContent() {
     if (publisherFilters.length > 0) f.publishers = publisherFilters.join(",");
     if (ownershipFilters.length > 0) f.ownership = ownershipFilters.join(",");
     if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
+    if (lodAuthorityFilter) f.lod_authority = lodAuthorityFilter;
+    if (lodStatusFilter) f.lod_status = lodStatusFilter;
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
@@ -401,6 +417,8 @@ function CollectionContent() {
     publisherFilters,
     ownershipFilters,
     statusFilters,
+    lodAuthorityFilter,
+    lodStatusFilter,
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
@@ -773,6 +791,7 @@ function CollectionContent() {
                 genreCounts={facetStatsData?.genre_counts}
                 publisherCounts={facetStatsData?.publisher_counts}
                 borrowedCount={facetStatsData?.borrowed_count}
+                lodCounts={facetStatsData?.lod_counts}
               />
             </div>
           </div>
@@ -1120,6 +1139,8 @@ function CollectionContent() {
         collectionCounts={facetStatsData?.collection_counts}
         genreCounts={facetStatsData?.genre_counts}
         publisherCounts={facetStatsData?.publisher_counts}
+        borrowedCount={facetStatsData?.borrowed_count}
+        lodCounts={facetStatsData?.lod_counts}
       />
     </div>
   );

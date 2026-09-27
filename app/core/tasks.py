@@ -430,6 +430,36 @@ def batch_link_catalog_lod_task(
         for i in range(0, total, chunk_size):
             chunk = manifestation_ids[i : i + chunk_size]
             for mid in chunk:
+                if task_id and (
+                    cache.get(f"lod:cancel_task:{task_id}")
+                    or (cache.get("lod:active_task_id") != task_id and InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") != task_id)
+                ):
+                    logger.info("Batch LOD reconciliation task %s cancelled by user request", task_id)
+                    percentage = round((processed / total) * 100, 1) if total > 0 else 0.0
+                    try:
+                        self.update_state(
+                            state="REVOKED",
+                            meta={
+                                "total": total,
+                                "processed": processed,
+                                "percentage": percentage,
+                                "total_resolved": total_resolved,
+                                "counts": counts,
+                                "recent_logs": list(recent_logs),
+                            },
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+                    return {
+                        "status": "cancelled",
+                        "total": total,
+                        "processed": processed,
+                        "percentage": percentage,
+                        "total_resolved": total_resolved,
+                        "counts": counts,
+                        "recent_logs": list(recent_logs),
+                    }
+
                 item_title = f"Manifestation #{mid}"
                 try:
                     manif = db.session.get(Manifestation, mid)

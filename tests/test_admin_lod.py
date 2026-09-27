@@ -301,3 +301,31 @@ def test_manifestation_lod_filtering(app, client):
         ids_unlinked = [item["id"] for item in resp_unlinked.get_json()["data"]]
         assert m_unlinked.id in ids_unlinked
         assert m_linked.id not in ids_unlinked
+
+
+def test_lod_cancel_task(app, client):
+    """Test POST /api/v1/admin/lod/cancel and POST /api/v1/admin/lod/tasks/<task_id>/cancel."""
+    with app.app_context():
+        admin_user = _create_user_with_role("admin_cancel@iqoqo.org", "admin")
+        from app.core.cache import cache
+        from app.db.models import InstanceSettings
+
+        cache.set("lod:active_task_id", "task-to-cancel-789", timeout=86400)
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", "task-to-cancel-789")
+
+        with (
+            patch("jwt.decode", return_value={"sub": str(admin_user.id), "jti": "jti5", "exp": 9999999999}),
+            patch("app.api.decorators._is_token_revoked", return_value=False),
+            patch("app.api.admin.celery.control.revoke") as mock_revoke,
+        ):
+            resp = client.post(
+                "/api/v1/admin/lod/cancel",
+                headers={"Authorization": "Bearer mock-token"},
+            )
+            assert resp.status_code == 200
+            assert resp.get_json()["success"] is True
+            assert resp.get_json()["data"]["task_id"] == "task-to-cancel-789"
+            mock_revoke.assert_called_once_with("task-to-cancel-789", terminate=True)
+            assert cache.get("lod:active_task_id") is None
+            assert InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") is None
+            assert cache.get("lod:cancel_task:task-to-cancel-789") is True

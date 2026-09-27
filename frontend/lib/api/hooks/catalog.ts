@@ -151,7 +151,9 @@ export function useInfiniteItems(
   collections?: string[],
   genres?: string[],
   publishers?: string[],
-  includePublic = false
+  includePublic = false,
+  lodAuthority?: string,
+  lodStatus?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -173,6 +175,8 @@ export function useInfiniteItems(
       missingCover,
       missingId,
       includePublic,
+      lodAuthority,
+      lodStatus,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -190,6 +194,8 @@ export function useInfiniteItems(
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (includePublic) params.include_public = true;
+      if (lodAuthority) params.lod_authority = lodAuthority;
+      if (lodStatus) params.lod_status = lodStatus;
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
@@ -287,7 +293,9 @@ export function useInfiniteManifestations(
   genres?: string[],
   publishers?: string[],
   statuses?: string[],
-  ownership?: string[]
+  ownership?: string[],
+  lodAuthority?: string,
+  lodStatus?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -308,6 +316,8 @@ export function useInfiniteManifestations(
       missingCover,
       missingId,
       ownership,
+      lodAuthority,
+      lodStatus,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -323,6 +333,8 @@ export function useInfiniteManifestations(
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
       if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
+      if (lodAuthority) params.lod_authority = lodAuthority;
+      if (lodStatus) params.lod_status = lodStatus;
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },

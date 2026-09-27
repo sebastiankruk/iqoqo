@@ -27,6 +27,7 @@ import {
   getLodTaskStatus,
   getActiveLodTask,
   triggerLodReconciliation,
+  cancelLodTask,
 } from "../admin";
 import type { LODReconciliationTriggerParams } from "@/types/admin";
 import { ARRAY_META_FIELDS, ensureArray } from "@/components/admin/frbr/types";
@@ -326,5 +327,26 @@ export function useActiveLodTask() {
     queryFn: () => getActiveLodTask(),
     staleTime: 0,
     refetchOnMount: "always",
+  });
+}
+
+/**
+ * Custom hook to cancel an active LOD reconciliation task.
+ *
+ * Invalidates LOD active task, task status, and stats upon success.
+ *
+ * @returns Mutation result for cancelling LOD reconciliation
+ */
+export function useCancelLodTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId?: string | null) => cancelLodTask(taskId),
+    onSuccess: data => {
+      qc.invalidateQueries({ queryKey: queryKeys.lodActiveTask });
+      qc.invalidateQueries({ queryKey: queryKeys.lodStats });
+      if (data?.task_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.lodTaskStatus(data.task_id) });
+      }
+    },
   });
 }

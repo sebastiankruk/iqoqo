@@ -640,3 +640,18 @@ export async function getActiveLodTask(): Promise<{
   }
   return res.data.data;
 }
+
+/**
+ * Cancel the active batch LOD reconciliation task.
+ *
+ * @param taskId - Optional specific task ID to cancel
+ * @returns Object with cancelled task ID
+ */
+export async function cancelLodTask(taskId?: string | null): Promise<{ task_id: string | null }> {
+  const url = taskId ? `/v1/admin/lod/tasks/${taskId}/cancel` : "/v1/admin/lod/cancel";
+  const res = await apiClient.post<ApiResponse<{ task_id: string | null }>>(url);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to cancel LOD task");
+  }
+  return res.data.data ?? { task_id: taskId ?? null };
+}

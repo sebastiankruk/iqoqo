@@ -51,6 +51,7 @@ interface SidebarFiltersProps {
   genreCounts?: Record<string, number>;
   publisherCounts?: Record<string, number>;
   borrowedCount?: number;
+  lodCounts?: Record<string, number>;
 }
 
 const collectionStatuses: { value: string; label: string; dot: string }[] = [
@@ -263,6 +264,7 @@ export function SidebarFilters({
   genreCounts,
   publisherCounts,
   borrowedCount,
+  lodCounts,
 }: SidebarFiltersProps) {
   const t = useTranslations("CollectionFilters");
   const activeCategories = activeFilters.filter(f => f.type === "category").map(f => f.value);
@@ -454,6 +456,70 @@ export function SidebarFilters({
           </div>
         </AccordionSection>
       )}
+
+      <AccordionSection
+        title={t("secLinkedData", { defaultValue: "Linked Open Data" })}
+        defaultOpen={activeFilters.some(f => f.type === "lod_authority" || f.type === "lod_status")}
+      >
+        <div className="flex flex-col gap-1">
+          {[
+            {
+              type: "lod_status" as const,
+              value: "linked",
+              label: t("lod_linked", { defaultValue: "Any Linked" }),
+              count: lodCounts?.linked,
+            },
+            {
+              type: "lod_status" as const,
+              value: "unlinked",
+              label: t("lod_unlinked", { defaultValue: "Unlinked" }),
+              count: lodCounts?.unlinked,
+            },
+            {
+              type: "lod_authority" as const,
+              value: "dbpedia",
+              label: t("lod_dbpedia", { defaultValue: "DBpedia" }),
+              count: lodCounts?.dbpedia,
+            },
+            {
+              type: "lod_authority" as const,
+              value: "geonames",
+              label: t("lod_geonames", { defaultValue: "GeoNames" }),
+              count: lodCounts?.geonames,
+            },
+            {
+              type: "lod_authority" as const,
+              value: "wordnet",
+              label: t("lod_wordnet", { defaultValue: "WordNet" }),
+              count: lodCounts?.wordnet,
+            },
+          ].map(opt => {
+            const active = isActive(activeFilters, opt.type, opt.value);
+            const count = opt.count;
+            const disabled = !active && count !== undefined && count === 0;
+            return (
+              <label
+                key={`${opt.type}-${opt.value}`}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "bg-muted text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                } ${disabled ? "opacity-50" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => onToggleFilter({ type: opt.type, value: opt.value })}
+                  disabled={disabled}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
+                />
+                <span className="flex-1 truncate">{opt.label}</span>
+                {count !== undefined && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
+              </label>
+            );
+          })}
+        </div>
+      </AccordionSection>
 
       {isLoggedIn && (
         <AccordionSection title={t("secCollectionStatus")}>

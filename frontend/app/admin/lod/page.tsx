@@ -24,7 +24,13 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/lib/api/hooks";
-import { useLodStats, useLodTaskStatus, useTriggerLodReconciliation, useActiveLodTask } from "@/lib/api/hooks/admin";
+import {
+  useLodStats,
+  useLodTaskStatus,
+  useTriggerLodReconciliation,
+  useActiveLodTask,
+  useCancelLodTask,
+} from "@/lib/api/hooks/admin";
 import { PermissionName } from "@/lib/permissions";
 import { MetricCards } from "@/components/admin/lod/metric-cards";
 import { BatchControl } from "@/components/admin/lod/batch-control";
@@ -70,6 +76,7 @@ export default function LodReconciliationPage() {
   const { data: stats, isLoading: isStatsLoading, isFetching: isFetchingStats, refetch: refetchStats } = useLodStats();
   const { data: taskStatus } = useLodTaskStatus(activeTaskId);
   const triggerMutation = useTriggerLodReconciliation();
+  const cancelMutation = useCancelLodTask();
 
   // If activeTaskData has task snapshot from /active endpoint, use it before or alongside taskStatus
   const effectiveTaskStatus = taskStatus ?? activeTaskData?.task ?? undefined;
@@ -85,7 +92,7 @@ export default function LodReconciliationPage() {
 
   // Monitor task completion to refresh catalog statistics and clean active storage
   useEffect(() => {
-    if (taskStatus?.status === "completed") {
+    if (taskStatus?.status === "completed" || taskStatus?.status === "cancelled") {
       refetchStats();
       try {
         localStorage.removeItem("iqoqo_active_lod_task_id");
@@ -145,14 +152,22 @@ export default function LodReconciliationPage() {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    const taskToCancel = activeTaskId;
     setActiveTaskId(null);
     try {
       localStorage.removeItem("iqoqo_active_lod_task_id");
     } catch {
       // ignore
     }
-    toast.info(t("batchControl.cancelScan"));
+    try {
+      await cancelMutation.mutateAsync(taskToCancel);
+      toast.info(t("batchControl.cancelScan"));
+      await refetchStats();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to cancel scan";
+      toast.error(msg);
+    }
   };
 
   if (isProfileLoading) {

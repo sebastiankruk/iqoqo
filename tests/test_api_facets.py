@@ -399,3 +399,82 @@ def test_postgresql_collection_status_grouping_reuses_coalesce_bind_parameter():
     assert len(available_bind_names) == 1
     available_placeholder = f"%({available_bind_names[0]})s"
     assert compiled.string.count(available_placeholder) == 2
+
+
+def test_lod_facets_and_filtering(client, normal_user_headers, app):
+    """Test LOD facets in /api/stats/facets and LOD filtering in /api/items and /api/manifestations."""
+    with app.app_context():
+        from app.db.models import SemanticLink, User
+
+        user = User.query.filter_by(email="test_user@iqoqo.local").first()
+
+        # Work 1 with DBpedia link
+        work1 = Work(title="Linked Work", meta={})
+        db.session.add(work1)
+        db.session.flush()
+        expr1 = Expression(work_id=work1.id, content_type="text")
+        db.session.add(expr1)
+        db.session.flush()
+        man1 = Manifestation(expression_id=expr1.id, publisher="LOD Press")
+        db.session.add(man1)
+        db.session.flush()
+        item1 = Item(manifestation_id=man1.id, owner_id=user.id, status="available")
+        db.session.add(item1)
+        db.session.flush()
+
+        link1 = SemanticLink(
+            entity_type="manifestation",
+            entity_id=man1.id,
+            authority="dbpedia",
+            external_uri="http://dbpedia.org/resource/Linked_Work",
+        )
+        db.session.add(link1)
+
+        # Work 2 without links (unlinked)
+        work2 = Work(title="Unlinked Work", meta={})
+        db.session.add(work2)
+        db.session.flush()
+        expr2 = Expression(work_id=work2.id, content_type="text")
+        db.session.add(expr2)
+        db.session.flush()
+        man2 = Manifestation(expression_id=expr2.id, publisher="Plain Press")
+        db.session.add(man2)
+        db.session.flush()
+        item2 = Item(manifestation_id=man2.id, owner_id=user.id, status="available")
+        db.session.add(item2)
+
+        db.session.commit()
+
+    # 1. Facet stats should return lod_counts
+    resp = client.get("/api/stats/facets?scope=user&view=items", headers=normal_user_headers)
+    assert resp.status_code == 200
+    facets = resp.get_json()["data"]
+    assert "lod_counts" in facets
+    lod_counts = facets["lod_counts"]
+    assert lod_counts["dbpedia"] >= 1
+    assert lod_counts["linked"] >= 1
+    assert lod_counts["unlinked"] >= 1
+
+    # 2. Filter items by lod_authority=dbpedia
+    resp_items = client.get("/api/items?lod_authority=dbpedia", headers=normal_user_headers)
+    assert resp_items.status_code == 200
+    items = resp_items.get_json()["data"]
+    item_titles = [i["title"] for i in items]
+    assert "Linked Work" in item_titles
+    assert "Unlinked Work" not in item_titles
+
+    # 3. Filter items by lod_status=unlinked
+    resp_unlinked = client.get("/api/items?lod_status=unlinked", headers=normal_user_headers)
+    assert resp_unlinked.status_code == 200
+    unlinked_items = resp_unlinked.get_json()["data"]
+    unlinked_titles = [i["title"] for i in unlinked_items]
+    assert "Unlinked Work" in unlinked_titles
+    assert "Linked Work" not in unlinked_titles
+
+    # 4. Filter manifestations by lod_authority=dbpedia
+    resp_man = client.get("/api/manifestations?lod_authority=dbpedia", headers=normal_user_headers)
+    assert resp_man.status_code == 200
+    man_data = resp_man.get_json()["data"]
+    man_titles = [m["title"] for m in man_data]
+    assert "Linked Work" in man_titles
+    assert "Unlinked Work" not in man_titles
