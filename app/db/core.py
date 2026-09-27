@@ -88,6 +88,23 @@ EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
 WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
 
+#: Controlled vocabulary for :attr:`DuplicateCandidate.entity_tier`.
+#:
+#: Duplicates are detected at the two abstract FRBR tiers where consolidation is
+#: meaningful.  ``Item`` is deliberately excluded: two Items are distinct
+#: physical or digital exemplars even when they describe the same edition.
+DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "manifestation")
+
+#: Controlled vocabulary for :attr:`DuplicateCandidate.status`.
+#:
+#: ``pending``   — awaiting administrative review.
+#: ``merged``    — the pair was consolidated into a single surviving entity.
+#: ``dismissed`` — an administrator marked the pair as a false positive.
+DUPLICATE_CANDIDATE_STATUSES: tuple[str, ...] = ("pending", "merged", "dismissed")
+DUPLICATE_STATUS_PENDING: str = "pending"
+DUPLICATE_STATUS_MERGED: str = "merged"
+DUPLICATE_STATUS_DISMISSED: str = "dismissed"
+
 
 class SemanticLink(db.Model):  # type: ignore[name-defined]
     """
@@ -858,6 +875,101 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     actor = db.relationship("User", backref="entity_audit_logs_as_actor")
+
+
+class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
+    """
+    Review queue entry for a suspected duplicate pair at the Work or Manifestation tier.
+
+    Detection is a two-stage pipeline: cheap heuristic screening prunes the
+    catalog down to plausible pairs (see :mod:`app.core.duplicate_service`), then
+    a local LLM scores each surviving pair.  Only pairs scoring above the
+    detection threshold are persisted here as ``pending`` rows for
+    administrative review in ``/admin/duplicates``.
+
+    :attr entity_tier: Either ``"work"`` or ``"manifestation"``
+        (see :data:`DUPLICATE_ENTITY_TIERS`).
+    :attr source_id: Primary key of the first entity of the pair.  The reference
+        is intentionally *not* a real foreign key: ``entity_tier`` is
+        polymorphic, so a single column cannot point at both ``catalog.works``
+        and ``catalog.manifestations``.  This mirrors the polymorphic
+        :class:`SemanticLink` pattern.  Merge code must resolve and validate the
+        entity before acting on the id.
+    :attr target_id: Primary key of the second entity of the pair.
+    :attr confidence: LLM-reported match confidence between ``0.0`` and ``1.0``.
+    :attr llm_reasoning: Verbatim rationale explaining the verdict.
+    :attr status: One of ``"pending"``, ``"merged"``, or ``"dismissed"``
+        (see :data:`DUPLICATE_CANDIDATE_STATUSES`).
+    """
+
+    __tablename__ = "duplicate_candidates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: See :data:`DUPLICATE_ENTITY_TIERS`.
+    entity_tier = db.Column(db.String(20), nullable=False)
+    #: Primary key of the first entity in the pair (polymorphic, see class docstring).
+    source_id = db.Column(db.Integer, nullable=False)
+    #: Primary key of the second entity in the pair (polymorphic, see class docstring).
+    target_id = db.Column(db.Integer, nullable=False)
+    #: LLM-assessed match probability in the closed interval ``[0.0, 1.0]``.
+    confidence = db.Column(db.Float, nullable=False, default=0.0)
+    #: Verbatim explanation of why the pair was (or was not) judged equivalent.
+    llm_reasoning = db.Column(db.Text, nullable=True)
+    #: See :data:`DUPLICATE_CANDIDATE_STATUSES`.
+    status = db.Column(db.String(20), nullable=False, default=DUPLICATE_STATUS_PENDING)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # A pair must be registered at most once regardless of which side was
+    # discovered first.  ``LEAST``/``GREATEST`` are unavailable on SQLite, so the
+    # canonical ordering is expressed as portable scalar ``CASE`` expressions
+    # that both PostgreSQL and SQLite accept inside an index.  The expressions
+    # are inlined into ``__table_args__`` so they are not mistaken for mapped
+    # class attributes.
+    __table_args__: tuple = (
+        db.CheckConstraint(
+            f"entity_tier IN ({', '.join(repr(t) for t in DUPLICATE_ENTITY_TIERS)})",
+            name="ck_duplicate_candidates_entity_tier",
+        ),
+        db.CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in DUPLICATE_CANDIDATE_STATUSES)})",
+            name="ck_duplicate_candidates_status",
+        ),
+        db.CheckConstraint("source_id <> target_id", name="ck_duplicate_candidates_distinct_entities"),
+        db.CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_duplicate_candidates_confidence_range"),
+        db.Index("ix_duplicate_candidates_status_confidence", "status", "confidence"),
+        db.Index("ix_duplicate_candidates_tier_pair", "entity_tier", "source_id", "target_id"),
+        db.Index("ix_duplicate_candidates_resolved_by_id", "resolved_by_id"),
+        db.Index(
+            "uq_duplicate_candidates_pair",
+            "entity_tier",
+            db.case((source_id <= target_id, source_id), else_=target_id),
+            db.case((source_id <= target_id, target_id), else_=source_id),
+            unique=True,
+        ),
+        *(({"schema": _INVENTORY},) if _INVENTORY else ()),
+    )
+
+    def to_dict(self) -> dict:
+        """Serialize candidate queue fields (lifecycle, not entity metadata)."""
+        return {
+            "id": self.id,
+            "entity_tier": self.entity_tier,
+            "source_id": self.source_id,
+            "target_id": self.target_id,
+            "confidence": self.confidence,
+            "llm_reasoning": self.llm_reasoning,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolved_by_id": str(self.resolved_by_id) if self.resolved_by_id else None,
+        }
 
 
 class MetadataRefetchLog(db.Model):  # type: ignore[name-defined]

@@ -18,6 +18,7 @@
 import os
 from datetime import date
 from functools import wraps
+from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
@@ -28,13 +29,21 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
-from app.core import frbr_service
+from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
-from app.db.core import EntityAuditLog, Expression, Item, Manifestation, SemanticLink, Work
+from app.db.core import (
+    DuplicateCandidate,
+    EntityAuditLog,
+    Expression,
+    Item,
+    Manifestation,
+    SemanticLink,
+    Work,
+)
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
@@ -1248,3 +1257,157 @@ def get_lod_stats():
         ),
         200,
     )
+
+
+# --- DUPLICATE DETECTION ROUTES ---
+
+
+def _duplicate_candidate_or_404(candidate_id: int) -> tuple[DuplicateCandidate | None, tuple[Any, int] | None]:
+    """Resolve a candidate id, or build the canonical 404 response.
+
+    Args:
+        candidate_id: Primary key of the requested candidate.
+
+    Returns:
+        Either ``(candidate, None)`` on success, or ``(None, response_tuple)``.
+    """
+    candidate = duplicate_service.get_candidate(candidate_id)
+    if candidate is None:
+        return None, (jsonify({"success": False, "error": "Duplicate candidate not found"}), 404)
+    return candidate, None
+
+
+@admin_bp.route("/duplicates", methods=["GET"])
+@require_auth
+@admin_required
+def list_duplicate_candidates_endpoint():
+    """List duplicate candidates for administrative review.
+
+    Filtering and pagination happen in SQL; the result set is never sliced in
+    Python.  Passing ``status=all`` returns every status, which powers the
+    history view in the review UI.
+    """
+    status_arg = request.args.get("status", "pending").strip()
+    status = None if status_arg.lower() == "all" else (status_arg or None)
+    page = request.args.get("page", 1, type=int)
+
+    try:
+        candidates, total = duplicate_service.candidate_query(
+            status=status,
+            entity_tier=request.args.get("entity_tier") or None,
+            min_confidence=request.args.get("min_confidence", type=float),
+            page=page,
+            limit=request.args.get("limit", 25, type=int),
+        )
+    except duplicate_service.DuplicateServiceError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "data": [duplicate_service.serialize_candidate(candidate) for candidate in candidates],
+            "meta": {"total": total, "page": page, "limit": len(candidates)},
+        }
+    )
+
+
+@admin_bp.route("/duplicates/<int:candidate_id>/dismiss", methods=["POST"])
+@require_auth
+@admin_required
+def dismiss_duplicate_candidate_endpoint(candidate_id: int):
+    """Dismiss a candidate as a false positive so it is never re-queued."""
+    user = _get_current_user()
+    candidate, error = _duplicate_candidate_or_404(candidate_id)
+    if error is not None:
+        return error
+
+    try:
+        duplicate_service.dismiss_candidate(candidate, user.id if user else None)
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 409
+
+    return jsonify({"success": True, "data": duplicate_service.serialize_candidate(candidate)})
+
+
+@admin_bp.route("/duplicates/scan", methods=["POST"])
+@require_auth
+@admin_required
+@limiter.limit("5 per minute")
+def run_duplicate_scan_endpoint():
+    """Trigger a detection run and queue new candidates for review.
+
+    Ollama health is verified up front so a missing prerequisite surfaces as a
+    409 with an actionable message rather than a run full of inference failures.
+    """
+    data = request.get_json(silent=True) or {}
+
+    healthy, message = duplicate_service.check_ollama_health()
+    if not healthy:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"{message.rstrip('.')}. Run 'ollama pull {duplicate_service.ollama_model()}' "
+                    "or set OLLAMA_DEDUPE_MODEL to an installed model",
+                }
+            ),
+            409,
+        )
+
+    try:
+        report = duplicate_service.run_detection(
+            tier=data.get("tier") or duplicate_service.TIER_ALL,
+            threshold=float(data.get("threshold", duplicate_service.DEFAULT_THRESHOLD)),
+            limit=data.get("limit"),
+            dry_run=bool(data.get("dry_run", False)),
+        )
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
+
+    return jsonify({"success": True, "data": report.to_dict()})
+
+
+@admin_bp.route("/duplicates/<int:candidate_id>/merge", methods=["POST"])
+@require_auth
+@admin_required
+@require_permission(PermissionName.WRITE_METADATA)
+def merge_duplicate_candidate_endpoint(candidate_id: int):
+    """Execute the FRBR merge for a candidate, keeping the selected primary entity.
+
+    The merge is transactional: any failure rolls the whole consolidation back,
+    so a half-merged pair can never be left behind.
+    """
+    user = _get_current_user()
+    candidate, error = _duplicate_candidate_or_404(candidate_id)
+    if error is not None:
+        return error
+
+    primary_id = (request.get_json(silent=True) or {}).get("primary_id")
+    if not isinstance(primary_id, int) or isinstance(primary_id, bool):
+        return jsonify({"success": False, "error": "primary_id must be an integer entity id"}), 400
+
+    try:
+        result = duplicate_service.resolve_candidate_merge(candidate, primary_id, user.id if user else None)
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.warning("Duplicate merge %s failed and was rolled back: %s", candidate_id, e)
+        return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
+    except Exception:
+        # The merge spans every referencing table, so a failure of any kind --
+        # not just a database error -- must roll the whole consolidation back
+        # rather than leave a half-merged pair behind.  ``logger.exception``
+        # records the type and traceback server-side, but nothing about it is
+        # returned, to avoid leaking connection strings or catalog content.
+        db.session.rollback()
+        current_app.logger.exception("Duplicate merge %s failed and was rolled back", candidate_id)
+        return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
+
+    return jsonify({"success": True, "data": result})

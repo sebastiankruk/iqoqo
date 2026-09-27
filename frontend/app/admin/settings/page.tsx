@@ -27,6 +27,7 @@ import {
   Key,
   Building2,
   DollarSign,
+  CopyCheck,
   Database,
   Search,
   X,
@@ -188,6 +189,15 @@ function SettingsContent(): React.JSX.Element {
                     isActive={activeTab === "metadata"}
                     onClick={() => handleTabChange("metadata")}
                     href="/admin/content?tab=metadata"
+                  />
+                )}
+                {canViewMetadata && (
+                  <NavItem
+                    label="Duplicate Review"
+                    icon={CopyCheck}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/duplicates"
                   />
                 )}
                 {canEditCover && (

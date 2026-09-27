@@ -27,6 +27,7 @@ import {
   Key,
   Building2,
   DollarSign,
+  CopyCheck,
   Database,
   Search,
   X,
@@ -181,6 +182,15 @@ function ContentManagementContent(): React.JSX.Element {
                     icon={Database}
                     isActive={effectiveTab === "metadata"}
                     onClick={() => handleTabChange("metadata")}
+                  />
+                )}
+                {canViewMetadata && (
+                  <NavItem
+                    label="Duplicate Review"
+                    icon={CopyCheck}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/duplicates"
                   />
                 )}
                 {canEditCover && (

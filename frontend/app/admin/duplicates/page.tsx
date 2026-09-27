@@ -25,12 +25,12 @@ import {
   Building2,
   DollarSign,
   Key,
-  CopyCheck,
   Database,
   Image as ImageIcon,
   Code2,
+  CopyCheck,
 } from "lucide-react";
-import { GroupManagement } from "@/components/admin/group-management";
+import { DuplicateReviewer } from "@/components/admin/duplicate-reviewer";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { cn } from "@/lib/utils";
@@ -47,7 +47,7 @@ interface NavItemProps {
 }
 
 /**
- * Navigation item for settings sidebar.
+ * Navigation item for the admin sidebar.
  * @param props - Navigation item properties
  * @param props.label - Display label
  * @param props.icon - Lucide icon component
@@ -85,11 +85,11 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
 }
 
 /**
- * Roles management page.
+ * Duplicate review page.
  *
- * @returns The roles page component
+ * @returns The duplicate review page component
  */
-export default function GroupsPage() {
+export default function DuplicatesPage() {
   const { data: profile, isLoading } = useProfile();
 
   if (isLoading || !profile) {
@@ -104,10 +104,10 @@ export default function GroupsPage() {
   const isAdmin = profile.roles?.includes("admin");
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
-  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
-  const canEditRoles = hasPermission(PermissionName.WRITE_ROLES);
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
+  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canEditMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
   const canAccessSparql =
     hasPermission(PermissionName.READ_METADATA) ||
@@ -148,7 +148,7 @@ export default function GroupsPage() {
                   <NavItem
                     label="Duplicate Review"
                     icon={CopyCheck}
-                    isActive={false}
+                    isActive={true}
                     onClick={() => {}}
                     href="/admin/duplicates"
                   />
@@ -217,7 +217,7 @@ export default function GroupsPage() {
                   />
                 )}
                 {canViewRoles && (
-                  <NavItem label="Roles" icon={BadgeCheck} isActive={true} onClick={() => {}} href="/admin/groups" />
+                  <NavItem label="Roles" icon={BadgeCheck} isActive={false} onClick={() => {}} href="/admin/groups" />
                 )}
                 {hasPermission(PermissionName.CONFIG_INTERNAL) && (
                   <NavItem
@@ -237,12 +237,13 @@ export default function GroupsPage() {
         <div className="flex-1 min-w-0 pb-20">
           <div className="flex flex-col gap-8">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Roles Management</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Duplicate Review</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Configure roles and their assigned permissions for this instance.
+                Compare flagged Works and Manifestations side by side, then keep the richer record or dismiss the false
+                positive. Merging is permanent and re-parents every child onto the surviving entity.
               </p>
             </div>
-            <GroupManagement canEdit={canEditRoles} />
+            <DuplicateReviewer canEdit={canEditMetadata} />
           </div>
         </div>
       </main>

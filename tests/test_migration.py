@@ -453,10 +453,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_2_semantic_links"
+    assert heads[0] == "v0_8_2_duplicate_candidates"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_2_duplicate_candidates",
         "v0_8_2_semantic_links",
         "v0_8_1_oauth_exchange_codes",
         "v0_8_1_security_constraints",
@@ -1043,5 +1044,132 @@ def test_v0_8_2_semantic_links_upgrade_and_downgrade() -> None:
 
         run_migration(migration.downgrade)
         assert not sa.inspect(engine).has_table("semantic_links")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_candidates_upgrade_and_downgrade() -> None:
+    """The duplicate_candidates table is reversible and creates proper columns and indexes."""
+    import warnings
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_candidates")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        assert inspector.has_table("duplicate_candidates")
+        assert {
+            "id",
+            "entity_tier",
+            "source_id",
+            "target_id",
+            "confidence",
+            "llm_reasoning",
+            "status",
+            "created_at",
+            "resolved_at",
+            "resolved_by_id",
+        } <= {column["name"] for column in inspector.get_columns("duplicate_candidates")}
+
+        # SQLite cannot reflect expression-based indexes and warns while trying,
+        # so mute that one warning and read the DDL directly instead.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", sa.exc.SAWarning)
+            indexes = {idx["name"]: idx for idx in inspector.get_indexes("duplicate_candidates")}
+        assert "ix_duplicate_candidates_status_confidence" in indexes
+        assert indexes["ix_duplicate_candidates_status_confidence"]["column_names"] == ["status", "confidence"]
+
+        # Confirm the order-insensitive unique pair index exists.
+        with engine.connect() as connection:
+            pair_index_ddl = connection.execute(
+                sa.text("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = :name"),
+                {"name": "uq_duplicate_candidates_pair"},
+            ).scalar_one()
+        assert "UNIQUE" in pair_index_ddl
+        assert "CASE WHEN source_id <= target_id THEN source_id ELSE target_id END" in pair_index_ddl
+
+        run_migration(migration.downgrade)
+        assert not sa.inspect(engine).has_table("duplicate_candidates")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_candidates_pair_index_is_order_insensitive() -> None:
+    """A pair recorded in either direction must collide on the unique index."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy.exc import IntegrityError
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_candidates")
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        previous_op = migration.op
+        migration.op = Operations(MigrationContext.configure(connection))
+        try:
+            migration.upgrade()
+        finally:
+            migration.op = previous_op
+
+    def insert_pair(source_id: int, target_id: int) -> None:
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                    "VALUES ('work', :source_id, :target_id, 0.9, 'pending')"
+                ),
+                {"source_id": source_id, "target_id": target_id},
+            )
+
+    def check_constraint_blocks(source_id: int, target_id: int) -> bool:
+        try:
+            insert_pair(source_id, target_id)
+        except IntegrityError:
+            return True
+        return False
+
+    try:
+        insert_pair(5, 9)
+        # The same pair in reverse order is the same candidate, not a new one.
+        assert check_constraint_blocks(9, 5)
+        # A different pair, tier, or self-pair must still be allowed/blocked as declared.
+        assert not check_constraint_blocks(5, 7)
+        assert not check_constraint_blocks(1, 5)
+
+        with engine.begin() as connection:
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                        "VALUES ('work', 4, 4, 0.9, 'pending')"
+                    )
+                )
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                        "VALUES ('expression', 5, 9, 0.9, 'pending')"
+                    )
+                )
     finally:
         engine.dispose()
