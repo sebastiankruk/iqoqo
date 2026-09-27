@@ -55,7 +55,7 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Total Editions */}
-      <Link href="/collection" className="group block focus:outline-none">
+      <Link href="/collection?view=manifestations" className="group block focus:outline-none">
         <Card
           data-testid="metric-card-manifestations"
           className="border-border/60 shadow-sm transition-all duration-200 group-hover:border-primary/50 group-hover:shadow-md cursor-pointer"
@@ -84,7 +84,7 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
       </Link>
 
       {/* DBpedia */}
-      <Link href="/collection?lod_authority=dbpedia" className="group block focus:outline-none">
+      <Link href="/collection?view=manifestations&lod_authority=dbpedia" className="group block focus:outline-none">
         <Card
           data-testid="metric-card-dbpedia"
           className="border-border/60 shadow-sm transition-all duration-200 group-hover:border-blue-500/50 group-hover:shadow-md cursor-pointer"
@@ -114,7 +114,7 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
       </Link>
 
       {/* GeoNames */}
-      <Link href="/collection?lod_authority=geonames" className="group block focus:outline-none">
+      <Link href="/collection?view=manifestations&lod_authority=geonames" className="group block focus:outline-none">
         <Card
           data-testid="metric-card-geonames"
           className="border-border/60 shadow-sm transition-all duration-200 group-hover:border-emerald-500/50 group-hover:shadow-md cursor-pointer"
@@ -144,7 +144,7 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
       </Link>
 
       {/* WordNet */}
-      <Link href="/collection?lod_authority=wordnet" className="group block focus:outline-none">
+      <Link href="/collection?view=manifestations&lod_authority=wordnet" className="group block focus:outline-none">
         <Card
           data-testid="metric-card-wordnet"
           className="border-border/60 shadow-sm transition-all duration-200 group-hover:border-purple-500/50 group-hover:shadow-md cursor-pointer"

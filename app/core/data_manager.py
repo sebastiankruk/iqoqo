@@ -1270,6 +1270,28 @@ class DataManager:
                 db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled").all()
             )
 
+            # Prefetch SemanticLinks for works and manifestations of user intents
+            intent_work_links: dict[Any, set[str]] = {}
+            intent_manif_links: dict[Any, set[str]] = {}
+            if intents:
+                all_w_ids = [it.work_id for it in intents if it.work_id]
+                all_m_ids = [man.id for it in intents if it.work for expr in it.work.expressions for man in expr.manifestations if man.id]
+                sem_clauses = []
+                if all_w_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "work", SemanticLink.entity_id.in_(all_w_ids)))
+                if all_m_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "manifestation", SemanticLink.entity_id.in_(all_m_ids)))
+                if sem_clauses:
+                    sem_rows = db.session.execute(
+                        select(SemanticLink.entity_type, SemanticLink.entity_id, SemanticLink.authority).where(or_(*sem_clauses))
+                    ).all()
+                    for ent_type, ent_id, auth in sem_rows:
+                        auth_lower = auth.lower() if auth else ""
+                        if ent_type == "work":
+                            intent_work_links.setdefault(ent_id, set()).add(auth_lower)
+                        elif ent_type == "manifestation":
+                            intent_manif_links.setdefault(ent_id, set()).add(auth_lower)
+
             def match_filter(f_list, item_vals):
                 if not f_list:
                     return True
@@ -1282,6 +1304,8 @@ class DataManager:
 
             for intent in intents:
                 work = intent.work
+                if not work:
+                    continue
                 intent_cats = set()
                 intent_formats = set()
                 intent_pubs = set()
@@ -1321,6 +1345,20 @@ class DataManager:
                     elif "wish_list" in statuses:
                         intent_status_match = True
 
+                # LOD match condition
+                intent_auths: set[str] = set(intent_work_links.get(work.id, set()))
+                for expr in work.expressions:
+                    for man in expr.manifestations:
+                        intent_auths.update(intent_manif_links.get(man.id, set()))
+
+                lod_match = True
+                if lod_authority:
+                    lod_match = lod_authority.lower() in intent_auths
+                elif lod_status == "linked":
+                    lod_match = len(intent_auths) > 0
+                elif lod_status == "unlinked":
+                    lod_match = len(intent_auths) == 0
+
                 # Cross-filter conditions
                 cat_match = match_filter(category, intent_cats)
                 fmt_match = match_filter(fmt, intent_formats)
@@ -1328,31 +1366,41 @@ class DataManager:
                 genre_match = match_filter(genres, intent_genres)
 
                 # category counts
-                if fmt_match and pub_match and genre_match and intent_status_match:
+                if fmt_match and pub_match and genre_match and intent_status_match and lod_match:
                     for c in intent_cats:
                         category_counts[c] = category_counts.get(c, 0) + 1
 
                 # status counts
-                if cat_match and fmt_match and pub_match and genre_match:
+                if cat_match and fmt_match and pub_match and genre_match and lod_match:
                     if intent.status in db_statuses:
                         db_statuses[intent.status] += 1
                     if "wish_list" in db_statuses:
                         db_statuses["wish_list"] += 1
 
                 # genre counts
-                if cat_match and fmt_match and pub_match and intent_status_match:
+                if cat_match and fmt_match and pub_match and intent_status_match and lod_match:
                     for g in intent_genres:
                         genre_counts[g] = genre_counts.get(g, 0) + 1
 
                 # format counts
-                if cat_match and pub_match and genre_match and intent_status_match:
+                if cat_match and pub_match and genre_match and intent_status_match and lod_match:
                     for f in intent_formats:
                         format_counts[f] = format_counts.get(f, 0) + 1
 
                 # publisher counts
-                if cat_match and fmt_match and genre_match and intent_status_match:
+                if cat_match and fmt_match and genre_match and intent_status_match and lod_match:
                     for p in intent_pubs:
                         publisher_counts[p] = publisher_counts.get(p, 0) + 1
+
+                # lod counts (cross-filtered against other active facets)
+                if cat_match and fmt_match and pub_match and genre_match and intent_status_match:
+                    if intent_auths:
+                        lod_counts["linked"] = lod_counts.get("linked", 0) + 1
+                        for a in intent_auths:
+                            if a in lod_counts:
+                                lod_counts[a] = lod_counts.get(a, 0) + 1
+                    else:
+                        lod_counts["unlinked"] = lod_counts.get("unlinked", 0) + 1
 
         return {
             "category_counts": category_counts,

@@ -443,6 +443,18 @@ def test_lod_facets_and_filtering(client, normal_user_headers, app):
         item2 = Item(manifestation_id=man2.id, owner_id=user.id, status="available")
         db.session.add(item2)
 
+        # Work 3 on wishlist without LOD links
+        from app.db.models import UserWorkIntent
+
+        work3 = Work(title="Wishlist Work", meta={})
+        db.session.add(work3)
+        db.session.flush()
+        expr3 = Expression(work_id=work3.id, content_type="text")
+        db.session.add(expr3)
+        db.session.flush()
+        intent = UserWorkIntent(user_id=user.id, work_id=work3.id, status="want_to_read")
+        db.session.add(intent)
+
         db.session.commit()
 
     # 1. Facet stats should return lod_counts
@@ -454,6 +466,13 @@ def test_lod_facets_and_filtering(client, normal_user_headers, app):
     assert lod_counts["dbpedia"] >= 1
     assert lod_counts["linked"] >= 1
     assert lod_counts["unlinked"] >= 1
+    assert facets["status_counts"]["wish_list"] >= 1
+
+    # 1b. When filtering facets by lod_authority=dbpedia, unlinked wishlist intent is NOT counted in wish_list
+    resp_dbpedia_facets = client.get("/api/stats/facets?scope=user&view=items&lod_authority=dbpedia", headers=normal_user_headers)
+    assert resp_dbpedia_facets.status_code == 200
+    dbpedia_facets = resp_dbpedia_facets.get_json()["data"]
+    assert dbpedia_facets["status_counts"].get("wish_list", 0) == 0
 
     # 2. Filter items by lod_authority=dbpedia
     resp_items = client.get("/api/items?lod_authority=dbpedia", headers=normal_user_headers)

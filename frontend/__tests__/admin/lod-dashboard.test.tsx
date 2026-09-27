@@ -178,23 +178,26 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
 
       const manifCard = screen.getByTestId("metric-card-manifestations");
       expect(manifCard).toBeInTheDocument();
-      expect(manifCard.closest("a")).toHaveAttribute("href", "/collection");
+      expect(manifCard.closest("a")).toHaveAttribute("href", "/collection?view=manifestations");
       expect(manifCard).toHaveTextContent("150");
       expect(manifCard).toHaveTextContent("120 linked · 30 unlinked");
 
       const dbpediaCard = screen.getByTestId("metric-card-dbpedia");
       expect(dbpediaCard).toBeInTheDocument();
-      expect(dbpediaCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=dbpedia");
+      expect(dbpediaCard.closest("a")).toHaveAttribute("href", "/collection?view=manifestations&lod_authority=dbpedia");
       expect(screen.getByText("140")).toBeInTheDocument();
 
       const geonamesCard = screen.getByTestId("metric-card-geonames");
       expect(geonamesCard).toBeInTheDocument();
-      expect(geonamesCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=geonames");
+      expect(geonamesCard.closest("a")).toHaveAttribute(
+        "href",
+        "/collection?view=manifestations&lod_authority=geonames"
+      );
       expect(screen.getByText("95")).toBeInTheDocument();
 
       const wordnetCard = screen.getByTestId("metric-card-wordnet");
       expect(wordnetCard).toBeInTheDocument();
-      expect(wordnetCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=wordnet");
+      expect(wordnetCard.closest("a")).toHaveAttribute("href", "/collection?view=manifestations&lod_authority=wordnet");
       expect(screen.getByText("75")).toBeInTheDocument();
     });
 
