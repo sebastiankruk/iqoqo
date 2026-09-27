@@ -519,3 +519,69 @@ def test_delete_semantic_link_api(client, normal_user_headers, app):
 
     with app.app_context():
         assert db.session.get(SemanticLink, link_id) is None
+
+
+def test_dbpedia_silmarillion_lookup_parameters_and_tags(app):
+    """Test that DBpedia lookup passes format=json, short typeName, and cleans HTML tags."""
+    with app.app_context():
+        cache.delete("lod:dbpedia:work:the silmarillion:dbo:Book")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "docs": [
+                {
+                    "resource": ["http://dbpedia.org/resource/The_Silmarillion"],
+                    "label": ["<B>The</B> <B>Silmarillion</B>"],
+                    "score": [7090.79],
+                    "comment": ["<B>The</B> <B>Silmarillion</B> is a collection of mythopoeic works by J.R.R. Tolkien"],
+                    "typeName": ["Book", "WrittenWork", "Work"],
+                }
+            ]
+        }
+
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            result = DBpediaClient.resolve_work("The Silmarillion", media_category="text")
+            assert result is not None
+            assert result["uri"] == "http://dbpedia.org/resource/The_Silmarillion"
+            assert result["label"] == "The Silmarillion"
+            assert "<B>" not in result["label"]
+            assert "<B>" not in result["attributes"]["comment"]
+            assert result["confidence"] == 0.95
+
+            # Assert request params
+            call_kwargs = mock_get.call_args[1]
+            assert call_kwargs["params"]["format"] == "json"
+            assert call_kwargs["params"]["typeName"] == "Book"
+            assert call_kwargs["params"]["query"] == "The Silmarillion"
+
+
+def test_dbpedia_subtitle_fallback_resolution(app):
+    """Test that creative works with subtitles fall back to main title on DBpedia lookup."""
+    with app.app_context():
+        cache.delete("lod:dbpedia:work:the silmarillion: illustrated edition:dbo:Book")
+
+        mock_empty = MagicMock()
+        mock_empty.status_code = 200
+        mock_empty.json.return_value = {"docs": []}
+
+        mock_hit = MagicMock()
+        mock_hit.status_code = 200
+        mock_hit.json.return_value = {
+            "docs": [
+                {
+                    "resource": ["http://dbpedia.org/resource/The_Silmarillion"],
+                    "label": ["The Silmarillion"],
+                    "score": [100.0],
+                }
+            ]
+        }
+
+        with patch("requests.get", side_effect=[mock_empty, mock_hit]) as mock_get:
+            result = DBpediaClient.resolve_work("The Silmarillion: Illustrated Edition", media_category="book")
+            assert result is not None
+            assert result["uri"] == "http://dbpedia.org/resource/The_Silmarillion"
+            assert mock_get.call_count == 2
+            # Second call should query main title
+            second_call_params = mock_get.call_args_list[1][1]["params"]
+            assert second_call_params["query"] == "The Silmarillion"

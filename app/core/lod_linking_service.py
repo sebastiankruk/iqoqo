@@ -41,9 +41,14 @@ CACHE_TTL_24H = 86400  # 24 hours in seconds
 
 MEDIA_CATEGORY_DBO_MAP: dict[str, str] = {
     "book": "dbo:Book",
+    "text": "dbo:Book",
+    "audiobook": "dbo:Book",
     "audio": "dbo:MusicalWork",
     "music": "dbo:MusicalWork",
+    "sound": "dbo:MusicalWork",
     "boardgame": "dbo:Game",
+    "board_game": "dbo:Game",
+    "game": "dbo:Game",
     "videogame": "dbo:VideoGame",
     "movie": "dbo:Film",
     "video": "dbo:Film",
@@ -189,6 +194,16 @@ class DBpediaClient:
         # Step 1: Query DBpedia Lookup API
         result = cls._query_lookup(normalized_title, type_name=dbo_type)
 
+        # Fallback 1b: If title has subtitle or parenthetical comment, retry with main title
+        if not result:
+            clean_title = re.sub(r"\(.*?\)", "", normalized_title).strip()
+            if ":" in clean_title:
+                clean_title = clean_title.split(":", 1)[0].strip()
+            elif " - " in clean_title:
+                clean_title = clean_title.split(" - ", 1)[0].strip()
+            if clean_title and clean_title != normalized_title:
+                result = cls._query_lookup(clean_title, type_name=dbo_type)
+
         # Step 2: Fallback to SPARQL if lookup yields nothing
         if not result and dbo_type:
             result = cls._query_sparql(normalized_title, dbo_type=dbo_type)
@@ -210,7 +225,7 @@ class DBpediaClient:
         if cached is not None:
             return cast(dict[str, Any], cached)
 
-        result = cls._query_lookup(normalized_name, type_name="dbo:Person")
+        result = cls._query_lookup(normalized_name, type_name="Person")
         if not result:
             result = cls._query_sparql(normalized_name, dbo_type="dbo:Person")
 
@@ -220,9 +235,10 @@ class DBpediaClient:
     @classmethod
     def _query_lookup(cls, query: str, type_name: str | None = None) -> dict[str, Any] | None:
         """Execute query against DBpedia Lookup API."""
-        params: dict[str, Any] = {"query": query, "maxResults": 5}
-        if type_name:
-            params["typeName"] = type_name
+        lookup_type = type_name.split(":")[-1] if type_name else None
+        params: dict[str, Any] = {"query": query, "maxResults": 5, "format": "json"}
+        if lookup_type:
+            params["typeName"] = lookup_type
 
         headers = {
             "Accept": "application/json",
@@ -255,6 +271,8 @@ class DBpediaClient:
             score_num = score_val[0] if isinstance(score_val, list) and score_val else score_val
             confidence = min(0.95, max(0.60, float(score_num) / 100.0)) if score_num else 0.85
 
+            comment_val = first.get("comment", [""])[0] if isinstance(first.get("comment"), list) else (first.get("comment") or "")
+
             return {
                 "uri": uri,
                 "label": re.sub(r"<[^>]+>", "", str(label)),
@@ -262,7 +280,7 @@ class DBpediaClient:
                 "strategy": "lookup",
                 "attributes": {
                     "dbo_type": type_name,
-                    "comment": (first.get("comment", [""])[0] if isinstance(first.get("comment"), list) else ""),
+                    "comment": re.sub(r"<[^>]+>", "", str(comment_val)),
                 },
             }
         except Exception as exc:  # pylint: disable=broad-except
@@ -467,7 +485,12 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
         work = manifestation.expression.work
 
     if work:
-        media_cat = getattr(manifestation, "media_category", None) or (work.meta.get("media_category") if work.meta else None)
+        media_cat = (
+            getattr(manifestation, "media_category", None)
+            or (work.meta.get("media_category") if work.meta else None)
+            or (manifestation.expression.content_type if manifestation.expression and manifestation.expression.content_type else None)
+            or (manifestation.format_type if manifestation.format_type else None)
+        )
 
         # 1a. DBpedia Work Resolution
         work_match = DBpediaClient.resolve_work(
