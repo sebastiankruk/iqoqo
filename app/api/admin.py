@@ -296,6 +296,7 @@ API_KEYS = {
     "ALLEGRO_TOKEN_DATA",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "GEONAMES_USERNAME",
 }
 
 FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
@@ -344,8 +345,8 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
             # Mask API keys but keep other external settings unmasked
             display_value = (
-                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or ""))
-                if key in API_KEYS and key != "LOCAL_SD_URL"
+                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME") else str(value or ""))
+                if key in API_KEYS and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME")
                 else str(value or "")
             )
             result[key] = {"value": display_value, "source": source}
@@ -896,9 +897,32 @@ def curator_or_admin_required(f):
 @curator_or_admin_required
 def trigger_lod_reconciliation():
     """Trigger background batch reconciliation of Linked Open Data links across the catalog."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id")
+    if active_task_id:
+        active_task = AsyncResult(active_task_id, app=celery)
+        if active_task.state in ("PENDING", "STARTED", "PROGRESS"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "A reconciliation scan is already running",
+                        "data": {
+                            "active_task_id": active_task_id,
+                            "status": "processing",
+                        },
+                    }
+                ),
+                409,
+            )
+        cache.delete("lod:active_task_id")
+
     body = request.get_json(silent=True) or {}
     manifestation_ids = body.get("manifestation_ids")
-    unlinked_only = bool(body.get("unlinked_only", False))
+    unlinked_only = bool(body.get("unlinked_only", True))
     throttle_delay = float(body.get("throttle_delay", 0.5))
     chunk_size = int(body.get("chunk_size", 10))
 
@@ -910,6 +934,7 @@ def trigger_lod_reconciliation():
             throttle_delay=throttle_delay,
         )
         task_id = str(task.id)
+        cache.set("lod:active_task_id", task_id, timeout=86400)
     except Exception as exc:  # pylint: disable=broad-except
         current_app.logger.warning("Failed to dispatch batch LOD task: %s", exc)
         task_id = "mock-batch-lod-task"
@@ -928,6 +953,75 @@ def trigger_lod_reconciliation():
         ),
         202,
     )
+
+
+@admin_bp.route("/lod/tasks/active", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/active", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_active_lod_task():
+    """Retrieve the currently executing batch LOD reconciliation task, or null."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id")
+    if not active_task_id:
+        return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
+
+    task = AsyncResult(active_task_id, app=celery)
+    state = task.state
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "processing",
+                            "state": state,
+                            "percentage": meta.get("percentage", 0.0),
+                            "total": meta.get("total", 0),
+                            "processed": meta.get("processed", 0),
+                            "total_resolved": meta.get("total_resolved", 0),
+                            "counts": meta.get("counts", {}),
+                            "recent_logs": meta.get("recent_logs", []),
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+    if state == "PENDING":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "pending",
+                            "state": state,
+                            "percentage": 0.0,
+                            "total": 0,
+                            "processed": 0,
+                            "total_resolved": 0,
+                            "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                            "recent_logs": [],
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+
+    # State is SUCCESS, FAILURE, or revoked; clear stale cache key
+    cache.delete("lod:active_task_id")
+    return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
 
 @admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
@@ -1045,9 +1139,25 @@ def get_lod_stats():
     """Query lifetime database statistics of Linked Open Data links across the catalog."""
     total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
 
+    # Count distinct manifestations with direct semantic links OR whose work has semantic links
+    manif_with_direct_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+    works_with_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+    manifs_with_linked_works = (
+        select(Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(Expression.work_id.in_(works_with_links))
+    )
     linked_manifestations = (
-        db.session.scalar(select(func.count(func.distinct(SemanticLink.entity_id))).where(SemanticLink.entity_type == "manifestation")) or 0
-    )  # pylint: disable=not-callable
+        db.session.scalar(
+            select(func.count(Manifestation.id)).where(  # pylint: disable=not-callable
+                db.or_(
+                    Manifestation.id.in_(manif_with_direct_links),
+                    Manifestation.id.in_(manifs_with_linked_works),
+                )
+            )
+        )
+        or 0
+    )
 
     authority_rows = db.session.execute(
         select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)

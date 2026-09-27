@@ -79,9 +79,29 @@ def test_lod_reconcile_access_control(app, client):
                 assert data["success"] is True
                 assert data["data"]["task_id"] == "mock-task-uuid-123"
 
-            # 4. Custodian user -> 202 Accepted
+            # 4. Duplicate scan while active -> 409 Conflict
             with (
                 patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti3", "exp": 9999999999}),
+                patch("app.api.decorators._is_token_revoked", return_value=False),
+                patch("celery.result.AsyncResult") as mock_async,
+            ):
+                mock_running = MagicMock()
+                mock_running.state = "PROGRESS"
+                mock_async.return_value = mock_running
+                resp_dup = client.post(
+                    "/api/v1/admin/lod/reconcile",
+                    json={"unlinked_only": True},
+                    headers={"Authorization": "Bearer mock-token"},
+                )
+                assert resp_dup.status_code == 409
+                assert resp_dup.get_json()["data"]["active_task_id"] == "mock-task-uuid-123"
+
+            # 5. Custodian user after task finishes -> 202 Accepted
+            from app.core.cache import cache
+
+            cache.delete("lod:active_task_id")
+            with (
+                patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti4", "exp": 9999999999}),
                 patch("app.api.decorators._is_token_revoked", return_value=False),
             ):
                 resp_custodian = client.post(
@@ -92,6 +112,51 @@ def test_lod_reconcile_access_control(app, client):
                 assert resp_custodian.status_code == 202
                 data = resp_custodian.get_json()
                 assert data["success"] is True
+
+
+def test_lod_active_task_query(app, client):
+    """Test GET /api/v1/admin/lod/tasks/active returns in-flight task or null."""
+    with app.app_context():
+        custodian_user = _create_user_with_role("custodian_active@iqoqo.org", "custodian")
+        from app.core.cache import cache
+
+        # When no task is active -> active_task_id is None
+        cache.delete("lod:active_task_id")
+        with (
+            patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti_act1", "exp": 9999999999}),
+            patch("app.api.decorators._is_token_revoked", return_value=False),
+        ):
+            resp = client.get("/api/v1/admin/lod/tasks/active", headers={"Authorization": "Bearer mock-token"})
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            assert data["active_task_id"] is None
+            assert data["task"] is None
+
+        # When active task exists in Redis -> returns task payload
+        cache.set("lod:active_task_id", "running-task-xyz", timeout=3600)
+        with (
+            patch("jwt.decode", return_value={"sub": str(custodian_user.id), "jti": "jti_act2", "exp": 9999999999}),
+            patch("app.api.decorators._is_token_revoked", return_value=False),
+            patch("celery.result.AsyncResult") as mock_async,
+        ):
+            mock_task = MagicMock()
+            mock_task.state = "PROGRESS"
+            mock_task.info = {
+                "total": 50,
+                "processed": 25,
+                "percentage": 50.0,
+                "total_resolved": 10,
+                "counts": {"dbpedia": 8, "geonames": 2, "wordnet": 0},
+                "recent_logs": [],
+            }
+            mock_async.return_value = mock_task
+            resp = client.get("/api/v1/admin/lod/tasks/active", headers={"Authorization": "Bearer mock-token"})
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            assert data["active_task_id"] == "running-task-xyz"
+            assert data["task"]["percentage"] == 50.0
+
+        cache.delete("lod:active_task_id")
 
 
 def test_lod_task_status_polling(app, client):
@@ -138,8 +203,8 @@ def test_lod_task_status_polling(app, client):
                 assert len(data["data"]["recent_logs"]) == 1
 
 
-def test_lod_stats_aggregation(app, client):
-    """Test GET /api/v1/admin/lod/stats aggregates database semantic links correctly."""
+def test_lod_stats_aggregation_with_work_links(app, client):
+    """Test GET /api/v1/admin/lod/stats aggregates database semantic links, including parent Work links."""
     with app.app_context():
         admin_user = _create_user_with_role("admin_stats@iqoqo.org", "admin")
 
@@ -156,20 +221,21 @@ def test_lod_stats_aggregation(app, client):
         db.session.add_all([m1, m2])
         db.session.flush()
 
-        # Add semantic links to m1
-        sl_db = SemanticLink(
-            entity_type="manifestation",
-            entity_id=m1.id,
+        # Add semantic link to parent Work (e.g. Stanislaw Lem / Solaris DBpedia)
+        sl_work = SemanticLink(
+            entity_type="work",
+            entity_id=work.id,
             authority="dbpedia",
-            external_uri="http://dbpedia.org/resource/Solaris",
+            external_uri="http://dbpedia.org/resource/Solaris_(novel)",
         )
+        # Add semantic link directly to m1 (GeoNames)
         sl_geo = SemanticLink(
             entity_type="manifestation",
             entity_id=m1.id,
             authority="geonames",
             external_uri="https://sws.geonames.org/756135/",
         )
-        db.session.add_all([sl_db, sl_geo])
+        db.session.add_all([sl_work, sl_geo])
         db.session.commit()
 
         with (
@@ -185,7 +251,48 @@ def test_lod_stats_aggregation(app, client):
             assert data["success"] is True
             stats = data["data"]
             assert stats["total_manifestations"] >= 2
-            assert stats["linked_manifestations"] >= 1
+            # Both m1 and m2 belong to the linked Work, so linked_manifestations must be >= 2!
+            assert stats["linked_manifestations"] >= 2
             assert stats["by_authority"]["dbpedia"] >= 1
             assert stats["by_authority"]["geonames"] >= 1
             assert stats["total_links"] >= 2
+
+
+def test_manifestation_lod_filtering(app, client):
+    """Test filtering GET /api/manifestations by lod_authority and lod_status."""
+    with app.app_context():
+        work = Work(title="Cyberiad")
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        m_linked = Manifestation(expression_id=expr.id, isbn13="9780000000001")
+        m_unlinked = Manifestation(expression_id=expr.id, isbn13="9780000000002")
+        db.session.add_all([m_linked, m_unlinked])
+        db.session.flush()
+
+        sl = SemanticLink(
+            entity_type="manifestation",
+            entity_id=m_linked.id,
+            authority="wordnet",
+            external_uri="http://wordnet-rdf.princeton.edu/id/123",
+        )
+        db.session.add(sl)
+        db.session.commit()
+
+        # Query lod_authority=wordnet
+        resp_wordnet = client.get("/api/manifestations?lod_authority=wordnet")
+        assert resp_wordnet.status_code == 200
+        ids_wordnet = [item["id"] for item in resp_wordnet.get_json()["data"]]
+        assert m_linked.id in ids_wordnet
+        assert m_unlinked.id not in ids_wordnet
+
+        # Query lod_status=unlinked
+        resp_unlinked = client.get("/api/manifestations?lod_status=unlinked")
+        assert resp_unlinked.status_code == 200
+        ids_unlinked = [item["id"] for item in resp_unlinked.get_json()["data"]]
+        assert m_unlinked.id in ids_unlinked
+        assert m_linked.id not in ids_unlinked

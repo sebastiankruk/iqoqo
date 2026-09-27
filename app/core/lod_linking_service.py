@@ -332,7 +332,14 @@ class GeoNamesClient:
         if cached is not None:
             return cast(dict[str, Any], cached)
 
-        username = os.environ.get("GEONAMES_USERNAME", "iqoqo_demo")
+        db_user = None
+        try:
+            from app.db.settings import InstanceSettings
+
+            db_user = InstanceSettings.get_value("GEONAMES_USERNAME")
+        except Exception:  # pylint: disable=broad-except
+            pass
+        username = (db_user or "").strip() or os.environ.get("GEONAMES_USERNAME", "iqoqo_demo")
         params: dict[str, Any] = {
             "q": normalized,
             "maxRows": 1,

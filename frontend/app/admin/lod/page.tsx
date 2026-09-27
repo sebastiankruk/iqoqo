@@ -24,7 +24,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/lib/api/hooks";
-import { useLodStats, useLodTaskStatus, useTriggerLodReconciliation } from "@/lib/api/hooks/admin";
+import { useLodStats, useLodTaskStatus, useTriggerLodReconciliation, useActiveLodTask } from "@/lib/api/hooks/admin";
 import { PermissionName } from "@/lib/permissions";
 import { MetricCards } from "@/components/admin/lod/metric-cards";
 import { BatchControl } from "@/components/admin/lod/batch-control";
@@ -43,9 +43,17 @@ export default function LodReconciliationPage() {
   const t = useTranslations("LodReconciliation");
   const { data: profile, isLoading: isProfileLoading } = useProfile();
 
+  const { data: activeTaskData } = useActiveLodTask();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
-  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useLodStats();
+  // Automatically reconnect to active running task on page load/reload
+  useEffect(() => {
+    if (!activeTaskId && activeTaskData?.active_task_id) {
+      setActiveTaskId(activeTaskData.active_task_id);
+    }
+  }, [activeTaskId, activeTaskData]);
+
+  const { data: stats, isLoading: isStatsLoading, isFetching: isFetchingStats, refetch: refetchStats } = useLodStats();
   const { data: taskStatus } = useLodTaskStatus(activeTaskId);
   const triggerMutation = useTriggerLodReconciliation();
 
@@ -65,6 +73,11 @@ export default function LodReconciliationPage() {
     }
   }, [taskStatus?.status, refetchStats]);
 
+  const handleRefreshStats = async () => {
+    await refetchStats();
+    toast.success("Stats refreshed");
+  };
+
   const handleTrigger = async (params: { unlinked_only: boolean; throttle_delay: number }) => {
     try {
       const result = await triggerMutation.mutateAsync({
@@ -77,6 +90,18 @@ export default function LodReconciliationPage() {
         toast.success(result.message || t("batchControl.statusPending"));
       }
     } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { error?: string; data?: { active_task_id?: string } } };
+        message?: string;
+      };
+      if (axiosErr.response?.status === 409) {
+        const runningId = axiosErr.response.data?.data?.active_task_id;
+        if (runningId) {
+          setActiveTaskId(runningId);
+        }
+        toast.warning(axiosErr.response.data?.error || "A reconciliation scan is already running");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Failed to dispatch reconciliation task";
       toast.error(msg);
     }
@@ -128,8 +153,8 @@ export default function LodReconciliationPage() {
             <span>Home</span>
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
-          <Link href="/admin/settings" className="hover:text-foreground transition-colors">
-            Administration
+          <Link href="/admin/content" className="hover:text-foreground transition-colors">
+            Custodians
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="font-medium text-foreground">{t("breadcrumb")}</span>
@@ -145,21 +170,25 @@ export default function LodReconciliationPage() {
             <p className="text-sm text-muted-foreground">{t("description")}</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetchStats()}
-              disabled={isStatsLoading}
+              onClick={handleRefreshStats}
+              disabled={isStatsLoading || isFetchingStats}
               className="gap-2 h-9 text-xs"
               title="Refresh statistics"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isStatsLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetchingStats ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh stats</span>
             </Button>
 
             <Button variant="outline" size="sm" asChild className="h-9 text-xs">
-              <Link href="/admin/settings">Back to settings</Link>
+              <Link href="/admin/content">Custodian Content</Link>
+            </Button>
+
+            <Button variant="outline" size="sm" asChild className="h-9 text-xs">
+              <Link href="/admin/sparql">SPARQL</Link>
             </Button>
           </div>
         </div>

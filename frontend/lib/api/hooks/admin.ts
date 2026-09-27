@@ -25,6 +25,7 @@ import {
   type FrbrItem as FrbrItemType,
   getLodStats,
   getLodTaskStatus,
+  getActiveLodTask,
   triggerLodReconciliation,
 } from "../admin";
 import type { LODReconciliationTriggerParams } from "@/types/admin";
@@ -303,7 +304,23 @@ export function useTriggerLodReconciliation() {
       qc.invalidateQueries({ queryKey: queryKeys.lodStats });
       if (data?.task_id) {
         qc.invalidateQueries({ queryKey: queryKeys.lodTaskStatus(data.task_id) });
+        qc.invalidateQueries({ queryKey: queryKeys.lodActiveTask });
       }
     },
+  });
+}
+
+/**
+ * Custom hook to retrieve the currently active LOD reconciliation task, if any.
+ *
+ * Useful for restoring state across page navigations and reloads.
+ *
+ * @returns Query result containing the active task ID and state
+ */
+export function useActiveLodTask() {
+  return useQuery({
+    queryKey: queryKeys.lodActiveTask,
+    queryFn: () => getActiveLodTask(),
+    staleTime: 5_000,
   });
 }

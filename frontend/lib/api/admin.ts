@@ -619,3 +619,24 @@ export async function getLodStats(): Promise<LODStats> {
   }
   return res.data.data;
 }
+
+/**
+ * Retrieve the currently executing batch LOD reconciliation task, or null.
+ *
+ * @returns Active task ID and status if a task is running, otherwise nulls.
+ */
+export async function getActiveLodTask(): Promise<{
+  active_task_id: string | null;
+  task: LODReconciliationTaskStatus | null;
+}> {
+  const res = await apiClient.get<
+    ApiResponse<{
+      active_task_id: string | null;
+      task: LODReconciliationTaskStatus | null;
+    }>
+  >("/v1/admin/lod/tasks/active");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch active LOD task");
+  }
+  return res.data.data;
+}

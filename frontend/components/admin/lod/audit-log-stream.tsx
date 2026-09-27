@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { LODLogEntry } from "@/types/admin";
 
 export interface AuditLogStreamProps {
@@ -114,14 +115,19 @@ export function AuditLogStream({ logs = [], isLoading = false, className }: Audi
 
           <Button
             data-testid="lod-autoscroll-toggle"
-            variant={autoScroll ? "secondary" : "outline"}
+            variant={autoScroll ? "default" : "outline"}
             size="sm"
             onClick={() => setAutoScroll(prev => !prev)}
-            className="h-8 px-2.5 text-xs gap-1.5"
+            className={cn(
+              "h-8 px-2.5 text-xs gap-1.5 font-medium transition-all",
+              autoScroll
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
             title={t("autoScroll")}
           >
-            <ArrowDownToLine className={`h-3.5 w-3.5 ${autoScroll ? "text-primary" : "text-muted-foreground"}`} />
-            <span>{t("autoScroll")}</span>
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+            <span>{autoScroll ? "Auto-scroll: ON" : "Auto-scroll: OFF"}</span>
           </Button>
         </div>
       </CardHeader>

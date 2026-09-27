@@ -55,7 +55,7 @@ export interface BatchControlProps {
 export function BatchControl({ status, isTriggering = false, onTrigger, onCancel }: BatchControlProps) {
   const t = useTranslations("LodReconciliation.batchControl");
 
-  const [unlinkedOnly, setUnlinkedOnly] = useState(false);
+  const [unlinkedOnly, setUnlinkedOnly] = useState(true);
   const [throttleDelay, setThrottleDelay] = useState<number>(0.5);
 
   const isRunning = isTriggering || status?.status === "pending" || status?.status === "processing";

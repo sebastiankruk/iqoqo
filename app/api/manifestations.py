@@ -30,6 +30,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
+from app.db.core import SemanticLink
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image, validate_upload_file
@@ -46,6 +47,8 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
+    lod_authority = (request.args.get("lod_authority") or "").strip().lower()
+    lod_status = (request.args.get("lod_status") or "").strip().lower()
     category_list = parse_csv_param(category_filter)
     format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
@@ -202,6 +205,41 @@ def get_manifestations() -> tuple[Response, int]:
                 query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
                 has_item_joined = True
             query = apply_statuses_filter(query, statuses_list, user_id=user_id)
+
+        if lod_authority:
+            manif_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            work_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            query = query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_auth_subq),
+                    Expression.work_id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_subq),
+                    Expression.work_id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.and_(
+                    ~Manifestation.id.in_(manif_subq),
+                    ~Expression.work_id.in_(work_subq),
+                )
+            )
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()

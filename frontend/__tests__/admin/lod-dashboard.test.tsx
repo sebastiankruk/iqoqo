@@ -92,6 +92,7 @@ vi.mock("@/lib/api/hooks/admin", () => ({
   useLodStats: vi.fn(),
   useLodTaskStatus: vi.fn(),
   useTriggerLodReconciliation: vi.fn(),
+  useActiveLodTask: vi.fn(),
 }));
 
 vi.mock("@/components/dashboard/navbar-wrapper", () => ({
@@ -164,23 +165,35 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(adminHooks.useActiveLodTask).mockReturnValue({
+      data: null,
+      isLoading: false,
+    } as unknown as ReturnType<typeof adminHooks.useActiveLodTask>);
   });
 
   describe("MetricCards", () => {
-    it("renders lifetime statistics for all 4 summary cards", () => {
+    it("renders lifetime statistics for all 4 summary cards with drill-down links", () => {
       render(<MetricCards stats={sampleStats} />);
 
-      expect(screen.getByTestId("metric-card-manifestations")).toBeInTheDocument();
-      expect(screen.getByText("150")).toBeInTheDocument();
-      expect(screen.getByText(/120 linked · 30 unlinked/)).toBeInTheDocument();
+      const manifCard = screen.getByTestId("metric-card-manifestations");
+      expect(manifCard).toBeInTheDocument();
+      expect(manifCard.closest("a")).toHaveAttribute("href", "/collection");
+      expect(manifCard).toHaveTextContent("150");
+      expect(manifCard).toHaveTextContent("120 linked · 30 unlinked");
 
-      expect(screen.getByTestId("metric-card-dbpedia")).toBeInTheDocument();
+      const dbpediaCard = screen.getByTestId("metric-card-dbpedia");
+      expect(dbpediaCard).toBeInTheDocument();
+      expect(dbpediaCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=dbpedia");
       expect(screen.getByText("140")).toBeInTheDocument();
 
-      expect(screen.getByTestId("metric-card-geonames")).toBeInTheDocument();
+      const geonamesCard = screen.getByTestId("metric-card-geonames");
+      expect(geonamesCard).toBeInTheDocument();
+      expect(geonamesCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=geonames");
       expect(screen.getByText("95")).toBeInTheDocument();
 
-      expect(screen.getByTestId("metric-card-wordnet")).toBeInTheDocument();
+      const wordnetCard = screen.getByTestId("metric-card-wordnet");
+      expect(wordnetCard).toBeInTheDocument();
+      expect(wordnetCard.closest("a")).toHaveAttribute("href", "/collection?lod_authority=wordnet");
       expect(screen.getByText("75")).toBeInTheDocument();
     });
 
@@ -205,7 +218,7 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
       expect(buttons.length).toBeLessThanOrEqual(4);
     });
 
-    it("triggers reconciliation when clicking primary CTA", () => {
+    it("triggers reconciliation when clicking primary CTA defaulting to unlinked_only=true", () => {
       const mockTrigger = vi.fn();
       render(<BatchControl onTrigger={mockTrigger} isTriggering={false} />);
 
@@ -213,7 +226,7 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
       fireEvent.click(startButton);
 
       expect(mockTrigger).toHaveBeenCalledWith({
-        unlinked_only: false,
+        unlinked_only: true,
         throttle_delay: 0.5,
       });
     });
@@ -258,11 +271,17 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
       expect(screen.getByTestId("lod-no-logs-message")).toHaveTextContent("No resolution events yet");
     });
 
-    it("toggles auto-scroll state", () => {
+    it("toggles auto-scroll state with explicit high-contrast ON/OFF labels", () => {
       render(<AuditLogStream logs={sampleLogs} />);
       const autoScrollButton = screen.getByTestId("lod-autoscroll-toggle");
       expect(autoScrollButton).toBeInTheDocument();
+      expect(autoScrollButton).toHaveTextContent("Auto-scroll: ON");
+
       fireEvent.click(autoScrollButton);
+      expect(autoScrollButton).toHaveTextContent("Auto-scroll: OFF");
+
+      fireEvent.click(autoScrollButton);
+      expect(autoScrollButton).toHaveTextContent("Auto-scroll: ON");
     });
   });
 
@@ -361,6 +380,49 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
       render(<LodReconciliationPage />);
 
       expect(screen.getByRole("heading", { name: "LOD reconciliation" })).toBeInTheDocument();
+      expect(screen.getByTestId("lod-progress-text")).toBeInTheDocument();
+    });
+
+    it("automatically rehydrates and tracks in-flight task on page load", () => {
+      vi.mocked(hooks.useProfile).mockReturnValue({
+        data: {
+          id: "u-3",
+          email: "admin@iqoqo.org",
+          roles: ["admin"],
+          permissions: ["config:internal"],
+        },
+        isLoading: false,
+      } as unknown as ReturnType<typeof hooks.useProfile>);
+
+      vi.mocked(adminHooks.useActiveLodTask).mockReturnValue({
+        data: {
+          active_task_id: "persisted-task-456",
+          status: "processing",
+        },
+        isLoading: false,
+      } as unknown as ReturnType<typeof adminHooks.useActiveLodTask>);
+
+      vi.mocked(adminHooks.useLodStats).mockReturnValue({
+        data: sampleStats,
+        isLoading: false,
+        refetch: vi.fn(),
+      } as unknown as ReturnType<typeof adminHooks.useLodStats>);
+
+      vi.mocked(adminHooks.useLodTaskStatus).mockImplementation((taskId: string | null) => {
+        if (taskId === "persisted-task-456") {
+          return { data: sampleTaskStatus } as unknown as ReturnType<typeof adminHooks.useLodTaskStatus>;
+        }
+        return { data: undefined } as unknown as ReturnType<typeof adminHooks.useLodTaskStatus>;
+      });
+
+      vi.mocked(adminHooks.useTriggerLodReconciliation).mockReturnValue({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      } as unknown as ReturnType<typeof adminHooks.useTriggerLodReconciliation>);
+
+      render(<LodReconciliationPage />);
+
+      expect(adminHooks.useLodTaskStatus).toHaveBeenCalledWith("persisted-task-456");
       expect(screen.getByTestId("lod-progress-text")).toBeInTheDocument();
     });
   });

@@ -168,5 +168,6 @@ export const queryKeys = {
   frbrTree: (id: number) => ["admin", "frbr", "tree", id] as const,
   lodStats: ["admin", "lod", "stats"] as const,
   lodTaskStatus: (taskId: string | null) => ["admin", "lod", "task", taskId] as const,
+  lodActiveTask: ["admin", "lod", "task", "active"] as const,
   config: ["config"] as const,
 };
