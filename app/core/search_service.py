@@ -26,7 +26,7 @@ from sqlalchemy import bindparam, text
 
 from app.api.filters import apply_genre_filter
 from app.db import db
-from app.db.models import Expression, Item, Manifestation, Work
+from app.db.models import Expression, Item, Manifestation, SemanticLink, Work
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +72,17 @@ class SearchService:
         statuses: list[str] | None = None,
         ownership: list[str] | None = None,
         user_id: Any = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         q = sanitize_search_query(q)
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses or ownership):
+        if db.engine.dialect.name == "postgresql" and not (
+            tags or collections or genres or publishers or statuses or ownership or lod_authority or lod_status
+        ):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
@@ -100,6 +104,8 @@ class SearchService:
             statuses=statuses,
             ownership=ownership,
             user_id=user_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
         )
 
     @staticmethod
@@ -118,13 +124,15 @@ class SearchService:
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[dict]]:
         """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
         q = sanitize_search_query(q)
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
+        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or lod_authority or lod_status):
             try:
                 return SearchService._pg_item_fts(
                     q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
@@ -148,6 +156,8 @@ class SearchService:
             collections=collections,
             genres=genres,
             publishers=publishers,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
         )
 
     @staticmethod
@@ -233,6 +243,8 @@ class SearchService:
         statuses: list[str] | None = None,
         ownership: list[str] | None = None,
         user_id: Any = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
         base_query = (
@@ -329,6 +341,41 @@ class SearchService:
                 base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
                 has_item_joined = True
             base_query = base_query.filter(Item.status.in_(statuses))
+
+        if lod_authority:
+            manif_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            work_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            base_query = base_query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_auth_subq),
+                    Work.id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_subq),
+                    Work.id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.filter(
+                db.and_(
+                    ~Manifestation.id.in_(manif_subq),
+                    ~Work.id.in_(work_subq),
+                )
+            )
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -443,6 +490,8 @@ class SearchService:
         collections: list[str] | None = None,
         genres: list[str] | None = None,
         publishers: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[dict]]:
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
@@ -543,6 +592,41 @@ class SearchService:
                     )
                 )
             query = query.filter(db.or_(*pub_conds))
+
+        if lod_authority:
+            manif_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            work_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            query = query.filter(
+                db.or_(
+                    Item.manifestation_id.in_(manif_auth_subq),
+                    Work.id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.or_(
+                    Item.manifestation_id.in_(manif_subq),
+                    Work.id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.and_(
+                    ~Item.manifestation_id.in_(manif_subq),
+                    ~Work.id.in_(work_subq),
+                )
+            )
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()

@@ -386,6 +386,7 @@ export type FacetStatsResponse = {
   tag_counts: Record<string, number>;
   genre_counts: Record<string, number>;
   publisher_counts: Record<string, number>;
+  lod_counts?: Record<string, number>;
   borrowed_count?: number;
 };
 
@@ -507,4 +508,33 @@ export interface FrbrImpactPreview {
   entity_id: number;
   children_count: number;
   children: Array<{ id: number; label: string }>;
+}
+
+/** Linked Open Data external semantic link. */
+export interface SemanticLink {
+  id: number;
+  entity_type: "work" | "manifestation" | "contributor" | string;
+  entity_id: number;
+  authority: "dbpedia" | "geonames" | "wordnet" | string;
+  external_uri: string;
+  pref_label?: string | null;
+  confidence: number;
+  match_strategy?: string | null;
+  attributes?: Record<string, unknown>;
+  verified: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** Response structure for GET /api/manifestations/<id>/semantic-links */
+export interface SemanticLinksData {
+  manifestation_id: number;
+  total: number;
+  links: SemanticLink[];
+  grouped: {
+    dbpedia?: SemanticLink[];
+    geonames?: SemanticLink[];
+    wordnet?: SemanticLink[];
+    [authority: string]: SemanticLink[] | undefined;
+  };
 }

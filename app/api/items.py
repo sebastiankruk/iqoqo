@@ -42,6 +42,7 @@ from app.db.models import (
     ItemStatusLog,
     ItemTag,
     Manifestation,
+    SemanticLink,
     Tag,
     User,
     UserCollection,
@@ -253,6 +254,8 @@ def get_items():
     collections_filter = request.args.get("collections", None)
     genres_filter = request.args.get("genres", None)
     publishers_filter = request.args.get("publishers", None)
+    lod_authority = (request.args.get("lod_authority") or "").strip().lower()
+    lod_status = (request.args.get("lod_status") or "").strip().lower()
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
@@ -290,6 +293,8 @@ def get_items():
             collections=collections_list,
             genres=genres_list,
             publishers=publishers_list,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
         )
 
         for row in results:
@@ -342,8 +347,10 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id)
-        needs_work_join = bool(genres_list or publishers_list or sort_by in ("title", "title-desc", "author"))
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or lod_authority or lod_status)
+        needs_work_join = bool(
+            genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
+        )
         if needs_mfn_join or needs_work_join:
             query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
             query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
@@ -414,6 +421,41 @@ def get_items():
         if statuses_filter:
             statuses_list = parse_csv_param(statuses_filter)
             query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
+
+        if lod_authority:
+            manif_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            work_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            query = query.filter(
+                db.or_(
+                    Item.manifestation_id.in_(manif_auth_subq),
+                    Work.id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.or_(
+                    Item.manifestation_id.in_(manif_subq),
+                    Work.id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.and_(
+                    ~Item.manifestation_id.in_(manif_subq),
+                    ~Work.id.in_(work_subq),
+                )
+            )
 
         total_physical = query.order_by(None).count()
 

@@ -17,19 +17,24 @@
 
 import os
 from datetime import date
+from functools import wraps
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from app.api.core import api_bp
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import frbr_service
+from app.core.celery_app import celery
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
+from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
-from app.db.core import EntityAuditLog, Expression, Item, Manifestation, Work
+from app.db.core import EntityAuditLog, Expression, Item, Manifestation, SemanticLink, Work
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
@@ -291,6 +296,7 @@ API_KEYS = {
     "ALLEGRO_TOKEN_DATA",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "GEONAMES_USERNAME",
 }
 
 FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
@@ -339,8 +345,8 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
             # Mask API keys but keep other external settings unmasked
             display_value = (
-                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or ""))
-                if key in API_KEYS and key != "LOCAL_SD_URL"
+                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME") else str(value or ""))
+                if key in API_KEYS and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME")
                 else str(value or "")
             )
             result[key] = {"value": display_value, "source": source}
@@ -857,3 +863,388 @@ def upload_cover():
             except OSError:
                 pass
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500
+
+
+def curator_or_admin_required(f):
+    """Require user to have admin or custodian role, or metadata curation permissions."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Authentication required", "code": 401}), 401
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"success": False, "error": "User not found", "code": 401}), 401
+
+        user_roles_list = [r.name for r in getattr(user, "roles", [])]
+        is_curator_or_admin = (
+            "admin" in user_roles_list
+            or "custodian" in user_roles_list
+            or user.has_permission(PermissionName.REFETCH_METADATA)
+            or user.has_permission(PermissionName.WRITE_METADATA)
+        )
+        if not is_curator_or_admin:
+            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@admin_bp.route("/lod/reconcile", methods=["POST"])
+@api_bp.route("/admin/lod/reconcile", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_lod_reconciliation():
+    """Trigger background batch reconciliation of Linked Open Data links across the catalog."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+    if active_task_id:
+        active_task = AsyncResult(active_task_id, app=celery)
+        if active_task.state in ("PENDING", "STARTED", "PROGRESS"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "A reconciliation scan is already running",
+                        "data": {
+                            "active_task_id": active_task_id,
+                            "status": "processing",
+                        },
+                    }
+                ),
+                409,
+            )
+        cache.delete("lod:active_task_id")
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    body = request.get_json(silent=True) or {}
+    manifestation_ids = body.get("manifestation_ids")
+    unlinked_only = bool(body.get("unlinked_only", True))
+    throttle_delay = float(body.get("throttle_delay", 0.5))
+    chunk_size = int(body.get("chunk_size", 10))
+
+    try:
+        task = batch_link_catalog_lod_task.delay(
+            manifestation_ids=manifestation_ids,
+            unlinked_only=unlinked_only,
+            chunk_size=chunk_size,
+            throttle_delay=throttle_delay,
+        )
+        task_id = str(task.id)
+        cache.set("lod:active_task_id", task_id, timeout=86400)
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
+        except Exception:  # pylint: disable=broad-except
+            pass
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to dispatch batch LOD task: %s", exc)
+        task_id = "mock-batch-lod-task"
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "message": "Batch LOD reconciliation scheduled",
+                },
+                "error": None,
+            }
+        ),
+        202,
+    )
+
+
+@admin_bp.route("/lod/tasks/active", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/active", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_active_lod_task():
+    """Retrieve the currently executing batch LOD reconciliation task, or null."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+    if not active_task_id:
+        return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
+
+    task = AsyncResult(active_task_id, app=celery)
+    state = task.state
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "processing",
+                            "state": state,
+                            "percentage": meta.get("percentage", 0.0),
+                            "total": meta.get("total", 0),
+                            "processed": meta.get("processed", 0),
+                            "total_resolved": meta.get("total_resolved", 0),
+                            "counts": meta.get("counts", {}),
+                            "recent_logs": meta.get("recent_logs", []),
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+    if state == "PENDING":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "pending",
+                            "state": state,
+                            "percentage": 0.0,
+                            "total": 0,
+                            "processed": 0,
+                            "total_resolved": 0,
+                            "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                            "recent_logs": [],
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+
+    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
+    cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
+    return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
+
+
+@admin_bp.route("/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@admin_bp.route("/lod/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/cancel", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def cancel_lod_reconciliation_task(task_id: str | None = None):
+    """Cancel the active batch LOD reconciliation task."""
+    from app.core.cache import cache
+
+    target_task_id = task_id or cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+
+    if target_task_id:
+        cache.set(f"lod:cancel_task:{target_task_id}", True, timeout=86400)
+        try:
+            celery.control.revoke(target_task_id, terminate=True)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+    return jsonify({"success": True, "data": {"task_id": target_task_id}, "message": "LOD reconciliation task cancelled"}), 200
+
+
+@admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_reconciliation_task(task_id: str):
+    """Retrieve the progress and status of a batch LOD reconciliation Celery task."""
+    from celery.result import AsyncResult
+
+    task = AsyncResult(task_id, app=celery)
+
+    state = task.state
+    if state == "SUCCESS":
+        result = task.result or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "completed",
+                        "state": state,
+                        "percentage": 100.0,
+                        "total": result.get("total", 0),
+                        "processed": result.get("processed", 0),
+                        "total_resolved": result.get("total_resolved", 0),
+                        "counts": result.get("counts", {}),
+                        "recent_logs": result.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "processing",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state == "FAILURE":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "failed",
+                        "state": state,
+                        "percentage": 0.0,
+                        "total": 0,
+                        "processed": 0,
+                        "total_resolved": 0,
+                        "counts": {
+                            "dbpedia": 0,
+                            "geonames": 0,
+                            "wordnet": 0,
+                        },
+                        "recent_logs": [],
+                        "error": str(task.result),
+                    },
+                    "error": str(task.result),
+                }
+            ),
+            200,
+        )
+
+    if state == "REVOKED":
+        meta = task.info if isinstance(task.info, dict) else {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "cancelled",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    # PENDING or unknown state
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "state": state,
+                    "percentage": 0.0,
+                    "total": 0,
+                    "processed": 0,
+                    "total_resolved": 0,
+                    "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                    "recent_logs": [],
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
+@admin_bp.route("/lod/stats", methods=["GET"])
+@api_bp.route("/admin/lod/stats", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_stats():
+    """Query lifetime database statistics of Linked Open Data links across the catalog."""
+    total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
+
+    # Count distinct manifestations with direct semantic links OR whose work has semantic links
+    manif_with_direct_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+    works_with_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+    manifs_with_linked_works = (
+        select(Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(Expression.work_id.in_(works_with_links))
+    )
+    linked_manifestations = (
+        db.session.scalar(
+            select(func.count(Manifestation.id)).where(  # pylint: disable=not-callable
+                db.or_(
+                    Manifestation.id.in_(manif_with_direct_links),
+                    Manifestation.id.in_(manifs_with_linked_works),
+                )
+            )
+        )
+        or 0
+    )
+
+    authority_rows = db.session.execute(
+        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
+    ).all()  # pylint: disable=not-callable
+    by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
+    total_links = sum(by_authority.values())
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "total_manifestations": total_manifestations,
+                    "linked_manifestations": linked_manifestations,
+                    "unlinked_manifestations": max(0, total_manifestations - linked_manifestations),
+                    "total_links": total_links,
+                    "by_authority": {
+                        "dbpedia": by_authority.get("dbpedia", 0),
+                        "geonames": by_authority.get("geonames", 0),
+                        "wordnet": by_authority.get("wordnet", 0),
+                    },
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )

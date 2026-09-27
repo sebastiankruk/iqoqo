@@ -30,7 +30,9 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
+from sqlalchemy import and_
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import foreign
 
 from app.core.iri import canonical_frbr_iri
 from app.core.taxonomy import (  # noqa: F401
@@ -85,6 +87,67 @@ EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 #: Controlled vocabulary for :attr:`WorkExpansionLink.link_type`.
 WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
 WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
+
+
+class SemanticLink(db.Model):  # type: ignore[name-defined]
+    """
+    Linked Open Data (LOD) link connecting FRBR entities to external authorities.
+
+    Supported authorities: ``dbpedia``, ``geonames``, ``wordnet``.
+    Entities mapped:
+    - ``work``: DBpedia creative works / authors, WordNet synsets
+    - ``manifestation``: GeoNames publication places, publishers, format URIs
+    - ``contributor``: DBpedia person / organisation
+    """
+
+    __tablename__ = "semantic_links"
+    __table_args__: tuple = (
+        (
+            db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
+            db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+            {"schema": _CATALOG},
+        )
+        if _CATALOG
+        else (
+            db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
+            db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    authority = db.Column(db.String(50), nullable=False)
+    external_uri = db.Column(db.String(2048), nullable=False)
+    pref_label = db.Column(db.String(500), nullable=True)
+    confidence = db.Column(db.Float, default=1.0, nullable=False)
+    match_strategy = db.Column(db.String(50), nullable=True)
+    attributes = db.Column(db.JSON, nullable=True)
+    verified = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    def to_dict(self) -> dict:
+        """Serialize semantic link to dictionary."""
+        return {
+            "id": self.id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "authority": self.authority,
+            "external_uri": self.external_uri,
+            "pref_label": self.pref_label,
+            "confidence": self.confidence,
+            "match_strategy": self.match_strategy,
+            "attributes": self.attributes or {},
+            "verified": self.verified,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -169,6 +232,23 @@ class Work(db.Model):  # type: ignore[name-defined]
         back_populates="expansion_work",
         uselist=False,
     )
+
+    semantic_links = db.relationship(
+        "SemanticLink",
+        primaryjoin=lambda: and_(
+            Work.id == foreign(SemanticLink.entity_id),
+            SemanticLink.entity_type == "work",
+        ),
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    def get_semantic_links(self, authority: str | None = None) -> list[SemanticLink]:
+        """Retrieve Work-scoped semantic links, optionally filtered by authority."""
+        links = list(self.semantic_links)
+        if authority:
+            links = [link for link in links if link.authority == authority]
+        return links
 
     @property
     def iri(self) -> str:
@@ -405,6 +485,35 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+
+    semantic_links = db.relationship(
+        "SemanticLink",
+        primaryjoin=lambda: and_(
+            Manifestation.id == foreign(SemanticLink.entity_id),
+            SemanticLink.entity_type == "manifestation",
+        ),
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        overlaps="semantic_links",
+    )
+
+    def get_semantic_links(
+        self,
+        include_work: bool = True,
+        authority: str | None = None,
+    ) -> list[SemanticLink]:
+        """Retrieve semantic links adhering strictly to FRBR scoping rules.
+
+        Manifestation-level links include publication places (GeoNames), publishers, formats.
+        If ``include_work`` is True and manifestation is linked to an expression/work,
+        inherited Work-level links (DBpedia creative work/authors, WordNet synsets) are included.
+        """
+        links = list(self.semantic_links)
+        if include_work and self.expression and self.expression.work:
+            links.extend(self.expression.work.semantic_links)
+        if authority:
+            links = [link for link in links if link.authority == authority]
+        return links
 
     @property
     def iri(self) -> str:

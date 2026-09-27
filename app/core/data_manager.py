@@ -27,7 +27,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import and_, distinct, func, or_, select
 
 from app.db import db
 from app.db.models import (
@@ -36,6 +36,7 @@ from app.db.models import (
     Item,
     ItemTag,
     Manifestation,
+    SemanticLink,
     Tag,
     User,
     UserCollection,
@@ -593,6 +594,8 @@ class DataManager:
         missing_id: bool = False,
         target_entity: str = "items",
         ownership: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -758,6 +761,41 @@ class DataManager:
             if ownership_conds:
                 base_query = base_query.where(or_(*ownership_conds))
 
+        if lod_authority:
+            manif_auth_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            work_auth_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            base_query = base_query.where(
+                or_(
+                    Manifestation.id.in_(manif_auth_subq),
+                    Work.id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.where(
+                or_(
+                    Manifestation.id.in_(manif_subq),
+                    Work.id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.where(
+                and_(
+                    ~Manifestation.id.in_(manif_subq),
+                    ~Work.id.in_(work_subq),
+                )
+            )
+
         return base_query.subquery()
 
     @staticmethod
@@ -776,6 +814,8 @@ class DataManager:
         missing_id: bool = False,
         view: str = "items",
         ownership: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> dict[str, Any]:
         """Return cross-filtered per-facet counts for sidebar faceted navigation.
 
@@ -858,6 +898,7 @@ class DataManager:
             exclude_genres: bool = False,
             exclude_publishers: bool = False,
             exclude_statuses: bool = False,
+            exclude_lod: bool = False,
         ):
             """Build entity-id subquery with the specified facet groups excluded."""
             # For user-specific facets when unauthenticated, no subquery filtering is possible
@@ -878,6 +919,8 @@ class DataManager:
                 missing_id=missing_id,
                 target_entity=target_entity,
                 ownership=ownership,
+                lod_authority=None if exclude_lod else lod_authority,
+                lod_status=None if exclude_lod else lod_status,
             )
 
         cat_subq = _subq(exclude_category=True)
@@ -887,6 +930,7 @@ class DataManager:
         genre_subq = _subq(exclude_genres=True)
         pub_subq = _subq(exclude_publishers=True)
         status_subq = _subq(exclude_statuses=True)
+        lod_subq = _subq(exclude_lod=True)
 
         # ── Helpers: per-facet join paths ──────────────────────────────
         def _apply_joins(q, *join_pairs):
@@ -959,6 +1003,24 @@ class DataManager:
             if owner_id:
                 res = res.where(Item.owner_id == owner_id)
             return res
+
+        # ── LOD join path (target → Manifestation & Work) ─────────────
+        def _join_for_lod(q):
+            if target_entity == "works":
+                return q.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
+                    Manifestation, Manifestation.expression_id == Expression.id
+                )
+            if target_entity == "expressions":
+                return q.outerjoin(Work, Expression.work_id == Work.id).outerjoin(
+                    Manifestation, Manifestation.expression_id == Expression.id
+                )
+            if target_entity == "manifestations":
+                return q.outerjoin(Expression, Manifestation.expression_id == Expression.id).outerjoin(Work, Expression.work_id == Work.id)
+            return (
+                q.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                .outerjoin(Work, Expression.work_id == Work.id)
+            )
 
         subq_filter_col = cfg["subq_col"]
 
@@ -1151,11 +1213,84 @@ class DataManager:
         pub_rows = db.session.execute(pub_query).all()
         publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
 
+        # ── LOD counts ────────────────────────────────────────────────────
+        lod_counts: dict[str, int] = {}
+        total_lod_q = (
+            select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(subq_filter_col.in_(select(lod_subq.c.id)))
+        )
+        total_lod_count = db.session.execute(total_lod_q).scalar() or 0
+
+        all_manif_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+        all_work_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+
+        linked_lod_q = (
+            select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(
+                subq_filter_col.in_(select(lod_subq.c.id)),
+                or_(
+                    Manifestation.id.in_(all_manif_links),
+                    Work.id.in_(all_work_links),
+                ),
+            )
+        )
+        linked_lod_q = _join_for_lod(linked_lod_q)
+        linked_lod_count = db.session.execute(linked_lod_q).scalar() or 0
+        lod_counts["linked"] = linked_lod_count
+        lod_counts["unlinked"] = max(0, total_lod_count - linked_lod_count)
+
+        for auth in ["dbpedia", "geonames", "wordnet"]:
+            auth_manif_links = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                func.lower(SemanticLink.authority) == auth,
+            )
+            auth_work_links = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                func.lower(SemanticLink.authority) == auth,
+            )
+            auth_lod_q = (
+                select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(
+                    subq_filter_col.in_(select(lod_subq.c.id)),
+                    or_(
+                        Manifestation.id.in_(auth_manif_links),
+                        Work.id.in_(auth_work_links),
+                    ),
+                )
+            )
+            auth_lod_q = _join_for_lod(auth_lod_q)
+            lod_counts[auth] = db.session.execute(auth_lod_q).scalar() or 0
+
         # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
         if owner_id and view == "items":
             intents = (
                 db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled").all()
             )
+
+            # Prefetch SemanticLinks for works and manifestations of user intents
+            intent_work_links: dict[Any, set[str]] = {}
+            intent_manif_links: dict[Any, set[str]] = {}
+            if intents:
+                all_w_ids = [it.work_id for it in intents if it.work_id]
+                all_m_ids = [man.id for it in intents if it.work for expr in it.work.expressions for man in expr.manifestations if man.id]
+                sem_clauses = []
+                if all_w_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "work", SemanticLink.entity_id.in_(all_w_ids)))
+                if all_m_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "manifestation", SemanticLink.entity_id.in_(all_m_ids)))
+                if sem_clauses:
+                    sem_rows = db.session.execute(
+                        select(SemanticLink.entity_type, SemanticLink.entity_id, SemanticLink.authority).where(or_(*sem_clauses))
+                    ).all()
+                    for ent_type, ent_id, auth in sem_rows:
+                        auth_lower = auth.lower() if auth else ""
+                        if ent_type == "work":
+                            intent_work_links.setdefault(ent_id, set()).add(auth_lower)
+                        elif ent_type == "manifestation":
+                            intent_manif_links.setdefault(ent_id, set()).add(auth_lower)
 
             def match_filter(f_list, item_vals):
                 if not f_list:
@@ -1169,6 +1304,8 @@ class DataManager:
 
             for intent in intents:
                 work = intent.work
+                if not work:
+                    continue
                 intent_cats = set()
                 intent_formats = set()
                 intent_pubs = set()
@@ -1208,6 +1345,20 @@ class DataManager:
                     elif "wish_list" in statuses:
                         intent_status_match = True
 
+                # LOD match condition
+                intent_auths: set[str] = set(intent_work_links.get(work.id, set()))
+                for expr in work.expressions:
+                    for man in expr.manifestations:
+                        intent_auths.update(intent_manif_links.get(man.id, set()))
+
+                lod_match = True
+                if lod_authority:
+                    lod_match = lod_authority.lower() in intent_auths
+                elif lod_status == "linked":
+                    lod_match = len(intent_auths) > 0
+                elif lod_status == "unlinked":
+                    lod_match = len(intent_auths) == 0
+
                 # Cross-filter conditions
                 cat_match = match_filter(category, intent_cats)
                 fmt_match = match_filter(fmt, intent_formats)
@@ -1215,31 +1366,41 @@ class DataManager:
                 genre_match = match_filter(genres, intent_genres)
 
                 # category counts
-                if fmt_match and pub_match and genre_match and intent_status_match:
+                if fmt_match and pub_match and genre_match and intent_status_match and lod_match:
                     for c in intent_cats:
                         category_counts[c] = category_counts.get(c, 0) + 1
 
                 # status counts
-                if cat_match and fmt_match and pub_match and genre_match:
+                if cat_match and fmt_match and pub_match and genre_match and lod_match:
                     if intent.status in db_statuses:
                         db_statuses[intent.status] += 1
                     if "wish_list" in db_statuses:
                         db_statuses["wish_list"] += 1
 
                 # genre counts
-                if cat_match and fmt_match and pub_match and intent_status_match:
+                if cat_match and fmt_match and pub_match and intent_status_match and lod_match:
                     for g in intent_genres:
                         genre_counts[g] = genre_counts.get(g, 0) + 1
 
                 # format counts
-                if cat_match and pub_match and genre_match and intent_status_match:
+                if cat_match and pub_match and genre_match and intent_status_match and lod_match:
                     for f in intent_formats:
                         format_counts[f] = format_counts.get(f, 0) + 1
 
                 # publisher counts
-                if cat_match and fmt_match and genre_match and intent_status_match:
+                if cat_match and fmt_match and genre_match and intent_status_match and lod_match:
                     for p in intent_pubs:
                         publisher_counts[p] = publisher_counts.get(p, 0) + 1
+
+                # lod counts (cross-filtered against other active facets)
+                if cat_match and fmt_match and pub_match and genre_match and intent_status_match:
+                    if intent_auths:
+                        lod_counts["linked"] = lod_counts.get("linked", 0) + 1
+                        for a in intent_auths:
+                            if a in lod_counts:
+                                lod_counts[a] = lod_counts.get(a, 0) + 1
+                    else:
+                        lod_counts["unlinked"] = lod_counts.get("unlinked", 0) + 1
 
         return {
             "category_counts": category_counts,
@@ -1249,6 +1410,7 @@ class DataManager:
             "tag_counts": tag_counts,
             "genre_counts": genre_counts,
             "publisher_counts": publisher_counts,
+            "lod_counts": lod_counts,
             "borrowed_count": borrowed_count,
         }
 

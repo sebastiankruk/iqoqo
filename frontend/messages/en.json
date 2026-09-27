@@ -214,6 +214,12 @@
     "secGenres": "Genres",
     "secPublishers": "Publishers",
     "secPhysicalKind": "Physical Kind",
+    "secLinkedData": "Linked Open Data",
+    "lod_linked": "Any Linked",
+    "lod_unlinked": "Unlinked",
+    "lod_dbpedia": "DBpedia",
+    "lod_geonames": "GeoNames",
+    "lod_wordnet": "WordNet",
     "secCollectionStatus": "Collection Status",
     "secProgress": "Progress",
     "secCuration": "Curation",
@@ -462,5 +468,82 @@
       "lookupFailed": "Could not look up this item. Please try again.",
       "cameraUnavailable": "Camera unavailable"
     }
+  },
+  "SemanticLinks": {
+    "title": "Linked Open Data",
+    "description": "External semantic knowledge graph links connected to this work and edition.",
+    "scanButton": "Scan External LOD",
+    "scanning": "Scanning LOD...",
+    "scanStarted": "LOD background reconciliation scheduled.",
+    "scanFailed": "Failed to trigger LOD reconciliation.",
+    "noLinks": "No external Linked Open Data authorities linked yet.",
+    "noLinksHint": "Scan external authorities to enrich with DBpedia, GeoNames, and WordNet entities.",
+    "confidence": "{score}% confidence",
+    "verified": "Verified",
+    "unverified": "Auto-matched",
+    "deleteLink": "Remove link",
+    "linkDeleted": "Semantic link removed.",
+    "deleteFailed": "Failed to remove semantic link.",
+    "authorities": {
+      "dbpedia": "DBpedia",
+      "geonames": "GeoNames",
+      "wordnet": "WordNet",
+      "other": "External Authority"
+    },
+    "levels": {
+      "work": "Work Level",
+      "manifestation": "Edition Level"
+    }
+  },
+  "LodReconciliation": {
+    "title": "LOD reconciliation",
+    "description": "Trigger catalog-wide entity linking and monitor external authority resolution across DBpedia, GeoNames, and WordNet.",
+    "breadcrumb": "LOD reconciliation",
+    "accessDenied": "Access denied",
+    "accessDeniedDesc": "You need administrative or custodian permissions to access the LOD reconciliation dashboard.",
+    "backToDashboard": "Back to dashboard",
+    "metrics": {
+      "totalManifestations": "Total editions",
+      "linkedManifestations": "Linked editions",
+      "unlinkedManifestations": "Unlinked editions",
+      "totalLinks": "Total semantic links",
+      "dbpediaLinks": "DBpedia links",
+      "geonamesLinks": "GeoNames links",
+      "wordnetLinks": "WordNet links"
+    },
+    "batchControl": {
+      "title": "Batch reconciliation control",
+      "description": "Launch asynchronous catalog reconciliation against external knowledge bases.",
+      "startScan": "Start full scan",
+      "scanUnlinked": "Scan unlinked only",
+      "options": "Scan options",
+      "unlinkedOnly": "Unlinked entities only",
+      "allEntities": "All entities (re-link)",
+      "throttle": "Throttle delay",
+      "throttleFast": "Fast (0.2s)",
+      "throttleNormal": "Normal (0.5s)",
+      "throttleGentle": "Gentle (1.0s)",
+      "cancelScan": "Cancel scan",
+      "statusPending": "Queued",
+      "statusProcessing": "Reconciling catalog...",
+      "statusCompleted": "Reconciliation complete",
+      "statusFailed": "Reconciliation failed",
+      "progressLabel": "{processed} of {total} editions ({percent}%)"
+    },
+    "auditLog": {
+      "title": "Resolution audit stream",
+      "description": "Live feed of recent item-by-item LOD resolution events.",
+      "filterAll": "All outcomes",
+      "filterSuccess": "Success only",
+      "filterSkipped": "Skipped only",
+      "filterWarn": "Warnings & errors",
+      "autoScroll": "Auto-scroll",
+      "noLogs": "No resolution events yet. Start a scan to observe live entity reconciliation.",
+      "linksAdded": "{count} links added",
+      "noLinksAdded": "No links matched",
+      "manifestationLabel": "Edition #{id}"
+    }
   }
 }
+
+

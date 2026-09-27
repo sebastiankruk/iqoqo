@@ -33,6 +33,7 @@ import {
   Image as ImageIcon,
   LifeBuoy,
   Code2,
+  Network,
 } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
@@ -205,6 +206,15 @@ function ContentManagementContent(): React.JSX.Element {
                     isActive={false}
                     onClick={() => {}}
                     href="/admin/sparql"
+                  />
+                )}
+                {(hasCustodianAccess || canViewSettings) && (
+                  <NavItem
+                    label="LOD Reconciliation"
+                    icon={Network}
+                    isActive={false}
+                    onClick={() => {}}
+                    href="/admin/lod"
                   />
                 )}
               </nav>

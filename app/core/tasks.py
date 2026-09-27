@@ -25,6 +25,7 @@ import subprocess
 from collections.abc import Callable
 from typing import Any
 
+import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
@@ -250,3 +251,290 @@ def refresh_taxonomies_cache() -> dict[str, Any]:
     cache_key = "taxonomies:global:/api/taxonomies?"
     cache.set(cache_key, {"success": True, "data": data}, timeout=3600)
     return {"status": "refreshed", "data": data}
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.link_manifestation_lod_task",
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def link_manifestation_lod_task(self, manifestation_id: int) -> dict[str, Any]:
+    """Resolve and persist Linked Open Data links for a single manifestation asynchronously."""
+    from flask import has_app_context
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return self.run(manifestation_id=manifestation_id)
+
+    from app.core.lod_linking_service import get_manifestation_semantic_links_dict, resolve_manifestation_links
+
+    try:
+        self.update_state(state="STARTED", meta={"manifestation_id": manifestation_id})
+    except (ValueError, AttributeError):
+        pass
+    links = resolve_manifestation_links(manifestation_id)
+    summary = get_manifestation_semantic_links_dict(manifestation_id)
+    return {
+        "status": "completed",
+        "manifestation_id": manifestation_id,
+        "resolved_count": len(links),
+        "summary": summary,
+    }
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.batch_link_catalog_lod_task",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def batch_link_catalog_lod_task(
+    self,
+    manifestation_ids: list[int] | None = None,
+    unlinked_only: bool = False,
+    chunk_size: int = 10,
+    throttle_delay: float = 0.5,
+) -> dict[str, Any]:
+    """Batch reconcile Linked Open Data links for multiple catalog manifestations with chunking and throttling."""
+    import time
+    from datetime import UTC, datetime
+
+    from flask import has_app_context
+    from sqlalchemy import select
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return self.run(
+                manifestation_ids=manifestation_ids,
+                unlinked_only=unlinked_only,
+                chunk_size=chunk_size,
+                throttle_delay=throttle_delay,
+            )
+
+    from app.core.cache import cache
+    from app.core.lod_linking_service import resolve_manifestation_links
+    from app.db import db
+    from app.db.core import Expression, Manifestation, SemanticLink
+    from app.db.models import InstanceSettings
+
+    task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
+    if task_id:
+        try:
+            cache.set("lod:active_task_id", task_id, timeout=86400)
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    try:
+        if manifestation_ids is None:
+            query = select(Manifestation.id)
+            if unlinked_only:
+                manif_subq = select(1).where(
+                    SemanticLink.entity_type == "manifestation",
+                    SemanticLink.entity_id == Manifestation.id,
+                )
+                work_subq = (
+                    select(1)
+                    .select_from(Expression)
+                    .where(
+                        Expression.id == Manifestation.expression_id,
+                        SemanticLink.entity_type == "work",
+                        SemanticLink.entity_id == Expression.work_id,
+                    )
+                )
+                query = query.where(~manif_subq.exists()).where(~work_subq.exists())
+            manifestation_ids = list(db.session.execute(query).scalars().all())
+        elif unlinked_only and manifestation_ids:
+            manif_linked = set(
+                db.session.execute(
+                    select(SemanticLink.entity_id).where(
+                        SemanticLink.entity_type == "manifestation",
+                        SemanticLink.entity_id.in_(manifestation_ids),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            # Also find works linked to these manifestations via expression
+            manif_work_map = dict(
+                db.session.execute(
+                    select(Manifestation.id, Expression.work_id)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .where(
+                        Manifestation.id.in_(manifestation_ids),
+                        Expression.work_id.isnot(None),
+                    )
+                ).all()
+            )
+            work_ids = list({w for w in manif_work_map.values() if w})
+            linked_work_ids = (
+                set(
+                    db.session.execute(
+                        select(SemanticLink.entity_id).where(
+                            SemanticLink.entity_type == "work",
+                            SemanticLink.entity_id.in_(work_ids),
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                if work_ids
+                else set()
+            )
+            manifestation_ids = [
+                mid for mid in manifestation_ids if mid not in manif_linked and manif_work_map.get(mid) not in linked_work_ids
+            ]
+
+        total = len(manifestation_ids)
+        counts: dict[str, int] = {"dbpedia": 0, "geonames": 0, "wordnet": 0}
+        recent_logs: list[dict[str, Any]] = []
+
+        if total == 0:
+            return {
+                "status": "completed",
+                "total": 0,
+                "processed": 0,
+                "percentage": 100.0,
+                "total_resolved": 0,
+                "counts": counts,
+                "recent_logs": [],
+            }
+
+        try:
+            self.update_state(
+                state="STARTED",
+                meta={
+                    "total": total,
+                    "processed": 0,
+                    "percentage": 0.0,
+                    "total_resolved": 0,
+                    "counts": counts,
+                    "recent_logs": [],
+                },
+            )
+        except (ValueError, AttributeError):
+            pass
+
+        processed = 0
+        total_resolved = 0
+
+        for i in range(0, total, chunk_size):
+            chunk = manifestation_ids[i : i + chunk_size]
+            for mid in chunk:
+                if task_id and (
+                    cache.get(f"lod:cancel_task:{task_id}")
+                    or (cache.get("lod:active_task_id") != task_id and InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") != task_id)
+                ):
+                    logger.info("Batch LOD reconciliation task %s cancelled by user request", task_id)
+                    percentage = round((processed / total) * 100, 1) if total > 0 else 0.0
+                    try:
+                        self.update_state(
+                            state="REVOKED",
+                            meta={
+                                "total": total,
+                                "processed": processed,
+                                "percentage": percentage,
+                                "total_resolved": total_resolved,
+                                "counts": counts,
+                                "recent_logs": list(recent_logs),
+                            },
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+                    return {
+                        "status": "cancelled",
+                        "total": total,
+                        "processed": processed,
+                        "percentage": percentage,
+                        "total_resolved": total_resolved,
+                        "counts": counts,
+                        "recent_logs": list(recent_logs),
+                    }
+
+                item_title = f"Manifestation #{mid}"
+                try:
+                    manif = db.session.get(Manifestation, mid)
+                    if manif and manif.title:
+                        item_title = manif.title
+                except Exception:  # pylint: disable=broad-except
+                    pass
+
+                try:
+                    links = resolve_manifestation_links(mid)
+                    total_resolved += len(links)
+                    for link in links:
+                        auth = (link.authority or "").lower()
+                        counts[auth] = counts.get(auth, 0) + 1
+
+                    log_entry = {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "manifestation_id": mid,
+                        "title": item_title,
+                        "status": "success" if links else "skipped",
+                        "links_added": len(links),
+                        "authorities": list({link.authority for link in links}),
+                        "error": None,
+                    }
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.warning("Batch LOD resolution failed for manifestation %d: %s", mid, exc)
+                    log_entry = {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "manifestation_id": mid,
+                        "title": item_title,
+                        "status": "error",
+                        "links_added": 0,
+                        "authorities": [],
+                        "error": str(exc),
+                    }
+
+                processed += 1
+                recent_logs.append(log_entry)
+                if len(recent_logs) > 50:
+                    recent_logs.pop(0)
+
+                percentage = round((processed / total) * 100, 1)
+                try:
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "total": total,
+                            "processed": processed,
+                            "percentage": percentage,
+                            "total_resolved": total_resolved,
+                            "counts": counts,
+                            "recent_logs": list(recent_logs),
+                        },
+                    )
+                except (ValueError, AttributeError):
+                    pass
+
+            if i + chunk_size < total and throttle_delay > 0:
+                time.sleep(throttle_delay)
+
+        return {
+            "status": "completed",
+            "total": total,
+            "processed": processed,
+            "percentage": 100.0,
+            "total_resolved": total_resolved,
+            "counts": counts,
+            "recent_logs": list(recent_logs),
+        }
+    finally:
+        if task_id:
+            try:
+                if cache.get("lod:active_task_id") == task_id:
+                    cache.delete("lod:active_task_id")
+                if InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") == task_id:
+                    InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+            except Exception:  # pylint: disable=broad-except
+                pass

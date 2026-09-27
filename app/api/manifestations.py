@@ -30,6 +30,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
+from app.db.core import SemanticLink
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image, validate_upload_file
@@ -46,6 +47,8 @@ def get_manifestations() -> tuple[Response, int]:
     q = request.args.get("q", "").strip()
     category_filter = request.args.get("category")
     format_filter = request.args.get("format")
+    lod_authority = (request.args.get("lod_authority") or "").strip().lower()
+    lod_status = (request.args.get("lod_status") or "").strip().lower()
     category_list = parse_csv_param(category_filter)
     format_list_raw = parse_csv_param(format_filter)
     from app.core.format_normalizer import expand_format_filter
@@ -97,6 +100,8 @@ def get_manifestations() -> tuple[Response, int]:
             statuses=statuses_list,
             ownership=ownership_list,
             user_id=user_id,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
         )
 
         if result_ids:
@@ -202,6 +207,41 @@ def get_manifestations() -> tuple[Response, int]:
                 query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
                 has_item_joined = True
             query = apply_statuses_filter(query, statuses_list, user_id=user_id)
+
+        if lod_authority:
+            manif_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            work_auth_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                db.func.lower(SemanticLink.authority) == lod_authority,
+            )
+            query = query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_auth_subq),
+                    Expression.work_id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.or_(
+                    Manifestation.id.in_(manif_subq),
+                    Expression.work_id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            query = query.filter(
+                db.and_(
+                    ~Manifestation.id.in_(manif_subq),
+                    ~Expression.work_id.in_(work_subq),
+                )
+            )
 
         query = query.order_by(Manifestation.id.desc())
         total = query.count()
@@ -481,6 +521,13 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             manifestation.expression.work.meta["authors"] = metadata["Authors"]
         db.session.commit()
 
+    try:
+        from app.core.tasks import link_manifestation_lod_task
+
+        link_manifestation_lod_task.delay(manifestation.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.debug("Failed to dispatch LOD task: %s", exc)
+
     return jsonify(**metadata), 200
 
 
@@ -582,6 +629,14 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
             manif.expression.work.meta = work_meta
 
     db.session.commit()
+
+    try:
+        from app.core.tasks import link_manifestation_lod_task
+
+        link_manifestation_lod_task.delay(manif.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.debug("Failed to dispatch LOD task on refetch: %s", exc)
+
     return jsonify({"success": True, "data": {"id": manif.id}, "error": None}), 200
 
 
@@ -928,3 +983,77 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         db.session.rollback()
         logger.exception("Failed to delete manifestation")
         return jsonify({"success": False, "data": None, "error": "Unable to delete manifestation"}), 500
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links", methods=["GET"])
+@optional_auth
+def get_manifestation_semantic_links(manifestation_id: int) -> tuple[Response, int]:
+    """Fetch grouped Linked Open Data links for a manifestation and its parent work."""
+    from app.core.lod_linking_service import get_manifestation_semantic_links_dict
+
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    data = get_manifestation_semantic_links_dict(manifestation_id)
+    return jsonify({"success": True, "data": data, "error": None}), 200
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/relink", methods=["POST"])
+@require_auth
+def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Response, int]:
+    """Trigger an on-demand asynchronous background LOD reconciliation task."""
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    from app.core.tasks import link_manifestation_lod_task
+
+    try:
+        task = link_manifestation_lod_task.delay(manifestation_id)
+        task_id = str(task.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Failed to enqueue LOD relink task for manifestation %d: %s", manifestation_id, exc)
+        task_id = "mock-task-id"
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "message": "Background LOD linking scheduled",
+                    "status": "pending",
+                },
+                "error": None,
+            }
+        ),
+        202,
+    )
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
+@require_auth
+def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
+    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work."""
+    from app.db.core import SemanticLink
+
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    link = db.session.get(SemanticLink, link_id)
+    if not link:
+        return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
+
+    work_id = manif.expression.work_id if manif.expression else None
+    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
+        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
+    )
+
+    if not is_valid_assoc:
+        return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
+
+    db.session.delete(link)
+    db.session.commit()
+    return "", 204
