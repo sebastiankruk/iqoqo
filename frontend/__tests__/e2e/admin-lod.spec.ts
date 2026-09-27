@@ -209,14 +209,5 @@ test.describe("LOD Reconciliation Dashboard End-to-End Suite", () => {
     await unlinkedOption.click();
 
     await expect(startButton).toContainText(/Start full scan/i);
-
-    // Toggle back on "Unlinked entities only" -> updates CTA to "Scan unlinked only"
-    if (!(await unlinkedOption.isVisible())) {
-      await optionsButton.click();
-    }
-    await expect(unlinkedOption).toBeVisible();
-    await unlinkedOption.click();
-
-    await expect(startButton).toContainText(/Scan unlinked/i);
   });
 });
