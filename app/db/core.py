@@ -841,8 +841,12 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
     :attr entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
     :attr entity_id: The primary key of the affected entity.
-    :attr change_type: A label such as ``"metadata_edit"``, ``"merge"``,
-        ``"duplicate_resolved"``, or ``"field_update"``.
+    :attr change_type: A label such as ``"metadata_edit"``,
+        ``"merge_work"``, ``"merge_expression"``, ``"merge_manifestation"``,
+        ``"duplicate_resolved"``, or ``"field_update"``.  Merges are labelled
+        per tier by both entry points, so one query reconstructs every merge
+        regardless of whether it came from Relation Management or the
+        duplicate-review queue.
     :attr diff: Optional JSON snapshot of the before/after field values.
     """
 
