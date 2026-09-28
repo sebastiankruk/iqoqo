@@ -51,7 +51,7 @@ from typing import Any
 from uuid import UUID
 
 import requests
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import Select, delete, func, literal, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -1229,6 +1229,11 @@ def _repoint_unique_child(
     Rows whose natural key already exists on the target are deleted, since the
     surviving target row is authoritative.
 
+    This must not assume a surrogate ``id`` column: :class:`WorkPart` declares
+    a composite primary key of ``(container_work_id, part_work_id)`` and has no
+    ``id`` at all, so selecting the primary key would raise ``AttributeError``
+    and fail the whole merge for any Work involved in a box set.
+
     Args:
         model: Model class holding the FK column.
         fk_attribute: Name of the FK column on ``model``.
@@ -1244,8 +1249,8 @@ def _repoint_unique_child(
     for row in rows:
         collision_filters = [getattr(model, unique_attribute) == getattr(row, unique_attribute) for unique_attribute in unique_attributes]
         existing = db.session.execute(
-            select(model.id).where(getattr(model, fk_attribute) == target_id, *collision_filters)
-        ).scalar_one_or_none()
+            select(literal(1)).where(getattr(model, fk_attribute) == target_id, *collision_filters).limit(1)
+        ).first()
         if existing is not None:
             db.session.delete(row)
         else:
@@ -1384,6 +1389,17 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
         note_count = _repoint_simple(SocialNote, "work_id", source.id, target.id)
         roadmap_count = _repoint_simple(RoadmapItem, "work_id", source.id, target.id)
         escalation_count = _repoint_simple(EscalationRequest, "work_id", source.id, target.id)
+        # UserWorkIntent.work_id is ON DELETE CASCADE, so a wishlist entry aimed at
+        # the source Work would be silently destroyed by the delete below instead of
+        # following the survivor.  Re-point it, collapsing onto an identical entry
+        # the user already has for the target.
+        wishlist_count = _repoint_unique_child(
+            UserWorkIntent,
+            "work_id",
+            ("user_id", "expression_id", "manifestation_id"),
+            source.id,
+            target.id,
+        )
         semantic_count = _repoint_semantic_links(TIER_WORK, source.id, target.id)
 
         target.meta = _consolidate_meta(target.meta, source.meta)
@@ -1406,6 +1422,7 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
                     "reparented_notes": note_count,
                     "reparented_roadmap_items": roadmap_count,
                     "reparented_escalations": escalation_count,
+                    "reparented_wishlist_entries": wishlist_count,
                     "reparented_semantic_links": semantic_count,
                 },
             )

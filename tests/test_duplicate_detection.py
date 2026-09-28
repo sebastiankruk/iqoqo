@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core import duplicate_service as svc
@@ -36,6 +36,8 @@ from app.db.models import (
     Item,
     Manifestation,
     SemanticLink,
+    User,
+    UserWorkIntent,
     Work,
     WorkContribution,
     db,
@@ -515,6 +517,115 @@ def test_merge_work_moves_user_content_and_audit_logs_the_merge():
     assert audit[0].entity_id == source.id
     assert audit[0].diff["target_id"] == target.id
     assert audit[0].actor_id == user_id
+
+
+def test_merge_work_preserves_wishlist_entries(app):
+    """UserWorkIntent.work_id is ON DELETE CASCADE, so it must be re-pointed.
+
+    Regression: merge_work re-pointed every referencing table except the
+    wishlist, so merging a Work a user had on their list silently destroyed the
+    entry on PostgreSQL.  Verified with SQLite foreign keys enforced.
+    """
+    target = make_work("Dune")
+    source = make_work("Dune")
+    user = User(email="wishlist-owner@iqoqo.local", display_name="Reader")
+    user.set_password("x")
+    db.session.add(user)
+    db.session.commit()
+    wishlist = UserWorkIntent(user_id=user.id, work_id=source.id, status="want_to_read")
+    db.session.add(wishlist)
+    db.session.commit()
+    wishlist_id, target_id, source_id = wishlist.id, target.id, source.id
+
+    # SQLite ignores foreign keys unless asked; PostgreSQL always enforces them.
+    db.session.execute(text("PRAGMA foreign_keys=ON"))
+    try:
+        svc.merge_work(source, target, user_id=None)
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+    db.session.expire_all()
+
+    moved = db.session.get(UserWorkIntent, wishlist_id)
+    assert moved is not None, "the wishlist entry was cascade-deleted with the source Work"
+    assert moved.work_id == target_id
+    assert db.session.get(Work, source_id) is None
+
+
+def test_merge_work_collapses_duplicate_wishlist_entries():
+    """Two wishlist rows that become identical after the merge collapse to one."""
+    target = make_work("Dune")
+    source = make_work("Dune")
+    user = User(email="double-wish@iqoqo.local", display_name="Reader")
+    user.set_password("x")
+    db.session.add(user)
+    db.session.commit()
+    db.session.add_all(
+        [
+            UserWorkIntent(user_id=user.id, work_id=source.id, status="want_to_read"),
+            UserWorkIntent(user_id=user.id, work_id=target.id, status="want_to_read"),
+        ]
+    )
+    db.session.commit()
+    target_id = target.id
+
+    svc.merge_work(source, target, user_id=None)
+
+    rows = db.session.execute(select(UserWorkIntent).where(UserWorkIntent.user_id == user.id)).scalars().all()
+    # The unique constraint (user_id, work_id, expression_id, manifestation_id)
+    # would reject a second row, so the duplicate is dropped rather than kept.
+    assert len(rows) == 1
+    assert rows[0].work_id == target_id
+
+
+def test_merge_work_handles_box_set_container(app):
+    """WorkPart has a composite primary key and no surrogate id.
+
+    Regression: the re-point helper selected ``model.id`` to detect a natural-key
+    collision, which raised AttributeError for WorkPart and failed the entire
+    merge for any Work involved in a box set or anthology (F15).
+    """
+    from app.db.contributions import WorkPart
+
+    container = make_work("The Complete Anthology")
+    member = make_work("Short Story I")
+    source = make_work("The Complete Anthology")
+    db.session.add(WorkPart(container_work_id=source.id, part_work_id=member.id, sequence=0))
+    db.session.commit()
+    target_id, source_id, member_id = container.id, source.id, member.id
+
+    db.session.execute(text("PRAGMA foreign_keys=ON"))
+    try:
+        svc.merge_work(source, container, user_id=None)
+    finally:
+        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+    db.session.expire_all()
+
+    reparented = db.session.get(WorkPart, {"container_work_id": target_id, "part_work_id": member_id})
+    assert reparented is not None, "the box-set part row was lost"
+    assert db.session.get(Work, source_id) is None
+
+
+def test_merge_work_deduplicates_box_set_parts():
+    """Merging two containers holding the same part keeps one row, not two."""
+    from app.db.contributions import WorkPart
+
+    target = make_work("Box A")
+    source = make_work("Box B")
+    member = make_work("Shared Story")
+    db.session.add_all(
+        [
+            WorkPart(container_work_id=source.id, part_work_id=member.id, sequence=0),
+            WorkPart(container_work_id=target.id, part_work_id=member.id, sequence=0),
+        ]
+    )
+    db.session.commit()
+    target_id, member_id = target.id, member.id
+
+    svc.merge_work(source, target, user_id=None)
+
+    rows = db.session.execute(select(WorkPart).where(WorkPart.container_work_id == target_id)).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].part_work_id == member_id
 
 
 def test_merge_work_rolls_back_completely_on_failure():
