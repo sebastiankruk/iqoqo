@@ -1195,6 +1195,77 @@ def test_v0_8_2_duplicate_provenance_upgrade_and_downgrade() -> None:
         engine.dispose()
 
 
+def test_v0_8_2_duplicate_provenance_never_bakes_the_schema_into_the_table_name() -> None:
+    """Schema must be passed as a separate identifier, not glued into the name.
+
+    Regression: the migration handed Alembic ``"inventory.duplicate_candidates"``
+    as the table name.  SQLAlchemy renders that as a *single* quoted identifier,
+    which PostgreSQL then looks for in ``search_path`` instead of the
+    ``inventory`` schema, so the migration failed with::
+
+        relation "inventory.duplicate_candidates" does not exist
+
+    on a table that was demonstrably present.  The behavioural migration test
+    above runs on SQLite, where ``schema`` is ``None`` and the distinction
+    cannot appear, so it passed against the broken code -- this asserts the
+    call shape for the PostgreSQL path directly.
+    """
+    from importlib import import_module
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    migration = import_module("migrations.versions.v0_8_2_duplicate_provenance")
+
+    class _PostgresBind:
+        dialect = SimpleNamespace(name="postgresql")
+
+    recorded: list[tuple[str, tuple, dict]] = []
+
+    def _record(name):
+        def _inner(*args, **kwargs):
+            recorded.append((name, args, kwargs))
+            return MagicMock(__enter__=lambda self: self, __exit__=lambda self, *a: False)
+
+        return _inner
+
+    original_get_bind = migration.op.get_bind
+    original_add_column = migration.op.add_column
+    original_batch = migration.op.batch_alter_table
+    original_execute = migration.op.execute
+    original_drop = migration.op.drop_column
+    try:
+        migration.op.get_bind = lambda: _PostgresBind()
+        migration.op.add_column = _record("add_column")
+        migration.op.batch_alter_table = _record("batch_alter_table")
+        migration.op.execute = _record("execute")
+        migration.op.drop_column = _record("drop_column")
+        migration.upgrade()
+        migration.downgrade()
+    finally:
+        migration.op.get_bind = original_get_bind
+        migration.op.add_column = original_add_column
+        migration.op.batch_alter_table = original_batch
+        migration.op.execute = original_execute
+        migration.op.drop_column = original_drop
+
+    for name, args, kwargs in recorded:
+        if name in {"add_column", "drop_column"}:
+            table = args[0]
+            assert table == "duplicate_candidates", f"{name} got a pre-qualified table name {table!r}; pass schema= instead"
+            assert kwargs.get("schema") == "inventory", f"{name} must pass schema='inventory' as a separate argument"
+        if name == "batch_alter_table":
+            assert args[0] == "duplicate_candidates", f"batch_alter_table got {args[0]!r}"
+            assert kwargs.get("schema") == "inventory"
+
+    # Raw SQL is not re-rendered, so the qualified form is correct there.
+    raw = [args[0] for name, args, _ in recorded if name == "execute"]
+    assert raw, "expected the backfill to issue raw SQL"
+    assert all(
+        statement.startswith("UPDATE inventory.duplicate_candidates") or statement.startswith("DELETE FROM inventory.duplicate_candidates")
+        for statement in raw
+    )
+
+
 def test_duplicate_candidates_model_index_compiles_for_postgresql() -> None:
     """The ORM index must emit the same DDL the migration does.
 

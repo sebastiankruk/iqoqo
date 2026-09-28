@@ -39,32 +39,51 @@ branch_labels = None
 depends_on = None
 
 
+#: Unqualified table name.  Every ``op.*`` call takes this and passes ``schema``
+#: separately: handing Alembic a pre-qualified ``"inventory.duplicate_candidates"``
+#: makes SQLAlchemy render it as ONE quoted identifier, which PostgreSQL then
+#: looks for in ``search_path`` rather than in the ``inventory`` schema, so the
+#: statement fails with "relation does not exist" on a table that is plainly
+#: there.  The qualified form is only correct inside raw SQL passed to
+#: ``op.execute``, which is not re-rendered.
+_TABLE = "duplicate_candidates"
+
+
+def _schema() -> str | None:
+    """Return the schema name when the dialect has one.
+
+    Returns:
+        ``"inventory"`` on PostgreSQL, ``None`` elsewhere.
+    """
+    return "inventory" if op.get_bind().dialect.name == "postgresql" else None
+
+
 def _qualified(schema: str | None) -> str:
-    """Return the schema-qualified table name for DDL emitted by ``op.execute``.
+    """Return the schema-qualified name for raw SQL.
 
     Args:
         schema: Schema name, or ``None`` on dialects without one.
 
     Returns:
-        The table reference to interpolate into raw SQL.
+        The table reference to interpolate into a SQL string.
     """
-    return "duplicate_candidates" if schema is None else f"{schema}.duplicate_candidates"
+    return _TABLE if schema is None else f"{schema}.{_TABLE}"
 
 
 def upgrade():
     """Add the provenance column, relax ``confidence``, and backfill."""
-    schema = "inventory" if op.get_bind().dialect.name == "postgresql" else None
-    table = _qualified(schema)
+    schema = _schema()
 
     op.add_column(
-        table,
+        _TABLE,
         sa.Column("resolution_source", sa.String(length=20), nullable=False, server_default="heuristic"),
+        schema=schema,
     )
     # Every existing row came from the LLM path, so derive provenance from the
     # presence of a rationale rather than trusting the column default.
-    op.execute(f"UPDATE {table} SET resolution_source = 'llama' WHERE llm_reasoning IS NOT NULL")
+    op.execute(f"UPDATE {_qualified(schema)} SET resolution_source = 'llama' WHERE llm_reasoning IS NOT NULL")
 
-    with op.batch_alter_table(table, schema=schema) as batch_op:
+    with op.batch_alter_table(_TABLE, schema=schema) as batch_op:
         batch_op.alter_column("confidence", existing_type=sa.Float(), nullable=True)
 
 
@@ -78,10 +97,9 @@ def downgrade():
     ``merged`` or ``dismissed`` status necessarily passed through a review
     action, and a reviewed candidate always has a confidence value.
     """
-    schema = "inventory" if op.get_bind().dialect.name == "postgresql" else None
-    table = _qualified(schema)
+    schema = _schema()
 
-    op.execute(f"DELETE FROM {table} WHERE confidence IS NULL")
-    with op.batch_alter_table(table, schema=schema) as batch_op:
+    op.execute(f"DELETE FROM {_qualified(schema)} WHERE confidence IS NULL")
+    with op.batch_alter_table(_TABLE, schema=schema) as batch_op:
         batch_op.alter_column("confidence", existing_type=sa.Float(), nullable=False)
-    op.drop_column(table, "resolution_source", schema=schema)
+    op.drop_column(_TABLE, "resolution_source", schema=schema)
