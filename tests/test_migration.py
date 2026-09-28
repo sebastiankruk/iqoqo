@@ -453,10 +453,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_2_duplicate_candidates"
+    assert heads[0] == "v0_8_2_duplicate_provenance"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_2_duplicate_provenance",
         "v0_8_2_duplicate_candidates",
         "v0_8_2_semantic_links",
         "v0_8_1_oauth_exchange_codes",
@@ -1106,6 +1107,90 @@ def test_v0_8_2_duplicate_candidates_upgrade_and_downgrade() -> None:
 
         run_migration(migration.downgrade)
         assert not sa.inspect(engine).has_table("duplicate_candidates")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_provenance_upgrade_and_downgrade() -> None:
+    """Provenance is recorded, confidence becomes nullable, and both reverse."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_provenance")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        previous_op = migration.op
+        migration.op = Operations(MigrationContext.configure(connection))
+        try:
+            connection.execute(
+                sa.text(
+                    "CREATE TABLE duplicate_candidates (id INTEGER PRIMARY KEY, entity_tier VARCHAR(20) NOT NULL, "
+                    "source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, confidence FLOAT NOT NULL, "
+                    "llm_reasoning TEXT, status VARCHAR(20) NOT NULL)"
+                )
+            )
+            # One pre-existing LLM-era row, which must be backfilled to 'llama'.
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status) "
+                    "VALUES ('work', 1, 2, 0.91, 'Same work.', 'pending')"
+                )
+            )
+            # One row that never had a rationale, which must land on 'heuristic'.
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status) "
+                    "VALUES ('work', 3, 4, 0.5, NULL, 'pending')"
+                )
+            )
+        finally:
+            migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        columns = {c["name"]: c for c in inspector.get_columns("duplicate_candidates")}
+        assert "resolution_source" in columns
+        assert columns["confidence"]["nullable"] is True
+
+        with engine.connect() as connection:
+            rows = dict(connection.execute(sa.text("SELECT llm_reasoning, resolution_source FROM duplicate_candidates ORDER BY id")).all())
+        assert rows["Same work."] == "llama", "a row with an LLM rationale must be backfilled to 'llama'"
+        assert rows[None] == "heuristic", "a row without a rationale must be backfilled to 'heuristic'"
+
+        # A heuristic candidate stores no probability at all.
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status, resolution_source) "
+                    "VALUES ('work', 5, 6, NULL, 'heuristic: identical ean', 'pending', 'heuristic')"
+                )
+            )
+
+        run_migration(migration.downgrade)
+        inspector = sa.inspect(engine)
+        assert "resolution_source" not in {c["name"] for c in inspector.get_columns("duplicate_candidates")}
+        assert inspector.get_columns("duplicate_candidates") is not None
+        confidence = next(c for c in inspector.get_columns("duplicate_candidates") if c["name"] == "confidence")
+        assert confidence["nullable"] is False
+        # The lossy part of the downgrade: a NULL-confidence row cannot survive.
+        with engine.connect() as connection:
+            remaining = connection.execute(sa.text("SELECT count(*) FROM duplicate_candidates")).scalar()
+        assert remaining == 2, "only the NULL-confidence candidate should have been discarded"
     finally:
         engine.dispose()
 

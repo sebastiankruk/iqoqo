@@ -287,7 +287,11 @@ def test_work_creators_reads_authors_from_meta():
 
 
 def test_screening_pairs_works_with_matching_titles():
-    """Heuristic screening must surface a pair without calling the LLM."""
+    """An identical title corroborated by a shared author is queued with no model.
+
+    This is the deterministic accept path: a categorical match, not a
+    probability, so it neither consults the LLM nor needs a threshold.
+    """
     make_work("The Left Hand of Darkness", authors=["Ursula K. Le Guin"])
     make_work("The Left Hand of Darkness", authors=["Ursula K. Le Guin"])
     make_work("A Wizard of Earthsea", authors=["Ursula K. Le Guin"])
@@ -296,8 +300,12 @@ def test_screening_pairs_works_with_matching_titles():
         report = svc.run_detection(tier="work", threshold=0.8)
 
     assert report.work_candidates == 1
-    assert mock_llm.call_count == 1
+    assert report.auto_accepted == 1
+    assert mock_llm.call_count == 0
     assert report.created == 1
+    # A classifier verdict carries no probability, so the column stays NULL.
+    assert DuplicateCandidate.query.one().confidence is None
+    assert DuplicateCandidate.query.one().resolution_source == "heuristic"
 
 
 def test_screening_ignores_unrelated_titles():
@@ -314,10 +322,12 @@ def test_screening_ignores_unrelated_titles():
 
 
 def test_screening_matches_manifestations_by_shared_ean():
-    """A shared EAN is near-conclusive evidence for a Manifestation duplicate.
+    """A shared EAN is conclusive, so the pair is accepted without a model.
 
     ``isbn13`` is uniquely constrained, so it can never be shared between two
-    Manifestations; the non-unique EAN/ UPC/barcode family carries this signal.
+    Manifestations; the non-unique EAN/UPC/barcode family carries this signal.
+    Previously this pair still paid for an LLM call despite the classifier
+    already knowing the answer.
     """
     work = make_work("Dune", authors=["Frank Herbert"])
     expression = make_expression(work)
@@ -328,7 +338,93 @@ def test_screening_matches_manifestations_by_shared_ean():
         report = svc.run_detection(tier="manifestation")
 
     assert report.manifestation_candidates == 1
+    assert report.auto_accepted == 1
+    assert mock_llm.call_count == 0
+    assert report.created == 1
+
+
+def test_same_creator_different_volume_is_rejected_without_a_model():
+    """Shared author plus a below-floor title is a rule, not an LLM decision.
+
+    A parent Work and its sequel share an author and a title prefix, so they
+    block on each other; the subtitle pushes title similarity to 0.69, just under
+    the 0.72 floor.  This is the same-author noise the model used to filter.
+    """
+    make_work("The Lord of the Rings", authors=["J.R.R. Tolkien"])
+    make_work("The Lord of the Rings: The Two Towers", authors=["J.R.R. Tolkien"])
+
+    with patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate()) as mock_llm:
+        report = svc.run_detection(tier="work")
+
+    assert report.candidate_pairs == 1
+    assert report.auto_rejected == 1
+    assert report.created == 0
+    assert mock_llm.call_count == 0
+    assert DuplicateCandidate.query.count() == 0
+
+
+def test_blocking_removes_unrelated_works_before_classification():
+    """Unrelated titles share no blocking key, so they are never even paired.
+
+    Documents why the LLM never saw cross-semantic cases: the blocking stage
+    removes them first, which leaves the model adjudicating only pairs that
+    already look lexically alike.
+    """
+    make_work("Neuromancer", authors=["William Gibson"])
+    make_work("Snow Crash", authors=["William Gibson"])
+
+    with patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate()) as mock_llm:
+        report = svc.run_detection(tier="work")
+
+    assert report.candidate_pairs == 0
+    assert mock_llm.call_count == 0
+    assert report.auto_rejected == 0
+
+
+def test_grey_zone_is_left_undecided_by_the_heuristic_engine():
+    """An identical title with conflicting creators is the genuine grey zone."""
+    make_work("Emma", authors=["Jane Austen"])
+    make_work("Emma", authors=["Anonymous"])
+
+    with patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate()) as mock_llm:
+        report = svc.run_detection(tier="work")
+
+    assert report.candidate_pairs == 1
+    assert report.needs_llm == 1
+    assert report.created == 0
+    assert mock_llm.call_count == 0
+
+
+def test_llama_engine_adjudicates_the_grey_zone():
+    """The same pair is settled when the operator opts into inference."""
+    make_work("Emma", authors=["Jane Austen"])
+    make_work("Emma", authors=["Anonymous"])
+
+    with patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate()) as mock_llm:
+        report = svc.run_detection(tier="work", engine="llama")
+
+    assert report.needs_llm == 1
     assert mock_llm.call_count == 1
+    assert report.created == 1
+    assert DuplicateCandidate.query.one().resolution_source == "llama"
+    assert DuplicateCandidate.query.one().confidence == 0.95
+
+
+def test_heuristic_engine_needs_no_inference_service():
+    """A scan must complete with Ollama unreachable under the default engine."""
+    with patch.object(svc, "check_ollama_health", return_value=(False, "Ollama unreachable at http://x:1 (Error).")) as probe:
+        make_work("Dune", authors=["Frank Herbert"])
+        make_work("Dune", authors=["Frank Herbert"])
+        report = svc.run_detection(tier="work")
+
+    assert report.created == 1
+    assert probe.call_count == 0
+
+
+def test_run_detection_rejects_unknown_engine():
+    """An unrecognized engine must be rejected, not silently downgraded."""
+    with pytest.raises(svc.DuplicateServiceError):
+        svc.run_detection(engine="gpt-9")
 
 
 def test_isbn13_is_uniquely_constrained_so_it_can_never_be_a_shared_blocking_key():
@@ -364,12 +460,16 @@ def test_dry_run_writes_nothing():
 
 
 def test_below_threshold_is_not_queued():
-    """A low-confidence verdict must not create a review candidate."""
-    make_work("Dune", authors=["Frank Herbert"])
-    make_work("Dune", authors=["Frank Herbert"])
+    """A low-confidence verdict must not create a review candidate.
+
+    The pair shares a title but not a creator, so the classifier leaves it
+    undecided and the ``llama`` engine is the one that applies the threshold.
+    """
+    make_work("Emma", authors=["Jane Austen"])
+    make_work("Emma", authors=["Anonymous"])
 
     with patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate(confidence=0.55)):
-        report = svc.run_detection(tier="work", threshold=0.8)
+        report = svc.run_detection(tier="work", threshold=0.8, engine="llama")
 
     assert report.below_threshold == 1
     assert report.created == 0
@@ -447,11 +547,11 @@ def test_evaluate_pair_raises_on_ollama_error():
 
 def test_llm_failure_is_recorded_and_skipped_not_raised():
     """An offline LLM must never abort a whole detection run."""
-    make_work("Dune", authors=["Frank Herbert"])
-    make_work("Dune", authors=["Frank Herbert"])
+    make_work("Emma", authors=["Jane Austen"])
+    make_work("Emma", authors=["Anonymous"])
 
     with patch("app.core.duplicate_service.requests.post", side_effect=svc.requests.exceptions.ConnectionError("down")):
-        report = svc.run_detection(tier="work")
+        report = svc.run_detection(tier="work", engine="llama")
 
     assert report.llm_failures == 1
     assert report.created == 0
@@ -1046,13 +1146,34 @@ def test_api_merge_executes_and_rolls_back_on_failure(client, admin_headers):
     assert db.session.get(Expression, expression.id).work_id == target.id
 
 
-def test_api_scan_requires_healthy_ollama(client, admin_headers):
-    """An unreachable Ollama short-circuits the scan with actionable guidance."""
-    with patch.object(svc, "check_ollama_health", return_value=(False, "Ollama unreachable at http://x:1 (Error).")):
-        response = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work"})
+def test_api_scan_requires_healthy_ollama_only_for_the_llama_engine(client, admin_headers):
+    """The Ollama probe is a prerequisite of the ``llama`` engine only.
+
+    The default engine resolves candidates deterministically, so demanding a
+    running model would make an ordinary offline scan impossible.
+    """
+    with patch.object(svc, "check_ollama_health", return_value=(False, "Ollama unreachable at http://x:1 (Error).")) as probe:
+        response = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work", "engine": "llama"})
 
     assert response.status_code == 409
     assert "ollama pull" in response.get_json()["error"]
+    assert probe.call_count == 1
+
+    make_work("Dune", authors=["Frank Herbert"])
+    make_work("Dune", authors=["Frank Herbert"])
+    with patch.object(svc, "check_ollama_health", return_value=(False, "Ollama unreachable at http://x:1 (Error).")) as probe:
+        response = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work"})
+
+    assert response.status_code == 200
+    assert probe.call_count == 0, "the default engine must not probe for an inference service"
+
+
+def test_api_scan_rejects_unknown_engine(client, admin_headers):
+    """An unrecognized engine must be a 400, not a silent fallback."""
+    response = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work", "engine": "gpt-9"})
+
+    assert response.status_code == 400
+    assert "engine" in response.get_json()["error"]
 
 
 def test_api_scan_queues_candidates(client, admin_headers):
@@ -1084,27 +1205,29 @@ def test_api_scan_rejects_bad_tier(client, admin_headers):
 
 
 def test_api_full_lifecycle_from_detection_to_merge(client, admin_headers):
-    """The end-to-end path: detect, list, compare, merge, and verify the catalog."""
+    """The end-to-end path on the default engine: detect, list, merge, verify.
+
+    Identical title plus a shared author is a categorical match, so the pair is
+    queued by the classifier with no model involved and no confidence attached.
+    """
     target = make_work("The Dispossessed", authors=["Ursula K. Le Guin"], year=1974)
     source = make_work("The Dispossessed", authors=["Ursula K. Le Guin"], year=1974)
     target_expression = make_expression(target)
     source_expression = make_expression(source)
     source_item_work = make_expression(source)
 
-    with (
-        patch.object(svc, "check_ollama_health", return_value=(True, "ok")),
-        patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate(0.97)),
-    ):
-        scan = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work"})
+    scan = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work"})
     assert scan.get_json()["data"]["created"] == 1
+    assert scan.get_json()["data"]["engine"] == "heuristic"
 
-    queue = client.get(f"{DUPLICATES_URL}?min_confidence=0.9", headers=admin_headers).get_json()
+    queue = client.get(DUPLICATES_URL, headers=admin_headers).get_json()
     assert queue["meta"]["total"] == 1
-    candidate_id = queue["data"][0]["id"]
-    assert queue["data"][0]["llm_reasoning"].startswith("Same work, same edition.")
-    assert "heuristic:" in queue["data"][0]["llm_reasoning"]
+    candidate = queue["data"][0]
+    assert candidate["resolution_source"] == "heuristic"
+    assert candidate["confidence"] is None
+    assert "identical normalized title" in candidate["llm_reasoning"]
 
-    merged = client.post(f"{DUPLICATES_URL}/{candidate_id}/merge", headers=admin_headers, json={"primary_id": target.id})
+    merged = client.post(f"{DUPLICATES_URL}/{candidate['id']}/merge", headers=admin_headers, json={"primary_id": target.id})
     assert merged.status_code == 200
     assert merged.get_json()["data"]["primary_id"] == target.id
 
@@ -1113,16 +1236,64 @@ def test_api_full_lifecycle_from_detection_to_merge(client, admin_headers):
     for expression in (target_expression, source_expression, source_item_work):
         assert db.session.get(Expression, expression.id).work_id == target.id
 
+
+def test_api_full_lifecycle_through_the_llama_engine(client, admin_headers):
+    """The same path with inference opted in, including the confidence filter."""
+    target = make_work("Dune", authors=["Frank Herbert"], year=1965)
+    source = make_work("Dune", authors=["Frank Herbert"], year=1965)
+    make_expression(target)
+    make_expression(source)
+
+    with (
+        patch.object(svc, "check_ollama_health", return_value=(True, "ok")),
+        patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate(0.97)),
+    ):
+        scan = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work", "engine": "llama"})
+
+    # The classifier short-circuits a categorical match, so opting into the LLM
+    # engine still does not spend a call on it.
+    assert scan.get_json()["data"]["created"] == 1
+    assert scan.get_json()["data"]["llm_evaluations"] == 0
+
+    queue = client.get(f"{DUPLICATES_URL}?min_confidence=0.9", headers=admin_headers).get_json()
+    # A heuristic candidate has a NULL confidence, so the filter excludes it.
+    assert queue["meta"]["total"] == 0
+
+    grey_target = make_work("Emma", authors=["Anonymous"])
+    grey_source = make_work("Emma", authors=["Someone Distinct"])
+    make_expression(grey_target)
+    make_expression(grey_source)
+    with (
+        patch.object(svc, "check_ollama_health", return_value=(True, "ok")),
+        patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate(0.97)) as mock_llm,
+    ):
+        scan = client.post(f"{DUPLICATES_URL}/scan", headers=admin_headers, json={"tier": "work", "engine": "llama"})
+
+    assert scan.get_json()["data"]["llm_evaluations"] >= 1
+    assert mock_llm.call_count >= 1
+
+    queue = client.get(f"{DUPLICATES_URL}?min_confidence=0.9", headers=admin_headers).get_json()
+    llama_candidates = [c for c in queue["data"] if c["resolution_source"] == "llama"]
+    assert llama_candidates, "expected at least one llama-sourced candidate above the confidence filter"
+    assert llama_candidates[0]["confidence"] == 0.97
+    assert llama_candidates[0]["llm_reasoning"].startswith("Same work, same edition.")
+
+    merged = client.post(f"{DUPLICATES_URL}/{llama_candidates[0]['id']}/merge", headers=admin_headers, json={"primary_id": grey_target.id})
+    assert merged.status_code == 200
+
     # The resolved candidate leaves the pending queue but remains auditable.
-    assert client.get(DUPLICATES_URL, headers=admin_headers).get_json()["meta"]["total"] == 0
+    assert client.get(DUPLICATES_URL, headers=admin_headers).get_json()["meta"]["total"] == 1
     history = client.get(f"{DUPLICATES_URL}?status=merged", headers=admin_headers).get_json()
     assert history["meta"]["total"] == 1
     assert history["data"][0]["resolved_by_email"] == "test_admin@iqoqo.local"
 
+    db.session.expire_all()
+    assert db.session.get(Work, grey_source.id) is None
+
     audit = EntityAuditLog.query.filter_by(change_type="merge_work").all()
     assert len(audit) == 1
-    assert audit[0].diff["source_id"] == source.id
-    assert audit[0].diff["target_id"] == target.id
+    assert audit[0].diff["source_id"] == grey_source.id
+    assert audit[0].diff["target_id"] == grey_target.id
 
 
 # ---------------------------------------------------------------------------

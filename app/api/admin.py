@@ -1351,26 +1351,41 @@ def dismiss_duplicate_candidate_endpoint(candidate_id: int):
 def run_duplicate_scan_endpoint():
     """Trigger a detection run and queue new candidates for review.
 
-    Ollama health is verified up front so a missing prerequisite surfaces as a
-    409 with an actionable message rather than a run full of inference failures.
+    The default ``heuristic`` engine resolves candidates deterministically and
+    needs no inference service, so the Ollama health probe only runs when the
+    caller explicitly asks for the ``llama`` engine.
     """
     data = request.get_json(silent=True) or {}
 
-    healthy, message = duplicate_service.check_ollama_health()
-    if not healthy:
+    engine = data.get("engine") or duplicate_service.DEFAULT_ENGINE
+    if engine not in duplicate_service.DETECTION_ENGINES:
         return (
             jsonify(
                 {
                     "success": False,
-                    "error": f"{message.rstrip('.')}. Run 'ollama pull {duplicate_service.ollama_model()}' "
-                    "or set OLLAMA_DEDUPE_MODEL to an installed model",
+                    "error": f"Unknown engine: {engine!r}. Expected one of {sorted(duplicate_service.DETECTION_ENGINES)}",
                 }
             ),
-            409,
+            400,
         )
+
+    if engine == duplicate_service.ENGINE_LLAMA:
+        healthy, message = duplicate_service.check_ollama_health()
+        if not healthy:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"{message.rstrip('.')}. Run 'ollama pull {duplicate_service.ollama_model()}' "
+                        "or set OLLAMA_DEDUPE_MODEL to an installed model",
+                    }
+                ),
+                409,
+            )
 
     try:
         report = duplicate_service.run_detection(
+            engine=engine,
             tier=data.get("tier") or duplicate_service.TIER_ALL,
             threshold=float(data.get("threshold", duplicate_service.DEFAULT_THRESHOLD)),
             limit=data.get("limit"),

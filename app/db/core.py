@@ -105,6 +105,18 @@ DUPLICATE_STATUS_PENDING: str = "pending"
 DUPLICATE_STATUS_MERGED: str = "merged"
 DUPLICATE_STATUS_DISMISSED: str = "dismissed"
 
+#: Controlled vocabulary for :attr:`DuplicateCandidate.resolution_source`.
+#:
+#: ``heuristic`` — queued by the deterministic classifier, with no probability
+#:                attached.  A heuristic ``1.0`` means "these two records share
+#:                an edition identifier", which is a far stronger claim than an
+#:                LLM's ``0.9``, so the two must not be presented alike.
+#: ``llama``     — confirmed by local LLM evaluation; ``confidence`` is then a
+#:                model-reported probability.
+DUPLICATE_RESOLUTION_SOURCES: tuple[str, ...] = ("heuristic", "llama")
+DUPLICATE_RESOLUTION_HEURISTIC: str = "heuristic"
+DUPLICATE_RESOLUTION_LLAMA: str = "llama"
+
 
 class SemanticLink(db.Model):  # type: ignore[name-defined]
     """
@@ -900,8 +912,15 @@ class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
         :class:`SemanticLink` pattern.  Merge code must resolve and validate the
         entity before acting on the id.
     :attr target_id: Primary key of the second entity of the pair.
-    :attr confidence: LLM-reported match confidence between ``0.0`` and ``1.0``.
-    :attr llm_reasoning: Verbatim rationale explaining the verdict.
+    :attr confidence: Match confidence between ``0.0`` and ``1.0``.  Nullable,
+        because a candidate queued by the deterministic classifier has no
+        probability attached to it.  See :data:`DUPLICATE_RESOLUTION_SOURCES`.
+    :attr resolution_source: Which stage decided this candidate
+        (see :data:`DUPLICATE_RESOLUTION_SOURCES`).  The review UI must label a
+        heuristic score differently from an LLM one, because ``1.0`` from the
+        classifier means "shared identifier", not "99% certain".
+    :attr llm_reasoning: Verbatim rationale.  Holds the classifier's reasons
+        when no LLM was consulted.
     :attr status: One of ``"pending"``, ``"merged"``, or ``"dismissed"``
         (see :data:`DUPLICATE_CANDIDATE_STATUSES`).
     """
@@ -915,8 +934,13 @@ class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
     source_id = db.Column(db.Integer, nullable=False)
     #: Primary key of the second entity in the pair (polymorphic, see class docstring).
     target_id = db.Column(db.Integer, nullable=False)
-    #: LLM-assessed match probability in the closed interval ``[0.0, 1.0]``.
-    confidence = db.Column(db.Float, nullable=False, default=0.0)
+    #: Match probability in the closed interval ``[0.0, 1.0]``.  ``NULL`` when
+    #: the deterministic classifier queued the candidate with no score.
+    confidence = db.Column(db.Float, nullable=True, default=None)
+    #: See :data:`DUPLICATE_RESOLUTION_SOURCES`.
+    resolution_source = db.Column(
+        db.String(20), nullable=False, default=DUPLICATE_RESOLUTION_HEURISTIC, server_default=DUPLICATE_RESOLUTION_HEURISTIC
+    )
     #: Verbatim explanation of why the pair was (or was not) judged equivalent.
     llm_reasoning = db.Column(db.Text, nullable=True)
     #: See :data:`DUPLICATE_CANDIDATE_STATUSES`.

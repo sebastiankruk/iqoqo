@@ -65,6 +65,9 @@ from app.db.contributions import (
 )
 from app.db.core import (
     DUPLICATE_ENTITY_TIERS,
+    DUPLICATE_RESOLUTION_HEURISTIC,
+    DUPLICATE_RESOLUTION_LLAMA,
+    DUPLICATE_RESOLUTION_SOURCES,
     DUPLICATE_STATUS_DISMISSED,
     DUPLICATE_STATUS_MERGED,
     DUPLICATE_STATUS_PENDING,
@@ -109,10 +112,30 @@ MAX_LLM_EVALUATIONS_PER_RUN: int = 200
 #: Keyset page size for the administrative candidate queue.
 QUEUE_PAGE_SIZE_LIMIT: int = 100
 
+#: Detection engines.  ``heuristic`` resolves candidates deterministically and
+#: never contacts a model; ``llama`` additionally adjudicates the grey zone the
+#: classifier cannot decide.  The default is ``heuristic`` so a scan needs no
+#: inference service, which matters for container deployments without a GPU.
+ENGINE_HEURISTIC: str = "heuristic"
+ENGINE_LLAMA: str = "llama"
+DETECTION_ENGINES: tuple[str, ...] = (ENGINE_HEURISTIC, ENGINE_LLAMA)
+DEFAULT_ENGINE: str = ENGINE_HEURISTIC
+
+#: Outcomes of the deterministic pre-inference classifier.
+CLASSIFICATION_AUTO_ACCEPT: str = "auto_accept"
+CLASSIFICATION_AUTO_REJECT: str = "auto_reject"
+CLASSIFICATION_NEEDS_LLM: str = "needs_llm"
+
+#: Manifestation attributes that identify a specific printed edition.  A shared
+#: value means the two records describe the same physical edition, so the pair
+#: needs no confidence threshold at all.  Note that ``isbn13`` is uniquely
+#: constrained, so in practice ``ean``/``upc``/``barcode`` are the columns that
+#: can actually collide.
+CONCLUSIVE_EDITION_IDENTIFIERS: tuple[str, ...] = ("isbn13", "ean", "upc", "barcode")
+
 DEFAULT_OLLAMA_MODEL: str = "llama3:latest"
 OLLAMA_TIMEOUT_SECONDS: int = 15
 OLLAMA_HEALTH_TIMEOUT_SECONDS: int = 5
-
 #: Leading articles stripped during title normalization, in several languages
 #: because catalog titles are not reliably English.
 _LEADING_ARTICLES: frozenset[str] = frozenset(
@@ -763,6 +786,100 @@ def _score_pair(tier: str, left: Any, right: Any, block_key: tuple[str, str]) ->
     return min(score, 1.0), reasons
 
 
+def classify_pair(tier: str, left: Any, right: Any) -> tuple[str, list[str]]:
+    """Decide a screened pair without consulting a language model.
+
+    The two-stage pipeline exists because most pairs can be settled by rules
+    alone, and the expensive stage was doing far less than its design implied.
+    Measured on a production clone, the ``0.75`` creator-overlap rule in
+    :func:`_score_pair` is what admits pairs like *Neuromancer* vs *Snow Crash* --
+    two different books by the same author -- so the language model was mostly
+    acting as a same-author noise filter.  Meanwhile a pair sharing an edition
+    identifier is already conclusive, yet was still paying for a call.
+
+    Outcomes:
+
+    * ``AUTO_ACCEPT`` -- a shared edition identifier (Manifestation tier) or an
+      identical normalized title corroborated by a shared creator (Work tier).
+      Queued without consulting :attr:`DEFAULT_THRESHOLD`, because a categorical
+      match should not need a probability gate.
+    * ``AUTO_REJECT`` -- a shared creator whose titles fail the similarity floor,
+      which is the same-author noise described above.
+    * ``NEEDS_LLM``  -- the genuine grey zone, only adjudicated under the
+      ``llama`` engine.
+
+    Args:
+        tier: ``"work"`` or ``"manifestation"``.
+        left: First entity of the pair.
+        right: Second entity of the pair.
+
+    Returns:
+        Tuple of ``(classification, reasons)``; reasons are stored as the
+        candidate's rationale when no model was consulted.
+    """
+    reasons: list[str] = []
+
+    if tier == TIER_MANIFESTATION:
+        for attribute in CONCLUSIVE_EDITION_IDENTIFIERS:
+            left_value = getattr(left, attribute, None)
+            if left_value and left_value == getattr(right, attribute, None):
+                return CLASSIFICATION_AUTO_ACCEPT, [f"identical {attribute}"]
+
+    similarity = title_similarity(left.title, right.title)
+    identical_title = bool(normalize_title(left.title)) and normalize_title(left.title) == normalize_title(right.title)
+    creators = _creators_for_tier(tier, left) & _creators_for_tier(tier, right)
+
+    if identical_title and creators:
+        # Two catalog entries that normalize to exactly the same title *and*
+        # share an author are the same work.  A title match alone is not enough:
+        # the production clone holds six distinct works titled "Greatest Hits".
+        return CLASSIFICATION_AUTO_ACCEPT, ["identical normalized title", f"shared creator(s): {', '.join(sorted(creators))}"]
+
+    if creators and similarity < TITLE_SIMILARITY_FLOOR:
+        return (
+            CLASSIFICATION_AUTO_REJECT,
+            [f"shared creator(s) {', '.join(sorted(creators))} but title similarity {similarity:.2f} is below the floor"],
+        )
+
+    reasons.append(f"title similarity {similarity:.2f}")
+    if creators:
+        reasons.append(f"shared creator(s): {', '.join(sorted(creators))}")
+    return CLASSIFICATION_NEEDS_LLM, reasons
+
+
+def _creators_for_tier(tier: str, entity: Any) -> set[str]:
+    """Return the normalized creator set for an entity at either tier.
+
+    Args:
+        tier: ``"work"`` or ``"manifestation"``.
+        entity: Work or Manifestation.
+
+    Returns:
+        Normalized creator names, possibly empty.
+    """
+    return work_creators(entity) if tier == TIER_WORK else _manifestation_creators(entity)
+
+
+def classify_pair_by_id(tier: str, left_id: int, right_id: int) -> tuple[str, list[str]]:
+    """Load two entities and classify the pair, tolerating a missing row.
+
+    Args:
+        tier: ``"work"`` or ``"manifestation"``.
+        left_id: Primary key of the first entity.
+        right_id: Primary key of the second entity.
+
+    Returns:
+        Tuple of ``(classification, reasons)``; a pair whose entities have since
+        been deleted is reported as needing the model rather than raising.
+    """
+    model = Work if tier == TIER_WORK else Manifestation
+    left = db.session.get(model, left_id)
+    right = db.session.get(model, right_id)
+    if left is None or right is None:
+        return CLASSIFICATION_NEEDS_LLM, ["one of the entities no longer exists"]
+    return classify_pair(tier, left, right)
+
+
 def _manifestation_creators(manifestation: Manifestation) -> set[str]:
     """Return the normalized creator set reachable from a Manifestation.
 
@@ -842,8 +959,9 @@ def record_candidate(
     entity_tier: str,
     source_id: int,
     target_id: int,
-    confidence: float,
+    confidence: float | None,
     reasoning: str,
+    resolution_source: str = DUPLICATE_RESOLUTION_LLAMA,
 ) -> DuplicateCandidate | None:
     """Persist a pending candidate, skipping pairs that are already registered.
 
@@ -854,8 +972,12 @@ def record_candidate(
         entity_tier: Either ``"work"`` or ``"manifestation"``.
         source_id: First entity id.
         target_id: Second entity id.
-        confidence: LLM confidence in ``[0.0, 1.0]``.
-        reasoning: LLM rationale.
+        confidence: Match probability in ``[0.0, 1.0]``, or ``None`` for a
+            candidate the deterministic classifier queued without a score.
+        reasoning: LLM rationale, or the classifier's reasons when no model was
+            consulted.
+        resolution_source: Which stage decided the pair.  See
+            :data:`DUPLICATE_RESOLUTION_SOURCES`.
 
     Returns:
         The new candidate, or ``None`` when the pair was already registered.
@@ -867,6 +989,8 @@ def record_candidate(
         raise DuplicateServiceError(f"Unsupported entity tier: {entity_tier!r}")
     if source_id == target_id:
         raise DuplicateServiceError("Cannot create a duplicate candidate for an entity paired with itself")
+    if resolution_source not in DUPLICATE_RESOLUTION_SOURCES:
+        raise DuplicateServiceError(f"Unsupported resolution source: {resolution_source!r}")
 
     low, high = min(source_id, target_id), max(source_id, target_id)
     if find_existing_pair(entity_tier, low, high) is not None:
@@ -876,8 +1000,9 @@ def record_candidate(
         entity_tier=entity_tier,
         source_id=low,
         target_id=high,
-        confidence=min(1.0, max(0.0, float(confidence))),
+        confidence=None if confidence is None else min(1.0, max(0.0, float(confidence))),
         llm_reasoning=reasoning,
+        resolution_source=resolution_source,
         status=DUPLICATE_STATUS_PENDING,
     )
     db.session.add(candidate)
@@ -987,6 +1112,7 @@ class DetectionReport:
     tier: str = TIER_ALL
     threshold: float = DEFAULT_THRESHOLD
     dry_run: bool = False
+    engine: str = DEFAULT_ENGINE
     entities_screened: int = 0
     candidate_pairs: int = 0
     llm_evaluations: int = 0
@@ -994,6 +1120,15 @@ class DetectionReport:
     below_threshold: int = 0
     already_known: int = 0
     created: int = 0
+    #: Pairs the deterministic classifier accepted outright, with no model
+    #: consulted and no confidence threshold applied.
+    auto_accepted: int = 0
+    #: Pairs the classifier dismissed as same-author noise.
+    auto_rejected: int = 0
+    #: Pairs left undecided because the engine cannot classify them.  Under the
+    #: ``heuristic`` engine these are the grey zone, and re-running with
+    #: ``--engine llama`` is what adjudicates them.
+    needs_llm: int = 0
     #: Candidates a dry run *would* have persisted.  Kept separate from
     #: :attr:`created` so an operator can never read a dry-run summary as if
     #: rows had actually been written.
@@ -1084,6 +1219,7 @@ def run_detection(
     threshold: float = DEFAULT_THRESHOLD,
     limit: int | None = None,
     dry_run: bool = False,
+    engine: str = DEFAULT_ENGINE,
     progress: Callable[[str], None] | None = None,
 ) -> DetectionReport:
     """Screen the catalog and queue verified duplicate candidates for review.
@@ -1095,23 +1231,30 @@ def run_detection(
 
     Args:
         tier: ``"work"``, ``"manifestation"``, or ``"all"``.
-        threshold: Minimum confidence required to queue a candidate.
+        threshold: Minimum LLM confidence required to queue an undecided pair.
+            Not applied to a pair the classifier accepted categorically.
         limit: Maximum number of catalog entities to load per tier, or ``None``.
         dry_run: Evaluate and report without writing candidate rows.
+        engine: ``"heuristic"`` (default) never contacts a model; ``"llama"``
+            also adjudicates the grey zone the classifier cannot decide.
         progress: Optional callable receiving human-readable progress lines.
 
     Returns:
         A :class:`DetectionReport` describing the run.
 
     Raises:
-        DuplicateServiceError: If the tier or threshold argument is invalid.
+        DuplicateServiceError: If the tier, threshold, or engine argument is
+            invalid.
     """
     if not 0.0 <= float(threshold) <= 1.0:
         raise DuplicateServiceError(f"threshold must be between 0.0 and 1.0, got {threshold}")
     if limit is not None and limit <= 0:
         raise DuplicateServiceError(f"limit must be a positive integer, got {limit}")
+    if engine not in DETECTION_ENGINES:
+        raise DuplicateServiceError(f"Unknown engine: {engine!r}. Expected one of {sorted(DETECTION_ENGINES)}")
 
-    report = DetectionReport(tier=tier, threshold=float(threshold), dry_run=dry_run)
+    report = DetectionReport(tier=tier, threshold=float(threshold), dry_run=dry_run, engine=engine)
+    use_llm = engine == ENGINE_LLAMA
 
     for active_tier in _resolve_tiers(tier):
         known = _existing_pair_ids(active_tier)
@@ -1128,6 +1271,57 @@ def run_detection(
             if pair_key in known:
                 report.already_known += 1
                 continue
+
+            # Deterministic classification first.  It resolves the two categories
+            # that need no model at all -- a categorical match, and same-author
+            # noise -- and leaves only the grey zone to inference.
+            classification, reasons = classify_pair_by_id(active_tier, pair.left_id, pair.right_id)
+            heuristic_reasons = list(reasons) + [reason for reason in pair.reasons if reason not in reasons]
+
+            if classification == CLASSIFICATION_AUTO_REJECT:
+                report.auto_rejected += 1
+                if progress is not None:
+                    progress(f"[{active_tier}] rejected ({pair.left_id}, {pair.right_id}): {'; '.join(reasons)}")
+                continue
+
+            if classification == CLASSIFICATION_AUTO_ACCEPT:
+                report.auto_accepted += 1
+                created = None
+                if dry_run:
+                    report.would_create += 1
+                else:
+                    created = record_candidate(
+                        active_tier,
+                        pair.left_id,
+                        pair.right_id,
+                        None,
+                        "heuristic: " + "; ".join(heuristic_reasons),
+                        resolution_source=DUPLICATE_RESOLUTION_HEURISTIC,
+                    )
+                    if created is None:
+                        report.already_known += 1
+                        continue
+                    known[pair_key] = created
+                    report.created += 1
+                if progress is not None:
+                    outcome = (
+                        f"would queue ({pair.left_id}, {pair.right_id})"
+                        if dry_run
+                        else f"queued candidate #{created.id} ({pair.left_id}, {pair.right_id})"
+                    )
+                    progress(f"[{active_tier}] {outcome}: {'; '.join(reasons)}")
+                continue
+
+            # Grey zone: only the llama engine can settle it.
+            report.needs_llm += 1
+            if not use_llm:
+                if progress is not None:
+                    progress(
+                        f"[{active_tier}] undecided ({pair.left_id}, {pair.right_id}); the heuristic engine "
+                        f"will not guess -- re-run with --engine {ENGINE_LLAMA} to adjudicate"
+                    )
+                continue
+
             if evaluations >= MAX_LLM_EVALUATIONS_PER_RUN:
                 if progress is not None:
                     progress(
@@ -1167,7 +1361,14 @@ def run_detection(
                     progress(f"[{active_tier}] would queue ({pair.left_id}, {pair.right_id}) at confidence {evaluation.confidence:.2f}")
                 continue
 
-            created = record_candidate(active_tier, pair.left_id, pair.right_id, evaluation.confidence, reasoning)
+            created = record_candidate(
+                active_tier,
+                pair.left_id,
+                pair.right_id,
+                evaluation.confidence,
+                reasoning,
+                resolution_source=DUPLICATE_RESOLUTION_LLAMA,
+            )
             if created is None:
                 report.already_known += 1
                 continue
@@ -1624,6 +1825,10 @@ def serialize_candidate(candidate: DuplicateCandidate) -> dict[str, Any]:
         JSON-serializable payload for the administrative review queue.
     """
     payload = candidate.to_dict()
+    # The review UI must not present a classifier verdict and a model verdict
+    # alike: a heuristic ``confidence`` of ``None`` is a categorical match, not a
+    # missing value, and the badge is labelled from this field.
+    payload["resolution_source"] = candidate.resolution_source
     payload["source"] = _entity_payload(candidate.entity_tier, candidate.source_id)
     payload["target"] = _entity_payload(candidate.entity_tier, candidate.target_id)
     payload["resolved_by_email"] = None

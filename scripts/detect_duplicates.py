@@ -37,7 +37,7 @@ sys.path.insert(0, root_dir)
 
 from app import create_app
 from app.core import duplicate_service
-from app.core.duplicate_service import DEFAULT_THRESHOLD, TIER_ALL, DetectionReport, DuplicateServiceError
+from app.core.duplicate_service import DEFAULT_ENGINE, DEFAULT_THRESHOLD, TIER_ALL, DetectionReport, DuplicateServiceError
 
 #: Exit code used for usage/argument errors, mirroring ``backfill_legacy_covers.py``.
 EXIT_PREREQUISITE = 2
@@ -56,6 +56,9 @@ _SUMMARY_FIELDS: tuple[str, ...] = (
     "already_known",
     "created",
     "would_create",
+    "auto_accepted",
+    "auto_rejected",
+    "needs_llm",
 )
 
 
@@ -79,6 +82,7 @@ def run_scan(
     limit: int | None = None,
     dry_run: bool = True,
     skip_health_check: bool = False,
+    engine: str = DEFAULT_ENGINE,
     progress: Any = print,
 ) -> DetectionReport:
     """Verify prerequisites and run one detection pass.
@@ -86,11 +90,12 @@ def run_scan(
     Args:
         app: Optional pre-built Flask application, used by tests.
         tier: ``"work"``, ``"manifestation"``, or ``"all"``.
-        threshold: Minimum LLM confidence required to queue a candidate.
+        threshold: Minimum LLM confidence required to queue an undecided pair.
         limit: Maximum number of catalog entities to load per tier, or ``None``.
         dry_run: Evaluate and report without writing candidate rows.
-        skip_health_check: Bypass the Ollama probe.  Intended for unit tests and
-            for triage runs where local inference is known to be offline.
+        skip_health_check: Bypass the Ollama probe.  Only meaningful for the
+            ``llama`` engine, which is the sole one that contacts a model.
+        engine: ``"heuristic"`` (default) or ``"llama"``.
         progress: Callable receiving human-readable progress lines.
 
     Returns:
@@ -100,7 +105,12 @@ def run_scan(
         DuplicateServiceError: If a prerequisite is missing or an argument is
             invalid.  Callers turn this into a non-zero exit code.
     """
-    if not skip_health_check:
+    if engine not in duplicate_service.DETECTION_ENGINES:
+        raise DuplicateServiceError(f"Unknown engine: {engine!r}. Expected one of {sorted(duplicate_service.DETECTION_ENGINES)}")
+
+    # The heuristic engine never calls a model, so probing for one would turn a
+    # perfectly ordinary offline scan into a prerequisite failure.
+    if engine == duplicate_service.ENGINE_LLAMA and not skip_health_check:
         healthy, message = duplicate_service.check_ollama_health()
         if not healthy:
             # The health message already ends in a period, so strip it before
@@ -117,6 +127,7 @@ def run_scan(
             threshold=threshold,
             limit=limit,
             dry_run=dry_run,
+            engine=engine,
             progress=progress,
         )
     return report
@@ -137,12 +148,21 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_THRESHOLD,
         help="Minimum LLM confidence required to queue a candidate, 0.0-1.0 (default: %(default)s)",
     )
+    parser.add_argument(
+        "--engine",
+        choices=sorted(duplicate_service.DETECTION_ENGINES),
+        default=DEFAULT_ENGINE,
+        help=(
+            "heuristic resolves candidates deterministically and needs no inference service; "
+            "llama also adjudicates the grey zone the classifier cannot decide (default: %(default)s)"
+        ),
+    )
     parser.add_argument("--limit", type=int, help="Maximum number of catalog entities to load per tier")
     parser.add_argument("--apply", action="store_true", help="Persist candidate rows; dry-run is the default")
     parser.add_argument(
         "--skip-health-check",
         action="store_true",
-        help="Skip the Ollama probe and let per-pair inference failures be reported instead",
+        help="Skip the Ollama probe and let per-pair inference failures be reported instead (llama engine only)",
     )
     parser.add_argument("--quiet", action="store_true", help="Suppress per-page progress lines")
     return parser
@@ -164,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     progress = None if args.quiet else print
 
     print(f"Tier: {args.tier}")
+    print(f"Engine: {args.engine}")
     print(f"Threshold: {args.threshold}")
     print(f"Mode: {'DRY RUN' if dry_run else 'APPLY'}")
 
@@ -174,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             dry_run=dry_run,
             skip_health_check=args.skip_health_check,
+            engine=args.engine,
             progress=progress,
         )
     except DuplicateServiceError as exc:
