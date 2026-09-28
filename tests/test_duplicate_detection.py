@@ -49,6 +49,36 @@ DUPLICATES_URL = "/api/v1/admin/duplicates"
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def read_only_metadata_headers(app):
+    """Headers for a non-admin holding ``read:metadata`` but not ``write:metadata``.
+
+    The shared ``custodian_headers`` fixture carries both metadata permissions,
+    so a separate role is needed to prove the read/write split on the duplicate
+    endpoints rather than merely that custodians are admitted.
+    """
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import Permission, Role, User
+
+    with app.app_context():
+        read_perm = Permission.query.filter_by(name="read:metadata").first()
+        if not read_perm:
+            read_perm = Permission(name="read:metadata")
+            db.session.add(read_perm)
+
+        role = Role(name="read_only_metadata_test")
+        role.permissions.append(read_perm)
+        db.session.add(role)
+
+        user = User(email="read_only_metadata@iqoqo.local", display_name="Read Only")
+        user.set_password("test-password")
+        user.roles.append(role)
+        db.session.add(user)
+        db.session.commit()
+
+        return {"Authorization": f"Bearer {generate_internal_jwt(user)}"}
+
+
 def make_work(title: str, *, authors: list[str] | None = None, year: int | None = None) -> Work:
     """Create and persist a Work with optional author metadata.
 
@@ -683,10 +713,91 @@ def test_api_requires_authentication(client, admin_headers):
     assert client.post(f"{DUPLICATES_URL}/scan").status_code == 401
 
 
-def test_api_requires_admin_role(client, normal_user_headers):
-    """An authenticated non-admin must be refused."""
+def test_user_without_metadata_permissions_cannot_reach_duplicate_endpoints(client, normal_user_headers):
+    """A plain user holding neither metadata permission is refused everywhere.
+
+    Duplicate review is a custodian surface, so the bar is ``read:metadata`` to
+    list and ``write:metadata`` to mutate -- not merely being authenticated.
+    """
     assert client.get(DUPLICATES_URL, headers=normal_user_headers).status_code == 403
     assert client.post(f"{DUPLICATES_URL}/scan", headers=normal_user_headers).status_code == 403
+    assert client.post(f"{DUPLICATES_URL}/1/dismiss", headers=normal_user_headers).status_code == 403
+    assert client.post(f"{DUPLICATES_URL}/1/merge", headers=normal_user_headers, json={"primary_id": 1}).status_code == 403
+
+
+def test_custodian_can_list_candidates(client, custodian_headers):
+    """A non-admin custodian holding read:metadata can read the review queue."""
+    make_work("Dune", authors=["Frank Herbert"])
+    make_work("Dune", authors=["Frank Herbert"])
+    candidate = svc.record_candidate("work", 1, 2, 0.9, "Same work.")
+
+    response = client.get(DUPLICATES_URL, headers=custodian_headers)
+
+    assert response.status_code == 200
+    assert response.get_json()["data"][0]["id"] == candidate.id
+
+
+def test_custodian_can_trigger_scan(client, custodian_headers):
+    """Scanning is a curator action, so a custodian with write:metadata may run it."""
+    make_work("Dune", authors=["Frank Herbert"])
+    make_work("Dune", authors=["Frank Herbert"])
+
+    with (
+        patch.object(svc, "check_ollama_health", return_value=(True, "ok")),
+        patch.object(svc, "evaluate_pair_with_llm", return_value=llm_duplicate()),
+    ):
+        response = client.post(f"{DUPLICATES_URL}/scan", headers=custodian_headers, json={"tier": "work"})
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["created"] == 1
+
+
+def test_custodian_can_dismiss_candidate(client, custodian_headers):
+    """Dismissing a false positive is a curator decision, not an admin-only one."""
+    left, right = make_work("Dune", authors=["Frank Herbert"]), make_work("Dune", authors=["Frank Herbert"])
+    candidate = svc.record_candidate("work", left.id, right.id, 0.9, "Same work.")
+
+    response = client.post(f"{DUPLICATES_URL}/{candidate.id}/dismiss", headers=custodian_headers)
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["status"] == "dismissed"
+    # The deciding custodian is surfaced to the API.
+    assert response.get_json()["data"]["resolved_by_email"] == "custodian_test@iqoqo.local"
+
+
+def test_custodian_can_merge_candidate(client, custodian_headers):
+    """A custodian with write:metadata may perform the merge, not just view it."""
+    target = make_work("The Dispossessed", authors=["Ursula K. Le Guin"])
+    source = make_work("The Dispossessed", authors=["Ursula K. Le Guin"])
+    make_expression(target)
+    make_expression(source)
+    candidate = svc.record_candidate("work", source.id, target.id, 0.95, "Same work.")
+
+    response = client.post(f"{DUPLICATES_URL}/{candidate.id}/merge", headers=custodian_headers, json={"primary_id": target.id})
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["entity_tier"] == "work"
+    assert response.get_json()["data"]["primary_id"] == target.id
+    assert response.get_json()["data"]["merged_id"] == source.id
+    assert db.session.get(Work, source.id) is None
+
+
+def test_read_only_metadata_user_can_list_but_not_mutate(client, read_only_metadata_headers):
+    """The read/write split: read:metadata lists the queue, write:metadata acts on it."""
+    left, right = make_work("Dune", authors=["Frank Herbert"]), make_work("Dune", authors=["Frank Herbert"])
+    candidate = svc.record_candidate("work", left.id, right.id, 0.9, "Same work.")
+
+    assert client.get(DUPLICATES_URL, headers=read_only_metadata_headers).status_code == 200
+    assert client.post(f"{DUPLICATES_URL}/scan", headers=read_only_metadata_headers).status_code == 403
+    assert client.post(f"{DUPLICATES_URL}/{candidate.id}/dismiss", headers=read_only_metadata_headers).status_code == 403
+    assert (
+        client.post(
+            f"{DUPLICATES_URL}/{candidate.id}/merge",
+            headers=read_only_metadata_headers,
+            json={"primary_id": candidate.target_id},
+        ).status_code
+        == 403
+    )
 
 
 def test_api_lists_pending_candidates(client, admin_headers):

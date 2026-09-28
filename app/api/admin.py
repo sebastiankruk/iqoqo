@@ -1261,6 +1261,19 @@ def get_lod_stats():
 
 # --- DUPLICATE DETECTION ROUTES ---
 
+#: Duplicate review is a custodian (contributor) surface, not an admin-only one:
+#: the ``contributor`` role holds every ``*:metadata`` permission, so gating on
+#: :data:`PermissionName.WRITE_METADATA` admits custodians and admins while
+#: excluding standard users -- who also hold ``read:metadata`` and would
+#: otherwise see the queue in their sidebar.
+#:
+#: Reading the queue is separated from mutating it so the read-only listing stays
+#: as permissive as the other custodian metadata surfaces (``frbr/search`` and the
+#: SPARQL endpoints use ``read:metadata``), while every state change -- and only
+#: a human decision may change state -- demands ``write:metadata``.
+_DUPLICATE_READ_PERMISSION = PermissionName.READ_METADATA
+_DUPLICATE_WRITE_PERMISSION = PermissionName.WRITE_METADATA
+
 
 def _duplicate_candidate_or_404(candidate_id: int) -> tuple[DuplicateCandidate | None, tuple[Any, int] | None]:
     """Resolve a candidate id, or build the canonical 404 response.
@@ -1279,7 +1292,7 @@ def _duplicate_candidate_or_404(candidate_id: int) -> tuple[DuplicateCandidate |
 
 @admin_bp.route("/duplicates", methods=["GET"])
 @require_auth
-@admin_required
+@require_permission(_DUPLICATE_READ_PERMISSION)
 def list_duplicate_candidates_endpoint():
     """List duplicate candidates for administrative review.
 
@@ -1313,7 +1326,7 @@ def list_duplicate_candidates_endpoint():
 
 @admin_bp.route("/duplicates/<int:candidate_id>/dismiss", methods=["POST"])
 @require_auth
-@admin_required
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
 def dismiss_duplicate_candidate_endpoint(candidate_id: int):
     """Dismiss a candidate as a false positive so it is never re-queued."""
     user = _get_current_user()
@@ -1332,7 +1345,7 @@ def dismiss_duplicate_candidate_endpoint(candidate_id: int):
 
 @admin_bp.route("/duplicates/scan", methods=["POST"])
 @require_auth
-@admin_required
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
 @limiter.limit("5 per minute")
 def run_duplicate_scan_endpoint():
     """Trigger a detection run and queue new candidates for review.
@@ -1374,8 +1387,7 @@ def run_duplicate_scan_endpoint():
 
 @admin_bp.route("/duplicates/<int:candidate_id>/merge", methods=["POST"])
 @require_auth
-@admin_required
-@require_permission(PermissionName.WRITE_METADATA)
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
 def merge_duplicate_candidate_endpoint(candidate_id: int):
     """Execute the FRBR merge for a candidate, keeping the selected primary entity.
 

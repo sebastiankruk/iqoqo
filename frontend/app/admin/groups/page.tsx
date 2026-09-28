@@ -108,6 +108,7 @@ export default function GroupsPage() {
   const canEditRoles = hasPermission(PermissionName.WRITE_ROLES);
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
+  const canEditMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
   const canAccessSparql =
     hasPermission(PermissionName.READ_METADATA) ||
@@ -144,7 +145,7 @@ export default function GroupsPage() {
                     href="/admin/settings?tab=metadata"
                   />
                 )}
-                {canViewMetadata && (
+                {canEditMetadata && (
                   <NavItem
                     label="Duplicate Review"
                     icon={CopyCheck}

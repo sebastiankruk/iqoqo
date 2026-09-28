@@ -15,6 +15,8 @@
 //
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useProfile } from "@/lib/api/hooks";
 import {
   Loader2,
@@ -91,8 +93,30 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
  */
 export default function DuplicatesPage() {
   const { data: profile, isLoading } = useProfile();
+  const router = useRouter();
 
-  if (isLoading || !profile) {
+  const permissions = profile?.permissions ?? [];
+  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
+  // Duplicate review is a custodian surface: the backend mutation endpoints all
+  // require write:metadata, which the contributor role holds and standard users
+  // do not.  Guard on the same permission so the page and the API agree -- note
+  // this matches the "Metadata" gate in the sibling admin pages, and is
+  // deliberately stricter than read:metadata, which every standard user has.
+  const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
+
+  // Redirect to login when unauthenticated, or to /profile when the viewer has
+  // no custodian access.  The sidebar link is only a convenience; this is the
+  // actual access boundary, matching the other admin pages.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!profile) {
+      router.push("/login");
+    } else if (!canViewMetadata) {
+      router.push("/profile");
+    }
+  }, [profile, isLoading, canViewMetadata, router]);
+
+  if (isLoading || !profile || !canViewMetadata) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
@@ -100,14 +124,8 @@ export default function DuplicatesPage() {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const isAdmin = profile.roles?.includes("admin");
-  const permissions = profile.permissions ?? [];
-  const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
-  const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canViewRoles = hasPermission(PermissionName.READ_ROLES);
-  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
-  const canEditMetadata = hasPermission(PermissionName.WRITE_METADATA);
+  const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
   const canAccessSparql =
     hasPermission(PermissionName.READ_METADATA) ||
@@ -243,7 +261,7 @@ export default function DuplicatesPage() {
                 positive. Merging is permanent and re-parents every child onto the surviving entity.
               </p>
             </div>
-            <DuplicateReviewer canEdit={canEditMetadata} />
+            <DuplicateReviewer canEdit={canViewMetadata} />
           </div>
         </div>
       </main>
