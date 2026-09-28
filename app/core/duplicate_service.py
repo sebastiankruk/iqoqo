@@ -55,6 +55,7 @@ from sqlalchemy import Select, delete, func, literal, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from app.core import frbr_merge
 from app.db import db
 from app.db.auth import User
 from app.db.contributions import (
@@ -1497,54 +1498,13 @@ def merge_manifestation(source: Manifestation, target: Manifestation, user_id: U
         # The surviving primary is authoritative; a discarded ISBN that the
         # primary lacks is adopted, and one it already has is preserved as an
         # alternate on the Manifestation rather than being dropped or promoted
-        # to a Work or Expression.
+        # to a Work or Expression.  Shared with the manual merge path so the two
+        # cannot drift.
         target.meta = _consolidate_meta(target.meta, source.meta)
-        alternate_isbns = target.meta.get("alternate_isbn13")
-        if not isinstance(alternate_isbns, list):
-            alternate_isbns = []
-        for attribute in (
-            "ean",
-            "upc",
-            "barcode",
-            "catalog_number",
-            "publisher",
-            "publication_date",
-            "format",
-            "format_type",
-            "label",
-            "cover_url",
-        ):
-            source_value = getattr(source, attribute, None)
-            if source_value in (None, ""):
-                continue
-            if getattr(target, attribute, None) in (None, ""):
-                setattr(target, attribute, source_value)
-                continue
-            if attribute == "barcode":
-                # Barcodes legitimately identify different printings, so keep
-                # the source's alongside the primary's.
-                alternates = target.meta.get("alternate_barcodes")
-                if not isinstance(alternates, list):
-                    alternates = []
-                if source_value not in alternates:
-                    alternates.append(source_value)
-                target.meta["alternate_barcodes"] = alternates
-
+        # Captured first: the helper clears ``source.isbn13`` when it adopts it,
+        # to release the unique index before the survivor takes the value.
         source_isbn13 = source.isbn13
-        if source_isbn13:
-            if not target.isbn13:
-                # Release the unique isbn13 index on the source row *before*
-                # adopting it.  Both rows would otherwise carry the same value
-                # at flush time, and the UPDATE order within a single flush is
-                # not guaranteed, so the constraint would reject the merge.
-                # Flushing here makes the release explicit and deterministic.
-                source.isbn13 = None
-                db.session.flush()
-                target.isbn13 = source_isbn13
-            elif source_isbn13 != target.isbn13 and source_isbn13 not in alternate_isbns:
-                alternate_isbns.append(source_isbn13)
-        if alternate_isbns:
-            target.meta["alternate_isbn13"] = alternate_isbns
+        frbr_merge.consolidate_manifestation_identifiers(target, source)
 
         db.session.add(
             EntityAuditLog(

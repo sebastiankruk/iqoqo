@@ -776,6 +776,7 @@ def reassign_frbr_parent_endpoint():
 @admin_bp.route("/frbr/relations/merge", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
+@limiter.limit("10 per minute")
 def merge_frbr_entities_endpoint():
     """Merge two entities at the same FRBR level, reparenting children and contributions."""
     user = _get_current_user()

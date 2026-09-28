@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
 
 SHELL := /bin/bash
 
@@ -668,6 +668,44 @@ test-e2e-db-up: .venv/bin/activate
 
 test-e2e: test-e2e-db-up
 	@$(MAKE) --no-print-directory _test-e2e-run NO_RESET='$(NO_RESET)' args='$(args)'
+
+# FRBR merge integrity against a real PostgreSQL instance.
+#
+# SQLite does not enforce foreign keys unless PRAGMA foreign_keys=ON and it
+# accepts DDL PostgreSQL rejects, so two shipped data-loss defects were invisible
+# to the default suite: the manual merge path destroyed wishlist entries and
+# dropped unique contributors via a delete-orphan cascade, and the
+# duplicate_candidates pair index could not be created at all on PostgreSQL.
+# This target builds a throwaway database inside the same isolated E2E
+# PostgreSQL service, so no default, preview, or production stack is touched.
+#
+# The throwaway database is dropped on the next run and on failure; nothing
+# persists beyond this target.
+test-merge-integrity-pg: .venv/bin/activate
+	@set -euo pipefail; \
+		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
+		$(MAKE) --no-print-directory test-e2e-db-up; \
+		admin="$${E2E_SELECTED_DATABASE_URL%/*}/postgres"; \
+		probe="$${E2E_SELECTED_DATABASE_URL%/*}/iqoqo_merge_integrity"; \
+		echo "Recreating throwaway merge-integrity database..."; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'iqoqo_merge_integrity'" >/dev/null; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS iqoqo_merge_integrity' >/dev/null; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE iqoqo_merge_integrity' >/dev/null; \
+		trap 'psql "$$admin" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '"'"'iqoqo_merge_integrity'"'"'" >/dev/null 2>&1 || true; psql "$$admin" -c "DROP DATABASE IF EXISTS iqoqo_merge_integrity" >/dev/null 2>&1 || true' EXIT; \
+		psql "$$probe" -v ON_ERROR_STOP=1 \
+			-c 'CREATE SCHEMA IF NOT EXISTS auth' \
+			-c 'CREATE SCHEMA IF NOT EXISTS catalog' \
+			-c 'CREATE SCHEMA IF NOT EXISTS inventory' \
+			-c 'CREATE SCHEMA IF NOT EXISTS social' \
+			-c 'CREATE SCHEMA IF NOT EXISTS config' >/dev/null; \
+		echo "Running FRBR merge integrity suite against PostgreSQL..."; \
+		echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
+		echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
+		echo " code path that rejected the unparenthesized pair-index DDL)"; \
+		ENABLE_FTS_TESTS=true DATABASE_URL="$$probe" \
+			SECRET_KEY="$$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')" \
+			.venv/bin/pytest tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
+				tests/test_duplicate_detection.py -q -p no:randomly
 
 # Internal: verify runtime identity immediately before reset and again before
 # Playwright startup. set -e makes every failed prepare step fail closed.

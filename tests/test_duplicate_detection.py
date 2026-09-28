@@ -136,17 +136,49 @@ def make_manifestation(expression: Expression, **kwargs) -> Manifestation:
     return manifestation
 
 
+def make_user() -> User:
+    """Create and persist a user so ownership foreign keys are satisfiable.
+
+    A bare ``uuid4()`` satisfies ``Item.owner_id`` on SQLite, which does not
+    enforce foreign keys, but PostgreSQL rejects it because no such user row
+    exists.  Every id used in these tests must therefore be a real user.
+
+    Returns:
+        The persisted user.
+    """
+    user = User(email=f"dedupe-{uuid4().hex[:12]}@iqoqo.local", display_name="Dedupe Test")
+    user.set_password("test-password")
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
+def enable_sqlite_foreign_keys() -> bool:
+    """Enable SQLite FK enforcement so ``ON DELETE CASCADE`` behaves like PostgreSQL.
+
+    No-op on PostgreSQL, which always enforces foreign keys and rejects the
+    SQLite-only ``PRAGMA`` syntax.  Returns whether the pragma was issued.
+
+    Returns:
+        True when the pragma was applied.
+    """
+    if db.engine.dialect.name != "sqlite":
+        return False
+    db.session.execute(text("PRAGMA foreign_keys=ON"))
+    return True
+
+
 def make_item(manifestation: Manifestation, owner_id=None) -> Item:
     """Create and persist a physical Item belonging to a Manifestation.
 
     Args:
         manifestation: Parent Manifestation.
-        owner_id: Owning user; a random id is used when omitted.
+        owner_id: Owning user; a freshly persisted user is used when omitted.
 
     Returns:
         The persisted Item.
     """
-    item = Item(manifestation_id=manifestation.id, owner_id=owner_id or uuid4(), condition="good", meta={})
+    item = Item(manifestation_id=manifestation.id, owner_id=owner_id or make_user().id, condition="good", meta={})
     db.session.add(item)
     db.session.commit()
     return item
@@ -493,7 +525,7 @@ def test_merge_work_consolidates_contributions_without_duplicates():
 
 def test_merge_work_moves_user_content_and_audit_logs_the_merge():
     """User data must survive the consolidation, and the merge must be audited."""
-    user_id = uuid4()
+    user_id = make_user().id
     target, source = make_work("Dune"), make_work("Dune")
     link = SemanticLink(
         entity_type="work",
@@ -538,11 +570,12 @@ def test_merge_work_preserves_wishlist_entries(app):
     wishlist_id, target_id, source_id = wishlist.id, target.id, source.id
 
     # SQLite ignores foreign keys unless asked; PostgreSQL always enforces them.
-    db.session.execute(text("PRAGMA foreign_keys=ON"))
+    pragma = enable_sqlite_foreign_keys()
     try:
         svc.merge_work(source, target, user_id=None)
     finally:
-        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        if pragma:
+            db.session.execute(text("PRAGMA foreign_keys=OFF"))
     db.session.expire_all()
 
     moved = db.session.get(UserWorkIntent, wishlist_id)
@@ -593,11 +626,12 @@ def test_merge_work_handles_box_set_container(app):
     db.session.commit()
     target_id, source_id, member_id = container.id, source.id, member.id
 
-    db.session.execute(text("PRAGMA foreign_keys=ON"))
+    pragma = enable_sqlite_foreign_keys()
     try:
         svc.merge_work(source, container, user_id=None)
     finally:
-        db.session.execute(text("PRAGMA foreign_keys=OFF"))
+        if pragma:
+            db.session.execute(text("PRAGMA foreign_keys=OFF"))
     db.session.expire_all()
 
     reparented = db.session.get(WorkPart, {"container_work_id": target_id, "part_work_id": member_id})
