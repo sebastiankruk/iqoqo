@@ -18,24 +18,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
-import {
-  Loader2,
-  Settings,
-  Users,
-  Shield,
-  BadgeCheck,
-  Key,
-  Building2,
-  DollarSign,
-  CopyCheck,
-  Database,
-  Search,
-  X,
-  Image as ImageIcon,
-  LifeBuoy,
-  Code2,
-  Network,
-} from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { PermissionName } from "@/lib/permissions";
 import { InstanceSettings } from "@/components/admin/instance-settings";
 import { UserManagement } from "@/components/admin/user-management";
@@ -45,56 +28,8 @@ import { FrbrEditor } from "@/components/admin/frbr-editor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchFrbrEntities, type FrbrSearchResult } from "@/lib/api/admin";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import type React from "react";
-import Link from "next/link";
-
-interface NavItemProps {
-  label: string;
-  icon: LucideIcon;
-  isActive: boolean;
-  onClick: () => void;
-  href?: string;
-}
-
-/**
- * Navigation item for settings sidebar.
- * @param props - Navigation item properties
- * @param props.label - Display label
- * @param props.icon - Lucide icon component
- * @param props.isActive - Whether this item is currently active
- * @param props.onClick - Click handler
- * @param props.href - Optional href for external navigation
- * @returns Navigation item JSX element
- */
-function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps): React.JSX.Element {
-  const className = cn(
-    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-  );
-
-  const content = (
-    <>
-      <Icon className="h-4 w-4" />
-      {label}
-    </>
-  );
-
-  if (href) {
-    return (
-      <Link href={href} onClick={onClick} className={className}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {content}
-    </button>
-  );
-}
 
 /**
  * Inner settings content component that uses useSearchParams.
@@ -144,7 +79,6 @@ function SettingsContent(): React.JSX.Element {
     hasPermission(PermissionName.CONFIG_AFFILIATE) ||
     hasPermission(PermissionName.CONFIG_INTERNAL);
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
-  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
   const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
   const canEditCover = hasPermission(PermissionName.EDIT_COVER);
@@ -154,8 +88,6 @@ function SettingsContent(): React.JSX.Element {
     hasPermission(PermissionName.WRITE_METADATA) ||
     (profile.roles ?? []).includes("admin") ||
     (profile.roles ?? []).includes("contributor");
-
-  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
   const isAdmin = (profile.roles ?? []).includes("admin");
 
   // Determine default tab based on permissions
@@ -177,130 +109,7 @@ function SettingsContent(): React.JSX.Element {
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
-        <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          {hasCustodianAccess && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
-              <nav className="flex flex-col gap-1">
-                {canViewMetadata && (
-                  <NavItem
-                    label="Metadata"
-                    icon={Database}
-                    isActive={activeTab === "metadata"}
-                    onClick={() => handleTabChange("metadata")}
-                    href="/admin/content?tab=metadata"
-                  />
-                )}
-                {canViewMetadata && (
-                  <NavItem
-                    label="Duplicate Review"
-                    icon={CopyCheck}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/duplicates"
-                  />
-                )}
-                {canEditCover && (
-                  <NavItem
-                    label="Cover Art"
-                    icon={ImageIcon}
-                    isActive={activeTab === "cover-art"}
-                    onClick={() => handleTabChange("cover-art")}
-                    href="/admin/content?tab=cover-art"
-                  />
-                )}
-                {canViewEscalationQueue && (
-                  <NavItem
-                    label="User Requests"
-                    icon={LifeBuoy}
-                    isActive={activeTab === "escalations"}
-                    onClick={() => handleTabChange("escalations")}
-                    href="/admin/content?tab=escalations"
-                  />
-                )}
-                {canAccessSparql && (
-                  <NavItem
-                    label="SPARQL Explorer"
-                    icon={Code2}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/sparql"
-                  />
-                )}
-                <NavItem
-                  label="LOD Reconciliation"
-                  icon={Network}
-                  isActive={false}
-                  onClick={() => {}}
-                  href="/admin/lod"
-                />
-              </nav>
-            </div>
-          )}
-
-          {canViewSettings && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
-              <nav className="flex flex-col gap-1">
-                <NavItem
-                  label="Settings"
-                  icon={Settings}
-                  isActive={activeTab === "instance"}
-                  onClick={() => handleTabChange("instance")}
-                />
-                {hasPermission(PermissionName.CONFIG_FEDERATION) && (
-                  <NavItem
-                    label="Federation"
-                    icon={Building2}
-                    isActive={activeTab === "federation"}
-                    onClick={() => handleTabChange("federation")}
-                  />
-                )}
-                {hasPermission(PermissionName.CONFIG_AFFILIATE) && (
-                  <NavItem
-                    label="Monetization"
-                    icon={DollarSign}
-                    isActive={activeTab === "monetization"}
-                    onClick={() => handleTabChange("monetization")}
-                  />
-                )}
-                {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
-                  <NavItem
-                    label="API Integrations"
-                    icon={Key}
-                    isActive={activeTab === "apikeys"}
-                    onClick={() => handleTabChange("apikeys")}
-                  />
-                )}
-                {canViewUsers && (
-                  <NavItem
-                    label="Users"
-                    icon={Users}
-                    isActive={activeTab === "users"}
-                    onClick={() => handleTabChange("users")}
-                  />
-                )}
-                {canViewRoles && (
-                  <NavItem
-                    label="Roles"
-                    icon={BadgeCheck}
-                    isActive={activeTab === "roles"}
-                    onClick={() => handleTabChange("roles")}
-                    href="/admin/groups"
-                  />
-                )}
-                {hasPermission(PermissionName.CONFIG_INTERNAL) && (
-                  <NavItem
-                    label="Security"
-                    icon={Shield}
-                    isActive={activeTab === "security"}
-                    onClick={() => handleTabChange("security")}
-                  />
-                )}
-              </nav>
-            </div>
-          )}
-        </aside>
+        <AdminSidebar activeTab={activeTab} onTabChange={handleTabChange} />
 
         {/* Main Content Area */}
         <div className="flex-1 min-w-0 pb-20">
