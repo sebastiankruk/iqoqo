@@ -1110,6 +1110,32 @@ def test_v0_8_2_duplicate_candidates_upgrade_and_downgrade() -> None:
         engine.dispose()
 
 
+def test_duplicate_candidates_model_index_compiles_for_postgresql() -> None:
+    """The ORM index must emit the same DDL the migration does.
+
+    Regression: the model built the pair index with ``db.case(...)``, which
+    SQLAlchemy renders unparenthesized.  PostgreSQL parses an unparenthesized
+    expression as a column separator inside ``CREATE INDEX``, so
+    ``db.create_all()`` -- and therefore ``scripts/init_db.py`` -- failed
+    outright with ``syntax error at or near "CASE"`` on a fresh PostgreSQL
+    install.  SQLite accepts the broken form, so the behavioural suite could
+    never catch it; assert the rendered DDL instead.
+    """
+    from sqlalchemy.dialects import postgresql, sqlite
+    from sqlalchemy.schema import CreateIndex
+
+    from app.db.models import DuplicateCandidate
+
+    index = next(idx for idx in DuplicateCandidate.__table__.indexes if idx.name == "uq_duplicate_candidates_pair")
+
+    for label, dialect in (("postgresql", postgresql.dialect()), ("sqlite", sqlite.dialect())):
+        ddl = str(CreateIndex(index).compile(dialect=dialect)).strip()
+        assert "UNIQUE" in ddl, f"{label}: index is not unique"
+        # Every expression must be parenthesized so it cannot be misread as a
+        # column separator.
+        assert ddl.count("(CASE WHEN source_id <= target_id THEN") == 2, f"{label}: CASE expressions must be parenthesized; got {ddl}"
+
+
 def test_v0_8_2_duplicate_candidates_pair_index_is_order_insensitive() -> None:
     """A pair recorded in either direction must collide on the unique index."""
     from importlib import import_module

@@ -946,11 +946,17 @@ class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
         db.Index("ix_duplicate_candidates_status_confidence", "status", "confidence"),
         db.Index("ix_duplicate_candidates_tier_pair", "entity_tier", "source_id", "target_id"),
         db.Index("ix_duplicate_candidates_resolved_by_id", "resolved_by_id"),
+        # Order-insensitive uniqueness: (5, 9) and (9, 5) collide on one pair.
+        # The CASE expressions MUST be parenthesized: PostgreSQL parses an
+        # unparenthesized expression as a column separator inside CREATE INDEX,
+        # so the unparenthesized form makes `db.create_all()` -- and therefore
+        # scripts/init_db.py -- fail outright on PostgreSQL.  This is the same
+        # DDL the v0_8_2_duplicate_candidates migration emits.
         db.Index(
             "uq_duplicate_candidates_pair",
             "entity_tier",
-            db.case((source_id <= target_id, source_id), else_=target_id),
-            db.case((source_id <= target_id, target_id), else_=source_id),
+            db.text("(CASE WHEN source_id <= target_id THEN source_id ELSE target_id END)"),
+            db.text("(CASE WHEN source_id <= target_id THEN target_id ELSE source_id END)"),
             unique=True,
         ),
         *(({"schema": _INVENTORY},) if _INVENTORY else ()),
