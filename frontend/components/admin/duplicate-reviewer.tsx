@@ -51,18 +51,31 @@ interface DuplicateReviewerProps {
 const HIGH_CONFIDENCE = 0.9;
 
 /**
- * Render a confidence value as a percentage badge, colored by severity.
+ * Render a candidate's decision, labelled by the stage that made it.
+ *
+ * A classifier verdict is categorical, not probabilistic: the pair was queued
+ * because two records share an edition identifier, or an identical title with a
+ * shared author. Showing that as a percentage would present a rule as a
+ * calibrated belief, so it is labelled as a match and carries no number.
  *
  * @param props - The component props
- * @param props.confidence - Confidence in the 0.0-1.0 range
- * @returns {JSX.Element} A badge showing the confidence percentage
+ * @param props.candidate - The candidate whose decision to render
+ * @returns {JSX.Element} A badge naming the provenance of the decision
  */
-function ConfidenceBadge({ confidence }: { confidence: number }) {
-  const percent = Math.round(confidence * 100);
-  const variant = confidence >= HIGH_CONFIDENCE ? "destructive" : confidence >= 0.8 ? "default" : "secondary";
+function ConfidenceBadge({ candidate }: { candidate: DuplicateCandidate }) {
+  if (candidate.resolution_source === "heuristic" || candidate.confidence === null) {
+    return (
+      <Badge variant="default" data-testid="confidence-badge" data-provenance="heuristic">
+        match (rules)
+      </Badge>
+    );
+  }
+
+  const percent = Math.round(candidate.confidence * 100);
+  const variant = candidate.confidence >= HIGH_CONFIDENCE ? "destructive" : "secondary";
   return (
-    <Badge variant={variant} data-testid="confidence-badge">
-      {percent}% match
+    <Badge variant={variant} data-testid="confidence-badge" data-provenance="llama">
+      LLM {percent}% match
     </Badge>
   );
 }
@@ -306,7 +319,7 @@ export function DuplicateReviewer({ canEdit }: DuplicateReviewerProps) {
       ) : candidates.length === 0 ? (
         <EmptyState
           title="No duplicate candidates"
-          description="Run a scan to compare the catalog for duplicate Works and Manifestations."
+          description="Run a scan to compare the catalog for duplicate Works and Manifestations. A scan resolves what it can from the records alone and needs no language model; use the CLI with --engine llama to adjudicate the remaining grey zone."
           icon={CopyCheck}
         />
       ) : (
@@ -320,7 +333,7 @@ export function DuplicateReviewer({ canEdit }: DuplicateReviewerProps) {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{candidate.entity_tier}</Badge>
-                  <ConfidenceBadge confidence={candidate.confidence} />
+                  <ConfidenceBadge candidate={candidate} />
                 </div>
                 {canEdit && (
                   <Button

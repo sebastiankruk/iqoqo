@@ -665,6 +665,17 @@ export type DuplicateEntityTier = "work" | "manifestation";
 export type DuplicateCandidateStatus = "pending" | "merged" | "dismissed";
 
 /**
+ * Which stage decided a candidate.
+ *
+ * `heuristic` means the deterministic classifier queued it, so `confidence` is
+ * null and the decision is categorical. `llama` means a local model returned a
+ * probability. The two must never be presented as the same kind of number: a
+ * classifier "1.0" means "these records share an edition identifier", which is a
+ * far stronger claim than a model's "0.99".
+ */
+export type DuplicateResolutionSource = "heuristic" | "llama";
+
+/**
  * One side of a Work duplicate, as rendered by the review comparison table.
  */
 export interface DuplicateWorkSide {
@@ -715,8 +726,11 @@ export interface DuplicateCandidate {
   entity_tier: DuplicateEntityTier;
   source_id: number;
   target_id: number;
-  confidence: number;
+  /** Null for a candidate queued by the deterministic classifier, which has no probability. */
+  confidence: number | null;
   llm_reasoning: string | null;
+  /** Which stage decided this candidate; see `DuplicateResolutionSource`. */
+  resolution_source: DuplicateResolutionSource;
   status: DuplicateCandidateStatus;
   created_at: string;
   resolved_at: string | null;

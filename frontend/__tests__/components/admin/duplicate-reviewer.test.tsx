@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { DuplicateReviewer } from "@/components/admin/duplicate-reviewer";
 import type { DuplicateCandidate } from "@/lib/api/admin";
@@ -44,6 +44,7 @@ const WORK_CANDIDATE: DuplicateCandidate = {
   source_id: 10,
   target_id: 11,
   confidence: 0.93,
+  resolution_source: "llama",
   llm_reasoning: "Identical title, author, and first-publication year.",
   status: "pending",
   created_at: "2026-01-01T00:00:00Z",
@@ -79,6 +80,7 @@ const MANIFESTATION_CANDIDATE: DuplicateCandidate = {
   source_id: 20,
   target_id: 21,
   confidence: 0.78,
+  resolution_source: "llama",
   llm_reasoning: "Same edition, different metadata source.",
   source: {
     tier: "manifestation",
@@ -173,14 +175,51 @@ describe("DuplicateReviewer Component", () => {
       expect(screen.getByTestId("duplicate-side-B")).toHaveTextContent("HAR-1975");
     });
 
-    it("renders the confidence as a percentage badge", async () => {
+    it("labels a model verdict as an LLM confidence percentage", async () => {
       mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE]);
       render(<DuplicateReviewer canEdit />);
 
       await screen.findByTestId("duplicate-candidate-1");
       const badges = screen.getAllByTestId("confidence-badge");
-      expect(badges[0]).toHaveTextContent("93% match");
-      expect(badges[1]).toHaveTextContent("78% match");
+      expect(badges[0]).toHaveTextContent("LLM 93% match");
+      expect(badges[0]).toHaveAttribute("data-provenance", "llama");
+      expect(badges[1]).toHaveTextContent("LLM 78% match");
+    });
+
+    // A classifier verdict is categorical, not probabilistic. Rendering it as a
+    // percentage would present a rule as a calibrated belief, and a null
+    // confidence would otherwise render as a bare "0% match".
+    it("renders a classifier verdict as a match with no number", async () => {
+      const heuristic: DuplicateCandidate = {
+        ...WORK_CANDIDATE,
+        id: 3,
+        confidence: null,
+        resolution_source: "heuristic",
+        llm_reasoning: "heuristic: identical normalized title; shared creator(s): le guin ursula k",
+      };
+      mockQueue([heuristic]);
+      render(<DuplicateReviewer canEdit />);
+
+      await screen.findByTestId("duplicate-candidate-3");
+      const badge = screen.getByTestId("confidence-badge");
+      expect(badge).toHaveAttribute("data-provenance", "heuristic");
+      expect(badge).toHaveTextContent("match (rules)");
+      expect(badge).not.toHaveTextContent("%");
+      expect(badge).not.toHaveTextContent("0%");
+    });
+
+    it("treats a null confidence as a classifier verdict even if provenance is missing", async () => {
+      const legacy: DuplicateCandidate = {
+        ...WORK_CANDIDATE,
+        id: 4,
+        confidence: null,
+        resolution_source: undefined as unknown as DuplicateCandidate["resolution_source"],
+      };
+      mockQueue([legacy]);
+      render(<DuplicateReviewer canEdit />);
+
+      await screen.findByTestId("duplicate-candidate-4");
+      expect(screen.getByTestId("confidence-badge")).toHaveAttribute("data-provenance", "heuristic");
     });
   });
 
@@ -310,6 +349,57 @@ describe("DuplicateReviewer Component", () => {
       expect(screen.queryByRole("button", { name: /Run scan/ })).not.toBeInTheDocument();
       // The comparison itself remains available so a reviewer can still assess the pair.
       expect(screen.getByTestId("duplicate-side-A")).toBeInTheDocument();
+    });
+
+    // Button density is a UX constraint: a candidate card must not grow more
+    // controls as tiers are added, so these counts are pinned.  A read-only
+    // viewer keeps the two primary toggles, which only change which side is
+    // highlighted; the destructive controls are gone.
+    it("keeps the read-only card's control count unchanged", async () => {
+      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE]);
+      render(<DuplicateReviewer canEdit={false} />);
+
+      await screen.findByTestId("duplicate-candidate-1");
+      const labels = within(screen.getByTestId("duplicate-candidate-1"))
+        .getAllByRole("button")
+        .map(b => b.textContent?.trim());
+      expect(labels).toEqual(["Primary selected", "Keep this one"]);
+
+      // The only view-level action left is Refresh.
+      const viewButtons = screen.getAllByRole("button").map(b => b.textContent?.trim());
+      expect(viewButtons).toEqual([
+        "Refresh",
+        "Primary selected",
+        "Keep this one",
+        "Primary selected",
+        "Keep this one",
+      ]);
+    });
+
+    it("keeps the editable card's control count fixed as tiers are added", async () => {
+      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE]);
+      render(<DuplicateReviewer canEdit />);
+
+      await screen.findByTestId("duplicate-candidate-1");
+      const labels = (testId: string) =>
+        within(screen.getByTestId(testId))
+          .getAllByRole("button")
+          .map(b => b.textContent?.trim());
+
+      // Dismiss, two primary toggles, and the merge action.  The Expression
+      // tier must reuse this exact card rather than adding to it.
+      expect(labels("duplicate-candidate-1")).toEqual([
+        "Not duplicates",
+        "Primary selected",
+        "Keep this one",
+        "Merge keeping entity 10",
+      ]);
+      expect(labels("duplicate-candidate-2")).toEqual([
+        "Not duplicates",
+        "Primary selected",
+        "Keep this one",
+        "Merge keeping entity 20",
+      ]);
     });
   });
 
