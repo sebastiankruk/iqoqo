@@ -23,13 +23,15 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *"get_status.py"* ]]
 
+  # MOD-OPS-04: index/update now dispatch through scripts/mykg_sync.sh, which
+  # selects run_index.py / run_update.py internally.
   run make -n mykg-index
   [ "$status" -eq 0 ]
-  [[ "$output" == *"run_index.py"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh index"* ]]
 
   run make -n mykg-update
   [ "$status" -eq 0 ]
-  [[ "$output" == *"run_update.py"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
 
   run make -n mykg-ask Q="test"
   [ "$status" -eq 0 ]
@@ -126,16 +128,102 @@
   [ "$status" -ne 0 ]
 }
 
-@test "Makefile mykg targets define pre-flight cleanup and signal trap handlers" {
+@test "Makefile mykg targets delegate sandbox lifecycle to scripts/mykg_sync.sh" {
+  # MOD-OPS-04: the ~45 lines of backslash-continued shell per target moved out
+  # of the Makefile. The Makefile must now be a thin wrapper, not a second copy.
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+  [ -f "$sync_script" ]
+
   run make -n mykg-update
   [ "$status" -eq 0 ]
-  [[ "$output" == *"docker rm -f mykg-agy-daemon"* ]]
-  [[ "$output" == *"trap cleanup EXIT INT TERM"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
+  # The daemon wiring must no longer be duplicated inline in the recipe.
+  [[ "$output" != *"docker rm -f mykg-agy-daemon"* ]]
+  [[ "$output" != *"trap cleanup EXIT INT TERM"* ]]
 
   run make -n mykg-index
   [ "$status" -eq 0 ]
-  [[ "$output" == *"docker rm -f mykg-agy-daemon"* ]]
-  [[ "$output" == *"trap cleanup EXIT INT TERM"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh index"* ]]
+  [[ "$output" != *"docker rm -f mykg-agy-daemon"* ]]
+  [[ "$output" != *"trap cleanup EXIT INT TERM"* ]]
+}
+
+@test "Makefile forwards the AI agent, model, effort and profile to the sync script" {
+  run make -n mykg-update AI_AGENT=opencode
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'AI_AGENT="opencode"'* ]]
+  [[ "$output" == *'MYKG_MODEL="opencode/mimo-v2.5-free"'* ]]
+  [[ "$output" == *'MYKG_EFFORT="minimal"'* ]]
+  [[ "$output" == *'MYKG_PROFILE="agent-opencode"'* ]]
+}
+
+@test "mykg_sync.sh defines pre-flight cleanup and signal trap handlers" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  run grep -F 'trap cleanup EXIT INT TERM' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  # Pre-flight removal must precede creation so a leaked daemon from an
+  # interrupted run cannot cause a --name collision.
+  rm_line=$(grep -n 'docker rm -f "$AI_CONTAINER"' "$sync_script" | head -1 | cut -d: -f1)
+  run_line=$(grep -n 'run --rm -d --name "$AI_CONTAINER"' "$sync_script" | head -1 | cut -d: -f1)
+  [ -n "$rm_line" ]
+  [ -n "$run_line" ]
+  [ "$rm_line" -lt "$run_line" ]
+
+  # Teardown must remove both daemons and bring the compose stack down.
+  run grep -F 'docker compose -f "$COMPOSE_FILE" down' "$sync_script"
+  [ "$status" -eq 0 ]
+  run grep -F 'docker rm -f mykg-agy-daemon' "$sync_script"
+  [ "$status" -eq 0 ]
+  run grep -F 'docker rm -f mykg-opencode-daemon' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg_sync.sh selects the daemon script and container per AI_AGENT" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  run grep -F 'AI_CONTAINER="mykg-opencode-daemon"' "$sync_script"
+  [ "$status" -eq 0 ]
+  run grep -F 'opencode_daemon.py' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'AI_CONTAINER="mykg-agy-daemon"' "$sync_script"
+  [ "$status" -eq 0 ]
+  run grep -F 'agy_daemon.py' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg_sync.sh propagates the runner's exit code through the cleanup trap" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  run env AI_AGENT=agy VENV_PYTHON=/nonexistent/python SKIP_SANDBOX=1 bash "$sync_script" update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not found or not executable"* ]]
+
+  # A runner that fails must surface its status, not be swallowed by cleanup's
+  # `exit "$EXIT_CODE"` on the EXIT trap.
+  runner="${BATS_TEST_TMPDIR}/runner"
+  printf '#!/bin/sh\nexit 7\n' > "$runner"
+  chmod +x "$runner"
+  mkdir -p "${BATS_TEST_TMPDIR}/venv/bin"
+  ln -sf "$runner" "${BATS_TEST_TMPDIR}/venv/bin/python"
+
+  run env AI_AGENT=agy VENV_PYTHON="${BATS_TEST_TMPDIR}/venv/bin/python" SKIP_SANDBOX=1 \
+    bash "$sync_script" update
+  [ "$status" -eq 7 ]
+}
+
+@test "mykg_sync.sh rejects an unknown mode and an unset AI_AGENT" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  run env AI_AGENT=agy bash "$sync_script" bogus
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown mode"* ]]
+
+  run env -u AI_AGENT bash "$sync_script" update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"AI_AGENT must be set"* ]]
 }
 
 @test "mykg recipe trap handler cleans up daemon container on SIGINT" {
@@ -305,18 +393,16 @@ print('FAIL_CLOSED_OK')
   [ "$status" -eq 0 ]
   [[ "$output" == *"opencode/mimo-v2.5-free"* ]]
   [[ "$output" == *"minimal"* ]]
-  [[ "$output" == *"opencode_daemon.py"* ]]
-  [[ "$output" == *"mykg-opencode-daemon"* ]]
   [[ "$output" == *"agent-opencode"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
 }
 
 @test "Makefile mykg-update preserves agy defaults when AI_AGENT=agy" {
   run make -n mykg-update
   [ "$status" -eq 0 ]
   [[ "$output" == *"gemini-3.8-flash-low"* ]]
-  [[ "$output" == *"agy_daemon.py"* ]]
-  [[ "$output" == *"mykg-agy-daemon"* ]]
   [[ "$output" == *"agent-claude-code"* ]]
+  [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
 }
 
 @test "docker-compose.ai_sandbox.yml includes mykg-opencode-daemon with correct hardening" {

@@ -26,6 +26,7 @@ from sqlalchemy import and_, or_, text
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
+from app.config import Config
 from app.db import db
 from app.db.core import Expression, Manifestation, MetadataRefetchLog, Work
 from app.utils.bgg import fetch_bgg_metadata
@@ -38,7 +39,18 @@ from app.utils.tmdb import fetch_video_metadata
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-IQOQO_VERSION = "0.7.10"
+# MOD-OPS-12: was hardcoded to "0.7.10" and drifted as the project advanced.
+#
+# This string is stamped onto every MetadataRefetchLog row and is then used as a
+# resume check ("skip this manifestation if it was already refetched by *this*
+# version"). With the literal frozen at 0.7.10 while the project moved to
+# 0.8.x, the comparison never matched any row written by a real run, so the
+# resume logic was inert and every invocation refetched the whole library —
+# hammering the external APIs against their rate limits for no benefit.
+#
+# Config.VERSION resolves APP_VERSION -> pyproject.toml [project].version ->
+# "dev-local", which is the same value the running application reports.
+IQOQO_VERSION = Config.VERSION
 
 RATE_LIMITS = {
     "tmdb": 0.025,

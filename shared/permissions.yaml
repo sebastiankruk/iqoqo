@@ -68,3 +68,51 @@ permissions:
     description: "Create/delete roles and assign specific permission sets."
   - name: "write:users"
     description: "Modify user roles, account activation, and status."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Default roles and the permissions each is granted.
+#
+# This is the Single Source of Truth. `scripts/sync_permissions.py` generates
+# `RoleName`, `ROLE_PERMISSION_PATTERNS` and `resolve_role_permissions()` into
+# app/core/permissions.py from this section, and `scripts/sync_db_permissions.py`
+# consumes them. Do not hand-edit app/core/permissions.py -- it is overwritten.
+#
+# Permission entries are shell-style globs matched against permission names:
+#   "*"          every permission in the instance
+#   "llm_generate:*"  every permission whose name starts with "llm_generate:"
+#   "write:item"      exactly that permission
+#
+# Matching happens at sync time against the permissions actually present in the
+# database, so a permission an administrator added by hand is still assigned
+# correctly instead of being silently skipped.
+roles:
+  - name: "admin"
+    description: "Full control over the instance, its configuration, and its users."
+    protected: true
+    permissions:
+      - "*"
+
+  - name: "contributor"
+    description: "Trusted curator who may improve shared metadata and covers."
+    protected: true
+    permissions:
+      - "*:metadata"
+      - "llm_generate:*"
+      - "edit:cover"
+      - "delete:item"
+      - "escalate:resolve"
+
+  - name: "user"
+    description: "Standard member who curates their own collection."
+    protected: true
+    permissions:
+      - "write:item"
+      - "update:item"
+      - "delete:item"
+      - "read:metadata"
+      - "upload:cover"
+      - "regenerate:cover"
+      - "llm_generate:metadata"
+      - "llm_generate:cover"
+      - "escalate:request"
+      - "tickets:creator"

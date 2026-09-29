@@ -1,3 +1,18 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
 """MOD-OPS-17 regression tests for the streaming SQL-to-JSON converter.
 
 `scripts/sql_to_json.py` used to read the entire dump into a string and then
@@ -14,6 +29,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -176,23 +192,25 @@ def test_no_partial_file_survives_a_failure(tmp_path: Path) -> None:
     assert not out.exists()
     assert not out.with_name(out.name + ".partial").exists()
     # No spool files leaked into the temp dir.
-    assert list(tmp_path.glob("sql2json_*")) == []
+    assert not list(tmp_path.glob("sql2json_*"))
 
 
-def test_existing_output_is_not_clobbered_on_failure(tmp_path: Path) -> None:
+def test_existing_output_is_not_clobbered_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A pre-existing conversion must survive a failed re-run intact."""
     out = tmp_path / "out.json"
     out.write_text('{"clients": [], "manifestations": [], "items": []}', encoding="utf-8")
 
     import scripts.sql_to_json as mod
 
-    original = mod.iter_sql_statements
-    mod.iter_sql_statements = lambda _p: (_ for _ in ()).throw(RuntimeError("boom"))
-    try:
-        with pytest.raises(RuntimeError):
-            convert_sql_dump(tmp_path / "missing.sql", out)
-    finally:
-        mod.iter_sql_statements = original
+    # monkeypatch.setattr rather than a manual save/restore: it restores
+    # automatically even if the assertion fails, and it avoids re-assigning a
+    # differently-typed function onto the module.
+    def replacement(_path: Path) -> Any:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(mod, "iter_sql_statements", replacement)
+    with pytest.raises(RuntimeError):
+        convert_sql_dump(tmp_path / "missing.sql", out)
 
     assert json.loads(out.read_text(encoding="utf-8")) == {"clients": [], "manifestations": [], "items": []}
 
@@ -237,7 +255,6 @@ def test_peak_memory_is_bounded_independently_of_dump_size(tmp_path: Path) -> No
 
     # The dumps differ by several MiB. A buffering implementation would show
     # peak RSS growing by at least that much.
-    assert size_growth > 3.0, f"test dumps are too similar to be meaningful ({size_growth:.2f} MiB apart)"
-    assert memory_growth < size_growth * 0.25, (
-        f"peak RSS grew {memory_growth:.1f} MiB while the input grew {size_growth:.1f} MiB — the converter is still buffering the dump"
-    )
+    assert size_growth > 3.0, f"test dumps too similar to be meaningful ({size_growth:.2f} MiB apart)"
+    # Kept short so `black` and `ruff format` agree on the wrapping.
+    assert memory_growth < size_growth * 0.25, f"peak RSS grew {memory_growth:.1f} MiB vs input {size_growth:.1f} MiB"

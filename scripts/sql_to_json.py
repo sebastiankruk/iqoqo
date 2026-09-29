@@ -363,6 +363,13 @@ def convert_sql_dump(sql_path: Path, output_path: Path) -> dict[str, int]:
 
     try:
         for collection in collections:
+            # `delete=False` is required, not an oversight: the three spools must
+            # stay open simultaneously while every statement is parsed, and pass
+            # 2 re-opens each one by path to stream it into the final document.
+            # They are unlinked unconditionally in the `finally` block below, so
+            # a crash cannot leave credential-bearing rows behind on disk.
+            #
+            # pylint: disable=consider-using-with  # see comment above
             handle = tempfile.NamedTemporaryFile(  # noqa: SIM115
                 mode="w",
                 encoding="utf-8",

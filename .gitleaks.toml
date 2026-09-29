@@ -15,19 +15,102 @@ tags = ["monitoring", "openobserve", "credentials"]
 [[rules]]
 id = "iqoqo-openobserve-hardcoded-password"
 description = "Hardcoded legacy OpenObserve fallback password"
-regex = '''(?i)(?:SuperSecret!123|supersecret)'''
+# Matches ONLY the exact legacy default that was removed in v0.8.1 (#309).
+#
+# This rule previously read `(?i)(?:SuperSecret!123|supersecret)`. The bare
+# `supersecret` alternative matched any case-variant of that word anywhere in
+# the repository — prose in docs/MONITORING.md, the `ghp_superSecretToken12345`
+# fixture in tests/test_models.py, and the `supersecretpassword` fixture in the
+# redaction test. It accounted for 54% of all findings (60 of 111 across
+# history) while being capable of detecting nothing real, because the actual
+# password it was written to catch no longer exists in the codebase.
+#
+# A rule that cries wolf on 60 findings trains reviewers to ignore the scanner
+# and to suppress whatever it next reports — including a genuine leak. Matching
+# the exact literal keeps the regression guard intact: if anyone reintroduces
+# the removed default password, this still fires.
+regex = '''SuperSecret!123'''
 tags = ["monitoring", "openobserve", "credentials"]
 
-[allowlist]
+[[allowlists]]
 description = "Global allowlist for build artifacts, dependencies, changelogs, and specs"
 paths = [
     '''(^|/)\.venv/''',
     '''(^|/)node_modules/''',
     '''(^|/)\.next/''',
+    # E2E build output lives in sibling `.next-e2e*` directories, which the
+    # `\.next/` pattern above does not match. These are compiled bundles
+    # containing minified third-party code and were responsible for ~35
+    # findings on their own.
+    '''(^|/)\.next-e2e[^/]*/''',
+    # Compiled bytecode. .pyc files embed string constants from the source
+    # they were compiled from, so any finding in a .py is duplicated here.
+    '''(^|/)__pycache__/''',
+    '''\.pyc$''',
+    '''(^|/)\.mypy_cache/''',
+    '''(^|/)\.pytest_cache/''',
+    '''(^|/)\.ruff_cache/''',
     '''(^|/)graphify-out/''',
     '''(^|/)mykg_sessions/''',
     '''(^|/)\.mempalace/''',
     '''docs/CHANGELOG\.md''',
     '''\.gitleaks\.toml''',
     '''openspec/.*''',
+]
+
+# Local, git-ignored environment files.
+#
+# These are never committed, so they contribute nothing to a history scan, but a
+# `gitleaks dir` run on a developer machine or a self-hosted runner WILL find
+# them — and, absent this entry, it prints the real values to the terminal and
+# into CI logs. The rule is the opposite of what we want: it would copy live
+# credentials out of the untracked file and into a build log.
+[[allowlists]]
+description = "Untracked local env files — never committed, and must not be echoed into logs"
+paths = [
+    '''(^|/)\.env$''',
+    '''(^|/)\.env\.dev$''',
+    '''(^|/)\.env\.preview$''',
+    '''(^|/)\.env\.prod$''',
+    '''(^|/)\.env\.mykg$''',
+]
+
+# Synthetic redaction-test fixtures.
+#
+# `tests/bash/sync_agy_memory.bats` asserts that the MOD-OPS-15 filter scrubs
+# credentials out of agent transcripts, so it has to *contain* secret-shaped
+# strings. Every value below is inert by construction:
+#
+#   AKIAIOSFODNN7EXAMPLE            AWS's own documentation example key
+#   eyJhbGciOiJIUzI1NiJ9...         the canonical jwt.io example JWT
+#   ghp_1234.../xoxb-1234...        sequential placeholders
+#   AKIA1234567890ABCDEF            sequential placeholder
+#   AIzaSyD1.../sk-proj-abcdef...   sequential placeholders
+#   MIIEowIBAAKCAQEAx7Vv8Q9...      a truncated, structurally invalid PEM body
+#   gAAAAABmNDP5r3xJfK0pQ8sT2...   a 43-char Fernet-shaped placeholder
+#
+# Matching on the *exact values* rather than on the path matters: if someone
+# later pastes a real credential into this file, it will not match any entry
+# below and will still be reported. A whole-file allowlist would hide it.
+[[allowlists]]
+description = "Known-synthetic credential shapes inside the redaction test fixtures only"
+condition = "AND"
+paths = [
+    '''(^|/)tests/bash/sync_agy_memory\.bats$''',
+]
+regexTarget = "secret"
+regexes = [
+    '''^AKIAIOSFODNN7EXAMPLE$''',
+    '''^AKIA1234567890ABCDEF$''',
+    '''^AIzaSyD1234567890abcdefghijklmnopqrstuv$''',
+    '''^sk-proj-abcdefghijklmnop1234567890AB$''',
+    '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NSJ9\.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk$''',
+    '''^ghp_1234567890abcdefghijklmnopqrstuvwxyz$''',
+    '''^xoxb-123456789012-abcdefghijkl$''',
+    '''^supersecretpassword$''',
+    '''^gAAAAABmNDP5r3xJfK0pQ8sT2uV4wX6yZ8aB1cD3eF5=$''',
+    '''-----BEGIN RSA PRIVATE KEY-----''',
+    '''^MIIEowIBAAKCAQEAx7Vv8Q9dE2rF4hJ8kL0mN6pQ$''',
+    '''^R3sT5uW7yZ9aB1cD3eF5gH7iJ9kL1mN3$''',
+    '''^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$''',
 ]

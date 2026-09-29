@@ -219,109 +219,28 @@ endif
 mykg-scope: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 
+# MOD-OPS-04: the sandbox lifecycle and agent-daemon wiring used to live inline
+# in these two recipes -- ~45 lines of backslash-continued shell each, duplicated
+# between the targets. A single missing continuation silently split a command in
+# two, and nothing could be shellchecked or unit-tested. Both targets now delegate
+# to scripts/mykg_sync.sh, which owns the cleanup trap and agent selection.
 mykg-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
-		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
-		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
-		print(str(sessions[0])) if sessions else sys.exit(0)"); \
-	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-	if [ -n "$$AI_BIN" ]; then \
-		docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-			-v "$$AI_BIN:$$AI_MOUNT" \
-			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e AI_AGENT="$(AI_AGENT)" \
-			"$$AI_CONTAINER" \
-			python3 "$$AI_SCRIPT" \
-			--workers 1 \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
-	fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh update $(if $(ARGS),$(ARGS),)
 
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "mykg_sessions"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-		if [ -n "$$AI_BIN" ]; then \
-			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-				-v "$$AI_BIN:$$AI_MOUNT" \
-				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e AI_AGENT="$(AI_AGENT)" \
-				"$$AI_CONTAINER" \
-				python3 "$$AI_SCRIPT" \
-				--workers 1 \
-				"mykg_sessions" \
-				"mykg_sessions" >/dev/null 2>&1 || true; \
-		fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh index $(if $(ARGS),$(ARGS),)
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
