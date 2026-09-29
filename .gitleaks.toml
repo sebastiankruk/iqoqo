@@ -75,42 +75,8 @@ paths = [
     '''(^|/)\.env\.mykg$''',
 ]
 
-# Synthetic redaction-test fixtures.
-#
-# `tests/bash/sync_agy_memory.bats` asserts that the MOD-OPS-15 filter scrubs
-# credentials out of agent transcripts, so it has to *contain* secret-shaped
-# strings. Every value below is inert by construction:
-#
-#   AKIAIOSFODNN7EXAMPLE            AWS's own documentation example key
-#   eyJhbGciOiJIUzI1NiJ9...         the canonical jwt.io example JWT
-#   ghp_1234.../xoxb-1234...        sequential placeholders
-#   AKIA1234567890ABCDEF            sequential placeholder
-#   AIzaSyD1.../sk-proj-abcdef...   sequential placeholders
-#   MIIEowIBAAKCAQEAx7Vv8Q9...      a truncated, structurally invalid PEM body
-#   gAAAAABmNDP5r3xJfK0pQ8sT2...   a 43-char Fernet-shaped placeholder
-#
-# Matching on the *exact values* rather than on the path matters: if someone
-# later pastes a real credential into this file, it will not match any entry
-# below and will still be reported. A whole-file allowlist would hide it.
-[[allowlists]]
-description = "Known-synthetic credential shapes inside the redaction test fixtures only"
-condition = "AND"
-paths = [
-    '''(^|/)tests/bash/sync_agy_memory\.bats$''',
-]
-regexTarget = "secret"
-regexes = [
-    '''^AKIAIOSFODNN7EXAMPLE$''',
-    '''^AKIA1234567890ABCDEF$''',
-    '''^AIzaSyD1234567890abcdefghijklmnopqrstuv$''',
-    '''^sk-proj-abcdefghijklmnop1234567890AB$''',
-    '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NSJ9\.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk$''',
-    '''^ghp_1234567890abcdefghijklmnopqrstuvwxyz$''',
-    '''^xoxb-123456789012-abcdefghijkl$''',
-    '''^supersecretpassword$''',
-    '''^gAAAAABmNDP5r3xJfK0pQ8sT2uV4wX6yZ8aB1cD3eF5=$''',
-    '''-----BEGIN RSA PRIVATE KEY-----''',
-    '''^MIIEowIBAAKCAQEAx7Vv8Q9dE2rF4hJ8kL0mN6pQ$''',
-    '''^R3sT5uW7yZ9aB1cD3eF5gH7iJ9kL1mN3$''',
-    '''^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$''',
-]
+# NOTE: there is deliberately no allowlist entry for the secret-shaped fixtures
+# in tests/bash/sync_agy_memory.bats. They are assembled at runtime from
+# string fragments, so no committed line contains a complete credential and no
+# rule can match one. That is stronger than any allowlist, because it also
+# means a genuine key pasted into that file is still reported.
