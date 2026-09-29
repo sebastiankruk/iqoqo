@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Public user profile and collection endpoints.
+
+Profiles are authenticated but not privileged: the routes expose only what a
+profile owner or a permitted viewer may see, and hide entries through visibility
+flags rather than by omitting them from the query."""
+
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -32,6 +38,10 @@ profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 @profile_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_profile():
+    """Return the caller's own profile, roles and resolved permissions.
+
+    Permissions are unioned across every role the user holds, so the response
+    reflects what the user can actually do rather than what any single role grants."""
     user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -61,6 +71,10 @@ def get_profile():
 @profile_bp.route("/consent", methods=["POST"])
 @require_auth
 def update_consent():
+    """Grant or revoke a single consent type.
+
+    Consent is recorded as a row with an explicit boolean rather than by deleting
+    it, so a withdrawal is auditable after the fact."""
     data = request.get_json()
     consent_type = data.get("consent_type")
     is_granted = data.get("is_granted", False)
@@ -88,6 +102,10 @@ def update_consent():
 @profile_bp.route("/", methods=["PUT"], strict_slashes=False)
 @require_auth
 def update_profile():
+    """Update the caller's display name and profile fields.
+
+    Restricted to self-service fields. Role and permission changes are not reachable
+    here; they belong to the admin blueprint."""
     data = request.get_json()
     user = db.session.get(User, getattr(g, "user_id", None))
     if not user:

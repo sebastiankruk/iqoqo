@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Interactive first-run auth bootstrap.
+
+Creates the first admin account and initialises the permission rows. Refuses to
+run against a populated database unless forced, because it grants unrestricted
+access."""
+
 import os
 import uuid
 from pathlib import Path
@@ -41,6 +47,10 @@ def validate_admin_password(password: object) -> str:
 
 
 def run_init_auth(app: Flask | None = None) -> None:
+    """Create the first admin account and initialise permissions.
+
+    Interactive by design. Refuses to run against a populated instance unless
+    forced, because it grants unrestricted access."""
     if app is None:
         admin_password = validate_admin_password(os.environ.get("ADMIN_PASSWORD"))
         app = create_app(config_override={"ADMIN_PASSWORD": admin_password})

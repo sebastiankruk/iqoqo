@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Allegro.pl OAuth device-authorisation helper.
+
+Exchanges a stored device token for an access token and writes the result to
+.allegro_token.json. The token file is gitignored and created with owner-only
+permissions."""
+
 import json
 import os
 import sys
@@ -31,6 +37,10 @@ GRANT_TYPE_DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
 
 
 def device_code_flow():
+    """Run the Allegro.pl device-authorisation flow.
+
+    Prints a URL and a user code for the operator to open, then polls until the token
+    is granted. Writes the result to a gitignored, owner-only file."""
     print("Requesting device code from Allegro...")
     response = requests.post(
         DEVICE_AUTH_URL,
@@ -101,6 +111,7 @@ def device_code_flow():
 
 
 def main():
+    """Entry point for the Allegro.pl auth helper."""
     if not CLIENT_ID or not CLIENT_SECRET:
         print("Blad: Brak ALLEGRO_CLIENT_ID lub ALLEGRO_CLIENT_SECRET w pliku .env")
         sys.exit(1)

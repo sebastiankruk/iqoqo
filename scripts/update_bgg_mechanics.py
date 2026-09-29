@@ -30,6 +30,7 @@ from sqlalchemy import select
 
 
 def main() -> int:
+    """Synchronise board-game mechanics from BoardGameGeek."""
     project_root = Path(__file__).resolve().parents[1]
     data_path = project_root / "data" / "bgg_mechanics.json"
 

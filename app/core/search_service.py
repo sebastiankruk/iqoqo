@@ -18,8 +18,10 @@
 Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 """
 
+import dataclasses
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import bindparam, text
@@ -55,7 +57,45 @@ def sanitize_search_query(q: str) -> str:
     return q.translate(str.maketrans("’‘ʼ", "'''")).strip()
 
 
+@dataclass(frozen=True)
+class ItemSearchFilters:
+    """The filter set shared by the item-search backends.
+
+    These fourteen parameters were previously passed individually to
+    ``_pg_item_fts`` and ``_ilike_item_search``. A sixteen-parameter positional
+    run is where a call site stops being readable: ``borrowed_only`` and
+    ``missing_cover`` are both ``bool``, so passing one where the other belongs
+    is invisible to a type checker and produces wrong rows rather than an error.
+
+    Grouping them also stops the two backends drifting. When the filter list
+    lived in two signatures, adding one to the PostgreSQL path and forgetting
+    the SQLite path was a silent behaviour split between deployments.
+
+    Frozen so a filter set cannot be mutated while a query is being built.
+    """
+
+    statuses: list[str] | None = None
+    category: list[str] | None = None
+    format_filter: list[str] | None = None
+    borrowed_only: bool = False
+    missing_cover: bool = False
+    missing_id: bool = False
+    tags: list[str] | None = None
+    collections: list[str] | None = None
+    genres: list[str] | None = None
+    publishers: list[str] | None = None
+    lod_authority: str | None = None
+    lod_status: str | None = None
+
+
 class SearchService:
+    """Entry points for item and manifestation search.
+
+    Dispatches to PostgreSQL full-text search when the dialect and the filter set
+    allow it, and to ILIKE otherwise. The two backends must return equivalent
+    results for the same query; :class:`ItemSearchFilters` is shared between them
+    so a filter cannot be added to one and forgotten in the other."""
+
     @staticmethod
     def search_manifestations(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
@@ -109,56 +149,54 @@ class SearchService:
         )
 
     @staticmethod
-    def search_items(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def search_items(
         q: str,
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
-        tags: list[str] | None = None,
-        collections: list[str] | None = None,
-        genres: list[str] | None = None,
-        publishers: list[str] | None = None,
-        lod_authority: str | None = None,
-        lod_status: str | None = None,
+        filters: ItemSearchFilters | None = None,
+        **kwargs: Any,
     ) -> tuple[int, list[dict]]:
-        """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
+        """Returns (total_count, list_of_item_data_mappings) ordered by relevance.
+
+        Args:
+            q: The free-text query, sanitised below.
+            user_id: Owner whose items are searched.
+            limit: Maximum rows to return.
+            offset: Row offset for pagination.
+            filters: The filter set. Built from *kwargs* when omitted, so
+                existing keyword call sites keep working unchanged while new
+                callers can pass a typed value.
+            **kwargs: Any :class:`ItemSearchFilters` field, accepted for
+                backwards compatibility with the pre-DTO signature.
+        """
+        if filters is None:
+            # The field names are checked explicitly rather than filtered out: a
+            # typo'd filter must raise, because silently ignoring
+            # ``missing_covr=True`` would widen the result set and look correct.
+            unknown = set(kwargs) - {f.name for f in dataclasses.fields(ItemSearchFilters)}
+            if unknown:
+                raise TypeError(f"search_items() got unexpected keyword arguments: {sorted(unknown)}")
+            filters = ItemSearchFilters(**kwargs)
+
         q = sanitize_search_query(q)
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or lod_authority or lod_status):
+        # Full-text search cannot express the facet filters, so a query carrying
+        # any of them is routed to ILIKE rather than silently dropping them.
+        has_facets = bool(
+            filters.tags or filters.collections or filters.genres or filters.publishers or filters.lod_authority or filters.lod_status
+        )
+
+        if db.engine.dialect.name == "postgresql" and not has_facets:
             try:
-                return SearchService._pg_item_fts(
-                    q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
-                )
+                return SearchService._pg_item_fts(q, user_id, limit, offset, filters)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
                 logger.exception("PostgreSQL FTS failed for items, falling back to ILIKE", exc_info=exc)
                 db.session.rollback()
 
-        return SearchService._ilike_item_search(
-            q,
-            user_id,
-            limit,
-            offset,
-            statuses,
-            category,
-            format_filter,
-            borrowed_only,
-            missing_cover,
-            missing_id,
-            tags=tags,
-            collections=collections,
-            genres=genres,
-            publishers=publishers,
-            lod_authority=lod_authority,
-            lod_status=lod_status,
-        )
+        return SearchService._ilike_item_search(q, user_id, limit, offset, filters)
 
     @staticmethod
     def _pg_manifestation_fts(
@@ -281,13 +319,23 @@ class SearchService:
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
+        filters: ItemSearchFilters,
     ) -> tuple[int, list[dict]]:
+        # Unpacked into locals so the raw SQL below reads as it did before the
+        # DTO. Only the first six fields are unpacked: this backend is reached
+        # only when `search_items` has established that no facet filter is set,
+        # because hand-written SQL cannot express them. Unpacking the rest
+        # would imply they are honoured here.
+        (
+            statuses,
+            category,
+            format_filter,
+            borrowed_only,
+            missing_cover,
+            missing_id,
+        ) = dataclasses.astuple(
+            filters
+        )[:6]
         catalog_prefix, inventory_prefix = _validated_schema_prefixes()
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
@@ -369,24 +417,29 @@ class SearchService:
         return total, [dict(r) for r in results]
 
     @staticmethod
-    def _ilike_item_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _ilike_item_search(
         q: str,
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
-        tags: list[str] | None = None,
-        collections: list[str] | None = None,
-        genres: list[str] | None = None,
-        publishers: list[str] | None = None,
-        lod_authority: str | None = None,
-        lod_status: str | None = None,
+        filters: ItemSearchFilters,
     ) -> tuple[int, list[dict]]:
+        # The fallback for every filter combination, including the facet ones,
+        # so it unpacks the full DTO.
+        (
+            statuses,
+            category,
+            format_filter,
+            borrowed_only,
+            missing_cover,
+            missing_id,
+            tags,
+            collections,
+            genres,
+            publishers,
+            lod_authority,
+            lod_status,
+        ) = dataclasses.astuple(filters)
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
         matching_items_sub = (

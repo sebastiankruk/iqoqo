@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Media metadata lookup strategies and the factory that selects them."""
 
 from .audio import AudioLookupStrategy
 from .base import LookupStrategy

@@ -14,6 +14,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 # pylint: disable=inconsistent-return-statements
+"""Administrative endpoints: users, roles, FRBR maintenance, settings.
+
+All routes require the admin permission. Destructive FRBR operations (merge,
+split, reassign) live here rather than in the public blueprint because each one
+rewrites references across entity types."""
 
 import os
 from datetime import date

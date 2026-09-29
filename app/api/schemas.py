@@ -33,6 +33,14 @@ def _validate_uuid_str(v: str | None) -> str | None:
 
 
 class ItemCreateSchema(BaseModel):
+    """Request body for adding a new physical item to the library.
+
+    ``extra="allow"`` because the API accepts provider-specific fields that are
+    preserved into ``meta`` rather than rejected: a client that round-trips a
+    record from another system should not lose fields this schema has never
+    heard of.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     status: str | None = Field(default=None, description="The progress status of the item")
@@ -47,6 +55,12 @@ class ItemCreateSchema(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_id_positive(cls, data: Any) -> Any:
+        """Reject a non-positive ``id``/``item_id`` before field validation.
+
+        Runs in ``before`` mode so the check sees the raw payload. A
+        zero-or-negative primary key would otherwise be accepted here and fail
+        later as a foreign-key error, far from the request that caused it.
+        """
         if isinstance(data, dict):
             for key in ("id", "item_id"):
                 if key in data and data[key] is not None and data[key] <= 0:
@@ -56,11 +70,13 @@ class ItemCreateSchema(BaseModel):
     @field_validator("lent_to_user_id")
     @classmethod
     def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        """Ensure the borrower id is a well-formed UUID, or absent."""
         return _validate_uuid_str(v)
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain the progress status to the controlled vocabulary."""
         if v is not None and v not in PROGRESS_STATUSES:
             raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
         return v
@@ -68,12 +84,19 @@ class ItemCreateSchema(BaseModel):
     @field_validator("collection_status")
     @classmethod
     def validate_collection_status(cls, v: str | None) -> str | None:
+        """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
 
 class ItemBulkCreateSchema(BaseModel):
+    """Request body for adding several manifestations to the library at once.
+
+    ``extra="forbid"`` because a bulk operation with silently ignored fields
+    would apply a partial change while appearing to apply the whole one.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     manifestation_ids: list[int] = Field(..., min_length=1, description="List of manifestation IDs to add")
@@ -84,6 +107,7 @@ class ItemBulkCreateSchema(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain the progress status to the controlled vocabulary."""
         if v is not None and v not in PROGRESS_STATUSES:
             raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
         return v
@@ -91,12 +115,19 @@ class ItemBulkCreateSchema(BaseModel):
     @field_validator("collection_status")
     @classmethod
     def validate_collection_status(cls, v: str | None) -> str | None:
+        """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
 
 class ItemUpdateSchema(BaseModel):
+    """Request body for editing an existing item.
+
+    Every field is optional: an absent field means "unchanged", so a partial
+    edit does not require resending the whole record.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     status: str | None = None
@@ -110,6 +141,11 @@ class ItemUpdateSchema(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_id_positive(cls, data: Any) -> Any:
+        """Reject a non-positive ``id``/``item_id`` in an update payload.
+
+        An update that sets the primary key to 0 or a negative value is
+        rejected here rather than becoming a constraint violation on flush.
+        """
         if isinstance(data, dict):
             for key in ("id", "item_id"):
                 if key in data and data[key] is not None and data[key] <= 0:
@@ -119,11 +155,13 @@ class ItemUpdateSchema(BaseModel):
     @field_validator("lent_to_user_id")
     @classmethod
     def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        """Ensure the borrower id is a well-formed UUID, or absent."""
         return _validate_uuid_str(v)
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain the progress status to the controlled vocabulary."""
         if v is not None and v not in PROGRESS_STATUSES:
             raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
         return v
@@ -131,12 +169,19 @@ class ItemUpdateSchema(BaseModel):
     @field_validator("collection_status")
     @classmethod
     def validate_collection_status(cls, v: str | None) -> str | None:
+        """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
 
 class ItemManualCreateSchema(BaseModel):
+    """Request body for creating an item by hand, without a scanned barcode.
+
+    The capitalised field names mirror the provider payload format used by the
+    import tooling, so the same body can be fed from a file or a form.
+    """
+
     model_config = ConfigDict(extra="allow")  # Store all extra fields in meta
 
     Title: str = Field(..., min_length=1)
@@ -154,11 +199,13 @@ class ItemManualCreateSchema(BaseModel):
     @field_validator("lent_to_user_id")
     @classmethod
     def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        """Ensure the borrower id is a well-formed UUID, or absent."""
         return _validate_uuid_str(v)
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain the progress status to the controlled vocabulary."""
         if v is not None and v not in PROGRESS_STATUSES:
             raise ValueError(f"Invalid progress status: '{v}'. Must be one of {PROGRESS_STATUSES}")
         return v
@@ -166,12 +213,19 @@ class ItemManualCreateSchema(BaseModel):
     @field_validator("collection_status")
     @classmethod
     def validate_collection_status(cls, v: str | None) -> str | None:
+        """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
 
 class ManifestationUpdateSchema(BaseModel):
+    """Request body for editing manifestation-level bibliographic metadata.
+
+    The title and author changes cascade to the parent Work and sibling
+    Expressions; see the admin API for the propagation rules.
+    """
+
     model_config = ConfigDict(extra="allow")
 
     Title: str | None = None
@@ -184,6 +238,13 @@ class ManifestationUpdateSchema(BaseModel):
 
 
 class ScanBarcodeSchema(BaseModel):
+    """Request body for a barcode scan.
+
+    ``policy`` decides what a scan does beyond resolving a manifestation:
+    ``inventory`` files a physical item, ``wishlist`` records intent to buy,
+    and the ``catalog`` variants only refresh metadata.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     barcode: str | None = Field(default=None, max_length=128)
@@ -198,6 +259,7 @@ class ScanBarcodeSchema(BaseModel):
     @field_validator("policy")
     @classmethod
     def validate_policy(cls, v: str | None) -> str | None:
+        """Constrain the scan policy to the supported set."""
         valid_policies = {"inventory", "wishlist", "catalog", "catalog_only"}
         if v is not None and v not in valid_policies:
             raise ValueError(f"Invalid policy: '{v}'. Must be one of {valid_policies}")
@@ -206,17 +268,21 @@ class ScanBarcodeSchema(BaseModel):
     @field_validator("lent_to_user_id")
     @classmethod
     def validate_lent_to_user_id(cls, v: str | None) -> str | None:
+        """Ensure the borrower id is a well-formed UUID, or absent."""
         return _validate_uuid_str(v)
 
     @field_validator("collection_status")
     @classmethod
     def validate_collection_status(cls, v: str | None) -> str | None:
+        """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
 
 class UserCollectionCreateSchema(BaseModel):
+    """Request body for creating a user collection folder."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=255)
@@ -224,6 +290,12 @@ class UserCollectionCreateSchema(BaseModel):
 
 
 class UserCollectionUpdateSchema(BaseModel):
+    """Request body for renaming or re-parenting a user collection folder.
+
+    ``parent_id`` may be set to null to move a collection to the root; cycle
+    detection happens server-side, since it needs the whole tree.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -257,6 +329,7 @@ class ItemLendSchema(BaseModel):
     @field_validator("borrower_id")
     @classmethod
     def validate_borrower_id(cls, v: str | None) -> str | None:
+        """Ensure the borrower id is a well-formed UUID, or absent."""
         return _validate_uuid_str(v)
 
 
@@ -312,6 +385,7 @@ class FeedbackUpdateSchema(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain a ticket status to the controlled vocabulary."""
         if v is not None and v not in {"new", "accepted", "in_progress", "in_validation", "closed"}:
             raise ValueError(f"Invalid status: {v}. Must be one of new, accepted, in_progress, in_validation, closed")
         return v
@@ -319,12 +393,18 @@ class FeedbackUpdateSchema(BaseModel):
     @field_validator("feedback_type")
     @classmethod
     def validate_feedback_type(cls, v: str | None) -> str | None:
+        """Constrain the feedback type to ``feature_request`` or ``bug``."""
         if v is not None and v not in {"feature_request", "bug"}:
             raise ValueError(f"Invalid feedback_type: {v}. Must be one of feature_request, bug")
         return v
 
     @model_validator(mode="after")
     def check_at_least_one_field(self) -> "FeedbackUpdateSchema":
+        """Reject an update that changes nothing.
+
+        An all-absent payload would otherwise return 200 having written
+        nothing, which reads as a successful edit to the client.
+        """
         if self.status is None and self.feedback_type is None and self.description is None and self.comment is None:
             raise ValueError("No valid fields provided for update")
         return self
@@ -347,6 +427,7 @@ class FrbrReassignSchema(BaseModel):
     @field_validator("entity_type")
     @classmethod
     def validate_entity_type(cls, v: str) -> str:
+        """Restrict reassignment to entity types that can have a new parent."""
         allowed = {"expression", "manifestation", "item"}
         if v not in allowed:
             raise ValueError(f"Invalid entity_type for reassign: {v!r}. Must be one of {sorted(allowed)}")
@@ -365,6 +446,12 @@ class FrbrMergeSchema(BaseModel):
     @field_validator("entity_type")
     @classmethod
     def validate_entity_type(cls, v: str) -> str:
+        """Restrict merging to entity types that exist at this level.
+
+        ``work`` is included here but not in the reassign set: a Work is the
+        root of the FRBR hierarchy and cannot be re-parented, but it can be the
+        target of a merge.
+        """
         allowed = {"work", "expression", "manifestation"}
         if v not in allowed:
             raise ValueError(f"Invalid entity_type for merge: {v!r}. Must be one of {sorted(allowed)}")
@@ -372,6 +459,11 @@ class FrbrMergeSchema(BaseModel):
 
     @model_validator(mode="after")
     def check_different_ids(self) -> "FrbrMergeSchema":
+        """Reject a merge whose source and target are the same row.
+
+        Merging a row into itself would delete it and then re-point every
+        reference at nothing.
+        """
         if self.source_id == self.target_id:
             raise ValueError("source_id and target_id must be different")
         return self
@@ -390,6 +482,7 @@ class FrbrSplitSchema(BaseModel):
     @field_validator("entity_type")
     @classmethod
     def validate_entity_type(cls, v: str) -> str:
+        """Restrict splitting to entity types that own children."""
         allowed = {"work", "expression", "manifestation"}
         if v not in allowed:
             raise ValueError(f"Invalid entity_type for split: {v!r}. Must be one of {sorted(allowed)}")
@@ -398,6 +491,7 @@ class FrbrSplitSchema(BaseModel):
     @field_validator("child_ids")
     @classmethod
     def validate_child_ids(cls, v: list[int]) -> list[int]:
+        """Require every child id to be a positive integer."""
         if any(cid <= 0 for cid in v):
             raise ValueError("All child_ids must be positive integers")
         return v

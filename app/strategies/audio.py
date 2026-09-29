@@ -12,6 +12,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
+"""Audio metadata lookup across MusicBrainz, Discogs and UPC/EAN codes.
+
+The most involved strategy: one barcode can be a CD, a vinyl release, a
+cassette or a Blu-ray Pure Audio title, and the carriers need different
+providers. Carrier detection is kept separate from lookup so the resolution is
+testable without a network call."""
 
 from app.strategies.base import LookupStrategy
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_metadata
@@ -97,6 +103,8 @@ def classify_bluray_carrier(
 
 
 class AudioLookupStrategy(LookupStrategy):
+    """Carrier-aware audio lookup (CD, vinyl, cassette, Blu-ray audio)."""
+
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         if barcode.isdigit() and len(barcode) <= 7:

@@ -12,12 +12,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
+"""LLM cover generation tiers and the shared-cache lookup in front of them.
+
+Each tier is a separate function with its own provider, and fetch_llm_cover()
+orchestrates them. The request fields shared across tiers are grouped in
+CoverRequest so a caller cannot pass two same-typed parameters in the wrong
+order."""
 
 import base64
 import binascii
+import dataclasses
 import logging
 import os
 import time
+from dataclasses import dataclass
+from typing import Any
 
 import requests
 from openai import OpenAI
@@ -26,10 +35,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
 from app.core.permissions import PermissionName
+from app.core.s3_service import BUCKET_COVERS, get_s3_service, warn_if_legacy_rclone_configured
 from app.db import db
 from app.db.models import LLMTelemetry
 from app.utils.images import add_text_overlay, optimize_and_save_image
-from app.utils.rclone_utils import get_rclone_target
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +129,10 @@ def save_image(image_data: bytes, identifier: str, suffix: str, return_bytes: bo
 
 
 def build_context(description: str, genre: str) -> str:
+    """Compose the descriptive half of a cover prompt.
+
+    Separated from generation so the prompt text can be asserted in tests without
+    calling a provider, and so the two prompt halves cannot drift apart."""
     ctx = ""
     if not is_placeholder(genre):
         ctx += f" Genre: {genre.strip()}."
@@ -129,17 +142,62 @@ def build_context(description: str, genre: str) -> str:
     return ctx
 
 
+@dataclass(frozen=True)
+class CoverRequest:
+    """The descriptive inputs shared by every cover-generation tier.
+
+    ``identifier``/``title``/``author``/``user_id`` stay positional on each
+    function: they are four values, they read fine in sequence, and keeping them
+    first means the identity of the request is always visible.
+
+    Everything after them was a run of optional parameters, and every call site
+    passed all of them even though most callers had no opinion about most of
+    them. That is where positional mistakes live: ``description``, ``genre`` and
+    ``format_type`` are all ``str``, so swapping two is invisible to a type
+    checker and silently produces a wrong prompt.
+
+    ``allow_cloud_llm`` belongs here rather than as a separate argument because
+    it is a property of the request, not of the tier being called.
+    """
+
+    description: str = ""
+    genre: str = ""
+    format_type: str | None = None
+    return_bytes: bool = False
+    allow_cloud_llm: bool = False
+
+
+def _cover_request(request: "CoverRequest | None", kwargs: dict[str, Any]) -> CoverRequest:
+    """Build a :class:`CoverRequest` from an explicit value or legacy kwargs.
+
+    An unrecognised name raises rather than being ignored: silently dropping
+    ``description`` would generate a cover from a half-empty prompt and look
+    like a provider quirk.
+    """
+    if request is not None:
+        return request
+    if not kwargs:
+        return CoverRequest()
+    unknown = set(kwargs) - {f.name for f in dataclasses.fields(CoverRequest)}
+    if unknown:
+        raise TypeError(f"unexpected cover request fields: {sorted(unknown)}")
+    return CoverRequest(**kwargs)
+
+
 def generate_cover_cloud(
     identifier: str,
     title: str,
     author: str,
     user_id: str,
-    description: str = "",
-    genre: str = "",
-    format_type: str | None = None,
-    return_bytes: bool = False,
+    request: CoverRequest | None = None,
+    **kwargs: Any,
 ) -> tuple[str | bytes, str] | None:
     """Tier 3: OpenAI DALL-E 3. Returns (path_or_bytes, source) tuple on success."""
+    request = _cover_request(request, kwargs)
+    description = request.description
+    genre = request.genre
+    format_type = request.format_type
+    return_bytes = request.return_bytes
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
@@ -198,12 +256,15 @@ def generate_cover_gemini(
     title: str,
     author: str,
     user_id: str,
-    description: str = "",
-    genre: str = "",
-    format_type: str | None = None,
-    return_bytes: bool = False,
+    request: CoverRequest | None = None,
+    **kwargs: Any,
 ) -> tuple[str | bytes, str] | None:
     """Tier 3: Google Imagen via Gemini API. Returns (path_or_bytes, source) tuple on success."""
+    request = _cover_request(request, kwargs)
+    description = request.description
+    genre = request.genre
+    format_type = request.format_type
+    return_bytes = request.return_bytes
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -260,12 +321,15 @@ def generate_cover_local(
     title: str,
     author: str,
     user_id: str,
-    description: str = "",
-    genre: str = "",
-    format_type: str | None = None,
-    return_bytes: bool = False,
+    request: CoverRequest | None = None,
+    **kwargs: Any,
 ) -> tuple[str | bytes, str] | None:
     """Tier 4: Local Stable Diffusion (Automatic1111 API). Returns (path_or_bytes, source) tuple on success."""
+    request = _cover_request(request, kwargs)
+    description = request.description
+    genre = request.genre
+    format_type = request.format_type
+    return_bytes = request.return_bytes
     sd_url = os.environ.get("LOCAL_SD_URL")
     if not sd_url:
         return None
@@ -335,36 +399,29 @@ def fetch_llm_cover(
     title: str,
     author: str,
     user_id: str,
-    description: str = "",
-    genre: str = "",
-    format_type: str | None = None,
-    allow_cloud_llm: bool = False,
-    return_bytes: bool = False,
+    request: CoverRequest | None = None,
+    **kwargs: Any,
 ) -> tuple[str | bytes, str] | None:
     """Orchestrates LLM generation tiers. Returns (path_or_bytes, source) tuple on success."""
-    # 0. Global Cache (rclone)
-    remote = os.environ.get("RCLONE_COVERS_REMOTE")
-    if remote and not return_bytes:
-        import subprocess
-
+    request = _cover_request(request, kwargs)
+    allow_cloud_llm = request.allow_cloud_llm
+    return_bytes = request.return_bytes
+    # 0. Shared cache: a cover already generated for this identifier on another
+    # instance is reused instead of paying for a new generation.
+    service = None if return_bytes else get_s3_service(BUCKET_COVERS)
+    if not return_bytes and service is None:
+        warn_if_legacy_rclone_configured(BUCKET_COVERS)
+    if service is not None:
         for sfx in ("dalle", "gemini", "localsd", "cover"):
             filename = f"{identifier}_{sfx}.jpg"
             local_file = os.path.join(COVERS_DIR, filename)
-            try:
-                target = get_rclone_target(remote, "covers", filename)
-                res = subprocess.run(
-                    ["rclone", "copyto", "--s3-no-check-bucket", "--", target, local_file],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                if res.returncode == 0 and os.path.exists(local_file):
-                    logger.info("Pulled cover from global cache: %s", filename)
-                    return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.warning("Failed to check rclone cache: %s", e)
+            # A cache miss is the expected outcome, so this never raises: the
+            # caller falls through to generating the cover normally.
+            if service.download_to_file_or_none(service.key_for(filename), local_file) and os.path.exists(local_file):
+                logger.info("Pulled cover from shared cache: %s", filename)
+                return f"{Config.COVERS_BASE_URL}/{filename}", "llm_cache"
     # 1. Local (Free)
-    result = generate_cover_local(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
+    result = generate_cover_local(identifier, title, author, user_id, request)
     if result:
         return result
 
@@ -381,12 +438,12 @@ def fetch_llm_cover(
         return None
 
     if os.environ.get("GEMINI_API_KEY"):
-        result = generate_cover_gemini(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
+        result = generate_cover_gemini(identifier, title, author, user_id, request)
         if result:
             return result
 
     if os.environ.get("OPENAI_API_KEY"):
-        return generate_cover_cloud(identifier, title, author, user_id, description, genre, format_type, return_bytes=return_bytes)
+        return generate_cover_cloud(identifier, title, author, user_id, request)
 
     return None
 
@@ -447,6 +504,11 @@ def apply_corner_watermark(gen_image_path: str, watermark_path: str, output_path
 
 
 def apply_corner_watermark_bytes(gen_image_bytes: bytes, watermark_path: str, opacity: float = 0.45) -> bytes:
+    """Overlay the iqoqo corner watermark on generated image bytes.
+
+    Applied to LLM output only. The watermark is a licensing mark, so it is drawn
+    after generation rather than being asked for in the prompt, where a model would
+    be free to ignore it."""
     import io
 
     try:

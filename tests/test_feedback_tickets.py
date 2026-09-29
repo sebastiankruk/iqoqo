@@ -310,18 +310,14 @@ def test_concurrent_comment_addition(client, feedback_setup, app):
     assert len(resp.json["data"]["comments"]) == 10
 
 
-def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
-    """Test that screenshots trigger Celery task and resolve remotely if configured."""
+def test_s3_screenshot_upload(client, feedback_setup, app, monkeypatch):
+    """Screenshots are pushed to object storage and read back when local storage misses."""
     import os
     from io import BytesIO
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
     png_bytes = _sample_png()
-
-    mock_subprocess_run = MagicMock()
-    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
-    monkeypatch.setenv("RCLONE_FEEDBACK_REMOTE", "test_remote:feedback")
 
     # Override Celery task to run synchronously
     from app.core.tasks import upload_feedback_screenshot
@@ -331,57 +327,52 @@ def test_rclone_screenshot_upload(client, feedback_setup, app, monkeypatch):
 
     monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
 
-    resp = client.post(
-        "/api/feedback",
-        data={
-            "type": "bug",
-            "description": "Rclone test",
-            "screenshots": (BytesIO(png_bytes), "test.png"),
-        },
-        headers=u1_headers,
-        content_type="multipart/form-data",
-    )
-    print(resp.json)
-    assert resp.status_code == 201, resp.json
+    service = MagicMock()
+    service.key_for.side_effect = lambda name: f"feedback/{name}"
+    service.get_bytes.return_value = b"fakeimage"
 
-    # Assert rclone was called
-    mock_subprocess_run.assert_called_once()
-    args = mock_subprocess_run.call_args[0][0]
-    assert "rclone" in args
-    assert "copyto" in args
-    assert any("test_remote:feedback" in a for a in args)
+    with patch("app.core.tasks.get_s3_service", return_value=service), patch("app.api.feedback.get_s3_service", return_value=service):
+        resp = client.post(
+            "/api/feedback",
+            data={
+                "type": "bug",
+                "description": "S3 test",
+                "screenshots": (BytesIO(png_bytes), "test.png"),
+            },
+            headers=u1_headers,
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 201, resp.json
 
-    # Test retrieval from remote
-    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+        # The upload went to the feedback bucket under a validated key.
+        service.upload_file.assert_called_once()
+        assert service.upload_file.call_args[0][1].startswith("feedback/")
 
-    mock_subprocess_run_cat = MagicMock()
-    mock_subprocess_run_cat.return_value.stdout = b"fakeimage"
-    monkeypatch.setattr("subprocess.run", mock_subprocess_run_cat)
+        # Test retrieval from remote: remove the local file to force the remote path.
+        filename = resp.json["data"]["attachments"][0].split("/")[-1]
 
-    # Need to remove local file to trigger rclone fallback
-    from app.utils.covers import GALLERY_DIR
+        from app.utils.covers import GALLERY_DIR
 
-    local_path = os.path.join(GALLERY_DIR, filename)
-    if os.path.exists(local_path):
-        os.remove(local_path)
+        local_path = os.path.join(GALLERY_DIR, filename)
+        if os.path.exists(local_path):
+            os.remove(local_path)
 
-    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
-    assert img_resp.status_code == 200
-    assert img_resp.data == b"fakeimage"
-    mock_subprocess_run_cat.assert_called_once()
-    assert "cat" in mock_subprocess_run_cat.call_args[0][0]
+        img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+        assert img_resp.status_code == 200
+        assert img_resp.data == b"fakeimage"
+        service.get_bytes.assert_called_once()
+        assert service.get_bytes.call_args[0][0].startswith("feedback/")
 
 
-def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
-    """Test fallback when rclone is not configured."""
+def test_s3_graceful_fallback(client, feedback_setup, app, monkeypatch):
+    """Without a configured bucket, submission still succeeds and retrieval 404s."""
     import os
     from io import BytesIO
-    from unittest.mock import MagicMock
+    from unittest.mock import patch
 
     monkeypatch.delenv("RCLONE_FEEDBACK_REMOTE", raising=False)
-
-    mock_subprocess_run = MagicMock()
-    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+    monkeypatch.delenv("S3_BUCKET_FEEDBACK", raising=False)
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
 
     # Override Celery task to run synchronously
     from app.core.tasks import upload_feedback_screenshot
@@ -394,33 +385,32 @@ def test_rclone_graceful_fallback(client, feedback_setup, app, monkeypatch):
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
     png_bytes = _sample_png()
 
-    resp = client.post(
-        "/api/feedback",
-        data={
-            "type": "bug",
-            "description": "Fallback test",
-            "screenshots": (BytesIO(png_bytes), "test2.png"),
-        },
-        headers=u1_headers,
-        content_type="multipart/form-data",
-    )
-    print(resp.json)
-    assert resp.status_code == 201
+    with patch("app.core.s3_service.boto3.client") as mock_boto:
+        resp = client.post(
+            "/api/feedback",
+            data={
+                "type": "bug",
+                "description": "Fallback test",
+                "screenshots": (BytesIO(png_bytes), "test2.png"),
+            },
+            headers=u1_headers,
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 201
 
-    # Subprocess shouldn't be called because RCLONE_FEEDBACK_REMOTE is missing
-    mock_subprocess_run.assert_not_called()
+        # No bucket is configured, so no S3 client is ever built.
+        mock_boto.assert_not_called()
 
-    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+        filename = resp.json["data"]["attachments"][0].split("/")[-1]
 
-    # Remove local file to test retrieval failure
-    from app.utils.covers import GALLERY_DIR
+        from app.utils.covers import GALLERY_DIR
 
-    local_path = os.path.join(GALLERY_DIR, filename)
-    if os.path.exists(local_path):
-        os.remove(local_path)
+        local_path = os.path.join(GALLERY_DIR, filename)
+        if os.path.exists(local_path):
+            os.remove(local_path)
 
-    img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
-    assert img_resp.status_code == 404
+        img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
+        assert img_resp.status_code == 404
 
 
 def test_feedback_schema_migration(app):
@@ -784,11 +774,11 @@ def test_feedback_screenshot_exact_collision_idor_blocked(client, feedback_setup
     assert resp_admin.status_code == 200
 
 
-def test_feedback_screenshot_rclone_timeout(client, feedback_setup, app, monkeypatch):
-    """Verify that a timeout on rclone remote fetch returns 504 instead of hanging."""
+def test_feedback_screenshot_remote_failure_returns_502(client, feedback_setup, app, monkeypatch):
+    """A remote storage outage must be a 502, distinct from a genuinely absent screenshot."""
     import io
     import os
-    import subprocess
+    from unittest.mock import MagicMock, patch
 
     from app.utils.covers import GALLERY_DIR
 
@@ -799,27 +789,28 @@ def test_feedback_screenshot_rclone_timeout(client, feedback_setup, app, monkeyp
         "/api/feedback",
         headers=u1_headers,
         data={
-            "description": "Ticket for remote timeout test",
+            "description": "Ticket for remote failure test",
             "type": "bug",
-            "screenshots": (io.BytesIO(png_bytes), "timeout_test.png"),
+            "screenshots": (io.BytesIO(png_bytes), "remote_fail.png"),
         },
         content_type="multipart/form-data",
     )
     assert resp.status_code == 201
     filename = resp.json["data"]["attachments"][0].split("/")[-1]
 
-    # Delete local file so it tries remote
+    # Delete local file so retrieval falls through to remote storage
     local_path = os.path.join(GALLERY_DIR, filename)
-    if os.path.exists(local_path):
-        os.remove(local_path)
+    assert os.path.exists(local_path), f"local screenshot missing, cannot test the remote path: {local_path}"
+    os.remove(local_path)
 
-    monkeypatch.setenv("RCLONE_FEEDBACK_REMOTE", "remote:feedback")
+    from app.core.s3_service import S3DownloadError
 
-    def mock_run_timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout", 30))
+    service = MagicMock()
+    service.key_for.side_effect = lambda name: f"feedback/{name}"
+    service.get_bytes.side_effect = S3DownloadError("failed", code="AccessDenied")
 
-    monkeypatch.setattr(subprocess, "run", mock_run_timeout)
+    with patch("app.api.feedback.get_s3_service", return_value=service):
+        resp_fail = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
 
-    resp_timeout = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
-    assert resp_timeout.status_code == 504
-    assert "Timeout retrieving screenshot" in resp_timeout.json["error"]
+    assert resp_fail.status_code == 502
+    assert "Remote storage unavailable" in resp_fail.json["error"]

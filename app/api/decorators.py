@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Shared route decorators: authentication, RBAC, rate limiting.
+
+The permission decorator resolves the caller's role to a permission set and
+denies by default. It is deliberately the only supported way to expose an
+authenticated route, so an endpoint cannot accidentally ship without a check."""
+
 import hmac
 import logging
 import time
@@ -96,6 +102,14 @@ def _is_token_revoked(jti: str | None, expires_at: int | float | None = None) ->
 
 
 def require_auth(f):
+    """Reject the request unless a valid credential is present.
+
+    Accepts a bearer token first and falls back to the session cookie, so the same
+    decorator serves both the API clients and the server-rendered frontend.
+
+    This is the only supported way to expose an authenticated route: a view that
+    omits it is unprotected, and the permission decorator composes on top of it."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
@@ -130,6 +144,11 @@ def require_auth(f):
 
 
 def optional_auth(f):
+    """Attach the caller when a credential is present, without requiring one.
+
+    Used for endpoints whose response varies for a signed-in user but is valid
+    anonymously, such as public profile views."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
@@ -156,6 +175,12 @@ def optional_auth(f):
 
 
 def require_permission(perm_name: PermissionName):
+    """Build a decorator that requires one named permission.
+
+    Denies by default. The permission is resolved from the caller's role set at
+    request time, so a role change takes effect on the next request without needing
+    a session refresh."""
+
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -178,6 +203,11 @@ def require_permission(perm_name: PermissionName):
 
 
 def admin_required(f):
+    """Short-hand for requiring the admin role rather than a single permission.
+
+    Use when a route is administrative as a whole, rather than protected by one
+    capability that could be delegated."""
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         user_id = getattr(g, "user_id", None)

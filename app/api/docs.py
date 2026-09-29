@@ -14,6 +14,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""OpenAPI/Swagger document assembly.
+
+Assembled from the route table and the shared schema models so the published
+contract cannot drift from what the endpoints actually accept."""
+
 import logging
 
 from apispec import APISpec

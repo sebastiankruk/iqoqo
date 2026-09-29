@@ -13,6 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Lookup strategy interface for media metadata resolution.
+
+Each media type (book, audio, video, board game, puzzle) implements
+:class:`LookupStrategy`, and :class:`LookupStrategyFactory` picks one from the
+content type recorded on the Work. Strategies are tried in a fixed order and
+the first that returns metadata wins, so each one owns its own fallbacks
+rather than delegating down a chain."""
+
 from abc import ABC, abstractmethod
 
 

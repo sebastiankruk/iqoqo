@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Board game metadata lookup via BoardGameGeek and UPC/EAN resolution."""
+
 import requests
 
 from app.strategies.base import LookupStrategy
@@ -21,6 +23,8 @@ from app.utils.upc import resolve_physical_media
 
 
 class BoardGameLookupStrategy(LookupStrategy):
+    """Board game lookup via BoardGameGeek and UPC/EAN."""
+
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         try:

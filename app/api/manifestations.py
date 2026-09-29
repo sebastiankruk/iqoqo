@@ -50,6 +50,11 @@ logger = logging.getLogger(__name__)
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
+    """List manifestations with filtering, sorting and pagination.
+
+    The main catalogue browse endpoint. Pagination is offset-based and the total
+    count is computed separately, so a large collection costs two queries rather
+    than materialising every row."""
     user_id = getattr(g, "user_id", None)
     page_param = request.args.get("page", "1")
     limit_param = request.args.get("limit", "20")
@@ -277,6 +282,10 @@ def get_manifestations() -> tuple[Response, int]:
 @api_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
 @optional_auth
 def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
+    """Return one manifestation with its full FRBR ancestry and works.
+
+    The ancestry is needed by nearly every client view, so it is assembled here
+    rather than making the frontend issue four follow-up requests."""
     user_id = getattr(g, "user_id", None)
     m = db.session.get(Manifestation, manifestation_id)
 
@@ -376,6 +385,9 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
 @api_bp.route("/manifestations/recent", methods=["GET"])
 def get_recent_manifestations() -> tuple[Response, int]:
+    """Return the most recently added manifestations for the caller.
+
+    Used by the dashboard. Scoped to the caller's own library."""
     try:
         limit = request.args.get("limit", 10, type=int)
 
@@ -539,6 +551,12 @@ def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) ->
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
 def update_manifestation(isbn: str) -> tuple[Response, int]:
+    """Update manifestation metadata, cascading shared fields.
+
+    A title or author change also updates the parent Work and sibling Expressions,
+    because those fields are shared across the FRBR hierarchy. The propagation is
+    delegated to :mod:`app.core.frbr_service` so the API and the admin editor apply
+    identical rules."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": "Manifestation not found"}), 404
@@ -604,6 +622,10 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.REFETCH_METADATA)
 def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
+    """Re-query the providers for one manifestation's metadata.
+
+    Overwrites the cached provider values. Rate-limited per user, because this is
+    the one endpoint that fans out to third-party APIs on demand."""
     manif = db.get_or_404(Manifestation, manifestation_id)
     isbn_val = manif.isbn13
     if not isbn_val and manif.meta:
@@ -648,6 +670,10 @@ def refetch_metadata(manifestation_id: int) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.UPLOAD_COVER)
 def upload_cover(manifestation_id: int) -> tuple[Response, int]:
+    """Attach an uploaded image as the manifestation's cover.
+
+    Validates and re-encodes the upload before storing it, and rebinds any existing
+    cover file so the old one does not linger."""
     if "cover" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -803,6 +829,10 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.REGENERATE_COVER)
 def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
+    """Regenerate the cover through the full provider and LLM pipeline.
+
+    Ignores the current cover entirely, unlike refetch which only refreshes
+    metadata. Expensive, so it is permission-gated separately."""
     manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
     db.session.commit()
@@ -852,6 +882,10 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.REFETCH_COVER)
 def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
+    """Re-fetch a cover from providers without invoking the LLM tiers.
+
+    Cheaper than :func:`regenerate_cover`: it retries only the provider lookups, so
+    it does not spend money when a provider image was merely missing."""
     manif = db.get_or_404(Manifestation, manifestation_id)
     manif.update_meta(cover_status="pending")
     db.session.commit()
@@ -970,6 +1004,11 @@ def get_cover_status(manifestation_id: int):
 @require_auth
 @require_permission(PermissionName.DELETE_MANIFESTATION)
 def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
+    """Delete a manifestation and every item referencing it.
+
+    Destructive and cascade-heavy, so it is admin-only and the response reports what
+    was removed. Items are deleted with the manifestation because an item cannot
+    exist without one."""
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404

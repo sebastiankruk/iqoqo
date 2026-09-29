@@ -166,6 +166,10 @@ def get_system_status():
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():
+    """Return aggregate counts for the caller's dashboard.
+
+    ``scope=global`` switches to instance-wide totals and is restricted by the route's
+    permission; otherwise the counts are the caller's own."""
     scope = request.args.get("scope", "personal")
     owner_id = getattr(g, "user_id", None) if scope != "global" else None
     stats = DataManager.get_stats(owner_id=owner_id)
@@ -275,6 +279,7 @@ def get_global_stats():
 @require_auth
 @admin_required
 def get_stats():
+    """Return instance-wide catalogue statistics."""
     stats = DataManager.get_stats()
     return jsonify(stats)
 
@@ -315,6 +320,7 @@ def export_data():
 @require_auth
 @admin_required
 def import_data():
+    """Import a data file into the instance."""
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
 
@@ -351,6 +357,10 @@ def import_data():
 @require_auth
 @admin_required
 def clear_data():
+    """Purge instance data.
+
+    Irreversible, so it requires the admin permission and an explicit confirmation
+    flag in the request body."""
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()

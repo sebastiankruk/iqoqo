@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
 
 SHELL := /bin/bash
 
@@ -117,6 +117,7 @@ help:
 	@echo "  lint-markdown  - Run Markdown linter"
 	@echo "  lint-license   - Check copyright headers"
 	@echo "  validate-yaml  - Validate YAML configuration files"
+	@echo "  validate-nginx - Validate deploy/nginx.conf.example with a real nginx"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
@@ -453,7 +454,15 @@ lint-python: .venv/bin/activate
 	rm -rf .mypy_cache || true
 	.venv/bin/mypy $(MYPY_FLAGS) app/ tests/
 	$(AI_ECHO) "Running pylint..."
-	.venv/bin/pylint $(PYLINT_FLAGS) app/ tests/ scripts/
+	.venv/bin/pylint $(PYLINT_FLAGS) app/ scripts/
+	$(AI_ECHO) "Running pylint on tests (docstring rules relaxed)..."
+	# Docstring rules are not applied to tests. A test's name is its
+	# documentation -- `test_rejects_non_positive_item_id` says what the test
+	# asserts -- and requiring a prose restatement would be 126 entries of
+	# filler that drift out of date the moment the assertion changes. The rules
+	# still apply to app/ and scripts/, where the docstring carries information
+	# the signature does not.
+	.venv/bin/pylint $(PYLINT_FLAGS) --disable=C0114,C0115,C0116 tests/
 
 lint-format: .venv/bin/activate
 	$(AI_ECHO) "Checking Python formatting..."
@@ -513,6 +522,10 @@ lint-markdown:
 validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
+
+validate-nginx: .venv/bin/activate ## Validate deploy/nginx.conf.example with a real nginx
+	$(AI_ECHO) "Checking production nginx reference config..."
+	@.venv/bin/python scripts/validate_nginx_example.py
 
 secret-scan: .venv/bin/activate ## Scan repository working tree and branch commits for secrets using Gitleaks
 	$(AI_ECHO) "Scanning code for secrets (Gitleaks)..."

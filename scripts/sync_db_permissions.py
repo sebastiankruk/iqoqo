@@ -32,6 +32,10 @@ from app.db.models import Permission, Role, db
 
 
 def run_sync_permissions(app: Flask | None = None) -> None:
+    """Regenerate the permissions module from the YAML source of truth.
+
+    Also verifies the generated grants against the previous ones, so a typo in the
+    YAML fails here rather than silently widening or narrowing access."""
     if app is None:
         app = create_app()
 

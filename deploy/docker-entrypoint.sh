@@ -20,54 +20,62 @@
 
 set -e
 
-# Pre-start check: ensure the rclone configuration directory exists.
-# In-container backup and cover-cache jobs invoke rclone as the runtime
-# user; on fresh deployments without a host bind-mount of the config,
-# ${HOME}/.config/rclone is missing and rclone fails silently.
-# `mkdir -p` is idempotent: a no-op when the directory (or bind-mount)
-# already exists, so this is safe to run on every container start.
-mkdir -p "${HOME}/.config/rclone" 2>/dev/null || true
-chmod 0700 "${HOME}/.config/rclone" 2>/dev/null || true
-RCLONE_CONF="${HOME}/.config/rclone/rclone.conf"
-if [ -e "${RCLONE_CONF}" ]; then
-  chmod 0600 "${RCLONE_CONF}" 2>/dev/null || true
-  if [ ! -r "${RCLONE_CONF}" ]; then
-    echo "WARNING: ${RCLONE_CONF} exists but is not readable by UID $(id -u). Cloud backup and restore jobs may fail. Check host file permissions (recommend chmod 0640 or chown UID 10001)." >&2
+# Pre-start check: warn when remote object storage is configured but incomplete.
+#
+# Remote storage used to shell out to `rclone` and required a plaintext
+# `rclone.conf` bind-mounted into this container. It now uses boto3
+# (`app/core/s3_service.py`) configured entirely from environment variables, so
+# there is no config file to create or permission to fix here. What remains
+# worth catching at startup is a *half* configuration: a bucket named with no
+# credentials, or credentials with no bucket. Either way every remote operation
+# silently no-ops, and the first symptom is a missing backup archive or a cover
+# cache that never populates. Failing loudly at container start is the only
+# point where the operator is guaranteed to be watching.
+if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$S3_BUCKET_BACKUP" ] || [ -n "$S3_BUCKET_COVERS" ] || [ -n "$S3_BUCKET_FEEDBACK" ]; then
+  if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo "WARNING: S3 storage appears configured but AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is empty." >&2
+    echo "         Remote backups and shared cover cache will be skipped. Check your .env." >&2
+  fi
+  if [ -z "$S3_BUCKET_BACKUP" ] && [ -z "$S3_BUCKET_COVERS" ] && [ -z "$S3_BUCKET_FEEDBACK" ]; then
+    echo "WARNING: AWS credentials are present but no S3_BUCKET_* variable is set." >&2
+    echo "         Remote storage is disabled; set S3_BUCKET_BACKUP to enable backup archiving." >&2
   fi
 fi
 
-# Auto-rewrite localhost database and redis URLs to docker service names
-if [ -n "$DATABASE_URL" ]; then
-  case "$DATABASE_URL" in
-    *@localhost:*)
-      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@localhost:/@db:/')
-      ;;
-    *@127.0.0.1:*)
-      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/@127.0.0.1:/@db:/')
-      ;;
-    *//localhost:*)
-      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/\/\/localhost:/\/\/db:/')
-      ;;
-    *//127.0.0.1:*)
-      export DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/\/\/127.0.0.1:/\/\/db:/')
-      ;;
-  esac
+# Legacy rclone.conf detection. The file is no longer read by anything, but a
+# deployment that still mounts one is carrying a plaintext S3 secret into a
+# container for no reason. Removing the bind-mount is the fix; this notice
+# tells them exactly what to delete rather than leaving it silently unused.
+if [ -e "${HOME}/.config/rclone/rclone.conf" ]; then
+  echo "NOTE: ${HOME}/.config/rclone/rclone.conf is present but is no longer used." >&2
+  echo "      iqoqo now uses boto3 with environment-variable credentials." >&2
+  echo "      Remove the rclone.conf bind-mount from docker-compose.yml to stop" >&2
+  echo "      mounting a plaintext S3 secret into the container." >&2
 fi
-if [ -n "$REDIS_URL" ]; then
-  case "$REDIS_URL" in
-    *@localhost:*)
-      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@localhost:/@redis:/')
-      ;;
-    *@127.0.0.1:*)
-      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/@127.0.0.1:/@redis:/')
-      ;;
-    *//localhost:*)
-      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/\/\/localhost:/\/\/redis:/')
-      ;;
-    *//127.0.0.1:*)
-      export REDIS_URL=$(echo "$REDIS_URL" | sed 's/\/\/127.0.0.1:/\/\/redis:/')
-      ;;
+
+# Auto-rewrite localhost database and redis URLs to docker service names.
+#
+# These run before every container start, so they avoid forking `sed` and
+# `echo` per URL: parameter expansion is POSIX and allocation-free. Assigning
+# and exporting separately (rather than `export VAR=$(...)`) also keeps the
+# substitution's exit status from being masked by the export builtin.
+if [ -n "${DATABASE_URL:-}" ]; then
+  case "$DATABASE_URL" in
+    *@localhost:*)   DATABASE_URL=$(printf '%s' "$DATABASE_URL" | sed 's/@localhost:/@db:/') ;;
+    *@127.0.0.1:*)   DATABASE_URL=$(printf '%s' "$DATABASE_URL" | sed 's/@127.0.0.1:/@db:/') ;;
+    *//localhost:*)  DATABASE_URL=$(printf '%s' "$DATABASE_URL" | sed 's|//localhost:|//db:|') ;;
+    *//127.0.0.1:*)  DATABASE_URL=$(printf '%s' "$DATABASE_URL" | sed 's|//127.0.0.1:|//db:|') ;;
   esac
+  export DATABASE_URL
+fi
+if [ -n "${REDIS_URL:-}" ]; then
+  case "$REDIS_URL" in
+    *@localhost:*)   REDIS_URL=$(printf '%s' "$REDIS_URL" | sed 's/@localhost:/@redis:/') ;;
+    *@127.0.0.1:*)   REDIS_URL=$(printf '%s' "$REDIS_URL" | sed 's/@127.0.0.1:/@redis:/') ;;
+    *//localhost:*)  REDIS_URL=$(printf '%s' "$REDIS_URL" | sed 's|//localhost:|//redis:|') ;;
+    *//127.0.0.1:*)  REDIS_URL=$(printf '%s' "$REDIS_URL" | sed 's|//127.0.0.1:|//redis:|') ;;
+  esac
+  export REDIS_URL
 fi
 
 exec "$@"

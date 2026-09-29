@@ -32,9 +32,18 @@ class SearchVector(Text):
 
 @compiles(SearchVector, "postgresql")
 def compile_search_vector_pg(element, compiler, **kw) -> str:  # noqa: ARG001
+    """Render a generated column as a PostgreSQL TSVECTOR.
+
+    Registered with SQLAlchemy's ``@compiles`` so the same model definition works on
+    PostgreSQL and SQLite. The element is ignored: the database maintains the value,
+    not Python."""
     return "TSVECTOR"
 
 
 @compiles(SearchVector)
 def compile_search_vector_default(element, compiler, **kw) -> str:  # noqa: ARG001
+    """Render a generated column as plain text outside PostgreSQL.
+
+    SQLite has no TSVECTOR type, so the column degrades to the underlying text and
+    the ILIKE fallback search path is used instead."""
     return str(compiler.visit_TEXT(element, **kw))
