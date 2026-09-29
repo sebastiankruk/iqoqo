@@ -375,17 +375,24 @@ def main() -> int:
         action="store_true",
         help="do not fall back to a container; structural check only if nginx is absent",
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=EXAMPLE,
+        help="config file to validate (default: deploy/nginx.conf.example)",
+    )
     args = parser.parse_args()
+    config: Path = args.config
 
-    if not EXAMPLE.exists():
-        print(f"FAIL: {EXAMPLE} does not exist", file=sys.stderr)
+    if not config.exists():
+        print(f"FAIL: {config} does not exist", file=sys.stderr)
         return 1
 
-    raw = EXAMPLE.read_text()
+    raw = config.read_text()
     rendered, unknown = render(raw)
 
     if unknown:
-        print(f"FAIL: unknown placeholder(s) in {EXAMPLE.name}: {', '.join(sorted(set(unknown)))}", file=sys.stderr)
+        print(f"FAIL: unknown placeholder(s) in {config.name}: {', '.join(sorted(set(unknown)))}", file=sys.stderr)
         print("      Add it to RENDER_VALUES in this script so validation stays honest.", file=sys.stderr)
         return 1
 
@@ -436,7 +443,11 @@ def main() -> int:
                 )
                 print("         use `listen 443 ssl http2;` instead.", file=sys.stderr)
 
-    print(f"OK: {EXAMPLE.relative_to(REPO_ROOT)} is a valid nginx configuration")
+    try:
+        shown = config.relative_to(REPO_ROOT)
+    except ValueError:
+        shown = config
+    print(f"OK: {shown} is a valid nginx configuration")
     return 0
 
 

@@ -18,138 +18,149 @@
 # deploy/nginx.conf.example (OpenSpec §2.1-§2.3).
 #
 # The validator's own value depends on it failing when it should. Most of these
-# tests mutate a valid config to confirm the check is not vacuously green --
-# a validator that passes everything is worse than none, because it launders an
+# tests corrupt a *copy* of the config and assert the validator rejects it -- a
+# validator that passes everything is worse than none, because it launders an
 # unvalidated reference config as a validated one.
+#
+# The copy matters. An earlier version of this file mutated the real
+# deploy/nginx.conf.example in place and restored it in teardown, which meant
+# that an interrupted run left the committed config corrupted for every
+# subsequent test in the file. Tests here never write to the repository.
 
 setup() {
-  export EXAMPLE="${BATS_TEST_DIRNAME}/../../deploy/nginx.conf.example"
-  export VALIDATOR="${BATS_TEST_DIRNAME}/../../scripts/validate_nginx_example.py"
-  export BACKUP="${BATS_TEST_DIRNAME}/../../.nginx.example.bats-backup"
-  cp "${EXAMPLE}" "${BACKUP}"
+  export REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
+  export VALIDATOR="${REPO_ROOT}/scripts/validate_nginx_example.py"
+  export COMMITTED="${REPO_ROOT}/deploy/nginx.conf.example"
+
+  # Each test gets its own scratch copy.
+  WORK_DIR="$(mktemp -d)"
+  export CONFIG="${WORK_DIR}/nginx.conf.example"
+  cp "${COMMITTED}" "${CONFIG}"
 
   # A structural-only run: no docker, no nginx. Fast, and sufficient for the
   # presence and placement assertions.
   run_validator() {
-    python3 "${VALIDATOR}" --no-docker
+    python3 "${VALIDATOR}" --no-docker --config "${CONFIG}"
   }
 }
 
 teardown() {
-  cp "${BACKUP}" "${EXAMPLE}"
-  rm -f "${BACKUP}"
+  [ -n "${WORK_DIR:-}" ] && rm -rf "${WORK_DIR}"
 }
 
+# Corrupt the scratch copy in a specific way. Kept as named cases so a failure
+# names the defect rather than a line number in a heredoc.
 mutate() {
-  # Apply a python transformation to the example, run the validator, restore.
-  python3 - "$1" <<'PY'
+  CONFIG="${CONFIG}" python3 - "$1" <<'PY'
+import os
 import sys
 from pathlib import Path
 
-example = Path("deploy/nginx.conf.example")
-text = example.read_text()
+config = Path(os.environ["CONFIG"])
+text = config.read_text()
 op = sys.argv[1]
 
-if op == "drop_hsts":
-    text = text.replace('    add_header Strict-Transport-Security "max-age=31536000" always;\n', "")
-elif op == "drop_csp":
-    text = text.replace('    add_header Content-Security-Policy "', '    # add_header Content-Security-Policy "')
-elif op == "drop_scanner_zone":
-    text = text.replace("limit_req_zone $binary_remote_addr zone=api_scanner:10m  rate=5r/s;\n", "")
-elif op == "drop_immutable":
-    text = text.replace('add_header Cache-Control "public, max-age=31536000, immutable" always;', 'add_header Cache-Control "public" always;')
-elif op == "upstream_in_server":
-    block = "upstream iqoqo_api {\n    zone iqoqo_api 64k;\n    resolver 127.0.0.11 valid=30s ipv6=off;\n    server ${API_UPSTREAM}:${API_PORT} resolve;\n}\n"
-    text = text.replace(block, "").replace("    # ── Proxy preamble", block + "\n    # ── Proxy preamble")
-elif op == "extra_brace":
-    text = text.rstrip() + "\n}\n"
-elif op == "server_tokens_on":
-    text = text.replace("    server_tokens off;\n", "")
-elif op == "unknown_placeholder":
-    text = text.replace("${SERVER_NAME}", "${NOT_A_REAL_PLACEHOLDER}")
-elif op == "braces_in_comment":
-    # The validator must ignore braces that appear inside comments.
-    text = text.replace("# OpenSpec change", "# a stray } brace in a comment\n# OpenSpec change")
-else:
-    raise SystemExit(f"unknown mutation {op}")
+MUTATIONS = {
+    # A commented-out header parses cleanly and loses the header: only the
+    # presence check can catch it.
+    "drop_hsts": lambda t: t.replace('    add_header Strict-Transport-Security "max-age=31536000" always;\n', ""),
+    "comment_csp": lambda t: t.replace('    add_header Content-Security-Policy "', '    # add_header Content-Security-Policy "'),
+    "drop_scanner_zone": lambda t: t.replace("limit_req_zone $binary_remote_addr zone=api_scanner:10m  rate=5r/s;\n", ""),
+    "downgrade_immutable": lambda t: t.replace(
+        'add_header Cache-Control "public, max-age=31536000, immutable" always;',
+        'add_header Cache-Control "public" always;',
+    ),
+    "server_tokens_on": lambda t: t.replace("    server_tokens off;\n", ""),
+    "unknown_placeholder": lambda t: t.replace("${SERVER_NAME}", "${NOT_A_REAL_PLACEHOLDER}"),
+    # A stray brace in a comment must not affect brace balance.
+    "braces_in_comment": lambda t: t.replace("# OpenSpec change", "# a stray } brace in a comment\n# OpenSpec change"),
+    # `upstream` is http-context only; inside `server` nginx rejects it. This is
+    # the structural mistake most likely to be reintroduced by an edit.
+    "upstream_in_server": lambda t: t.replace(
+        "upstream iqoqo_api {\n    zone iqoqo_api 64k;\n    resolver 127.0.0.11 valid=30s ipv6=off;\n"
+        "    server ${API_UPSTREAM}:${API_PORT} resolve;\n}\n",
+        "",
+    ).replace("    # ── Proxy preamble", (
+        "    upstream iqoqo_api {\n        zone iqoqo_api 64k;\n"
+        "        resolver 127.0.0.11 valid=30s ipv6=off;\n"
+        "        server ${API_UPSTREAM}:${API_PORT} resolve;\n    }\n\n"
+        "    # ── Proxy preamble"
+    ), 1),
+    "extra_brace": lambda t: t.rstrip() + "\n}\n",
+}
 
-example.write_text(text)
+config.write_text(MUTATIONS[op](text))
 PY
 }
 
-@test "the example config exists" {
-  [ -f "${EXAMPLE}" ]
+@test "the example config exists and is non-empty" {
+  [ -s "${COMMITTED}" ]
 }
 
-@test "the example config passes structural validation" {
-  run run_validator
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "[OK]  structure" ]]
+@test "the committed config passes structural validation" {
+  # Validates the file as committed, via the default path, so this also covers
+  # the default-argument wiring.
+  run python3 "${VALIDATOR}" --no-docker
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "[OK]  structure" ]]
 }
 
-@test "the example config validates against a real nginx" {
-  # Skipped rather than failed when neither nginx nor docker is present: the
-  # structural check still runs above, and failing here would make the suite
-  # depend on a container runtime being installed.
+@test "the committed config validates against a real nginx" {
   if ! command -v nginx >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
     skip "neither nginx nor docker available for a parse check"
   fi
   run python3 "${VALIDATOR}"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "is a valid nginx configuration" ]]
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "is a valid nginx configuration" ]]
 }
 
 @test "validation fails when HSTS is removed" {
   mutate drop_hsts
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "HSTS" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "HSTS" ]]
 }
 
 @test "validation fails when the CSP is commented out" {
-  # A commented-out header is a silent regression: the config still parses, so
-  # only the presence check catches it.
-  mutate drop_csp
+  mutate comment_csp
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "CSP" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "CSP" ]]
 }
 
 @test "validation fails when the api_scanner rate limit zone is removed" {
   mutate drop_scanner_zone
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "api_scanner" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "api_scanner" ]]
 }
 
 @test "validation fails when immutable static caching is downgraded" {
-  mutate drop_immutable
+  mutate downgrade_immutable
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "immutable" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "immutable" ]]
 }
 
 @test "validation fails when server_tokens off is removed" {
   mutate server_tokens_on
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "version suppression" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "version suppression" ]]
 }
 
 @test "validation fails when upstream is declared inside a server block" {
-  # nginx rejects this outright, and it is the most likely structural mistake
-  # to reintroduce when editing the file.
   mutate upstream_in_server
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "upstream" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "upstream" ]]
 }
 
 @test "validation fails on unbalanced braces" {
   mutate extra_brace
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "unbalanced braces" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "unbalanced braces" ]]
 }
 
 @test "validation fails on an unknown placeholder" {
@@ -157,9 +168,9 @@ PY
   # the validator refuses rather than substituting a blank.
   mutate unknown_placeholder
   run run_validator
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "unknown placeholder" ]]
-  [[ "$output" =~ "NOT_A_REAL_PLACEHOLDER" ]]
+  [ "${status}" -ne 0 ]
+  [[ "${output}" =~ "unknown placeholder" ]]
+  [[ "${output}" =~ "NOT_A_REAL_PLACEHOLDER" ]]
 }
 
 @test "braces inside comments do not affect brace balance" {
@@ -168,14 +179,23 @@ PY
   # readers to ignore the check.
   mutate braces_in_comment
   run run_validator
-  [ "$status" -eq 0 ]
+  [ "${status}" -eq 0 ]
 }
 
-@test "the example still parses after a comment containing braces is added" {
+@test "the mutated config still parses after a comment containing braces" {
   mutate braces_in_comment
   if ! command -v nginx >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
     skip "neither nginx nor docker available for a parse check"
   fi
-  run python3 "${VALIDATOR}"
-  [ "$status" -eq 0 ]
+  run python3 "${VALIDATOR}" --config "${CONFIG}"
+  [ "${status}" -eq 0 ]
+}
+
+@test "the committed config is never modified by these tests" {
+  # Guards the hermeticity the rest of this file depends on. An earlier version
+  # mutated the real file and restored it in teardown; an interrupted run left
+  # the committed config corrupted and every later test in the file failed for
+  # the wrong reason.
+  run git -C "${REPO_ROOT}" diff --quiet -- deploy/nginx.conf.example
+  [ "${status}" -eq 0 ]
 }

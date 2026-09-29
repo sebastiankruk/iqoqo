@@ -173,7 +173,12 @@ EOF
   # failure mode.
   export FAKE_PROJECT="${TEST_TEMP_DIR}/project"
   mkdir -p "${FAKE_PROJECT}/scripts"
-  ln -s "$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)/.venv" "${FAKE_PROJECT}/.venv"
+  # Symlinked only when it exists. CI installs into the system interpreter
+  # rather than creating a .venv, and a dangling symlink would be misleading
+  # even though the check script's fallback handles it.
+  if [ -d "${BATS_TEST_DIRNAME}/../../.venv" ]; then
+    ln -s "$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)/.venv" "${FAKE_PROJECT}/.venv"
+  fi
   export CHECK_SCRIPT="${FAKE_PROJECT}/scripts/cloud_backup_check.sh"
   cp scripts/cloud_backup_check.sh "${CHECK_SCRIPT}"
   cp scripts/cloud_backup.sh "${FAKE_PROJECT}/scripts/"
