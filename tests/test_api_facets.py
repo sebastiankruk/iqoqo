@@ -247,7 +247,12 @@ class TestCrossFRBRMultiFilter:
         assert data is not None
 
     def test_faceted_stats_caching(self, client, normal_user_headers, app):
-        """Test that /api/stats/facets caches its response and doesn't hit DB on subsequent requests."""
+        """Test that /api/stats/facets caches its response and doesn't hit DB on subsequent requests.
+
+        Caching now lives inside ``DataManager.get_faceted_stats`` (which owns
+        the normalized key and the invalidation hooks), so the uncached
+        implementation ``_compute_faceted_stats`` is what gets counted.
+        """
         from unittest.mock import patch
 
         with app.app_context():
@@ -255,21 +260,21 @@ class TestCrossFRBRMultiFilter:
 
             cache.clear()
 
-        with patch("app.api.system.DataManager.get_faceted_stats", return_value={"mock": "data"}) as mock_get_stats:
+        with patch("app.core.data_manager.DataManager._compute_faceted_stats", return_value={"mock": "data"}) as mock_compute:
             # First request
             resp1 = client.get("/api/stats/facets?scope=user", headers=normal_user_headers)
             assert resp1.status_code == 200
-            assert mock_get_stats.call_count == 1
+            assert mock_compute.call_count == 1
 
             # Second request with same params
             resp2 = client.get("/api/stats/facets?scope=user", headers=normal_user_headers)
             assert resp2.status_code == 200
-            assert mock_get_stats.call_count == 1
+            assert mock_compute.call_count == 1
 
             # Third request with different params
             resp3 = client.get("/api/stats/facets?scope=global", headers=normal_user_headers)
             assert resp3.status_code == 200
-            assert mock_get_stats.call_count == 2
+            assert mock_compute.call_count == 2
 
     def test_faceted_stats_cache_key_normalized(self, client, normal_user_headers, app):
         """Test that reordered query params produce the same cache key (no fragmentation)."""
@@ -280,17 +285,17 @@ class TestCrossFRBRMultiFilter:
 
             cache.clear()
 
-        with patch("app.api.system.DataManager.get_faceted_stats", return_value={"mock": "data"}) as mock_get_stats:
+        with patch("app.core.data_manager.DataManager._compute_faceted_stats", return_value={"mock": "data"}) as mock_compute:
             # Request with params in order: scope=user, view=items
             resp1 = client.get("/api/stats/facets?scope=user&view=items", headers=normal_user_headers)
             assert resp1.status_code == 200
-            assert mock_get_stats.call_count == 1
+            assert mock_compute.call_count == 1
 
             # Same params, reversed order: view=items, scope=user
             resp2 = client.get("/api/stats/facets?view=items&scope=user", headers=normal_user_headers)
             assert resp2.status_code == 200
             # Should hit the cache — same logical request
-            assert mock_get_stats.call_count == 1, "Reordered params should produce same cache key"
+            assert mock_compute.call_count == 1, "Reordered params should produce same cache key"
 
     def test_taxonomies_caching(self, client, normal_user_headers, app):
         """Test that /api/taxonomies caches its response and doesn't re-query on subsequent calls."""

@@ -24,9 +24,9 @@ from typing import Any
 
 from sqlalchemy import bindparam, text
 
-from app.api.filters import apply_genre_filter
+from app.api.filters import CatalogFilterBuilder
 from app.db import db
-from app.db.models import Expression, Item, Manifestation, SemanticLink, Work
+from app.db.models import Expression, Item, Manifestation, Work
 
 logger = logging.getLogger(__name__)
 
@@ -253,129 +253,23 @@ class SearchService:
             .join(Work, Expression.work_id == Work.id)
             .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
         )
-        if ownership and user_id:
-            ownership_conditions = []
-            owned_exists = db.session.query(Item.id).filter(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id).exists()
-            if "owned" in ownership:
-                ownership_conditions.append(owned_exists)
-            if "not_owned" in ownership:
-                ownership_conditions.append(~owned_exists)
-            if ownership_conditions:
-                base_query = base_query.filter(db.or_(*ownership_conditions))
-        if category:
-            base_query = base_query.filter(Expression.content_type.in_(category))
-        if format_filter:
-            base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
-        if missing_cover:
-            base_query = base_query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            base_query = base_query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                    db.or_(
-                        Manifestation.meta["catalog_number"].as_string().is_(None),
-                        Manifestation.meta["catalog_number"].as_string() == "",
-                    ),
-                )
-            )
-
-        # Apply taxonomy filters
-        has_item_joined = False
-        if tags:
-            from app.db.models import ItemTag, Tag
-
-            if not has_item_joined:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
-            base_query = base_query.filter(db.or_(*tags_conditions))
-
-        if collections:
-            from app.db.models import UserCollection, UserCollectionItem
-
-            if not has_item_joined:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
-            base_query = base_query.filter(db.or_(*coll_conditions))
-            if user_id:
-                base_query = base_query.filter(UserCollection.owner_id == user_id)
-
-        if genres:
-            base_query = apply_genre_filter(base_query, genres)
-
-        if publishers:
-            pubs_conditions = []
-            for p in publishers:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            base_query = base_query.filter(db.or_(*pubs_conditions))
-
-        if statuses and user_id:
-            if not has_item_joined:
-                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
-                has_item_joined = True
-            base_query = base_query.filter(Item.status.in_(statuses))
-
-        if lod_authority:
-            manif_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
-            )
-            work_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
-            )
-            base_query = base_query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_auth_subq),
-                    Work.id.in_(work_auth_subq),
-                )
-            )
-
-        if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            base_query = base_query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_subq),
-                    Work.id.in_(work_subq),
-                )
-            )
-        elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            base_query = base_query.filter(
-                db.and_(
-                    ~Manifestation.id.in_(manif_subq),
-                    ~Work.id.in_(work_subq),
-                )
-            )
+        # The ILIKE path historically applied the narrower ``Item.status IN
+        # (...)`` predicate rather than the full taxonomy semantics, hence
+        # ``statuses_style="progress_only"``.
+        base_query = CatalogFilterBuilder(base_query, user_id=user_id, statuses_style="progress_only").apply(
+            category=category,
+            fmt=format_filter,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            statuses=statuses,
+            ownership=ownership,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
+        )
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -553,80 +447,25 @@ class SearchService:
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
-        if category:
-            query = query.filter(Expression.content_type.in_(category))
-
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
-
-        # Apply taxonomy filters
-        if tags:
-            from app.db.models import ItemTag, Tag
-
-            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
-            query = query.filter(db.or_(*tags_conditions))
-
-        if collections:
-            from app.db.models import UserCollection, UserCollectionItem
-
-            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
-            query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
-
-        if genres:
-            query = apply_genre_filter(query, genres)
-
-        if publishers:
-            pub_conds = []
-            for p in publishers:
-                p_term = f"%{p.strip()}%"
-                pub_conds.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            query = query.filter(db.or_(*pub_conds))
-
-        if lod_authority:
-            manif_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
-            )
-            work_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                db.func.lower(SemanticLink.authority) == lod_authority.lower(),
-            )
-            query = query.filter(
-                db.or_(
-                    Item.manifestation_id.in_(manif_auth_subq),
-                    Work.id.in_(work_auth_subq),
-                )
-            )
-
-        if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.or_(
-                    Item.manifestation_id.in_(manif_subq),
-                    Work.id.in_(work_subq),
-                )
-            )
-        elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.and_(
-                    ~Item.manifestation_id.in_(manif_subq),
-                    ~Work.id.in_(work_subq),
-                )
-            )
+        # The Item -> Manifestation -> Expression -> Work chain is already
+        # INNER-joined by the base query above, so the builder must not re-join it.
+        query = CatalogFilterBuilder(
+            query,
+            root=CatalogFilterBuilder.ROOT_ITEM,
+            user_id=user_id,
+            ensure_frbr_join=False,
+        ).apply(
+            category=category,
+            fmt=format_filter,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
+        )
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()

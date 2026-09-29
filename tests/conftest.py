@@ -111,6 +111,33 @@ def app():
 
 
 @pytest.fixture(autouse=True)
+def no_unmocked_isbn_network(monkeypatch):
+    """Fail any test that reaches the real ISBN provider unmocked.
+
+    A test that lets ``fetch_isbn_metadata`` run unmocked depends on live
+    Google Books / Open Library availability. That makes the suite
+    non-hermetic: it passes or fails based on network reachability and
+    provider rate limits, and it silently differs between developer
+    machines and CI (where egress is typically blocked).
+
+    Tests that legitimately need provider data must mock it explicitly via
+    ``patch("app.utils.isbn.fetch_isbn_metadata", ...)``.  Because patching
+    replaces this module attribute, an explicit mock takes precedence and
+    this guard stays out of the way.
+    """
+    import app.utils.isbn as isbn_mod
+
+    def _blocked(isbn, *args, **kwargs):
+        raise AssertionError(
+            f"Unmocked call to fetch_isbn_metadata({isbn!r}). "
+            "Mock it with patch('app.utils.isbn.fetch_isbn_metadata', ...) "
+            "so the test does not depend on live provider availability."
+        )
+
+    monkeypatch.setattr(isbn_mod, "fetch_isbn_metadata", _blocked)
+
+
+@pytest.fixture(autouse=True)
 def celery_eager(app):
     """Ensure Celery is in eager mode and isolated for all tests."""
     from app.core.celery_app import celery

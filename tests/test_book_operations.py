@@ -106,7 +106,11 @@ class TestISBNScanning:
         assert response.json["Title"] == "Test Book"
 
     def test_scan_isbn_without_metadata_builds_from_work(self, client, app):
-        """Test scanning when metadata needs to be built from Work/Expression."""
+        """Metadata is derived from Work/Expression and returned, not persisted.
+
+        GET /api/isbn/<isbn> is read-only: the derived Title/Authors are served
+        from the FRBR hierarchy but must not be written back to the row.
+        """
         with app.app_context():
             work = Work(title="Minimal Book", meta={"authors": ["Minimal Author"]})
             db.session.add(work)
@@ -127,15 +131,14 @@ class TestISBNScanning:
         assert data["Title"] == "Minimal Book"
         assert data["Authors"] == ["Minimal Author"]
 
-        # Verify manifestation.meta was updated
+        # The GET must not have written the derived metadata back.
         with client.application.app_context():
             manifestation = Manifestation.query.filter_by(isbn13="9789876543210").first()
-            assert manifestation.meta["Title"] == "Minimal Book"
-            assert manifestation.meta["Authors"] == ["Minimal Author"]
+            assert not manifestation.meta or "Title" not in manifestation.meta
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
     def test_scan_new_isbn_from_open_library(self, mock_fetch, client):
-        """Test scanning a new ISBN fetches from external sources and creates FRBR structure."""
+        """A GET for an uncatalogued ISBN returns provider data without persisting it."""
         mock_fetch.return_value = {"Title": "Brave New World", "Authors": ["Aldous Huxley"]}
 
         response = client.get("/api/isbn/9780060850524")
@@ -144,25 +147,13 @@ class TestISBNScanning:
         assert data["Title"] == "Brave New World"
         assert data["Authors"] == ["Aldous Huxley"]
 
-        # Verify complete FRBR structure was created
+        # No FRBR structure may be created by a read request.
         with client.application.app_context():
-            manifestation = Manifestation.query.filter_by(isbn13="9780060850524").first()
-            assert manifestation is not None
-            assert manifestation.meta["Title"] == "Brave New World"
-
-            expression = manifestation.expression
-            assert expression is not None
-            assert expression.content_type == "text"
-            assert expression.language == "en"
-
-            work = expression.work
-            assert work is not None
-            assert work.title == "Brave New World"
-            assert work.meta["authors"] == ["Aldous Huxley"]
+            assert Manifestation.query.filter_by(isbn13="9780060850524").first() is None
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
     def test_scan_isbn_fetches_from_external_source(self, mock_fetch, client):
-        """Test scanning a new ISBN fetches metadata from external sources (Google Books / Open Library)."""
+        """Scanning a new ISBN fetches metadata from Google Books / Open Library."""
         mock_fetch.return_value = {
             "Title": "The Catcher in the Rye",
             "Authors": ["J.D. Salinger"],
@@ -177,11 +168,9 @@ class TestISBNScanning:
         # Verify fetch_isbn_metadata was called with the canonical ISBN
         mock_fetch.assert_called_once_with("9780316769488")
 
-        # Verify data was saved to database
+        # Read-only: nothing persisted.
         with client.application.app_context():
-            manifestation = Manifestation.query.filter_by(isbn13="9780316769488").first()
-            assert manifestation is not None
-            assert manifestation.expression.work.title == "The Catcher in the Rye"
+            assert Manifestation.query.filter_by(isbn13="9780316769488").first() is None
 
     @patch("app.utils.isbn.fetch_isbn_metadata", return_value=None)
     def test_scan_nonexistent_isbn(self, mock_fetch, client):
@@ -226,23 +215,42 @@ class TestISBNScanning:
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
     def test_scan_creates_proper_frbr_hierarchy(self, mock_fetch, client):
-        """Test that scanning creates proper Work -> Expression -> Manifestation hierarchy."""
+        """A GET must not create the Work -> Expression -> Manifestation hierarchy.
+
+        Hierarchy creation is the responsibility of the explicit POST
+        endpoints; see tests/test_isbn_idempotency.py for that contract.
+        """
         mock_fetch.return_value = {"Title": "Pride and Prejudice", "Authors": ["Jane Austen"]}
 
         response = client.get("/api/isbn/9780141439518")
         assert response.status_code == 200
+        assert response.json["Title"] == "Pride and Prejudice"
 
         with client.application.app_context():
-            # Check Manifestation
+            assert Manifestation.query.filter_by(isbn13="9780141439518").first() is None
+            assert Work.query.filter_by(title="Pride and Prejudice").first() is None
+
+    @patch("app.utils.isbn.fetch_isbn_metadata")
+    def test_scan_creates_frbr_hierarchy_via_post(self, mock_fetch, client, normal_user_headers):
+        """The explicit POST endpoint does create the full FRBR hierarchy."""
+        mock_fetch.return_value = {"Title": "Pride and Prejudice", "Authors": ["Jane Austen"]}
+
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            response = client.post("/api/item/9780141439518", json={}, headers=normal_user_headers)
+        assert response.status_code == 200
+
+        with client.application.app_context():
             manifestation = Manifestation.query.filter_by(isbn13="9780141439518").first()
             assert manifestation is not None
 
-            # Check Expression exists and links correctly
             expression = Expression.query.filter_by(id=manifestation.expression_id).first()
             assert expression is not None
             assert expression.id == manifestation.expression_id
 
-            # Check Work exists and links correctly
             work = Work.query.filter_by(id=expression.work_id).first()
             assert work is not None
             assert work.id == expression.work_id
@@ -288,7 +296,14 @@ class TestAddingBooks:
 
     def test_add_item_creates_manifestation_if_not_exists(self, client, normal_user_headers):
         """Test adding item creates manifestation structure if ISBN doesn't exist."""
-        with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+        with (
+            patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch,
+            # Cover resolution performs live HTTP downloads; stub it so the
+            # test stays hermetic.
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
             mock_fetch.return_value = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
 
             metadata = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
@@ -632,15 +647,22 @@ class TestBookOperationsIntegration:
         """Test complete workflow: scan new book, add item, then update metadata."""
         mock_fetch.return_value = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
 
-        # Step 1: Scan new ISBN (creates FRBR structure)
-        scan_response = client.get("/api/isbn/9780547928227")
-        assert scan_response.status_code == 200
-        assert scan_response.json["Title"] == "The Hobbit"
+        # Cover resolution performs live HTTP downloads; stub it so the
+        # test stays hermetic.
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            # Step 1: Scan new ISBN (returns metadata; GET is read-only)
+            scan_response = client.get("/api/isbn/9780547928227")
+            assert scan_response.status_code == 200
+            assert scan_response.json["Title"] == "The Hobbit"
 
-        # Step 2: Add an item
-        add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
-        assert add_response.status_code == 200
-        item_id = add_response.json["data"]["item_id"]
+            # Step 2: Add an item (POST performs the explicit ingestion)
+            add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
+            assert add_response.status_code == 200
+            item_id = add_response.json["data"]["item_id"]
 
         # Step 3: Update metadata
         update_data = {"Title": "The Hobbit: Annotated Edition", "Authors": ["J.R.R. Tolkien"]}
@@ -658,20 +680,23 @@ class TestBookOperationsIntegration:
             work = manifestation.expression.work
             assert work.title == "The Hobbit: Annotated Edition"
 
-    def test_scan_same_book_twice_reuses_structure(self, client):
-        """Test scanning the same ISBN twice doesn't create duplicates."""
-        with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+    def test_scan_same_book_twice_reuses_structure(self, client, normal_user_headers):
+        """Cataloging the same ISBN twice reuses the existing structure."""
+        with (
+            patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch,
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+        ):
             mock_fetch.return_value = {"Title": "Harry Potter", "Authors": ["J.K. Rowling"]}
 
-            # First scan
-            response1 = client.get("/api/isbn/9780439708180")
+            # First cataloging request creates the hierarchy.
+            response1 = client.post("/api/item/9780439708180", json={}, headers=normal_user_headers)
             assert response1.status_code == 200
 
-            # Second scan (served from DB; fetch_isbn_metadata not called again)
-            response2 = client.get("/api/isbn/9780439708180")
+            # Second cataloging request reuses it.
+            response2 = client.post("/api/item/9780439708180", json={}, headers=normal_user_headers)
             assert response2.status_code == 200
 
-        # Verify only one manifestation exists
+        # Verify only one manifestation and one work exist
         with client.application.app_context():
             manifestations = Manifestation.query.filter_by(isbn13="9780439708180").all()
             assert len(manifestations) == 1
@@ -702,9 +727,20 @@ class TestBookOperationsIntegration:
         """Test that FRBR structure maintains referential integrity."""
         mock_fetch.return_value = {"Title": "Animal Farm", "Authors": ["George Orwell"]}
 
-        # Create structure through API
-        client.get("/api/isbn/9780141182605")
-        client.post("/api/item/9780141182605", json={}, headers=normal_user_headers, content_type="application/json")
+        # Create structure through the API. Cover resolution performs live
+        # HTTP downloads, so stub it to keep the test hermetic.
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            # GET is read-only and returns metadata without persisting it.
+            scan = client.get("/api/isbn/9780141182605")
+            assert scan.status_code == 200
+
+            # The explicit POST performs ingestion and builds the FRBR chain.
+            created = client.post("/api/item/9780141182605", json={}, headers=normal_user_headers, content_type="application/json")
+            assert created.status_code == 200
 
         # Verify complete chain
         with client.application.app_context():

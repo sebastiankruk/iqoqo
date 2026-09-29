@@ -28,9 +28,10 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
-from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
-from app.api.manifestations import lookup_isbn
+from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.core.data_manager import invalidate_facets_cache
 from app.core.export_service import ExportService
 from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
@@ -42,7 +43,6 @@ from app.db.models import (
     ItemStatusLog,
     ItemTag,
     Manifestation,
-    SemanticLink,
     Tag,
     User,
     UserCollection,
@@ -51,6 +51,7 @@ from app.db.models import (
     Work,
     db,
 )
+from app.utils import isbn as isbn_utils
 
 logger = logging.getLogger(__name__)
 
@@ -351,111 +352,32 @@ def get_items():
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
+        builder = CatalogFilterBuilder(
+            query,
+            root=CatalogFilterBuilder.ROOT_ITEM,
+            user_id=user_id,
+            borrowed_only=borrowed_only,
+            ensure_frbr_join=True,
+            frbr_join_outer=True,
+        )
         if needs_mfn_join or needs_work_join:
-            query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
+            # Sorting by work title requires the FRBR chain even when no
+            # filter does, so the join is requested explicitly.
+            query = builder.ensure_frbr_joins()
 
-        if category_list:
-            query = query.filter(Expression.content_type.in_(category_list))
-
-        if format_list:
-            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
-
-        if missing_cover:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                    db.or_(
-                        Manifestation.meta["catalog_number"].as_string().is_(None),
-                        Manifestation.meta["catalog_number"].as_string() == "",
-                    ),
-                )
-            )
-
-        if tags_list:
-            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags_list]
-            query = query.filter(db.or_(*tags_conditions))
-
-        if collections_list:
-            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
-            query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
-
-        if genres_list:
-            query = apply_genre_filter(query, genres_list)
-
-        if publishers_list:
-            pubs_conditions = []
-            for p in publishers_list:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            query = query.filter(db.or_(*pubs_conditions))
-
-        if statuses_filter:
-            statuses_list = parse_csv_param(statuses_filter)
-            query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
-
-        if lod_authority:
-            manif_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                db.func.lower(SemanticLink.authority) == lod_authority,
-            )
-            work_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                db.func.lower(SemanticLink.authority) == lod_authority,
-            )
-            query = query.filter(
-                db.or_(
-                    Item.manifestation_id.in_(manif_auth_subq),
-                    Work.id.in_(work_auth_subq),
-                )
-            )
-
-        if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.or_(
-                    Item.manifestation_id.in_(manif_subq),
-                    Work.id.in_(work_subq),
-                )
-            )
-        elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.and_(
-                    ~Item.manifestation_id.in_(manif_subq),
-                    ~Work.id.in_(work_subq),
-                )
-            )
+        query = builder.apply(
+            category=category_list,
+            fmt=format_list,
+            tags=tags_list,
+            collections=collections_list,
+            genres=genres_list,
+            publishers=publishers_list,
+            statuses=parse_csv_param(statuses_filter),
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
+        )
 
         total_physical = query.order_by(None).count()
 
@@ -710,6 +632,8 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
 
     try:
         db.session.commit()
+        # Tag/status changes alter this user's facet counts.
+        invalidate_facets_cache(user_id)
         return jsonify({"success": True, "data": {"id": item.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
@@ -740,6 +664,8 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
 
     db.session.delete(item)
     db.session.commit()
+    # Facet counts for this user changed; drop the cached entries.
+    invalidate_facets_cache(user_id)
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
@@ -921,12 +847,23 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
-        lookup_response = lookup_isbn(isbn)
-        if isinstance(lookup_response, tuple):
-            status_code = lookup_response[1] if len(lookup_response) > 1 else 404
-            if status_code != 200:
-                return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
-        manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+        # Explicit ingestion. `GET /api/isbn/<isbn>` is read-only by design, so
+        # the POST endpoint owns creating the FRBR hierarchy and scheduling
+        # background cover/LOD work.
+        canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
+        if not canonical_isbn:
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        try:
+            metadata = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+        except Exception:
+            current_app.logger.exception("External provider failed during ISBN metadata lookup for %s", isbn)
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        if not metadata:
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        manifestation = persist_isbn_manifestation(canonical_isbn, metadata)
 
     payload_json = request.get_json(silent=True)
     payload = None
@@ -983,6 +920,8 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
+        # A new item changes this user's facet counts.
+        invalidate_facets_cache(user_id)
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
@@ -1081,6 +1020,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
+    invalidate_facets_cache(user_id)
 
     return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
 
@@ -1146,6 +1086,7 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         for item in created_items:
             log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         db.session.commit()
+        invalidate_facets_cache(user_id)
         return jsonify(
             {
                 "success": True,
@@ -1255,6 +1196,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
+        invalidate_facets_cache(user_id)
 
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
