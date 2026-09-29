@@ -63,6 +63,23 @@
 #
 # OpenSpec change `devops-infrastructure-updates` §2.1–§2.3.
 
+# ── Version requirement ─────────────────────────────────────────────────────
+#
+# This config needs nginx >= 1.27.3, for two directives:
+#
+#   `http2 on;`                                  >= 1.25.1
+#   `resolve` on an upstream `server`, and
+#   `resolver` inside an `upstream` block         >= 1.27.3
+#
+# That is the same floor the project's own edge image uses (nginx:1.31.3), so
+# matching it keeps this file consistent with the deployed proxy. On an older
+# nginx — a stock Ubuntu 24.04 ships 1.24 — `nginx -t` reports
+# `"resolver" directive is not allowed here`, which is a parser limitation
+# rather than a defect in this file. Replace the `upstream` blocks with plain
+# `server host:port;` entries and a `resolver` in the `http {}` context if you
+# must run something that old, and accept that upstream addresses are then only
+# resolved at startup.
+
 # ---------------------------------------------------------------------------
 # Rate limiting (must be in the http{} block; this file is an http-include)
 # ---------------------------------------------------------------------------
@@ -148,8 +165,9 @@ server {
 # Port 443 — TLS termination
 # ---------------------------------------------------------------------------
 server {
-    # `http2 on` requires nginx >= 1.25.1. The older `listen 443 ssl http2;`
-    # spelling was removed in that release; check `nginx -v` if HTTP/2 matters.
+    # `http2 on` requires nginx >= 1.25.1, and the upstream `resolve` further
+    # down requires >= 1.27.3; see the version note at the top of this file. The
+    # older `listen 443 ssl http2;` spelling was removed in 1.25.1.
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;

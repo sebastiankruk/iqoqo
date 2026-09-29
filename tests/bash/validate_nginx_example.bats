@@ -206,6 +206,44 @@ PY
   [ "${status}" -eq 0 ]
 }
 
+@test "an nginx too old for the example is skipped, not failed" {
+  # The GitHub runner has a stock nginx older than the 1.27.3 this config needs,
+  # and it reported the config as broken. That is a parser limitation, not a
+  # defect, so a too-old build must produce a skip with a non-zero-free exit.
+  mkdir -p "${WORK_DIR}/oldbin"
+  cat << 'STUB' > "${WORK_DIR}/oldbin/nginx"
+#!/bin/bash
+if [ "$1" = "-v" ]; then echo "nginx version: nginx/1.24.0" >&2; exit 0; fi
+# A real `nginx -t` would fail here: 1.24 has no upstream `resolve`.
+exit 1
+STUB
+  chmod +x "${WORK_DIR}/oldbin/nginx"
+
+  run env PATH="${WORK_DIR}/oldbin:${PATH}" python3 "${VALIDATOR}" --no-docker
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "SKIP" ]]
+  [[ "${output}" =~ "1.27.3" ]]
+  # The structural check still ran, so the file was not merely ignored.
+  [[ "${output}" =~ "[OK]  structure" ]]
+}
+
+@test "an nginx new enough is actually used to parse the config" {
+  # The inverse of the previous test: a build at the supported version must be
+  # used, otherwise the version gate would silently disable real validation.
+  mkdir -p "${WORK_DIR}/newbin"
+  cat << 'STUB' > "${WORK_DIR}/newbin/nginx"
+#!/bin/bash
+if [ "$1" = "-v" ]; then echo "nginx version: nginx/1.31.3" >&2; exit 0; fi
+exit 0
+STUB
+  chmod +x "${WORK_DIR}/newbin/nginx"
+
+  run env PATH="${WORK_DIR}/newbin:${PATH}" python3 "${VALIDATOR}" --no-docker
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "nginx -t (local)" ]]
+  [[ "${output}" =~ "is a valid nginx configuration" ]]
+}
+
 @test "the committed config is never modified by these tests" {
   # Guards the hermeticity the rest of this file depends on. An earlier version
   # mutated the real file and restored it in teardown; an interrupted run left

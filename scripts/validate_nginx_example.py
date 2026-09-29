@@ -42,6 +42,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -68,7 +69,17 @@ RENDER_VALUES = {
 # directive (nginx >= 1.25.1) is supported.
 NGINX_IMAGE = "nginx:1.29-alpine"
 
-MIN_NGINX = (1, 25, 1)
+# The example uses two directives that are only available in recent nginx:
+#
+#   `http2 on;`                            nginx >= 1.25.1
+#   `resolve` on an upstream `server`, and   nginx >= 1.27.3
+#   `resolver` inside an `upstream` block
+#
+# The repo's own image is nginx:1.31.3, so this is the same floor the deployed
+# proxy already assumes. A validator older than this cannot parse the config
+# for reasons that have nothing to do with the config, and reporting that as a
+# config failure would be a lie.
+MIN_NGINX = (1, 27, 3)
 
 # Directives that must appear somewhere in the file for the config to be
 # considered complete. Checked structurally when nginx is unavailable.
@@ -95,6 +106,15 @@ REQUIRED_DIRECTIVES = [
 
 class ValidationError(RuntimeError):
     """Raised when the example config fails validation."""
+
+
+class TooOldNginxError(ValidationError):
+    """Raised when the available nginx predates the directives the example uses.
+
+    Distinct from a plain :class:`ValidationError` so the caller can report it as
+    a skip rather than a defect: the config may be perfectly fine, and the
+    parser simply cannot read it.
+    """
 
 
 def render(text: str) -> tuple[str, list[str]]:
@@ -232,11 +252,39 @@ def check_structure(rendered: str) -> list[str]:
     return missing
 
 
+def nginx_version(binary: str) -> tuple[int, ...] | None:
+    """Parse ``nginx -v`` output, or ``None`` if it cannot be read."""
+    try:
+        result = subprocess.run([binary, "-v"], capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    text_line = (result.stderr or result.stdout or "").strip()
+    match = re.search(r"nginx/(\d+)\.(\d+)\.(\d+)", text_line)
+    if not match:
+        return None
+    return tuple(int(group) for group in match.groups())
+
+
 def validate_with_nginx(rendered: str) -> str:
-    """Parse the config with a local nginx binary. Returns the nginx version."""
+    """Parse the config with a local nginx binary. Returns the nginx version.
+
+    Raises:
+        ValidationError: if nginx is absent, too old to parse the example, or
+            the config is genuinely invalid.
+    """
     binary = shutil.which("nginx")
     if not binary:
         raise ValidationError("nginx is not installed")
+
+    found = nginx_version(binary)
+    if found is not None and found < MIN_NGINX:
+        # Not a config defect: this build cannot express the directives the
+        # example uses. Failing here would blame the file for the parser's age.
+        raise TooOldNginxError(
+            f"nginx {'.'.join(map(str, found))} is older than the "
+            f"{'.'.join(map(str, MIN_NGINX))} this example requires "
+            f"(`http2 on`, upstream `resolve`)"
+        )
 
     with tempfile.TemporaryDirectory() as tmp:
         conf_dir = Path(tmp)
@@ -407,41 +455,45 @@ def main() -> int:
         return 1
     print(f"  [OK]  structure: {len(REQUIRED_DIRECTIVES)} required directives present, braces balanced")
 
-    attempts: list[tuple[str, callable]] = []
-    if shutil.which("nginx"):
-        attempts.append(("nginx -t (local)", lambda: validate_with_nginx(rendered)))
+    # A local nginx is preferred, but only if new enough to parse the example.
+    # A too-old build is skipped with an explanation rather than allowed to fail,
+    # because it would report the file as broken when the parser is what is old.
+    attempts: list[tuple[str, Callable[[], str]]] = []
+    local_nginx = shutil.which("nginx")
+    if local_nginx:
+        local_version = nginx_version(local_nginx)
+        if local_version is not None and local_version < MIN_NGINX:
+            print(
+                f"  [SKIP] nginx -t (local): {'.'.join(map(str, local_version))} predates "
+                f"{'.'.join(map(str, MIN_NGINX))}, which this example requires",
+                file=sys.stderr,
+            )
+        else:
+            attempts.append(("nginx -t (local)", lambda: validate_with_nginx(rendered)))
     if not args.no_docker and shutil.which("docker"):
         attempts.append((f"nginx -t (docker {NGINX_IMAGE})", lambda: validate_with_docker(rendered)))
 
     if not attempts:
-        print("  [SKIP] no nginx binary and docker unavailable or disabled", file=sys.stderr)
+        print("  [SKIP] no nginx new enough to parse the example, and docker is unavailable or disabled", file=sys.stderr)
         print("         Structural checks passed, but the config was NOT parsed.", file=sys.stderr)
-        print("         Install nginx or enable docker for a real syntax check.", file=sys.stderr)
+        required = ".".join(map(str, MIN_NGINX))
+        print(f"         Install nginx >= {required} or enable docker for a real syntax check.", file=sys.stderr)
         return 0
 
     for label, run in attempts:
         try:
             version = run()
+        except TooOldNginxError as exc:
+            # Reachable only if the version changed between selection and the
+            # run; treated as a skip for the same reason.
+            print(f"  [SKIP] {label}: {exc}", file=sys.stderr)
+            continue
         except (ValidationError, subprocess.CalledProcessError) as exc:
             print(f"  [FAIL] {label}", file=sys.stderr)
             print(f"         {exc}", file=sys.stderr)
             return 1
 
         print(f"  [OK]  {label}: parsed by {version}")
-
-        # The `http2 on` directive needs nginx >= 1.25.1. A parse success on an
-        # older build would mean the directive was silently ignored, so the
-        # version is checked rather than assumed.
-        match = re.search(r"nginx/(\d+)\.(\d+)\.(\d+)", version)
-        if match:
-            found = tuple(int(g) for g in match.groups())
-            if found < MIN_NGINX:
-                print(
-                    f"  [WARN] validator is {version}, but `http2 on` needs >= "
-                    f"{'.'.join(map(str, MIN_NGINX))}. Operators on an older nginx must",
-                    file=sys.stderr,
-                )
-                print("         use `listen 443 ssl http2;` instead.", file=sys.stderr)
 
     try:
         shown = config.relative_to(REPO_ROOT)
