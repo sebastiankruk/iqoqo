@@ -1,0 +1,13 @@
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:github-pat:44
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:gcp-api-key:40
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:github-pat:73
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:gcp-api-key:68
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:aws-access-token:39
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:aws-access-token:67
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:private-key:43
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:curl-auth-header:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:jwt:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:jwt:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:iqoqo-openobserve-hardcoded-password:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:iqoqo-openobserve-hardcoded-password:45
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:iqoqo-openobserve-hardcoded-password:75
