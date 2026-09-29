@@ -116,7 +116,11 @@ update_env_var() {
     # Snapshot before any mutation. Overwrite a same-second backup rather than
     # clobbering it with a partially rewritten file.
     if [ -s "$file" ]; then
-        local backup="${file}.bak.$(date +%Y%m%d_%H%M%S)"
+        # Declared and assigned separately (SC2155): with a single `local x=$(...)`
+        # the exit status of the command substitution is masked, so a failing
+        # `date` would look like success and yield a ".bak." name with no timestamp.
+        local backup
+        backup="${file}.bak.$(date +%Y%m%d_%H%M%S)"
         if cp -p "$file" "$backup" 2>/dev/null; then
             # Backups hold the same secrets as the source; match its mode
             # (0600 in production, 0644 in dev) and never widen it.
@@ -688,6 +692,10 @@ if [ "$MODE" == "dev" ]; then
     echo $! > "$PID_DIR/celery.pid"
 
     # Start Next.js
+    # NOTE: NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN is intentionally passed with no
+    # fallback value. A hardcoded default would silently send every deployment's
+    # browser telemetry to whichever OpenObserve org that token belonged to.
+    # Unset disables the RUM SDK cleanly (see browser-openobserve-rum.tsx).
     if [ -d "frontend" ]; then
         (cd frontend && \
          NEXT_PUBLIC_API_URL="/api" \
@@ -706,10 +714,6 @@ if [ "$MODE" == "dev" ]; then
          NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID="${OPENOBSERVE_RUM_ORG_ID:-default}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-true}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION="${OPENOBSERVE_RUM_API_VERSION:-v1}" \
-    # NOTE: NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN is intentionally passed with no
-    # fallback value. A hardcoded default would silently send every deployment's
-    # browser telemetry to whichever OpenObserve org that token belonged to.
-    # Unset disables the RUM SDK cleanly (see browser-openobserve-rum.tsx).
          NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL="${OPENOBSERVE_RUM_PRIVACY_LEVEL:-allow}" \
          nohup npx next dev -p "${FRONTEND_PORT:-3000}" >> "$PID_DIR/next.log" 2>&1 & \
          echo $! > "$PID_DIR/next.pid"

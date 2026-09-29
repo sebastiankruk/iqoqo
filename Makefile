@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell
 
 SHELL := /bin/bash
 
@@ -110,6 +110,7 @@ help:
 	@echo "  lint-all       - Run canonical lint plus stricter local-only checks"
 	@echo "  lint-python    - Run Python linters (ruff, mypy, pylint)"
 	@echo "  lint-format    - Check Python code formatting (black)"
+	@echo "  lint-shell     - Check shell scripts (shellcheck; needed locally, it is skipped in tests without it)"
 	@echo "  lint-js        - Run legacy JavaScript linter (eslint)"
 	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
 	@echo "  lint-css       - Run CSS linter (stylelint)"
@@ -458,6 +459,30 @@ lint-format: .venv/bin/activate
 	$(AI_ECHO) "Checking Python formatting..."
 	.venv/bin/black --check app/ tests/ scripts/
 	.venv/bin/isort --check-only app/ tests/ scripts/
+
+# shellcheck is a system package, so it is absent from the Docker image and
+# from most dev machines. `pytest tests/test_linting.py` skips its gate when
+# it is missing, which means a shell regression can pass locally and only fail
+# in CI. Run this target before pushing to catch that locally instead.
+# CI installs a pinned 0.10.0 and fails the suite outright if it is missing.
+lint-shell:
+	@command -v shellcheck >/dev/null 2>&1 || { \
+		echo "shellcheck is not installed. Install it with:"; \
+		echo "  Debian/Ubuntu: sudo apt-get install shellcheck"; \
+		echo "  macOS:         brew install shellcheck"; \
+		echo "Without it, tests/test_linting.py SKIPS the shell gate and shell"; \
+		echo "regressions will surface only in CI."; \
+		exit 1; \
+	}
+	@status=0; \
+	for f in $$(find scripts -name '*.sh') $$(ls *.sh 2>/dev/null); do \
+		shellcheck "$$f" || status=1; \
+	done; \
+	if [ $$status -ne 0 ]; then \
+		echo "shellcheck reported violations (see above)."; \
+		exit 1; \
+	fi; \
+	echo "shellcheck: all shell scripts clean."
 
 lint-js:
 	$(AI_ECHO) "Running eslint..."

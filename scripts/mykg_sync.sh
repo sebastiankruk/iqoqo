@@ -66,6 +66,14 @@ if [ -z "$AI_AGENT" ]; then
   exit 2
 fi
 
+# Exported once, here, rather than as a `VAR=x docker ...` prefix on each
+# call. docker compose reads AI_AGENT from the environment to choose the
+# egress-proxy allowlist, and a prefix assignment is visible only to the
+# forked process — so the very next `-e AI_AGENT="$AI_AGENT"` would expand the
+# *outer* value, which shellcheck flags as SC2097/SC2098. Exporting states the
+# intent once and removes the trap.
+export AI_AGENT
+
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -161,11 +169,17 @@ start_sandbox_daemon() {
 
   # Recreate the egress proxy so its allowlist is re-read and it is not
   # serving a stale configuration.
+  #
+  # AI_AGENT is exported once here rather than written as a `VAR=x docker ...`
+  # prefix on every call. A prefix assignment is only visible to the forked
+  # process, so a `-e AI_AGENT="$AI_AGENT"` on the *same* command line would
+  # expand the outer value and shellcheck (rightly) flags the combination
+  # SC2097/SC2098. Exporting makes the intent explicit and removes the trap.
   docker compose -f "$COMPOSE_FILE" stop sandbox-egress-proxy >/dev/null 2>&1 || true
   docker compose -f "$COMPOSE_FILE" rm -f sandbox-egress-proxy >/dev/null 2>&1 || true
-  AI_AGENT="$AI_AGENT" docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
+  docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
 
-  AI_AGENT="$AI_AGENT" docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
+  docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
     -v "$AI_BIN:$AI_MOUNT" \
     -e MYKG_MODEL="${MYKG_MODEL:-}" \
     -e MYKG_EFFORT="${MYKG_EFFORT:-}" \
