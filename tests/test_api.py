@@ -223,9 +223,7 @@ def test_lookup_isbn_from_open_library(mock_fetch, client):
 @patch("app.utils.isbn.fetch_isbn_metadata")
 def test_lookup_isbn_does_not_dispatch_background_tasks(mock_fetch, client):
     """A read request must not enqueue cover or LOD background work."""
-    with patch("app.utils.covers.start_cover_processing") as mock_cover, patch(
-        "app.core.tasks.link_manifestation_lod_task"
-    ) as mock_lod:
+    with patch("app.utils.covers.start_cover_processing") as mock_cover, patch("app.core.tasks.link_manifestation_lod_task") as mock_lod:
         mock_fetch.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
 
         response = client.get("/api/isbn/9780441013593")
