@@ -158,6 +158,7 @@ def sync_secrets_to_db(secrets_map: dict[str, str]) -> None:
 
 
 def main() -> None:
+    """Generate any missing secrets in .env, leaving existing values untouched."""
     parser = argparse.ArgumentParser(description="Ensure required secrets exist in environment file.")
     parser.add_argument(
         "env_file_pos",

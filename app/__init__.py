@@ -13,6 +13,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Flask application factory and blueprint registration.
+
+Holds create_app(), which wires configuration, extensions and the API blueprints
+together. Importing this package must stay cheap: it is imported by the
+entrypoints of every container, so module-level work is limited to building the
+Flask app and nothing else."""
+
 import logging
 import os
 from typing import Any
@@ -67,6 +74,15 @@ def _coerce_list(value, default=None):
 
 
 def create_app(config_class=Config, config_override=None):
+    """Build and configure the Flask application.
+
+    Args:
+        config_class: The configuration object to load defaults from.
+        config_override: Values applied on top of ``config_class``, used by tests and
+            by the preview/production stacks to point at a different stack.
+
+    Returns:
+        The configured application, with extensions and blueprints registered."""
     load_dotenv()
 
     # Configure logging early

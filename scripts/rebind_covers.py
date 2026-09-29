@@ -32,6 +32,7 @@ from app.utils.covers import rebind_orphaned_covers
 
 
 def main():
+    """Re-link orphaned cover files to their manifestations."""
     app = create_app()
     with app.app_context():
         print("Starting cover rebind process...")

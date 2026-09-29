@@ -100,6 +100,13 @@ def _detect_live_performance(meta: dict) -> bool:
 
 
 class IngestService:
+    """Creates manifestations from an external identifier.
+
+    Each ``ingest_from_*`` method owns one resolution path (ISBN, audio barcode,
+    puzzle barcode) and returns the resulting Manifestation. Resolution is
+    idempotent: an identifier that is already present returns the existing row
+    rather than creating a duplicate, which is what makes bulk re-ingest safe."""
+
     @staticmethod
     def batch_ingest_manifestations(manifestations_data: list[dict]) -> list[Manifestation]:
         """Batch-ingest a list of pre-fetched metadata dicts with deferred tsvector updates.
@@ -216,6 +223,10 @@ class IngestService:
 
     @staticmethod
     def ingest_puzzle_from_barcode(barcode: str) -> Manifestation:
+        """Resolve a puzzle or game from a barcode.
+
+        Tries the BoardGameGeek path first and falls back to UPC/EAN resolution, since
+        puzzles are catalogued inconsistently across both."""
         # Puzzles are purely manifestation-based (no cinematic 'work' resolution)
         # but we still benefit from the Tier 1a/1b/2 waterfall.
         meta = resolve_physical_media(barcode)
@@ -270,6 +281,10 @@ class IngestService:
 
     @staticmethod
     def ingest_from_isbn(isbn: str) -> Manifestation:
+        """Resolve a book from an ISBN.
+
+        Canonicalises the ISBN before lookup, so hyphenated and check-digit variants of
+        the same identifier resolve to one record instead of duplicates."""
         meta = fetch_isbn_metadata(isbn)
         if not meta:
             raise ValueError("ISBN metadata not found in external services.")
@@ -324,6 +339,10 @@ class IngestService:
 
     @staticmethod
     def ingest_audio_from_barcode(barcode: str) -> Manifestation:
+        """Resolve an audio release from a barcode.
+
+        Audio carriers are identified inconsistently across MusicBrainz, Discogs and
+        UPC databases, so this consults all three before giving up."""
         # Try Discogs first (if token is available inside the utility), then MusicBrainz
         meta = fetch_discogs_metadata(barcode) or fetch_audio_metadata(barcode)
 

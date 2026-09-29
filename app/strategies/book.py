@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Book metadata lookup: ISBN canonicalisation, then provider fallbacks.
+
+Tries the ISBN providers first, then Allegro and Discogs. An unresolved ISBN
+still yields a usable manifest, so a physical book can be shelved even when no
+provider call succeeds."""
+
 import copy
 import logging
 
@@ -28,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 
 class BookLookupStrategy(LookupStrategy):
-    """Lookup strategy for Books / Text media format."""
+    """ISBN-first book metadata lookup.
+
+    Lookup strategy for Books / Text media format.
+    """
 
     def lookup_candidates(self, query: str, max_results: int = 10) -> list[dict]:
         """Aggregate candidate books from Google Books and Allegro up to max_results."""

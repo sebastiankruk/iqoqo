@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Re-fetches bibliographic metadata for existing manifestations.
+
+Resumable: progress is recorded per manifestation, so a re-run continues where
+the last one stopped rather than reprocessing the whole library."""
+
 import argparse
 import logging
 import os
@@ -63,6 +68,10 @@ RATE_LIMITS = {
 
 
 def get_gap_query(gap: str, content_type: str | None = None):
+    """Return the SQL for one gap kind.
+
+    Gaps are the reasons a record is missing metadata. Kept as a lookup rather than
+    a chain of branches so adding a gap is one entry here."""
     q = db.session.query(Manifestation).join(Expression).join(Work)
     if content_type:
         q = q.filter(Expression.content_type == content_type)
@@ -109,6 +118,10 @@ def get_gap_query(gap: str, content_type: str | None = None):
 
 
 def determine_strategy(man: Manifestation) -> str | None:
+    """Decide which provider to re-query for a manifestation.
+
+    Returns ``None`` when the record is already complete, so a full pass over the
+    library skips the rows that need no work."""
     ct = man.expression.content_type if man.expression else None
     if ct == "movie":
         return "tmdb"
@@ -124,6 +137,10 @@ def determine_strategy(man: Manifestation) -> str | None:
 
 
 def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, limit: int | None):
+    """Re-fetch metadata for manifestations matching a gap.
+
+    Resumable via the recorded resume marker, so an interrupted run continues where
+    it stopped instead of reprocessing the library."""
     app = create_app()
     with app.app_context():
         gaps = ["format", "publisher", "genres", "cover"] if gap == "all" else [gap]

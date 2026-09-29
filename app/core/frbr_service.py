@@ -17,10 +17,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import dataclasses
 import itertools
 import logging
 import re
 from collections.abc import Generator, Iterable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -1033,29 +1035,56 @@ def update_work(
     return work
 
 
+@dataclass(frozen=True)
+class ExpressionChange:
+    """A partial update to an :class:`Expression`.
+
+    Every field is optional and ``None`` means "leave unchanged", so this is a
+    patch rather than a replacement. It is frozen because a change is assembled
+    once and then applied; mutating it mid-apply would make the resulting
+    expression depend on evaluation order.
+
+    This replaces seven optional parameters. They were all ``| None``, so
+    passing ``language`` where ``kind`` was meant was invisible to a type
+    checker -- and ``kind`` is validated against a controlled vocabulary, so the
+    mistake showed up as a puzzling ``ValueError`` far from the call site.
+    """
+
+    work_id: int | None = None
+    content_type: str | None = None
+    language: str | None = None
+    meta: dict[str, Any] | None = None
+    kind: str | None = None
+    raw_payload: dict[str, Any] | None = None
+    contributions: list[dict[str, Any]] | None = None
+
+
+def _expression_change(change: "ExpressionChange | None", kwargs: dict[str, Any]) -> ExpressionChange:
+    """Build an :class:`ExpressionChange` from an explicit value or legacy kwargs."""
+    if change is not None:
+        return change
+    if not kwargs:
+        return ExpressionChange()
+    unknown = set(kwargs) - {f.name for f in dataclasses.fields(ExpressionChange)}
+    if unknown:
+        raise TypeError(f"update_expression() got unexpected keyword arguments: {sorted(unknown)}")
+    return ExpressionChange(**kwargs)
+
+
 def update_expression(
     expression_id: int,
-    work_id: int | None = None,
-    content_type: str | None = None,
-    language: str | None = None,
-    meta: dict[str, Any] | None = None,
-    kind: str | None = None,
-    raw_payload: dict[str, Any] | None = None,
-    contributions: list[dict[str, Any]] | None = None,
+    change: ExpressionChange | None = None,
+    **kwargs: Any,
 ) -> Expression:
     """
     Update an existing Expression.
 
     Args:
-        expression_id: The ID of the expression to update
-        work_id: New parent work ID
-        content_type: New content type
-        language: New language code
-        meta: Metadata to merge with existing
-        kind: New expression kind (``live_performance`` or ``None`` to clear
-              via :func:`clear_expression_kind`).
-        raw_payload: Verbatim provider payload JSON
-        contributions: Optional structured contribution list to reconcile.
+        expression_id: The ID of the expression to update.
+        change: The fields to change. May also be supplied as individual
+            keyword arguments, which is what existing call sites do; a field
+            name that is not a member raises ``TypeError`` rather than being
+            ignored.
 
     Returns:
         The updated Expression object
@@ -1063,7 +1092,19 @@ def update_expression(
     Raises:
         ValueError: If the Expression/Work does not exist, or *kind* is not in
                     the controlled vocabulary.
+        TypeError: If an unknown field name is passed.
     """
+    change = _expression_change(change, kwargs)
+    (
+        work_id,
+        content_type,
+        language,
+        meta,
+        kind,
+        raw_payload,
+        contributions,
+    ) = dataclasses.astuple(change)
+
     expr = db.session.get(Expression, expression_id)
     if expr is None:
         raise ValueError(f"Expression with id {expression_id} not found")

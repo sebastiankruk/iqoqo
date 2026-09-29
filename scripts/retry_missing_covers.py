@@ -39,6 +39,11 @@ from app.utils.covers import process_cover_pipeline
 
 
 def retry_missing_covers(batch_limit=None, dry_run=False):
+    """Retry covers for items left pending by the circuit breaker.
+
+    Walks the backlog of items that exhausted their attempt budget and re-queues
+    them with a fresh budget, so a transient provider outage does not permanently
+    strand them."""
     app = create_app()
     with app.app_context():
         query = Manifestation.query.filter(
@@ -106,6 +111,7 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
 
 
 def main():
+    """Parse arguments and run the pending-cover retry."""
     parser = argparse.ArgumentParser(description="Retry cover processing for failed items")
     parser.add_argument("--limit", type=int, help="Maximum items to process", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Show what would be processed without changes")

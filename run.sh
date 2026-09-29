@@ -893,11 +893,15 @@ except Exception:
         printf '{}\n' > ".allegro_token.json"
     fi
 
-    # Ensure rclone.conf is a regular file before bind-mounting
-    if [ ! -f "$HOME/.config/rclone/rclone.conf" ]; then
-        mkdir -p "$HOME/.config/rclone"
-        touch "$HOME/.config/rclone/rclone.conf"
-    fi
+    # No rclone.conf is created here. The containers no longer use rclone:
+    # app/core/s3_service.py (boto3) reads the S3_* / AWS_* variables from .env,
+    # and nothing is bind-mounted in, so there is no credential file for docker
+    # to resolve. This block used to manufacture an empty rclone.conf, which
+    # docker turns into a *directory* on hosts where the file is missing, and
+    # that then breaks the container restart.
+    #
+    # Host-side backup scripts still use rclone, and still read the operator's
+    # own ~/.config/rclone/rclone.conf — untouched by this.
 
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
     if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then

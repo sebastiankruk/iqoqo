@@ -28,8 +28,10 @@ is a dry run: add ``--apply`` to persist candidate rows.
 #
 
 import argparse
+import dataclasses
 import os
 import sys
+from dataclasses import dataclass
 from typing import Any
 
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -74,29 +76,44 @@ def _format_report(report: DetectionReport) -> str:
     return ", ".join(f"{name}={getattr(report, name)}" for name in _SUMMARY_FIELDS)
 
 
+@dataclass(frozen=True)
+class ScanOptions:
+    """Configuration for a single detection pass.
+
+    All of these are options: ``run_scan`` is called by the CLI, by scripts, and
+    by tests, and every caller passes a different subset. As keyword-only
+    parameters they were already safe from positional mistakes, but eight of
+    them is more than fits on one readable call, and ``engine``/``tier`` are
+    both ``str`` drawn from small vocabularies -- ``engine="all"`` and
+    ``tier="heuristic"`` are both nonsense values that would surface as an
+    unhelpful failure much later.
+
+    Frozen so a pass cannot have its options mutated once started.
+    """
+
+    tier: str = TIER_ALL
+    threshold: float = DEFAULT_THRESHOLD
+    limit: int | None = None
+    dry_run: bool = True
+    skip_health_check: bool = False
+    engine: str = DEFAULT_ENGINE
+
+
 def run_scan(
     *,
     app: Any = None,
-    tier: str = TIER_ALL,
-    threshold: float = DEFAULT_THRESHOLD,
-    limit: int | None = None,
-    dry_run: bool = True,
-    skip_health_check: bool = False,
-    engine: str = DEFAULT_ENGINE,
     progress: Any = print,
+    options: ScanOptions | None = None,
+    **kwargs: Any,
 ) -> DetectionReport:
     """Verify prerequisites and run one detection pass.
 
     Args:
         app: Optional pre-built Flask application, used by tests.
-        tier: ``"work"``, ``"manifestation"``, or ``"all"``.
-        threshold: Minimum LLM confidence required to queue an undecided pair.
-        limit: Maximum number of catalog entities to load per tier, or ``None``.
-        dry_run: Evaluate and report without writing candidate rows.
-        skip_health_check: Bypass the Ollama probe.  Only meaningful for the
-            ``llama`` engine, which is the sole one that contacts a model.
-        engine: ``"heuristic"`` (default) or ``"llama"``.
         progress: Callable receiving human-readable progress lines.
+        options: A :class:`ScanOptions`. May also be supplied as individual
+            keyword arguments, which is what existing callers do; an
+            unrecognised name raises ``TypeError`` rather than being ignored.
 
     Returns:
         The :class:`DetectionReport` describing the run.
@@ -105,6 +122,15 @@ def run_scan(
         DuplicateServiceError: If a prerequisite is missing or an argument is
             invalid.  Callers turn this into a non-zero exit code.
     """
+    if options is None:
+        unknown = set(kwargs) - {f.name for f in dataclasses.fields(ScanOptions)}
+        if unknown:
+            raise DuplicateServiceError(
+                f"Unknown scan option(s): {sorted(unknown)}. Expected one of {sorted(f.name for f in dataclasses.fields(ScanOptions))}"
+            )
+        options = ScanOptions(**kwargs)
+    tier, threshold, limit, dry_run, skip_health_check, engine = dataclasses.astuple(options)
+
     if engine not in duplicate_service.DETECTION_ENGINES:
         raise DuplicateServiceError(f"Unknown engine: {engine!r}. Expected one of {sorted(duplicate_service.DETECTION_ENGINES)}")
 

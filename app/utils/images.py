@@ -15,6 +15,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 # pylint: disable=no-member
+"""Image processing: optimisation, overlays, upload validation and perceptual hashing.
+
+Cover images arrive from providers, uploads and generated files, so every path
+here assumes hostile input: PIL decompression-bomb limits, EXIF rotation
+normalisation, and re-encoding to JPEG on every save."""
+
 import io
 import logging
 import os
@@ -23,6 +29,13 @@ from typing import Any
 
 import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from app.core.s3_service import (
+    BUCKET_COVERS,
+    S3UploadError,
+    get_s3_service,
+    warn_if_legacy_rclone_configured,
+)
 
 # Safety threshold for decompression bombs.
 # Set to 200MP to accommodate even the largest modern smartphone cameras
@@ -93,6 +106,11 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 
 
 def optimize_image_to_bytes(image_bytes: bytes) -> bytes:
+    """Re-encode an image to a bounded JPEG in memory.
+
+    Normalises EXIF rotation, converts to RGB and caps the long edge at 1024px.
+    The decompression-bomb limit is checked on the way in, so a small payload that
+    expands to gigabytes is rejected before allocation."""
     try:
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
             transposed_img = ImageOps.exif_transpose(raw_img)
@@ -116,18 +134,18 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
             out.thumbnail((1024, 1024))
             out.save(filepath, "JPEG", quality=85)
 
-        remote = os.environ.get("RCLONE_COVERS_REMOTE")
-        if remote and "/covers/" in filepath:
-            try:
-                import subprocess
-
-                from app.utils.rclone_utils import get_rclone_target
-
-                filename = os.path.basename(filepath)
-                target = get_rclone_target(remote, "covers", filename)
-                subprocess.run(["rclone", "copyto", "--s3-no-check-bucket", "--", filepath, target], check=False)
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.warning("Failed to push cover to rclone cache: %s", e)
+        if "/covers/" in filepath:
+            filename = os.path.basename(filepath)
+            service = get_s3_service(BUCKET_COVERS)
+            if service is None:
+                warn_if_legacy_rclone_configured(BUCKET_COVERS)
+            else:
+                # A failed cache push is not fatal: the cover is already on local
+                # storage and only the cross-instance cache is missed.
+                try:
+                    service.upload_file(filepath, service.key_for(filename), content_type="image/jpeg")
+                except (ValueError, S3UploadError) as e:
+                    logger.warning("Failed to push cover to shared cache: %s", type(e).__name__)
     except (OSError, ValueError):
         logger.exception("Error optimizing image")
         raise
@@ -140,6 +158,9 @@ def add_text_overlay_bytes(
     branding: str = "iQoQo",
     font_path: str = "arial.ttf",
 ) -> bytes:
+    """Draw a title/author overlay onto image bytes and return JPEG.
+
+    Used for the local placeholder cover, where no provider returned artwork."""
     try:
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
             transposed_img = ImageOps.exif_transpose(raw_img)

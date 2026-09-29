@@ -33,6 +33,10 @@ from app.db.models import Manifestation
 
 
 def restore_covers(zip_path, app=None):
+    """Restore cover files from a backup archive.
+
+    Used after restoring a database dump whose cover directory was not restored
+    alongside it."""
     if app is None:
         app = create_app()
     with tempfile.TemporaryDirectory() as tmp:

@@ -20,8 +20,6 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 """
 
 import logging
-import os
-import subprocess
 from collections.abc import Callable
 from typing import Any
 
@@ -29,9 +27,13 @@ import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
-from app.config import Config
 from app.core.celery_app import celery
-from app.utils.rclone_utils import get_rclone_target
+from app.core.s3_service import (
+    BUCKET_FEEDBACK,
+    S3UploadError,
+    get_s3_service,
+    warn_if_legacy_rclone_configured,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,83 +164,31 @@ def shutdown_executor() -> None:
     pass
 
 
-class BackupManager:
-    """Helper class to manage backups in local storage and remote cloud via rclone."""
-
-    def __init__(self, backup_dir: str = "/data/backups", rclone_remote_fast: str | None = None, rclone_remote_archive: str | None = None):
-        self.backup_dir = backup_dir
-        self.rclone_remote_fast = rclone_remote_fast or getattr(Config, "RCLONE_REMOTE_FAST", "iqoqo-backup")
-        self.rclone_remote_archive = rclone_remote_archive or getattr(Config, "RCLONE_REMOTE_ARCHIVE", "iqoqo-glacier")
-
-    def list_backups(self) -> list[str]:
-        """Mockable method to list backups."""
-        if not os.path.exists(self.backup_dir):
-            return []
-        return [f for f in os.listdir(self.backup_dir) if os.path.isfile(os.path.join(self.backup_dir, f))]
-
-    def delete_backup(self, filename: str) -> None:
-        """Mockable method to delete a backup from fast storage."""
-        file_path = os.path.join(self.backup_dir, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-    def upload_to_glacier(self, filename: str) -> None:
-        """Uploads a file to long-term storage via rclone proxy."""
-        file_path = os.path.join(self.backup_dir, filename)
-        try:
-            remote_archive = str(self.rclone_remote_archive or "iqoqo-glacier")
-            target = get_rclone_target(remote_archive, "archives")
-            subprocess.run(["rclone", "copy", "--s3-no-check-bucket", "--", file_path, target], check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            logger.error("rclone upload failed: %s", e.stderr)
-            raise RuntimeError(f"Backup sync failed: {e.stderr}") from e
-
-
-@celery.task(bind=True)
-def rotate_and_archive_backups(self) -> None:
-    """
-    Automated Backup Retention Task.
-    Enforces 7 daily and 5 weekly backups in fast storage (Dropbox).
-    Archives older backups to AWS S3 Glacier and removes them from fast storage.
-    """
-    manager = BackupManager()
-    backups = manager.list_backups()
-
-    # Sort backups by modification time (newest first)
-    def get_mtime(filename: str) -> float:
-        return os.path.getmtime(os.path.join(manager.backup_dir, filename))
-
-    backups.sort(key=get_mtime, reverse=True)
-
-    for i, backup in enumerate(backups):
-        # Keep 7 daily + 5 weekly = 12 newest backups in fast storage
-        if i < 12:
-            continue
-
-        # Archive older backups
-        try:
-            manager.upload_to_glacier(backup)
-            manager.delete_backup(backup)
-            logger.info("Archived %s to Glacier and removed from local storage.", backup)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Failed to archive %s: %s", backup, e)
-
-
 @celery.task(bind=True)
 def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: object) -> None:
-    """Uploads a feedback screenshot via rclone to RCLONE_FEEDBACK_REMOTE."""
-    rclone_remote = getattr(Config, "RCLONE_FEEDBACK_REMOTE", None) or os.environ.get("RCLONE_FEEDBACK_REMOTE")
-    if not rclone_remote:
-        logger.info("RCLONE_FEEDBACK_REMOTE not configured, skipping remote upload.")
+    """Uploads a feedback screenshot to the configured feedback bucket.
+
+    Args:
+        local_path: Absolute path to the screenshot on local storage.
+        filename: Base name to store the object under. Validated as a single
+            safe key component, so a caller-supplied value cannot place the
+            object outside the ``feedback/`` prefix.
+
+    Raises:
+        RuntimeError: if the upload failed. The local file is left in place.
+    """
+    service = get_s3_service(BUCKET_FEEDBACK)
+    if service is None:
+        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
+        logger.info("Feedback object storage not configured, skipping remote upload.")
         return
 
     try:
-        target = get_rclone_target(rclone_remote, "feedback", filename)
-        subprocess.run(["rclone", "copyto", "--", local_path, target], check=True, capture_output=True, text=True)
-        logger.info("Successfully uploaded feedback screenshot %s to rclone remote.", filename)
-    except subprocess.CalledProcessError as e:
-        logger.error("rclone copyto failed for feedback screenshot %s: %s", filename, e.stderr)
-        raise RuntimeError(f"Feedback screenshot upload failed: {e.stderr}") from e
+        service.upload_file(local_path, service.key_for(filename), content_type="image/jpeg")
+        logger.info("Successfully uploaded feedback screenshot %s to remote storage.", filename)
+    except (ValueError, S3UploadError) as exc:
+        logger.error("Failed to upload feedback screenshot %s: %s", filename, type(exc).__name__)
+        raise RuntimeError("Feedback screenshot upload failed") from exc
 
 
 @celery.task(name="app.core.tasks.refresh_taxonomies_cache")

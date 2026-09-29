@@ -40,12 +40,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def die(*msgs: str) -> NoReturn:
+    """Print each message to stderr and exit non-zero."""
     for m in msgs:
         print(f"FAIL: {m}", file=sys.stderr)
     sys.exit(1)
 
 
 def get_version_from_branch() -> str:
+    """Read the release version from the branch name.
+
+    The branch is the source of truth for what is about to ship, so a mismatch with
+    the packaging metadata is a release blocker rather than a warning."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -65,17 +70,23 @@ def get_version_from_branch() -> str:
 
 
 def read_pyproject_version() -> str:
+    """Read the version declared in pyproject.toml."""
     with open(REPO_ROOT / "pyproject.toml", "rb") as fh:
         data = tomllib.load(fh)
     return str(data["project"]["version"])
 
 
 def read_package_json_version(path: Path) -> str:
+    """Read the version declared in a package.json."""
     data = json.loads(path.read_text(encoding="utf-8"))
     return str(data["version"])
 
 
 def check_changelog_entry(version: str) -> None:
+    """Require a changelog section for *version*.
+
+    A release without a changelog entry ships undocumented changes, so this fails
+    rather than warns."""
     changelog = REPO_ROOT / "docs" / "CHANGELOG.md"
     if not changelog.exists():
         die(f"{changelog} not found")
@@ -86,6 +97,7 @@ def check_changelog_entry(version: str) -> None:
 
 
 def main() -> None:
+    """Run every pre-release consistency check."""
     version = sys.argv[1] if len(sys.argv) > 1 else get_version_from_branch()
 
     errors = []

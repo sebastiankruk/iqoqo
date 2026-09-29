@@ -15,6 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
+"""Physical item endpoints: create, update, lend, and cover management.
+
+Items are the physical layer of the FRBR model, so every endpoint here acts on
+an existing manifestation rather than creating bibliographic records."""
 
 import logging
 import uuid
@@ -57,6 +61,10 @@ logger = logging.getLogger(__name__)
 
 
 def sync_tags(item_id: int, user_id, tags: list[str] | None):
+    """Replace an item's tag set with *tags*.
+
+    Replaces rather than merges, so a caller can clear tags by sending an empty
+    list. Unknown tags are created on demand."""
     if tags is None:
         return
     existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
@@ -226,6 +234,10 @@ def export_user_items():
 @api_bp.route("/items", methods=["GET"])
 @require_auth
 def get_items():
+    """List the caller's physical items with filtering and pagination.
+
+    Scoped to the caller unless the request carries a permission that allows seeing
+    another user's items."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return (
@@ -537,6 +549,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 @limiter.limit("300 per hour", override_defaults=True)
 @optional_auth
 def get_item_detail(item_id: int):
+    """Return one item with its manifestation, expression and work."""
     if item_id <= 0:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
     return _get_physical_item_detail(item_id)
@@ -675,6 +688,10 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
 @require_physical_item
 @require_item_access()
 def delete_item(item_id: int):
+    """Delete a physical item.
+
+    Only the item is removed; the manifestation it referenced is left intact,
+    because a work may still be shelved on another copy."""
     user_id = getattr(g, "user_id", None)
     try:
         return _delete_physical_item(item_id, user_id)
@@ -825,6 +842,9 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
 def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
+    """List every physical item of the manifestation with this ISBN.
+
+    The endpoint a scanner uses to decide whether a code is already shelved."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
@@ -840,6 +860,10 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 def add_item(isbn: str) -> Response | tuple[Response, int]:
+    """Shelve a physical copy of the manifestation with this ISBN.
+
+    Creates the item against an existing manifestation; it does not create
+    bibliographic records, which is what ingest does."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401

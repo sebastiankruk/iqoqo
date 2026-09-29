@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Batch cover backfill for manifestations missing an image.
+
+Safe to re-run: a manifestation whose cover is already present is skipped, and
+each fetch is recorded so a provider outage can be retried without redoing
+completed work."""
+
 import argparse
 import logging
 import os
@@ -35,6 +41,10 @@ WATERMARK_ASSET_PATH = os.getenv("IQOQO_WATERMARK_PATH", "resources/images/iqoqo
 
 
 def run_batch(batch_limit=None, force=False, app=None):
+    """Fetch covers for manifestations that lack one.
+
+    Resumable and idempotent: each processed row is recorded, so re-running after a
+    provider outage continues rather than restarting."""
     if app is None:
         app = create_app()
     with app.app_context():

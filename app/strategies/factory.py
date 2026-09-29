@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Resolves a :class:`LookupStrategy` from a content type hint."""
+
 from app.strategies.base import LookupStrategy
 
 

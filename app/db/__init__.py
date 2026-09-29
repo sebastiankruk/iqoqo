@@ -13,6 +13,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""SQLAlchemy session and declarative base.
+
+Exports db (the Flask-SQLAlchemy instance) and the shared model namespace so
+that importing a model does not require knowing which module in this package
+defines it. The schema split (FRBR, social, games) is applied by the migration
+service, not here."""
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.model import Model
 

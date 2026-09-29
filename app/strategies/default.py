@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Format-agnostic fallback used when the content type is unknown.
+
+Probes every provider in turn. It exists so a Work with a missing or
+unrecognised ``content_type`` still resolves metadata instead of returning
+nothing, at the cost of a longer and noisier lookup chain."""
+
 import re
 
 from app.strategies.base import LookupStrategy
@@ -25,6 +31,8 @@ from app.utils.upc import resolve_physical_media
 
 
 class DefaultFallbackStrategy(LookupStrategy):
+    """Probes every provider in turn when the content type is unknown."""
+
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
 

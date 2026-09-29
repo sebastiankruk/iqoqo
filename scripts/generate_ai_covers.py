@@ -75,8 +75,13 @@ def process_batch(
 
     logger.info("Starting batch cover processing for %d manifestations (dry_run=%s)", total, dry_run)
 
-    if os.environ.get("RCLONE_COVERS_REMOTE"):
-        logger.info("Using rclone global cache for covers")
+    # The shared cache is what makes a batch worth running: covers already
+    # generated on another instance are pulled instead of re-paid for.
+    covers_bucket = os.environ.get("S3_BUCKET_COVERS", "").strip()
+    if covers_bucket:
+        logger.info("Shared cover cache enabled (bucket %s)", covers_bucket)
+    else:
+        logger.info("No S3_BUCKET_COVERS set: every cover will be generated rather than reused")
 
     for idx, manif in enumerate(manifestations, start=1):
         # Circuit breaker: skip items that have failed too many times
@@ -164,6 +169,7 @@ def process_batch(
 
 
 def main() -> None:
+    """Run a batch of LLM cover generation with watermarking."""
     parser = argparse.ArgumentParser(description="Batch AI Cover Generation and Watermarking CLI")
     parser.add_argument("--batch-all-unwatermarked", action="store_true", help="Process all missing or unwatermarked AI covers")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of manifestations to process")

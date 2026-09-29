@@ -191,6 +191,7 @@ def run_backfill(
 
 
 def main() -> int:
+    """Migrate legacy cover records to the current schema."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Process allowlisted sources; dry-run is the default")
     parser.add_argument("--confirm-target", help="Exact credential-free database target printed by dry-run")
