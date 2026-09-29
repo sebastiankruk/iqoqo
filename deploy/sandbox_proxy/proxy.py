@@ -31,6 +31,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sandbox-egress-proxy")
 
+# MOD-OPS-09: IPv6 literals are intentionally NOT accepted.
+# The character class below is deliberately restricted to ASCII letters, digits,
+# dots and hyphens, which means bracketed IPv6 authorities (``[::1]:443``) and
+# IPv4-in-IPv6 forms (``::ffff:127.0.0.1:443``) are rejected by the regex and the
+# request is denied. Rationale:
+#   * the allowlist in ``allowlist.conf`` is matched by host *name*, and an IPv6
+#     literal can never match a DNS name pattern, so accepting one would only
+#     ever hit the fail-closed path;
+#   * embedding the authority in the upstream target would otherwise require a
+#     second, differently-formatted code path — a common source of
+#     parser-confusion and SSRF bypass bugs;
+#   * sandbox containers reach the internet over IPv4 egress, so there is no
+#     functional need to tunnel IPv6.
+# Consequence: IPv6-only destinations are unreachable through this proxy by
+# design. Revisit together with dual-stack allowlist support rather than
+# loosening the regex in isolation.
 CONNECT_PATTERN = re.compile(r"^CONNECT\s+([a-zA-Z0-9.-]+):(\d+)\s+HTTP/1\.[01]$", re.IGNORECASE)
 UPSTREAM_CONNECT_TIMEOUT = 10.0
 

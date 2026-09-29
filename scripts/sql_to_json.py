@@ -28,8 +28,41 @@ import argparse
 import json
 import re
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+
+# MOD-OPS-17: cap on how many physical lines may be joined into one logical
+# INSERT statement before the buffer is flushed. A well-formed pg_dump line
+# ends each statement within a handful of lines, so this only ever triggers on
+# a malformed or truncated dump — where it bounds memory instead of letting the
+# buffer grow without limit. Generous enough not to interfere with a statement
+# whose rows legitimately span many lines.
+MAX_STATEMENT_LINES = 100_000
+
+# Matches a single logical INSERT statement, with or without a schema qualifier
+# and with or without an explicit column list. Compiled once at module scope:
+# the streaming path matches every statement in the dump, and re-compiling per
+# statement was measurable on multi-hundred-thousand-row dumps.
+#
+# Supports both pg_dump output styles:
+#   INSERT INTO "iqoqo"."item" (id, …) VALUES (…), (…);
+#   INSERT INTO iqoqo.item VALUES (…);
+INSERT_RE = re.compile(
+    r"INSERT\s+INTO\s+"
+    r'(?:"?iqoqo"?\.)"?(\w+)"?'  # schema + table name (group 1)
+    r"(?:\s*\([^)]*\))?\s*VALUES\s+"  # optional column list + VALUES keyword
+    r"(.+?)\s*;?\s*$",  # values block (group 2)
+    re.IGNORECASE,
+)
+
+# Table name in a pg_dump INSERT -> output collection key.
+COLLECTION_FOR_TABLE = {
+    "client": "clients",
+    "manifestation": "manifestations",
+    "item": "items",
+}
 
 
 def _parse_sql_values(values_str: str) -> list[str | None]:
@@ -134,12 +167,272 @@ def _split_row_tuples(values_block: str) -> list[str]:
     return rows
 
 
+def _iter_statements_from_lines(lines: Iterator[str]) -> Iterator[str]:
+    """
+    Group an iterable of raw dump lines into logical INSERT statements.
+
+    pg_dump may emit one statement across many physical lines (the ``VALUES``
+    keyword and the row tuples land on separate lines, and a row containing a
+    newline in a text column wraps). Those lines must be joined before the
+    statement regex can match, so this buffers from an ``INSERT INTO`` up to
+    the line that ends with ``;``.
+
+    At most one statement is held at a time, which is what keeps the streaming
+    path bounded regardless of total input size.
+
+    Args:
+        lines: Raw lines from the dump, with or without trailing newlines.
+
+    Yields:
+        Each complete logical ``INSERT`` statement, whitespace-normalised.
+    """
+    buffer: list[str] = []
+    for raw_line in lines:
+        # Bound the buffer so a malformed dump (an INSERT whose terminating
+        # semicolon never arrives) cannot grow it without limit. Well-formed
+        # input never reaches this: the statement is flushed at its semicolon.
+        if len(buffer) > MAX_STATEMENT_LINES:
+            yield " ".join(buffer)
+            buffer = []
+
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue
+
+        if stripped.upper().startswith("INSERT INTO"):
+            # A new INSERT supersedes anything buffered: the previous statement
+            # never received its terminating semicolon (truncated dump).
+            buffer = [stripped]
+        elif buffer:
+            buffer.append(stripped)
+
+        if buffer and stripped.endswith(";"):
+            yield " ".join(buffer)
+            buffer = []
+
+    # Trailing statement without a terminating semicolon.
+    if buffer:
+        yield " ".join(buffer)
+
+
+def iter_sql_statements(sql_path: Path) -> Iterator[str]:
+    """
+    Stream logical INSERT statements out of a SQL dump file, one at a time.
+
+    MOD-OPS-17: the previous implementation read the whole dump into a string
+    and then accumulated *every* statement into a list, so peak memory was the
+    input size plus a full second copy of it. A mature instance dump is
+    routinely hundreds of MB, so conversion could OOM regardless of how small
+    the resulting JSON was.
+
+    This reads the file lazily and holds at most one statement. The file
+    object's internal buffer is fixed-size and independent of file size.
+
+    Args:
+        sql_path: Path to the SQL dump.
+
+    Yields:
+        Each complete logical ``INSERT`` statement, whitespace-normalised.
+    """
+    # `errors="replace"` mirrors what a shell pipeline would do with a stray
+    # invalid byte: step past it rather than abort a migration over one
+    # non-UTF-8 byte in a text column.
+    with open(sql_path, encoding="utf-8", errors="replace") as f:
+        yield from _iter_statements_from_lines(f)
+
+
+def iter_parsed_rows(statement: str) -> Iterator[tuple[str, list[str | None]]]:
+    """
+    Yield ``(table_name, values)`` for each row tuple in one INSERT statement.
+
+    MOD-OPS-17: rows are yielded one at a time, so a caller never holds a whole
+    table's worth of parsed rows.
+
+    Args:
+        statement: A single logical ``INSERT`` statement.
+
+    Yields:
+        ``(table_name, values)`` per row, where ``table_name`` is the bare
+        table name and ``values`` holds the parsed column values (entries may
+        be ``None`` for SQL NULL).
+    """
+    m = INSERT_RE.match(statement)
+    if not m:
+        return
+
+    table_name = m.group(1)
+    for row_content in _split_row_tuples(m.group(2)):
+        yield table_name, _parse_sql_values(row_content)
+
+
+def _row_to_record(table_name: str, values: list[str | None]) -> dict[str, Any] | None:
+    """
+    Convert one parsed row into the JSON record shape used by migrate_legacy.py.
+
+    Args:
+        table_name: Bare table name from the INSERT statement.
+        values: Parsed column values.
+
+    Returns:
+        The record dict, or None when the table is unknown or the row has too
+        few columns to be valid.
+    """
+    if table_name == "client" and len(values) >= 4:
+        return {
+            "id": values[0],
+            "address": values[1],
+            "user": values[2],
+            "added": values[3],
+        }
+
+    if table_name == "manifestation" and len(values) >= 5:
+        # Columns: id, isbn, title, authors, meta (JSON), added
+        meta: dict[str, Any] = {}
+        try:
+            meta = json.loads(values[4]) if values[4] else {}
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        return {
+            "id": values[0],
+            "isbn": values[1],
+            "title": values[2],
+            "authors": values[3],
+            "meta": meta,
+            "added": values[5] if len(values) > 5 else None,
+        }
+
+    if table_name == "item" and len(values) >= 4:
+        # Columns: id, manifestation_id, added_by, added_at, meta (JSON)
+        item_meta: dict[str, Any] = {}
+        try:
+            item_meta = json.loads(values[4]) if len(values) > 4 and values[4] else {}
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        return {
+            "id": values[0],
+            "manifestation_id": values[1],
+            "added_by": values[2],
+            "added_at": values[3],
+            "meta": item_meta,
+        }
+
+    return None
+
+
+def convert_sql_dump(sql_path: Path, output_path: Path) -> dict[str, int]:
+    """
+    Convert a legacy SQL dump to the migrate_legacy.py JSON format, streaming.
+
+    MOD-OPS-17: records are serialised to disk as they are parsed, so peak
+    memory is bounded by one statement's worth of rows rather than by the size
+    of the dump. The output remains a single valid JSON object with the same
+    ``{"clients": [...], "manifestations": [...], "items": [...]}`` shape that
+    ``migrate_legacy.py`` consumes, so downstream behaviour is unchanged.
+
+    Implementation note: the output is grouped by collection, but a dump can
+    interleave tables (pg_dump emits one statement block per table, yet a
+    hand-edited or multi-schema dump need not). Buffering every record in RAM
+    just to regroup it would reintroduce the very problem this function
+    removes, so records are spooled one-per-line to a temporary JSONL file per
+    collection and then streamed into the final document. Memory stays bounded
+    by a single record and the assembly is a pure concatenation.
+
+    Args:
+        sql_path: Path to the input SQL dump.
+        output_path: Path to the JSON file to write.
+
+    Returns:
+        Mapping of collection name to the number of records written.
+
+    Raises:
+        Exception: Any parsing or write error propagates after all partial
+            artifacts are removed, so no half-written output can be mistaken
+            for a complete conversion.
+    """
+    collections = ("clients", "manifestations", "items")
+    counts = dict.fromkeys(collections, 0)
+
+    spools: dict[str, Any] = {}
+    spool_paths: list[Path] = []
+    # Output goes to a sibling `.partial` file and is renamed only once
+    # complete, so an interrupted run never leaves a truncated JSON file that a
+    # later run would treat as a finished conversion.
+    tmp_output = output_path.with_name(output_path.name + ".partial")
+
+    try:
+        for collection in collections:
+            handle = tempfile.NamedTemporaryFile(  # noqa: SIM115
+                mode="w",
+                encoding="utf-8",
+                prefix=f"sql2json_{collection}_",
+                suffix=".jsonl",
+                delete=False,
+            )
+            spools[collection] = handle
+            spool_paths.append(Path(handle.name))
+
+        # ── Pass 1: parse and spool, one record at a time ──────────────────
+        for statement in iter_sql_statements(sql_path):
+            for table_name, values in iter_parsed_rows(statement):
+                collection = COLLECTION_FOR_TABLE.get(table_name)
+                if collection is None:
+                    continue
+                record = _row_to_record(table_name, values)
+                if record is None:
+                    continue
+                # Newline-delimited: no separator state to carry between
+                # records, so the spool stays line-parseable even if truncated.
+                spools[collection].write(json.dumps(record, ensure_ascii=False) + "\n")
+                counts[collection] += 1
+
+        for handle in spools.values():
+            handle.close()
+
+        # ── Pass 2: stream the spools into the final JSON document ───────
+        with open(tmp_output, "w", encoding="utf-8") as out:
+            out.write("{\n")
+            for index, collection in enumerate(collections):
+                if index:
+                    out.write(",\n")
+                out.write(f'  "{collection}": [')
+                first = True
+                with open(spool_paths[index], encoding="utf-8") as spool:
+                    for line in spool:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if not first:
+                            out.write(",")
+                        out.write("\n    ")
+                        out.write(line)
+                        first = False
+                out.write("\n  ]" if not first else "]")
+            out.write("\n}\n")
+
+        tmp_output.replace(output_path)
+    finally:
+        for handle in spools.values():
+            if not handle.closed:
+                handle.close()
+        for path in spool_paths:
+            path.unlink(missing_ok=True)
+        tmp_output.unlink(missing_ok=True)
+
+    return counts
+
+
 def parse_sql_dump(sql_content: str) -> dict:
     """
-    Parse a legacy SQL dump and extract data.
+    Parse a legacy SQL dump held in memory and extract data.
 
     Supports both quoted (``"iqoqo"."table"``) and unquoted (``iqoqo.table``)
     schema-qualified table names as produced by different pg_dump versions.
+
+    Retained for callers and tests that already hold the dump as a string. New
+    code should prefer :func:`convert_sql_dump`, which reads from a path and
+    never materialises the whole dump in memory (MOD-OPS-17).
 
     Args:
         sql_content: Content of the SQL dump file.
@@ -153,91 +446,12 @@ def parse_sql_dump(sql_content: str) -> dict:
         "items": [],
     }
 
-    # ── Step 1: join multi-line INSERT statements into single logical lines ──
-    # pg_dump may emit the VALUES keyword and individual rows on separate lines.
-    # We collect lines that belong to the same statement (from INSERT to the
-    # line ending with ";") and join them so the regex can work on one string.
-    statements: list[str] = []
-    buffer: list[str] = []
-    for raw_line in sql_content.splitlines():
-        stripped = raw_line.strip()
-        if not stripped or stripped.startswith("--"):
-            continue
-        if stripped.upper().startswith("INSERT INTO"):
-            buffer = [stripped]
-        elif buffer:
-            buffer.append(stripped)
-        if buffer and stripped.endswith(";"):
-            statements.append(" ".join(buffer))
-            buffer = []
-
-    # ── Step 2: parse each statement ────────────────────────────────────────
-    # Handles both:
-    #   INSERT INTO "iqoqo"."table" (col, …) VALUES (…), (…);
-    #   INSERT INTO iqoqo.table VALUES (…);
-    insert_re = re.compile(
-        r"INSERT\s+INTO\s+"
-        r'(?:"?iqoqo"?\.)"?(\w+)"?'  # schema + table name (group 1)
-        r"(?:\s*\([^)]*\))?\s*VALUES\s+"  # optional column list + VALUES keyword
-        r"(.+?)\s*;?\s*$",  # values block (group 2)
-        re.IGNORECASE,
-    )
-
-    for stmt in statements:
-        m = insert_re.match(stmt)
-        if not m:
-            continue
-
-        table_name = m.group(1)
-        values_block = m.group(2)
-
-        for row_content in _split_row_tuples(values_block):
-            values = _parse_sql_values(row_content)
-
-            if table_name == "client" and len(values) >= 4:
-                data["clients"].append(
-                    {
-                        "id": values[0],
-                        "address": values[1],
-                        "user": values[2],
-                        "added": values[3],
-                    }
-                )
-            elif table_name == "manifestation" and len(values) >= 5:
-                # Columns: id, isbn, title, authors, meta (JSON), added
-                meta: dict[str, Any] = {}
-                try:
-                    meta = json.loads(values[4]) if values[4] else {}
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-                data["manifestations"].append(
-                    {
-                        "id": values[0],
-                        "isbn": values[1],
-                        "title": values[2],
-                        "authors": values[3],
-                        "meta": meta,
-                        "added": values[5] if len(values) > 5 else None,
-                    }
-                )
-            elif table_name == "item" and len(values) >= 4:
-                # Columns: id, manifestation_id, added_by, added_at, meta (JSON)
-                item_meta: dict[str, Any] = {}
-                try:
-                    item_meta = json.loads(values[4]) if len(values) > 4 and values[4] else {}
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-                data["items"].append(
-                    {
-                        "id": values[0],
-                        "manifestation_id": values[1],
-                        "added_by": values[2],
-                        "added_at": values[3],
-                        "meta": item_meta,
-                    }
-                )
+    for statement in _iter_statements_from_lines(sql_content.splitlines()):
+        for table_name, values in iter_parsed_rows(statement):
+            record = _row_to_record(table_name, values)
+            if record is None:
+                continue
+            data[COLLECTION_FOR_TABLE[table_name]].append(record)
 
     return data
 
@@ -254,21 +468,13 @@ def main():
         print(f"Error: File not found: {input_path}")
         sys.exit(1)
 
-    print(f"Reading SQL dump from {input_path}...")
-    with open(input_path, encoding="utf-8") as f:
-        sql_content = f.read()
-
-    print("Parsing SQL dump...")
-    data = parse_sql_dump(sql_content)
-
-    print(f"Found {len(data['clients'])} clients")
-    print(f"Found {len(data['manifestations'])} manifestations")
-    print(f"Found {len(data['items'])} items")
-
     output_path = Path(args.output_file)
-    print(f"Writing JSON to {output_path}...")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"Converting SQL dump {input_path} -> {output_path} (streaming)...")
+    counts = convert_sql_dump(input_path, output_path)
+
+    print(f"Found {counts['clients']} clients")
+    print(f"Found {counts['manifestations']} manifestations")
+    print(f"Found {counts['items']} items")
 
     print("Conversion complete!")
 

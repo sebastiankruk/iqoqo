@@ -121,3 +121,6 @@ python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
 pythonpath = ["."]
+markers = [
+    "slow: tests that build large inputs or spawn subprocesses; deselect with '-m \"not slow\"'",
+]
