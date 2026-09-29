@@ -26,14 +26,100 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import Config
+from app.core.duplicate_service import DuplicateServiceError
 from app.db import db
 from app.db.models import Expression, Manifestation, Work
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
 from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
 from scripts.backfill_legacy_covers import DatabaseConnectivityError, database_target, run_backfill
+from scripts.detect_duplicates import main as detect_main
+from scripts.detect_duplicates import run_scan
 from scripts.fetch_covers import run_batch
 from scripts.restore_covers import restore_covers
+
+# ---------------------------------------------------------------------------
+# detect_duplicates.py
+# ---------------------------------------------------------------------------
+
+
+def test_detect_duplicates_defaults_to_the_heuristic_engine():
+    """The default engine must be deterministic, so no model is probed."""
+    from scripts.detect_duplicates import _build_parser
+
+    args = _build_parser().parse_args([])
+
+    assert args.engine == "heuristic"
+    assert args.apply is False, "dry-run is the safe default until --apply is passed"
+
+
+def test_detect_duplicates_engine_choices_are_restricted():
+    """An unrecognized engine must be rejected by argparse, not silently downgraded."""
+    from scripts.detect_duplicates import _build_parser
+
+    assert _build_parser().parse_args(["--engine", "llama"]).engine == "llama"
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args(["--engine", "gpt-9"])
+
+
+def test_detect_duplicates_heuristic_engine_never_probes_ollama(app):
+    """A scan must not demand a running inference service on the default path."""
+    with patch("scripts.detect_duplicates.duplicate_service.check_ollama_health") as health:
+        report = run_scan(app=app, engine="heuristic", progress=None)
+
+    health.assert_not_called()
+    assert report.engine == "heuristic"
+    assert report.llm_evaluations == 0
+
+
+def test_detect_duplicates_llama_engine_requires_healthy_ollama(app):
+    """Opting into inference makes the model a genuine prerequisite."""
+    with (
+        patch(
+            "scripts.detect_duplicates.duplicate_service.check_ollama_health",
+            return_value=(False, "Ollama unreachable at http://x:1 (ConnectionError)."),
+        ),
+        pytest.raises(DuplicateServiceError, match="ollama pull"),
+    ):
+        run_scan(app=app, engine="llama", progress=None)
+
+
+def test_detect_duplicates_skip_health_check_bypasses_the_probe(app):
+    """The triage flag must still work for the llama engine."""
+    with (
+        patch("scripts.detect_duplicates.duplicate_service.check_ollama_health") as health,
+        patch("scripts.detect_duplicates.duplicate_service.run_detection") as detect,
+    ):
+        detect.return_value = MagicMock()
+        run_scan(app=app, engine="llama", skip_health_check=True, progress=None)
+
+    health.assert_not_called()
+    detect.assert_called_once()
+
+
+def test_detect_duplicates_rejects_unknown_engine(app):
+    """An unknown engine must raise rather than silently falling back."""
+    with pytest.raises(DuplicateServiceError, match="Unknown engine"):
+        run_scan(app=app, engine="gpt-9", progress=None)
+
+
+def test_detect_duplicates_reports_the_engine_it_used(capsys, app):
+    """The operator must be able to see which engine produced the summary."""
+    with patch("scripts.detect_duplicates.run_scan") as scan:
+        scan.return_value = MagicMock()
+        scan.return_value.to_dict.return_value = {}
+        scan.return_value.created = 0
+        detect_main(["--quiet"])
+
+    assert "Engine: heuristic" in capsys.readouterr().out
+
+
+def test_detect_duplicates_exits_2_when_a_prerequisite_is_missing(capsys):
+    """A missing prerequisite must be distinguishable from a run failure."""
+    with patch("scripts.detect_duplicates.run_scan", side_effect=DuplicateServiceError("no ollama")):
+        assert detect_main(["--engine", "llama"]) == 2
+
+    assert "Detection not started" in capsys.readouterr().err
 
 
 def test_archive_orphaned_covers(app, tmp_path):

@@ -453,10 +453,12 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_2_semantic_links"
+    assert heads[0] == "v0_8_2_duplicate_provenance"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_2_duplicate_provenance",
+        "v0_8_2_duplicate_candidates",
         "v0_8_2_semantic_links",
         "v0_8_1_oauth_exchange_codes",
         "v0_8_1_security_constraints",
@@ -1043,5 +1045,313 @@ def test_v0_8_2_semantic_links_upgrade_and_downgrade() -> None:
 
         run_migration(migration.downgrade)
         assert not sa.inspect(engine).has_table("semantic_links")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_candidates_upgrade_and_downgrade() -> None:
+    """The duplicate_candidates table is reversible and creates proper columns and indexes."""
+    import warnings
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_candidates")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        assert inspector.has_table("duplicate_candidates")
+        assert {
+            "id",
+            "entity_tier",
+            "source_id",
+            "target_id",
+            "confidence",
+            "llm_reasoning",
+            "status",
+            "created_at",
+            "resolved_at",
+            "resolved_by_id",
+        } <= {column["name"] for column in inspector.get_columns("duplicate_candidates")}
+
+        # SQLite cannot reflect expression-based indexes and warns while trying,
+        # so mute that one warning and read the DDL directly instead.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", sa.exc.SAWarning)
+            indexes = {idx["name"]: idx for idx in inspector.get_indexes("duplicate_candidates")}
+        assert "ix_duplicate_candidates_status_confidence" in indexes
+        assert indexes["ix_duplicate_candidates_status_confidence"]["column_names"] == ["status", "confidence"]
+
+        # Confirm the order-insensitive unique pair index exists.
+        with engine.connect() as connection:
+            pair_index_ddl = connection.execute(
+                sa.text("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = :name"),
+                {"name": "uq_duplicate_candidates_pair"},
+            ).scalar_one()
+        assert "UNIQUE" in pair_index_ddl
+        assert "CASE WHEN source_id <= target_id THEN source_id ELSE target_id END" in pair_index_ddl
+
+        run_migration(migration.downgrade)
+        assert not sa.inspect(engine).has_table("duplicate_candidates")
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_provenance_upgrade_and_downgrade() -> None:
+    """Provenance is recorded, confidence becomes nullable, and both reverse."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_provenance")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        previous_op = migration.op
+        migration.op = Operations(MigrationContext.configure(connection))
+        try:
+            connection.execute(
+                sa.text(
+                    "CREATE TABLE duplicate_candidates (id INTEGER PRIMARY KEY, entity_tier VARCHAR(20) NOT NULL, "
+                    "source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, confidence FLOAT NOT NULL, "
+                    "llm_reasoning TEXT, status VARCHAR(20) NOT NULL)"
+                )
+            )
+            # One pre-existing LLM-era row, which must be backfilled to 'llama'.
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status) "
+                    "VALUES ('work', 1, 2, 0.91, 'Same work.', 'pending')"
+                )
+            )
+            # One row that never had a rationale, which must land on 'heuristic'.
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status) "
+                    "VALUES ('work', 3, 4, 0.5, NULL, 'pending')"
+                )
+            )
+        finally:
+            migration.op = previous_op
+
+    try:
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        columns = {c["name"]: c for c in inspector.get_columns("duplicate_candidates")}
+        assert "resolution_source" in columns
+        assert columns["confidence"]["nullable"] is True
+
+        with engine.connect() as connection:
+            rows = dict(connection.execute(sa.text("SELECT llm_reasoning, resolution_source FROM duplicate_candidates ORDER BY id")).all())
+        assert rows["Same work."] == "llama", "a row with an LLM rationale must be backfilled to 'llama'"
+        assert rows[None] == "heuristic", "a row without a rationale must be backfilled to 'heuristic'"
+
+        # A heuristic candidate stores no probability at all.
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, llm_reasoning, status, resolution_source) "
+                    "VALUES ('work', 5, 6, NULL, 'heuristic: identical ean', 'pending', 'heuristic')"
+                )
+            )
+
+        run_migration(migration.downgrade)
+        inspector = sa.inspect(engine)
+        assert "resolution_source" not in {c["name"] for c in inspector.get_columns("duplicate_candidates")}
+        assert inspector.get_columns("duplicate_candidates") is not None
+        confidence = next(c for c in inspector.get_columns("duplicate_candidates") if c["name"] == "confidence")
+        assert confidence["nullable"] is False
+        # The lossy part of the downgrade: a NULL-confidence row cannot survive.
+        with engine.connect() as connection:
+            remaining = connection.execute(sa.text("SELECT count(*) FROM duplicate_candidates")).scalar()
+        assert remaining == 2, "only the NULL-confidence candidate should have been discarded"
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_2_duplicate_provenance_never_bakes_the_schema_into_the_table_name() -> None:
+    """Schema must be passed as a separate identifier, not glued into the name.
+
+    Regression: the migration handed Alembic ``"inventory.duplicate_candidates"``
+    as the table name.  SQLAlchemy renders that as a *single* quoted identifier,
+    which PostgreSQL then looks for in ``search_path`` instead of the
+    ``inventory`` schema, so the migration failed with::
+
+        relation "inventory.duplicate_candidates" does not exist
+
+    on a table that was demonstrably present.  The behavioural migration test
+    above runs on SQLite, where ``schema`` is ``None`` and the distinction
+    cannot appear, so it passed against the broken code -- this asserts the
+    call shape for the PostgreSQL path directly.
+    """
+    from importlib import import_module
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    migration = import_module("migrations.versions.v0_8_2_duplicate_provenance")
+
+    class _PostgresBind:
+        dialect = SimpleNamespace(name="postgresql")
+
+    recorded: list[tuple[str, tuple, dict]] = []
+
+    def _record(name):
+        def _inner(*args, **kwargs):
+            recorded.append((name, args, kwargs))
+            return MagicMock(__enter__=lambda self: self, __exit__=lambda self, *a: False)
+
+        return _inner
+
+    original_get_bind = migration.op.get_bind
+    original_add_column = migration.op.add_column
+    original_batch = migration.op.batch_alter_table
+    original_execute = migration.op.execute
+    original_drop = migration.op.drop_column
+    try:
+        migration.op.get_bind = lambda: _PostgresBind()
+        migration.op.add_column = _record("add_column")
+        migration.op.batch_alter_table = _record("batch_alter_table")
+        migration.op.execute = _record("execute")
+        migration.op.drop_column = _record("drop_column")
+        migration.upgrade()
+        migration.downgrade()
+    finally:
+        migration.op.get_bind = original_get_bind
+        migration.op.add_column = original_add_column
+        migration.op.batch_alter_table = original_batch
+        migration.op.execute = original_execute
+        migration.op.drop_column = original_drop
+
+    for name, args, kwargs in recorded:
+        if name in {"add_column", "drop_column"}:
+            table = args[0]
+            assert table == "duplicate_candidates", f"{name} got a pre-qualified table name {table!r}; pass schema= instead"
+            assert kwargs.get("schema") == "inventory", f"{name} must pass schema='inventory' as a separate argument"
+        if name == "batch_alter_table":
+            assert args[0] == "duplicate_candidates", f"batch_alter_table got {args[0]!r}"
+            assert kwargs.get("schema") == "inventory"
+
+    # Raw SQL is not re-rendered, so the qualified form is correct there.
+    raw = [args[0] for name, args, _ in recorded if name == "execute"]
+    assert raw, "expected the backfill to issue raw SQL"
+    assert all(
+        statement.startswith("UPDATE inventory.duplicate_candidates") or statement.startswith("DELETE FROM inventory.duplicate_candidates")
+        for statement in raw
+    )
+
+
+def test_duplicate_candidates_model_index_compiles_for_postgresql() -> None:
+    """The ORM index must emit the same DDL the migration does.
+
+    Regression: the model built the pair index with ``db.case(...)``, which
+    SQLAlchemy renders unparenthesized.  PostgreSQL parses an unparenthesized
+    expression as a column separator inside ``CREATE INDEX``, so
+    ``db.create_all()`` -- and therefore ``scripts/init_db.py`` -- failed
+    outright with ``syntax error at or near "CASE"`` on a fresh PostgreSQL
+    install.  SQLite accepts the broken form, so the behavioural suite could
+    never catch it; assert the rendered DDL instead.
+    """
+    from sqlalchemy.dialects import postgresql, sqlite
+    from sqlalchemy.schema import CreateIndex
+
+    from app.db.models import DuplicateCandidate
+
+    index = next(idx for idx in DuplicateCandidate.__table__.indexes if idx.name == "uq_duplicate_candidates_pair")
+
+    for label, dialect in (("postgresql", postgresql.dialect()), ("sqlite", sqlite.dialect())):
+        ddl = str(CreateIndex(index).compile(dialect=dialect)).strip()
+        assert "UNIQUE" in ddl, f"{label}: index is not unique"
+        # Every expression must be parenthesized so it cannot be misread as a
+        # column separator.
+        assert ddl.count("(CASE WHEN source_id <= target_id THEN") == 2, f"{label}: CASE expressions must be parenthesized; got {ddl}"
+
+
+def test_v0_8_2_duplicate_candidates_pair_index_is_order_insensitive() -> None:
+    """A pair recorded in either direction must collide on the unique index."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy.exc import IntegrityError
+
+    migration: Any = import_module("migrations.versions.v0_8_2_duplicate_candidates")
+    engine = sa.create_engine("sqlite://")
+
+    with engine.begin() as connection:
+        previous_op = migration.op
+        migration.op = Operations(MigrationContext.configure(connection))
+        try:
+            migration.upgrade()
+        finally:
+            migration.op = previous_op
+
+    def insert_pair(source_id: int, target_id: int) -> None:
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                    "VALUES ('work', :source_id, :target_id, 0.9, 'pending')"
+                ),
+                {"source_id": source_id, "target_id": target_id},
+            )
+
+    def check_constraint_blocks(source_id: int, target_id: int) -> bool:
+        try:
+            insert_pair(source_id, target_id)
+        except IntegrityError:
+            return True
+        return False
+
+    try:
+        insert_pair(5, 9)
+        # The same pair in reverse order is the same candidate, not a new one.
+        assert check_constraint_blocks(9, 5)
+        # A different pair, tier, or self-pair must still be allowed/blocked as declared.
+        assert not check_constraint_blocks(5, 7)
+        assert not check_constraint_blocks(1, 5)
+
+        with engine.begin() as connection:
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                        "VALUES ('work', 4, 4, 0.9, 'pending')"
+                    )
+                )
+            with pytest.raises(IntegrityError):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, confidence, status) "
+                        "VALUES ('expression', 5, 9, 0.9, 'pending')"
+                    )
+                )
     finally:
         engine.dispose()

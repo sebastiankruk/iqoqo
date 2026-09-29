@@ -100,7 +100,14 @@ def app():
     with app.app_context():
         db.create_all()
         yield app
+        # End the test's transaction before issuing DDL.  On PostgreSQL a
+        # session left "idle in transaction" still holds the row locks taken
+        # during the test, so the DROP TABLE blocks indefinitely.  SQLite's
+        # in-memory backend never exhibited this, which is why the
+        # PostgreSQL-backed suites need this teardown.
+        db.session.remove()
         db.drop_all()
+        db.session.remove()
 
 
 @pytest.fixture(autouse=True)
