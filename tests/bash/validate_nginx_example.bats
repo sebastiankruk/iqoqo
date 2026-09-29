@@ -99,8 +99,13 @@ PY
 
 @test "the committed config passes structural validation" {
   # Validates the file as committed, via the default path, so this also covers
-  # the default-argument wiring.
+  # the default-argument wiring. The validator's own output is echoed on
+  # failure: a bare status assertion hides the reason.
   run python3 "${VALIDATOR}" --no-docker
+  if [ "${status}" -ne 0 ]; then
+    echo "validator said:" >&2
+    echo "${output}" >&2
+  fi
   [ "${status}" -eq 0 ]
   [[ "${output}" =~ "[OK]  structure" ]]
 }
@@ -179,7 +184,17 @@ PY
   # readers to ignore the check.
   mutate braces_in_comment
   run run_validator
-  [ "${status}" -eq 0 ]
+  if [ "${status}" -ne 0 ]; then
+    {
+      echo "--- validator diagnostics ---"
+      echo "python3: $(command -v python3) ($(python3 --version 2>&1))"
+      echo "config: ${CONFIG}"
+      echo "validator exit: ${status}"
+      echo "validator output:"
+      echo "${output}"
+    } >&2
+    false
+  fi
 }
 
 @test "the mutated config still parses after a comment containing braces" {
