@@ -700,12 +700,16 @@ if [ "$MODE" == "dev" ]; then
          OTEL_SERVICE_NAME="iqoqo-frontend" \
          OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}" \
          OTEL_TRACES_EXPORTER="${OTEL_TRACES_EXPORTER}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-rumST8CMTyDstlTbPUm}" \
+         NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_SITE="${OPENOBSERVE_RUM_SITE:-localhost:5080}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ENV="${OPENOBSERVE_RUM_ENV:-development}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID="${OPENOBSERVE_RUM_ORG_ID:-default}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-true}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION="${OPENOBSERVE_RUM_API_VERSION:-v1}" \
+    # NOTE: NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN is intentionally passed with no
+    # fallback value. A hardcoded default would silently send every deployment's
+    # browser telemetry to whichever OpenObserve org that token belonged to.
+    # Unset disables the RUM SDK cleanly (see browser-openobserve-rum.tsx).
          NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL="${OPENOBSERVE_RUM_PRIVACY_LEVEL:-allow}" \
          nohup npx next dev -p "${FRONTEND_PORT:-3000}" >> "$PID_DIR/next.log" 2>&1 & \
          echo $! > "$PID_DIR/next.pid"
