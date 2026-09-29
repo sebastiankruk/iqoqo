@@ -28,12 +28,21 @@ from werkzeug.utils import secure_filename
 import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
-from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
+from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.core.permissions import PermissionName
-from app.db.core import SemanticLink
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image, validate_upload_file
+from app.utils.pagination import (
+    CURSOR_START,
+    InvalidCursorError,
+    decode_manifestation_cursor,
+    encode_manifestation_cursor,
+)
+
+#: Upper bound on a single keyset page, so one request cannot ask the server
+#: to materialise an unbounded result set.
+MAX_CURSOR_PAGE_SIZE = 100
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +89,32 @@ def get_manifestations() -> tuple[Response, int]:
     if page < 1 or limit < 1:
         return jsonify({"success": False, "data": None, "error": "Invalid pagination parameters"}), 400
 
+    # ── Keyset (cursor) pagination ─────────────────────────────────────
+    # When a ``cursor`` is supplied the endpoint switches from offset to keyset
+    # pagination: ``WHERE id < :cursor_id ORDER BY id DESC LIMIT limit + 1``.
+    # This makes page depth irrelevant to query cost, at the price of dropping
+    # the total/page-count metadata, which would otherwise require a second
+    # full-table COUNT on every page.
+    cursor_param = request.args.get("cursor")
+    use_cursor = cursor_param is not None
+    if use_cursor:
+        # The FTS path is relevance-ranked, so a monotonic id bound is not a
+        # meaningful position within it.  Reject rather than silently ignore.
+        if q:
+            return (
+                jsonify({"success": False, "data": None, "error": "Cursor pagination cannot be combined with full-text search"}),
+                400,
+            )
+        try:
+            cursor_id = decode_manifestation_cursor(cursor_param)
+        except InvalidCursorError as e:
+            return jsonify({"success": False, "data": None, "error": f"Invalid cursor: {e}"}), 400
+        # Bound the page size so a single request cannot ask the server to
+        # materialise an unbounded result set.
+        limit = min(limit, MAX_CURSOR_PAGE_SIZE)
+    else:
+        cursor_id = None
+
     offset = (page - 1) * limit
 
     if q:
@@ -114,138 +149,47 @@ def get_manifestations() -> tuple[Response, int]:
             manifestations = [m_dict[m_id] for m_id in result_ids if m_id in m_dict]
         else:
             manifestations = []
+        # The relevance-ranked search path is always offset-paginated; a
+        # cursor was already rejected above when ``q`` is present.
+        next_cursor = None
+        has_more = bool(result_ids) and (offset + limit) < total
     else:
         query = (
             Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work)).join(Expression).join(Work)
         )
 
-        if category_list:
-            query = query.filter(Expression.content_type.in_(category_list))
-        if format_list:
-            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
-        if missing_cover:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                    db.or_(
-                        Manifestation.meta["catalog_number"].as_string().is_(None),
-                        Manifestation.meta["catalog_number"].as_string() == "",
-                    ),
-                )
-            )
-
-        # Apply taxonomy filters
-        has_item_joined = False
-        if ownership_list and user_id:
-            ownership_conditions = []
-            owned_exists = db.session.query(Item.id).filter(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id).exists()
-            if "owned" in ownership_list:
-                ownership_conditions.append(owned_exists)
-            if "not_owned" in ownership_list:
-                ownership_conditions.append(~owned_exists)
-            if ownership_conditions:
-                query = query.filter(db.or_(*ownership_conditions))
-        if tags_list:
-            if not has_item_joined:
-                query = query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            from app.db.models import ItemTag, Tag
-
-            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(f.strip()) for f in tags_list]
-            query = query.filter(db.or_(*tags_conditions))
-
-        if collections_list:
-            if not has_item_joined:
-                query = query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            from app.db.models import UserCollection, UserCollectionItem
-
-            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
-            query = query.filter(db.or_(*coll_conditions))
-            if user_id:
-                query = query.filter(UserCollection.owner_id == user_id)
-
-        if genres_list:
-            query = apply_genre_filter(query, genres_list)
-
-        if publishers_list:
-            pubs_conditions = []
-            for p in publishers_list:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            query = query.filter(db.or_(*pubs_conditions))
-
-        if statuses_list and user_id:
-            if not has_item_joined:
-                query = query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
-                has_item_joined = True
-            query = apply_statuses_filter(query, statuses_list, user_id=user_id)
-
-        if lod_authority:
-            manif_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "manifestation",
-                db.func.lower(SemanticLink.authority) == lod_authority,
-            )
-            work_auth_subq = db.select(SemanticLink.entity_id).where(
-                SemanticLink.entity_type == "work",
-                db.func.lower(SemanticLink.authority) == lod_authority,
-            )
-            query = query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_auth_subq),
-                    Expression.work_id.in_(work_auth_subq),
-                )
-            )
-
-        if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.or_(
-                    Manifestation.id.in_(manif_subq),
-                    Expression.work_id.in_(work_subq),
-                )
-            )
-        elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
-            query = query.filter(
-                db.and_(
-                    ~Manifestation.id.in_(manif_subq),
-                    ~Expression.work_id.in_(work_subq),
-                )
-            )
+        query = CatalogFilterBuilder(query, user_id=user_id).apply(
+            category=category_list,
+            fmt=format_list,
+            tags=tags_list,
+            collections=collections_list,
+            genres=genres_list,
+            publishers=publishers_list,
+            statuses=statuses_list,
+            ownership=ownership_list,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
+        )
 
         query = query.order_by(Manifestation.id.desc())
-        total = query.count()
-        manifestations = query.offset(offset).limit(limit).all()
+        if use_cursor:
+            # CURSOR_START is the sentinel for "no lower bound yet".
+            if cursor_id > CURSOR_START:
+                query = query.filter(Manifestation.id < cursor_id)
+            # Fetch one extra row to detect whether a further page exists
+            # without a COUNT query.
+            rows = query.limit(limit + 1).all()
+            has_more = len(rows) > limit
+            manifestations = rows[:limit]
+            next_cursor = encode_manifestation_cursor(manifestations[-1].id) if has_more and manifestations else None
+            total = None
+        else:
+            total = query.count()
+            manifestations = query.offset(offset).limit(limit).all()
+            next_cursor = None
+            has_more = False
 
     owned_manifestation_map = {}
     if user_id and manifestations:
@@ -299,12 +243,30 @@ def get_manifestations() -> tuple[Response, int]:
             }
         )
 
+    if use_cursor:
+        # Keyset mode: total/pages are intentionally omitted (they would
+        # require a full COUNT) and traversal state is carried by the cursor.
+        pagination_meta = {
+            "limit": limit,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+        }
+    else:
+        pagination_meta = {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if limit > 0 else 0,
+            "has_more": has_more,
+            "next_cursor": None,
+        }
+
     return (
         jsonify(
             {
                 "success": True,
                 "data": data,
-                "meta": {"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) // limit if limit > 0 else 0},
+                "meta": pagination_meta,
                 "error": None,
             }
         ),
@@ -451,6 +413,19 @@ def get_recent_manifestations() -> tuple[Response, int]:
 
 @api_bp.route("/isbn/<isbn>", methods=["GET"])
 def lookup_isbn(isbn: str) -> tuple[Response, int]:
+    """Read-only ISBN metadata lookup (RFC 9110 safe/idempotent).
+
+    Returns local metadata for a catalogued ISBN, otherwise fetches and returns
+    external provider metadata.  This handler performs **no** database writes
+    and dispatches **no** background tasks: creating the Work/Expression/
+    Manifestation hierarchy and scheduling cover processing is the
+    responsibility of the explicit POST endpoints (``POST /item/<isbn>``,
+    ``POST /api/isbn/<isbn>``).
+
+    Previously this GET persisted new FRBR entities and enqueued cover and LOD
+    jobs, which meant any crawler or prefetch traffic mutated the catalog and
+    could be used to exhaust worker capacity.
+    """
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if manifestation and manifestation.meta and manifestation.meta.get("Title"):
         return jsonify(**manifestation.meta), 200
@@ -462,11 +437,8 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
             "Authors": work.meta.get("authors", []) if work.meta else [],
         }
         if work_metadata["Title"]:
-            manifestation.update_meta(**work_metadata)
-            try:
-                db.session.commit()
-            except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
-                db.session.rollback()
+            # Read straight from the FRBR hierarchy; do not persist the
+            # derived metadata back onto the manifestation.
             return jsonify(**work_metadata), 200
 
     canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
@@ -482,37 +454,37 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
     if not metadata:
         return jsonify({"success": False, "data": None, "error": "Metadata not found"}), 404
 
-    if not manifestation:
-        from app.core.ingest import _extract_genres
+    # A locally-catalogued manifestation gets its work-level fields refreshed
+    # in the response payload only; the database is left untouched.
+    if manifestation and manifestation.expression and manifestation.expression.work:
+        work = manifestation.expression.work
+        if not work.title:
+            metadata = {**metadata, "Title": work.title or metadata.get("Title", "")}
+        if not work.meta or not work.meta.get("authors"):
+            metadata = {**metadata, "Authors": work.meta.get("authors", metadata.get("Authors", []))}
 
-        work_genres = _extract_genres(metadata)
-        work_meta: dict[str, object] = {"authors": metadata.get("Authors", [])}
-        if work_genres:
-            work_meta["genres"] = work_genres
-        work = Work(title=metadata["Title"], meta=work_meta)
-        db.session.add(work)
-        db.session.flush()
+    return jsonify(**metadata), 200
 
-        expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
-        db.session.add(expression)
-        db.session.flush()
 
-        manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
-        db.session.add(manifestation)
-        db.session.commit()
+def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) -> Manifestation:
+    """Create/persist the FRBR hierarchy for a looked-up ISBN.
 
-        found_cover = process_fast_cover(manifestation, canonical_isbn)
-        if not found_cover:
-            manifestation.update_meta(cover_status="pending")
-            title = work.title or "Unknown"
-            author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
-            user_id = getattr(g, "user_id", None)
-            user_id_str = str(user_id) if user_id else "anonymous"
-            user = db.session.get(User, user_id) if user_id else None
-            llm_permissions = User.list_llm_permissions(user)
-            start_cover_processing(manifestation.id, canonical_isbn, title, author, user_id_str, llm_permissions=llm_permissions)
-        db.session.commit()
-    else:
+    Explicit ingestion counterpart to the read-only :func:`lookup_isbn`.
+    Performs the database writes (Work -> Expression -> Manifestation) and
+    schedules cover processing that a GET must never do.
+
+    Parameters
+    ----------
+    canonical_isbn:
+        Normalized ISBN-13 to catalog under.
+    metadata:
+        Provider metadata dict; must contain a ``Title`` key.
+
+    Returns:
+        The existing or newly created :class:`Manifestation`.
+    """
+    manifestation = Manifestation.query.filter_by(isbn13=canonical_isbn).first()
+    if manifestation:
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
             manifestation.expression.work.title = metadata["Title"]
@@ -520,6 +492,38 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
                 manifestation.expression.work.meta = {}
             manifestation.expression.work.meta["authors"] = metadata["Authors"]
         db.session.commit()
+        return manifestation
+
+    from app.core.ingest import _extract_genres
+
+    work_genres = _extract_genres(metadata)
+    work_meta: dict[str, object] = {"authors": metadata.get("Authors", [])}
+    if work_genres:
+        work_meta["genres"] = work_genres
+
+    work = Work(title=metadata["Title"], meta=work_meta)
+    db.session.add(work)
+    db.session.flush()
+
+    expression = Expression(work_id=work.id, content_type="text", language="en", meta={})
+    db.session.add(expression)
+    db.session.flush()
+
+    manifestation = Manifestation(expression_id=expression.id, isbn13=canonical_isbn, meta=metadata)
+    db.session.add(manifestation)
+    db.session.commit()
+
+    found_cover = process_fast_cover(manifestation, canonical_isbn)
+    if not found_cover:
+        manifestation.update_meta(cover_status="pending")
+        title = work.title or "Unknown"
+        author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
+        user_id = getattr(g, "user_id", None)
+        user_id_str = str(user_id) if user_id else "anonymous"
+        user = db.session.get(User, user_id) if user_id else None
+        llm_permissions = User.list_llm_permissions(user)
+        start_cover_processing(manifestation.id, canonical_isbn, title, author, user_id_str, llm_permissions=llm_permissions)
+    db.session.commit()
 
     try:
         from app.core.tasks import link_manifestation_lod_task
@@ -528,7 +532,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
     except Exception as exc:  # pylint: disable=broad-except
         logger.debug("Failed to dispatch LOD task: %s", exc)
 
-    return jsonify(**metadata), 200
+    return manifestation
 
 
 @api_bp.route("/isbn/<isbn>", methods=["POST"])
