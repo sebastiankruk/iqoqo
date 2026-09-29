@@ -326,7 +326,14 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client, normal
     mock_fetch.return_value = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
-    response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
+    # Cover resolution performs live HTTP downloads; stub it so the test
+    # stays hermetic and does not depend on provider availability.
+    with (
+        patch("app.api.manifestations.process_fast_cover", return_value=True),
+        patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+        patch("app.core.tasks.link_manifestation_lod_task"),
+    ):
+        response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
 
     # Verify manifestation and item were created

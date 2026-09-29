@@ -262,7 +262,12 @@ def test_post_requires_authentication(client, app):
 
 
 def test_lookup_then_catalog_flow(client, app, isbn_user):
-    """The documented flow: GET for metadata, POST to persist."""
+    """The documented flow: GET for metadata, POST to persist.
+
+    The provider is mocked for every step. An unmocked fetch here would make
+    the suite depend on live Google Books / Open Library availability, which is
+    unavailable in CI and makes the test fail intermittently.
+    """
     isbn = "9780441478125"
 
     # 1. Read-only lookup returns provider metadata and creates nothing.
@@ -275,7 +280,10 @@ def test_lookup_then_catalog_flow(client, app, isbn_user):
         assert _row_counts()["manifestations"] == 0
 
     # 2. The cataloging POST uses that ISBN to create the full hierarchy.
-    with patch("app.api.manifestations.process_fast_cover", return_value=True):
+    with (
+        patch("app.utils.isbn.fetch_isbn_metadata", return_value=PROVIDER_METADATA),
+        patch("app.api.manifestations.process_fast_cover", return_value=True),
+    ):
         created = client.post(f"/api/item/{isbn}", json={}, headers=isbn_user["headers"])
     assert created.status_code == 200
 

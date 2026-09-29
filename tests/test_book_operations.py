@@ -231,34 +231,16 @@ class TestISBNScanning:
             assert Work.query.filter_by(title="Pride and Prejudice").first() is None
 
     @patch("app.utils.isbn.fetch_isbn_metadata")
-    def test_scan_creates_frbr_hierarchy_via_post(self, mock_fetch, client):
+    def test_scan_creates_frbr_hierarchy_via_post(self, mock_fetch, client, normal_user_headers):
         """The explicit POST endpoint does create the full FRBR hierarchy."""
-        from app.db.models import Permission, Role
-
         mock_fetch.return_value = {"Title": "Pride and Prejudice", "Authors": ["Jane Austen"]}
 
-        with client.application.app_context():
-            user = User(email="frbr_builder@example.com", display_name="FRBR Builder")
-            user.set_password("Pass123!")
-            db.session.add(user)
-            db.session.flush()
-            role = Role(name="frbr_builder_role")
-            perm = Permission.query.filter_by(name="write:item").first()
-            if not perm:
-                perm = Permission(name="write:item")
-                db.session.add(perm)
-                db.session.flush()
-            role.permissions.append(perm)
-            user.roles.append(role)
-            db.session.add(role)
-            db.session.commit()
-
-            from app.api.auth import generate_internal_jwt
-
-            headers = {"Authorization": f"Bearer {generate_internal_jwt(user)}"}
-
-        with patch("app.api.manifestations.process_fast_cover", return_value=True):
-            response = client.post("/api/item/9780141439518", json={}, headers=headers)
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            response = client.post("/api/item/9780141439518", json={}, headers=normal_user_headers)
         assert response.status_code == 200
 
         with client.application.app_context():
@@ -314,7 +296,14 @@ class TestAddingBooks:
 
     def test_add_item_creates_manifestation_if_not_exists(self, client, normal_user_headers):
         """Test adding item creates manifestation structure if ISBN doesn't exist."""
-        with patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch:
+        with (
+            patch("app.utils.isbn.fetch_isbn_metadata") as mock_fetch,
+            # Cover resolution performs live HTTP downloads; stub it so the
+            # test stays hermetic.
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
             mock_fetch.return_value = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
 
             metadata = {"Title": "The Catcher in the Rye", "Authors": ["J.D. Salinger"]}
@@ -658,15 +647,22 @@ class TestBookOperationsIntegration:
         """Test complete workflow: scan new book, add item, then update metadata."""
         mock_fetch.return_value = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
 
-        # Step 1: Scan new ISBN (creates FRBR structure)
-        scan_response = client.get("/api/isbn/9780547928227")
-        assert scan_response.status_code == 200
-        assert scan_response.json["Title"] == "The Hobbit"
+        # Cover resolution performs live HTTP downloads; stub it so the
+        # test stays hermetic.
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            # Step 1: Scan new ISBN (returns metadata; GET is read-only)
+            scan_response = client.get("/api/isbn/9780547928227")
+            assert scan_response.status_code == 200
+            assert scan_response.json["Title"] == "The Hobbit"
 
-        # Step 2: Add an item
-        add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
-        assert add_response.status_code == 200
-        item_id = add_response.json["data"]["item_id"]
+            # Step 2: Add an item (POST performs the explicit ingestion)
+            add_response = client.post("/api/item/9780547928227", json={}, headers=normal_user_headers, content_type="application/json")
+            assert add_response.status_code == 200
+            item_id = add_response.json["data"]["item_id"]
 
         # Step 3: Update metadata
         update_data = {"Title": "The Hobbit: Annotated Edition", "Authors": ["J.R.R. Tolkien"]}
@@ -731,9 +727,20 @@ class TestBookOperationsIntegration:
         """Test that FRBR structure maintains referential integrity."""
         mock_fetch.return_value = {"Title": "Animal Farm", "Authors": ["George Orwell"]}
 
-        # Create structure through API
-        client.get("/api/isbn/9780141182605")
-        client.post("/api/item/9780141182605", json={}, headers=normal_user_headers, content_type="application/json")
+        # Create structure through the API. Cover resolution performs live
+        # HTTP downloads, so stub it to keep the test hermetic.
+        with (
+            patch("app.api.manifestations.process_fast_cover", return_value=True),
+            patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+            patch("app.core.tasks.link_manifestation_lod_task"),
+        ):
+            # GET is read-only and returns metadata without persisting it.
+            scan = client.get("/api/isbn/9780141182605")
+            assert scan.status_code == 200
+
+            # The explicit POST performs ingestion and builds the FRBR chain.
+            created = client.post("/api/item/9780141182605", json={}, headers=normal_user_headers, content_type="application/json")
+            assert created.status_code == 200
 
         # Verify complete chain
         with client.application.app_context():
