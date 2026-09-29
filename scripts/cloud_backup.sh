@@ -17,6 +17,14 @@
 
 set -euo pipefail
 
+# MOD-OPS-11: backups contain a full pg_dumpall of the instance database, which
+# includes user rows, password hashes and API tokens. Restrict every file this
+# script creates (dump, per-asset tarballs, final archive) to owner-only
+# access before anything touches the filesystem. umask applies to files created
+# later via open()/creat(), and is not affected by a later chmod on the parent
+# directory, so it must be set here at initialisation.
+umask 077
+
 if [ -f "$(dirname "$0")/../.env" ]; then
     set -a
     # shellcheck disable=SC1091

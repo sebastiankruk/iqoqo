@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell
 
 SHELL := /bin/bash
 
@@ -110,6 +110,7 @@ help:
 	@echo "  lint-all       - Run canonical lint plus stricter local-only checks"
 	@echo "  lint-python    - Run Python linters (ruff, mypy, pylint)"
 	@echo "  lint-format    - Check Python code formatting (black)"
+	@echo "  lint-shell     - Check shell scripts (shellcheck; needed locally, it is skipped in tests without it)"
 	@echo "  lint-js        - Run legacy JavaScript linter (eslint)"
 	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
 	@echo "  lint-css       - Run CSS linter (stylelint)"
@@ -219,109 +220,28 @@ endif
 mykg-scope: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 
+# MOD-OPS-04: the sandbox lifecycle and agent-daemon wiring used to live inline
+# in these two recipes -- ~45 lines of backslash-continued shell each, duplicated
+# between the targets. A single missing continuation silently split a command in
+# two, and nothing could be shellchecked or unit-tested. Both targets now delegate
+# to scripts/mykg_sync.sh, which owns the cleanup trap and agent selection.
 mykg-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
-		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
-		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
-		print(str(sessions[0])) if sessions else sys.exit(0)"); \
-	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-	if [ -n "$$AI_BIN" ]; then \
-		docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-			-v "$$AI_BIN:$$AI_MOUNT" \
-			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e AI_AGENT="$(AI_AGENT)" \
-			"$$AI_CONTAINER" \
-			python3 "$$AI_SCRIPT" \
-			--workers 1 \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
-	fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh update $(if $(ARGS),$(ARGS),)
 
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "mykg_sessions"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-		if [ -n "$$AI_BIN" ]; then \
-			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-				-v "$$AI_BIN:$$AI_MOUNT" \
-				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e AI_AGENT="$(AI_AGENT)" \
-				"$$AI_CONTAINER" \
-				python3 "$$AI_SCRIPT" \
-				--workers 1 \
-				"mykg_sessions" \
-				"mykg_sessions" >/dev/null 2>&1 || true; \
-		fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh index $(if $(ARGS),$(ARGS),)
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
@@ -539,6 +459,30 @@ lint-format: .venv/bin/activate
 	$(AI_ECHO) "Checking Python formatting..."
 	.venv/bin/black --check app/ tests/ scripts/
 	.venv/bin/isort --check-only app/ tests/ scripts/
+
+# shellcheck is a system package, so it is absent from the Docker image and
+# from most dev machines. `pytest tests/test_linting.py` skips its gate when
+# it is missing, which means a shell regression can pass locally and only fail
+# in CI. Run this target before pushing to catch that locally instead.
+# CI installs a pinned 0.10.0 and fails the suite outright if it is missing.
+lint-shell:
+	@command -v shellcheck >/dev/null 2>&1 || { \
+		echo "shellcheck is not installed. Install it with:"; \
+		echo "  Debian/Ubuntu: sudo apt-get install shellcheck"; \
+		echo "  macOS:         brew install shellcheck"; \
+		echo "Without it, tests/test_linting.py SKIPS the shell gate and shell"; \
+		echo "regressions will surface only in CI."; \
+		exit 1; \
+	}
+	@status=0; \
+	for f in $$(find scripts -name '*.sh') $$(ls *.sh 2>/dev/null); do \
+		shellcheck "$$f" || status=1; \
+	done; \
+	if [ $$status -ne 0 ]; then \
+		echo "shellcheck reported violations (see above)."; \
+		exit 1; \
+	fi; \
+	echo "shellcheck: all shell scripts clean."
 
 lint-js:
 	$(AI_ECHO) "Running eslint..."

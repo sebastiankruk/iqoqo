@@ -92,7 +92,12 @@ else
 fi
 
 # 4. Disk space
-AVAIL=$(df "$(dirname "$0")/.." | awk 'NR==2 {print $4}')
+# MOD-OPS-14: use `df -P` (POSIX output format). Without it, GNU df wraps long
+# device names onto a second line, which shifts every subsequent field by one
+# and makes `awk 'NR==2 {print $4}'` read the wrong column — silently reporting
+# a wrong free-space figure instead of failing. -P guarantees exactly one line
+# of output per filesystem with stable field positions.
+AVAIL=$(df -P "$(dirname "$0")/.." | awk 'NR==2 {print $4}')
 if [ "${AVAIL}" -gt 1048576 ]; then
   check ok "Disk: $((AVAIL / 1024)) MB available"
 else

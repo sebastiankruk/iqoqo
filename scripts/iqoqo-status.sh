@@ -287,8 +287,15 @@ otel_cname=$(find_container "otel-collector")
 
 if [[ -n "$oo_cname" ]]; then
     oo_status=$(docker ps --filter "name=${oo_cname}$" --format '{{.Status}}' 2>/dev/null)
-    oo_host_port="${OPENOBSERVE_HOST_PORT:-5080}"
+    oo_host_port="${OPENOBSERVE_HOST_PORT:-$(load_env "OPENOBSERVE_HOST_PORT")}"
+    oo_host_port="${oo_host_port:-5080}"
+    # MOD-OPS-10: never hardcode an OpenObserve credential. Resolution order is
+    # process environment -> stack env file -> encrypted InstanceSettings in the
+    # database. The value is never echoed; only its presence is reported.
     oo_auth="${OPENOBSERVE_BASIC_AUTH:-}"
+    if [[ -z "$oo_auth" ]]; then
+        oo_auth=$(load_env "OPENOBSERVE_BASIC_AUTH")
+    fi
     if [[ -z "$oo_auth" ]]; then
         oo_auth=$(python3 -c "
 try:

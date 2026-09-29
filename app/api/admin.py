@@ -32,7 +32,7 @@ from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
 from app.core.limiter import limiter
-from app.core.permissions import PermissionName
+from app.core.permissions import PROTECTED_ROLE_NAMES, PermissionName
 from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
 from app.db.core import (
@@ -174,7 +174,6 @@ def get_roles():
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
     roles = db.session.execute(db.select(Role).options(selectinload(Role.permissions))).scalars().all()
-    protected_roles = {"admin", "user", "contributor"}
     return jsonify(
         {
             "success": True,
@@ -182,7 +181,7 @@ def get_roles():
                 {
                     "id": r.id,
                     "name": r.name,
-                    "is_protected": r.name.lower() in protected_roles,
+                    "is_protected": r.name.lower() in PROTECTED_ROLE_NAMES,
                     "member_count": db.session.execute(db.select(db.func.count()).select_from(user_roles).filter_by(role_id=r.id)).scalar()
                     or 0,  # pylint: disable=not-callable
                     "permission_count": len(r.permissions),
@@ -204,8 +203,7 @@ def delete_role(role_id):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
     role = db.get_or_404(Role, role_id)
-    protected_roles = {"admin", "user", "contributor"}
-    if role.name.lower() in protected_roles:
+    if role.name.lower() in PROTECTED_ROLE_NAMES:
         return jsonify({"success": False, "error": "Cannot delete protected role"}), 400
     db.session.delete(role)
     db.session.commit()

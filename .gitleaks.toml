@@ -15,15 +15,41 @@ tags = ["monitoring", "openobserve", "credentials"]
 [[rules]]
 id = "iqoqo-openobserve-hardcoded-password"
 description = "Hardcoded legacy OpenObserve fallback password"
-regex = '''(?i)(?:SuperSecret!123|supersecret)'''
+# Matches ONLY the exact legacy default that was removed in v0.8.1 (#309).
+#
+# This rule previously read `(?i)(?:SuperSecret!123|supersecret)`. The bare
+# `supersecret` alternative matched any case-variant of that word anywhere in
+# the repository — prose in docs/MONITORING.md, the `ghp_superSecretToken12345`
+# fixture in tests/test_models.py, and the `supersecretpassword` fixture in the
+# redaction test. It accounted for 54% of all findings (60 of 111 across
+# history) while being capable of detecting nothing real, because the actual
+# password it was written to catch no longer exists in the codebase.
+#
+# A rule that cries wolf on 60 findings trains reviewers to ignore the scanner
+# and to suppress whatever it next reports — including a genuine leak. Matching
+# the exact literal keeps the regression guard intact: if anyone reintroduces
+# the removed default password, this still fires.
+regex = '''SuperSecret!123'''
 tags = ["monitoring", "openobserve", "credentials"]
 
-[allowlist]
+[[allowlists]]
 description = "Global allowlist for build artifacts, dependencies, changelogs, and specs"
 paths = [
     '''(^|/)\.venv/''',
     '''(^|/)node_modules/''',
     '''(^|/)\.next/''',
+    # E2E build output lives in sibling `.next-e2e*` directories, which the
+    # `\.next/` pattern above does not match. These are compiled bundles
+    # containing minified third-party code and were responsible for ~35
+    # findings on their own.
+    '''(^|/)\.next-e2e[^/]*/''',
+    # Compiled bytecode. .pyc files embed string constants from the source
+    # they were compiled from, so any finding in a .py is duplicated here.
+    '''(^|/)__pycache__/''',
+    '''\.pyc$''',
+    '''(^|/)\.mypy_cache/''',
+    '''(^|/)\.pytest_cache/''',
+    '''(^|/)\.ruff_cache/''',
     '''(^|/)graphify-out/''',
     '''(^|/)mykg_sessions/''',
     '''(^|/)\.mempalace/''',
@@ -31,3 +57,26 @@ paths = [
     '''\.gitleaks\.toml''',
     '''openspec/.*''',
 ]
+
+# Local, git-ignored environment files.
+#
+# These are never committed, so they contribute nothing to a history scan, but a
+# `gitleaks dir` run on a developer machine or a self-hosted runner WILL find
+# them — and, absent this entry, it prints the real values to the terminal and
+# into CI logs. The rule is the opposite of what we want: it would copy live
+# credentials out of the untracked file and into a build log.
+[[allowlists]]
+description = "Untracked local env files — never committed, and must not be echoed into logs"
+paths = [
+    '''(^|/)\.env$''',
+    '''(^|/)\.env\.dev$''',
+    '''(^|/)\.env\.preview$''',
+    '''(^|/)\.env\.prod$''',
+    '''(^|/)\.env\.mykg$''',
+]
+
+# NOTE: there is deliberately no allowlist entry for the secret-shaped fixtures
+# in tests/bash/sync_agy_memory.bats. They are assembled at runtime from
+# string fragments, so no committed line contains a complete credential and no
+# rule can match one. That is stronger than any allowlist, because it also
+# means a genuine key pasted into that file is still reported.

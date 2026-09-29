@@ -93,6 +93,18 @@ echo "🚀 iqoqo Management: Entering mode '$MODE'..."
 cd "$(dirname "$0")" || exit 1
 
 # Helper function to update or append environment variables in env files
+#
+# MOD-OPS-03: this function rewrites SECRET_KEY, JWT_SECRET_KEY and AUTH_SECRET
+# during automatic key rotation. It edits in place via `grep -v > tmp && mv`,
+# so an interrupted run (Ctrl-C, OOM kill, full disk) destroys the only copy of
+# the current secrets — and those secrets are also the key material for the
+# Fernet-encrypted values in InstanceSettings, so a loss is a full instance
+# lockout requiring `make migrate-secrets`-style manual recovery. A timestamped
+# snapshot is taken before every mutation so the prior state is always
+# recoverable.
+#
+# The backup is created before the file is touched, and only when the file
+# already exists and is non-empty (a fresh `touch` has nothing to lose).
 update_env_var() {
     local file="$1"
     local key="$2"
@@ -100,9 +112,50 @@ update_env_var() {
     if [ ! -f "$file" ]; then
         touch "$file"
     fi
-    # Delete existing entry if present, to avoid duplicates
+
+    # Snapshot before any mutation. Overwrite a same-second backup rather than
+    # clobbering it with a partially rewritten file.
+    if [ -s "$file" ]; then
+        # Declared and assigned separately (SC2155): with a single `local x=$(...)`
+        # the exit status of the command substitution is masked, so a failing
+        # `date` would look like success and yield a ".bak." name with no timestamp.
+        local backup
+        backup="${file}.bak.$(date +%Y%m%d_%H%M%S)"
+        if cp -p "$file" "$backup" 2>/dev/null; then
+            # Backups hold the same secrets as the source; match its mode
+            # (0600 in production, 0644 in dev) and never widen it.
+            chmod --reference="$file" "$backup" 2>/dev/null || chmod 0600 "$backup" 2>/dev/null || true
+        else
+            # run.sh does not run under `set -e`, so returning 1 here would be
+            # ignored by the callers: the script would carry on and export a
+            # freshly rotated key that never reached the file, leaving the
+            # running process unable to decrypt the Fernet-encrypted values in
+            # InstanceSettings. Abort instead.
+            echo "❌ Could not create ${backup} before updating ${key}." >&2
+            echo "   Refusing to rotate secrets without a recoverable snapshot of ${file}." >&2
+            echo "   Check free space and write permissions on $(dirname "$file"), then re-run." >&2
+            exit 1
+        fi
+    fi
+
+    # Delete existing entry if present, to avoid duplicates.
+    # `grep -v` exits 1 when it selects no lines at all, which is the normal
+    # result when the key being updated was the only entry in the file. Under
+    # `set -e` that non-zero status aborts the caller, so the rewrite is
+    # guarded explicitly rather than relying on grep's exit status.
     if grep -q "^${key}=" "$file"; then
-        grep -v "^${key}=" "$file" > "${file}.tmp"
+        # `mv` replaces the inode, so the rewritten file takes the mode of the
+        # freshly created temp file (0644 under the default umask) instead of
+        # the original. For a production .env that means a 0600 file silently
+        # becomes world-readable after every key rotation, exposing SECRET_KEY
+        # to every local user. Restore the original mode after the swap, and
+        # tighten rather than widen if the source was already restrictive.
+        local orig_mode
+        orig_mode=$(stat -c '%a' "$file" 2>/dev/null || echo "")
+        grep -v "^${key}=" "$file" > "${file}.tmp" || true
+        if [ -n "$orig_mode" ]; then
+            chmod "$orig_mode" "${file}.tmp" 2>/dev/null || true
+        fi
         mv "${file}.tmp" "$file"
     fi
     echo "${key}=\"${val}\"" >> "$file"
@@ -322,8 +375,21 @@ terminate_from_pidfile() {
     # First try graceful shutdown (SIGTERM).
     kill "${pid}" 2>/dev/null || true
 
-    # Wait up to 5 seconds for the process to exit.
-    for _ in 1 2 3 4 5; do
+    # MOD-OPS-02: wait up to 15 seconds before escalating to SIGKILL.
+    #
+    # The previous 5 s budget was too short for a real shutdown. Gunicorn drains
+    # in-flight requests, and a Flask worker finishing a long SPARQL export or a
+    # cover-generation batch routinely needs longer than that. SIGKILL after 5 s
+    # aborted those requests mid-write, which showed up as truncated
+    # `/data/backups` archives and half-committed Postgres transactions. Longer
+    # than necessary is merely slower; too short corrupts data.
+    #
+    # Overridable via IQOQO_GRACEFUL_SHUTDOWN_SECONDS for slow-storage hosts.
+    local grace="${IQOQO_GRACEFUL_SHUTDOWN_SECONDS:-15}"
+    case "$grace" in
+        ''|*[!0-9]*) grace=15 ;;
+    esac
+    for ((i = 0; i < grace; i++)); do
         if ! kill -0 "${pid}" 2>/dev/null; then
             break
         fi
@@ -626,6 +692,10 @@ if [ "$MODE" == "dev" ]; then
     echo $! > "$PID_DIR/celery.pid"
 
     # Start Next.js
+    # NOTE: NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN is intentionally passed with no
+    # fallback value. A hardcoded default would silently send every deployment's
+    # browser telemetry to whichever OpenObserve org that token belonged to.
+    # Unset disables the RUM SDK cleanly (see browser-openobserve-rum.tsx).
     if [ -d "frontend" ]; then
         (cd frontend && \
          NEXT_PUBLIC_API_URL="/api" \
@@ -638,7 +708,7 @@ if [ "$MODE" == "dev" ]; then
          OTEL_SERVICE_NAME="iqoqo-frontend" \
          OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}" \
          OTEL_TRACES_EXPORTER="${OTEL_TRACES_EXPORTER}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-rumST8CMTyDstlTbPUm}" \
+         NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_SITE="${OPENOBSERVE_RUM_SITE:-localhost:5080}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ENV="${OPENOBSERVE_RUM_ENV:-development}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID="${OPENOBSERVE_RUM_ORG_ID:-default}" \
