@@ -601,3 +601,80 @@ print('FAIL_CLOSED_OK')
   run grep -F 'skipping queue drain' "$sync_script"
   [ "$status" -eq 0 ]
 }
+
+@test "opencode invocation uses standalone mode" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # Without --standalone, `opencode run` connects to the long-lived background
+  # service. In the container the equivalent private server deadlocks
+  # intermittently after its database bootstrap.
+  run grep -F '"--standalone"' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  run grep -F '"--standalone"' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'probe_model.py' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe captures diagnostics before the container is removed" {
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+
+  # An intermittent hang leaves no evidence once `compose run --rm` has
+  # removed the container, so the probe must dump state from inside.
+  run grep -F 'subprocess.TimeoutExpired' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'dump_diagnostics' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F '/proc' "$probe_model"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe waits for proxy health instead of a fixed sleep" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # The probe runs the agent with --no-deps, which bypasses compose's
+  # depends_on/service_healthy gate. A fixed sleep therefore let opencode start
+  # against a cold proxy and hang reaching the model catalogue. mykg_sync.sh is
+  # not affected: it starts the daemon without --no-deps.
+  run grep -F 'wait_for_proxy' "$probe"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'State.Health.Status' "$probe"
+  [ "$status" -eq 0 ]
+
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'sleep 4'"
+  [ "$status" -ne 0 ]
+}
+
+@test "probe surfaces hang diagnostics instead of one line" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # Collapsing output to `tail -1` discarded the very evidence the hang dump
+  # exists to produce.
+  run grep -F 'hang diagnostics' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe avoids the inherited-pipe hang" {
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+
+  # `opencode run` spawns `serve --stdio`. If that server lingers after the
+  # client exits, it keeps the inherited stdout/stderr pipe write end open, and
+  # subprocess.run(capture_output=True) blocks forever waiting for EOF on a pipe
+  # whose writer is an orphaned process -- an indefinite hang with no live
+  # child to explain it. Temp files sidestep it; the daemon already does this.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe_model' | grep -F 'capture_output=True'"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'TemporaryFile' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'subprocess.DEVNULL' "$probe_model"
+  [ "$status" -eq 0 ]
+}

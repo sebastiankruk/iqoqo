@@ -407,6 +407,10 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
         assert "--pure" not in args
         assert "--variant" not in args
 
+        # Standalone avoids the background `serve --service` process, which
+        # intermittently spins at 100% CPU and never becomes ready.
+        assert "--standalone" in args
+
         # Verify output files
         done_file = outbox / f"{task_id}.done"
         answer_file = outbox / f"{task_id}.answer.json"
@@ -840,7 +844,11 @@ def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_pat
         assert success is True
         mock_run.assert_called_once()
         timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
-        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+        # The task timeout is capped: an invocation that never returns must not
+        # park a worker for the full task timeout.
+        assert timeout_kwarg == opencode_daemon_module.MAX_CLI_TIMEOUT, (
+            f"Expected capped timeout={opencode_daemon_module.MAX_CLI_TIMEOUT}, got {timeout_kwarg}"
+        )
 
 
 def test_daemon_core_guardrail_not_empty(daemon_core_module):
@@ -1309,3 +1317,29 @@ def test_opencode_passes_env_to_subprocess(opencode_daemon_module, tmp_path):
     kwargs = mock_run.call_args[1]
     assert "env" in kwargs
     assert isinstance(kwargs["env"], dict)
+
+
+def test_opencode_never_spawns_a_background_server(opencode_daemon_module, tmp_path):
+    """The invocation must not depend on a background `serve --service`.
+
+    `opencode run` without `--standalone` spawns `opencode serve --service` and
+    waits for it to become ready. That server intermittently spins at 100% CPU
+    without ever becoming ready, leaving the client blocked until the task
+    timeout -- and with a single worker that stalled the entire queue. The
+    daemon must therefore always pass `--standalone`.
+    """
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_no_server"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "", 0)) as mock_run:
+        assert opencode_daemon_module.process_task(task_file, outbox) is True
+
+    args = mock_run.call_args[0][0]
+    assert "--standalone" in args
+    assert "serve" not in " ".join(args)

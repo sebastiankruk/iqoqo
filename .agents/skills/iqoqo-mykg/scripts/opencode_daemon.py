@@ -133,6 +133,10 @@ def is_variant_unavailable(stderr_data: str) -> bool:
 # in the Makefile.
 DEFAULT_MODEL = "opencode-go/space-bunny-free"
 
+# Wall-clock ceiling for a single `opencode run` invocation, in seconds. See the
+# comment at the call site for why this is far below the task's own timeout.
+MAX_CLI_TIMEOUT = int(os.environ.get("MYKG_MAX_CLI_TIMEOUT", "300"))
+
 AUTH_SECRET_PATH = Path("/run/secrets/opencode-auth.json")
 
 # Provider id -> environment variable holding its API key. Taken from the
@@ -356,6 +360,20 @@ def _execute_task(
         len(combined_prompt),
     )
 
+    # Cap the wall-clock wait for a single CLI invocation.
+    #
+    # compute_effective_timeout() returns a floor of 600s and honours the task's
+    # timeout_seconds (1800s in practice), so an invocation that never returns
+    # parks a worker for up to half an hour. The CLI hangs intermittently -- the
+    # server finishes its database bootstrap and then goes idle with the client
+    # still waiting, having made no network attempt -- and with a single worker
+    # that stalls the entire queue.
+    #
+    # A 118KB prompt completes in ~13s, so a few minutes is generous headroom for
+    # a slow model. Anything longer than that is treated as a hang: the attempt
+    # fails, the retry budget applies, and other workers keep working.
+    effective_timeout = min(effective_timeout, MAX_CLI_TIMEOUT)
+
     print(f"[opencode_daemon] Using timeout: {effective_timeout}s for task {task_id[:12]}", flush=True)
 
     # opencode v2 removed `--pure` and `--variant` from `opencode run`; passing
@@ -370,7 +388,14 @@ def _execute_task(
     stderr_data = ""
 
     for index, variant in enumerate(candidates):
-        cmd = ["opencode", "run", "--auto", "-m", build_model_spec(effective_model, variant)]
+        # `--standalone` runs a private server in-process instead of spawning
+        # `opencode serve --service` and waiting for it to become ready. That
+        # background server intermittently spins at 100% CPU without ever
+        # becoming ready, which left `opencode run` blocked until the task
+        # timeout -- and with a single worker that stalled the whole queue.
+        # Standalone mode has no such process, so the failure mode is gone
+        # rather than merely bounded.
+        cmd = ["opencode", "run", "--standalone", "--auto", "-m", build_model_spec(effective_model, variant)]
         cmd.append(combined_prompt)
 
         returncode, stdout_data, stderr_data = _run_opencode(cmd, effective_timeout, effective_model)

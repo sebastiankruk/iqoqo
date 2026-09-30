@@ -50,6 +50,7 @@ COMPOSE_FILE="docker-compose.ai_sandbox.yml"
 SERVICE="mykg-opencode-daemon"
 VARIANT="${PROBE_VARIANT:-low}"
 PROMPT="${PROBE_PROMPT:-reply with the single word OK}"
+PROBE_TIMEOUT="${PROBE_TIMEOUT:-120}"
 
 # Models are passed as provider/model; the variant is appended as the v2
 # '#suffix'. Keep the defaults in the provider namespace that auth.json
@@ -119,13 +120,39 @@ echo
 # Track whether the proxy was already up, so cleanup leaves a proxy it did not
 # start alone. Never run `docker compose down` here.
 STARTED_PROXY=0
-if docker ps --format '{{.Names}}' | grep -q 'egress-proxy'; then
-  :
-else
+if ! docker ps --format '{{.Names}}' | grep -q 'egress-proxy'; then
   docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
   STARTED_PROXY=1
 fi
-sleep 4
+
+# Wait for the proxy to be genuinely healthy. This probe runs the agent with
+# --no-deps, which bypasses compose's depends_on/service_healthy gate, so the
+# readiness check has to be done here. A fixed sleep was the bug: a cold proxy
+# can take longer than that to accept connections, and opencode then hangs
+# trying to reach the model catalogue. mykg_sync.sh does not have this problem
+# because it starts the daemon without --no-deps and compose waits for it.
+wait_for_proxy() {
+  local tries=0 cid status
+  while [ "$tries" -lt 60 ]; do
+    cid="$(docker ps -q --filter name=egress-proxy 2>/dev/null | head -1)"
+    if [ -n "$cid" ]; then
+      status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null)"
+      case "$status" in
+        healthy|running) return 0 ;;
+      esac
+    fi
+    sleep 1
+    tries=$((tries + 1))
+  done
+  return 1
+}
+
+if wait_for_proxy; then
+  :
+else
+  echo "probe: egress proxy did not become healthy; sandbox calls will fail." >&2
+  echo "probe: inspect it with 'docker logs $(docker ps -q --filter name=egress-proxy | head -1)'." >&2
+fi
 
 # Host control. Without this the output is ambiguous: "Model unavailable" could
 # mean a bad model name OR a broken sandbox. Running the same model on the host
@@ -134,7 +161,8 @@ sleep 4
 if [ "${PROBE_SKIP_HOST:-0}" != "1" ]; then
   HOST_SPEC="${MODELS[0]}#${VARIANT}"
   printf '%-52s ' "[host control] $HOST_SPEC"
-  if HOST_OUT=$(opencode run --auto -m "$HOST_SPEC" "$PROMPT" 2>&1); then
+  # --standalone for the same reason as the daemon: no background server to wait on.
+  if HOST_OUT=$(opencode run --standalone --auto -m "$HOST_SPEC" "$PROMPT" 2>&1); then
     printf 'OK\n'
   else
     REASON=$(printf '%s\n' "$HOST_OUT" | sed -E 's/\x1b\[[0-9;]*m//g' | grep -vE '^\s*$' | tail -1 | cut -c1-100)
@@ -153,36 +181,36 @@ for MODEL in "${MODELS[@]}"; do
   SPEC="${MODEL}#${VARIANT}"
   printf '%-52s ' "$SPEC"
 
-  # Run the real bootstrap so auth is placed exactly where the daemon puts it.
+  # probe_model.py runs inside the container and uses the daemon's own
+  # credential path. On a hang it dumps /proc, the opencode log and the proxy
+  # env *before* `compose run --rm` removes the container -- the only way to
+  # get evidence out of an intermittent hang.
+  #
+  # NOTE: no comment may sit inside the continuation below; bash would end the
+  # command there and run the rest on the host.
   OUT=$(docker compose -f "$COMPOSE_FILE" run --rm -T --no-deps \
     -v "$AI_BIN:/usr/local/bin/opencode:ro" \
     -e "OPENCODE_MODEL=$SPEC" \
     "$SERVICE" \
-    python3 -c "
-import subprocess, sys
-sys.path.insert(0, '/workspace/.agents/skills/iqoqo-mykg/scripts')
-from opencode_daemon import bootstrap_opencode_auth, build_subprocess_env
-bootstrap_opencode_auth()
-model = '$SPEC'
-# Use the daemon's own env builder so the probe exercises the exact code path
-# extraction uses, including the opencode-go API key injection. A hand-rolled
-# env here would test something the daemon never does.
-r = subprocess.run(
-    ['opencode', 'run', '--auto', '-m', model, '''$PROMPT'''],
-    capture_output=True, text=True, timeout=300,
-    env=build_subprocess_env(model),
-)
-sys.stdout.write(r.stdout[-400:])
-sys.stderr.write(r.stderr[-400:])
-sys.exit(r.returncode)
-" 2>&1) && RC=0 || RC=$?
+    python3 /workspace/.agents/skills/iqoqo-mykg/scripts/probe_model.py \
+      "$SPEC" "$PROMPT" "$PROBE_TIMEOUT" 2>&1) && RC=0 || RC=$?
 
   if [ "$RC" -eq 0 ]; then
     printf 'OK\n'
     PASSED=$((PASSED + 1))
+  elif printf '%s' "$OUT" | grep -q 'HANG DIAGNOSTICS'; then
+    # A hang dumped its own evidence. Show ALL of it: the process table and the
+    # opencode log are the only record that survives, and collapsing to a
+    # single line (as this used to do) throws the diagnosis away.
+    printf 'HANG (rc=%s)\n' "$RC"
+    echo "----- hang diagnostics -----"
+    printf '%s\n' "$OUT" | sed -E 's/\x1b\[[0-9;]*m//g' | grep -vE "orphan containers|^\s*$" | cut -c1-190
+    echo "----- end diagnostics -----"
+    FAILED=$((FAILED + 1))
+    FAILED_MODELS+=("$SPEC")
   else
-    # Collapse to the last non-empty stderr line; the useful part of an opencode
-    # failure is on one line, and the usage block is dozens.
+    # Collapse to the last non-empty line; the useful part of an ordinary
+    # opencode failure is on one line, and the usage block is dozens.
     REASON=$(printf '%s\n' "$OUT" | sed -E 's/\x1b\[[0-9;]*m//g' | grep -vE '^\s*$' | tail -1 | cut -c1-120)
     printf 'FAIL (rc=%s)\n' "$RC"
     echo "        ${REASON:-<no output>}"
