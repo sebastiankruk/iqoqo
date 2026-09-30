@@ -30,7 +30,6 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
 # Import shared core from the same directory
@@ -48,10 +47,12 @@ from daemon_core import (  # noqa: E402
     discover_tasks,
     is_task_done,
     load_and_validate_task,
-    run_daemon as _run_daemon_core,
     sanitize_task_payload,
     write_answer_envelope,
     write_error_envelope,
+)
+from daemon_core import (
+    run_daemon as _run_daemon_core,
 )
 
 # Re-export shared symbols for backward-compatible test access
@@ -60,6 +61,7 @@ __all__ = [
     "SECURITY_GUARDRAIL",
     "bootstrap_opencode_auth",
     "build_combined_prompt",
+    "build_subprocess_env",
     "clean_json_fences",
     "compute_effective_timeout",
     "discover_tasks",
@@ -67,46 +69,208 @@ __all__ = [
     "load_and_validate_task",
     "map_effort_to_variant",
     "process_task",
+    "read_provider_api_key",
+    "variant_candidates",
     "run_daemon",
     "sanitize_task_payload",
     "write_answer_envelope",
 ]
 
 
-def map_effort_to_variant(effort: str) -> str | None:
-    """Map agy-style effort levels to opencode --variant flag values.
+# Reasoning-effort ladder for opencode v2.
+#
+# opencode v2 dropped `--pure` and `--variant` from `opencode run`; the variant
+# is now a `#suffix` on the model string (`provider/model#variant`). Variant
+# names are per-model and v2 exits non-zero with "Variant unavailable for
+# <model>: <variant>" when a model does not publish the requested one, so a
+# single hardcoded mapping breaks as soon as the model set shifts.
+#
+# Each entry is an ordered preference list, most-specific first, always ending
+# in None. None means "send no variant", which every model accepts. The daemon
+# walks this list on a "Variant unavailable" failure, so an unknown model
+# degrades to the default variant instead of failing every task.
+EFFORT_VARIANT_LADDER: dict[str, tuple[str | None, ...]] = {
+    "minimal": ("minimal", "low", None),
+    "low": ("low", "minimal", None),
+    "medium": ("medium", "low", None),
+    "high": ("high", "xhigh", "max", "medium", None),
+}
 
-    Mapping:
-        low    -> minimal
-        medium -> None (default variant, no flag)
-        high   -> high
-        minimal -> minimal
+
+def variant_candidates(effort: str | None) -> tuple[str | None, ...]:
+    """Return the ordered variant preference list for an effort level."""
+    return EFFORT_VARIANT_LADDER.get((effort or "").lower(), (None,))
+
+
+def map_effort_to_variant(effort: str) -> str | None:
+    """Map an agy-style effort level to its preferred opencode v2 variant.
+
+    Returns None when the effort is unknown or maps to the default variant.
+    This is the first entry of variant_candidates(); the daemon uses the full
+    ladder, this stays for callers that only need a single answer.
     """
-    mapping = {
-        "low": "minimal",
-        "minimal": "minimal",
-        "medium": None,
-        "high": "high",
-    }
-    return mapping.get(effort.lower() if effort else "", None)
+    return variant_candidates(effort)[0]
+
+
+def build_model_spec(model: str, variant: str | None) -> str:
+    """Render the `provider/model[#variant]` string opencode v2 expects."""
+    base = model.split("#", 1)[0].strip()
+    if not variant:
+        return base
+    return f"{base}#{variant}"
+
+
+def is_variant_unavailable(stderr_data: str) -> bool:
+    """Detect opencode's "Variant unavailable" rejection in stderr."""
+    return "variant unavailable" in (stderr_data or "").lower()
+
+
+# Where the opencode-go API key is read from. The compose file bind-mounts the
+# host's auth.json here (read-only, single file) so the sandbox never needs the
+# whole credential store.
+# Last-resort model when neither the argument nor the environment names one.
+# Must be free-tier: a missing env var should not silently start spending the
+# operator's inference budget. Keep this in sync with OPENCODE_DEFAULT_MODEL
+# in the Makefile.
+DEFAULT_MODEL = "opencode-go/space-bunny-free"
+
+# Wall-clock ceiling for a single `opencode run` invocation, in seconds. See the
+# comment at the call site for why this is far below the task's own timeout.
+MAX_CLI_TIMEOUT = int(os.environ.get("MYKG_MAX_CLI_TIMEOUT", "300"))
+
+AUTH_SECRET_PATH = Path("/run/secrets/opencode-auth.json")
+
+# Provider id -> environment variable holding its API key. Taken from the
+# provider entry in the models.dev catalogue, e.g. opencode-go declares
+# {"env": ["OPENCODE_API_KEY"], "api": "https://opencode.ai/zen/go/v1"}.
+PROVIDER_ENV_VARS = {
+    "opencode-go": "OPENCODE_API_KEY",
+    "opencode": "OPENCODE_API_KEY",
+}
+
+
+def read_provider_api_key(model: str | None = None) -> str | None:
+    """Read the API key for a provider out of the mounted auth.json.
+
+    opencode v2 stopped reading auth.json for provider credentials. It keeps
+    them in the `credential` table of its own SQLite store (opencode.db), which
+    is populated by `opencode auth login` — and that command demands an
+    interactive terminal for API-key providers, so it cannot run unattended in
+    the daemon. Instead the provider takes its key straight from the
+    environment, per its catalogue entry.
+
+    Without this, every task fails with "Model unavailable: <provider>", because
+    the sandbox has no credential at all.
+    """
+    provider = (model or "").split("/", 1)[0].strip() or "opencode-go"
+    env_var = PROVIDER_ENV_VARS.get(provider)
+    if env_var is None:
+        return None
+
+    # An explicit env var (e.g. injected by compose) always wins.
+    existing = os.environ.get(env_var)
+    if existing:
+        return existing
+
+    candidates = [AUTH_SECRET_PATH]
+    home = Path(os.environ.get("HOME", "/home/appuser"))
+    candidates.append(home / ".local" / "share" / "opencode" / "auth.json")
+
+    for candidate in candidates:
+        try:
+            if not candidate.is_file():
+                continue
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        entry = payload.get(provider)
+        if isinstance(entry, dict):
+            key = entry.get("key")
+            if isinstance(key, str) and key:
+                return key
+
+    return None
+
+
+SMALL_MODEL = os.environ.get("MYKG_OPENCODE_SMALL_MODEL", DEFAULT_MODEL)
+
+
+def write_opencode_small_model_config(model: str | None = None) -> None:
+    """Pin opencode's auxiliary ("small") model so it cannot pick its own default.
+
+    opencode routes internal work -- session title generation and, when context
+    fills, auto-compaction -- to a `small_model` from its config. When that key
+    is absent, opencode chooses one itself, and its choice is a paid model
+    (gpt-6-luna) served over a different protocol (/responses) than the
+    extraction model. That produced two consequences: unbilled-by-us auxiliary
+    traffic to a model the operator had deliberately blocked, and an extra
+    network round trip per task that could fail or stall independently of the
+    extraction call itself.
+
+    The daemon container mounts no opencode config, so this writes one at
+    startup next to the staged auth.json. There is no OPENCODE_SMALL_MODEL env
+    var, so the config file is the only supported route.
+    """
+    home = Path(os.environ.get("HOME", "/home/appuser"))
+    target_dir = home / ".config" / "opencode"
+    target = target_dir / "opencode.json"
+    spec = build_model_spec(model or DEFAULT_MODEL, None)
+
+    payload = {"small_model": spec}
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    except OSError as err:
+        # Non-fatal: without it opencode just falls back to its own default.
+        print(
+            f"[opencode_daemon] Warning: could not pin small_model to {spec}: {err}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
+def build_subprocess_env(model: str | None = None) -> dict[str, str]:
+    """Build the environment for the opencode child process.
+
+    SECURITY: the key is read from the read-only secret mount at call time and
+    passed only in the child's environment. It is never written to a log line,
+    a command line, or a file inside the container.
+    """
+    env = os.environ.copy()
+    key = read_provider_api_key(model)
+    provider = (model or "").split("/", 1)[0].strip() or "opencode-go"
+    env_var = PROVIDER_ENV_VARS.get(provider, "OPENCODE_API_KEY")
+    if key:
+        env[env_var] = key
+    return env
 
 
 def bootstrap_opencode_auth() -> None:
-    """Copy the surgically-mounted opencode auth secret into the user home directory.
+    """Stage the surgically-mounted auth secret and pin the auxiliary model.
 
-    SECURITY: Credentials are copied from Docker secrets mount to user home
-    because the CLI tools expect them in specific paths. We use 0o600 permissions
-    and never log the credential content. The secret mount is read-only and
-    isolated by the container runtime.
+    NOTE: this copy alone is NOT sufficient for opencode v2. v2 no longer reads
+    auth.json for provider credentials — it keeps them in the `credential` table
+    of its own SQLite store, and the only CLI path to populate that
+    (`opencode auth login`) refuses to run unattended for API-key providers.
+    The key actually reaches the model through OPENCODE_API_KEY, set per-child
+    in build_subprocess_env(). The copy is kept because it is cheap, preserves
+    the 0o600 permissions, and keeps the home self-describing for anything
+    else that inspects the credential store.
+
+    SECURITY: Credentials are copied from the Docker secrets mount to user home
+    because the CLI tools expect them in specific paths. We use 0o600
+    permissions and never log the credential content. The secret mount is
+    read-only and isolated by the container runtime.
     """
-    secret_path = Path("/run/secrets/opencode-auth.json")
+    secret_path = AUTH_SECRET_PATH
     home = Path(os.environ.get("HOME", "/home/appuser"))
     target_path = home / ".local" / "share" / "opencode" / "auth.json"
 
     if not secret_path.is_file():
         print(
             "[opencode_daemon] Warning: secret mount /run/secrets/opencode-auth.json not found. "
-            "opencode CLI will fail its own auth check if no key is available.",
+            "The opencode-go key will not be available, so every task will fail "
+            "with 'Model unavailable: <provider>'.",
             file=sys.stderr,
         )
         return
@@ -145,10 +309,9 @@ def process_task(
             return _execute_task(task_path, outbox_dir, model, effort, attempt)
         except subprocess.TimeoutExpired:
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
                 print(
-                    f"[opencode_daemon] TimeoutExpired for task {task_id}, "
-                    f"retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
+                    f"[opencode_daemon] TimeoutExpired for task {task_id}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -156,8 +319,7 @@ def process_task(
             else:
                 write_error_envelope(task_id, "Subprocess timed out after all retries", outbox_dir)
                 print(
-                    f"[opencode_daemon] TimeoutExpired for task {task_id} "
-                    f"after {max_retries} attempts",
+                    f"[opencode_daemon] TimeoutExpired for task {task_id} after {max_retries} attempts",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -168,6 +330,38 @@ def process_task(
             return False
 
     return False
+
+
+def _run_opencode(cmd: list[str], effective_timeout: int, model: str | None = None) -> tuple[int, str, str]:
+    """Run the opencode CLI, returning (returncode, stdout, stderr).
+
+    SECURITY: stdout/stderr go to temp files rather than pipes. opencode's
+    internal IPC/event-bus writes to stdout immediately after the 'init'
+    handshake, so capture_output=True fills the pipe buffer and deadlocks
+    before the process can exit.
+    """
+    with (
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
+    ):
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,  # prevent opencode from blocking on stdin
+            stdout=stdout_f,
+            stderr=stderr_f,
+            text=True,
+            encoding="utf-8",
+            timeout=effective_timeout,
+            check=False,
+            env=build_subprocess_env(model),
+        )
+
+        stdout_f.seek(0)
+        stdout_data = stdout_f.read()
+        stderr_f.seek(0)
+        stderr_data = stderr_f.read()
+
+    return proc.returncode, stdout_data, stderr_data
 
 
 def _execute_task(
@@ -188,18 +382,11 @@ def _execute_task(
     actual_task_id = task_data.get("task_id", task_id)
     combined_prompt = build_combined_prompt(task_data)
 
-    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
 
-    cmd = ["opencode", "run", "--auto", "--pure", "-m", effective_model]
-    variant = map_effort_to_variant(effective_effort)
-    if variant:
-        cmd.extend(["--variant", variant])
-    cmd.append(combined_prompt)
-
     print(
-        f"[opencode_daemon] Running opencode for task {task_id[:12]} "
-        f"(prompt size: {len(combined_prompt)} chars)...",
+        f"[opencode_daemon] Running opencode for task {task_id[:12]} (prompt size: {len(combined_prompt)} chars)...",
         flush=True,
     )
 
@@ -211,39 +398,73 @@ def _execute_task(
         len(combined_prompt),
     )
 
+    # Cap the wall-clock wait for a single CLI invocation.
+    #
+    # compute_effective_timeout() returns a floor of 600s and honours the task's
+    # timeout_seconds (1800s in practice), so an invocation that never returns
+    # parks a worker for up to half an hour. The CLI hangs intermittently -- the
+    # server finishes its database bootstrap and then goes idle with the client
+    # still waiting, having made no network attempt -- and with a single worker
+    # that stalls the entire queue.
+    #
+    # A 118KB prompt completes in ~13s, so a few minutes is generous headroom for
+    # a slow model. Anything longer than that is treated as a hang: the attempt
+    # fails, the retry budget applies, and other workers keep working.
+    effective_timeout = min(effective_timeout, MAX_CLI_TIMEOUT)
+
     print(f"[opencode_daemon] Using timeout: {effective_timeout}s for task {task_id[:12]}", flush=True)
 
-    # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
-    # after 'init' (the "event connected" handshake). Using capture_output=True creates a
-    # pipe whose buffer fills and blocks because subprocess.run() only drains after the
-    # process exits — a classic pipe deadlock. We avoid this by redirecting stdout/stderr
-    # to temp files so opencode can write freely, then read back the content after exit.
-    with (
-        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
-        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
-    ):
+    # opencode v2 removed `--pure` and `--variant` from `opencode run`; passing
+    # either makes the CLI print its usage block and exit 1 without ever
+    # contacting the model. The variant is a `#suffix` on the model string.
+    #
+    # Variant availability is per-model, and a bad pick is fatal in v2, so walk
+    # the effort ladder and degrade on rejection rather than failing the task.
+    candidates = variant_candidates(effective_effort)
+    returncode = 1
+    stdout_data = ""
+    stderr_data = ""
 
-        proc = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,  # prevent opecode from blocking on stdin
-            stdout=stdout_f,
-            stderr=stderr_f,
-            text=True,
-            encoding="utf-8",
-            timeout=effective_timeout,
-            check=False,
+    for index, variant in enumerate(candidates):
+        # `--standalone` runs a private server in-process instead of spawning
+        # `opencode serve --service` and waiting for it to become ready. That
+        # background server intermittently spins at 100% CPU without ever
+        # becoming ready, which left `opencode run` blocked until the task
+        # timeout -- and with a single worker that stalled the whole queue.
+        # Standalone mode has no such process, so the failure mode is gone
+        # rather than merely bounded.
+        cmd = ["opencode", "run", "--standalone", "--auto", "-m", build_model_spec(effective_model, variant)]
+        cmd.append(combined_prompt)
+
+        returncode, stdout_data, stderr_data = _run_opencode(cmd, effective_timeout, effective_model)
+
+        if returncode == 0:
+            break
+
+        is_last = index == len(candidates) - 1
+        if is_last or not is_variant_unavailable(stderr_data):
+            break
+
+        next_variant = candidates[index + 1]
+        print(
+            f"[opencode_daemon] Variant '{variant}' unavailable for {effective_model}; retrying with {next_variant or 'no variant'}.",
+            file=sys.stderr,
+            flush=True,
         )
 
-        stdout_f.seek(0)
-        stdout_data = stdout_f.read()
-        stderr_f.seek(0)
-        stderr_data = stderr_f.read()
+    print(f"[opencode_daemon] opencode returned code {returncode} for task {task_id[:12]}", flush=True)
 
-    print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
-
-    if proc.returncode != 0:
-        write_error_envelope(task_id, f"Subprocess failed with exit code {proc.returncode}", outbox_dir)
-        print(f"[opencode_daemon] Warning: opencode failed for {task_id}: exit code {proc.returncode}", file=sys.stderr, flush=True)
+    if returncode != 0:
+        # Surface stderr: a bare exit code hides the actual cause, which is
+        # exactly how a v2 CLI flag/model regression went unnoticed here.
+        detail = (stderr_data or "").strip().splitlines()
+        reason = detail[-1][:300] if detail else "no stderr output"
+        write_error_envelope(task_id, f"Subprocess failed with exit code {returncode}: {reason}", outbox_dir)
+        print(
+            f"[opencode_daemon] Warning: opencode failed for {task_id}: exit code {returncode} — {reason}",
+            file=sys.stderr,
+            flush=True,
+        )
         return False
 
     answer_text = clean_json_fences(stdout_data)
@@ -263,8 +484,10 @@ def run_daemon(
     """Watch inbox_dir and dispatch task processing in a thread pool."""
     # Bootstrap opencode auth from secret mount
     bootstrap_opencode_auth()
+    # Pin the auxiliary model so opencode does not pick a paid default of its own.
+    write_opencode_small_model_config(model)
 
-    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
 
     _run_daemon_core(
@@ -289,8 +512,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         "-m",
-        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor",
-        help="Model to use for opencode CLI (default: opencode-go/muse-spark-1.3-contributor)",
+        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL,
+        help=f"Model to use for opencode CLI (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "--effort",

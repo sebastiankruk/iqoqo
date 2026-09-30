@@ -179,7 +179,18 @@ start_sandbox_daemon() {
   docker compose -f "$COMPOSE_FILE" rm -f sandbox-egress-proxy >/dev/null 2>&1 || true
   docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
 
-  docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
+  # A failing daemon start is fatal rather than ignored. The previous
+  # `>/dev/null 2>&1 || true` made a daemon that never started -- or started
+  # and died on every task -- indistinguishable from a healthy run, which is
+  # how a hard opencode CLI regression went unnoticed. A non-zero status here
+  # means the sandbox never came up, so the extraction would silently degrade
+  # to the non-LLM tiers and quietly produce a worse knowledge graph.
+  # Concurrency. A single worker means one slow task parks the whole queue for
+  # up to its own timeout_seconds (1800s in practice) -- longer than a typical
+  # drain window -- so one bad task silently stalls the entire backlog. Two
+  # matches the daemon's own default and stays under provider rate limits.
+  DAEMON_WORKERS="${MYKG_DAEMON_WORKERS:-2}"
+  if ! docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
     -v "$AI_BIN:$AI_MOUNT" \
     -e MYKG_MODEL="${MYKG_MODEL:-}" \
     -e MYKG_EFFORT="${MYKG_EFFORT:-}" \
@@ -188,9 +199,14 @@ start_sandbox_daemon() {
     -e AI_AGENT="$AI_AGENT" \
     "$AI_CONTAINER" \
     python3 "$AI_SCRIPT" \
-    --workers 1 \
+    --workers "$DAEMON_WORKERS" \
     "$INBOX" \
-    "$OUTBOX" >/dev/null 2>&1 || true
+    "$OUTBOX"; then
+    echo "mykg_sync: failed to start the ${AI_AGENT} extraction daemon." >&2
+    echo "mykg_sync: inspect it with:" >&2
+    echo "  docker logs $AI_CONTAINER" >&2
+    return 1
+  fi
 }
 
 if [ "${SKIP_SANDBOX:-0}" != "1" ] && docker_available && [ -n "$INBOX" ]; then
@@ -209,3 +225,87 @@ fi
 # A non-zero exit here propagates: `set -e` plus the EXIT trap preserves the
 # original status through cleanup's `exit "$EXIT_CODE"`.
 MYKG_PROFILE="${MYKG_PROFILE:-}" "$VENV_PYTHON" "$RUNNER" "$@"
+
+# ── Drain the agent queue ───────────────────────────────────────────────────
+# The extraction runner is the producer; the daemon is a consumer that runs
+# alongside it. The runner returns as soon as extraction finishes, and the EXIT
+# trap then removes the daemon container -- so any tasks still sitting in the
+# inbox are abandoned mid-flight. That silently converts inference work into
+# "no result at all": the tasks stay pending with neither an answer nor an
+# error, so nothing reports the loss and the graph is quietly incomplete.
+#
+# Wait here for the queue to drain before teardown. Bounded, and only when a
+# daemon is actually running and there is something to drain.
+DRAIN_TIMEOUT="${MYKG_DRAIN_TIMEOUT:-900}"
+# Look the daemon up by compose service, not by container name. `compose run`
+# does not reliably honour `--name` (this project produced
+# "iqoqo-mykg-opencode-daemon-run-<hash>"), so an exact-name match silently
+# skipped the drain entirely -- which is exactly when the drain is needed.
+daemon_running() {
+  docker ps --filter "label=com.docker.compose.service=$AI_CONTAINER" \
+           --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q .
+}
+
+if [ "$MODE" = "update" ] && [ -n "$INBOX" ] && [ "${MYKG_DRAIN:-1}" = "1" ] \
+   && [ "${SKIP_SANDBOX:-0}" != "1" ] && [ -n "$AI_CONTAINER" ] \
+   && daemon_running; then
+
+  count_unfinished() {
+    # A task is unfinished while it has no answer and no error envelope.
+    find "$INBOX" -maxdepth 1 -name '*.task.json' 2>/dev/null | while read -r task; do
+      id="$(basename "$task" .task.json)"
+      if [ ! -f "$OUTBOX/$id.answer.json" ] && [ ! -f "$OUTBOX/$id.done" ] && [ ! -f "$OUTBOX/$id.error" ]; then
+        printf 'x'
+      fi
+    done | wc -c | tr -d ' '
+  }
+
+  ELAPSED=0
+  LAST_REPORT=0
+  LAST_PENDING="$(count_unfinished)"
+  STARTED_UNFINISHED="$LAST_PENDING"
+  STALLED_REPORTED=0
+  while :; do
+    PENDING="$(count_unfinished)"
+    [ "$PENDING" = "0" ] && break
+    if [ "$ELAPSED" -ge "$DRAIN_TIMEOUT" ]; then
+      COMPLETED=$((STARTED_UNFINISHED - PENDING))
+      echo "mykg_sync: drain timed out after ${DRAIN_TIMEOUT}s." >&2
+      echo "mykg_sync:   completed $COMPLETED, still pending $PENDING." >&2
+      echo "mykg_sync: re-run 'make mykg-update' to continue, or raise MYKG_DRAIN_TIMEOUT." >&2
+      break
+    fi
+    if [ $((ELAPSED - LAST_REPORT)) -ge 60 ]; then
+      # Report completions, not just the outstanding count. A repeated identical
+      # pending count is indistinguishable from a stall unless the delta is
+      # shown, which is how a single slow task can go unnoticed.
+      COMPLETED=$((STARTED_UNFINISHED - PENDING))
+      if [ "$PENDING" -eq "$LAST_PENDING" ] && [ "$STALLED_REPORTED" -eq 0 ]; then
+        echo "mykg_sync: no completions in the last 60s with $PENDING task(s) pending." >&2
+        echo "mykg_sync: the daemon may be blocked on a single slow task; check:" >&2
+        echo "  docker logs $AI_CONTAINER" >&2
+        STALLED_REPORTED=1
+      fi
+      echo "mykg_sync: draining $PENDING pending agent task(s) (completed $COMPLETED)..."
+      LAST_REPORT="$ELAPSED"
+      LAST_PENDING="$PENDING"
+    fi
+    sleep 10
+    ELAPSED=$((ELAPSED + 10))
+  done
+
+  if [ "$PENDING" = "0" ] && [ "$ELAPSED" -gt 0 ]; then
+    echo "mykg_sync: agent queue drained after ${ELAPSED}s (completed $((STARTED_UNFINISHED - PENDING)))."
+  fi
+  unset -f count_unfinished
+else
+  # A requested drain that cannot even start is a silent failure mode: the run
+  # reports success and the backlog quietly persists.
+  if [ "$MODE" = "update" ] && [ "${MYKG_DRAIN:-1}" = "1" ] \
+     && [ "${SKIP_SANDBOX:-0}" != "1" ] && [ -n "$INBOX" ] && [ -n "$AI_CONTAINER" ]; then
+    if ! daemon_running; then
+      echo "mykg_sync: warning: agent daemon is not running; skipping queue drain." >&2
+      echo "mykg_sync:   backlog will be left pending. Check 'docker logs $AI_CONTAINER'." >&2
+    fi
+  fi
+fi

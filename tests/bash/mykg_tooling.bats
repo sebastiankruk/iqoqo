@@ -152,8 +152,8 @@
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
   [[ "$output" == *'AI_AGENT="opencode"'* ]]
-  [[ "$output" == *'MYKG_MODEL="opencode/mimo-v2.5-free"'* ]]
-  [[ "$output" == *'MYKG_EFFORT="minimal"'* ]]
+  [[ "$output" == *'MYKG_MODEL="opencode-go/space-bunny-free"'* ]]
+  [[ "$output" == *'MYKG_EFFORT="low"'* ]]
   [[ "$output" == *'MYKG_PROFILE="agent-opencode"'* ]]
 }
 
@@ -391,10 +391,29 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode/mimo-v2.5-free"* ]]
-  [[ "$output" == *"minimal"* ]]
+  [[ "$output" == *"opencode-go/space-bunny-free"* ]]
   [[ "$output" == *"agent-opencode"* ]]
   [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
+}
+
+@test "Makefile opencode default model is a live registry entry" {
+  # Guards against the class of regression where the pinned default was
+  # retired from the provider and every opencode mykg run failed.
+  model=$(make -n mykg-update AI_AGENT=opencode 2>/dev/null | grep -o 'MYKG_MODEL="[^"]*"' | head -1 | cut -d'"' -f2)
+  [ -n "$model" ]
+
+  # The registry is only queryable where the opencode CLI is installed. CI has
+  # no opencode, so assert what is verifiable everywhere and skip the live
+  # lookup rather than failing on a missing binary.
+  if ! command -v opencode >/dev/null 2>&1; then
+    echo "opencode CLI not installed; checking the default is well-formed only"
+    [[ "$model" == */* ]]
+    return 0
+  fi
+
+  run opencode models
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$model"* ]]
 }
 
 @test "Makefile mykg-update preserves agy defaults when AI_AGENT=agy" {
@@ -422,6 +441,87 @@ print('FAIL_CLOSED_OK')
   [ "$status" -eq 0 ]
 }
 
+@test "opencode daemon does not pass v1-only CLI flags" {
+  # opencode v2 removed --pure and --variant from `opencode run`. Passing
+  # either makes the CLI print its usage block and exit 1 on every task, so
+  # the model is never contacted and the whole extraction degrades silently.
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  [ -f "$daemon_py" ]
+
+  run grep -E '"--pure"' "$daemon_py"
+  [ "$status" -ne 0 ]
+
+  run grep -E '"--variant"' "$daemon_py"
+  [ "$status" -ne 0 ]
+}
+
+@test "opencode daemon builds the model with a #variant suffix" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+
+  run grep -F 'def build_model_spec' "$daemon_py"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg_sync.sh surfaces daemon start failures" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # The daemon start must not be wrapped in `|| true`; a sandbox that never
+  # came up used to look identical to a healthy run.
+  run grep -F 'failed to start the ${AI_AGENT} extraction daemon' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "opencode harness probe never touches mykg session state" {
+  probe_script="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+  [ -f "$probe_script" ]
+  [ -x "$probe_script" ]
+
+  # The whole point of the probe is to test models without writing .error
+  # envelopes, which is_task_done() treats as terminal. It must never point the
+  # daemon at a real session inbox/outbox nor run the extraction pipeline.
+  run grep -E 'agent_inbox|agent_outbox' "$probe_script"
+  [ "$status" -ne 0 ]
+
+  run grep -E 'run_update\.py|run_index\.py' "$probe_script"
+  [ "$status" -ne 0 ]
+
+  # It must exercise the real credential bootstrap, not a reimplementation.
+  run grep -F 'bootstrap_opencode_auth' "$probe_script"
+  [ "$status" -eq 0 ]
+
+  # The egress proxy picks its allowlist from AI_AGENT, so it must be exported
+  # for compose to interpolate it into the proxy service.
+  run grep -E '^export AI_AGENT=opencode' "$probe_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg-retry target re-queues failed agent tasks" {
+  run make -n mykg-retry
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"retry_failed.py"* ]]
+
+  run make -n mykg-probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"probe_opencode_harness.sh"* ]]
+}
+
+@test "mykg_sync.sh drains the agent queue before teardown" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # The daemon is a consumer; without an explicit drain the EXIT trap removes
+  # it while tasks are still pending, and those tasks end up with neither an
+  # answer nor an error -- invisible, permanent data loss.
+  run grep -F 'mykg_sync: agent queue drained' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'MYKG_DRAIN_TIMEOUT' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  # The drain must be skippable, e.g. for a quick sync.
+  run grep -E '\$\{MYKG_DRAIN:-1\}' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
 @test "mykgconfig.yaml includes agent-opencode profile" {
   config_file="${BATS_TEST_DIRNAME}/../../mykg_config.yaml"
   [ -f "$config_file" ]
@@ -429,7 +529,179 @@ print('FAIL_CLOSED_OK')
   run grep -E "agent-opencode:" "$config_file"
   [ "$status" -eq 0 ]
 
-  run grep -E "opencode-go/muse-spark-1\.3-contributor" "$config_file"
+  run grep -E "opencode-go/space-bunny-free" "$config_file"
+  [ "$status" -eq 0 ]
+
+  # The documented model must be free-tier: a missing OPENCODE_MODEL must never
+  # silently start spending the operator's inference budget.
+  run grep -E "opencode-go/(muse-spark|glm-|mimo-|grok-)" "$config_file"
+  [ "$status" -ne 0 ]
+}
+
+
+@test "opencode defaults are free-tier" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+  makefile="${BATS_TEST_DIRNAME}/../../Makefile"
+
+  # A probe performs real billed calls, so its default model set must be free.
+  # Comments are stripped first: the probe documents paid models as opt-in
+  # examples, and naming one there is not the same as defaulting to it.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -E 'opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)'"
+  [ "$status" -ne 0 ]
+
+  # Same for the daemon's last-resort fallback, which is reached whenever the
+  # environment names no model.
+  run bash -c "grep -vE '^[[:space:]]*#' '$daemon_py' | grep -E '^DEFAULT_MODEL = \"opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)'"
+  [ "$status" -ne 0 ]
+
+  run grep -E 'OPENCODE_DEFAULT_MODEL \?= opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)' "$makefile"
+  [ "$status" -ne 0 ]
+}
+
+@test "mykg_sync.sh raises daemon concurrency above one" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # One worker means a single slow task blocks the queue for its full
+  # timeout_seconds, which exceeds a default drain window.
+  run grep -F 'MYKG_DAEMON_WORKERS' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F -- '--workers "$DAEMON_WORKERS"' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  # The drain must report completions, not only the outstanding count.
+  run grep -F 'no completions in the last' "$sync_script"
   [ "$status" -eq 0 ]
 }
 
+@test "probe cleanup does not tear down a concurrent run" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # `docker compose down` removes every service in the project, including the
+  # egress proxy and extraction daemon of a concurrently running mykg-update,
+  # which then fails in-flight tasks with a DNS timeout against the vanished
+  # proxy. The probe must only undo what it started.
+  # Comments are stripped: the script documents this hazard in prose, and
+  # naming the forbidden command in a comment is not calling it.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'compose down'"
+  [ "$status" -ne 0 ]
+
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'compose -f \"\$COMPOSE_FILE\" down'"
+  [ "$status" -ne 0 ]
+
+  # It must track whether it started the proxy before stopping it.
+  run grep -F 'STARTED_PROXY' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg drain guard locates the daemon by compose service, not container name" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # `compose run` does not reliably honour --name, so an exact container-name
+  # match silently skipped the drain -- precisely when it is most needed.
+  run grep -F 'com.docker.compose.service=' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'grep -qx "$AI_CONTAINER"' "$sync_script"
+  [ "$status" -ne 0 ]
+
+  # A drain that cannot start must say so rather than reporting success.
+  run grep -F 'skipping queue drain' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "opencode invocation uses standalone mode" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # Without --standalone, `opencode run` connects to the long-lived background
+  # service. In the container the equivalent private server deadlocks
+  # intermittently after its database bootstrap.
+  run grep -F '"--standalone"' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  run grep -F '"--standalone"' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'probe_model.py' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe captures diagnostics before the container is removed" {
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+
+  # An intermittent hang leaves no evidence once `compose run --rm` has
+  # removed the container, so the probe must dump state from inside.
+  run grep -F 'subprocess.TimeoutExpired' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'dump_diagnostics' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F '/proc' "$probe_model"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe waits for proxy health instead of a fixed sleep" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # The probe runs the agent with --no-deps, which bypasses compose's
+  # depends_on/service_healthy gate. A fixed sleep therefore let opencode start
+  # against a cold proxy and hang reaching the model catalogue. mykg_sync.sh is
+  # not affected: it starts the daemon without --no-deps.
+  run grep -F 'wait_for_proxy' "$probe"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'State.Health.Status' "$probe"
+  [ "$status" -eq 0 ]
+
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'sleep 4'"
+  [ "$status" -ne 0 ]
+}
+
+@test "probe surfaces hang diagnostics instead of one line" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # Collapsing output to `tail -1` discarded the very evidence the hang dump
+  # exists to produce.
+  run grep -F 'hang diagnostics' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe avoids the inherited-pipe hang" {
+  probe_model="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/probe_model.py"
+
+  # `opencode run` spawns `serve --stdio`. If that server lingers after the
+  # client exits, it keeps the inherited stdout/stderr pipe write end open, and
+  # subprocess.run(capture_output=True) blocks forever waiting for EOF on a pipe
+  # whose writer is an orphaned process -- an indefinite hang with no live
+  # child to explain it. Temp files sidestep it; the daemon already does this.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe_model' | grep -F 'capture_output=True'"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'TemporaryFile' "$probe_model"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'subprocess.DEVNULL' "$probe_model"
+  [ "$status" -eq 0 ]
+}
+
+@test "opencode auxiliary model is pinned to a free model" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+
+  # Without an explicit small_model, opencode picks its own auxiliary model,
+  # which has been a paid one (gpt-6-luna) served over /responses. That meant
+  # unbilled-to-us traffic to a model the operator had blocked, plus an extra
+  # round trip per task that could fail independently of the extraction call.
+  run grep -F 'write_opencode_small_model_config' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  # The pin must name a free model and carry no variant.
+  run grep -E '^SMALL_MODEL = os.environ.get\("MYKG_OPENCODE_SMALL_MODEL", DEFAULT_MODEL\)' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'build_model_spec(model or DEFAULT_MODEL, None)' "$daemon_py"
+  [ "$status" -eq 0 ]
+}
