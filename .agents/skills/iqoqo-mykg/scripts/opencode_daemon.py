@@ -30,7 +30,6 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 # ---------------------------------------------------------------------------
 # Import shared core from the same directory
@@ -48,10 +47,12 @@ from daemon_core import (  # noqa: E402
     discover_tasks,
     is_task_done,
     load_and_validate_task,
-    run_daemon as _run_daemon_core,
     sanitize_task_payload,
     write_answer_envelope,
     write_error_envelope,
+)
+from daemon_core import (
+    run_daemon as _run_daemon_core,
 )
 
 # Re-export shared symbols for backward-compatible test access
@@ -191,6 +192,43 @@ def read_provider_api_key(model: str | None = None) -> str | None:
     return None
 
 
+SMALL_MODEL = os.environ.get("MYKG_OPENCODE_SMALL_MODEL", DEFAULT_MODEL)
+
+
+def write_opencode_small_model_config(model: str | None = None) -> None:
+    """Pin opencode's auxiliary ("small") model so it cannot pick its own default.
+
+    opencode routes internal work -- session title generation and, when context
+    fills, auto-compaction -- to a `small_model` from its config. When that key
+    is absent, opencode chooses one itself, and its choice is a paid model
+    (gpt-6-luna) served over a different protocol (/responses) than the
+    extraction model. That produced two consequences: unbilled-by-us auxiliary
+    traffic to a model the operator had deliberately blocked, and an extra
+    network round trip per task that could fail or stall independently of the
+    extraction call itself.
+
+    The daemon container mounts no opencode config, so this writes one at
+    startup next to the staged auth.json. There is no OPENCODE_SMALL_MODEL env
+    var, so the config file is the only supported route.
+    """
+    home = Path(os.environ.get("HOME", "/home/appuser"))
+    target_dir = home / ".config" / "opencode"
+    target = target_dir / "opencode.json"
+    spec = build_model_spec(model or DEFAULT_MODEL, None)
+
+    payload = {"small_model": spec}
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    except OSError as err:
+        # Non-fatal: without it opencode just falls back to its own default.
+        print(
+            f"[opencode_daemon] Warning: could not pin small_model to {spec}: {err}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
 def build_subprocess_env(model: str | None = None) -> dict[str, str]:
     """Build the environment for the opencode child process.
 
@@ -208,7 +246,7 @@ def build_subprocess_env(model: str | None = None) -> dict[str, str]:
 
 
 def bootstrap_opencode_auth() -> None:
-    """Stage the surgically-mounted opencode auth secret in the user home.
+    """Stage the surgically-mounted auth secret and pin the auxiliary model.
 
     NOTE: this copy alone is NOT sufficient for opencode v2. v2 no longer reads
     auth.json for provider credentials — it keeps them in the `credential` table
@@ -446,6 +484,8 @@ def run_daemon(
     """Watch inbox_dir and dispatch task processing in a thread pool."""
     # Bootstrap opencode auth from secret mount
     bootstrap_opencode_auth()
+    # Pin the auxiliary model so opencode does not pick a paid default of its own.
+    write_opencode_small_model_config(model)
 
     effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"

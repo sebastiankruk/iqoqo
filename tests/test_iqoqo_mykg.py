@@ -1343,3 +1343,55 @@ def test_opencode_never_spawns_a_background_server(opencode_daemon_module, tmp_p
     args = mock_run.call_args[0][0]
     assert "--standalone" in args
     assert "serve" not in " ".join(args)
+
+
+def test_opencode_pins_small_model_to_avoid_unrequested_paid_model(opencode_daemon_module, tmp_path, monkeypatch):
+    """opencode's auxiliary model must be pinned, not left to its own default.
+
+    opencode routes title generation and auto-compaction to a `small_model`
+    from its config. When that key is absent opencode picks one itself, and
+    that choice has been observed to be a paid model (gpt-6-luna) served over
+    a different protocol (/responses) than the extraction model. The daemon
+    container mounts no opencode config, so the daemon must write one.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    opencode_daemon_module.write_opencode_small_model_config("opencode-go/space-bunny-free#low")
+
+    config = home / ".config" / "opencode" / "opencode.json"
+    assert config.is_file(), "no opencode config written"
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    # provider/model only -- small_model does not take a variant.
+    assert payload["small_model"] == "opencode-go/space-bunny-free"
+    assert "#" not in payload["small_model"]
+
+
+def test_opencode_small_model_pin_never_names_a_paid_model(opencode_daemon_module, tmp_path, monkeypatch):
+    """The pinned auxiliary model must be free-tier.
+
+    Its whole purpose is to stop opencode reaching for a paid default, so
+    pinning a paid model would defeat it.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    opencode_daemon_module.write_opencode_small_model_config(None)
+
+    config = home / ".config" / "opencode" / "opencode.json"
+    pinned = json.loads(config.read_text(encoding="utf-8"))["small_model"]
+    for paid in ("muse-spark", "glm-", "mimo-v", "grok-", "gpt-6", "deepseek-v4", "longcat"):
+        assert paid not in pinned, f"pinned auxiliary model looks paid: {pinned}"
+
+
+def test_opencode_small_model_pin_survives_an_unwritable_home(opencode_daemon_module, tmp_path, monkeypatch):
+    """A failed config write must warn, not crash the daemon."""
+    blocker = tmp_path / "home"
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(blocker))
+
+    # Must not raise.
+    opencode_daemon_module.write_opencode_small_model_config("opencode-go/space-bunny-free")

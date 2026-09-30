@@ -42,7 +42,11 @@ from pathlib import Path
 
 sys.path.insert(0, "/workspace/.agents/skills/iqoqo-mykg/scripts")
 
-from opencode_daemon import bootstrap_opencode_auth, build_subprocess_env  # noqa: E402
+from opencode_daemon import (  # noqa: E402
+    bootstrap_opencode_auth,
+    build_subprocess_env,
+    write_opencode_small_model_config,
+)
 
 OPENCODE_LOG = Path.home() / ".local" / "share" / "opencode" / "log" / "opencode.log"
 
@@ -104,6 +108,7 @@ def main() -> int:
     timeout = int(sys.argv[3]) if len(sys.argv) > 3 else 120
 
     bootstrap_opencode_auth()
+    write_opencode_small_model_config(model)
 
     cmd = ["opencode", "run", "--standalone", "--auto", "-m", model, prompt]
     print(f"[probe_model] {model} (timeout {timeout}s)", file=sys.stderr, flush=True)

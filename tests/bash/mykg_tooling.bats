@@ -152,7 +152,7 @@
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
   [[ "$output" == *'AI_AGENT="opencode"'* ]]
-  [[ "$output" == *'MYKG_MODEL="opencode-go/longcat-2.5-preview-free"'* ]]
+  [[ "$output" == *'MYKG_MODEL="opencode-go/space-bunny-free"'* ]]
   [[ "$output" == *'MYKG_EFFORT="low"'* ]]
   [[ "$output" == *'MYKG_PROFILE="agent-opencode"'* ]]
 }
@@ -391,7 +391,7 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode-go/longcat-2.5-preview-free"* ]]
+  [[ "$output" == *"opencode-go/space-bunny-free"* ]]
   [[ "$output" == *"agent-opencode"* ]]
   [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
 }
@@ -685,5 +685,23 @@ print('FAIL_CLOSED_OK')
   [ "$status" -eq 0 ]
 
   run grep -F 'subprocess.DEVNULL' "$probe_model"
+  [ "$status" -eq 0 ]
+}
+
+@test "opencode auxiliary model is pinned to a free model" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+
+  # Without an explicit small_model, opencode picks its own auxiliary model,
+  # which has been a paid one (gpt-6-luna) served over /responses. That meant
+  # unbilled-to-us traffic to a model the operator had blocked, plus an extra
+  # round trip per task that could fail independently of the extraction call.
+  run grep -F 'write_opencode_small_model_config' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  # The pin must name a free model and carry no variant.
+  run grep -E '^SMALL_MODEL = os.environ.get\("MYKG_OPENCODE_SMALL_MODEL", DEFAULT_MODEL\)' "$daemon_py"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'build_model_spec(model or DEFAULT_MODEL, None)' "$daemon_py"
   [ "$status" -eq 0 ]
 }
