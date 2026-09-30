@@ -176,13 +176,36 @@ def build_combined_prompt(task_data: Dict[str, Any]) -> str:
     system_prompt = sanitize_task_payload(task_data.get("system", ""))
     user_prompt = sanitize_task_payload(task_data.get("user", ""))
 
-    return (
+    combined = (
         f"{SECURITY_GUARDRAIL}\n\n"
         f"System Instructions:\n{system_prompt}\n\n"
         f"User Prompt:\n{user_prompt}\n\n"
         "CRITICAL: Respond ONLY with the requested JSON payload. "
         "Do NOT include conversational text or markdown code fences."
     )
+
+    # Both harnesses pass the prompt as a command-line argument, and the OS
+    # layer rejects a NUL in argv: subprocess.run() raises
+    # "ValueError: embedded null byte" before the CLI is ever contacted. A
+    # single NUL anywhere in the indexed source therefore fails the whole
+    # task, and the retry budget cannot help because the input does not
+    # change. Observed on 6 of 2,710 chunks, where the extracted text
+    # happened to contain a real 0x00 byte.
+    #
+    # NUL is a terminator with no meaning in natural language, so dropping it
+    # is lossless for the model's purposes. Counted so the condition is
+    # visible rather than silent.
+    nul_count = combined.count("\x00")
+    if nul_count:
+        print(
+            f"[daemon_core] warning: stripped {nul_count} NUL byte(s) from prompt "
+            f"(a NUL in argv raises 'embedded null byte' and fails the task)",
+            file=sys.stderr,
+            flush=True,
+        )
+        combined = combined.replace("\x00", "")
+
+    return combined
 
 
 def write_answer_envelope(

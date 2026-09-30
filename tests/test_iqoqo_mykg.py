@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -1406,6 +1407,27 @@ def test_opencode_small_model_pin_survives_an_unwritable_home(opencode_daemon_mo
 # ValueError", which identifies nothing -- the real cause ("Expecting ','
 # delimiter") was only recoverable by grepping a 9 MB run log.
 # ---------------------------------------------------------------------------
+
+
+def test_prompt_strips_nul_bytes(daemon_core_module):
+    """A NUL in the prompt must be dropped, not passed to the OS.
+
+    Both harnesses put the prompt in argv, and subprocess raises
+    "ValueError: embedded null byte" before the CLI is contacted, so a single
+    NUL in the indexed source fails the task irrecoverably.
+    """
+    prompt = daemon_core_module.build_combined_prompt({"user": "before\x00after"})
+    assert "\x00" not in prompt
+    assert "beforeafter" in prompt
+    # And it must now be acceptable to the OS.
+    assert subprocess.run(["/bin/echo", prompt], capture_output=True).returncode == 0
+
+
+def test_prompt_without_nul_is_untouched(daemon_core_module):
+    """Stripping must be a no-op on normal content."""
+    clean = daemon_core_module.build_combined_prompt({"user": "plain text"})
+    assert "\x00" not in clean
+    assert "plain text" in clean
 
 
 def test_describe_unexpected_error_keeps_the_message(daemon_core_module):
