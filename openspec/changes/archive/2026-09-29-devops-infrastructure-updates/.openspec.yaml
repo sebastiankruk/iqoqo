@@ -1,0 +1,9 @@
+schema: spec-driven
+created: 2026-09-16
+
+# `automated-backup-retention` loses its last requirement: the rotation task it
+# described was already unreachable (no beat_schedule entry, /data/backups
+# unmounted) and has been deleted. Archiving without this refuses, which is
+# correct -- silently emptying a capability's spec would be worse than deleting
+# it, because the spec files would remain and assert nothing.
+retire_capabilities: true
