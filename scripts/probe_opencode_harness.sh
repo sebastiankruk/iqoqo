@@ -61,11 +61,14 @@ PROMPT="${PROBE_PROMPT:-reply with the single word OK}"
 # model by default would spend the operator's budget without them asking. Pass
 # a model explicitly to test anything else:
 #   make mykg-probe ARGS="opencode-go/glm-5.3-flash"
+#
+# Of the two free models, only space-bunny-free publishes variants, so it is the
+# only one that can be probed with a variant suffix. longcat-2.5-preview-free
+# publishes none, so appending one can never succeed for it.
 MODELS=("$@")
 if [ ${#MODELS[@]} -eq 0 ]; then
   MODELS=(
     "opencode-go/space-bunny-free"
-    "opencode-go/longcat-2.5-preview-free"
   )
 fi
 
@@ -76,8 +79,14 @@ export AI_AGENT=opencode
 cleanup() {
   EXIT_CODE=$?
   trap - EXIT INT TERM
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" down >/dev/null 2>&1 || true
+  # Deliberately NOT `docker compose down`. That tears down every service in
+  # the project -- including the egress proxy and the extraction daemon of any
+  # concurrently running `make mykg-update`, which then fails every in-flight
+  # task with a DNS timeout against the vanished proxy. This script's own
+  # containers are already removed by `run --rm`; the proxy is only stopped
+  # when this script was the one that started it.
+  if [ "$STARTED_PROXY" = "1" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    docker compose -f "$COMPOSE_FILE" stop sandbox-egress-proxy >/dev/null 2>&1 || true
   fi
   exit "$EXIT_CODE"
 }
@@ -107,7 +116,15 @@ echo "models  : ${#MODELS[@]}"
 echo "NOTE: each successful model makes a real billed API call."
 echo
 
-docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
+# Track whether the proxy was already up, so cleanup leaves a proxy it did not
+# start alone. Never run `docker compose down` here.
+STARTED_PROXY=0
+if docker ps --format '{{.Names}}' | grep -q 'egress-proxy'; then
+  :
+else
+  docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
+  STARTED_PROXY=1
+fi
 sleep 4
 
 # Host control. Without this the output is ambiguous: "Model unavailable" could

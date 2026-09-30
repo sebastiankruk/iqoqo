@@ -152,7 +152,7 @@
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
   [[ "$output" == *'AI_AGENT="opencode"'* ]]
-  [[ "$output" == *'MYKG_MODEL="opencode-go/space-bunny-free"'* ]]
+  [[ "$output" == *'MYKG_MODEL="opencode-go/longcat-2.5-preview-free"'* ]]
   [[ "$output" == *'MYKG_EFFORT="low"'* ]]
   [[ "$output" == *'MYKG_PROFILE="agent-opencode"'* ]]
 }
@@ -391,7 +391,7 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode-go/space-bunny-free"* ]]
+  [[ "$output" == *"opencode-go/longcat-2.5-preview-free"* ]]
   [[ "$output" == *"agent-opencode"* ]]
   [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
 }
@@ -563,5 +563,41 @@ print('FAIL_CLOSED_OK')
 
   # The drain must report completions, not only the outstanding count.
   run grep -F 'no completions in the last' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "probe cleanup does not tear down a concurrent run" {
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+
+  # `docker compose down` removes every service in the project, including the
+  # egress proxy and extraction daemon of a concurrently running mykg-update,
+  # which then fails in-flight tasks with a DNS timeout against the vanished
+  # proxy. The probe must only undo what it started.
+  # Comments are stripped: the script documents this hazard in prose, and
+  # naming the forbidden command in a comment is not calling it.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'compose down'"
+  [ "$status" -ne 0 ]
+
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -F 'compose -f \"\$COMPOSE_FILE\" down'"
+  [ "$status" -ne 0 ]
+
+  # It must track whether it started the proxy before stopping it.
+  run grep -F 'STARTED_PROXY' "$probe"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg drain guard locates the daemon by compose service, not container name" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # `compose run` does not reliably honour --name, so an exact container-name
+  # match silently skipped the drain -- precisely when it is most needed.
+  run grep -F 'com.docker.compose.service=' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'grep -qx "$AI_CONTAINER"' "$sync_script"
+  [ "$status" -ne 0 ]
+
+  # A drain that cannot start must say so rather than reporting success.
+  run grep -F 'skipping queue drain' "$sync_script"
   [ "$status" -eq 0 ]
 }

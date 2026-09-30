@@ -237,9 +237,18 @@ MYKG_PROFILE="${MYKG_PROFILE:-}" "$VENV_PYTHON" "$RUNNER" "$@"
 # Wait here for the queue to drain before teardown. Bounded, and only when a
 # daemon is actually running and there is something to drain.
 DRAIN_TIMEOUT="${MYKG_DRAIN_TIMEOUT:-900}"
+# Look the daemon up by compose service, not by container name. `compose run`
+# does not reliably honour `--name` (this project produced
+# "iqoqo-mykg-opencode-daemon-run-<hash>"), so an exact-name match silently
+# skipped the drain entirely -- which is exactly when the drain is needed.
+daemon_running() {
+  docker ps --filter "label=com.docker.compose.service=$AI_CONTAINER" \
+           --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q .
+}
+
 if [ "$MODE" = "update" ] && [ -n "$INBOX" ] && [ "${MYKG_DRAIN:-1}" = "1" ] \
    && [ "${SKIP_SANDBOX:-0}" != "1" ] && [ -n "$AI_CONTAINER" ] \
-   && docker ps --format '{{.Names}}' | grep -qx "$AI_CONTAINER"; then
+   && daemon_running; then
 
   count_unfinished() {
     # A task is unfinished while it has no answer and no error envelope.
@@ -289,4 +298,14 @@ if [ "$MODE" = "update" ] && [ -n "$INBOX" ] && [ "${MYKG_DRAIN:-1}" = "1" ] \
     echo "mykg_sync: agent queue drained after ${ELAPSED}s (completed $((STARTED_UNFINISHED - PENDING)))."
   fi
   unset -f count_unfinished
+else
+  # A requested drain that cannot even start is a silent failure mode: the run
+  # reports success and the backlog quietly persists.
+  if [ "$MODE" = "update" ] && [ "${MYKG_DRAIN:-1}" = "1" ] \
+     && [ "${SKIP_SANDBOX:-0}" != "1" ] && [ -n "$INBOX" ] && [ -n "$AI_CONTAINER" ]; then
+    if ! daemon_running; then
+      echo "mykg_sync: warning: agent daemon is not running; skipping queue drain." >&2
+      echo "mykg_sync:   backlog will be left pending. Check 'docker logs $AI_CONTAINER'." >&2
+    fi
+  fi
 fi
