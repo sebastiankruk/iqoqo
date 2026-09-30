@@ -846,9 +846,9 @@ def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_pat
         timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
         # The task timeout is capped: an invocation that never returns must not
         # park a worker for the full task timeout.
-        assert timeout_kwarg == opencode_daemon_module.MAX_CLI_TIMEOUT, (
-            f"Expected capped timeout={opencode_daemon_module.MAX_CLI_TIMEOUT}, got {timeout_kwarg}"
-        )
+        assert (
+            timeout_kwarg == opencode_daemon_module.MAX_CLI_TIMEOUT
+        ), f"Expected capped timeout={opencode_daemon_module.MAX_CLI_TIMEOUT}, got {timeout_kwarg}"
 
 
 def test_daemon_core_guardrail_not_empty(daemon_core_module):

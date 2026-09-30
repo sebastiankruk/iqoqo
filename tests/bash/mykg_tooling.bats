@@ -402,6 +402,15 @@ print('FAIL_CLOSED_OK')
   model=$(make -n mykg-update AI_AGENT=opencode 2>/dev/null | grep -o 'MYKG_MODEL="[^"]*"' | head -1 | cut -d'"' -f2)
   [ -n "$model" ]
 
+  # The registry is only queryable where the opencode CLI is installed. CI has
+  # no opencode, so assert what is verifiable everywhere and skip the live
+  # lookup rather than failing on a missing binary.
+  if ! command -v opencode >/dev/null 2>&1; then
+    echo "opencode CLI not installed; checking the default is well-formed only"
+    [[ "$model" == */* ]]
+    return 0
+  fi
+
   run opencode models
   [ "$status" -eq 0 ]
   [[ "$output" == *"$model"* ]]

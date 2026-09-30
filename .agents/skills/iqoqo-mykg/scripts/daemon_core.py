@@ -37,17 +37,17 @@ from typing import Any, Callable, Dict, Optional, Set
 # Timeout constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_TIMEOUT = 300       # Fallback when task has no timeout_seconds
-BASE_TIMEOUT = 600          # 10-minute base floor for dynamic formula
-MAX_TIMEOUT_CAP = 3600      # 1-hour absolute ceiling to prevent DoS
+DEFAULT_TIMEOUT = 300  # Fallback when task has no timeout_seconds
+BASE_TIMEOUT = 600  # 10-minute base floor for dynamic formula
+MAX_TIMEOUT_CAP = 3600  # 1-hour absolute ceiling to prevent DoS
 
 # ---------------------------------------------------------------------------
 # Task validation constants
 # ---------------------------------------------------------------------------
 
 MAX_TASK_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
-MAX_ERROR_SIZE_BYTES = 100 * 1024        # 100 KB — cap error files to prevent disk exhaustion
-MAX_TASK_ID_LENGTH = 128                 # SHA-256 hex = 64 chars, allow margin
+MAX_ERROR_SIZE_BYTES = 100 * 1024  # 100 KB — cap error files to prevent disk exhaustion
+MAX_TASK_ID_LENGTH = 128  # SHA-256 hex = 64 chars, allow margin
 
 # ---------------------------------------------------------------------------
 # Retry budget
@@ -157,8 +157,7 @@ def compute_effective_timeout(
     # HARD CAP — non-negotiable security boundary
     if effective > max_timeout:
         print(
-            f"[daemon_core] WARNING: Requested timeout {effective}s exceeds "
-            f"cap, clamping to {max_timeout}s",
+            f"[daemon_core] WARNING: Requested timeout {effective}s exceeds " f"cap, clamping to {max_timeout}s",
             file=sys.stderr,
             flush=True,
         )
@@ -243,14 +242,14 @@ def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
     sanitized = str(error_text)[:2000]
 
     # Redact absolute paths (Unix and Windows)
-    sanitized = re.sub(r'/[a-zA-Z0-9_./-]+', '[PATH_REDACTED]', sanitized)
-    sanitized = re.sub(r'[A-Z]:\\[^\s]+', '[PATH_REDACTED]', sanitized)
+    sanitized = re.sub(r"/[a-zA-Z0-9_./-]+", "[PATH_REDACTED]", sanitized)
+    sanitized = re.sub(r"[A-Z]:\\[^\s]+", "[PATH_REDACTED]", sanitized)
 
     # Redact environment variable references (e.g. HOME=/home/user)
-    sanitized = re.sub(r'\b[A-Z_]{3,}=[^\s,;]+', '[ENV_REDACTED]', sanitized)
+    sanitized = re.sub(r"\b[A-Z_]{3,}=[^\s,;]+", "[ENV_REDACTED]", sanitized)
 
     # Redact potential tokens/keys (long alphanumeric strings)
-    sanitized = re.sub(r'\b[a-zA-Z0-9_\-]{32,}\b', '[TOKEN_REDACTED]', sanitized)
+    sanitized = re.sub(r"\b[a-zA-Z0-9_\-]{32,}\b", "[TOKEN_REDACTED]", sanitized)
 
     # Final truncation
     if len(sanitized) > max_length:
@@ -270,7 +269,7 @@ def validate_task_id(task_id: str) -> bool:
         return False
 
     # Reject path separators and parent directory references
-    if any(char in task_id for char in ['/', '\\', '..']):
+    if any(char in task_id for char in ["/", "\\", ".."]):
         return False
 
     # Reject control characters
@@ -324,8 +323,7 @@ def write_error_envelope(
     # SECURITY: Validate task_id to prevent path traversal
     if not validate_task_id(task_id):
         print(
-            f"[daemon_core] ERROR: Invalid task_id for error envelope: "
-            f"{repr(task_id)[:50]}",
+            f"[daemon_core] ERROR: Invalid task_id for error envelope: " f"{repr(task_id)[:50]}",
             file=sys.stderr,
             flush=True,
         )
@@ -352,7 +350,7 @@ def write_error_envelope(
 
     # Verify size before writing
     error_json = json.dumps(error_envelope)
-    if len(error_json.encode('utf-8')) > MAX_ERROR_SIZE_BYTES:
+    if len(error_json.encode("utf-8")) > MAX_ERROR_SIZE_BYTES:
         # Hard truncation as final safety net
         error_envelope["error"] = sanitized_error[:50000] + "... [HARD TRUNCATION]"
         error_json = json.dumps(error_envelope)
@@ -395,8 +393,7 @@ def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:
         file_size = task_path.stat().st_size
         if file_size > MAX_TASK_SIZE_BYTES:
             print(
-                f"[daemon_core] ERROR: Task {task_path.name} exceeds size limit "
-                f"({file_size} > {MAX_TASK_SIZE_BYTES})",
+                f"[daemon_core] ERROR: Task {task_path.name} exceeds size limit " f"({file_size} > {MAX_TASK_SIZE_BYTES})",
                 file=sys.stderr,
                 flush=True,
             )
@@ -418,8 +415,7 @@ def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:
             value = task_data.get(field, "")
             if not isinstance(value, str):
                 print(
-                    f"[daemon_core] WARNING: Task {task_path.name} field "
-                    f"'{field}' is not a string, converting to string",
+                    f"[daemon_core] WARNING: Task {task_path.name} field " f"'{field}' is not a string, converting to string",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -523,8 +519,7 @@ def run_daemon(
     config_str = f" ({', '.join(config_desc)})" if config_desc else ""
 
     print(
-        f"[{daemon_name}] Starting daemon watching {inbox_dir} "
-        f"(workers={workers}){config_str}...",
+        f"[{daemon_name}] Starting daemon watching {inbox_dir} " f"(workers={workers}){config_str}...",
         flush=True,
     )
 
