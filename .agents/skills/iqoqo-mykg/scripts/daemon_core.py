@@ -28,6 +28,7 @@ import re
 import signal
 import sys
 import time
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -256,6 +257,35 @@ def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
         sanitized = sanitized[:max_length] + "... [TRUNCATED]"
 
     return sanitized
+
+
+def describe_unexpected_error(exc: BaseException) -> str:
+    """Build a diagnosable message for an exception that has no CLI context.
+
+    The subprocess failure path can quote the CLI's own stderr, but a raised
+    exception reaches the generic handler with only a bare type. Recording just
+    the class name makes an envelope like "Unexpected error: ValueError",
+    which identifies nothing -- the operator has to grep a multi-megabyte run
+    log to recover the cause, and often cannot.
+
+    So: prefer the exception message, and fall back to the deepest traceback
+    frame (file stem, function, line) when the message is empty, which is the
+    common case for bare ``ValueError`` raised by a JSON parser.
+
+    The result is always passed through sanitize_error_text() by the caller, so
+    including a path here is safe: it is redacted on the way to disk.
+    """
+    message = str(exc).strip()
+    if message:
+        return f"{type(exc).__name__}: {message}"
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    if frames:
+        deepest = frames[-1]
+        origin = Path(deepest.filename).stem
+        return f"{type(exc).__name__} with no message, raised at {origin}.py:{deepest.lineno} in {deepest.name}()"
+
+    return f"{type(exc).__name__} with no message and no traceback"
 
 
 def validate_task_id(task_id: str) -> bool:

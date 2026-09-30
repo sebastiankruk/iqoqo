@@ -1395,3 +1395,82 @@ def test_opencode_small_model_pin_survives_an_unwritable_home(opencode_daemon_mo
 
     # Must not raise.
     opencode_daemon_module.write_opencode_small_model_config("opencode-go/space-bunny-free")
+
+
+# ---------------------------------------------------------------------------
+# Diagnosable failures (task 4.1, regression)
+#
+# The subprocess failure path could quote the CLI's own stderr, but a raised
+# exception reached the generic handler with only ``type(exc).__name__``. Six
+# tasks burned the full retry budget on envelopes reading "Unexpected error:
+# ValueError", which identifies nothing -- the real cause ("Expecting ','
+# delimiter") was only recoverable by grepping a 9 MB run log.
+# ---------------------------------------------------------------------------
+
+
+def test_describe_unexpected_error_keeps_the_message(daemon_core_module):
+    """An exception's own message is the whole point; it must survive."""
+    try:
+        int("not-a-number")
+    except ValueError as exc:
+        detail = daemon_core_module.describe_unexpected_error(exc)
+
+    assert detail.startswith("ValueError:")
+    assert "invalid literal for int()" in detail
+
+
+def test_describe_unexpected_error_locates_a_bare_exception(daemon_core_module):
+    """A bare ValueError from json.loads has no message, so report where it came from.
+
+    This is the exact shape of the six stuck tasks: json.JSONDecodeError is a
+    ValueError whose str() names the offset, but a plainly raised ValueError
+    carries nothing, and the class name alone cannot distinguish 2,710 chunks.
+    """
+    try:
+        raise ValueError
+    except ValueError as exc:
+        detail = daemon_core_module.describe_unexpected_error(exc)
+
+    assert "ValueError with no message" in detail
+    assert "test_iqoqo_mykg.py" in detail
+    # The frame must name a line, not just the file.
+    assert ".py:" in detail
+
+
+def test_describe_unexpected_error_survives_no_traceback(daemon_core_module):
+    """An exception constructed but never raised still describes itself."""
+    detail = daemon_core_module.describe_unexpected_error(ValueError())
+    assert "ValueError with no message and no traceback" in detail
+
+
+def test_describe_unexpected_error_still_redacts(daemon_core_module):
+    """Adding the message must not weaken redaction -- it is sanitized on write."""
+    exc = RuntimeError("could not read /home/appuser/.config/opencode/auth.json with OPENCODE_API_KEY=sk-abc")
+    sanitized = daemon_core_module.sanitize_error_text(
+        f"Unexpected error: {daemon_core_module.describe_unexpected_error(exc)}"
+    )
+    assert "/home/appuser" not in sanitized
+    assert "sk-abc" not in sanitized
+
+
+@pytest.mark.parametrize("daemon_fixture", ["opencode_daemon_module", "agy_daemon_module"])
+def test_process_task_envelope_records_the_real_cause(request, daemon_fixture, tmp_path):
+    """End to end: the generic handler must not reduce a failure to a type name.
+
+    Both harnesses are covered because the defect was copy-pasted into each.
+    """
+    module = request.getfixturevalue(daemon_fixture)
+
+    task_path = tmp_path / "abc123.task.json"
+    task_path.write_text(json.dumps({"prompt": "extract nodes"}), encoding="utf-8")
+
+    def boom(*args, **kwargs):
+        raise ValueError("Expecting ',' delimiter: line 1 column 13 (char 12)")
+
+    with patch.object(module.subprocess, "run", side_effect=boom):
+        assert module.process_task(task_path, tmp_path) is False
+
+    envelope = json.loads((tmp_path / "abc123.error").read_text(encoding="utf-8"))
+    assert "Expecting ',' delimiter" in envelope["error"]
+    # The regression this guards: the class name used to be the entire record.
+    assert envelope["error"] != "Unexpected error: ValueError"

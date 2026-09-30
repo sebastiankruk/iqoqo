@@ -43,6 +43,7 @@ from daemon_core import (  # noqa: E402
     build_combined_prompt,
     clean_json_fences,
     compute_effective_timeout,
+    describe_unexpected_error,
     discover_tasks,
     is_task_done,
     load_and_validate_task,
@@ -140,8 +141,9 @@ def process_task(
         print(f"[agy_daemon] TimeoutExpired for task {task_id}", file=sys.stderr)
         return False
     except Exception as exc:  # pylint: disable=broad-exception-caught
-        write_error_envelope(task_id, f"Unexpected error: {type(exc).__name__}", outbox_dir)
-        print(f"[agy_daemon] Error processing task {task_id}: {type(exc).__name__}", file=sys.stderr)
+        detail = describe_unexpected_error(exc)
+        write_error_envelope(task_id, f"Unexpected error: {detail}", outbox_dir)
+        print(f"[agy_daemon] Error processing task {task_id}: {detail}", file=sys.stderr)
         return False
 
 
