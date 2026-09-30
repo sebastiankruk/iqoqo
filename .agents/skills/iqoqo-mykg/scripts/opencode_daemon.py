@@ -67,28 +67,59 @@ __all__ = [
     "load_and_validate_task",
     "map_effort_to_variant",
     "process_task",
+    "variant_candidates",
     "run_daemon",
     "sanitize_task_payload",
     "write_answer_envelope",
 ]
 
 
-def map_effort_to_variant(effort: str) -> str | None:
-    """Map agy-style effort levels to opencode --variant flag values.
+# Reasoning-effort ladder for opencode v2.
+#
+# opencode v2 dropped `--pure` and `--variant` from `opencode run`; the variant
+# is now a `#suffix` on the model string (`provider/model#variant`). Variant
+# names are per-model and v2 exits non-zero with "Variant unavailable for
+# <model>: <variant>" when a model does not publish the requested one, so a
+# single hardcoded mapping breaks as soon as the model set shifts.
+#
+# Each entry is an ordered preference list, most-specific first, always ending
+# in None. None means "send no variant", which every model accepts. The daemon
+# walks this list on a "Variant unavailable" failure, so an unknown model
+# degrades to the default variant instead of failing every task.
+EFFORT_VARIANT_LADDER: dict[str, tuple[str | None, ...]] = {
+    "minimal": ("minimal", "low", None),
+    "low": ("low", "minimal", None),
+    "medium": ("medium", "low", None),
+    "high": ("high", "xhigh", "max", "medium", None),
+}
 
-    Mapping:
-        low    -> minimal
-        medium -> None (default variant, no flag)
-        high   -> high
-        minimal -> minimal
+
+def variant_candidates(effort: str | None) -> tuple[str | None, ...]:
+    """Return the ordered variant preference list for an effort level."""
+    return EFFORT_VARIANT_LADDER.get((effort or "").lower(), (None,))
+
+
+def map_effort_to_variant(effort: str) -> str | None:
+    """Map an agy-style effort level to its preferred opencode v2 variant.
+
+    Returns None when the effort is unknown or maps to the default variant.
+    This is the first entry of variant_candidates(); the daemon uses the full
+    ladder, this stays for callers that only need a single answer.
     """
-    mapping = {
-        "low": "minimal",
-        "minimal": "minimal",
-        "medium": None,
-        "high": "high",
-    }
-    return mapping.get(effort.lower() if effort else "", None)
+    return variant_candidates(effort)[0]
+
+
+def build_model_spec(model: str, variant: str | None) -> str:
+    """Render the `provider/model[#variant]` string opencode v2 expects."""
+    base = model.split("#", 1)[0].strip()
+    if not variant:
+        return base
+    return f"{base}#{variant}"
+
+
+def is_variant_unavailable(stderr_data: str) -> bool:
+    """Detect opencode's "Variant unavailable" rejection in stderr."""
+    return "variant unavailable" in (stderr_data or "").lower()
 
 
 def bootstrap_opencode_auth() -> None:
@@ -145,10 +176,9 @@ def process_task(
             return _execute_task(task_path, outbox_dir, model, effort, attempt)
         except subprocess.TimeoutExpired:
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
                 print(
-                    f"[opencode_daemon] TimeoutExpired for task {task_id}, "
-                    f"retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
+                    f"[opencode_daemon] TimeoutExpired for task {task_id}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -156,8 +186,7 @@ def process_task(
             else:
                 write_error_envelope(task_id, "Subprocess timed out after all retries", outbox_dir)
                 print(
-                    f"[opencode_daemon] TimeoutExpired for task {task_id} "
-                    f"after {max_retries} attempts",
+                    f"[opencode_daemon] TimeoutExpired for task {task_id} after {max_retries} attempts",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -168,6 +197,37 @@ def process_task(
             return False
 
     return False
+
+
+def _run_opencode(cmd: list[str], effective_timeout: int) -> tuple[int, str, str]:
+    """Run the opencode CLI, returning (returncode, stdout, stderr).
+
+    SECURITY: stdout/stderr go to temp files rather than pipes. opencode's
+    internal IPC/event-bus writes to stdout immediately after the 'init'
+    handshake, so capture_output=True fills the pipe buffer and deadlocks
+    before the process can exit.
+    """
+    with (
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
+    ):
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,  # prevent opencode from blocking on stdin
+            stdout=stdout_f,
+            stderr=stderr_f,
+            text=True,
+            encoding="utf-8",
+            timeout=effective_timeout,
+            check=False,
+        )
+
+        stdout_f.seek(0)
+        stdout_data = stdout_f.read()
+        stderr_f.seek(0)
+        stderr_data = stderr_f.read()
+
+    return proc.returncode, stdout_data, stderr_data
 
 
 def _execute_task(
@@ -191,15 +251,8 @@ def _execute_task(
     effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
 
-    cmd = ["opencode", "run", "--auto", "--pure", "-m", effective_model]
-    variant = map_effort_to_variant(effective_effort)
-    if variant:
-        cmd.extend(["--variant", variant])
-    cmd.append(combined_prompt)
-
     print(
-        f"[opencode_daemon] Running opencode for task {task_id[:12]} "
-        f"(prompt size: {len(combined_prompt)} chars)...",
+        f"[opencode_daemon] Running opencode for task {task_id[:12]} (prompt size: {len(combined_prompt)} chars)...",
         flush=True,
     )
 
@@ -213,37 +266,50 @@ def _execute_task(
 
     print(f"[opencode_daemon] Using timeout: {effective_timeout}s for task {task_id[:12]}", flush=True)
 
-    # PIPE DEADLOCK FIX: opencode's internal IPC/event-bus writes to stdout immediately
-    # after 'init' (the "event connected" handshake). Using capture_output=True creates a
-    # pipe whose buffer fills and blocks because subprocess.run() only drains after the
-    # process exits — a classic pipe deadlock. We avoid this by redirecting stdout/stderr
-    # to temp files so opencode can write freely, then read back the content after exit.
-    with (
-        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stdout") as stdout_f,
-        tempfile.TemporaryFile(mode="w+", encoding="utf-8", suffix=".stderr") as stderr_f,
-    ):
+    # opencode v2 removed `--pure` and `--variant` from `opencode run`; passing
+    # either makes the CLI print its usage block and exit 1 without ever
+    # contacting the model. The variant is a `#suffix` on the model string.
+    #
+    # Variant availability is per-model, and a bad pick is fatal in v2, so walk
+    # the effort ladder and degrade on rejection rather than failing the task.
+    candidates = variant_candidates(effective_effort)
+    returncode = 1
+    stdout_data = ""
+    stderr_data = ""
 
-        proc = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,  # prevent opecode from blocking on stdin
-            stdout=stdout_f,
-            stderr=stderr_f,
-            text=True,
-            encoding="utf-8",
-            timeout=effective_timeout,
-            check=False,
+    for index, variant in enumerate(candidates):
+        cmd = ["opencode", "run", "--auto", "-m", build_model_spec(effective_model, variant)]
+        cmd.append(combined_prompt)
+
+        returncode, stdout_data, stderr_data = _run_opencode(cmd, effective_timeout)
+
+        if returncode == 0:
+            break
+
+        is_last = index == len(candidates) - 1
+        if is_last or not is_variant_unavailable(stderr_data):
+            break
+
+        next_variant = candidates[index + 1]
+        print(
+            f"[opencode_daemon] Variant '{variant}' unavailable for {effective_model}; retrying with {next_variant or 'no variant'}.",
+            file=sys.stderr,
+            flush=True,
         )
 
-        stdout_f.seek(0)
-        stdout_data = stdout_f.read()
-        stderr_f.seek(0)
-        stderr_data = stderr_f.read()
+    print(f"[opencode_daemon] opencode returned code {returncode} for task {task_id[:12]}", flush=True)
 
-    print(f"[opencode_daemon] opencode returned code {proc.returncode} for task {task_id[:12]}", flush=True)
-
-    if proc.returncode != 0:
-        write_error_envelope(task_id, f"Subprocess failed with exit code {proc.returncode}", outbox_dir)
-        print(f"[opencode_daemon] Warning: opencode failed for {task_id}: exit code {proc.returncode}", file=sys.stderr, flush=True)
+    if returncode != 0:
+        # Surface stderr: a bare exit code hides the actual cause, which is
+        # exactly how a v2 CLI flag/model regression went unnoticed here.
+        detail = (stderr_data or "").strip().splitlines()
+        reason = detail[-1][:300] if detail else "no stderr output"
+        write_error_envelope(task_id, f"Subprocess failed with exit code {returncode}: {reason}", outbox_dir)
+        print(
+            f"[opencode_daemon] Warning: opencode failed for {task_id}: exit code {returncode} — {reason}",
+            file=sys.stderr,
+            flush=True,
+        )
         return False
 
     answer_text = clean_json_fences(stdout_data)

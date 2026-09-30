@@ -400,9 +400,12 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
         assert "run" in args
         assert "--auto" in args
         assert "-m" in args
-        assert args[args.index("-m") + 1] == "opencode-go/muse-spark-1.3-contributor"
-        assert "--variant" in args
-        assert args[args.index("--variant") + 1] == "minimal"
+        # Default effort is "minimal"; the variant rides on the model string.
+        assert args[args.index("-m") + 1] == "opencode-go/muse-spark-1.3-contributor#minimal"
+
+        # opencode v2 removed these flags; passing either exits 1 on every task.
+        assert "--pure" not in args
+        assert "--variant" not in args
 
         # Verify output files
         done_file = outbox / f"{task_id}.done"
@@ -416,7 +419,7 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
 
 
 def test_opencode_process_task_with_model_and_effort(opencode_daemon_module, tmp_path):
-    """Test process_task forwards model and effort flags to opencode CLI."""
+    """Test process_task forwards model and effort to the opencode v2 model spec."""
     inbox = tmp_path / "inbox"
     outbox = tmp_path / "outbox"
     inbox.mkdir()
@@ -435,14 +438,127 @@ def test_opencode_process_task_with_model_and_effort(opencode_daemon_module, tmp
         )
         assert success is True
         args = mock_run.call_args[0][0]
-        assert "-m" in args
-        assert args[args.index("-m") + 1] == "opencode-go/deepseek-v4-pro"
-        assert "--variant" in args
-        assert args[args.index("--variant") + 1] == "high"
+        assert args[args.index("-m") + 1] == "opencode-go/deepseek-v4-pro#high"
+        assert "--variant" not in args
+        assert "--pure" not in args
 
 
-def test_opencode_process_task_medium_effort_omits_variant(opencode_daemon_module, tmp_path):
-    """Test that medium effort maps to no --variant flag (default variant)."""
+def test_opencode_process_task_degrades_on_unavailable_variant(opencode_daemon_module, tmp_path):
+    """A rejected variant must degrade down the ladder, not fail the task.
+
+    opencode v2 exits 1 with "Variant unavailable for <model>: <variant>" when
+    a model does not publish the requested variant. Variant sets are per-model,
+    so a hardcoded mapping fails every task on any model that lacks it.
+    """
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_variant_degrade"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    # space-bunny-free publishes low..max but not "minimal", so the default
+    # minimal effort must fall through to "low".
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        spec = cmd[cmd.index("-m") + 1]
+        if spec.endswith("#minimal"):
+            return _make_subprocess_mock("", "Error: Variant unavailable for space-bunny-free: minimal", 1)(cmd, **kwargs)
+        return _make_subprocess_mock('{"nodes": []}', "", 0)(cmd, **kwargs)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        success = opencode_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="opencode-go/space-bunny-free",
+            effort="minimal",
+        )
+
+    assert success is True
+    assert len(calls) == 2
+    assert calls[0][calls[0].index("-m") + 1] == "opencode-go/space-bunny-free#minimal"
+    assert calls[1][calls[1].index("-m") + 1] == "opencode-go/space-bunny-free#low"
+
+
+def test_opencode_process_task_degrades_to_bare_model(opencode_daemon_module, tmp_path):
+    """When every variant is rejected the daemon falls back to no variant."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_variant_bare"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    specs = []
+
+    def fake_run(cmd, **kwargs):
+        spec = cmd[cmd.index("-m") + 1]
+        specs.append(spec)
+        if "#" in spec:
+            return _make_subprocess_mock("", "Error: Variant unavailable for m: x", 1)(cmd, **kwargs)
+        return _make_subprocess_mock('{"nodes": []}', "", 0)(cmd, **kwargs)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        success = opencode_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="opencode-go/some-model",
+            effort="minimal",
+        )
+
+    assert success is True
+    assert specs[-1] == "opencode-go/some-model"
+
+
+def test_opencode_does_not_retry_ladder_on_unrelated_failure(opencode_daemon_module, tmp_path):
+    """Only 'Variant unavailable' may trigger a retry; other errors must not loop."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_unrelated_failure"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock("", "Error: unauthorized", 1)) as mock_run:
+        success = opencode_daemon_module.process_task(task_file, outbox, effort="minimal")
+
+    assert success is False
+    assert mock_run.call_count == 1
+    # The cause must reach the error envelope, not just an exit code.
+    error_file = outbox / f"{task_id}.error"
+    assert error_file.exists()
+    assert "unauthorized" in error_file.read_text(encoding="utf-8")
+
+
+def test_opencode_build_model_spec_strips_existing_variant(opencode_daemon_module):
+    build = opencode_daemon_module.build_model_spec
+    assert build("opencode-go/muse-spark-1.3-contributor", "high") == "opencode-go/muse-spark-1.3-contributor#high"
+    assert build("opencode-go/muse-spark-1.3-contributor", None) == "opencode-go/muse-spark-1.3-contributor"
+    # A model passed with a variant already pinned must not get a second one.
+    assert build("opencode-go/muse-spark-1.3-contributor#low", "high") == "opencode-go/muse-spark-1.3-contributor#high"
+
+
+def test_opencode_effort_ladder_always_ends_unpinned(opencode_daemon_module):
+    """Every ladder must terminate at None so no task can exhaust all variants."""
+    module = opencode_daemon_module
+    for effort in ("minimal", "low", "medium", "high"):
+        candidates = module.variant_candidates(effort)
+        assert candidates[-1] is None, effort
+    # Unknown/empty effort still produces a runnable spec.
+    assert module.variant_candidates("bogus") == (None,)
+    assert module.variant_candidates(None) == (None,)
+
+
+def test_opencode_process_task_medium_effort_uses_medium_variant(opencode_daemon_module, tmp_path):
+    """Test that medium effort maps to the medium variant."""
     inbox = tmp_path / "inbox"
     outbox = tmp_path / "outbox"
     inbox.mkdir()
@@ -460,17 +576,19 @@ def test_opencode_process_task_medium_effort_omits_variant(opencode_daemon_modul
         )
         assert success is True
         args = mock_run.call_args[0][0]
+        assert args[args.index("-m") + 1].endswith("#medium")
         assert "--variant" not in args
 
 
 def test_opencode_map_effort_to_variant(opencode_daemon_module):
-    """Test effort-to-variant mapping for opencode CLI."""
+    """Test the effort-to-variant ladder for the opencode v2 CLI."""
     mapper = opencode_daemon_module.map_effort_to_variant
-    assert mapper("low") == "minimal"
     assert mapper("minimal") == "minimal"
-    assert mapper("medium") is None
+    assert mapper("low") == "low"
+    assert mapper("medium") == "medium"
     assert mapper("high") == "high"
-    assert mapper("LOW") == "minimal"  # case-insensitive
+    assert mapper("LOW") == "low"  # case-insensitive
+    assert mapper("nonsense") is None
 
 
 def test_opencode_credential_bootstrap(tmp_path, opencode_daemon_module, monkeypatch):

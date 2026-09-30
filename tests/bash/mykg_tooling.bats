@@ -152,8 +152,8 @@
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
   [[ "$output" == *'AI_AGENT="opencode"'* ]]
-  [[ "$output" == *'MYKG_MODEL="opencode/mimo-v2.5-free"'* ]]
-  [[ "$output" == *'MYKG_EFFORT="minimal"'* ]]
+  [[ "$output" == *'MYKG_MODEL="opencode-go/space-bunny-free"'* ]]
+  [[ "$output" == *'MYKG_EFFORT="low"'* ]]
   [[ "$output" == *'MYKG_PROFILE="agent-opencode"'* ]]
 }
 
@@ -391,10 +391,20 @@ print('FAIL_CLOSED_OK')
 @test "Makefile mykg-update uses opencode defaults when AI_AGENT=opencode" {
   run make -n mykg-update AI_AGENT=opencode
   [ "$status" -eq 0 ]
-  [[ "$output" == *"opencode/mimo-v2.5-free"* ]]
-  [[ "$output" == *"minimal"* ]]
+  [[ "$output" == *"opencode-go/space-bunny-free"* ]]
   [[ "$output" == *"agent-opencode"* ]]
   [[ "$output" == *"scripts/mykg_sync.sh update"* ]]
+}
+
+@test "Makefile opencode default model is a live registry entry" {
+  # Guards against the class of regression where the pinned default was
+  # retired from the provider and every opencode mykg run failed.
+  model=$(make -n mykg-update AI_AGENT=opencode 2>/dev/null | grep -o 'MYKG_MODEL="[^"]*"' | head -1 | cut -d'"' -f2)
+  [ -n "$model" ]
+
+  run opencode models
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$model"* ]]
 }
 
 @test "Makefile mykg-update preserves agy defaults when AI_AGENT=agy" {
@@ -419,6 +429,36 @@ print('FAIL_CLOSED_OK')
 
   # Verify AI_AGENT=opencode environment variable
   run grep -E "AI_AGENT=opencode" "$compose_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "opencode daemon does not pass v1-only CLI flags" {
+  # opencode v2 removed --pure and --variant from `opencode run`. Passing
+  # either makes the CLI print its usage block and exit 1 on every task, so
+  # the model is never contacted and the whole extraction degrades silently.
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  [ -f "$daemon_py" ]
+
+  run grep -E '"--pure"' "$daemon_py"
+  [ "$status" -ne 0 ]
+
+  run grep -E '"--variant"' "$daemon_py"
+  [ "$status" -ne 0 ]
+}
+
+@test "opencode daemon builds the model with a #variant suffix" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+
+  run grep -F 'def build_model_spec' "$daemon_py"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg_sync.sh surfaces daemon start failures" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # The daemon start must not be wrapped in `|| true`; a sandbox that never
+  # came up used to look identical to a healthy run.
+  run grep -F 'failed to start the ${AI_AGENT} extraction daemon' "$sync_script"
   [ "$status" -eq 0 ]
 }
 

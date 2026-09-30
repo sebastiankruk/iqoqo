@@ -179,7 +179,13 @@ start_sandbox_daemon() {
   docker compose -f "$COMPOSE_FILE" rm -f sandbox-egress-proxy >/dev/null 2>&1 || true
   docker compose -f "$COMPOSE_FILE" up -d sandbox-egress-proxy >/dev/null 2>&1 || true
 
-  docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
+  # A failing daemon start is fatal rather than ignored. The previous
+  # `>/dev/null 2>&1 || true` made a daemon that never started -- or started
+  # and died on every task -- indistinguishable from a healthy run, which is
+  # how a hard opencode CLI regression went unnoticed. A non-zero status here
+  # means the sandbox never came up, so the extraction would silently degrade
+  # to the non-LLM tiers and quietly produce a worse knowledge graph.
+  if ! docker compose -f "$COMPOSE_FILE" run --rm -d --name "$AI_CONTAINER" \
     -v "$AI_BIN:$AI_MOUNT" \
     -e MYKG_MODEL="${MYKG_MODEL:-}" \
     -e MYKG_EFFORT="${MYKG_EFFORT:-}" \
@@ -190,7 +196,12 @@ start_sandbox_daemon() {
     python3 "$AI_SCRIPT" \
     --workers 1 \
     "$INBOX" \
-    "$OUTBOX" >/dev/null 2>&1 || true
+    "$OUTBOX"; then
+    echo "mykg_sync: failed to start the ${AI_AGENT} extraction daemon." >&2
+    echo "mykg_sync: inspect it with:" >&2
+    echo "  docker logs $AI_CONTAINER" >&2
+    return 1
+  fi
 }
 
 if [ "${SKIP_SANDBOX:-0}" != "1" ] && docker_available && [ -n "$INBOX" ]; then

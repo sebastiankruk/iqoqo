@@ -209,8 +209,11 @@ MYKG_DEFAULT_EFFORT ?= low
 AI_AGENT ?= agy
 AGY_DEFAULT_MODEL ?= gemini-3.8-flash-low
 AGY_DEFAULT_EFFORT ?= low
-OPENCODE_DEFAULT_MODEL ?= opencode/mimo-v2.5-free
-OPENCODE_DEFAULT_EFFORT ?= minimal
+# Keep this on a model that actually exists in the registry — the previous
+# pin (opencode/mimo-v2.5-free) was retired and made every opencode mykg run
+# fail. The daemon degrades the effort->variant mapping per model.
+OPENCODE_DEFAULT_MODEL ?= opencode-go/space-bunny-free
+OPENCODE_DEFAULT_EFFORT ?= low
 AI_EFFECTIVE_MODEL = $(if $(MODEL),$(MODEL),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_MODEL),$(OPENCODE_DEFAULT_MODEL)))
 AI_EFFECTIVE_EFFORT = $(if $(EFFORT),$(EFFORT),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_EFFORT),$(OPENCODE_DEFAULT_EFFORT)))
 AI_PROFILE = $(if $(filter opencode,$(AI_AGENT)),agent-opencode,agent-claude-code)
