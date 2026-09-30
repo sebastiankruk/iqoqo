@@ -29,6 +29,7 @@
 
 - [x] 4.1 Record the CLI's underlying error text in the failure envelope alongside the exit code, and verify the cause is readable from pipeline state alone
 - [x] 4.4 **Regression fix (2026-09-30).** 4.1 was only satisfied on the *subprocess* path (`opencode_daemon.py:462`, which quotes the CLI's stderr — hence envelopes reading `getaddrinfo ETIMEOUT sandbox-egress-proxy`). The generic `except Exception` handler in both harnesses recorded only `type(exc).__name__`, so an envelope said just `Unexpected error: ValueError`, which identifies nothing. Six tasks from the 2026-09-30 run burned the full retry budget in exactly that state; the real cause (`Expecting ',' delimiter: line 1 column 13`) was only recoverable by grepping the 9 MB `run.log`, which is precisely what 4.1 forbids. Added `describe_unexpected_error()` to the shared core — it keeps the exception message, and for a bare `ValueError` (the common `json.loads` case, where `str()` is empty) reports the deepest traceback frame as `file.py:line in func()` instead. Wired into `opencode_daemon.py:328` and `agy_daemon.py:143` (the defect was copy-pasted into both). Redaction is unaffected: the message passes through the existing `sanitize_error_text()` on write, verified by a test asserting `/home/appuser` and `sk-abc` are still stripped. 5 tests added to `tests/test_iqoqo_mykg.py`, including a parametrized end-to-end check across both harnesses; confirmed to fail against the pre-fix behaviour.
+- [x] 4.5 **NUL byte fix (2026-09-30) — the root cause 4.4 made visible.** Once the cause was legible, all six stuck tasks read `ValueError: embedded null byte`. Both harnesses pass the prompt as a **command-line argument**, and `subprocess.run()` raises before the CLI is ever contacted, so a single `0x00` anywhere in the indexed source fails the task irrecoverably — the retry budget cannot help, because the input does not change between attempts. The failing prompt carried exactly one NUL at offset 86,860. The NUL was **self-inflicted**: the graph had indexed an earlier run's own `ps` output, which contains the shell idiom `tr "\0" " " < $d/cmdline`, so one run's diagnostic output became the next run's poisoned input. `build_combined_prompt()` now drops NUL bytes — a terminator with no meaning in natural language, so lossless for the model — and **logs the count to stderr** rather than stripping silently, so the condition stays visible. 2 tests added, one of which asserts the built prompt is actually accepted by a live `subprocess.run()`. Verified against the real failing task file. **Confirmed effective in production:** the re-queued six went from 6 failed to 6 answered, with the strip warning firing exactly 6 times (see 9.2).
 - [x] 4.2 Make daemon start failures fatal instead of discarding the status, and verify a failed start is reported with a log-inspection hint
 - [x] 4.3 Repoint the default opencode model to a live registry entry, and verify with a test that asserts the default actually appears in the provider's model list
 
@@ -46,7 +47,7 @@
 - [x] 6.2 Bound the wait with a configurable timeout and treat timeout as a reported backlog rather than a failed run
 - [x] 6.3 Report completions alongside the outstanding count, and warn explicitly when no task completes within a reporting interval, since an unchanged pending count is otherwise indistinguishable from a stall
 - [x] 6.4 Raise daemon concurrency above one so a single slow task cannot block the queue, and verify throughput improves rather than assuming it
-- [ ] 6.5 Verify the drain end-to-end against a real backlog and confirm the pending-task count reaches zero, rather than plateauing
+- [x] 6.5 Verify the drain end-to-end against a real backlog and confirm the pending-task count reaches zero, rather than plateauing. **Verified 2026-09-30 against a real 2,728-task backlog.** Final state: 2728 done, 0 failed, 0 pending — the count reached zero rather than plateauing, and the `DONE pass2` line confirms the orchestrator completed the 1-file/2-batch re-extraction that the re-queued tasks belonged to.
 
 ## 7. Operator Tools
 
@@ -66,8 +67,25 @@
 
 ## 9. Integration and Release
 
-- [ ] 9.1 Drain the outstanding task backlog with the drain in place and confirm pending tasks reach zero with no new failure envelopes
-- [ ] 9.2 Confirm the previously re-queued failures are now answered rather than re-failed, and record the before/after counts
-- [ ] 9.3 Run the full backend suite and the shell suite, confirming no new failures beyond known pre-existing ones
-- [ ] 9.4 Add a changelog entry covering the v2 CLI contract, credential delivery, retry budget, queue drain, and the two new targets
-- [ ] 9.5 Commit the change set, since an earlier session lost uncommitted work to a stash operation
+- [x] 9.1 Drain the outstanding task backlog with the drain in place and confirm pending tasks reach zero with no new failure envelopes. **Verified 2026-09-30.** Before: 2710 in the inbox, 2704 done, 6 failed, 0 pending. After: 2728 total, 2728 done, **0 failed, 0 pending** — the drain reached zero and produced no new failure envelopes.
+- [x] 9.2 Confirm the previously re-queued failures are now answered rather than re-failed, and record the before/after counts. **Verified 2026-09-30. Before: 6 failed. After: 0 failed, 6 answered.** All six carry a real `.answer.json` and a `.done` marker. This task is what exposed the NUL defect, and is the evidence for it:
+
+  | Task | Before (20:32) | After (21:12) |
+  |------|----------------|---------------|
+  | `29a682950d67` | `ValueError: embedded null byte` | answered |
+  | `2f459fd600b4` | `ValueError: embedded null byte` | answered |
+  | `659931b0ccce` | `ValueError: embedded null byte` | answered |
+  | `663642e1f34e` | `ValueError: embedded null byte` | answered |
+  | `9b053aebca24` | `ValueError: embedded null byte` | answered |
+  | `e0dc8287a0e8` | `ValueError: embedded null byte` | answered |
+
+  The NUL strip warning fired exactly 6 times in the daemon log, one per task, confirming the fix is what unblocked them. The NUL was **self-inflicted**: the graph had indexed an earlier run's own `ps` output, which contains a `tr "\0" " " < $d/cmdline` shell idiom — so a previous run's diagnostic output became the input that broke the next run.
+
+  The 7th envelope, `4871e495` (`Subprocess failed with exit code 1: > build · space-bunny-free`), is correctly classified as **already answered** and left alone by `retry_failed.py`. Its retry budget was never spent and it needs no action.
+- [x] 9.3 Run the full backend suite and the shell suite, confirming no new failures beyond known pre-existing ones. **Backend: 2375 passed, 3 skipped, 0 failed** (10m17s). **Shell: 276 ok, 2 not ok — both confirmed pre-existing and environmental, neither caused by this change:**
+  - `#184 Makefile mykg-update preserves agy defaults when AI_AGENT=agy` — the test runs bare `make -n mykg-update` without setting `AI_AGENT`, so it inherits `AI_AGENT=opencode` from the operator's shell and asserts the agy default `gemini-3.8-flash-low` against an opencode-resolved recipe. Reproduced on the **base commit `2a9f550`** in a clean worktree, where it fails identically; passes with `env -u AI_AGENT`. The Makefile's agy default is correct (`Makefile:210,213`); the test is under-specified.
+  - `#177 mykg query produces valid ontological output via make mykg-ask` — requires `output/nodes.jsonl`, which the current session lacks. Skips in a clean checkout (no `mykg_sessions/`) and fails here only because a live session exists in an incomplete state. This change touches no graph or query code.
+- [x] 9.4 Add a changelog entry covering the v2 CLI contract, credential delivery, retry budget, queue drain, and the two new targets
+- [x] 9.5 Commit the change set, since an earlier session lost uncommitted work to a stash operation. **Committed 2026-09-30 on `chore/0.8.2/moderate-findings-sweep` (3 commits: the diagnosability fix, the NUL fix, the OpenSpec archival).** The pre-existing `stash@{0}` from 2026-09-30 04:21 was audited: every symbol it contains is already present in `HEAD` (it is the pre-merge state of PR #319, which is an ancestor here), so nothing is lost by leaving it. **It has been left in place** rather than dropped, since removing a stash is not reversible from the reflog alone.
+- [x] 9.4 Add a changelog entry covering the v2 CLI contract, credential delivery, retry budget, queue drain, and the two new targets
+- [x] 9.5 Commit the change set, since an earlier session lost uncommitted work to a stash operation
