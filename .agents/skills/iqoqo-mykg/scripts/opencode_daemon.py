@@ -60,6 +60,7 @@ __all__ = [
     "SECURITY_GUARDRAIL",
     "bootstrap_opencode_auth",
     "build_combined_prompt",
+    "build_subprocess_env",
     "clean_json_fences",
     "compute_effective_timeout",
     "discover_tasks",
@@ -67,6 +68,7 @@ __all__ = [
     "load_and_validate_task",
     "map_effort_to_variant",
     "process_task",
+    "read_provider_api_key",
     "variant_candidates",
     "run_daemon",
     "sanitize_task_payload",
@@ -122,22 +124,111 @@ def is_variant_unavailable(stderr_data: str) -> bool:
     return "variant unavailable" in (stderr_data or "").lower()
 
 
-def bootstrap_opencode_auth() -> None:
-    """Copy the surgically-mounted opencode auth secret into the user home directory.
+# Where the opencode-go API key is read from. The compose file bind-mounts the
+# host's auth.json here (read-only, single file) so the sandbox never needs the
+# whole credential store.
+# Last-resort model when neither the argument nor the environment names one.
+# Must be free-tier: a missing env var should not silently start spending the
+# operator's inference budget. Keep this in sync with OPENCODE_DEFAULT_MODEL
+# in the Makefile.
+DEFAULT_MODEL = "opencode-go/space-bunny-free"
 
-    SECURITY: Credentials are copied from Docker secrets mount to user home
-    because the CLI tools expect them in specific paths. We use 0o600 permissions
-    and never log the credential content. The secret mount is read-only and
-    isolated by the container runtime.
+AUTH_SECRET_PATH = Path("/run/secrets/opencode-auth.json")
+
+# Provider id -> environment variable holding its API key. Taken from the
+# provider entry in the models.dev catalogue, e.g. opencode-go declares
+# {"env": ["OPENCODE_API_KEY"], "api": "https://opencode.ai/zen/go/v1"}.
+PROVIDER_ENV_VARS = {
+    "opencode-go": "OPENCODE_API_KEY",
+    "opencode": "OPENCODE_API_KEY",
+}
+
+
+def read_provider_api_key(model: str | None = None) -> str | None:
+    """Read the API key for a provider out of the mounted auth.json.
+
+    opencode v2 stopped reading auth.json for provider credentials. It keeps
+    them in the `credential` table of its own SQLite store (opencode.db), which
+    is populated by `opencode auth login` — and that command demands an
+    interactive terminal for API-key providers, so it cannot run unattended in
+    the daemon. Instead the provider takes its key straight from the
+    environment, per its catalogue entry.
+
+    Without this, every task fails with "Model unavailable: <provider>", because
+    the sandbox has no credential at all.
     """
-    secret_path = Path("/run/secrets/opencode-auth.json")
+    provider = (model or "").split("/", 1)[0].strip() or "opencode-go"
+    env_var = PROVIDER_ENV_VARS.get(provider)
+    if env_var is None:
+        return None
+
+    # An explicit env var (e.g. injected by compose) always wins.
+    existing = os.environ.get(env_var)
+    if existing:
+        return existing
+
+    candidates = [AUTH_SECRET_PATH]
+    home = Path(os.environ.get("HOME", "/home/appuser"))
+    candidates.append(home / ".local" / "share" / "opencode" / "auth.json")
+
+    for candidate in candidates:
+        try:
+            if not candidate.is_file():
+                continue
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        entry = payload.get(provider)
+        if isinstance(entry, dict):
+            key = entry.get("key")
+            if isinstance(key, str) and key:
+                return key
+
+    return None
+
+
+def build_subprocess_env(model: str | None = None) -> dict[str, str]:
+    """Build the environment for the opencode child process.
+
+    SECURITY: the key is read from the read-only secret mount at call time and
+    passed only in the child's environment. It is never written to a log line,
+    a command line, or a file inside the container.
+    """
+    env = os.environ.copy()
+    key = read_provider_api_key(model)
+    provider = (model or "").split("/", 1)[0].strip() or "opencode-go"
+    env_var = PROVIDER_ENV_VARS.get(provider, "OPENCODE_API_KEY")
+    if key:
+        env[env_var] = key
+    return env
+
+
+def bootstrap_opencode_auth() -> None:
+    """Stage the surgically-mounted opencode auth secret in the user home.
+
+    NOTE: this copy alone is NOT sufficient for opencode v2. v2 no longer reads
+    auth.json for provider credentials — it keeps them in the `credential` table
+    of its own SQLite store, and the only CLI path to populate that
+    (`opencode auth login`) refuses to run unattended for API-key providers.
+    The key actually reaches the model through OPENCODE_API_KEY, set per-child
+    in build_subprocess_env(). The copy is kept because it is cheap, preserves
+    the 0o600 permissions, and keeps the home self-describing for anything
+    else that inspects the credential store.
+
+    SECURITY: Credentials are copied from the Docker secrets mount to user home
+    because the CLI tools expect them in specific paths. We use 0o600
+    permissions and never log the credential content. The secret mount is
+    read-only and isolated by the container runtime.
+    """
+    secret_path = AUTH_SECRET_PATH
     home = Path(os.environ.get("HOME", "/home/appuser"))
     target_path = home / ".local" / "share" / "opencode" / "auth.json"
 
     if not secret_path.is_file():
         print(
             "[opencode_daemon] Warning: secret mount /run/secrets/opencode-auth.json not found. "
-            "opencode CLI will fail its own auth check if no key is available.",
+            "The opencode-go key will not be available, so every task will fail "
+            "with 'Model unavailable: <provider>'.",
             file=sys.stderr,
         )
         return
@@ -199,7 +290,7 @@ def process_task(
     return False
 
 
-def _run_opencode(cmd: list[str], effective_timeout: int) -> tuple[int, str, str]:
+def _run_opencode(cmd: list[str], effective_timeout: int, model: str | None = None) -> tuple[int, str, str]:
     """Run the opencode CLI, returning (returncode, stdout, stderr).
 
     SECURITY: stdout/stderr go to temp files rather than pipes. opencode's
@@ -220,6 +311,7 @@ def _run_opencode(cmd: list[str], effective_timeout: int) -> tuple[int, str, str
             encoding="utf-8",
             timeout=effective_timeout,
             check=False,
+            env=build_subprocess_env(model),
         )
 
         stdout_f.seek(0)
@@ -248,7 +340,7 @@ def _execute_task(
     actual_task_id = task_data.get("task_id", task_id)
     combined_prompt = build_combined_prompt(task_data)
 
-    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
 
     print(
@@ -281,7 +373,7 @@ def _execute_task(
         cmd = ["opencode", "run", "--auto", "-m", build_model_spec(effective_model, variant)]
         cmd.append(combined_prompt)
 
-        returncode, stdout_data, stderr_data = _run_opencode(cmd, effective_timeout)
+        returncode, stdout_data, stderr_data = _run_opencode(cmd, effective_timeout, effective_model)
 
         if returncode == 0:
             break
@@ -330,7 +422,7 @@ def run_daemon(
     # Bootstrap opencode auth from secret mount
     bootstrap_opencode_auth()
 
-    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor"
+    effective_model = model or os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL
     effective_effort = effort or os.environ.get("OPENCODE_EFFORT") or os.environ.get("MYKG_EFFORT") or "minimal"
 
     _run_daemon_core(
@@ -355,8 +447,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         "-m",
-        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or "opencode-go/muse-spark-1.3-contributor",
-        help="Model to use for opencode CLI (default: opencode-go/muse-spark-1.3-contributor)",
+        default=os.environ.get("OPENCODE_MODEL") or os.environ.get("MYKG_MODEL") or DEFAULT_MODEL,
+        help=f"Model to use for opencode CLI (default: {DEFAULT_MODEL})",
     )
     parser.add_argument(
         "--effort",

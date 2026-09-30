@@ -462,6 +462,57 @@ print('FAIL_CLOSED_OK')
   [ "$status" -eq 0 ]
 }
 
+@test "opencode harness probe never touches mykg session state" {
+  probe_script="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+  [ -f "$probe_script" ]
+  [ -x "$probe_script" ]
+
+  # The whole point of the probe is to test models without writing .error
+  # envelopes, which is_task_done() treats as terminal. It must never point the
+  # daemon at a real session inbox/outbox nor run the extraction pipeline.
+  run grep -E 'agent_inbox|agent_outbox' "$probe_script"
+  [ "$status" -ne 0 ]
+
+  run grep -E 'run_update\.py|run_index\.py' "$probe_script"
+  [ "$status" -ne 0 ]
+
+  # It must exercise the real credential bootstrap, not a reimplementation.
+  run grep -F 'bootstrap_opencode_auth' "$probe_script"
+  [ "$status" -eq 0 ]
+
+  # The egress proxy picks its allowlist from AI_AGENT, so it must be exported
+  # for compose to interpolate it into the proxy service.
+  run grep -E '^export AI_AGENT=opencode' "$probe_script"
+  [ "$status" -eq 0 ]
+}
+
+@test "mykg-retry target re-queues failed agent tasks" {
+  run make -n mykg-retry
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"retry_failed.py"* ]]
+
+  run make -n mykg-probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"probe_opencode_harness.sh"* ]]
+}
+
+@test "mykg_sync.sh drains the agent queue before teardown" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # The daemon is a consumer; without an explicit drain the EXIT trap removes
+  # it while tasks are still pending, and those tasks end up with neither an
+  # answer nor an error -- invisible, permanent data loss.
+  run grep -F 'mykg_sync: agent queue drained' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'MYKG_DRAIN_TIMEOUT' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  # The drain must be skippable, e.g. for a quick sync.
+  run grep -E '\$\{MYKG_DRAIN:-1\}' "$sync_script"
+  [ "$status" -eq 0 ]
+}
+
 @test "mykgconfig.yaml includes agent-opencode profile" {
   config_file="${BATS_TEST_DIRNAME}/../../mykg_config.yaml"
   [ -f "$config_file" ]
@@ -469,7 +520,48 @@ print('FAIL_CLOSED_OK')
   run grep -E "agent-opencode:" "$config_file"
   [ "$status" -eq 0 ]
 
-  run grep -E "opencode-go/muse-spark-1\.3-contributor" "$config_file"
+  run grep -E "opencode-go/space-bunny-free" "$config_file"
   [ "$status" -eq 0 ]
+
+  # The documented model must be free-tier: a missing OPENCODE_MODEL must never
+  # silently start spending the operator's inference budget.
+  run grep -E "opencode-go/(muse-spark|glm-|mimo-|grok-)" "$config_file"
+  [ "$status" -ne 0 ]
 }
 
+
+@test "opencode defaults are free-tier" {
+  daemon_py="${BATS_TEST_DIRNAME}/../../.agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"
+  probe="${BATS_TEST_DIRNAME}/../../scripts/probe_opencode_harness.sh"
+  makefile="${BATS_TEST_DIRNAME}/../../Makefile"
+
+  # A probe performs real billed calls, so its default model set must be free.
+  # Comments are stripped first: the probe documents paid models as opt-in
+  # examples, and naming one there is not the same as defaulting to it.
+  run bash -c "grep -vE '^[[:space:]]*#' '$probe' | grep -E 'opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)'"
+  [ "$status" -ne 0 ]
+
+  # Same for the daemon's last-resort fallback, which is reached whenever the
+  # environment names no model.
+  run bash -c "grep -vE '^[[:space:]]*#' '$daemon_py' | grep -E '^DEFAULT_MODEL = \"opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)'"
+  [ "$status" -ne 0 ]
+
+  run grep -E 'OPENCODE_DEFAULT_MODEL \?= opencode-go/(muse-spark|glm-|mimo-v|grok-|gpt-6|deepseek-v4)' "$makefile"
+  [ "$status" -ne 0 ]
+}
+
+@test "mykg_sync.sh raises daemon concurrency above one" {
+  sync_script="${BATS_TEST_DIRNAME}/../../scripts/mykg_sync.sh"
+
+  # One worker means a single slow task blocks the queue for its full
+  # timeout_seconds, which exceeds a default drain window.
+  run grep -F 'MYKG_DAEMON_WORKERS' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  run grep -F -- '--workers "$DAEMON_WORKERS"' "$sync_script"
+  [ "$status" -eq 0 ]
+
+  # The drain must report completions, not only the outstanding count.
+  run grep -F 'no completions in the last' "$sync_script"
+  [ "$status" -eq 0 ]
+}

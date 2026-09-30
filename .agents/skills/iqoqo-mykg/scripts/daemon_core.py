@@ -50,6 +50,21 @@ MAX_ERROR_SIZE_BYTES = 100 * 1024        # 100 KB — cap error files to prevent
 MAX_TASK_ID_LENGTH = 128                 # SHA-256 hex = 64 chars, allow margin
 
 # ---------------------------------------------------------------------------
+# Retry budget
+# ---------------------------------------------------------------------------
+# Most extraction failures are transient: a network blip, a rate limit, a
+# provider blip, a model temporarily unavailable. Treating the first failure as
+# terminal meant one bad run silently and permanently dropped those extractions
+# from the knowledge graph — nothing reported the loss, and neither an
+# incremental update nor a full reindex would ever revisit them, because both
+# consult the same per-task gate.
+#
+# Error envelopes therefore carry an attempt count and only become terminal once
+# the budget is spent. That cap is what stops a permanently broken model from
+# being retried forever.
+MAX_TASK_ATTEMPTS = int(os.environ.get("MYKG_MAX_TASK_ATTEMPTS", "3"))
+
+# ---------------------------------------------------------------------------
 # Security: Payload sanitization patterns
 # ---------------------------------------------------------------------------
 
@@ -201,6 +216,18 @@ def write_answer_envelope(
     temp_file.rename(answer_file)
     done_file.touch()
 
+    # A retried task that now succeeds must not keep its old failure envelope:
+    # it would misreport the task as failed to anyone reading the outbox, and
+    # it would consume a retry-budget slot for work that no longer failed.
+    error_file = outbox_dir / f"{task_id}.error"
+    if error_file.exists():
+        try:
+            error_file.unlink()
+        except OSError:
+            # Non-fatal: the answer is authoritative and is_task_done() already
+            # short-circuits on the answer+done pair.
+            pass
+
 
 def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
     """Sanitize error text to prevent information disclosure.
@@ -257,6 +284,23 @@ def validate_task_id(task_id: str) -> bool:
     return True
 
 
+def read_error_attempts(error_file: Path) -> int:
+    """Attempt count recorded in an error envelope.
+
+    Envelopes written before the retry budget existed carry no `attempts`
+    field; those are treated as a single attempt so they get the benefit of the
+    new budget rather than being stranded.
+    """
+    try:
+        payload = json.loads(error_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 1
+    attempts = payload.get("attempts") if isinstance(payload, dict) else None
+    if isinstance(attempts, int) and attempts > 0:
+        return attempts
+    return 1
+
+
 def write_error_envelope(
     task_id: str,
     error_text: str,
@@ -273,8 +317,9 @@ def write_error_envelope(
         outbox_dir: Directory to write the .error file.
 
     Returns:
-        True if error file was written, False if validation failed or
-        an error file already exists (first error wins).
+        True if the error file was written, False if validation failed or the
+        retry budget is already spent (in which case the existing terminal
+        envelope is preserved).
     """
     # SECURITY: Validate task_id to prevent path traversal
     if not validate_task_id(task_id):
@@ -288,9 +333,12 @@ def write_error_envelope(
 
     error_file = outbox_dir / f"{task_id}.error"
 
-    # Don't overwrite existing error (first error wins)
-    if error_file.exists():
+    # Retry budget: keep counting up to the cap, then leave the first terminal
+    # error in place rather than churning the record forever.
+    previous_attempts = read_error_attempts(error_file) if error_file.exists() else 0
+    if previous_attempts >= MAX_TASK_ATTEMPTS:
         return False
+    attempts = previous_attempts + 1
 
     # Sanitize and truncate error text
     sanitized_error = sanitize_error_text(error_text)
@@ -298,6 +346,7 @@ def write_error_envelope(
     error_envelope = {
         "task_id": task_id,
         "error": sanitized_error,
+        "attempts": attempts,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -316,11 +365,23 @@ def write_error_envelope(
 
 
 def is_task_done(task_id: str, outbox_dir: Path) -> bool:
-    """Check whether a task has already been completed or errored."""
+    """Check whether a task has already been completed or exhausted its retries.
+
+    A task counts as done when it has a real answer, or when its error envelope
+    has spent the retry budget. An envelope from a *transient* failure does not
+    block the task — it is retried on the next run, up to MAX_TASK_ATTEMPTS.
+    """
     done_file = outbox_dir / f"{task_id}.done"
     answer_file = outbox_dir / f"{task_id}.answer.json"
     error_file = outbox_dir / f"{task_id}.error"
-    return (done_file.exists() and answer_file.exists()) or error_file.exists()
+
+    if done_file.exists() and answer_file.exists():
+        return True
+
+    if error_file.exists():
+        return read_error_attempts(error_file) >= MAX_TASK_ATTEMPTS
+
+    return False
 
 
 def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:

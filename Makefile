@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
 
 SHELL := /bin/bash
 
@@ -172,6 +172,8 @@ help:
 	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
 	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
 	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
+	@echo "  mykg-retry          - Re-queue tasks whose myKG inference failed (ARGS=\"--dry-run\" to inspect)"
+	@echo "  mykg-probe          - Test opencode models in the sandbox, no mykg state touched (ARGS=\"<model>\")"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -249,6 +251,24 @@ mykg-index: .venv/bin/activate
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
+
+# Re-queue tasks whose inference failed. An .error envelope is treated as
+# terminal by is_task_done() and is never overwritten, so a single failed run
+# permanently drops those extractions from the graph while the run still
+# reports success. This clears the marker (quarantined, not deleted) so the
+# next run retries them. ARGS="--dry-run" to inspect without changing state.
+mykg-retry: .venv/bin/activate
+	$(AI_ECHO) "Re-queueing failed mykg agent tasks (ARGS=$(ARGS))..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/retry_failed.py $(ARGS)
+
+# Test opencode model calls inside the AI sandbox WITHOUT touching mykg state.
+# Every failed mykg task writes a terminal .error envelope, so `make
+# mykg-update` is the wrong place to find out whether a model works — it
+# poisons real extraction work. ARGS="opencode-go/glm-5.3" to probe one model.
+# Makes real (billed) API calls that are visible on the opencode.ai side.
+mykg-probe:
+	$(AI_ECHO) "Probing opencode harness in the sandbox (no mykg state touched)..."
+	@bash scripts/probe_opencode_harness.sh $(ARGS)
 
 mykg-ask: .venv/bin/activate
 	@if [ -z "$(Q)" ]; then \
