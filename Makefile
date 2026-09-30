@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx openspec-sync-push openspec-sync-pull openspec-sync-check
 
 SHELL := /bin/bash
 
@@ -170,6 +170,11 @@ help:
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
 	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
+	@echo ""
+	@echo "OpenSpec Sync:"
+	@echo "  openspec-sync-push  - Mirror openspec/changes/ to the Dropbox copy (repo is source of truth)"
+	@echo "  openspec-sync-pull  - Restore openspec/changes/ from the Dropbox copy"
+	@echo "  openspec-sync-check - Show drift between repo and Dropbox openspec/changes"
 	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
 	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
 	@echo "  mykg-retry          - Re-queue tasks whose myKG inference failed (ARGS=\"--dry-run\" to inspect)"
@@ -912,3 +917,22 @@ sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi
+
+# --- OpenSpec change/archive sync (repo <-> Dropbox mirror) -------------------
+# openspec/changes used to be a symlink into Dropbox, which broke
+# `openspec archive` ("path outside the OpenSpec root") and git pathspec
+# traversal. It is now a real directory in the repo; Dropbox is an offsite
+# mirror reconciled with rsync on demand.
+OPENSPEC_DROPBOX_CHANGES ?= /home/sebastiankruk/Dropbox/iqoqo/openspec/changes
+
+openspec-sync-push: ## Mirror openspec/changes/ to the Dropbox copy (repo is source of truth)
+	@echo "Pushing openspec/changes -> $(OPENSPEC_DROPBOX_CHANGES)"
+	@rsync -a --delete --itemize-changes openspec/changes/ $(OPENSPEC_DROPBOX_CHANGES)/
+
+openspec-sync-pull: ## Restore openspec/changes/ from the Dropbox copy (Dropbox is source of truth)
+	@echo "Pulling $(OPENSPEC_DROPBOX_CHANGES) -> openspec/changes"
+	@rsync -a --delete --itemize-changes $(OPENSPEC_DROPBOX_CHANGES)/ openspec/changes/
+
+openspec-sync-check: ## Show drift between repo and Dropbox openspec/changes (no writes)
+	@rsync -ain --delete openspec/changes/ $(OPENSPEC_DROPBOX_CHANGES)/ | sed 's/^/  /' ; \
+	echo "(empty list above = in sync)"
