@@ -87,7 +87,11 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
       const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
       const categories = activeFilters.filter(f => f.type === "category").map(f => f.value);
 
-      if (statuses.length > 0) filtersPayload.status = statuses[0]; // assuming single status for now
+      // Send every selected status, not just the first. The collection page
+      // allows multi-select, so passing statuses[0] published a link covering
+      // a subset of what the sharer had on screen.
+      if (statuses.length === 1) filtersPayload.status = statuses[0];
+      else if (statuses.length > 1) filtersPayload.status = statuses;
       if (categories.length > 0) filtersPayload.tags = categories;
       if (appliedQuery) filtersPayload.query = appliedQuery;
 

@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Shared Collection Links Silently Dropped Every Status But the First**: the collection page allows multi-select status filters, but the share dialog passed only `statuses[0]` — carrying a `// assuming single status for now` comment — so a link created from a view showing two statuses covered one of them. The dialog now sends the full list, and the shared-items endpoint accepts either a single status or a list, so existing links keep resolving. A malformed or empty status list now matches nothing rather than dropping the predicate and widening the link to the sharer's entire library.
+
 - **Public Profiles Only Ever Showed the First 24 Items**: the profile page fetched `/public/u/<name>/items` with no pagination, but that endpoint paginates server-side (default 24, capped at 100). A collector with 500 public items had no route to the rest — the remainder was unreachable, not merely slow. The page now forwards the requested page and renders navigation that keeps the first and last pages reachable for long ranges, clamping malformed or hostile `?page=` values before they reach the API. Its `getItems` and translation fetches also run concurrently with the profile fetch rather than after it.
 
 - **Public Profile JSON-LD Advertised the Wrong Item Count**: `publicItemCount` was populated from the length of the single fetched page, so a profile with 500 public items published `"publicItemCount": 24` to search engines. It now uses the API's own total.
