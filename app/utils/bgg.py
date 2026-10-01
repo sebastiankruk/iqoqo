@@ -30,6 +30,8 @@ from typing import Any
 import defusedxml.ElementTree as ET
 import requests
 
+from app.config import Config
+
 logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT: int = 3
@@ -38,7 +40,7 @@ _READ_TIMEOUT: int = 7
 
 def get_bgg_headers() -> dict[str, str]:
     """Get the headers required for calling BoardGameGeek XML API v2."""
-    headers = {"User-Agent": "iqoqo/0.3.0 (https://github.com/sebastiankruk/iqoqo)", "Accept": "application/xml"}
+    headers = {"User-Agent": f"iqoqo/{Config.VERSION} (https://github.com/sebastiankruk/iqoqo)", "Accept": "application/xml"}
 
     token = os.getenv("BGG_API_TOKEN")
     if token:

@@ -237,4 +237,49 @@ describe("PrintQrCodeDialog", () => {
     fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  // ── HTML escaping in the print window (C18 3.11, MOD-FE_UI-16) ──────────────
+
+  it("escapes a title containing markup instead of executing it", async () => {
+    // A Work title is user-supplied catalog data. It is spliced into a
+    // document.write() template, so an unescaped "</div><script>" would close
+    // the label div and execute in the print window's origin.
+    const hostileItem: Item = {
+      ...baseItem,
+      work: {
+        id: 1,
+        title: "</div><script>window.__pwned=1</script><div>",
+        authors: ["<img src=x onerror=alert(1)>"],
+      },
+    } as unknown as Item;
+
+    const printStub = makePrintWindowStub();
+    vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
+
+    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={hostileItem} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: /Print Label/i }));
+
+    const writtenHtml: string = printStub.document.write.mock.calls[0][0];
+    // The tag must appear as escaped text, never as live markup.
+    expect(writtenHtml).not.toContain("<script>window.__pwned");
+    expect(writtenHtml).not.toContain("<img src=x");
+    expect(writtenHtml).toContain("&lt;script&gt;");
+    expect(writtenHtml).toContain("&lt;img src=x");
+  });
+
+  it("escapes the authors line too, and leaves ordinary titles untouched", async () => {
+    const printStub = makePrintWindowStub();
+    vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
+
+    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={baseItem} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: /Print Label/i }));
+
+    // Ampersands must be encoded, but normal text must stay readable -- an
+    // over-eager escaper that mangles every label would be its own bug.
+    const writtenHtml: string = printStub.document.write.mock.calls[0][0];
+    expect(writtenHtml).toContain("The Hobbit");
+    expect(writtenHtml).toContain("J.R.R. Tolkien");
+  });
 });

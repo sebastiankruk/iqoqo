@@ -28,6 +28,7 @@ import re
 import signal
 import sys
 import time
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -175,13 +176,36 @@ def build_combined_prompt(task_data: Dict[str, Any]) -> str:
     system_prompt = sanitize_task_payload(task_data.get("system", ""))
     user_prompt = sanitize_task_payload(task_data.get("user", ""))
 
-    return (
+    combined = (
         f"{SECURITY_GUARDRAIL}\n\n"
         f"System Instructions:\n{system_prompt}\n\n"
         f"User Prompt:\n{user_prompt}\n\n"
         "CRITICAL: Respond ONLY with the requested JSON payload. "
         "Do NOT include conversational text or markdown code fences."
     )
+
+    # Both harnesses pass the prompt as a command-line argument, and the OS
+    # layer rejects a NUL in argv: subprocess.run() raises
+    # "ValueError: embedded null byte" before the CLI is ever contacted. A
+    # single NUL anywhere in the indexed source therefore fails the whole
+    # task, and the retry budget cannot help because the input does not
+    # change. Observed on 6 of 2,710 chunks, where the extracted text
+    # happened to contain a real 0x00 byte.
+    #
+    # NUL is a terminator with no meaning in natural language, so dropping it
+    # is lossless for the model's purposes. Counted so the condition is
+    # visible rather than silent.
+    nul_count = combined.count("\x00")
+    if nul_count:
+        print(
+            f"[daemon_core] warning: stripped {nul_count} NUL byte(s) from prompt "
+            f"(a NUL in argv raises 'embedded null byte' and fails the task)",
+            file=sys.stderr,
+            flush=True,
+        )
+        combined = combined.replace("\x00", "")
+
+    return combined
 
 
 def write_answer_envelope(
@@ -256,6 +280,35 @@ def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
         sanitized = sanitized[:max_length] + "... [TRUNCATED]"
 
     return sanitized
+
+
+def describe_unexpected_error(exc: BaseException) -> str:
+    """Build a diagnosable message for an exception that has no CLI context.
+
+    The subprocess failure path can quote the CLI's own stderr, but a raised
+    exception reaches the generic handler with only a bare type. Recording just
+    the class name makes an envelope like "Unexpected error: ValueError",
+    which identifies nothing -- the operator has to grep a multi-megabyte run
+    log to recover the cause, and often cannot.
+
+    So: prefer the exception message, and fall back to the deepest traceback
+    frame (file stem, function, line) when the message is empty, which is the
+    common case for bare ``ValueError`` raised by a JSON parser.
+
+    The result is always passed through sanitize_error_text() by the caller, so
+    including a path here is safe: it is redacted on the way to disk.
+    """
+    message = str(exc).strip()
+    if message:
+        return f"{type(exc).__name__}: {message}"
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    if frames:
+        deepest = frames[-1]
+        origin = Path(deepest.filename).stem
+        return f"{type(exc).__name__} with no message, raised at {origin}.py:{deepest.lineno} in {deepest.name}()"
+
+    return f"{type(exc).__name__} with no message and no traceback"
 
 
 def validate_task_id(task_id: str) -> bool:
