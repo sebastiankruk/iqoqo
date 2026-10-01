@@ -572,7 +572,15 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=False)
+    # Indexed explicitly: PostgreSQL does not create an index for a foreign key,
+    # so without this every lookup by Manifestation -- and every ON DELETE
+    # CASCADE from one -- scanned the whole items table.
+    manifestation_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status = db.Column(db.String(50), default="want_to_read")  # see PROGRESS_STATUSES for valid values
