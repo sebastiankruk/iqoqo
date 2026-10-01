@@ -302,6 +302,7 @@
   "Public": {
     "checkPlaceholder": "Szukaj w tej kolekcji...",
     "checkInventory": "Sprawdź kolekcję",
+    "checkFailed": "Nie udało się wykonać sprawdzenia. Spróbuj ponownie.",
     "foundItem": "Znaleziony egzemplarz",
     "foundManifestation": "Znalezione wydanie",
     "notFound": "Brak pozycji w tej kolekcji.",
