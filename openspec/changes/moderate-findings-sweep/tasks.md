@@ -105,6 +105,14 @@
 
 ## 5. Verification & Quality Gates
 
-- [ ] 5.1 Run complete backend linting and test suite with `IQOQO_AI_MODE=1 make lint && make test` to verify zero regressions
-- [ ] 5.2 Run complete frontend test and typecheck suite with `npm --prefix frontend run test && npm --prefix frontend run typecheck`
-- [ ] 5.3 Verify database migration chain from clean base to head on both SQLite and PostgreSQL
+> **Interim gate, 2026-10-01 (not the final gate — re-run when the change completes).** Backend **2391 passed, 3 skipped, 0 failed**. Frontend **1188 passed across 132 files, 0 failed**; `npm run type-check` clean. ruff and black clean tree-wide. pylint `app/` + `scripts/` 9.97/10 with every finding pre-existing.
+>
+> Two gates were **already failing before this change began**, verified by running the same checks in a clean worktree at `release/0.8.2`: mypy reports **58 errors on base and 58 on this branch** — zero introduced — and the frontend reports **19,891 eslint errors** (predominantly missing JSDoc across `tests/e2e` and older components). Neither is this change's to fix, but both mean `make lint` is currently red for reasons unrelated to C18; do not attribute them to work here.
+>
+> The sweep caught one genuine regression of my own: `test_alembic_single_head_and_unbroken_lineage` pins the exact revision chain, so landing `v0_8_2_fk_indexes_and_quantity` broke it. Fixed. That test doing its job is the reason migration work on this branch stays honest.
+>
+> ⚠️ **Do not use `git stash` to compare against another branch here.** Doing so on 2026-10-01 replayed already-committed work on `stash pop` and left four files conflicted in the index. `git show <ref>:<path>` answers the same question safely.
+
+- [ ] 5.1 Run complete backend linting and test suite with `IQOQO_AI_MODE=1 make lint && make test` to verify zero regressions. **Interim run green (2391 passed); re-run at completion.** Note `make lint` cannot currently pass for the pre-existing mypy/eslint reasons above.
+- [ ] 5.2 Run complete frontend test and typecheck suite with `npm --prefix frontend run test && npm --prefix frontend run typecheck`. **Interim run green (1188 passed, type-check clean); re-run at completion.**
+- [ ] 5.3 Verify database migration chain from clean base to head on both SQLite and PostgreSQL. **PostgreSQL DONE 2026-10-01** for `v0_8_2_fk_indexes_and_quantity`: full 12-revision chain applies from base on PostgreSQL 18 via the isolated `iqoqo-e2e-test` service, both indexes present, planner reports an Index Scan, `quantity` NOT NULL with the CHECK enforced, downgrade clean and data preserved both directions, and a seeded legacy NULL row causes a clean refusal with **no partial state** (transactional DDL rollback). SQLite: the model builds without schemas and the 35 `test_migration.py` tests pass. **Remaining: migrations 1.7–1.11 must each be verified the same way.**
