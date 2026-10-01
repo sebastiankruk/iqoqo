@@ -14,12 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { describe, it, expect } from "vitest";
-import {
-  isAudioFormat,
-  isBoardGameFormat,
-  isPuzzleFormat,
-  isVideoFormat,
-} from "@/lib/media-classification";
+import { isAudioFormat, isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 
 describe("media classification", () => {
   it("classifies moving-image carriers", () => {
