@@ -1,15 +1,15 @@
 ## Context
 
-The iQoQo backup system has been experiencing intermittent failures since September 8th, 2026. The daily cron job at 03:00 executes `scripts/cloud_backup.sh`, which performs PostgreSQL database dumps and asset archival to cloud storage via rclone.
+The host-side daily cron job at 03:00 executes `scripts/cloud_backup.sh`, which performs a `pg_dumpall`, compresses the asset volumes, and uploads to cloud storage. A separate monthly cron invokes the same script against a cold remote for long-term archival.
 
-Current issues:
+> **Corrected 2026-10-01.** This context originally opened with the backup system "experiencing intermittent failures since September 8th", citing `role "iqoqo" does not exist` errors and duplicate execution as the cause of "only 7 successful backups over 2+ months". **That is not the current state and no task should be written against it.** Verified: archives exist for 2026-09-27, 2026-09-30 and 2026-10-01 from the same cron entry; `pg_dumpall -c -U iqoqo` exits 0; the role resolves. The script *does* still contain a `POSTGRES_USER:-iqoqo` fallback, so the reported error is possible under a renamed role — see Decision 3 — but it is not happening here and must be substantiated before being chased.
 
-1. **Duplicate execution**: The backup script runs twice per cron invocation, as evidenced by duplicate "Starting iQoQo backup" log entries
-2. **Database authentication failures**: `pg_dumpall` fails with `role "iqoqo" does not exist` despite the role existing and manual connections succeeding
-3. **Timing correlation**: The database container was recreated on Sep 22 at 03:41 (after the 03:00 backup attempt), suggesting container lifecycle issues affect backup reliability
-4. **Insufficient error handling**: Current script lacks retry logic, pre-flight checks, and structured error reporting
+The gaps that are real, confirmed by reading the current 320-line script:
 
-The backup script currently has no protection against concurrent execution, no mechanism to handle transient database connection failures, and minimal error context in logs. This has resulted in only 7 successful backups over 2+ months, creating a critical data protection gap.
+1. **No locking at all**: no `flock`, and no protection against a double cron trigger
+2. **No retry**: no retry or backoff on any transient failure
+3. **No pre-flight verification**: the script goes straight to `pg_dumpall`, so a connection failure is indistinguishable from a misconfiguration
+4. **Minimal error context**: failures surface as a single line with no attempt count or classification
 
 Stakeholders: System administrators, data protection compliance, end users relying on data integrity.
 
@@ -23,32 +23,40 @@ Stakeholders: System administrators, data protection compliance, end users relyi
 - Ensure cleanup of temporary files on all exit paths (success and failure)
 - Maintain backward compatibility with existing cron configuration and rclone setup
 - Add comprehensive test coverage for new locking and retry behaviors
+- Preserve every behaviour the C17 rework established: the `S3_BACKEND=auto|rclone|s3` resolution, the empty-dump guard, `ASSET_PATHS`, and the existing 58 bats tests
 
 **Non-Goals:**
 
-- Changing the backup schedule or retention policy (separate concern)
-- Modifying the cloud storage destination or rclone configuration
-- Implementing backup encryption (already handled by cloud provider)
+- Changing the backup schedule, and **implementing retention** (delegated to S3-side lifecycle rules — see proposal "Scope decisions")
+- Changing the cloud storage destination, the rclone configuration, or the rclone/boto3 split between host and container
+- Modifying backend selection or the `S3_BUCKET_BACKUP` contract that `cloud_backup.sh` already reads
+- Implementing backup encryption (already handled by the cloud provider, and `S3_SSE` for the S3 backend)
 - Adding backup restore functionality (out of scope for this fix)
 - Migrating to a different backup tool or framework
 - Changing the database container orchestration (Docker Compose setup remains unchanged)
+- Removing feedback screenshot storage from the container (that is `feedback-screenshot-storage-retirement`, v0.8.3)
 
 ## Decisions
 
-### Decision 1: File-based locking with flock
+### Decision 1: File-based locking with flock (REVISED 2026-10-01)
 
-**Choice**: Use `flock` for exclusive file locking with a 2-hour timeout for stale locks.
+> **The original design was self-defeating and has been replaced.** It specified `flock -n` (non-blocking) *and* mtime-based stale-lock detection. These cannot both work: with `-n`, a genuinely held lock is never inspected and never classified as stale, so the stale-detection branch is unreachable for the case it exists to handle. Meanwhile a lock file left behind by a crashed process still *looks* old by mtime while holding no lock at all, so the branch is only reachable for the one case where removing it is unnecessary.
+
+**Choice**: `flock` with a **bounded blocking** acquisition (`-w <timeout>`), and no mtime-based staleness at all.
 
 **Rationale**:
 
 - `flock` is part of util-linux (standard on all Linux distributions), requiring no additional dependencies
 - Provides kernel-level atomic locking, preventing race conditions
-- File-based locks persist across process crashes and can be cleaned up
-- 2-hour timeout balances between preventing permanent lockouts and allowing long-running backups to complete
-- Alternative considered: PID-based locking (more complex, requires signal handling, prone to PID reuse issues)
-- Alternative considered: Database-based locking (adds complexity, requires database connection which may be the failing component)
+- **The kernel releases the lock when the holding process dies**, for any reason including `SIGKILL`. Crash cleanup is therefore already correct and needs no separate mechanism — which is precisely why mtime staleness is unnecessary.
+- Blocking-with-timeout is the only mode that gets both properties at once: a live holder is waited for (bounded), and a dead holder is acquired immediately because the kernel has already freed it.
+- Alternative considered: mtime-based stale detection. **Rejected** — it can evict a *live* lock held by a backup exceeding the threshold, which would reintroduce the exact double-execution this change exists to prevent.
+- Alternative considered: PID-based locking. Rejected as more complex, requiring signal handling, and prone to PID reuse.
+- Alternative considered: Database-based locking. Rejected: adds complexity and requires the database connection that may itself be the failing component.
 
-**Implementation**: Lock file at `/tmp/iqoqo_backup.lock` with `flock -n` for non-blocking acquisition. If lock acquisition fails, exit immediately with clear error message. Stale lock detection via file modification time.
+**Implementation**: Lock file at `${BACKUP_LOCK_FILE:-/tmp/iqoqo_backup.lock}`, acquired with `flock -w "${BACKUP_LOCK_TIMEOUT}"`. On timeout, exit with a distinct code (2) and a message naming the holder; do not delete the lock file, because the holder is alive. The lock is released automatically on every exit path, including signals — no trap needed for the lock itself, only for temporary-file cleanup.
+
+> `BACKUP_LOCK_TIMEOUT` no longer means "age at which a lock is presumed abandoned". It is now a **wait ceiling**: how long a second invocation will block before giving up. The default should reflect a realistic backup duration (observed: a ~113 MB archive completes well inside 30 minutes) with headroom.
 
 ### Decision 2: Exponential backoff retry strategy
 
@@ -83,6 +91,10 @@ Stakeholders: System administrators, data protection compliance, end users relyi
 3. Verify role exists with `SELECT rolname FROM pg_roles WHERE rolname = 'iqoqo'`
 4. Only proceed to pg_dumpall if all checks pass
 
+> **Correction (2026-10-01).** Step 3 hardcodes `'iqoqo'`, but the role is operator-configurable: `cloud_backup.sh:198` already passes `-U '${POSTGRES_USER:-iqoqo}'`, and `docker-compose.yml:143` defines `POSTGRES_USER=${POSTGRES_USER:-iqoqo}`. A check against a literal `iqoqo` would **pass on a stock install and fail on any deployment that renamed the role**, producing exactly the misleading diagnosis this change exists to eliminate. The existence check must resolve the role from `POSTGRES_USER` with the same fallback, and the two must not be allowed to drift.
+
+> Also note the current script already contains a correct guard worth preserving rather than rewriting: `cloud_backup.sh:209` treats a zero-exit `pg_dumpall` that produced an empty file as a **failure** ("a `pg_dumpall` exiting 0 doesn't guarantee non-empty"). Any retry work must keep that check outside the retry loop, so an empty dump is not retried as if it were a connection failure.
+
 ### Decision 4: Structured logging with timestamps
 
 **Choice**: Add ISO 8601 timestamps to all log entries and use emoji-prefixed status indicators.
@@ -114,10 +126,10 @@ Stakeholders: System administrators, data protection compliance, end users relyi
 ## Risks / Trade-offs
 
 **Risk**: Lock file prevents legitimate concurrent backups from different sources
-→ **Mitigation**: Lock file is specific to this script path; manual backups can use different lock file or `--no-lock` flag (future enhancement). Current use case has only one backup source (cron).
+→ **Mitigation**: Lock file is specific to this script path; a manual backup can use a different lock file via `BACKUP_LOCK_FILE` (future enhancement: a `--no-lock` flag). Current use case has only one backup source (cron).
 
-**Risk**: 2-hour stale lock timeout may be too aggressive for very large databases
-→ **Mitigation**: Timeout is configurable via environment variable `BACKUP_LOCK_TIMEOUT`. Current 2-hour value based on observed backup duration (<30 minutes for current data size). Monitor and adjust if needed.
+**Risk**: A wait ceiling set too low turns a slow-but-healthy backup into a spurious failure for the waiter
+→ **Mitigation**: The ceiling is configurable via `BACKUP_LOCK_TIMEOUT` and now means "how long to wait", not "how old is stale". Default it against observed duration (a ~113 MB archive completes well inside 30 minutes) with headroom. A waiter that times out exits 2 without touching the lock file, so the holder is never disturbed. The failure mode is a logged, retryable "another backup is running", which is the correct signal.
 
 **Risk**: Retry logic masks persistent database configuration issues
 → **Mitigation**: Retry only applies to transient connection failures. Persistent issues (role doesn't exist, wrong credentials) fail immediately without retry. Log clearly distinguishes transient vs permanent failures.
@@ -126,9 +138,12 @@ Stakeholders: System administrators, data protection compliance, end users relyi
 → **Mitigation**: Pre-flight checks are lightweight (single SQL query each). Total overhead <1 second. Benefit of early failure detection outweighs minimal time cost.
 
 **Risk**: Changes to backup script may introduce regressions
-→ **Mitigation**: Comprehensive test coverage with bats. Existing test suite validates current behavior. New tests cover locking, retry, and error handling. Manual testing before deployment.
+→ **Mitigation**: Comprehensive test coverage with bats. **The existing suite is substantial — 24 tests in `cloud_backup.bats`, 21 in `cloud_backup_check.bats`, 13 in `cloud_backup_cron.bats`, all written by the C17 rework — and every one must still pass unchanged.** New tests cover locking, retry, and error handling. Treat any pre-existing failure as a blocker, not a known issue.
 
-**Trade-off**: Increased script complexity (92 → ~180 lines) for improved reliability
+**Risk**: The original change was written against a 92-line script; the real one is 320 lines and already carries the backend-resolution logic
+→ **Mitigation**: Read the current script before estimating, and budget additions against it. The original "92 → ~180 lines" framing is void. Anything that reorders or rewrites existing sections for tidiness is out of scope — add, do not refactor.
+
+**Trade-off**: Increased script complexity (320 → ~420 lines) for improved reliability
 → **Justification**: Backup reliability is critical for data protection. Additional complexity is isolated to backup scripts, well-tested, and provides significant operational benefits.
 
 **Trade-off**: Lock file introduces single point of failure for backup execution

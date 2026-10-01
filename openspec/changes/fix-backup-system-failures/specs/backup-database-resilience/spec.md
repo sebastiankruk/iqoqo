@@ -20,23 +20,30 @@ The backup script SHALL verify database connectivity before attempting any datab
 
 ### Requirement: Database role existence verification
 
-The backup script SHALL verify that the configured PostgreSQL role exists before attempting database dump operations.
+The backup script SHALL verify that the configured PostgreSQL role exists before attempting database dump operations. The role under verification SHALL be the same value passed to the dump itself, resolved from the `POSTGRES_USER` environment variable with the same default, so that the check and the operation can never disagree about which role is meant.
 
-#### Scenario: Role exists
+#### Scenario: Configured role exists
 
 - **WHEN** the backup script performs pre-flight checks
-- **THEN** the script SHALL query `pg_roles` to verify the configured role exists
+- **THEN** the script SHALL query `pg_roles` for the role name resolved from `POSTGRES_USER`, defaulting to `iqoqo` when unset
+- **THEN** that resolved name SHALL be identical to the user the subsequent dump is invoked with
 - **THEN** if the role exists, the script SHALL proceed with the database dump
-- **THEN** the script SHALL log successful role verification
+- **THEN** the script SHALL log the role name it verified
 
-#### Scenario: Role does not exist
+#### Scenario: Deployment uses a non-default role
+
+- **WHEN** `POSTGRES_USER` is set to a name other than the default
+- **THEN** the existence check SHALL query for that configured name
+- **THEN** a hardcoded default name SHALL NOT be substituted for it
+
+#### Scenario: Configured role does not exist
 
 - **WHEN** the backup script performs pre-flight checks
 - **AND** the configured role does not exist in `pg_roles`
-- **THEN** the script SHALL exit immediately with exit code 1
-- **THEN** the script SHALL log a clear error message indicating the role does not exist
-- **THEN** the script SHALL NOT attempt retry logic (permanent configuration error)
-- **THEN** the script SHALL suggest checking `POSTGRES_USER` environment variable
+- **THEN** the script SHALL exit immediately with a general-error exit code
+- **THEN** the script SHALL log which role name it looked for and where that name came from
+- **THEN** the script SHALL NOT attempt retry logic, because a missing role is a permanent configuration error
+- **THEN** the script SHALL suggest checking the `POSTGRES_USER` environment variable
 
 ### Requirement: Retry logic with exponential backoff
 
@@ -68,6 +75,20 @@ The backup script SHALL implement retry logic with exponential backoff for trans
 - **THEN** the script SHALL exit immediately with a clear error message
 - **THEN** the script SHALL distinguish permanent errors from transient errors in log output
 
+#### Scenario: Retry scope is limited to pre-flight checks
+
+- **WHEN** retry logic is engaged
+- **THEN** the retry SHALL cover the pre-flight verification steps only
+- **AND** the dump operation itself SHALL NOT be re-executed as part of a connectivity retry
+
+#### Scenario: Empty dump is a permanent failure
+
+- **WHEN** the dump command exits successfully
+- **AND** the resulting archive is empty
+- **THEN** the script SHALL treat the run as failed
+- **THEN** the script SHALL NOT retry, because an empty dump is not a transient connection fault
+- **THEN** the check for a non-empty archive SHALL remain outside any retry loop
+
 ### Requirement: Database container status verification
 
 The backup script SHALL verify the database container is running before attempting database operations.
@@ -76,6 +97,7 @@ The backup script SHALL verify the database container is running before attempti
 
 - **WHEN** the backup script begins database operations
 - **THEN** the script SHALL check if the database container is in running state
+- **THEN** the container identity used SHALL be the same one the dump is executed against
 - **THEN** if the container is running, the script SHALL proceed with connectivity checks
 
 #### Scenario: Container is not running
