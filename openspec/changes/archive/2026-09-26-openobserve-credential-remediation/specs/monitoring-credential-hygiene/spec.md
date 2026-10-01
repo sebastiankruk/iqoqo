@@ -8,7 +8,7 @@ Ensures that the observability stack (OpenObserve, OpenTelemetry Collector) neve
 The system SHALL NOT contain any hardcoded OpenObserve passwords, Base64-encoded Basic-Auth tokens, or other monitoring infrastructure credentials in any version-controlled file (shell scripts, YAML configs, TypeScript tests, Markdown documentation, or AI skill files).
 
 #### Scenario: Scanning codebase for literal credentials
-- **WHEN** a CI pipeline or pre-commit hook scans tracked files for patterns matching `SuperSecret`, `supersecret`, or the known Base64 encodings `YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz` and `YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=`
+- **WHEN** a CI pipeline or pre-commit hook scans tracked files for patterns matching `SuperSecret`, `supersecret`, or the known Base64 encodings `YWRtaW5AaXFvcW8ubG9jYWw6<redacted>` and `YWRtaW5AaXFvcW8ubG9jYWw6<redacted>`
 - **THEN** zero matches are found outside of test fixtures that explicitly test the secret-scanning rule itself
 
 #### Scenario: Reviewing OTEL collector configuration

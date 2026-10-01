@@ -1,6 +1,6 @@
 ## Context
 
-Commit `61a7a50` (2026-09-01) introduced `SuperSecret!123` and its Base64 encoding as hardcoded fallbacks across 8 files. The prior default `supersecret` also persists in the DevOps skill file. See proposal.md for full motivation and file inventory.
+Commit `61a7a50` (2026-09-01) introduced `SuperSecret!<redacted>` and its Base64 encoding as hardcoded fallbacks across 8 files. The prior default `supersecret` also persists in the DevOps skill file. See proposal.md for full motivation and file inventory.
 
 OpenObserve is an internal-only service, not exposed outside the host. The `release/0.8.1` branches will be squash-merged into `main`, so feature-branch history containing the hardcoded creds will not persist in the mainline. However, v0.7.18 PROD (current production tag) carries the hardcoded values in `run.sh`, `iqoqo-status.sh`, and `MONITORING.md`.
 
@@ -65,7 +65,7 @@ The `docker-compose.monitoring.yml` was partially remediated in a later commit (
 
 ### Decision 6: Changelog mentions are acceptable
 
-**Choice:** The `docs/CHANGELOG.md:87` line mentioning "Removed hardcoded `SuperSecret!123` fallback" is a historical record of the fix itself and does not constitute a credential leak. It will be left as-is.
+**Choice:** The `docs/CHANGELOG.md:87` line mentioning "Removed hardcoded `SuperSecret!<redacted>` fallback" is a historical record of the fix itself and does not constitute a credential leak. It will be left as-is.
 
 ## Risks / Trade-offs
 
