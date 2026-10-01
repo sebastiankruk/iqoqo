@@ -1468,9 +1468,7 @@ def test_describe_unexpected_error_survives_no_traceback(daemon_core_module):
 def test_describe_unexpected_error_still_redacts(daemon_core_module):
     """Adding the message must not weaken redaction -- it is sanitized on write."""
     exc = RuntimeError("could not read /home/appuser/.config/opencode/auth.json with OPENCODE_API_KEY=sk-abc")
-    sanitized = daemon_core_module.sanitize_error_text(
-        f"Unexpected error: {daemon_core_module.describe_unexpected_error(exc)}"
-    )
+    sanitized = daemon_core_module.sanitize_error_text(f"Unexpected error: {daemon_core_module.describe_unexpected_error(exc)}")
     assert "/home/appuser" not in sanitized
     assert "sk-abc" not in sanitized
 
