@@ -146,4 +146,3 @@ A successful probe SHALL correspond to a real, billable model call.
 - **WHEN** one or more models fail
 - **THEN** the probe SHALL exit with a non-zero status
 - **AND** SHALL list the failing model identifiers
-
