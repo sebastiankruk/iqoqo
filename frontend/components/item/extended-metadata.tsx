@@ -19,6 +19,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
+import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
@@ -113,13 +114,9 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
   const format = meta["format"] as string | undefined;
   const formatLabel = format ? (getFormatLabel(format) ?? format) : undefined;
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "movie", "moving image", "unknown_video"].includes(
-    format?.toLowerCase() || ""
-  );
-  const isBoardGame = ["boardgame", "board_game", "cards", "three-dimensional object"].includes(
-    format?.toLowerCase() || ""
-  );
-  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
+  const isVideo = isVideoFormat(format);
+  const isBoardGame = isBoardGameFormat(format);
+  const isPuzzle = isPuzzleFormat(format);
 
   const trackList = meta["track_list"] as
     | Array<{ position: string; title: string; duration_seconds: number }>

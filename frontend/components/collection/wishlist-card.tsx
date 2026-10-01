@@ -23,6 +23,7 @@ import type { WishlistItem } from "@/types/frbr";
 import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { resolveMediaBadge } from "@/lib/media-badge";
 import { isAudioMedia } from "@/lib/utils";
+import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 
 interface WishlistCardProps {
   item: WishlistItem;
@@ -75,16 +76,9 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
   });
 
   const isAudio = badge.isAudio || isAudioMedia(format ?? undefined) || isAudioMedia(rawContentType ?? undefined);
-  const isVideo =
-    badge.typeKey === "movie" ||
-    ["dvd", "bluray", "video", "moving image"].includes((format || rawContentType || "").toLowerCase());
-  const isBoardGame =
-    badge.typeKey === "game" ||
-    ["boardgame", "board_game", "three-dimensional object"].includes((format || rawContentType || "").toLowerCase());
-  const isPuzzle =
-    rawContentType === "puzzle" ||
-    format?.toLowerCase() === "puzzle" ||
-    ["puzzle", "jigsaw", "jigsaw puzzle"].includes((format || "").toLowerCase());
+  const isVideo = badge.typeKey === "movie" || isVideoFormat(format, rawContentType);
+  const isBoardGame = badge.typeKey === "game" || isBoardGameFormat(format, rawContentType);
+  const isPuzzle = rawContentType === "puzzle" || format?.toLowerCase() === "puzzle" || isPuzzleFormat(format);
 
   const MediaIcon = isAudio
     ? Disc
