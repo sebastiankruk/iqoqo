@@ -248,7 +248,7 @@ describe("PrintQrCodeDialog", () => {
       ...baseItem,
       work: {
         id: 1,
-        title: '</div><script>window.__pwned=1</script><div>',
+        title: "</div><script>window.__pwned=1</script><div>",
         authors: ["<img src=x onerror=alert(1)>"],
       },
     } as unknown as Item;
