@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Metadata Field Reading Moved Behind One Module** (`frontend/lib/meta.ts`): the same concept arrives under inconsistent casing from different upstreams — `format`/`Format`, `categories`/`Categories`, `author`/`authors`/`Author`/`Authors` — and that was resolved by a chain of `||` fallbacks written independently at each read site. Six such chains existed across `item-header.tsx` and `extended-metadata.tsx`; a component that forgot a variant simply rendered a blank field, and no test covered the precedence. All of them now go through `readMeta()` / `readMetaChain()` / `hasMeta()` / `hasMetaChain()`, with the accepted spellings declared once in `FIELD_CHAINS`. Empty strings are skipped rather than returned, so an upstream writing `"format": ""` falls through to `"Format"` instead of rendering blank — while a meaningful falsy value such as `pages: 0` is preserved. The two components disagree on whether `label` or `publisher` wins when both are present; that is preserved rather than normalised, with the reasoning recorded at `LABEL_PUBLISHER_KEYS`.
+
 ### Fixed
 
 - **Shared Collection Links Silently Dropped Every Status But the First**: the collection page allows multi-select status filters, but the share dialog passed only `statuses[0]` — carrying a `// assuming single status for now` comment — so a link created from a view showing two statuses covered one of them. The dialog now sends the full list, and the shared-items endpoint accepts either a single status or a list, so existing links keep resolving. A malformed or empty status list now matches nothing rather than dropping the predicate and widening the link to the sharer's entire library.

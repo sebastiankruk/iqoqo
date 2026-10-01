@@ -19,6 +19,7 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
@@ -42,6 +43,9 @@ const ITEM_HEADER_LABELS = (key: string): string =>
       concert: "Concert",
     }) as Record<string, string>
   )[key] ?? key;
+
+/** Fallback spellings for an item's identifier when `Item.isbn` is absent. */
+const IDENTIFIER_KEYS = ["isbn", "barcode", "ISBN", "Barcode"] as const;
 
 interface ItemHeaderProps {
   item: Item;
@@ -88,12 +92,12 @@ export function ItemHeader({ item }: ItemHeaderProps) {
     getCoverUrl(meta["cover_url"] as string | undefined, timestamp) ||
     "/file.svg";
 
-  const format = (meta["format"] as string | undefined) || (meta["Format"] as string | undefined);
+  const format = readMeta<string>(meta, "format");
   const isAudio = isAudioMedia(format);
-  const identifier = item.isbn || (meta["isbn"] as string | undefined) || (meta["barcode"] as string | undefined);
-  const publisher =
-    item.publisher || (meta["publisher"] as string | undefined) || (meta["label"] as string | undefined);
-  const year = (meta["year"] as string | undefined) || (meta["Year"] as string | undefined);
+  // ISBN is a canonical field on Item; `barcode` is the provider's fallback.
+  const identifier = item.isbn || readMetaChain<string>(meta, IDENTIFIER_KEYS);
+  const publisher = item.publisher || readMeta<string>(meta, "publisher");
+  const year = readMeta<string>(meta, "year");
 
   // Compose "Type[ / Kind][ / Format]" (e.g. "Music / Vinyl", "Movie / Concert / Blu-ray")
   const badge = resolveMediaBadge(
@@ -214,14 +218,14 @@ export function ItemHeader({ item }: ItemHeaderProps) {
               <span className="font-semibold">{year}</span>
             </div>
           )}
-          {Boolean(meta["pages"] || meta["Pages"] || meta["tracks"] || meta["Tracks"]) && (
+          {Boolean(hasMeta(meta, "pages") || hasMeta(meta, "tracks")) && (
             <div className="space-y-1">
               <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-widest">
                 {isAudio ? "Tracks" : "Pages"}
               </span>
               <span className="font-semibold">
                 {(() => {
-                  const val = meta["tracks"] || meta["Tracks"] || meta["pages"] || meta["Pages"];
+                  const val = readMeta(meta, "tracks") ?? readMeta(meta, "pages");
                   if (val === null || val === undefined) return "";
                   if (typeof val === "object") return JSON.stringify(val).slice(0, 50);
                   return String(val).slice(0, 50);
