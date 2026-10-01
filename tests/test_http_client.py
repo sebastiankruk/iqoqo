@@ -22,11 +22,21 @@ edge cases safely.
 #
 
 import concurrent.futures
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.utils.http_client import SSRFError, _resolve_with_timeout, is_ip_blocked, is_safe_url, safe_get
+from app.utils.http_client import (
+    _DNS_MAX_SLOTS,
+    _DNS_MAX_WORKERS,
+    SSRFError,
+    _resolve_with_timeout,
+    is_ip_blocked,
+    is_safe_url,
+    safe_get,
+)
 
 # ---------------------------------------------------------------------------
 # is_ip_blocked
@@ -332,8 +342,8 @@ class TestResolveWithTimeout:
     Defense documented for auditors: ``socket.getaddrinfo()`` has no native
     timeout, so a stalling DNS resolver could pin worker threads and starve
     the pool (DNS-based thread starvation).  ``_resolve_with_timeout`` runs
-    the lookup in a single-worker ``ThreadPoolExecutor`` and enforces a hard
-    5-second ceiling via ``Future.result(timeout=...)`` (http_client.py:57-68).
+    the lookup in a bounded, process-wide ``ThreadPoolExecutor`` and enforces a
+    hard 5-second ceiling via ``Future.result(timeout=...)``.
     """
 
     @patch("app.utils.http_client.socket.getaddrinfo")
@@ -351,7 +361,8 @@ class TestResolveWithTimeout:
         ``Future.result`` is mocked to raise ``concurrent.futures.TimeoutError``
         immediately, so the test never actually sleeps through the 5-second window.
         The mocked getaddrinfo returns instantly so the abandoned worker thread
-        completes harmlessly.
+        completes harmlessly. The shared pool is left intact for later tests,
+        which is why the future is cancelled rather than the pool shut down.
         """
         mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
 
@@ -443,51 +454,68 @@ class TestSafeGetRedirectStrCoercion:
 
 
 class TestExecutorShutdownLifecycle:
-    """Tests for the ``executor.shutdown(wait=False)`` lifecycle defense.
+    """Tests for the bounded shared DNS pool.
 
-    Defense documented for auditors: ``_resolve_with_timeout`` abandons the
-    worker thread when DNS stalls.  Calling ``shutdown(wait=False)`` in the
-    ``finally`` block (http_client.py:67-68) releases the executor without
-    blocking on the hung thread, preventing starvation under repeated
-    timeouts.  The spy below wraps the real ``ThreadPoolExecutor.shutdown``
-    and records the ``wait`` argument it receives.
+    This class previously asserted that ``_resolve_with_timeout`` constructed
+    an executor per call and shut it down with ``wait=False``. That was not a
+    defense: ``shutdown(wait=False)`` releases the executor *object* but leaves
+    the worker thread alive, so N lookups -- or N timeout responses -- spawned N
+    unkillable threads with nothing capping the total.
+
+    The pool is now a module-level singleton capped at ``_DNS_MAX_WORKERS``,
+    with a bounded slot semaphore in front of it. The contract is therefore
+    about *bounding*, not shutting down: repeated lookups must reuse threads,
+    and a sustained stall must exhaust capacity by failing closed rather than
+    by spawning more.
     """
 
-    @staticmethod
-    def _spy_shutdown():
-        """Return a (spy, recorded_wait_args) pair wrapping the real ThreadPoolExecutor.shutdown."""
-        real_shutdown = concurrent.futures.ThreadPoolExecutor.shutdown
-        recorded_waits: list[bool] = []
-
-        def spy_shutdown(self, wait=True, **kwargs):
-            recorded_waits.append(wait)
-            return real_shutdown(self, wait=wait, **kwargs)
-
-        return spy_shutdown, recorded_waits
-
     @patch("app.utils.http_client.socket.getaddrinfo")
-    def test_shutdown_wait_false_after_successful_resolution(self, mock_getaddrinfo: MagicMock) -> None:
-        """After a successful lookup the executor must be shut down with ``wait=False``."""
-        expected = [(2, 1, 6, "", ("93.184.216.34", 0))]
-        mock_getaddrinfo.return_value = expected
-        spy_shutdown, recorded_waits = self._spy_shutdown()
-
-        with patch.object(concurrent.futures.ThreadPoolExecutor, "shutdown", spy_shutdown):
-            result = _resolve_with_timeout("example.com", timeout=5.0)
-
-        assert result == expected
-        assert recorded_waits == [False]
-
-    @patch("app.utils.http_client.socket.getaddrinfo")
-    def test_shutdown_wait_false_after_timeout(self, mock_getaddrinfo: MagicMock) -> None:
-        """On timeout the ``finally`` block must shut the executor down with ``wait=False``
-        *before* the SSRFError propagates to the caller."""
+    def test_repeated_lookups_reuse_one_executor(self, mock_getaddrinfo: MagicMock) -> None:
+        """Many lookups must not construct an executor each -- that is the leak."""
         mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
-        spy_shutdown, recorded_waits = self._spy_shutdown()
 
-        with patch.object(concurrent.futures.ThreadPoolExecutor, "shutdown", spy_shutdown):
-            with patch("concurrent.futures.Future.result", side_effect=concurrent.futures.TimeoutError("DNS timed out")):
-                with pytest.raises(SSRFError, match="DNS resolution timed out"):
-                    _resolve_with_timeout("hanging-dns.example.com", timeout=5.0)
+        with patch.object(concurrent.futures.ThreadPoolExecutor, "__init__", autospec=True) as spy_init:
+            for _ in range(25):
+                _resolve_with_timeout("example.com", timeout=5.0)
 
-        assert recorded_waits == [False]
+        spy_init.assert_not_called()
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_thread_count_is_bounded_under_repeated_lookups(self, mock_getaddrinfo: MagicMock) -> None:
+        """The live thread count must not grow with the number of lookups."""
+        mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        baseline = threading.active_count()
+
+        for _ in range(40):
+            _resolve_with_timeout("example.com", timeout=5.0)
+
+        # Allow the worker to finish handing back the result.
+        for _ in range(50):
+            if threading.active_count() <= baseline + 1:
+                break
+            time.sleep(0.02)
+
+        assert threading.active_count() <= baseline + _DNS_MAX_WORKERS
+
+    @patch("app.utils.http_client.socket.getaddrinfo")
+    def test_sustained_stall_pins_workers_and_fails_closed(self, mock_getaddrinfo: MagicMock) -> None:
+        """A resolver that never returns must cost a bounded number of threads.
+
+        It must also fail CLOSED. Skipping the resolution to "make progress"
+        would defeat the SSRF check this function exists to perform, so an
+        exhausted pool raises SSRFError instead of resolving unchecked.
+        """
+        baseline = threading.active_count()
+        mock_getaddrinfo.side_effect = lambda *a, **k: time.sleep(30)
+
+        errors = 0
+        for _ in range(_DNS_MAX_SLOTS + 12):
+            try:
+                _resolve_with_timeout("hanging-dns.example.com", timeout=0.05)
+            except SSRFError:
+                errors += 1
+
+        assert errors == _DNS_MAX_SLOTS + 12, "every stalled lookup must raise SSRFError, none may resolve unchecked"
+        # Every lookup raised, so no worker is handed a live result; the threads
+        # still pinned inside the C resolver are what the cap exists to bound.
+        assert threading.active_count() <= baseline + _DNS_MAX_WORKERS
