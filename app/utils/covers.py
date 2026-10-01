@@ -394,7 +394,7 @@ def _fetch_musicbrainz_cover(barcode: str) -> tuple[str, str] | None:
     """Query MusicBrainz by barcode, download front cover from Cover Art Archive."""
     url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
     try:
-        with safe_get(url, timeout=10, headers={"User-Agent": "iqoqo/0.7.1 ( dev@kruk.me )"}) as resp:
+        with safe_get(url, timeout=10, headers={"User-Agent": f"iqoqo/{Config.VERSION} ( dev@kruk.me )"}) as resp:
             if resp.status_code != 200:
                 return None
             releases = resp.json().get("releases", [])

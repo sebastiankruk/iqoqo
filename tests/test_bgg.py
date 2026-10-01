@@ -131,3 +131,36 @@ def test_fetch_bgg_metadata_xml_parse_error(mock_get):
 
     result = fetch_bgg_metadata("Catan")
     assert result is None
+
+
+def test_user_agent_reports_the_running_version() -> None:
+    """A hardcoded UA version goes stale silently, telling providers the wrong client version.
+
+    BGG's policy asks callers to identify themselves so operators can contact
+    them; reporting "0.3.0" while running 0.8.2 makes bug reports from those
+    operators unactionable. Config.VERSION resolves from APP_VERSION or
+    pyproject.toml, so the header now tracks the real release.
+    """
+    from app.config import Config
+    from app.utils.bgg import get_bgg_headers
+
+    assert Config.VERSION in get_bgg_headers()["User-Agent"]
+
+
+def test_no_provider_module_hardcodes_a_version_in_its_user_agent() -> None:
+    """Guard every outbound provider, not just BGG.
+
+    This caught three stale literals at once: musicbrainz.py and bgg.py both
+    claimed 0.3.0 and covers.py claimed 0.7.1, while discogs.py already did it
+    correctly. discogs.py is the reference pattern.
+    """
+    import re
+    from pathlib import Path
+
+    utils_dir = Path(__file__).parent.parent / "app" / "utils"
+    offenders = []
+    for path in sorted(utils_dir.glob("*.py")):
+        for match in re.finditer(r'"User-Agent"[^\n]*?"iqoqo/(\d+\.\d+)', path.read_text(encoding="utf-8")):
+            offenders.append(f"{path.name}: iqoqo/{match.group(1)}")
+
+    assert not offenders, f"hardcoded User-Agent version(s) in: {', '.join(offenders)}"
