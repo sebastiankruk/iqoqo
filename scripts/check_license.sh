@@ -23,7 +23,14 @@ LICENSE_SIGNATURE="GNU Affero General Public License"
 EXTENSIONS=("*.ts" "*.tsx" "*.js" "*.py" "*.java" "*.go" "*.rs" "*.cpp" "*.c" "*.h" "*.sh" "*.yaml" "*.yml" "Dockerfile*" "Makefile*" "*.css" "*.svg")
 
 # Excluded path patterns (e.g. third-party plugins, public static assets)
-EXCLUDE_PATTERNS=("frontend/public/*" ".opencode/*" "*/.opencode/*")
+#
+# .openspec.yaml is OpenSpec's own per-change metadata -- two lines of schema
+# name and creation date, written by the tool rather than authored. It matches
+# the *.yaml glob, so without this every change directory is a licence failure.
+# There were 134 of these before this change and the check had been red for all
+# of them. Only the dotfile is excluded; the .md artifacts inside a change are
+# not covered by this script at all, since *.md is absent from EXTENSIONS.
+EXCLUDE_PATTERNS=("frontend/public/*" ".opencode/*" "*/.opencode/*" "*/.openspec.yaml")
 
 echo "Checking source files for license headers..."
 FAILED=0
