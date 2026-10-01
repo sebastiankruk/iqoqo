@@ -151,6 +151,143 @@ def optimize_and_save_image(image_bytes: bytes, filepath: str):
         raise
 
 
+def _draw_text_overlay(
+    converted: Image.Image,
+    title: str,
+    author: str,
+    branding: str,
+    font_path: str,
+) -> None:
+    """Draw the title/author/branding overlay onto an open RGB image, in place.
+
+    Split out of the two public wrappers because the layout logic -- font
+    fallback, iterative shrink-to-fit, wrapping, centring, stroke -- was
+    duplicated between them at ~84% line similarity. Only the image source
+    (bytes vs path) and the destination (buffer vs file) actually differ, so
+    that is all those wrappers now own.
+
+    Mutates ``converted``; the caller saves it.
+    """
+    draw = ImageDraw.Draw(converted)
+    width, height = converted.size
+
+    # Define layout constants
+    max_text_width = int(width * 0.90)  # Keep 5% margin on sides
+
+    # Define bounding boxes (y_start, y_end) as ratios of height
+
+    title_box = (height * 0.60, height * 0.75)
+    # Author: 20%-10% of bottom -> 0.80 to 0.90
+    author_box = (height * 0.80, height * 0.90)
+    # Branding: bottom 5% -> 0.95 to 1.0
+    branding_box = (height * 0.95, height * 1.0)
+
+    # Resolve font path once
+    valid_font_path: str | None = font_path
+    try:
+        ImageFont.truetype(font_path, 10)
+    except OSError:
+        fallbacks = [
+            "Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+        for fb in fallbacks:
+            try:
+                ImageFont.truetype(fb, 10)
+                valid_font_path = fb
+                break
+            except OSError:
+                continue
+        else:
+            logger.warning(f"Font '{font_path}' not found. Using default.")
+            valid_font_path = None
+
+    def draw_text_in_box(text, y_range, size_ratio):
+        y_start, y_end = y_range
+        box_height = y_end - y_start
+
+        font_size = int(height * size_ratio)
+        min_font_size = 10
+
+        selected_font = None
+        final_lines = []
+        final_line_height = 0
+
+        # Iteratively shrink font until text fits in box_height
+        while font_size >= min_font_size:
+            if valid_font_path:
+                font = ImageFont.truetype(valid_font_path, font_size)
+            else:
+                font = ImageFont.load_default()
+                # Default font doesn't scale, so break early if we are using it
+                if font_size != int(height * size_ratio):
+                    selected_font = font
+                    break
+
+            # Wrap text
+            avg_char_width = font.getlength("x") or 10
+            chars_per_line = int(max_text_width / avg_char_width)
+            chars_per_line = max(chars_per_line, 1)
+
+            lines = textwrap.wrap(text, width=chars_per_line)
+
+            # Calculate total height
+            bbox = font.getbbox("Ay")
+            line_height = (bbox[3] - bbox[1]) * 1.2
+            total_height = line_height * len(lines)
+
+            if total_height <= box_height:
+                selected_font = font
+                final_lines = lines
+                final_line_height = line_height
+                break
+
+            font_size -= 2
+
+        if selected_font is None:
+            # Fallback: use min size or default
+            if valid_font_path:
+                selected_font = ImageFont.truetype(valid_font_path, min_font_size)
+            else:
+                selected_font = ImageFont.load_default()
+
+            # Re-wrap with this font
+            avg_char_width = selected_font.getlength("x") or 10
+            chars_per_line = int(max_text_width / avg_char_width)
+            chars_per_line = max(chars_per_line, 1)
+            final_lines = textwrap.wrap(text, width=chars_per_line)
+            bbox = selected_font.getbbox("Ay")
+            final_line_height = (bbox[3] - bbox[1]) * 1.2
+
+        # Draw centered vertically in the box
+        total_text_height = final_line_height * len(final_lines)
+        current_y = y_start + (box_height - total_text_height) / 2
+
+        for line in final_lines:
+            line_bbox = draw.textbbox((0, 0), line, font=selected_font)
+            text_width = line_bbox[2] - line_bbox[0]
+            x = (width - text_width) / 2
+
+            # Outline and text
+            draw.text(
+                (x, current_y),
+                line,
+                font=selected_font,
+                fill="white",
+                stroke_width=2,
+                stroke_fill="black",
+            )
+            current_y += final_line_height
+
+    # Draw text elements
+    draw_text_in_box(title, title_box, 0.10)
+    draw_text_in_box(author, author_box, 0.06)
+    draw_text_in_box(branding, branding_box, 0.03)
+
+
 def add_text_overlay_bytes(
     image_bytes: bytes,
     title: str,
@@ -160,107 +297,16 @@ def add_text_overlay_bytes(
 ) -> bytes:
     """Draw a title/author overlay onto image bytes and return JPEG.
 
-    Used for the local placeholder cover, where no provider returned artwork."""
+    Used for the local placeholder cover, where no provider returned artwork.
+    Returns the input unchanged if the overlay cannot be drawn, so a font or
+    decode problem degrades to an unbranded cover rather than losing the image.
+    """
     try:
         with Image.open(io.BytesIO(image_bytes)) as raw_img:
             transposed_img = ImageOps.exif_transpose(raw_img)
             converted: Image.Image = transposed_img.convert("RGB")
-            draw = ImageDraw.Draw(converted)
-            width, height = converted.size
 
-            max_text_width = int(width * 0.90)
-            title_box = (height * 0.60, height * 0.75)
-            author_box = (height * 0.80, height * 0.90)
-            branding_box = (height * 0.95, height * 1.0)
-
-            valid_font_path: str | None = font_path
-            try:
-                ImageFont.truetype(font_path, 10)
-            except OSError:
-                fallbacks = [
-                    "Arial.ttf",
-                    "/Library/Fonts/Arial.ttf",
-                    "/System/Library/Fonts/Supplemental/Arial.ttf",
-                    "DejaVuSans.ttf",
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                ]
-                for fb in fallbacks:
-                    try:
-                        ImageFont.truetype(fb, 10)
-                        valid_font_path = fb
-                        break
-                    except OSError:
-                        continue
-                else:
-                    logger.warning(f"Font '{font_path}' not found. Using default.")
-                    valid_font_path = None
-
-            def draw_text_in_box(text, y_range, size_ratio):
-                y_start, y_end = y_range
-                box_height = y_end - y_start
-                font_size = int(height * size_ratio)
-                min_font_size = 10
-                selected_font = None
-                final_lines = []
-                final_line_height = 0
-
-                while font_size >= min_font_size:
-                    if valid_font_path:
-                        font = ImageFont.truetype(valid_font_path, font_size)
-                    else:
-                        font = ImageFont.load_default()
-                        if font_size != int(height * size_ratio):
-                            selected_font = font
-                            break
-
-                    avg_char_width = font.getlength("x") or 10
-                    chars_per_line = int(max_text_width / avg_char_width)
-                    chars_per_line = max(chars_per_line, 1)
-
-                    lines = textwrap.wrap(text, width=chars_per_line)
-                    bbox = font.getbbox("Ay")
-                    line_height = (bbox[3] - bbox[1]) * 1.2
-                    total_height = line_height * len(lines)
-
-                    if total_height <= box_height:
-                        selected_font = font
-                        final_lines = lines
-                        final_line_height = line_height
-                        break
-                    font_size -= 2
-
-                if selected_font is None:
-                    if valid_font_path:
-                        selected_font = ImageFont.truetype(valid_font_path, min_font_size)
-                    else:
-                        selected_font = ImageFont.load_default()
-                    avg_char_width = selected_font.getlength("x") or 10
-                    chars_per_line = int(max_text_width / avg_char_width)
-                    chars_per_line = max(chars_per_line, 1)
-                    final_lines = textwrap.wrap(text, width=chars_per_line)
-                    bbox = selected_font.getbbox("Ay")
-                    final_line_height = (bbox[3] - bbox[1]) * 1.2
-
-                total_text_height = final_line_height * len(final_lines)
-                current_y = y_start + (box_height - total_text_height) / 2
-
-                for line in final_lines:
-                    line_bbox = draw.textbbox((0, 0), line, font=selected_font)
-                    text_width = line_bbox[2] - line_bbox[0]
-                    x = (width - text_width) / 2
-                    draw.text(
-                        (x, current_y),
-                        line,
-                        font=selected_font,
-                        fill="white",
-                        stroke_width=2,
-                        stroke_fill="black",
-                    )
-                    current_y += final_line_height
-
-            draw_text_in_box(title, title_box, 0.10)
-            draw_text_in_box(author, author_box, 0.06)
-            draw_text_in_box(branding, branding_box, 0.03)
+            _draw_text_overlay(converted, title, author, branding, font_path)
 
             buf = io.BytesIO()
             converted.save(buf, format="JPEG", quality=85)
@@ -277,130 +323,20 @@ def add_text_overlay(
     branding: str = "iQoQo",
     font_path: str = "arial.ttf",
 ):
-    """Overlays title, author, and branding text onto an existing image."""
+    """Overlays title, author, and branding text onto an existing image, in place.
+
+    The file-variant counterpart to :func:`add_text_overlay_bytes`; both delegate
+    the layout to :func:`_draw_text_overlay`. On failure the file is left
+    untouched, so a font or decode problem cannot truncate a cover that has
+    already been written to disk.
+    """
     try:
         with Image.open(filepath) as raw_img:
             # Fix EXIF orientation before overlaying text
             transposed_img = ImageOps.exif_transpose(raw_img)
             converted: Image.Image = transposed_img.convert("RGB")
-            draw = ImageDraw.Draw(converted)
-            width, height = converted.size
 
-            # Define layout constants
-            max_text_width = int(width * 0.90)  # Keep 5% margin on sides
-
-            # Define bounding boxes (y_start, y_end) as ratios of height
-
-            title_box = (height * 0.60, height * 0.75)
-            # Author: 20%-10% of bottom -> 0.80 to 0.90
-            author_box = (height * 0.80, height * 0.90)
-            # Branding: bottom 5% -> 0.95 to 1.0
-            branding_box = (height * 0.95, height * 1.0)
-
-            # Resolve font path once
-            valid_font_path: str | None = font_path
-            try:
-                ImageFont.truetype(font_path, 10)
-            except OSError:
-                fallbacks = [
-                    "Arial.ttf",
-                    "/Library/Fonts/Arial.ttf",
-                    "/System/Library/Fonts/Supplemental/Arial.ttf",
-                    "DejaVuSans.ttf",
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                ]
-                for fb in fallbacks:
-                    try:
-                        ImageFont.truetype(fb, 10)
-                        valid_font_path = fb
-                        break
-                    except OSError:
-                        continue
-                else:
-                    logger.warning(f"Font '{font_path}' not found. Using default.")
-                    valid_font_path = None
-
-            def draw_text_in_box(text, y_range, size_ratio):
-                y_start, y_end = y_range
-                box_height = y_end - y_start
-
-                font_size = int(height * size_ratio)
-                min_font_size = 10
-
-                selected_font = None
-                final_lines = []
-                final_line_height = 0
-
-                # Iteratively shrink font until text fits in box_height
-                while font_size >= min_font_size:
-                    if valid_font_path:
-                        font = ImageFont.truetype(valid_font_path, font_size)
-                    else:
-                        font = ImageFont.load_default()
-                        # Default font doesn't scale, so break early if we are using it
-                        if font_size != int(height * size_ratio):
-                            selected_font = font
-                            break
-
-                    # Wrap text
-                    avg_char_width = font.getlength("x") or 10
-                    chars_per_line = int(max_text_width / avg_char_width)
-                    chars_per_line = max(chars_per_line, 1)
-
-                    lines = textwrap.wrap(text, width=chars_per_line)
-
-                    # Calculate total height
-                    bbox = font.getbbox("Ay")
-                    line_height = (bbox[3] - bbox[1]) * 1.2
-                    total_height = line_height * len(lines)
-
-                    if total_height <= box_height:
-                        selected_font = font
-                        final_lines = lines
-                        final_line_height = line_height
-                        break
-
-                    font_size -= 2
-
-                if selected_font is None:
-                    # Fallback: use min size or default
-                    if valid_font_path:
-                        selected_font = ImageFont.truetype(valid_font_path, min_font_size)
-                    else:
-                        selected_font = ImageFont.load_default()
-
-                    # Re-wrap with this font
-                    avg_char_width = selected_font.getlength("x") or 10
-                    chars_per_line = int(max_text_width / avg_char_width)
-                    chars_per_line = max(chars_per_line, 1)
-                    final_lines = textwrap.wrap(text, width=chars_per_line)
-                    bbox = selected_font.getbbox("Ay")
-                    final_line_height = (bbox[3] - bbox[1]) * 1.2
-
-                # Draw centered vertically in the box
-                total_text_height = final_line_height * len(final_lines)
-                current_y = y_start + (box_height - total_text_height) / 2
-
-                for line in final_lines:
-                    line_bbox = draw.textbbox((0, 0), line, font=selected_font)
-                    text_width = line_bbox[2] - line_bbox[0]
-                    x = (width - text_width) / 2
-
-                    # Outline and text
-                    draw.text(
-                        (x, current_y),
-                        line,
-                        font=selected_font,
-                        fill="white",
-                        stroke_width=2,
-                        stroke_fill="black",
-                    )
-                    current_y += final_line_height
-
-            # Draw text elements
-            draw_text_in_box(title, title_box, 0.10)
-            draw_text_in_box(author, author_box, 0.06)
-            draw_text_in_box(branding, branding_box, 0.03)
+            _draw_text_overlay(converted, title, author, branding, font_path)
 
             converted.save(filepath, "JPEG", quality=85)
     except (OSError, ValueError) as e:
