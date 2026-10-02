@@ -46,10 +46,57 @@ teardown() {
   [[ "$output" =~ "Error: Archive not found" ]]
 }
 
-@test "import_covers.sh runs successfully when archive exists and user declines deletion" {
-  # Create a dummy archive file
+# A real gzip archive. The two happy-path tests previously used `touch`, which
+# produces a zero-byte file -- not a gzip archive at all. They passed only
+# because nothing validated the input, so they asserted nothing about success.
+make_valid_archive() {
+  local outfile="$1"
+  local staging
+  staging="$(mktemp -d)"
+  mkdir -p "${staging}/covers"
+  : > "${staging}/covers/manifestation_1_cover.jpg"
+  tar -czf "${outfile}" -C "${staging}" covers
+  rm -rf "${staging}"
+}
+
+@test "import_covers.sh exits 1 if archive is not a readable gzip" {
   local archive="${TEST_TEMP_DIR}/covers.tar.gz"
-  touch "${archive}"
+  printf 'this is not a gzip stream' > "${archive}"
+
+  run bash scripts/import_covers.sh test-container "${archive}"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "not a readable gzip archive" ]]
+}
+
+@test "import_covers.sh exits 1 on a truncated archive and does not reach the container" {
+  local archive="${TEST_TEMP_DIR}/covers.tar.gz"
+  make_valid_archive "${archive}"
+  # Truncate the way an interrupted upload does. Appending garbage would NOT
+  # work: gzip ignores trailing bytes after the last member, so the archive
+  # still lists fine and only fails once extraction reaches the end.
+  truncate -s -24 "${archive}"
+
+  # Record whether the container was touched at all.
+  local marker="${TEST_TEMP_DIR}/docker-was-called"
+  cat << EOF > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+touch "${marker}"
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  run bash scripts/import_covers.sh test-container "${archive}"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "not a readable gzip archive" ]]
+  if [ -f "${marker}" ]; then
+    echo "the archive was pushed into the container despite being unreadable" >&2
+    return 1
+  fi
+}
+
+@test "import_covers.sh runs successfully when archive exists and user declines deletion" {
+  local archive="${TEST_TEMP_DIR}/covers.tar.gz"
+  make_valid_archive "${archive}"
 
   # Pipe 'n' to answer the delete prompt
   run bash -c "echo 'n' | bash scripts/import_covers.sh test-container ${archive}"
@@ -61,7 +108,7 @@ teardown() {
 
 @test "import_covers.sh runs successfully and deletes archive when user accepts" {
   local archive="${TEST_TEMP_DIR}/covers.tar.gz"
-  touch "${archive}"
+  make_valid_archive "${archive}"
 
   # Pipe 'y' to answer the delete prompt
   run bash -c "echo 'y' | bash scripts/import_covers.sh test-container ${archive}"
@@ -69,4 +116,25 @@ teardown() {
   [[ "$output" =~ "Import complete!" ]]
   # The file should be deleted
   [ ! -f "${archive}" ]
+}
+
+@test "import_covers.sh aborts when extraction fails inside the container" {
+  local archive="${TEST_TEMP_DIR}/covers.tar.gz"
+  make_valid_archive "${archive}"
+
+  # Docker succeeds for `cp`, fails for the extraction `exec`, succeeds after.
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+case "$*" in
+  *"tar -xzvf"*) echo "tar: Unexpected EOF in archive" >&2; exit 2 ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  run bash -c "echo 'n' | bash scripts/import_covers.sh test-container ${archive}"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "extraction failed" ]]
+  [[ "$output" =~ "Rebinding was NOT run" ]]
+  [[ "$output" != *"Import complete!" ]]
 }
