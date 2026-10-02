@@ -21,6 +21,7 @@ API endpoints for the lending lifecycle:
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from datetime import UTC, datetime
@@ -251,11 +252,38 @@ def get_loan_status(item_id: int) -> Response | tuple[Response, int]:
 @lending_bp.route("/test/reset", methods=["POST"])
 @limiter.limit("30 per minute")
 def reset_lending_test_state() -> Response | tuple[Response, int]:
-    """E2E test helper: resets all lender items to available and deletes loan requests."""
-    from flask import current_app
+    """E2E test helper: resets all lender items to available and deletes loan requests.
+
+    The `TESTING` flag alone is not a sufficient gate. It is set only through
+    `create_app(config_override=...)`, which no deployment path currently uses --
+    but the route carries no authentication of its own, so any future change that
+    made `TESTING` settable from the environment would turn this into an
+    unauthenticated, state-mutating endpoint that resets every lent Item and
+    deletes every loan request. The shared-secret check below bounds that blast
+    radius: a mistake in how `TESTING` is configured would no longer be
+    sufficient on its own to expose the endpoint.
+    """
+    from flask import current_app, request
 
     is_prod = os.environ.get("FLASK_ENV") == "production" or current_app.config.get("ENV") == "production"
     if is_prod or not current_app.config.get("TESTING"):
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
+    # Constant-time comparison: a `!=` on a shared secret is a timing oracle,
+    # and this endpoint is reachable by anyone who can reach the API.
+    expected = current_app.config.get("E2E_RESET_SECRET") or os.environ.get("E2E_RESET_SECRET", "")
+    if not expected:
+        # Fail closed. Without a configured secret there is no way to
+        # distinguish the E2E harness from any other caller, so the endpoint
+        # stays closed rather than becoming open to anyone who sets TESTING.
+        logger.error(
+            "Refusing /lending/test/reset: E2E_RESET_SECRET is not configured. "
+            "Set it to a shared secret for the E2E harness; see .env.example."
+        )
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
+    provided = request.headers.get("X-E2E-Reset-Secret", "")
+    if not hmac.compare_digest(provided, expected):
         return jsonify({"error": "Forbidden", "code": 403}), 403
 
     from app.db.core import db

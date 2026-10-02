@@ -86,6 +86,11 @@ export default defineConfig({
       // to ensure the server always starts fresh against the test DB.
       command:
         (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
+        // E2E_RESET_SECRET gates POST /lending/test/reset (C18 4.1). Playwright
+        // spawns this Flask process, so the secret the spec reads from
+        // process.env has to be forwarded into it -- otherwise the harness sends
+        // a secret the server never sees. Both sides read the same env var.
+        `E2E_RESET_SECRET=${process.env.E2E_RESET_SECRET ?? ""} ` +
         "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5002",
