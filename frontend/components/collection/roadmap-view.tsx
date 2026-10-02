@@ -9,7 +9,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, MoveUp, MoveDown, Search, BookOpen, FileText } from "lucide-react";
+import { Plus, MoveUp, MoveDown, Search, BookOpen, FileText, AlertCircle } from "lucide-react";
 import {
   useRoadmaps,
   useCreateRoadmap,
@@ -18,6 +18,7 @@ import {
   useManifestations,
 } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import type { CatalogEntry } from "@/types/frbr";
@@ -29,7 +30,15 @@ import type { CatalogEntry } from "@/types/frbr";
  * @returns {React.JSX.Element} The roadmap view element.
  */
 export function RoadmapView() {
-  const { data: roadmaps = [], isLoading: isLoadingRoadmaps } = useRoadmaps();
+  // `isError` is destructured deliberately: without it a failed request renders as
+  // `roadmaps === []`, so a network failure is indistinguishable from "you have no
+  // roadmaps yet" and the user is told to go and create their first one.
+  const {
+    data: roadmaps = [],
+    isLoading: isLoadingRoadmaps,
+    isError: roadmapsFailed,
+    refetch: refetchRoadmaps,
+  } = useRoadmaps();
   const createRoadmapMutation = useCreateRoadmap();
   const addRoadmapItemMutation = useAddRoadmapItem();
   const reorderRoadmapItemMutation = useReorderRoadmapItem();
@@ -68,6 +77,7 @@ export function RoadmapView() {
       setCreateDialogOpen(false);
     } catch (err) {
       console.error("Failed to create roadmap:", err);
+      toast.error("Could not create the roadmap. Please try again.");
     }
   };
 
@@ -85,7 +95,8 @@ export function RoadmapView() {
       setNotes("");
       setAddDialogOpen(false);
     } catch (err) {
-      console.error("Failed to add item to roadmap:", err);
+      console.error("Failed to create roadmap:", err);
+      toast.error("Could not add the item to the roadmap. Please try again.");
     }
   };
 
@@ -97,7 +108,8 @@ export function RoadmapView() {
         position: newPosition,
       });
     } catch (err) {
-      console.error("Failed to reorder item:", err);
+      console.error("Failed to create roadmap:", err);
+      toast.error("Could not reorder the item. Please try again.");
     }
   };
 
@@ -160,6 +172,21 @@ export function RoadmapView() {
       {isLoadingRoadmaps ? (
         <div className="flex items-center justify-center py-20">
           <p className="text-muted-foreground animate-pulse">Loading roadmaps...</p>
+        </div>
+      ) : roadmapsFailed ? (
+        // A failed request must not render as "you have no roadmaps yet". The
+        // empty state invites the user to create their first roadmap, which
+        // cannot succeed while the list request is failing, and leaves them
+        // clicking a button that appears to do nothing.
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-16 text-center">
+          <AlertCircle className="h-12 w-12 text-destructive/60 mb-4" />
+          <h3 className="font-serif text-lg font-bold text-foreground">Could not load your roadmaps</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-6">
+            The request failed, so this list may be incomplete. Check your connection and try again.
+          </p>
+          <Button variant="outline" onClick={() => void refetchRoadmaps()}>
+            Try again
+          </Button>
         </div>
       ) : roadmaps.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-16 text-center">
