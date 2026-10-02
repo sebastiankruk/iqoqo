@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
@@ -187,8 +186,24 @@ def test_three_simultaneous_filters_status_format_tag(client, cross_frbr_multi_f
 
 
 def test_multiple_tag_and_logic(client, cross_frbr_multi_filter_data, app):
-    """Verify multiple tag filter AND logic returns only Works with items
-    having ALL specified tags."""
+    """Multiple tags in one facet are combined with OR, not AND.
+
+    Consolidated into `tests/test_api_facets.py` under MOD-TEST-12/MOD-TEST-13.
+    This test and `test_api_facets.py::test_multiple_tag_filter_and_logic` each
+    documented opposite semantics -- this one's comment said OR, that one's
+    docstring said AND -- while neither inspected the results: this one asserted
+    `response.json is not None` and seeded both tags onto the *same* Item, so the
+    question had no discriminating seed and no assertion capable of answering it.
+
+    The replacements are `test_multiple_tags_in_one_facet_are_combined_with_or`,
+    `test_filters_from_different_facets_are_combined_with_and` and
+    `test_a_single_tag_still_selects_one_work`, all of which use a fixture that
+    splits the tags across two Works and assert the actual titles returned.
+
+    What remains here is the part this file is uniquely positioned to cover: that
+    the seeded Works carrying both tags are still reachable through the filter,
+    which is a statement about the data rather than about the filter's semantics.
+    """
     user_id = cross_frbr_multi_filter_data["user_id"]
     from app.api.auth import generate_internal_jwt
 
@@ -197,12 +212,27 @@ def test_multiple_tag_and_logic(client, cross_frbr_multi_filter_data, app):
         token = generate_internal_jwt(user)
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Filter: tags=horror,classic → should return Horror Classic (which has both)
+    # Filter: tags=horror,classic. The fixture splits the tags deliberately --
+    # Work 1 carries horror, Work 2 carries classic, Work 3 carries both -- so the
+    # result set distinguishes the two readings on its own: OR returns all three,
+    # AND returns only Work 3. Asserting the count and the full title set pins
+    # the semantics *and* confirms the Work holding both tags is still included.
     response = client.get("/api/works/shelf?tags=horror,classic", headers=headers)
     assert response.status_code == 200
-    # Tags filter uses OR logic, so it may return all items with either tag.
-    # The AND semantics come from combining multiple filter types.
-    assert response.json is not None
+    assert response.json["total"] == 3
+    assert sorted(row["title"] for row in response.json["data"]) == [
+        "Classic Movie Wishlist",
+        "Horror Classic Movie",
+        "Horror Movie Available",
+    ]
+
+    # Narrowing to one tag removes exactly the Work that lacked it.
+    only_horror = client.get("/api/works/shelf?tags=horror", headers=headers)
+    assert only_horror.status_code == 200
+    assert sorted(row["title"] for row in only_horror.json["data"]) == [
+        "Horror Classic Movie",
+        "Horror Movie Available",
+    ]
 
 
 def test_cross_frbr_filter_empty_results_with_200(client, cross_frbr_multi_filter_data, app):

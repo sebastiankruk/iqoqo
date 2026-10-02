@@ -826,6 +826,26 @@ def split_frbr_entity_endpoint():
         return jsonify({"success": False, "error": str(e)}), 400
 
 
+def _discard_saved_cover(filepath: str | None) -> None:
+    """Delete a cover file written for a request that will not be committed.
+
+    The image is written to disk before the database is touched, so every exit
+    that is not a successful commit has to delete it -- including the early
+    return for a missing entity, which does not raise an exception and so never
+    reaches the surrounding handler.
+
+    @param filepath: The absolute path written by `save_upload_image`, or None.
+    @returns: Nothing; a failure to unlink is swallowed, since the request has
+        already failed and there is nothing useful to report to the caller.
+    """
+    if not filepath:
+        return
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
+
+
 @admin_bp.route("/media/upload-cover", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.UPLOAD_COVER)
@@ -862,6 +882,12 @@ def upload_cover():
         entity = db.session.get(Manifestation, int(entity_id)) if entity_type == "manifestation" else db.session.get(Item, int(entity_id))
 
         if not entity:
+            # The image is already on disk by this point, and a missing entity
+            # returns rather than raising, so the handler below never runs.
+            # Returning 404 without deleting leaves the file behind permanently:
+            # publicly served from /static/covers/, unreachable from any row, and
+            # never garbage-collected.
+            _discard_saved_cover(saved_filepath)
             return jsonify({"success": False, "error": "Entity not found"}), 404
 
         if hasattr(entity, "cover_url"):
@@ -875,11 +901,7 @@ def upload_cover():
         return jsonify({"success": True, "data": {"cover_url": public_url}})
     except (SQLAlchemyError, OSError, ValueError, KeyError, AttributeError, RuntimeError) as e:
         db.session.rollback()
-        if saved_filepath:
-            try:
-                os.remove(saved_filepath)
-            except OSError:
-                pass
+        _discard_saved_cover(saved_filepath)
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500
 
 

@@ -142,10 +142,24 @@ class TestCrossFRBRMultiFilter:
         )
         assert resp.status_code == 200
         data = resp.json
-        assert data["total"] >= 1
+        # Only Work 1 carries horror *and* is available *and* is paper, so this is
+        # exactly one row. `>= 1` would have passed on 2 or 3, which is what an
+        # over-broad or wrongly-OR'd facet produces.
+        assert data["total"] == 1
 
     def test_multiple_tag_filter_and_logic(self, client, normal_user_headers, app):
-        """2.2: Multiple tag filter AND logic returns only Works with ALL tags."""
+        """2.2: A comma-joined tag list resolves to the Works carrying those tags.
+
+        The name and the original docstring said "AND logic ... only Works with
+        ALL tags". The filter is OR -- `app/api/works.py` combines the tag
+        conditions with `db.or_(*tags_conditions)` -- and OR within a facet is the
+        conventional behaviour for faceted filtering: a user picking two tags is
+        asking for either, not for the intersection. Changing the filter to AND
+        would break that, so the docstring was wrong rather than the code.
+
+        Cross-facet combination is the AND case, and it is pinned separately in
+        test_filters_from_different_facets_are_combined_with_and.
+        """
         with app.app_context():
             from app.db.models import Tag, User
 
@@ -208,17 +222,18 @@ class TestCrossFRBRMultiFilter:
 
             db.session.commit()
 
-        # Query with horror AND classic — should match Work 1 only
+        # Both tags sit on this one Work, so `tags=horror,classic` returns it
+        # whether the filter is OR or AND. See
+        # test_multiple_tags_in_one_facet_are_combined_with_or for the fixture
+        # that can actually tell the two apart.
         resp = client.get(
             "/api/works/shelf?tags=horror,classic",
             headers=normal_user_headers,
         )
         assert resp.status_code == 200
         data = resp.json
-        # The API returns results matching the comma-separated tag filters
-        # Verify the response is valid JSON with expected structure
-        assert "total" in data
-        assert isinstance(data["total"], int)
+        assert data["total"] == 1
+        assert data["data"][0]["title"] == "Horror Classic Book"
 
     def test_empty_results_returns_200(self, client, normal_user_headers, app):
         """2.3: Cross-FRBR filter returns empty results with 200 status."""
@@ -502,3 +517,165 @@ def test_lod_facets_and_filtering(client, normal_user_headers, app):
     man_titles = [m["title"] for m in man_data]
     assert "Linked Work" in man_titles
     assert "Unlinked Work" not in man_titles
+
+
+# ---------------------------------------------------------------------------
+# Facet combination semantics (MOD-TEST-12, MOD-TEST-13)
+# ---------------------------------------------------------------------------
+#
+# Two things were previously asserted by two tests that could not disagree with
+# each other, because neither looked at the results:
+#
+#   test_api_facets.py::test_multiple_tag_filter_and_logic
+#       docstring: "AND logic returns only Works with ALL tags"
+#       assertions: `"total" in data` and `isinstance(data["total"], int)`
+#
+#   test_api_status_filters.py::test_multiple_tag_and_logic
+#       comment: "Tags filter uses OR logic, so it may return all items with
+#                 either tag. The AND semantics come from combining multiple
+#                 filter types."
+#       assertions: `response.json is not None`
+#
+# So one file documented AND, the other documented OR, and both would have passed
+# under either.
+#
+# This file's own fixture for 2.2 could not have settled it either: it attaches
+# `horror` and `classic` to the *same* Item, so `tags=horror,classic` selects that
+# one Work under OR and under AND alike. `cross_frbr_multi_filter_data` in
+# test_api_status_filters.py does split the tags -- one Work with each, one with
+# both -- and now asserts the distinguishing count; see
+# test_multiple_tag_and_logic there.
+#
+# The fixture below separates the tags across two Works and adds no Work carrying
+# both, so an OR returns two rows and an AND returns none. That makes it
+# sensitive to the one thing the 2.2 fixture could not see.
+
+
+@pytest.fixture
+def split_tag_facets(app):
+    """Seed two Works whose tags and statuses deliberately do not overlap.
+
+    `Only Horror` is available and tagged `horror`; `Only Classic` is lent and
+    tagged `classic`. Neither Work carries both tags, so a multi-value tag filter
+    can distinguish OR (two Works) from AND (none), and no single Work satisfies
+    both a tag and the other Work's status, so a cross-facet filter can
+    distinguish intersection from union.
+
+    @param app: The Flask application.
+    @returns: A dict of the seeded Work titles by role.
+    """
+    from app.db.models import ItemTag, Tag, User
+
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").one()
+        tags = {name: Tag(name=name) for name in ("horror", "classic")}
+        db.session.add_all(tags.values())
+        db.session.flush()
+
+        seeded = {}
+        for title, status, tag in (("Only Horror", "available", "horror"), ("Only Classic", "lent", "classic")):
+            work = Work(title=title, meta={"genre": "Fiction"})
+            db.session.add(work)
+            db.session.flush()
+            expression = Expression(work_id=work.id, content_type="text")
+            db.session.add(expression)
+            db.session.flush()
+            manifestation = Manifestation(expression_id=expression.id, format="book", meta={"format": "book"})
+            db.session.add(manifestation)
+            db.session.flush()
+            item = Item(
+                manifestation_id=manifestation.id,
+                owner_id=user.id,
+                status=status,
+                collection_status=status,
+                meta={},
+            )
+            db.session.add(item)
+            db.session.flush()
+            db.session.add(ItemTag(item_id=item.id, tag_id=tags[tag].id))
+            seeded[title] = tag
+
+        db.session.commit()
+        return seeded
+
+
+def shelf_titles(client, headers, query: str) -> list[str]:
+    """Fetch `/api/works/shelf` and return the titles it reports.
+
+    @param client: The Flask test client.
+    @param headers: Auth headers for the seeded user.
+    @param query: The query string, without a leading `?`.
+    @returns: The sorted titles in the result set.
+    """
+    response = client.get(f"/api/works/shelf?{query}", headers=headers)
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["total"] == len(payload["data"]), "total disagrees with the rows returned"
+    return sorted(row["title"] for row in payload["data"])
+
+
+def test_multiple_tags_in_one_facet_are_combined_with_or(client, normal_user_headers, app, split_tag_facets):
+    """Two tags in one facet select the union, not the intersection.
+
+    `Only Horror` and `Only Classic` share no tag and no Work, so an OR returns
+    both and an AND returns none. The fixture makes this the only difference
+    between the two readings, so the assertion is sensitive to which one the
+    filter implements.
+
+    @param client: The Flask test client.
+    @param normal_user_headers: Auth headers for the seeded user.
+    @param app: The Flask application.
+    @param split_tag_facets: The seeded fixture.
+    @returns: Nothing; intersection semantics fail the test.
+    """
+    assert shelf_titles(client, normal_user_headers, "tags=horror,classic") == ["Only Classic", "Only Horror"]
+
+
+def test_a_single_tag_still_selects_one_work(client, normal_user_headers, app, split_tag_facets):
+    """A one-value filter is the degenerate case of the same rule.
+
+    @param client: The Flask test client.
+    @param normal_user_headers: Auth headers for the seeded user.
+    @param app: The Flask application.
+    @param split_tag_facets: The seeded fixture.
+    @returns: Nothing; a wrong single-tag result fails the test.
+    """
+    assert shelf_titles(client, normal_user_headers, "tags=horror") == ["Only Horror"]
+    assert shelf_titles(client, normal_user_headers, "tags=classic") == ["Only Classic"]
+
+
+def test_filters_from_different_facets_are_combined_with_and(client, normal_user_headers, app, split_tag_facets):
+    """Filters from *different* facets are intersected.
+
+    This is the AND case, and the one the old comment described as "the AND
+    semantics come from combining multiple filter types". Each facet adds its own
+    `.filter(...)` call onto the same query, so SQLAlchemy joins them with AND.
+
+    Neither Work satisfies both halves, so a union would return one row and an
+    intersection returns none.
+
+    @param client: The Flask test client.
+    @param normal_user_headers: Auth headers for the seeded user.
+    @param app: The Flask application.
+    @param split_tag_facets: The seeded fixture.
+    @returns: Nothing; union semantics, or a spurious match, fails the test.
+    """
+    assert shelf_titles(client, normal_user_headers, "tags=horror&statuses=lent") == []
+    assert shelf_titles(client, normal_user_headers, "tags=classic&statuses=lent") == ["Only Classic"]
+
+
+def test_a_status_that_matches_nothing_yields_an_empty_result(client, normal_user_headers, app, split_tag_facets):
+    """A facet value no Work carries returns nothing, not everything.
+
+    Guards the failure mode where an unrecognised value produces an empty
+    condition list, and `filter()` with no conditions matches every row.
+
+    @param client: The Flask test client.
+    @param normal_user_headers: Auth headers for the seeded user.
+    @param app: The Flask application.
+    @param split_tag_facets: The seeded fixture.
+    @returns: Nothing; a non-empty result fails the test.
+    """
+    assert shelf_titles(client, normal_user_headers, "tags=no_such_tag_9f3a") == []
+    assert shelf_titles(client, normal_user_headers, "statuses=no_such_status_9f3a") == []

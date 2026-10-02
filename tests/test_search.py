@@ -43,12 +43,16 @@ def test_search_items_by_title(app, client, normal_user_headers):
     from app.db.models import Expression, Item, Manifestation, User, Work, db
 
     with app.app_context():
-        # The normal_user_headers fixture ensures a user exists in the DB
-        user = User.query.first()
-        if not user:
-            user = User(email="test@iqoqo.local", display_name="Test User")
-            db.session.add(user)
-            db.session.flush()
+        # The seeded item is owned by the user whose JWT `normal_user_headers`
+        # carries, and /api/items is scoped to the authenticated user -- so the
+        # two must be the same account. This used to be `User.query.first()`,
+        # which returns whichever row happens to sort first and is only the
+        # right user because the fixture happens to create exactly one. Its
+        # `if not user:` fallback was worse: it would create a *different*
+        # account, so the item would belong to someone the request is not
+        # authenticated as and the search would return nothing.
+        user = User.query.filter_by(email="test_user@iqoqo.local").one_or_none()
+        assert user is not None, "the normal_user_headers fixture did not create test_user@iqoqo.local"
 
         # Seed database with a matching item so the search yields > 0 results
         work = Work(title="The Hobbit", meta={"authors": ["J.R.R. Tolkien"]})
@@ -67,6 +71,7 @@ def test_search_items_by_title(app, client, normal_user_headers):
         item = Item(manifestation_id=manifestation.id, owner_id=user.id, status="available", meta={})
         db.session.add(item)
         db.session.commit()
+        seeded_item_id = item.id
 
     # Pass auth headers so the endpoint recognizes the user and returns their items
     response = client.get("/api/items?q=Hobbit", headers=normal_user_headers)
@@ -77,10 +82,13 @@ def test_search_items_by_title(app, client, normal_user_headers):
 
     assert len(data["data"]) > 0, "No items returned; database must be seeded with a matching item."
 
-    # If any items are returned, they must contain basic keys used by the UI
+    # Assert the row the UI is actually given, not just that it has keys. A
+    # shape check (`"title" in first_item`) passes for an empty string, a null,
+    # or a title inherited from the wrong work -- which is precisely the class of
+    # regression this seeding exists to catch.
     first_item = data["data"][0]
-    assert "id" in first_item
-    assert "title" in first_item
+    assert first_item["id"] == seeded_item_id
+    assert first_item["title"] == "The Hobbit"
 
     # Verify that a clearly non-matching query returns no results, ensuring `q` filters.
     no_match_response = client.get("/api/items?q=__no_such_title__", headers=normal_user_headers)
