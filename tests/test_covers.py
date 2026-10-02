@@ -42,6 +42,37 @@ def mock_requests_get():
         yield mock
 
 
+# The default for every pipeline test: the user has not consented to cloud
+# generation. It was spelled out inline in nine tests, which meant the one test
+# that *grants* consent was indistinguishable from the ones that deny it -- and
+# the gate itself (`Config.ALLOW_LLM and llm_permissions["allow_generate_cover"]`)
+# had no test that exercised the granting direction at all.
+LLM_CONSENT_DENIED: dict[str, bool] = {"allow_generate_cover": False}
+
+
+def make_manifestation(**overrides: Any) -> MagicMock:
+    """Build a Manifestation stand-in for the pipeline tests.
+
+    Defaults describe a plain text manifestation with no cover of any kind, which
+    is the starting point every pipeline test needs before it stubs one tier.
+
+    @param overrides: Attributes to set on the mock, replacing the defaults.
+    @returns: A `MagicMock` specced as a Manifestation.
+    """
+    manifestation = MagicMock(spec=Manifestation)
+    for name, value in {
+        "meta": {},
+        "isbn13": None,
+        "upc": None,
+        "cover_url": None,
+    }.items():
+        setattr(manifestation, name, value)
+    manifestation.expression = MagicMock(content_type="text")
+    for name, value in overrides.items():
+        setattr(manifestation, name, value)
+    return manifestation
+
+
 def test_generate_fallback_cover(tmp_path):
     """Test that Pillow generates a file and returns (url, source) tuple."""
     # Override COVERS_DIR for test
@@ -269,9 +300,7 @@ def test_process_cover_pipeline_intercepts_external_url(mock_db_get, mock_downlo
     mock_download.return_value = ("/static/covers/123_ext.jpg", "api_direct_download")
 
     with app.app_context():
-        process_cover_pipeline(
-            manifestation_id=1, identifier="123", title="Test", author="Author", llm_permissions={"allow_generate_cover": False}
-        )
+        process_cover_pipeline(manifestation_id=1, identifier="123", title="Test", author="Author", llm_permissions=LLM_CONSENT_DENIED)
 
     mock_download.assert_called_once_with("123", "http://discogs.com/cover.jpg", "api_direct_download")
     assert mock_manifestation.cover_url == "/static/covers/123_ext.jpg"
@@ -306,7 +335,7 @@ def test_process_cover_pipeline_migrates_external_cover_column_to_local_copy(app
             identifier="legacy-item",
             title="Legacy Item",
             author="Legacy Author",
-            llm_permissions={"allow_generate_cover": False},
+            llm_permissions=LLM_CONSENT_DENIED,
         )
 
     download.assert_called_once_with("legacy-item", external_url, "api_direct_download")
@@ -336,7 +365,7 @@ def test_process_cover_pipeline_does_not_fetch_legacy_cover_from_unknown_host(ap
             identifier="legacy-item",
             title="Legacy Item",
             author="Legacy Author",
-            llm_permissions={"allow_generate_cover": False},
+            llm_permissions=LLM_CONSENT_DENIED,
         )
 
     download.assert_not_called()
@@ -362,7 +391,7 @@ def test_process_cover_pipeline_skips_already_migrated_local_cover(app):
             identifier="legacy-item",
             title="Legacy Item",
             author="Legacy Author",
-            llm_permissions={"allow_generate_cover": False},
+            llm_permissions=LLM_CONSENT_DENIED,
         )
 
     download.assert_not_called()
@@ -392,7 +421,7 @@ def test_legacy_source_only_pipeline_does_not_run_fallback_providers(app):
             identifier="legacy-item",
             title="Legacy Item",
             author="Legacy Author",
-            llm_permissions={"allow_generate_cover": False, "allow_cloud_llm": False},
+            llm_permissions={**LLM_CONSENT_DENIED, "allow_cloud_llm": False},
             legacy_source_only=True,
         )
 
@@ -446,7 +475,7 @@ def test_pipeline_uses_tier5_fallback_when_all_tiers_fail(
             identifier="9780000000000",
             title="Unknown Book",
             author="Unknown Author",
-            llm_permissions={"allow_generate_cover": False},
+            llm_permissions=LLM_CONSENT_DENIED,
         )
 
     mock_fallback.assert_called_once_with("9780000000000", "Unknown Book", "Unknown Author")
@@ -502,7 +531,7 @@ def test_pipeline_skips_tier5_when_tier1_user_photo_succeeds(
                     identifier="item_42",
                     title="Uploaded Book",
                     author="Real Author",
-                    llm_permissions={"allow_generate_cover": False},
+                    llm_permissions=LLM_CONSENT_DENIED,
                     user_image_path=str(fake_raw),
                 )
 
@@ -619,9 +648,9 @@ def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
     final_statuses = [c.kwargs.get("cover_status") or (c[1].get("cover_status") if c[1] else None) for c in update_calls]
     # Filter out None (calls that didn't set cover_status explicitly)
     final_statuses = [s for s in final_statuses if s is not None]
-    assert any(
-        s in ("ready", "failed") for s in final_statuses
-    ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
+    assert any(s in ("ready", "failed") for s in final_statuses), (
+        f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
+    )
 
 
 @patch("app.utils.covers.is_safe_url", return_value=True)
@@ -765,3 +794,85 @@ def test_generate_fallback_cover_design_elements(tmp_path):
             # Check that footer text region has non-background pixels
             footer_region = pixels[height - 85 : height - 50, int(width * 0.25) : int(width * 0.75), :]
             assert footer_region.size > 0, "Footer text region should exist"
+
+
+# ---------------------------------------------------------------------------
+# The cloud-generation consent gate (MOD-TEST-18)
+# ---------------------------------------------------------------------------
+#
+# `process_cover_pipeline` only reaches the LLM tiers when
+# `Config.ALLOW_LLM and llm_permissions.get("allow_generate_cover")` is true.
+# Every existing test passed the permission as False, so the suite only ever
+# demonstrated that denying consent skips the tier. Nothing asserted that
+# granting it *runs* the tier, which means deleting the gate, or inverting the
+# condition, or reading the wrong key would not have failed a single test.
+
+
+def _run_pipeline(app, monkeypatch, permissions, *, allow_llm=True):
+    """Run the pipeline with all other tiers stubbed out.
+
+    @param app: The Flask application.
+    @param monkeypatch: The pytest fixture used to patch config and tiers.
+    @param permissions: The `llm_permissions` dict to pass through.
+    @param allow_llm: The value for `Config.ALLOW_LLM`.
+    @returns: The mocked `fetch_llm_cover`.
+    """
+    monkeypatch.setattr("app.utils.covers.Config.ALLOW_LLM", allow_llm)
+
+    llm = MagicMock(return_value=("/static/covers/llm_ext.jpg", "llm_generated"))
+    monkeypatch.setattr("app.utils.covers.fetch_upc_cover", MagicMock(return_value=None))
+    monkeypatch.setattr("app.utils.covers.fetch_llm_cover", llm)
+
+    with (
+        patch("app.utils.covers.db.session.get", return_value=make_manifestation()),
+        patch("app.utils.covers.download_direct_url", return_value=None),
+        patch("app.utils.covers.fetch_external_api_cover", return_value=None),
+    ):
+        with app.app_context():
+            process_cover_pipeline(manifestation_id=1, identifier="123", title="T", author="A", llm_permissions=permissions)
+
+    return llm
+
+
+def test_consent_grants_the_llm_tier(app, monkeypatch):
+    """With both halves of the gate satisfied, the LLM tier must run.
+
+    Without this, the suite could only show that denying consent skips the tier,
+    and a pipeline that never generated covers would pass every test.
+
+    @param app: The Flask application.
+    @param monkeypatch: The pytest fixture used to patch config and tiers.
+    @returns: Nothing; a skipped LLM tier fails the test.
+    """
+    llm = _run_pipeline(app, monkeypatch, {"allow_generate_cover": True})
+
+    llm.assert_called_once()
+    assert llm.call_args.args[0] == "123"
+
+
+def test_missing_consent_skips_the_llm_tier(app, monkeypatch):
+    """An absent key must deny, not default to permitted.
+
+    `llm_permissions` is caller-supplied, so an omitted key is a request that
+    never granted consent. This pins that reading it as anything other than
+    False is a change in behaviour.
+
+    @param app: The Flask application.
+    @param monkeypatch: The pytest fixture used to patch config and tiers.
+    @returns: Nothing; an LLM call fails the test.
+    """
+    _run_pipeline(app, monkeypatch, {}).assert_not_called()
+
+
+def test_server_side_llm_switch_overrides_user_consent(app, monkeypatch):
+    """`Config.ALLOW_LLM` off must deny even when the user consented.
+
+    The instance-wide switch exists so an operator can disable cloud generation
+    regardless of what any user consented to. Consent is necessary but not
+    sufficient, and this is the half that would otherwise go untested.
+
+    @param app: The Flask application.
+    @param monkeypatch: The pytest fixture used to patch config and tiers.
+    @returns: Nothing; an LLM call fails the test.
+    """
+    _run_pipeline(app, monkeypatch, {"allow_generate_cover": True}, allow_llm=False).assert_not_called()
