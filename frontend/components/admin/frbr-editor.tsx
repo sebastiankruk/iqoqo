@@ -376,11 +376,13 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       });
       toast.success(`Created new ${childType}`);
       setAddChildDialog({ open: false, parentLevel: null });
-      await refetch();
+      // No explicit refetch: `useAddFrbrChild` already invalidates this tree's
+      // query key on success (lib/api/hooks/admin.ts), so awaiting a refetch
+      // here would only add a second network round-trip for stale data.
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create child entity");
     }
-  }, [addChildDialog.parentLevel, tree, newChildTitle, addChild, manifestationId, refetch]);
+  }, [addChildDialog.parentLevel, tree, newChildTitle, addChild, manifestationId]);
 
   /**
    * Handles the "Escalate" action.
