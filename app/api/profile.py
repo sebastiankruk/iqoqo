@@ -34,6 +34,32 @@ from .decorators import require_auth
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 
+#: Maximum accepted biography length, in characters.
+BIO_MAX_LENGTH = 500
+
+
+def _apply_bio(user: User, raw_bio) -> Response | None:
+    """Sanitize and length-check a biography, then assign it to ``user``.
+
+    Shared by every profile write path (``PUT /api/profile/`` and
+    ``PATCH /api/profile/settings``) so the two cannot drift apart: an
+    unsanitized or oversized bio must be rejected no matter which endpoint
+    the client reaches for.
+
+    Returns a ready-to-return ``Response`` on rejection, or ``None`` when the
+    value was accepted and assigned. ``None`` clears the biography.
+    """
+    if raw_bio is None:
+        user.bio = None
+        return None
+
+    clean_bio = bleach.clean(str(raw_bio).strip(), tags=[], attributes={}, protocols=[], strip=True)
+    if len(clean_bio) > BIO_MAX_LENGTH:
+        return jsonify({"error": f"Biography cannot exceed {BIO_MAX_LENGTH} characters", "code": 400}), 400
+
+    user.bio = clean_bio
+    return None
+
 
 @profile_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
@@ -124,14 +150,9 @@ def update_profile():
             return err
 
     if "bio" in data:
-        bio_val = data["bio"]
-        if bio_val is not None:
-            clean_bio = bleach.clean(str(bio_val).strip(), tags=[], attributes={}, protocols=[], strip=True)
-            if len(clean_bio) > 500:
-                return jsonify({"error": "Biography cannot exceed 500 characters", "code": 400}), 400
-            user.bio = clean_bio
-        else:
-            user.bio = None
+        err = _apply_bio(user, data["bio"])
+        if err:
+            return err
 
     if "visibility" in data:
         val = data["visibility"]
@@ -252,7 +273,9 @@ def update_profile_settings():
                 return err
 
     if "bio" in data:
-        user.bio = data["bio"].strip()
+        err = _apply_bio(user, data["bio"])
+        if err:
+            return err
 
     if "visibility" in data:
         # User feedback: reuse visibility to value == public
