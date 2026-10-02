@@ -216,16 +216,34 @@ def test_update_manifestation_validation(client, admin_headers, app):
 
 
 def test_scan_barcode_dynamic_status(client, normal_user_headers, app):
-    # Verify that collection_status can be passed dynamically
+    """`collection_status` must be validated against the allowed set, dynamically.
+
+    The previous assertion was `status_code != 400 or "Invalid payload" not in
+    error`, which cannot fail: the 400 path returns an unrelated message, so the
+    second disjunct was always true. It passed identically whether the field was
+    validated or ignored, which is the only thing the test existed to check.
+
+    Both branches return 400 for a different reason, so the status code on its
+    own distinguishes nothing. What distinguishes them is the shape of the body:
+    a rejected payload carries pydantic's `details`, a payload that got past
+    validation does not.
+
+    @param client: The Flask test client.
+    @param normal_user_headers: Auth headers for a normal user.
+    @param app: The Flask application.
+    @returns: Nothing; a missing validation error fails the test.
+    """
     barcode = "9780141036146"
-    # Pre-mocking the manifestation lookup might be needed or just use a mock
-    # But here we just want to see if the payload is accepted and processed
-    payload = {"barcode": barcode, "collection_status": "wish_list"}
-    # Note: /api/scan requires resolution, if it fails to resolve it might return 404
-    # But the collection_status check happens before ingestion in some cases
-    response = client.post("/api/scan", json=payload, headers=normal_user_headers)
-    # If it fails to resolve, it's 404/400, but we want to make sure it's not a payload error
-    assert response.status_code != 400 or "Invalid payload" not in response.json.get("error", "")
+
+    accepted = client.post("/api/scan", json={"barcode": barcode, "collection_status": "wish_list"}, headers=normal_user_headers)
+    assert accepted.status_code == 400, "unexpected: the unresolvable barcode should still fail"
+    assert "details" not in accepted.get_json(), f"a valid collection_status was rejected by validation: {accepted.get_json()}"
+
+    rejected = client.post("/api/scan", json={"barcode": barcode, "collection_status": "not_a_real_status"}, headers=normal_user_headers)
+    assert rejected.status_code == 400
+    details = rejected.get_json()["details"]
+    assert "collection_status" in details, f"the error did not name the offending field: {details}"
+    assert "not_a_real_status" in details, f"the error did not quote the rejected value: {details}"
 
 
 class TestItemLendSchemaFrbrBoundary:
