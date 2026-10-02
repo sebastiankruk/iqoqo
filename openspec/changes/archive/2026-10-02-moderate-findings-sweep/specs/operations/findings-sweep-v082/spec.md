@@ -66,16 +66,27 @@ Public user collection profiles SHALL support pagination with concurrent data re
 - **WHEN** a user captures an item barcode and cover image through the scanner interface
 - **THEN** the system SHALL submit the item metadata and image payload as an atomic transaction that succeeds or rolls back as a single unit
 
-### Requirement: Session-Scoped Test Schema Rollback Isolation
-The automated test harness SHALL establish database schemas once per test session and isolate individual test cases through transaction rollback savepoints.
-
-#### Scenario: Sequential test case execution
-- **WHEN** an individual test case creates or modifies database entities and finishes execution
-- **THEN** the test harness SHALL roll back the active transaction savepoint without dropping or recreating database tables
-
-#### Scenario: Validating ontology SHACL shapes
-- **WHEN** test suites execute SHACL graph validation across multiple test cases
-- **THEN** the test harness SHALL use session-cached ontology shapes rather than re-parsing graph definition files on each test execution
+> **WITHDRAWN — not a requirement, and not synced.**
+>
+> A requirement titled "Session-Scoped Test Schema Rollback Isolation" was written for C18
+> task 4.3 (session-scoped `db.create_all()` with per-test savepoint rollback). C18 audited it
+> and **declined to implement it**: `tests/conftest.py` still creates and drops the schema per
+> test. The reasoning is in this change's `tasks.md` — five call sites invoke `db.drop_all()`
+> mid-session, and the per-test teardown is what guarantees a clean slate for roughly twenty
+> count-based assertions, so the change would trade about 15% of suite runtime for a class of
+> intermittent failures.
+>
+> It is recorded here rather than deleted, so the next reader does not re-propose the same
+> refactor without first reading why it was declined. It is deliberately **not** carried into
+> `openspec/specs/operations/`: a main spec asserting a test-harness design that does not exist
+> would be false against the code it describes, and a main spec is the last place that kind of
+> error belongs.
+>
+> The SHACL shape caching that shared this requirement *was* delivered, as task 4.4, and is
+> covered by its own record. It is not folded in here either, because a requirement spanning one
+> delivered and one declined behaviour cannot be split truthfully without becoming a separate
+> requirement. 4.4's own finding is worth repeating: naive caching would have been a **bug**,
+> since `pyshacl` mutates the graph it is given (387 to 389 triples).
 
 ### Requirement: Deterministic Test Assertions and Guarded State Reset Endpoints
 Automated test assertions SHALL evaluate exact status codes and conditions rather than permissive unions, and administrative test-reset endpoints SHALL be disabled in production configurations.
