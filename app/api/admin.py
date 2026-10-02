@@ -1262,7 +1262,9 @@ def get_lod_stats():
         or 0
     )
 
-    authority_rows = db.session.execute(select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)).all()  # pylint: disable=not-callable
+    authority_rows = db.session.execute(
+        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
+    ).all()  # pylint: disable=not-callable
     by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
     total_links = sum(by_authority.values())
 
