@@ -176,3 +176,18 @@ teardown() {
   [[ "$output" =~ "Removing iQoQo backup cron job" ]]
   [[ "$output" =~ "DOCKER_CALLED_WITH: run --rm -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c rm -f /etc/cron.d/iqoqo-backup" ]]
 }
+
+@test "cloud_backup_cron.sh archive-install succeeds and invokes docker" {
+  run bash "${FAKE_PROJECT}/scripts/cloud_backup_cron.sh" archive-install my-remote
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Installing monthly 04:00 cron job (backend: rclone, remote: my-remote)" ]]
+  [[ "$output" =~ "DOCKER_CALLED_WITH: run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine" ]]
+  grep -q "CRON_FILE_CONTENT: 0 4 1 \* \* root cd .* && ./scripts/cloud_backup.sh my-remote " <<< "$output"
+}
+
+@test "cloud_backup_cron.sh archive-uninstall invokes docker removal" {
+  run bash "${FAKE_PROJECT}/scripts/cloud_backup_cron.sh" archive-uninstall
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Removing iQoQo archive cron job" ]]
+  [[ "$output" =~ "DOCKER_CALLED_WITH: run --rm -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c rm -f /etc/cron.d/iqoqo-archive" ]]
+}

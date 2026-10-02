@@ -395,3 +395,14 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "[WARN] Last backup: none found" ]]
 }
+
+@test "cloud_backup_check.sh --archive checks iqoqo-archive cron file" {
+  export TEMP_ARCHIVE_CRON="${TEST_TEMP_DIR}/archive-cron-job"
+  echo "0 4 1 * * root /usr/src/app/scripts/cloud_backup.sh" > "${TEMP_ARCHIVE_CRON}"
+  sed -i.bak "s|/etc/cron.d/iqoqo-archive|${TEMP_ARCHIVE_CRON}|g" "${CHECK_SCRIPT}"
+
+  run bash "${CHECK_SCRIPT}" --archive my-remote
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Checking iQoQo archive configuration" ]]
+  [[ "$output" =~ "Cron job: ${TEMP_ARCHIVE_CRON} exists" ]]
+}

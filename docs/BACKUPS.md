@@ -21,29 +21,43 @@ Four separate `rclone` remotes can be configured via environment variables in `.
 
 ## 1. Fast Daily Backups (`RCLONE_REMOTE_FAST`)
 
-The backup script (`scripts/cloud_backup.sh`) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
+The backup script ([scripts/cloud_backup.sh](file:///home/sebastiankruk/Development/iqoqo/scripts/cloud_backup.sh)) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
 
 ### Setup Instructions
 
 1. Install [rclone](https://rclone.org/install/) on your host machine.
-2. Run `rclone config` to set up your primary remote named **`iqoqo-backup`**.
-3. Test manually:
-
+2. Run `rclone config` to set up your primary remote named **`iqoqo-backup`** (or your preferred S3 / cloud provider).
+3. Configure your `.env`:
    ```bash
-   ./scripts/cloud_backup.sh iqoqo-backup
+   RCLONE_REMOTE_FAST=iqoqo-backup
+   # Optional: explicitly set path if rclone is configured under a non-root user
+   RCLONE_CONFIG=/home/username/.config/rclone/rclone.conf
    ```
-
-4. Schedule nightly execution via cron (e.g. 03:00 AM):
-
+4. Test immediately:
    ```bash
-   0 3 * * * /path/to/iqoqo/scripts/cloud_backup.sh iqoqo-backup >> /var/log/iqoqo_backup.log 2>&1
+   make backup-run
+   # Or with an explicit remote: make backup-run remote=iqoqo-backup
+   ```
+5. Install daily 03:00 AM cron job:
+   ```bash
+   make backup-install
+   # Or with an explicit remote: make backup-install remote=iqoqo-backup
+   ```
+   *(Installs to `/etc/cron.d/iqoqo-backup` logging to `/var/log/iqoqo_backup.log`)*
+6. Verify backup health:
+   ```bash
+   make backup-check
+   ```
+7. To remove the daily cron job:
+   ```bash
+   make backup-uninstall
    ```
 
 ---
 
 ## 2. Long-Term Archiving & AWS S3 Glacier (`RCLONE_REMOTE_ARCHIVE`)
 
-For long-term retention and compliance, iQoQo supports pushing cold backups directly to **AWS S3 Glacier**.
+For long-term retention and compliance, iQoQo supports pushing cold backups directly to **AWS S3 Glacier** on a monthly schedule.
 
 ### AWS S3 Glacier Setup via Rclone
 
@@ -51,7 +65,7 @@ For long-term retention and compliance, iQoQo supports pushing cold backups dire
    - Create an IAM User in AWS Console with S3 permissions (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`).
    - Generate an **Access Key ID** and **Secret Access Key**.
 
-2. **Configure Rclone**:
+2. **Configure Rclone Profile**:
    Run `rclone config` and create a new remote named **`iqoqo-glacier`**:
 
    ```bash
@@ -62,21 +76,42 @@ For long-term retention and compliance, iQoQo supports pushing cold backups dire
    # env_auth: false
    # access_key_id: <YOUR_AWS_ACCESS_KEY_ID>
    # secret_access_key: <YOUR_AWS_SECRET_ACCESS_KEY>
-   # region: us-east-1 (or your preferred region)
-   # storage_class: GLACIER (or DEEP_ARCHIVE)
+   # region: eu-north-1 (or your preferred AWS region)
+   # storage_class: GLACIER_IR (or GLACIER / DEEP_ARCHIVE)
    ```
 
-3. **Run Long-Term Archive Backup**:
-   Pass the archive remote explicitly to the backup script:
+   > [!TIP]
+   > - `GLACIER_IR` (Glacier Instant Retrieval): Fast millisecond retrieval at low cold storage cost (~$0.004/GB/mo).
+   > - `GLACIER` (Flexible Retrieval): Cheaper (~$0.0036/GB/mo), but restore takes 3–5 hours before downloading.
+   > - `DEEP_ARCHIVE`: Lowest cost (~$0.00099/GB/mo), restore takes 12–48 hours.
 
+3. **Configure `.env`**:
    ```bash
-   ./scripts/cloud_backup.sh iqoqo-glacier
+   RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive
    ```
 
-4. **Schedule Monthly Glacier Sync via Cron**:
-
+4. **Run Long-Term Archive Immediately**:
    ```bash
-   0 4 1 * * /path/to/iqoqo/scripts/cloud_backup.sh iqoqo-glacier >> /var/log/iqoqo_glacier.log 2>&1
+   make archive-run
+   # Or with explicit remote: make archive-run remote=iqoqo-glacier:iqoqo-archive
+   ```
+
+5. **Install Monthly Cold Archive Cron Job (1st of month at 04:00 AM)**:
+   ```bash
+   make archive-install
+   # Or with explicit remote: make archive-install remote=iqoqo-glacier:iqoqo-archive
+   ```
+   *(Installs to `/etc/cron.d/iqoqo-archive` logging to `/var/log/iqoqo_archive.log` without affecting the daily backup)*
+
+6. **Verify Archive Health**:
+   ```bash
+   make archive-check
+   ```
+   *(Verifies `/etc/cron.d/iqoqo-archive`, remote reachability, and monthly freshness within 35 days)*
+
+7. **To remove the monthly archive cron job**:
+   ```bash
+   make archive-uninstall
    ```
 
 ---

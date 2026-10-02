@@ -26,7 +26,16 @@
 set -euo pipefail
 
 CMD="${1:-}"
-REMOTE="${2:-${RCLONE_REMOTE_FAST:-}}"
+IS_ARCHIVE=false
+if [ "${CMD}" = "archive-install" ] || [ "${CMD}" = "install-archive" ] || [ "${CMD}" = "archive-uninstall" ] || [ "${CMD}" = "uninstall-archive" ]; then
+    IS_ARCHIVE=true
+fi
+
+if [ "${IS_ARCHIVE}" = true ]; then
+    REMOTE="${2:-${RCLONE_REMOTE_ARCHIVE:-}}"
+else
+    REMOTE="${2:-${RCLONE_REMOTE_FAST:-}}"
+fi
 
 # Resolve a destination the same way cloud_backup.sh does, so `install` and the
 # nightly job can never disagree about where the backup goes.
@@ -67,7 +76,7 @@ case "${S3_BACKEND}" in
 esac
 
 # Fail early with an actionable message rather than installing a cron job that
-# will fail silently at 03:00. cloud_backup.sh performs the same checks, but a
+# will fail silently at 03:00 / 04:00. cloud_backup.sh performs the same checks, but a
 # broken nightly backup is only discovered when someone needs it.
 if [ "${BACKEND}" = "rclone" ]; then
     if ! command -v rclone >/dev/null 2>&1; then
@@ -117,15 +126,36 @@ case "${CMD}" in
       docker run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'cat > /etc/cron.d/iqoqo-backup'
     echo "Done. Next run: tonight at 03:00."
     ;;
+  archive-install|install-archive)
+    ARCHIVE_TARGET="${REMOTE:-iqoqo-glacier}"
+    CRON_CMD="./scripts/cloud_backup.sh"
+    [ "${BACKEND}" = "rclone" ] && CRON_CMD="${CRON_CMD} ${ARCHIVE_TARGET}"
+
+    if [ "${BACKEND}" = "rclone" ]; then
+        echo "Installing monthly 04:00 cron job (backend: rclone, remote: ${ARCHIVE_TARGET})..."
+    else
+        echo "Installing monthly 04:00 cron job (backend: s3, bucket: ${S3_BUCKET_ARCHIVE:-${S3_BUCKET_BACKUP}})..."
+    fi
+    echo "0 4 1 * * root cd ${PROJECT_DIR} && ${CRON_CMD} >> /var/log/iqoqo_archive.log 2>&1" | \
+      docker run --rm -i -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'cat > /etc/cron.d/iqoqo-archive'
+    echo "Done. Next run: 1st of month at 04:00."
+    ;;
   uninstall)
     echo "Removing iQoQo backup cron job..."
     docker run --rm -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'rm -f /etc/cron.d/iqoqo-backup'
     echo "Done."
     ;;
+  archive-uninstall|uninstall-archive)
+    echo "Removing iQoQo archive cron job..."
+    docker run --rm -v /etc/cron.d:/etc/cron.d --entrypoint sh alpine -c 'rm -f /etc/cron.d/iqoqo-archive'
+    echo "Done."
+    ;;
   *)
-    echo "Usage: $0 <install|uninstall> [rclone_remote]" >&2
-    echo "  install [remote] - Install daily 03:00 cron job" >&2
-    echo "  uninstall        - Remove cron job" >&2
+    echo "Usage: $0 <install|uninstall|archive-install|archive-uninstall> [rclone_remote]" >&2
+    echo "  install [remote]         - Install daily 03:00 cron job" >&2
+    echo "  uninstall                - Remove daily backup cron job" >&2
+    echo "  archive-install [remote] - Install monthly 04:00 cold archive cron job" >&2
+    echo "  archive-uninstall        - Remove archive cron job" >&2
     exit 1
     ;;
 esac

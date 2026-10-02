@@ -40,8 +40,46 @@ fi
 
 # Resolve the destination the same way cloud_backup.sh does. Disagreeing here
 # would produce a green health check for a backup that is not actually running.
-REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
+IS_ARCHIVE=false
+if [ "${1:-}" = "--archive" ]; then
+  IS_ARCHIVE=true
+  shift
+fi
+
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="${PROJECT_DIR}/.env"
+if [ -f "${ENV_FILE}" ]; then
+  set -a
+  # The path is a variable resolved at runtime, so shellcheck cannot follow it.
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
+
+if [ "${IS_ARCHIVE}" = true ]; then
+  JOB_TYPE="archive"
+  CRON_FILE="/etc/cron.d/iqoqo-archive"
+  REMOTE="${1:-${RCLONE_REMOTE_ARCHIVE:-}}"
+else
+  JOB_TYPE="backup"
+  CRON_FILE="/etc/cron.d/iqoqo-backup"
+  REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
+fi
+
 RCLONE_CONF="${RCLONE_CONFIG:-${HOME:-/root}/.config/rclone/rclone.conf}"
+
+# If running as root (e.g. from cron) and no rclone config is found in /root,
+# check if the owner of the project directory has an rclone configuration.
+if [ ! -f "${RCLONE_CONF}" ] && [ "$(id -u)" -eq 0 ]; then
+  proj_owner=$(stat -c '%U' "$(dirname "$0")/.." 2>/dev/null || true)
+  if [ -n "${proj_owner}" ] && [ "${proj_owner}" != "root" ]; then
+    owner_conf=$(eval echo "~${proj_owner}/.config/rclone/rclone.conf")
+    if [ -f "${owner_conf}" ]; then
+      RCLONE_CONF="${owner_conf}"
+      export RCLONE_CONFIG="${owner_conf}"
+    fi
+  fi
+fi
 
 BACKEND=""
 # Coerced, not just defaulted: `${VAR:-auto}` substitutes only when the
@@ -80,14 +118,13 @@ check() {
 }
 
 case "${BACKEND}" in
-  rclone) echo "Checking iQoQo backup configuration (backend: rclone, remote: ${REMOTE:-default})..." ;;
-  s3)     echo "Checking iQoQo backup configuration (backend: s3, bucket: ${S3_BUCKET_BACKUP:-<unset>})..." ;;
-  none)   echo "Checking iQoQo backup configuration (backend: NONE CONFIGURED)..." ;;
+  rclone) echo "Checking iQoQo ${JOB_TYPE} configuration (backend: rclone, remote: ${REMOTE:-default})..." ;;
+  s3)     echo "Checking iQoQo ${JOB_TYPE} configuration (backend: s3, bucket: ${S3_BUCKET_BACKUP:-<unset>})..." ;;
+  none)   echo "Checking iQoQo ${JOB_TYPE} configuration (backend: NONE CONFIGURED)..." ;;
 esac
 echo ""
 
 # 1. Cron job
-CRON_FILE="/etc/cron.d/iqoqo-backup"
 if [ -f "${CRON_FILE}" ]; then
   check ok "Cron job: ${CRON_FILE} exists"
   if grep -q "cloud_backup.sh" "${CRON_FILE}" 2>/dev/null; then
@@ -220,21 +257,32 @@ if [ -n "${LAST_TS}" ]; then
   LAST_EPOCH=$(date -d "${LAST_TS}" +%s 2>/dev/null || echo "")
   NOW_EPOCH=$(date +%s)
   if [ -z "${LAST_EPOCH}" ]; then
-    check warn "Last backup: found (${LAST_TS}) but its timestamp could not be parsed"
+    check warn "Last ${JOB_TYPE}: found (${LAST_TS}) but its timestamp could not be parsed"
   else
     HOURS_AGO=$(( (NOW_EPOCH - LAST_EPOCH) / 3600 ))
-    if [ "${HOURS_AGO}" -le 24 ]; then
-      check ok "Last backup: ${HOURS_AGO}h ago"
-    elif [ "${HOURS_AGO}" -le 48 ]; then
-      check warn "Last backup: ${HOURS_AGO}h ago (over 24h)"
+    if [ "${IS_ARCHIVE}" = true ]; then
+      # Monthly archive threshold: fresh <= 35 days (840h), warn 35-45 days (1080h), stale > 45 days
+      if [ "${HOURS_AGO}" -le 840 ]; then
+        check ok "Last archive: $((HOURS_AGO / 24))d ago"
+      elif [ "${HOURS_AGO}" -le 1080 ]; then
+        check warn "Last archive: $((HOURS_AGO / 24))d ago (over 35 days)"
+      else
+        check fail "Last archive: $((HOURS_AGO / 24))d ago (STALE)"
+      fi
     else
-      check fail "Last backup: ${HOURS_AGO}h ago (STALE)"
+      if [ "${HOURS_AGO}" -le 24 ]; then
+        check ok "Last backup: ${HOURS_AGO}h ago"
+      elif [ "${HOURS_AGO}" -le 48 ]; then
+        check warn "Last backup: ${HOURS_AGO}h ago (over 24h)"
+      else
+        check fail "Last backup: ${HOURS_AGO}h ago (STALE)"
+      fi
     fi
   fi
 elif [ "${BACKEND}" = "none" ]; then
-  check warn "Last backup: not checked (no destination configured)"
+  check warn "Last ${JOB_TYPE}: not checked (no destination configured)"
 else
-  check warn "Last backup: none found on ${BACKEND}"
+  check warn "Last ${JOB_TYPE}: none found on ${BACKEND}"
 fi
 
 # 4. Disk space

@@ -81,6 +81,19 @@ ARCHIVE="${BACKUP_DIR}.tar.gz"
 RCLONE_REMOTE="${1:-${RCLONE_REMOTE_FAST:-}}"
 RCLONE_CONF="${RCLONE_CONFIG:-${HOME}/.config/rclone/rclone.conf}"
 
+# If running as root (e.g. from cron) and no rclone config is found in /root,
+# check if the owner of the project directory has an rclone configuration.
+if [ ! -f "${RCLONE_CONF}" ] && [ "$(id -u)" -eq 0 ]; then
+    proj_owner=$(stat -c '%U' "$(dirname "$0")/.." 2>/dev/null || true)
+    if [ -n "${proj_owner}" ] && [ "${proj_owner}" != "root" ]; then
+        owner_conf=$(eval echo "~${proj_owner}/.config/rclone/rclone.conf")
+        if [ -f "${owner_conf}" ]; then
+            RCLONE_CONF="${owner_conf}"
+            export RCLONE_CONFIG="${owner_conf}"
+        fi
+    fi
+fi
+
 # Auto-selection keys off the config *file*, not off RCLONE_REMOTE_FAST.
 # .env.example ships RCLONE_REMOTE_FAST=iqoqo-backup, so keying off the
 # variable would make a copied .env hijack an S3-only deployment the moment

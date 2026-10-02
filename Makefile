@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
 
 SHELL := /bin/bash
 
@@ -146,6 +146,10 @@ help:
 	@echo "  backup-install   - Install daily 03:00 backup cron (remote=<name>)"
 	@echo "  backup-uninstall - Remove installed backup cron job"
 	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
+	@echo "  archive-run      - Run cloud archive immediately (remote=<name>)"
+	@echo "  archive-install  - Install monthly 04:00 cold archive cron (remote=<name>)"
+	@echo "  archive-uninstall - Remove installed archive cron job"
+	@echo "  archive-check    - Verify archive health (cron, rclone, disk, freshness)"
 	@echo ""
 	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
@@ -743,12 +747,16 @@ migrate-secrets: .venv/bin/activate
 	.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args)
 
 backup-run:
-	@if [ -z "$(remote)" ]; then \
+	@remote_target="$(remote)"; \
+	if [ -z "$$remote_target" ] && [ -f .env ]; then \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_FAST=' .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'); \
+	fi; \
+	if [ -z "$$remote_target" ]; then \
 		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
 		echo "  Example: make backup-run remote=iqoqo-backup"; \
 		exit 1; \
-	fi
-	@cd $(CURDIR) && bash scripts/cloud_backup.sh $(remote)
+	fi; \
+	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
 
 backup-install: backup-run
 	@bash scripts/cloud_backup_cron.sh install $(remote)
@@ -758,6 +766,23 @@ backup-uninstall:
 
 backup-check:
 	@bash scripts/cloud_backup_check.sh $(remote)
+
+archive-run:
+	@remote_target="$(remote)"; \
+	if [ -z "$$remote_target" ] && [ -f .env ]; then \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'); \
+	fi; \
+	remote_target="$${remote_target:-iqoqo-glacier}"; \
+	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
+
+archive-install: archive-run
+	@bash scripts/cloud_backup_cron.sh archive-install $(remote)
+
+archive-uninstall:
+	@bash scripts/cloud_backup_cron.sh archive-uninstall
+
+archive-check:
+	@bash scripts/cloud_backup_check.sh --archive $(remote)
 
 db-reset: pg-create-schemas .venv/bin/activate
 	@echo "Resetting database..."
