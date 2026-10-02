@@ -648,9 +648,9 @@ def test_pipeline_fallback_reaches_tier5_even_when_llm_raises(
     final_statuses = [c.kwargs.get("cover_status") or (c[1].get("cover_status") if c[1] else None) for c in update_calls]
     # Filter out None (calls that didn't set cover_status explicitly)
     final_statuses = [s for s in final_statuses if s is not None]
-    assert any(s in ("ready", "failed") for s in final_statuses), (
-        f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
-    )
+    assert any(
+        s in ("ready", "failed") for s in final_statuses
+    ), f"Expected cover_status to be 'ready' or 'failed', update calls: {update_calls}"
 
 
 @patch("app.utils.covers.is_safe_url", return_value=True)
