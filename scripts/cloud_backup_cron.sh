@@ -31,12 +31,6 @@ if [ "${CMD}" = "archive-install" ] || [ "${CMD}" = "install-archive" ] || [ "${
     IS_ARCHIVE=true
 fi
 
-if [ "${IS_ARCHIVE}" = true ]; then
-    REMOTE="${2:-${RCLONE_REMOTE_ARCHIVE:-}}"
-else
-    REMOTE="${2:-${RCLONE_REMOTE_FAST:-}}"
-fi
-
 # Resolve a destination the same way cloud_backup.sh does, so `install` and the
 # nightly job can never disagree about where the backup goes.
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -47,6 +41,12 @@ if [ -f "${ENV_FILE}" ]; then
     # shellcheck disable=SC1090
     source "${ENV_FILE}"
     set +a
+fi
+
+if [ "${IS_ARCHIVE}" = true ]; then
+    REMOTE="${2:-${RCLONE_REMOTE_ARCHIVE:-}}"
+else
+    REMOTE="${2:-${RCLONE_REMOTE_FAST:-}}"
 fi
 
 BACKEND=""
@@ -127,7 +127,7 @@ case "${CMD}" in
     echo "Done. Next run: tonight at 03:00."
     ;;
   archive-install|install-archive)
-    ARCHIVE_TARGET="${REMOTE:-iqoqo-glacier}"
+    ARCHIVE_TARGET="${REMOTE:-iqoqo-glacier:iqoqo-archive}"
     CRON_CMD="./scripts/cloud_backup.sh"
     [ "${BACKEND}" = "rclone" ] && CRON_CMD="${CRON_CMD} ${ARCHIVE_TARGET}"
 

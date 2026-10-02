@@ -749,7 +749,7 @@ migrate-secrets: .venv/bin/activate
 backup-run:
 	@remote_target="$(remote)"; \
 	if [ -z "$$remote_target" ] && [ -f .env ]; then \
-		remote_target=$$(grep -E '^RCLONE_REMOTE_FAST=' .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'); \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_FAST=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
 	fi; \
 	if [ -z "$$remote_target" ]; then \
 		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
@@ -770,9 +770,9 @@ backup-check:
 archive-run:
 	@remote_target="$(remote)"; \
 	if [ -z "$$remote_target" ] && [ -f .env ]; then \
-		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'); \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
 	fi; \
-	remote_target="$${remote_target:-iqoqo-glacier}"; \
+	remote_target="$${remote_target:-iqoqo-glacier:iqoqo-archive}"; \
 	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
 
 archive-install: archive-run

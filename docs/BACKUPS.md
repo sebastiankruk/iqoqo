@@ -12,8 +12,8 @@ Four separate `rclone` remotes can be configured via environment variables in `.
 
 | Environment Variable | Default Remote Name | Purpose | Recommended Storage Class |
 | -------------------- | ------------------- | ------- | ------------------------- |
-| `RCLONE_REMOTE_FAST` | `iqoqo-backup` | Daily database dumps & asset backups | AWS S3 Standard / S3 Standard-IA / Dropbox |
-| `RCLONE_REMOTE_ARCHIVE` | `iqoqo-glacier` | Long-term cold storage archive | AWS S3 Glacier Flexible Retrieval / Deep Archive |
+| `RCLONE_REMOTE_FAST` | `iqoqo-backup` (or `iqoqo-s3:<bucket>`) | Daily database dumps & asset backups | AWS S3 Standard / S3 Standard-IA / Dropbox |
+| `RCLONE_REMOTE_ARCHIVE` | `iqoqo-glacier:iqoqo-archive` | Long-term cold storage archive | AWS S3 Glacier Flexible Retrieval / Deep Archive |
 | `RCLONE_COVERS_REMOTE` | `iqoqo-s3-cache` | Shared AI cover cache across instances | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
 | `RCLONE_FEEDBACK_REMOTE` | `remote:feedback` | Feedback screenshot attachment persistence | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
 
@@ -28,27 +28,37 @@ The backup script ([scripts/cloud_backup.sh](file:///home/sebastiankruk/Developm
 1. Install [rclone](https://rclone.org/install/) on your host machine.
 2. Run `rclone config` to set up your primary remote named **`iqoqo-backup`** (or your preferred S3 / cloud provider).
 3. Configure your `.env`:
+
    ```bash
    RCLONE_REMOTE_FAST=iqoqo-backup
    # Optional: explicitly set path if rclone is configured under a non-root user
    RCLONE_CONFIG=/home/username/.config/rclone/rclone.conf
    ```
+
 4. Test immediately:
+
    ```bash
    make backup-run
    # Or with an explicit remote: make backup-run remote=iqoqo-backup
    ```
+
 5. Install daily 03:00 AM cron job:
+
    ```bash
    make backup-install
    # Or with an explicit remote: make backup-install remote=iqoqo-backup
    ```
+
    *(Installs to `/etc/cron.d/iqoqo-backup` logging to `/var/log/iqoqo_backup.log`)*
+
 6. Verify backup health:
+
    ```bash
    make backup-check
    ```
+
 7. To remove the daily cron job:
+
    ```bash
    make backup-uninstall
    ```
@@ -86,30 +96,53 @@ For long-term retention and compliance, iQoQo supports pushing cold backups dire
    > - `DEEP_ARCHIVE`: Lowest cost (~$0.00099/GB/mo), restore takes 12–48 hours.
 
 3. **Configure `.env`**:
-   ```bash
-   RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive
-   ```
+
+   For S3-based remotes, specify the target using the `<remote_name>:<bucket_name>` syntax:
+
+   - **Production**:
+
+     ```bash
+     RCLONE_REMOTE_FAST=iqoqo-s3:iqoqo-backup
+     RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive
+     ```
+
+   - **Preview / Staging**:
+
+     ```bash
+     RCLONE_REMOTE_FAST=iqoqo-s3:iqoqo-backup-preview
+     RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive-preview
+     ```
+
+   > [!NOTE]
+   > If `RCLONE_REMOTE_ARCHIVE` is unset in `.env`, `archive-run` and `archive-install` default to `iqoqo-glacier:iqoqo-archive`. You can also override the destination at runtime with `remote=...`.
 
 4. **Run Long-Term Archive Immediately**:
+
    ```bash
    make archive-run
-   # Or with explicit remote: make archive-run remote=iqoqo-glacier:iqoqo-archive
+   # Or with explicit remote/bucket: make archive-run remote=iqoqo-glacier:iqoqo-archive
    ```
 
 5. **Install Monthly Cold Archive Cron Job (1st of month at 04:00 AM)**:
+
    ```bash
    make archive-install
-   # Or with explicit remote: make archive-install remote=iqoqo-glacier:iqoqo-archive
+   # Or with explicit remote/bucket: make archive-install remote=iqoqo-glacier:iqoqo-archive
    ```
+
    *(Installs to `/etc/cron.d/iqoqo-archive` logging to `/var/log/iqoqo_archive.log` without affecting the daily backup)*
 
 6. **Verify Archive Health**:
+
    ```bash
    make archive-check
+   # Or with explicit remote/bucket: make archive-check remote=iqoqo-glacier:iqoqo-archive
    ```
+
    *(Verifies `/etc/cron.d/iqoqo-archive`, remote reachability, and monthly freshness within 35 days)*
 
 7. **To remove the monthly archive cron job**:
+
    ```bash
    make archive-uninstall
    ```
