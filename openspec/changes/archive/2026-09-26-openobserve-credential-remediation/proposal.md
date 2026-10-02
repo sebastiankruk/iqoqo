@@ -1,6 +1,6 @@
 ## Why
 
-Commit `61a7a50` (2026-09-01, branch `fix/0.7.17/multi-candidate-lookup`) hardcoded the OpenObserve default password `SuperSecret!123` and its Base64 Basic-Auth encoding `YWRtaW5AaXFvcW8ubG9jYWw6U3VwZXJTZWNyZXQhMTIz` into 8 tracked files across shell scripts, OTEL collector configs, E2E tests, and documentation. The prior default `supersecret` / `YWRtaW5AaXFvcW8ubG9jYWw6c3VwZXJzZWNyZXQ=` also persists in `.agents/skills/devops-observability-expert/SKILL.md`.
+Commit `61a7a50` (2026-09-01, branch `fix/0.7.17/multi-candidate-lookup`) hardcoded the OpenObserve default password `SuperSecret!<redacted>` and its Base64 Basic-Auth encoding `YWRtaW5AaXFvcW8ubG9jYWw6<redacted>` into 8 tracked files across shell scripts, OTEL collector configs, E2E tests, and documentation. The prior default `supersecret` / `YWRtaW5AaXFvcW8ubG9jYWw6<redacted>` also persists in `.agents/skills/devops-observability-expert/SKILL.md`.
 
 OpenObserve is an internal-only service, not exposed outside the host. The `release/0.8.1` branches will be squash-merged, so feature-branch history is not a concern — we simply overwrite the files. However, **v0.7.18 PROD** (the current production release) carries the hardcoded values in `run.sh:471`, `scripts/iqoqo-status.sh:292`, and `docs/MONITORING.md`, making them discoverable in the tagged release history.
 

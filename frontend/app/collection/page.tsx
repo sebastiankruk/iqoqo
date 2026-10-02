@@ -31,6 +31,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { SidebarFilters } from "@/components/collection/sidebar-filters";
 import type { ActiveFilter } from "@/components/collection/filter-bar";
 import { FilterBar, chipLabel } from "@/components/collection/filter-bar";
+import { buildCollectionUrl, parseCollectionUrl, parseCollectionUrlScalars } from "@/lib/collection-url";
 import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
@@ -104,42 +105,19 @@ function CollectionContent() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Initialization: read values directly from the URL preserving 'Go back' functionality perfectly
-  const initialSort = searchParams?.get("sort") || "updated";
-  const initialStatuses = searchParams?.get("statuses") || "";
-  const initialTags = searchParams?.get("tags") || "";
-  const initialCollections = searchParams?.get("collections") || "";
-  const initialGenres = searchParams?.get("genres") || "";
-  const initialPublishers = searchParams?.get("publishers") || "";
-  const initialOwnership = searchParams?.get("ownership") || "";
-  const initialLodAuthority = searchParams?.get("lod_authority") || "";
-  const initialLodStatus = searchParams?.get("lod_status") || "";
+  // Read initial state from the URL in one place (lib/collection-url.ts), which
+  // the tests exercise directly rather than re-implementing.
+  const urlSearch = searchParams?.toString() ?? "";
+  const initialFilters = useMemo(() => parseCollectionUrl(urlSearch), [urlSearch]);
+  const {
+    sortBy: initialSort,
+    viewMode: parsedViewMode,
+    appliedQuery: initialQuery,
+    missingCoverOnly: initialMissingCover,
+    missingIdOnly: initialMissingId,
+  } = useMemo(() => parseCollectionUrlScalars(urlSearch), [urlSearch]);
 
-  const initialCategories = searchParams?.get("category") || "";
-  const initialFormats = searchParams?.get("format") || "";
-
-  const initialFilters: ActiveFilter[] = [
-    ...(initialStatuses ? initialStatuses.split(",").map(s => ({ type: "status" as const, value: s })) : []),
-    ...(initialTags ? initialTags.split(",").map(s => ({ type: "tag" as const, value: s })) : []),
-    ...(initialCollections ? initialCollections.split(",").map(s => ({ type: "collection" as const, value: s })) : []),
-    ...(initialGenres ? initialGenres.split(",").map(s => ({ type: "genre" as const, value: s })) : []),
-    ...(initialPublishers ? initialPublishers.split(",").map(s => ({ type: "publisher" as const, value: s })) : []),
-    ...(initialCategories ? initialCategories.split(",").map(s => ({ type: "category" as const, value: s })) : []),
-    ...(initialFormats ? initialFormats.split(",").map(s => ({ type: "format" as const, value: s })) : []),
-    ...(initialOwnership ? initialOwnership.split(",").map(s => ({ type: "ownership" as const, value: s })) : []),
-    ...(initialLodAuthority ? [{ type: "lod_authority" as const, value: initialLodAuthority }] : []),
-    ...(initialLodStatus ? [{ type: "lod_status" as const, value: initialLodStatus }] : []),
-  ];
-
-  const initialViewMode = (searchParams?.get("view") || "items") as
-    | "items"
-    | "manifestations"
-    | "works"
-    | "expressions"
-    | "roadmap";
-  const initialQuery = searchParams?.get("q") ?? "";
-  const initialMissingCover = searchParams?.get("missing_cover") === "true";
-  const initialMissingId = searchParams?.get("missing_id") === "true";
+  const initialViewMode = parsedViewMode as "items" | "manifestations" | "works" | "expressions" | "roadmap";
 
   const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
     initialViewMode
@@ -252,52 +230,21 @@ function CollectionContent() {
 
   // Automatically sync all states robustly back to the URL as they change
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (sortBy !== "updated") params.set("sort", sortBy);
-
-    const statuses = activeFilters.filter(f => f.type === "status").map(f => f.value);
-    if (statuses.length > 0) params.set("statuses", statuses.join(","));
-
-    if (tagFilters.length > 0) params.set("tags", tagFilters.join(","));
-    if (collectionFilters.length > 0) params.set("collections", collectionFilters.join(","));
-    if (genreFilters.length > 0) params.set("genres", genreFilters.join(","));
-    if (publisherFilters.length > 0) params.set("publishers", publisherFilters.join(","));
-    if (ownershipFilters.length > 0) params.set("ownership", ownershipFilters.join(","));
-    if (categoryFilters.length > 0) params.set("category", categoryFilters.join(","));
-    if (formatFilters.length > 0) params.set("format", formatFilters.join(","));
-    if (lodAuthorityFilter) params.set("lod_authority", lodAuthorityFilter);
-    if (lodStatusFilter) params.set("lod_status", lodStatusFilter);
-
-    if (appliedQuery) params.set("q", appliedQuery);
-    if (viewMode !== "items") params.set("view", viewMode);
-    if (isBorrowedFilterActive) params.set("borrowed", "true");
-    if (missingCoverOnly) params.set("missing_cover", "true");
-    if (missingIdOnly) params.set("missing_id", "true");
+    // `activeFilters` alone is the dependency: the per-type slices below are all
+    // derived from it, so listing them re-ran this effect several times per
+    // single filter change.
+    const qs = buildCollectionUrl({
+      sortBy,
+      activeFilters,
+      appliedQuery,
+      viewMode,
+      missingCoverOnly,
+      missingIdOnly,
+    });
 
     // Replace state blocks messy rapid history buildup while keeping deep link persistency active
-    const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [
-    sortBy,
-    activeFilters,
-    tagFilters,
-    collectionFilters,
-    genreFilters,
-    publisherFilters,
-    ownershipFilters,
-    lodAuthorityFilter,
-    lodStatusFilter,
-    appliedQuery,
-    viewMode,
-    isLoggedIn,
-    isBorrowedFilterActive,
-    missingCoverOnly,
-    missingIdOnly,
-    categoryFilters,
-    formatFilters,
-    pathname,
-    router,
-  ]);
+  }, [sortBy, activeFilters, appliedQuery, viewMode, missingCoverOnly, missingIdOnly, pathname, router]);
 
   const physicalStatusFilters = useMemo(() => statusFilters.filter(status => status !== "wish_list"), [statusFilters]);
 

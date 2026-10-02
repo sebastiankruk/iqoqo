@@ -230,6 +230,13 @@ jobs:
       ADMIN_EMAIL: ci-admin@iqoqo.cc
       ADMIN_PASSWORD: E2EBootstrapPassword123!
       DATABASE_URL_TEST: postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/iqoqo_e2e_test
+      # Gates POST /lending/test/reset (C18 4.1). The endpoint fails closed when
+      # this is unset, so the E2E job must supply it. Deliberately a literal
+      # rather than a ${{ secrets.* }}: it is a throwaway CI-only value guarding a
+      # disposable database, and a secret would make the e2e suite depend on repo
+      # configuration it cannot verify. Playwright forwards this same variable
+      # into the Flask process it spawns (frontend/playwright.config.ts).
+      E2E_RESET_SECRET: ci-only-e2e-reset-secret-not-a-real-credential
     steps:
       - uses: actions/checkout@v7
 

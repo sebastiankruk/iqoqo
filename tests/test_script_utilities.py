@@ -302,6 +302,10 @@ def test_retry_missing_covers_dry_run(app: Any) -> None:
     mock_query = MagicMock()
     mock_query.filter.return_value = mock_query
     mock_query.limit.return_value = mock_query
+    # `.options(...)` is chained onto the query, so the mock has to be
+    # self-returning for it too. Without this the eager load added by C18 2.9
+    # produced a second, unrelated mock whose `.all()` was unset.
+    mock_query.options.return_value = mock_query
     mock_query.all.return_value = [mock_manif]
 
     captured_output = io.StringIO()

@@ -28,9 +28,10 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import String, and_, cast, or_
+from sqlalchemy.orm import selectinload
 
 from app import create_app
-from app.db.models import Manifestation
+from app.db.models import Expression, Manifestation
 from app.utils.covers import add_center_watermark, process_cover_pipeline
 from app.utils.llm_covers import apply_corner_watermark
 
@@ -48,7 +49,14 @@ def run_batch(batch_limit=None, force=False, app=None):
     if app is None:
         app = create_app()
     with app.app_context():
-        query = Manifestation.query.filter(Manifestation.cover_url.is_(None))
+        # Eager-load the chain the loop below walks. Touching
+        # `man.expression.work` on a lazy graph costs ~7.5 SELECTs per row
+        # (measured: 38 SELECTs for 5 rows), because Work pulls in semantic
+        # links, work parts and contributions. A maintenance script that
+        # iterates a whole catalog should not pay that per row.
+        query = Manifestation.query.filter(Manifestation.cover_url.is_(None)).options(
+            selectinload(Manifestation.expression).selectinload(Expression.work)
+        )
         if not force:
             cover_status = Manifestation.meta["cover_status"]
             status_str = cast(cover_status, String)

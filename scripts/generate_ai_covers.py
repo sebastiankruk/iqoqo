@@ -24,8 +24,10 @@ import logging
 import os
 from typing import Any, cast
 
+from sqlalchemy.orm import selectinload
+
 from app.config import Config
-from app.db.models import Manifestation, db
+from app.db.models import Expression, Manifestation, db
 from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -59,6 +61,11 @@ def get_unwatermarked_manifestations(limit: int | None = None) -> list[Manifesta
     )
     if limit:
         query = query.limit(limit)
+    # `process_batch` reads `manif.expression.work.title` for every row, which
+    # is ~7.5 SELECTs per manifestation on a lazy graph because Work pulls in
+    # semantic links, work parts and contributions. Same N+1 C18 2.9 fixed in
+    # fetch_covers.py and retry_missing_covers.py.
+    query = query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
     return cast(list[Manifestation], query.all())
 
 

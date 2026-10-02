@@ -18,11 +18,14 @@
 
 import argparse
 import json
+import logging
 import os
 import shutil
 import sys
 import tempfile
 import zipfile
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -30,6 +33,40 @@ from app import create_app
 from app.config import Config
 from app.db import db
 from app.db.models import Manifestation
+
+
+def _find_manifestation(m_data):
+    """Resolve one archive entry to a Manifestation, or None.
+
+    Identifiers are tried strongest-first and only when present, because an
+    absent field must never widen the query. `isbn13` is unique in the schema,
+    so it can only ever match one row; the others are not, so a match on them
+    is only trusted once it has been narrowed to a single candidate.
+
+    Args:
+        m_data: One entry from the archive's `manifestations` list.
+
+    Returns:
+        The matching Manifestation, or None when the entry identifies none or
+        more than one row. Returning None is safe: the file has already been
+        copied, and an operator can restore that cover by hand.
+    """
+    for field in ("id", "isbn13", "upc", "ean"):
+        value = m_data.get(field)
+        if value is None:
+            continue
+        candidates = Manifestation.query.filter_by(**{field: value}).all()
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            logger.warning(
+                "archive entry matches %d manifestations by %s=%s; leaving its cover alone rather than guessing",
+                len(candidates),
+                field,
+                value,
+            )
+            return None
+    return None
 
 
 def restore_covers(zip_path, app=None):
@@ -63,7 +100,17 @@ def restore_covers(zip_path, app=None):
                 if not m_data.get("cover_url"):
                     continue
 
-                manif = Manifestation.query.filter_by(isbn13=m_data.get("isbn13")).first()
+                # Match on the strongest identifier the entry actually carries.
+                #
+                # The previous code was `filter_by(isbn13=m_data.get("isbn13")).first()`.
+                # When the entry has no isbn13 that becomes `filter_by(isbn13=None)`,
+                # which matches *every* manifestation without one -- and `.first()`
+                # picks an arbitrary row, then overwrites its cover_url. Verified: with
+                # three isbn-less manifestations the query returned id 1 purely because
+                # it came first, and wrote the wrong cover onto it. Restore is the moment
+                # a wrong cover is least likely to be noticed, because the operator has
+                # just restored a database and expects the covers to match it.
+                manif = _find_manifestation(m_data)
                 if manif:
                     manif.cover_url = m_data["cover_url"]
                     new_meta = dict(manif.meta or {})

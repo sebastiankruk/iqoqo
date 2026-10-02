@@ -206,7 +206,19 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     browser,
   }) => {
     const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
-    await fetch(`${flaskApiUrl.replace(/\/$/, "")}/lending/test/reset`, { method: "POST" });
+    // The reset helper is gated on a shared secret (C18 4.1), so the harness has
+    // to present it. The response is also asserted now: it used to be discarded,
+    // which meant a 403 from the guard was invisible and the suite carried on
+    // believing the lending state had been cleared.
+    const resetSecret = process.env.E2E_RESET_SECRET || "";
+    const resetResponse = await fetch(`${flaskApiUrl.replace(/\/$/, "")}/lending/test/reset`, {
+      method: "POST",
+      headers: { "X-E2E-Reset-Secret": resetSecret },
+    });
+    expect(
+      resetResponse.ok,
+      `/lending/test/reset returned ${resetResponse.status}; is E2E_RESET_SECRET set for both the app and Playwright?`
+    ).toBe(true);
 
     // 1. Create isolated context for Owner/Lender (User B)
     const lenderContext = await browser.newContext();

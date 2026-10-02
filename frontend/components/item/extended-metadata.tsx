@@ -19,6 +19,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
+import { hasMetaChain, readMeta, readMetaChain } from "@/lib/meta";
+import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
@@ -79,6 +81,22 @@ function sanitizeHtml(dirty: string): string {
   return dirty.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
+/**
+ * The two components disagree on which of `label` / `publisher` wins, and that
+ * is deliberate rather than an oversight to be normalised away: Discogs emits
+ * `label` for a record label and other providers emit `publisher`, and this
+ * panel's heading is "Label / Publisher", so the more specific `label` wins
+ * here. `ItemHeader` reads the opposite order via the `publisher` chain. Do not
+ * collapse these into one chain without deciding which label to show.
+ */
+const LABEL_PUBLISHER_KEYS = ["label", "publisher", "Label", "Publisher"] as const;
+
+/** Discogs writes the catalogue number with a space; other sources use an underscore. */
+const CATALOG_NUMBER_KEYS = ["catalog_number", "Catalog Number"] as const;
+
+/** The runout identifier carries a slash, so its spelling varies more than most fields. */
+const MATRIX_NUMBER_KEYS = ["matrix_number", "Matrix / Runout"] as const;
+
 interface ExtendedMetadataProps {
   meta: Record<string, unknown>;
   workMeta?: Record<string, unknown>;
@@ -101,25 +119,19 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
 
   if (!meta) return null;
 
-  const description = (meta["description"] as string | undefined) || (meta["Description"] as string | undefined);
-  const manifestationCategories =
-    ((meta["categories"] as string[] | undefined) || (meta["Categories"] as string[] | undefined)) ?? [];
-  const workCategories =
-    ((workMeta?.["categories"] as string[] | undefined) || (workMeta?.["Categories"] as string[] | undefined)) ?? [];
-  const workGenres =
-    ((workMeta?.["genres"] as string[] | undefined) || (workMeta?.["Genres"] as string[] | undefined)) ?? [];
+  const description = readMeta<string>(meta, "description");
+  const manifestationCategories = readMeta<string[]>(meta, "categories") ?? [];
+  const workCategories = readMeta<string[]>(workMeta, "categories") ?? [];
+  // `genres` is Work-level only, so it is not in the shared chain map.
+  const workGenres = readMetaChain<string[]>(workMeta, ["genres", "Genres"]) ?? [];
   const categories = Array.from(new Set([...manifestationCategories, ...workCategories, ...workGenres]));
 
-  const format = meta["format"] as string | undefined;
+  const format = readMeta<string>(meta, "format");
   const formatLabel = format ? (getFormatLabel(format) ?? format) : undefined;
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "movie", "moving image", "unknown_video"].includes(
-    format?.toLowerCase() || ""
-  );
-  const isBoardGame = ["boardgame", "board_game", "cards", "three-dimensional object"].includes(
-    format?.toLowerCase() || ""
-  );
-  const isPuzzle = ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
+  const isVideo = isVideoFormat(format);
+  const isBoardGame = isBoardGameFormat(format);
+  const isPuzzle = isPuzzleFormat(format);
 
   const trackList = meta["track_list"] as
     | Array<{ position: string; title: string; duration_seconds: number }>
@@ -245,31 +257,31 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
           <h3 className="font-bold text-lg text-foreground font-serif">Release Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-            {Boolean(meta["label"] || meta["publisher"]) && (
+            {hasMetaChain(meta, LABEL_PUBLISHER_KEYS) && (
               <div className="flex flex-col gap-1">
                 <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
                   Label / Publisher
                 </span>
                 <DiscoveryPivot
                   type="publishers"
-                  value={String(meta["label"] || meta["publisher"])}
+                  value={String(readMetaChain(meta, LABEL_PUBLISHER_KEYS))}
                   variant="link"
                   className="font-semibold"
                 />
               </div>
             )}
-            {Boolean(meta["catalog_number"] || meta["Catalog Number"]) && (
+            {hasMetaChain(meta, CATALOG_NUMBER_KEYS) && (
               <div className="flex flex-col gap-1">
                 <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Catalog #</span>
-                <span className="font-semibold">{String(meta["catalog_number"] || meta["Catalog Number"])}</span>
+                <span className="font-semibold">{String(readMetaChain(meta, CATALOG_NUMBER_KEYS))}</span>
               </div>
             )}
-            {Boolean(meta["matrix_number"] || meta["Matrix / Runout"]) && (
+            {hasMetaChain(meta, MATRIX_NUMBER_KEYS) && (
               <div className="flex flex-col gap-1">
                 <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
                   Matrix / Runout
                 </span>
-                <span className="font-mono text-xs">{String(meta["matrix_number"] || meta["Matrix / Runout"])}</span>
+                <span className="font-mono text-xs">{String(readMetaChain(meta, MATRIX_NUMBER_KEYS))}</span>
               </div>
             )}
             {Boolean(meta["disc_count"]) && (

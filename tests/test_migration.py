@@ -453,10 +453,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_2_fk_indexes_and_quantity"
+    assert heads[0] == "v0_8_2_fk_index_names"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_2_fk_index_names",
         "v0_8_2_fk_indexes_and_quantity",
         "v0_8_2_duplicate_provenance",
         "v0_8_2_duplicate_candidates",
@@ -750,6 +751,15 @@ def test_v0_8_1_security_constraints_upgrade_and_downgrade() -> None:
         sa.Column("google_id", sa.String, nullable=True),
         sa.CheckConstraint("visibility IN ('public', 'private')", name="ck_users_visibility"),
     )
+    # Present in the real chain by this revision (v0_7_17_baseline creates it on
+    # both dialects). Omitting it let the migration's `except Exception` swallow
+    # the missing relation, which is the defect C18 1.7 removed.
+    sa.Table(
+        "items",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("owner_id", sa.Integer, nullable=True),
+    )
     aggregations = sa.Table(
         "container_aggregations",
         metadata,
@@ -837,6 +847,17 @@ def test_v0_8_1_security_constraints_handles_legacy_system_user() -> None:
         sa.Column("aggregated_item_id", sa.Integer, nullable=True),
         sa.Column("component_name", sa.String, nullable=False),
     )
+    # `items` exists by this point in the real chain -- `v0_7_17_baseline`
+    # creates it on both dialects. This fixture previously omitted it, and the
+    # migration's now-removed `except Exception` absorbed the missing table
+    # silently, which is exactly the class of defect C18 1.7 concerns. Scenario 2
+    # below adds its own `items`, populated with a row, so declare it here.
+    items = sa.Table(
+        "items",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("owner_id", sa.Integer, nullable=True),
+    )
     metadata.create_all(engine)
 
     # Scenario 1: Only legacy user without credentials exists -> migration cleans it up and succeeds
@@ -872,13 +893,6 @@ def test_v0_8_1_security_constraints_handles_legacy_system_user() -> None:
             connection.execute(users.delete().where(users.c.email == "real-user-no-creds@iqoqo.local"))
 
         # Scenario 3: Legacy user owns items -> user is disabled instead of deleted
-        items = sa.Table(
-            "items",
-            metadata,
-            sa.Column("id", sa.Integer, primary_key=True),
-            sa.Column("owner_id", sa.Integer, nullable=True),
-        )
-        items.create(engine)
         with engine.begin() as connection:
             connection.execute(users.insert().values(id=99, email="legacy@iqoqo.cc", visibility="private"))
             connection.execute(items.insert().values(id=1, owner_id=99))

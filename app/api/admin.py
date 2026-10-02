@@ -839,8 +839,13 @@ def upload_cover():
     if not file or not file.filename or entity_type not in ["manifestation", "item"] or not str(entity_id).isdigit():
         return jsonify({"success": False, "error": "Invalid request parameters"}), 400
 
-    ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
-    filename = f"{entity_type}_{entity_id}_cover.{ext}"
+    # The extension must describe the bytes that will actually be written, not
+    # the ones the client claims to be sending. `optimize_and_save_image()`
+    # unconditionally re-encodes to JPEG (`out.save(filepath, "JPEG")`), so
+    # deriving the name from `file.filename` produced JPEG bytes served under a
+    # `.png` Content-Type -- which nginx's `X-Content-Type-Options: nosniff`
+    # (deploy/nginx.conf.example) makes unrenderable in the browser.
+    filename = f"{entity_type}_{entity_id}_cover.jpg"
 
     try:
         from app.utils.images import save_upload_image

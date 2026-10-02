@@ -302,6 +302,7 @@
   "Public": {
     "checkPlaceholder": "Search this collection...",
     "checkInventory": "Check inventory",
+    "checkFailed": "The check could not be completed. Please try again.",
     "foundItem": "Found item",
     "foundManifestation": "Found edition",
     "notFound": "Item not found in this collection.",

@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, Search, X } from "lucide-react";
@@ -184,12 +184,11 @@ function ContentEditorWrapper({
     }
   };
 
-  useEffect(() => {
-    if (searchResults.length === 1 && !selectedManifestationId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedManifestationId(searchResults[0].id);
-    }
-  }, [searchResults, selectedManifestationId]);
+  // A single result is not auto-selected. `searchFrbrEntities` is a
+  // `%substring%` match (app/api/admin.py:714), so a half-typed query that
+  // happens to hit exactly one row would silently replace the search UI with
+  // that row's editor — for a custodian, the wrong record is worse than an
+  // extra click. Selection is always an explicit act.
 
   const handleSelectManifestation = (id: number) => {
     setSelectedManifestationId(id);
@@ -238,9 +237,10 @@ function ContentEditorWrapper({
                 <h3 className="text-sm font-medium mb-3">Search Results</h3>
                 <div className="border rounded-lg divide-y">
                   {searchResults.map(result => (
-                    <div
+                    <button
+                      type="button"
                       key={result.id}
-                      className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                      className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 cursor-pointer"
                       onClick={() => handleSelectManifestation(result.id)}
                     >
                       <div>
@@ -251,10 +251,10 @@ function ContentEditorWrapper({
                           {result.upc && ` | UPC: ${result.upc}`}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm">
+                      <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium">
                         Edit
-                      </Button>
-                    </div>
+                      </span>
+                    </button>
                   ))}
                 </div>
               </div>

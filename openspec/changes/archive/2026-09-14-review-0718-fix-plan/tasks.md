@@ -43,6 +43,6 @@
 - [x] 6.1 Add interactive typed confirmation prompts and production environment checks to `scripts/clone.sh`, `scripts/init_db.py --reset`, and `scripts/migrate_legacy.py --clear` (verify by executing dry-run tests in `tests/bash/`)
 - [x] 6.2 Delete deprecated `scripts/allegro_auth.sh` and fix Zip Slip vulnerability in `scripts/restore_covers.py` (verify with `pytest tests/test_security_uploads.py`)
 - [x] 6.3 Decouple database migrations in `docker-compose.yml` into a dedicated one-shot `migration` container service (verify compose syntax with `docker compose config`)
-- [x] 6.4 Remove hardcoded `SuperSecret!123` fallback from `docker-compose.monitoring.yml` and require explicit `.env` variable (verify with `docker compose -f docker-compose.monitoring.yml config`)
+- [x] 6.4 Remove hardcoded `SuperSecret!<redacted>` fallback from `docker-compose.monitoring.yml` and require explicit `.env` variable (verify with `docker compose -f docker-compose.monitoring.yml config`)
 - [x] 6.5 Resolve frontend test import race conditions in `frontend/tests/item-card.test.tsx` by moving `import("sonner")` to top-level module scope (verify with `pnpm --prefix frontend test`)
 - [x] 6.6 Update project rules (`.agent/rules/iqoqo-standards.md`) and agent skills (`implementation-expert`, `security-auditor`, `test-craftsman`) with strict mandatory checks for secret encryption, SQL pagination, UI button wiring, and migration DAG linear heads to permanently prevent regressions

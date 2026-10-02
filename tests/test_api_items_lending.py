@@ -171,13 +171,168 @@ def test_reset_lending_test_state_production_env_returns_403(client, app, monkey
     assert res.json["error"] == "Forbidden"
 
 
-def test_reset_lending_test_state_allowed_in_test_mode(client, app):
-    """Ensure POST /api/lending/test/reset succeeds in testing mode."""
+def _reset_headers(secret="s3cr3t-e2e"):
+    """Build the headers a correctly-authorised E2E caller would send.
+
+    @param secret: The shared secret to present.
+    @returns: A headers dict for the reset endpoint.
+    """
+    return {"X-E2E-Reset-Secret": secret}
+
+
+def test_reset_lending_test_state_requires_a_shared_secret(client, app, monkeypatch):
+    """TESTING alone must no longer be sufficient to reset lending state (C18 4.1).
+
+    The endpoint deletes every loan request and resets every lent Item, and it
+    carries no authentication of its own. `TESTING` is currently only settable
+    through `create_app(config_override=...)`, so this is hardening against a
+    future configuration mistake rather than a live vulnerability -- but the
+    point of the guard is that such a mistake would no longer be sufficient on
+    its own.
+    """
+    monkeypatch.delenv("E2E_RESET_SECRET", raising=False)
+    monkeypatch.setitem(app.config, "E2E_RESET_SECRET", "s3cr3t-e2e")
     orig_testing = app.config.get("TESTING")
     try:
         app.config["TESTING"] = True
-        res = client.post("/api/lending/test/reset")
+        # No header at all.
+        assert client.post("/api/lending/test/reset").status_code == 403
+        # A wrong header.
+        assert client.post("/api/lending/test/reset", headers=_reset_headers("wrong")).status_code == 403
+    finally:
+        app.config["TESTING"] = orig_testing
+
+
+def test_reset_lending_test_state_fails_closed_when_no_secret_is_configured(client, app, monkeypatch):
+    """An unset secret must refuse every request, not fall open.
+
+    @param client: Flask test client.
+    @param app: The Flask application fixture.
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; the guard must refuse.
+    """
+    monkeypatch.delenv("E2E_RESET_SECRET", raising=False)
+    monkeypatch.setitem(app.config, "E2E_RESET_SECRET", "")
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = True
+        res = client.post("/api/lending/test/reset", headers=_reset_headers("anything"))
+        assert res.status_code == 403
+    finally:
+        app.config["TESTING"] = orig_testing
+
+
+def test_reset_lending_test_state_succeeds_with_the_matching_secret(client, app, monkeypatch):
+    """The E2E harness's own path must keep working (C18 4.1).
+
+    @param client: Flask test client.
+    @param app: The Flask application fixture.
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; a correct secret must still be accepted.
+    """
+    monkeypatch.setitem(app.config, "E2E_RESET_SECRET", "s3cr3t-e2e")
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = True
+        res = client.post("/api/lending/test/reset", headers=_reset_headers("s3cr3t-e2e"))
+        assert res.status_code == 200, res.get_json()
+        assert res.json["success"] is True
+    finally:
+        app.config["TESTING"] = orig_testing
+
+
+def test_reset_lending_test_state_still_blocks_production(client, app, monkeypatch):
+    """Production must stay blocked even with a valid secret (C18 4.1).
+
+    @param client: Flask test client.
+    @param app: The Flask application fixture.
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; production must refuse.
+    """
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setitem(app.config, "E2E_RESET_SECRET", "s3cr3t-e2e")
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = True
+        res = client.post("/api/lending/test/reset", headers=_reset_headers("s3cr3t-e2e"))
+        assert res.status_code == 403
+    finally:
+        app.config["TESTING"] = orig_testing
+
+
+def test_reset_lending_test_state_allowed_in_test_mode(client, app, monkeypatch):
+    """POST /api/lending/test/reset succeeds in testing mode with the secret.
+
+    Updated for the shared-secret guard added by C18 4.1: testing mode alone is
+    no longer sufficient, so this now presents the secret the E2E harness sends.
+    """
+    monkeypatch.setitem(app.config, "E2E_RESET_SECRET", "s3cr3t-e2e")
+    orig_testing = app.config.get("TESTING")
+    try:
+        app.config["TESTING"] = True
+        res = client.post("/api/lending/test/reset", headers=_reset_headers("s3cr3t-e2e"))
         assert res.status_code == 200
         assert res.json["success"] is True
     finally:
         app.config["TESTING"] = orig_testing
+
+
+def test_testing_env_var_is_honoured_by_create_app(monkeypatch):
+    """`TESTING=true` in the environment must reach `app.config` (C18 4.1).
+
+    Flask does not read TESTING from the environment, so the E2E harness could
+    never enable it and the lending reset helper has always returned 403 in CI.
+    This asserts the wiring the harness now depends on.
+
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; a config that ignores the variable fails the test.
+    """
+    from app import create_app
+
+    monkeypatch.setenv("TESTING", "true")
+    assert create_app().config["TESTING"] is True
+
+    monkeypatch.setenv("TESTING", "false")
+    assert create_app().config["TESTING"] is False
+
+
+def test_unset_or_nonsense_testing_env_var_is_ignored(monkeypatch):
+    """Only an explicit truthy value may enable test mode.
+
+    A stray or malformed value must not silently disable the scheduler
+    (`app/core/scheduler.py:34`) in a production environment.
+
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; an over-eager parse fails the test.
+    """
+    from app import create_app
+
+    for value in ("", "maybe", "2", "truthy"):
+        monkeypatch.setenv("TESTING", value)
+        assert create_app().config["TESTING"] is False, f"TESTING={value!r} must not enable test mode"
+
+    monkeypatch.delenv("TESTING", raising=False)
+    assert create_app().config["TESTING"] is False
+
+
+def test_lending_reset_is_reachable_end_to_end_via_env(monkeypatch):
+    """TESTING plus the secret, both from the environment, must return 200.
+
+    This is the path the E2E harness actually takes, and it is the combination
+    that was broken: the spec presented no secret and the server had TESTING
+    unset, so the helper silently 403'd while the spec discarded the response.
+
+    @param monkeypatch: pytest monkeypatch fixture.
+    @returns: Nothing; the end-to-end path must succeed.
+    """
+    from app import create_app
+    from app.db import db
+
+    monkeypatch.setenv("TESTING", "true")
+    monkeypatch.setenv("E2E_RESET_SECRET", "s3cr3t")
+    app = create_app()
+    with app.app_context():
+        db.create_all()
+        client = app.test_client()
+        res = client.post("/api/lending/test/reset", headers={"X-E2E-Reset-Secret": "s3cr3t"})
+        assert res.status_code == 200, res.get_json()
