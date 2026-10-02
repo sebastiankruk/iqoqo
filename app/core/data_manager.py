@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from app.db import db
 from app.db.models import (
+    COLLECTION_STATUSES,
     ITEM_STATUSES,
     Expression,
     Item,
@@ -406,23 +407,67 @@ class DataManager:
             expr_id_map: dict[int, int] = {}
             manif_id_map: dict[int, int] = {}
 
+            def resolve(
+                mapping: dict[int, int],
+                raw_ref: Any,
+                entity: str,
+                collection: str,
+                record_id: Any,
+            ) -> int:
+                """Map a payload's reference onto the row this import created.
+
+                The previous code used ``mapping.get(raw, raw)``. That made a
+                payload which omitted a referenced row fall back to the *raw
+                id from the file*, and because ``work_id``/``expression_id``/
+                ``manifestation_id`` are real foreign keys, an id that happened
+                to match a pre-existing row attached the record to that
+                unrelated row and the import committed -- silently corrupting the
+                catalog rather than failing. When nothing matched, the violation
+                only surfaced at commit, far from the payload entry at fault.
+
+                A reference must be satisfied by the map, never by coincidence.
+
+                @param mapping: Old-id to new-id map built so far.
+                @param raw_ref: The reference value from the payload.
+                @param entity: Entity name, for the error message.
+                @param collection: Payload key the parent lives under.
+                @param record_id: Identifier of the record being imported.
+                @returns: The id of the row created earlier in this import.
+                @raises ValueError: If the reference cannot be resolved.
+                """
+                if raw_ref is None:
+                    raise ValueError(f"Cannot import {entity} {record_id}: it has no {entity}_id reference.")
+                try:
+                    resolved = mapping.get(raw_ref)
+                except TypeError as exc:
+                    raise ValueError(f"Cannot import {entity} {record_id}: {entity} reference {raw_ref!r} is not a valid id.") from exc
+                if resolved is None:
+                    raise ValueError(
+                        f"Cannot import {entity} {record_id}: {entity} reference {raw_ref!r} does not match any "
+                        f"record in the payload's '{collection}' list. Export and import a complete catalog "
+                        f"rather than a fragment, or omit records whose parent is not included."
+                    )
+                return resolved
+
             counts = {"works": 0, "expressions": 0, "manifestations": 0, "items": 0}
 
             # Import works
-            for work_data in data.get("works", []):
+            for index, work_data in enumerate(data.get("works", [])):
                 old_id = work_data.get("id")
-                work = Work(title=work_data["title"], meta=work_data.get("meta", {}))
+                title = work_data.get("title")
+                if not isinstance(title, str) or not title.strip():
+                    raise ValueError(f"Cannot import work at position {index}: 'title' is required and must be a non-empty string.")
+                work = Work(title=title, meta=work_data.get("meta", {}))
                 db.session.add(work)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     work_id_map[old_id] = work.id
                 counts["works"] += 1
 
             # Import expressions
             for expr_data in data.get("expressions", []):
                 old_id = expr_data.get("id")
-                old_work_id = expr_data.get("work_id")
-                new_work_id = work_id_map.get(old_work_id, old_work_id)
+                new_work_id = resolve(work_id_map, expr_data.get("work_id"), "work", "works", old_id)
                 expr = Expression(
                     work_id=new_work_id,
                     content_type=expr_data.get("content_type"),
@@ -431,16 +476,23 @@ class DataManager:
                 )
                 db.session.add(expr)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     expr_id_map[old_id] = expr.id
                 counts["expressions"] += 1
 
             # Import manifestations
             for manif_data in data.get("manifestations", []):
                 old_id = manif_data.get("id")
-                old_expr_id = manif_data.get("expression_id")
-                new_expr_id = expr_id_map.get(old_expr_id, old_expr_id)
-                pub_date = datetime.fromisoformat(manif_data["publication_date"]).date() if manif_data.get("publication_date") else None
+                new_expr_id = resolve(expr_id_map, manif_data.get("expression_id"), "expression", "expressions", old_id)
+                pub_date = None
+                if manif_data.get("publication_date"):
+                    try:
+                        pub_date = datetime.fromisoformat(manif_data["publication_date"]).date()
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(
+                            f"Cannot import manifestation {old_id}: 'publication_date' must be an ISO-8601 date, "
+                            f"got {manif_data['publication_date']!r}."
+                        ) from exc
                 manifestation_meta = dict(manif_data.get("meta") or {})
                 cover_url = manif_data.get("cover_url")
                 local_cover_url = cover_url if isinstance(cover_url, str) and cover_url.startswith("/static/covers/") else None
@@ -458,20 +510,44 @@ class DataManager:
                 )
                 db.session.add(manif)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     manif_id_map[old_id] = manif.id
                 counts["manifestations"] += 1
 
             # Import items
             for item_data, owner_id in zip(imported_items, resolved_owners, strict=True):
-                old_manif_id = item_data.get("manifestation_id")
-                new_manif_id = manif_id_map.get(old_manif_id, old_manif_id)
-                added_at = datetime.fromisoformat(item_data["added_at"]) if item_data.get("added_at") else None
+                new_manif_id = resolve(
+                    manif_id_map,
+                    item_data.get("manifestation_id"),
+                    "manifestation",
+                    "manifestations",
+                    item_data.get("id"),
+                )
+                added_at = None
+                if item_data.get("added_at"):
+                    try:
+                        added_at = datetime.fromisoformat(item_data["added_at"])
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(
+                            f"Cannot import item {item_data.get('id')}: 'added_at' must be an ISO-8601 "
+                            f"timestamp, got {item_data['added_at']!r}."
+                        ) from exc
+                status = item_data.get("status", "want_to_read")
+                if status not in ITEM_STATUSES:
+                    raise ValueError(
+                        f"Cannot import item {item_data.get('id')}: 'status' {status!r} is not one of {sorted(ITEM_STATUSES)}."
+                    )
+                collection_status = item_data.get("collection_status", "available")
+                if collection_status not in COLLECTION_STATUSES:
+                    raise ValueError(
+                        f"Cannot import item {item_data.get('id')}: 'collection_status' {collection_status!r} "
+                        f"is not one of {sorted(COLLECTION_STATUSES)}."
+                    )
                 item = Item(
                     manifestation_id=new_manif_id,
                     owner_id=owner_id or fallback_owner_id,
-                    status=item_data.get("status", "want_to_read"),
-                    collection_status=item_data.get("collection_status", "available"),
+                    status=status,
+                    collection_status=collection_status,
                     condition=item_data.get("condition"),
                     added_at=added_at,
                     meta=item_data.get("meta", {}),

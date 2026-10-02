@@ -317,7 +317,12 @@ def test_import_missing_owner_fails_before_writing_any_records(app):
 
 
 def test_import_failure_rolls_back_clear_and_partial_records(app, import_owner):
-    """A database constraint failure restores pre-import catalog data atomically."""
+    """A rejected record restores pre-import catalog data atomically.
+
+    The rejection now happens in application-layer validation rather than at
+    commit, since C18 1.5 added explicit enum checking. The point of this test
+    is the *rollback*, not which layer refuses, so accept either.
+    """
     with app.app_context():
         existing = Work(title="Existing record", meta={})
         db.session.add(existing)
@@ -330,7 +335,7 @@ def test_import_failure_rolls_back_clear_and_partial_records(app, import_owner):
             "items": [{"manifestation_id": 1, "owner_id": str(import_owner), "status": "invalid-status"}],
         }
 
-        with pytest.raises(sa.exc.IntegrityError):
+        with pytest.raises((sa.exc.IntegrityError, ValueError)):
             DataManager.import_data(data, clear_existing=True, default_owner_id=import_owner)
 
         assert [work.title for work in Work.query.all()] == ["Existing record"]
