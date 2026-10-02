@@ -55,7 +55,42 @@ paths = [
     '''(^|/)\.mempalace/''',
     '''docs/CHANGELOG\.md''',
     '''\.gitleaks\.toml''',
-    '''openspec/.*''',
+]
+
+# NOTE: `openspec/` is deliberately NOT path-allowlisted. The 17 findings that
+# CI reported on `release/0.8.2` came from exactly one commit -- 7a4887d, the
+# commit that turned `openspec/changes` from a symlink into 834 tracked files,
+# some of which quoted the OpenObserve default password that v0.8.1 removed.
+# Commit `f82f04df` redacted the current text, but a historical commit cannot be
+# redacted, so any scan reaching 7a4887d reports them again.
+#
+# Suppressing that commit is both narrower and more reliable than suppressing
+# the path. `openspec/.*` would permanently exempt the entire specs and change
+# tree, so a real credential pasted into a change proposal would never be
+# reported. A commit allowlist keeps every other commit -- including every future
+# one -- scanned.
+#
+# Why the path form was not simply fixed: the reported run applied this config's
+# custom rules (`iqoqo-openobserve-hardcoded-password` fired) but did not honour
+# its `openspec/.*` path entry, while gitleaks 8.30.1 honours it locally on the
+# identical range. Rather than depend on path-matching semantics that differ
+# between the runner's bundled binary and the local one, this allowlist is keyed
+# on the commit, where matching is exact and version-independent.
+[[allowlists]]
+description = "Commits that quoted the removed OpenObserve password in OpenSpec prose; the current text is redacted, but history is immutable"
+commits = [
+    # `Replace openspec/changes symlink with real directory` -- tracked the
+    # symlink target as 834 new files, including the OpenSpec specs that quote
+    # the removed default password.
+    '''7a4887d8922ff7c1e332041402f1a371f7cf1197''',
+    # `archive and sync openspec` -- wrote the credential-hygiene spec that
+    # names the Base64 Basic-Auth prefixes. Reachable only from release/0.8.1,
+    # so no scan on this branch can hit it today; it is listed because a branch
+    # cut from that release would.
+    '''8d49d21e3bad59b6026a88e5eff432486c9774cc''',
+    # `Release/0.8.1 (#301)` -- the credential remediation itself. Its spec
+    # recorded the literal values it was replacing.
+    '''c5dbe1e81877676f1facf98c06ec72b16ace9b10''',
 ]
 
 # Local, git-ignored environment files.
