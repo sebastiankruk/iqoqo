@@ -107,6 +107,23 @@ def create_app(config_class=Config, config_override=None):
     if config_override:
         app.config.from_mapping(config_override)
 
+    # Flask does not read TESTING from the environment, so the E2E harness could
+    # never enable it: POST /lending/test/reset has always returned 403 in CI and
+    # the spec discarded the response. Honour an explicit TESTING env var so the
+    # harness can actually reach the helpers that gate on it.
+    #
+    # This is deliberately narrow. TESTING disables the scheduler
+    # (`app/core/scheduler.py`), so an accidental `TESTING=true` in a production
+    # environment would silently stop background jobs. That is why it is opt-in
+    # from the environment at all rather than inferred, and why the lending reset
+    # additionally requires E2E_RESET_SECRET -- so a stray TESTING alone is not
+    # enough to expose a state-mutating endpoint.
+    _testing_env = os.environ.get("TESTING", "").strip().lower()
+    if _testing_env in {"1", "true", "yes"}:
+        app.config["TESTING"] = True
+    elif _testing_env in {"0", "false", "no"}:
+        app.config["TESTING"] = False
+
     # Initialize database and migrations
     db.init_app(app)
     _ = Migrate(app, db)

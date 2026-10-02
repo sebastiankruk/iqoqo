@@ -91,7 +91,13 @@ export default defineConfig({
         // process.env has to be forwarded into it -- otherwise the harness sends
         // a secret the server never sees. Both sides read the same env var.
         `E2E_RESET_SECRET=${process.env.E2E_RESET_SECRET ?? ""} ` +
-        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
+        // TESTING is what the /lending/test/reset helper gates on. Nothing set
+        // it before, so that call has always returned 403 and the spec discarded
+        // the response; it is forwarded here alongside the secret because the two
+        // are required together and forwarding one without the other is how the
+        // helper stays silently broken. Set only for this spawned process.
+        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False TESTING=true " +
+        "ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5002",
       url: "http://127.0.0.1:5002/api/health",
