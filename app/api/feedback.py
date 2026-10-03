@@ -17,7 +17,6 @@
 
 import logging
 import os
-import subprocess
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -32,11 +31,16 @@ from app.api.decorators import require_auth
 from app.api.schemas import FeedbackUpdateSchema
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
+from app.core.s3_service import (
+    BUCKET_FEEDBACK,
+    S3DownloadError,
+    get_s3_service,
+    warn_if_legacy_rclone_configured,
+)
 from app.core.tasks import upload_feedback_screenshot
 from app.db.models import FeedbackComment, FeedbackItem, User, db
 from app.utils.covers import GALLERY_DIR
 from app.utils.images import save_upload_image, validate_upload_file
-from app.utils.rclone_utils import get_rclone_target
 
 logger = logging.getLogger(__name__)
 
@@ -138,23 +142,41 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     return None
 
 
-def _fetch_remote_screenshot(rclone_remote: str, safe_name: str) -> tuple[Response, int] | Response:
-    """Fetch screenshot from rclone remote storage with a timeout."""
-    target = get_rclone_target(rclone_remote, "feedback", safe_name)
+def _fetch_remote_screenshot(safe_name: str) -> tuple[Response, int] | Response:
+    """Fetch a screenshot from remote object storage.
+
+    Args:
+        safe_name: Already validated by ``secure_filename`` and confirmed equal
+            to the requested filename by the caller.
+
+    Returns:
+        The image bytes, or a 404 when the object is absent, or a 502 when
+        remote storage is reachable-but-failing. A transport-level failure is
+        deliberately distinct from a missing object so an operator can tell a
+        bucket-permission problem from a genuinely absent screenshot.
+    """
+    service = get_s3_service(BUCKET_FEEDBACK)
+    if service is None:
+        return jsonify({"success": False, "error": "Screenshot not found and no remote storage configured"}), 404
+
     try:
-        result = subprocess.run(["rclone", "cat", "--", target], check=True, capture_output=True, timeout=30)
-        return Response(result.stdout, mimetype="image/jpeg")
-    except subprocess.TimeoutExpired:
-        logger.error("Timed out fetching screenshot from rclone remote: %s", target)
-        return jsonify({"success": False, "error": "Timeout retrieving screenshot from remote storage"}), 504
-    except subprocess.CalledProcessError:
-        return jsonify({"success": False, "error": "Screenshot not found"}), 404
+        key = service.key_for(safe_name)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid filename"}), 400
+
+    try:
+        return Response(service.get_bytes(key), mimetype="image/jpeg")
+    except S3DownloadError as exc:
+        if exc.code in {"NoSuchKey", "404", "NotFound"}:
+            return jsonify({"success": False, "error": "Screenshot not found"}), 404
+        logger.error("Failed to fetch screenshot %s from remote storage: %s", safe_name, exc.code)
+        return jsonify({"success": False, "error": "Remote storage unavailable"}), 502
 
 
 @api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
-    """Retrieve a feedback screenshot from local storage or rclone remote."""
+    """Retrieve a feedback screenshot from local storage, or from remote object storage."""
     safe_name = secure_filename(os.path.basename(filename))
     if not safe_name or safe_name != filename:
         return jsonify({"success": False, "error": "Invalid filename"}), 400
@@ -167,11 +189,11 @@ def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     if os.path.exists(local_path):
         return send_from_directory(GALLERY_DIR, safe_name)
 
-    rclone_remote = os.environ.get("RCLONE_FEEDBACK_REMOTE")
-    if not rclone_remote:
+    if get_s3_service(BUCKET_FEEDBACK) is None:
+        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
         return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
 
-    return _fetch_remote_screenshot(rclone_remote, safe_name)
+    return _fetch_remote_screenshot(safe_name)
 
 
 @api_bp.route("/feedback", methods=["GET"])

@@ -34,6 +34,7 @@ Options:
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -292,26 +293,30 @@ def check_drift(
             )
 
         _check_exact_term_contract(
-            graph=ontology_graph,
-            subject=prop,
-            predicate=RDFS.domain,
-            expected=expected_domain,
-            local_name=local_name,
-            label="domain",
-            missing=missing_property_domains,
-            changed=changed_property_domains,
-            diagnostics=diagnostics,
+            _TermContract(
+                graph=ontology_graph,
+                subject=prop,
+                predicate=RDFS.domain,
+                expected=expected_domain,
+                local_name=local_name,
+                label="domain",
+                missing=missing_property_domains,
+                changed=changed_property_domains,
+                diagnostics=diagnostics,
+            )
         )
         _check_exact_term_contract(
-            graph=ontology_graph,
-            subject=prop,
-            predicate=RDFS.range,
-            expected=expected_range,
-            local_name=local_name,
-            label="range",
-            missing=missing_property_ranges,
-            changed=changed_property_ranges,
-            diagnostics=diagnostics,
+            _TermContract(
+                graph=ontology_graph,
+                subject=prop,
+                predicate=RDFS.range,
+                expected=expected_range,
+                local_name=local_name,
+                label="range",
+                missing=missing_property_ranges,
+                changed=changed_property_ranges,
+                diagnostics=diagnostics,
+            )
         )
 
     missing_shapes: list[str] = []
@@ -387,18 +392,37 @@ def _format_terms(terms: set[URIRef]) -> str:
     return ", ".join(sorted(_term_name(term) for term in terms)) or "none"
 
 
-def _check_exact_term_contract(
-    *,
-    graph: Graph,
-    subject: URIRef,
-    predicate: URIRef,
-    expected: URIRef,
-    local_name: str,
-    label: str,
-    missing: list[str],
-    changed: list[dict[str, Any]],
-    diagnostics: list[dict[str, str]],
-) -> None:
+@dataclass(frozen=True)
+class _TermContract:
+    """One expected-exact ontology term, plus the accumulators to record a breach in.
+
+    The first six fields describe the contract. The three lists are the caller's
+    accumulators, which this function mutates. Grouping them makes the mutation
+    visible in the type: as nine separate parameters the lists read like ordinary
+    inputs, and a reader had to reach the body to learn they were outputs.
+    """
+
+    graph: Graph
+    subject: URIRef
+    predicate: URIRef
+    expected: URIRef
+    local_name: str
+    label: str
+    missing: list[str]
+    changed: list[dict[str, Any]]
+    diagnostics: list[dict[str, str]]
+
+
+def _check_exact_term_contract(contract: _TermContract) -> None:
+    """Assert that *contract*'s predicate holds exactly one, expected term.
+
+    A missing property is reported separately from a present-but-wrong one,
+    because the two need different fixes: the first is an absent declaration,
+    the second drift against a declared range.
+    """
+    graph, subject, predicate, expected = contract.graph, contract.subject, contract.predicate, contract.expected
+    local_name, label = contract.local_name, contract.label
+    missing, changed, diagnostics = contract.missing, contract.changed, contract.diagnostics
     actual = set(graph.objects(subject, predicate))
     if not actual:
         key = f"missing_property_{label}s"
@@ -416,6 +440,10 @@ def _check_exact_term_contract(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Synchronise the ontology, or check it for drift.
+
+    ``--check`` reports differences and exits non-zero without writing, so the same
+    function serves both the update path and the CI gate."""
     parser = argparse.ArgumentParser(description="Synchronize and validate iqoqo OWL ontology & SHACL shapes.")
     parser.add_argument(
         "--check",

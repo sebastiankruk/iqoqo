@@ -14,22 +14,41 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 # pylint: disable=inconsistent-return-statements
+"""Administrative endpoints: users, roles, FRBR maintenance, settings.
+
+All routes require the admin permission. Destructive FRBR operations (merge,
+split, reassign) live here rather than in the public blueprint because each one
+rewrites references across entity types."""
 
 import os
 from datetime import date
+from functools import wraps
+from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from app.api.core import api_bp
 from app.api.decorators import admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
-from app.core import frbr_service
+from app.core import duplicate_service, frbr_service
+from app.core.celery_app import celery
 from app.core.limiter import limiter
-from app.core.permissions import PermissionName
+from app.core.permissions import PROTECTED_ROLE_NAMES, PermissionName
+from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
-from app.db.core import EntityAuditLog, Expression, Item, Manifestation, Work
+from app.db.core import (
+    DuplicateCandidate,
+    EntityAuditLog,
+    Expression,
+    Item,
+    Manifestation,
+    SemanticLink,
+    Work,
+)
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
 from app.utils.json_utils import parse_meta, sanitize_meta
 
@@ -160,7 +179,6 @@ def get_roles():
         return jsonify({"success": False, "error": f"Permission denied: {PermissionName.READ_ROLES} required"}), 403
 
     roles = db.session.execute(db.select(Role).options(selectinload(Role.permissions))).scalars().all()
-    protected_roles = {"admin", "user", "contributor"}
     return jsonify(
         {
             "success": True,
@@ -168,7 +186,7 @@ def get_roles():
                 {
                     "id": r.id,
                     "name": r.name,
-                    "is_protected": r.name.lower() in protected_roles,
+                    "is_protected": r.name.lower() in PROTECTED_ROLE_NAMES,
                     "member_count": db.session.execute(db.select(db.func.count()).select_from(user_roles).filter_by(role_id=r.id)).scalar()
                     or 0,  # pylint: disable=not-callable
                     "permission_count": len(r.permissions),
@@ -190,8 +208,7 @@ def delete_role(role_id):
         return jsonify({"success": False, "error": "Permission denied: write:roles required"}), 403
 
     role = db.get_or_404(Role, role_id)
-    protected_roles = {"admin", "user", "contributor"}
-    if role.name.lower() in protected_roles:
+    if role.name.lower() in PROTECTED_ROLE_NAMES:
         return jsonify({"success": False, "error": "Cannot delete protected role"}), 400
     db.session.delete(role)
     db.session.commit()
@@ -291,6 +308,7 @@ API_KEYS = {
     "ALLEGRO_TOKEN_DATA",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "GEONAMES_USERNAME",
 }
 
 FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
@@ -339,8 +357,8 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
             value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
             # Mask API keys but keep other external settings unmasked
             display_value = (
-                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL",) else str(value or ""))
-                if key in API_KEYS and key != "LOCAL_SD_URL"
+                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME") else str(value or ""))
+                if key in API_KEYS and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME")
                 else str(value or "")
             )
             result[key] = {"value": display_value, "source": source}
@@ -761,6 +779,7 @@ def reassign_frbr_parent_endpoint():
 @admin_bp.route("/frbr/relations/merge", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
+@limiter.limit("10 per minute")
 def merge_frbr_entities_endpoint():
     """Merge two entities at the same FRBR level, reparenting children and contributions."""
     user = _get_current_user()
@@ -807,6 +826,26 @@ def split_frbr_entity_endpoint():
         return jsonify({"success": False, "error": str(e)}), 400
 
 
+def _discard_saved_cover(filepath: str | None) -> None:
+    """Delete a cover file written for a request that will not be committed.
+
+    The image is written to disk before the database is touched, so every exit
+    that is not a successful commit has to delete it -- including the early
+    return for a missing entity, which does not raise an exception and so never
+    reaches the surrounding handler.
+
+    @param filepath: The absolute path written by `save_upload_image`, or None.
+    @returns: Nothing; a failure to unlink is swallowed, since the request has
+        already failed and there is nothing useful to report to the caller.
+    """
+    if not filepath:
+        return
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
+
+
 @admin_bp.route("/media/upload-cover", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.UPLOAD_COVER)
@@ -820,8 +859,13 @@ def upload_cover():
     if not file or not file.filename or entity_type not in ["manifestation", "item"] or not str(entity_id).isdigit():
         return jsonify({"success": False, "error": "Invalid request parameters"}), 400
 
-    ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "jpg"
-    filename = f"{entity_type}_{entity_id}_cover.{ext}"
+    # The extension must describe the bytes that will actually be written, not
+    # the ones the client claims to be sending. `optimize_and_save_image()`
+    # unconditionally re-encodes to JPEG (`out.save(filepath, "JPEG")`), so
+    # deriving the name from `file.filename` produced JPEG bytes served under a
+    # `.png` Content-Type -- which nginx's `X-Content-Type-Options: nosniff`
+    # (deploy/nginx.conf.example) makes unrenderable in the browser.
+    filename = f"{entity_type}_{entity_id}_cover.jpg"
 
     try:
         from app.utils.images import save_upload_image
@@ -838,6 +882,12 @@ def upload_cover():
         entity = db.session.get(Manifestation, int(entity_id)) if entity_type == "manifestation" else db.session.get(Item, int(entity_id))
 
         if not entity:
+            # The image is already on disk by this point, and a missing entity
+            # returns rather than raising, so the handler below never runs.
+            # Returning 404 without deleting leaves the file behind permanently:
+            # publicly served from /static/covers/, unreachable from any row, and
+            # never garbage-collected.
+            _discard_saved_cover(saved_filepath)
             return jsonify({"success": False, "error": "Entity not found"}), 404
 
         if hasattr(entity, "cover_url"):
@@ -851,9 +901,571 @@ def upload_cover():
         return jsonify({"success": True, "data": {"cover_url": public_url}})
     except (SQLAlchemyError, OSError, ValueError, KeyError, AttributeError, RuntimeError) as e:
         db.session.rollback()
-        if saved_filepath:
-            try:
-                os.remove(saved_filepath)
-            except OSError:
-                pass
+        _discard_saved_cover(saved_filepath)
         return jsonify({"success": False, "error": f"Database binding failed: {str(e)}"}), 500
+
+
+def curator_or_admin_required(f):
+    """Require user to have admin or custodian role, or metadata curation permissions."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Authentication required", "code": 401}), 401
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"success": False, "error": "User not found", "code": 401}), 401
+
+        user_roles_list = [r.name for r in getattr(user, "roles", [])]
+        is_curator_or_admin = (
+            "admin" in user_roles_list
+            or "custodian" in user_roles_list
+            or user.has_permission(PermissionName.REFETCH_METADATA)
+            or user.has_permission(PermissionName.WRITE_METADATA)
+        )
+        if not is_curator_or_admin:
+            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@admin_bp.route("/lod/reconcile", methods=["POST"])
+@api_bp.route("/admin/lod/reconcile", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_lod_reconciliation():
+    """Trigger background batch reconciliation of Linked Open Data links across the catalog."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+    if active_task_id:
+        active_task = AsyncResult(active_task_id, app=celery)
+        if active_task.state in ("PENDING", "STARTED", "PROGRESS"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "A reconciliation scan is already running",
+                        "data": {
+                            "active_task_id": active_task_id,
+                            "status": "processing",
+                        },
+                    }
+                ),
+                409,
+            )
+        cache.delete("lod:active_task_id")
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    body = request.get_json(silent=True) or {}
+    manifestation_ids = body.get("manifestation_ids")
+    unlinked_only = bool(body.get("unlinked_only", True))
+    throttle_delay = float(body.get("throttle_delay", 0.5))
+    chunk_size = int(body.get("chunk_size", 10))
+
+    try:
+        task = batch_link_catalog_lod_task.delay(
+            manifestation_ids=manifestation_ids,
+            unlinked_only=unlinked_only,
+            chunk_size=chunk_size,
+            throttle_delay=throttle_delay,
+        )
+        task_id = str(task.id)
+        cache.set("lod:active_task_id", task_id, timeout=86400)
+        try:
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
+        except Exception:  # pylint: disable=broad-except
+            pass
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to dispatch batch LOD task: %s", exc)
+        task_id = "mock-batch-lod-task"
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "message": "Batch LOD reconciliation scheduled",
+                },
+                "error": None,
+            }
+        ),
+        202,
+    )
+
+
+@admin_bp.route("/lod/tasks/active", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/active", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_active_lod_task():
+    """Retrieve the currently executing batch LOD reconciliation task, or null."""
+    from celery.result import AsyncResult
+
+    from app.core.cache import cache
+
+    active_task_id = cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+    if not active_task_id:
+        return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
+
+    task = AsyncResult(active_task_id, app=celery)
+    state = task.state
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "processing",
+                            "state": state,
+                            "percentage": meta.get("percentage", 0.0),
+                            "total": meta.get("total", 0),
+                            "processed": meta.get("processed", 0),
+                            "total_resolved": meta.get("total_resolved", 0),
+                            "counts": meta.get("counts", {}),
+                            "recent_logs": meta.get("recent_logs", []),
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+    if state == "PENDING":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "active_task_id": active_task_id,
+                        "task": {
+                            "task_id": active_task_id,
+                            "status": "pending",
+                            "state": state,
+                            "percentage": 0.0,
+                            "total": 0,
+                            "processed": 0,
+                            "total_resolved": 0,
+                            "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                            "recent_logs": [],
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+
+    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
+    cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
+    return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
+
+
+@admin_bp.route("/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>/cancel", methods=["POST"])
+@admin_bp.route("/lod/cancel", methods=["POST"])
+@api_bp.route("/admin/lod/cancel", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def cancel_lod_reconciliation_task(task_id: str | None = None):
+    """Cancel the active batch LOD reconciliation task."""
+    from app.core.cache import cache
+
+    target_task_id = task_id or cache.get("lod:active_task_id") or InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+
+    if target_task_id:
+        cache.set(f"lod:cancel_task:{target_task_id}", True, timeout=86400)
+        try:
+            celery.control.revoke(target_task_id, terminate=True)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    cache.delete("lod:active_task_id")
+    try:
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+    return jsonify({"success": True, "data": {"task_id": target_task_id}, "message": "LOD reconciliation task cancelled"}), 200
+
+
+@admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
+@api_bp.route("/admin/lod/tasks/<string:task_id>", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_reconciliation_task(task_id: str):
+    """Retrieve the progress and status of a batch LOD reconciliation Celery task."""
+    from celery.result import AsyncResult
+
+    task = AsyncResult(task_id, app=celery)
+
+    state = task.state
+    if state == "SUCCESS":
+        result = task.result or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "completed",
+                        "state": state,
+                        "percentage": 100.0,
+                        "total": result.get("total", 0),
+                        "processed": result.get("processed", 0),
+                        "total_resolved": result.get("total_resolved", 0),
+                        "counts": result.get("counts", {}),
+                        "recent_logs": result.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state in ("STARTED", "PROGRESS"):
+        meta = task.info or {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "processing",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    if state == "FAILURE":
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "failed",
+                        "state": state,
+                        "percentage": 0.0,
+                        "total": 0,
+                        "processed": 0,
+                        "total_resolved": 0,
+                        "counts": {
+                            "dbpedia": 0,
+                            "geonames": 0,
+                            "wordnet": 0,
+                        },
+                        "recent_logs": [],
+                        "error": str(task.result),
+                    },
+                    "error": str(task.result),
+                }
+            ),
+            200,
+        )
+
+    if state == "REVOKED":
+        meta = task.info if isinstance(task.info, dict) else {}
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "data": {
+                        "task_id": task_id,
+                        "status": "cancelled",
+                        "state": state,
+                        "percentage": meta.get("percentage", 0.0),
+                        "total": meta.get("total", 0),
+                        "processed": meta.get("processed", 0),
+                        "total_resolved": meta.get("total_resolved", 0),
+                        "counts": meta.get("counts", {}),
+                        "recent_logs": meta.get("recent_logs", []),
+                    },
+                    "error": None,
+                }
+            ),
+            200,
+        )
+
+    # PENDING or unknown state
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "status": "pending",
+                    "state": state,
+                    "percentage": 0.0,
+                    "total": 0,
+                    "processed": 0,
+                    "total_resolved": 0,
+                    "counts": {"dbpedia": 0, "geonames": 0, "wordnet": 0},
+                    "recent_logs": [],
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
+@admin_bp.route("/lod/stats", methods=["GET"])
+@api_bp.route("/admin/lod/stats", methods=["GET"])
+@require_auth
+@curator_or_admin_required
+def get_lod_stats():
+    """Query lifetime database statistics of Linked Open Data links across the catalog."""
+    total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
+
+    # Count distinct manifestations with direct semantic links OR whose work has semantic links
+    manif_with_direct_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+    works_with_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+    manifs_with_linked_works = (
+        select(Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(Expression.work_id.in_(works_with_links))
+    )
+    linked_manifestations = (
+        db.session.scalar(
+            select(func.count(Manifestation.id)).where(  # pylint: disable=not-callable
+                db.or_(
+                    Manifestation.id.in_(manif_with_direct_links),
+                    Manifestation.id.in_(manifs_with_linked_works),
+                )
+            )
+        )
+        or 0
+    )
+
+    authority_rows = db.session.execute(
+        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
+    ).all()  # pylint: disable=not-callable
+    by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
+    total_links = sum(by_authority.values())
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "total_manifestations": total_manifestations,
+                    "linked_manifestations": linked_manifestations,
+                    "unlinked_manifestations": max(0, total_manifestations - linked_manifestations),
+                    "total_links": total_links,
+                    "by_authority": {
+                        "dbpedia": by_authority.get("dbpedia", 0),
+                        "geonames": by_authority.get("geonames", 0),
+                        "wordnet": by_authority.get("wordnet", 0),
+                    },
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
+# --- DUPLICATE DETECTION ROUTES ---
+
+#: Duplicate review is a custodian (contributor) surface, not an admin-only one:
+#: the ``contributor`` role holds every ``*:metadata`` permission, so gating on
+#: :data:`PermissionName.WRITE_METADATA` admits custodians and admins while
+#: excluding standard users -- who also hold ``read:metadata`` and would
+#: otherwise see the queue in their sidebar.
+#:
+#: Reading the queue is separated from mutating it so the read-only listing stays
+#: as permissive as the other custodian metadata surfaces (``frbr/search`` and the
+#: SPARQL endpoints use ``read:metadata``), while every state change -- and only
+#: a human decision may change state -- demands ``write:metadata``.
+_DUPLICATE_READ_PERMISSION = PermissionName.READ_METADATA
+_DUPLICATE_WRITE_PERMISSION = PermissionName.WRITE_METADATA
+
+
+def _duplicate_candidate_or_404(candidate_id: int) -> tuple[DuplicateCandidate | None, tuple[Any, int] | None]:
+    """Resolve a candidate id, or build the canonical 404 response.
+
+    Args:
+        candidate_id: Primary key of the requested candidate.
+
+    Returns:
+        Either ``(candidate, None)`` on success, or ``(None, response_tuple)``.
+    """
+    candidate = duplicate_service.get_candidate(candidate_id)
+    if candidate is None:
+        return None, (jsonify({"success": False, "error": "Duplicate candidate not found"}), 404)
+    return candidate, None
+
+
+@admin_bp.route("/duplicates", methods=["GET"])
+@require_auth
+@require_permission(_DUPLICATE_READ_PERMISSION)
+def list_duplicate_candidates_endpoint():
+    """List duplicate candidates for administrative review.
+
+    Filtering and pagination happen in SQL; the result set is never sliced in
+    Python.  Passing ``status=all`` returns every status, which powers the
+    history view in the review UI.
+    """
+    status_arg = request.args.get("status", "pending").strip()
+    status = None if status_arg.lower() == "all" else (status_arg or None)
+    page = request.args.get("page", 1, type=int)
+
+    try:
+        candidates, total = duplicate_service.candidate_query(
+            status=status,
+            entity_tier=request.args.get("entity_tier") or None,
+            min_confidence=request.args.get("min_confidence", type=float),
+            page=page,
+            limit=request.args.get("limit", 25, type=int),
+        )
+    except duplicate_service.DuplicateServiceError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "data": [duplicate_service.serialize_candidate(candidate) for candidate in candidates],
+            "meta": {"total": total, "page": page, "limit": len(candidates)},
+        }
+    )
+
+
+@admin_bp.route("/duplicates/<int:candidate_id>/dismiss", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def dismiss_duplicate_candidate_endpoint(candidate_id: int):
+    """Dismiss a candidate as a false positive so it is never re-queued."""
+    user = _get_current_user()
+    candidate, error = _duplicate_candidate_or_404(candidate_id)
+    if error is not None:
+        return error
+
+    try:
+        duplicate_service.dismiss_candidate(candidate, user.id if user else None)
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 409
+
+    return jsonify({"success": True, "data": duplicate_service.serialize_candidate(candidate)})
+
+
+@admin_bp.route("/duplicates/scan", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+@limiter.limit("5 per minute")
+def run_duplicate_scan_endpoint():
+    """Trigger a detection run and queue new candidates for review.
+
+    The default ``heuristic`` engine resolves candidates deterministically and
+    needs no inference service, so the Ollama health probe only runs when the
+    caller explicitly asks for the ``llama`` engine.
+    """
+    data = request.get_json(silent=True) or {}
+
+    engine = data.get("engine") or duplicate_service.DEFAULT_ENGINE
+    if engine not in duplicate_service.DETECTION_ENGINES:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Unknown engine: {engine!r}. Expected one of {sorted(duplicate_service.DETECTION_ENGINES)}",
+                }
+            ),
+            400,
+        )
+
+    if engine == duplicate_service.ENGINE_LLAMA:
+        healthy, message = duplicate_service.check_ollama_health()
+        if not healthy:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"{message.rstrip('.')}. Run 'ollama pull {duplicate_service.ollama_model()}' "
+                        "or set OLLAMA_DEDUPE_MODEL to an installed model",
+                    }
+                ),
+                409,
+            )
+
+    try:
+        report = duplicate_service.run_detection(
+            engine=engine,
+            tier=data.get("tier") or duplicate_service.TIER_ALL,
+            threshold=float(data.get("threshold", duplicate_service.DEFAULT_THRESHOLD)),
+            limit=data.get("limit"),
+            dry_run=bool(data.get("dry_run", False)),
+        )
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": f"Validation error: {e}"}), 400
+
+    return jsonify({"success": True, "data": report.to_dict()})
+
+
+@admin_bp.route("/duplicates/<int:candidate_id>/merge", methods=["POST"])
+@require_auth
+@require_permission(_DUPLICATE_WRITE_PERMISSION)
+def merge_duplicate_candidate_endpoint(candidate_id: int):
+    """Execute the FRBR merge for a candidate, keeping the selected primary entity.
+
+    The merge is transactional: any failure rolls the whole consolidation back,
+    so a half-merged pair can never be left behind.
+    """
+    user = _get_current_user()
+    candidate, error = _duplicate_candidate_or_404(candidate_id)
+    if error is not None:
+        return error
+
+    primary_id = (request.get_json(silent=True) or {}).get("primary_id")
+    if not isinstance(primary_id, int) or isinstance(primary_id, bool):
+        return jsonify({"success": False, "error": "primary_id must be an integer entity id"}), 400
+
+    try:
+        result = duplicate_service.resolve_candidate_merge(candidate, primary_id, user.id if user else None)
+    except duplicate_service.DuplicateServiceError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.warning("Duplicate merge %s failed and was rolled back: %s", candidate_id, e)
+        return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
+    except Exception:
+        # The merge spans every referencing table, so a failure of any kind --
+        # not just a database error -- must roll the whole consolidation back
+        # rather than leave a half-merged pair behind.  ``logger.exception``
+        # records the type and traceback server-side, but nothing about it is
+        # returned, to avoid leaking connection strings or catalog content.
+        db.session.rollback()
+        current_app.logger.exception("Duplicate merge %s failed and was rolled back", candidate_id)
+        return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
+
+    return jsonify({"success": True, "data": result})

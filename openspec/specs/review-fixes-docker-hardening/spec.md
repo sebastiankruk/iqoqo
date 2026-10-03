@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Record the container-hardening fixes from the v0.8.x review: secrets are excluded from the Docker build context, and AI cover generation no longer uploads duplicate copies to remote storage.
+
+## Requirements
 
 ### Requirement: Docker secret exclusion
 The `.dockerignore` file SHALL explicitly exclude environment files (`.env`, `.env.*`), compose overrides (`docker-compose.override.yml`), and SSL/TLS private keys (`*.pem`, `*.key`, `*.crt`) to prevent secret leakage into Docker image layers.

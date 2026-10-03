@@ -214,6 +214,12 @@
     "secGenres": "Gatunki",
     "secPublishers": "Wydawcy",
     "secPhysicalKind": "Rodzaj nośnika",
+    "secLinkedData": "Otwarte dane powiązane (LOD)",
+    "lod_linked": "Dowolne powiązane",
+    "lod_unlinked": "Niepowiązane",
+    "lod_dbpedia": "DBpedia",
+    "lod_geonames": "GeoNames",
+    "lod_wordnet": "WordNet",
     "secCollectionStatus": "Status kolekcji",
     "secProgress": "Postęp",
     "secCuration": "Zadania kustosza",
@@ -296,6 +302,7 @@
   "Public": {
     "checkPlaceholder": "Szukaj w tej kolekcji...",
     "checkInventory": "Sprawdź kolekcję",
+    "checkFailed": "Nie udało się wykonać sprawdzenia. Spróbuj ponownie.",
     "foundItem": "Znaleziony egzemplarz",
     "foundManifestation": "Znalezione wydanie",
     "notFound": "Brak pozycji w tej kolekcji.",
@@ -462,5 +469,82 @@
       "lookupFailed": "Nie udało się znaleźć tej pozycji. Spróbuj ponownie.",
       "cameraUnavailable": "Aparat jest niedostępny"
     }
+  },
+  "SemanticLinks": {
+    "title": "Połączone otwarte dane",
+    "description": "Zewnętrzne powiązania grafu wiedzy semantycznej połączone z tym dziełem i wydaniem.",
+    "scanButton": "Skanuj zewnętrzne LOD",
+    "scanning": "Skanowanie LOD...",
+    "scanStarted": "Zaplanowano uzgadnianie w tle.",
+    "scanFailed": "Nie udało się uruchomić uzgadniania LOD.",
+    "noLinks": "Brak zewnętrznych powiązań Linked Open Data.",
+    "noLinksHint": "Przeskanuj zewnętrzne autorytety, aby wzbogacić o encje DBpedia, GeoNames i WordNet.",
+    "confidence": "{score}% pewności",
+    "verified": "Zweryfikowany",
+    "unverified": "Dopasowany automatycznie",
+    "deleteLink": "Usuń powiązanie",
+    "linkDeleted": "Usunięto powiązanie semantyczne.",
+    "deleteFailed": "Nie udało się usunąć powiązania semantycznego.",
+    "authorities": {
+      "dbpedia": "DBpedia",
+      "geonames": "GeoNames",
+      "wordnet": "WordNet",
+      "other": "Zewnętrzny autorytet"
+    },
+    "levels": {
+      "work": "Poziom dzieła",
+      "manifestation": "Poziom wydania"
+    }
+  },
+  "LodReconciliation": {
+    "title": "Uzgadnianie LOD",
+    "description": "Uruchamiaj powiązywanie encji w całym katalogu i monitoruj dopasowania w DBpedia, GeoNames i WordNet.",
+    "breadcrumb": "Uzgadnianie LOD",
+    "accessDenied": "Brak dostępu",
+    "accessDeniedDesc": "Wymagane są uprawnienia administratora lub kustosza, aby uzyskać dostęp do panelu uzgadniania LOD.",
+    "backToDashboard": "Powrót do pulpitu",
+    "metrics": {
+      "totalManifestations": "Wszystkie wydania",
+      "linkedManifestations": "Powiązane wydania",
+      "unlinkedManifestations": "Niepowiązane wydania",
+      "totalLinks": "Wszystkie powiązania semantyczne",
+      "dbpediaLinks": "Powiązania DBpedia",
+      "geonamesLinks": "Powiązania GeoNames",
+      "wordnetLinks": "Powiązania WordNet"
+    },
+    "batchControl": {
+      "title": "Kontrola uzgadniania wsadowego",
+      "description": "Uruchamiaj asynchroniczne uzgadnianie katalogu z zewnętrznymi bazami wiedzy.",
+      "startScan": "Rozpocznij pełne skanowanie",
+      "scanUnlinked": "Skanuj tylko niepowiązane",
+      "options": "Opcje skanowania",
+      "unlinkedOnly": "Tylko niepowiązane encje",
+      "allEntities": "Wszystkie encje (ponowne powiązanie)",
+      "throttle": "Opóźnienie zapytań",
+      "throttleFast": "Szybkie (0.2s)",
+      "throttleNormal": "Standardowe (0.5s)",
+      "throttleGentle": "Łagodne (1.0s)",
+      "cancelScan": "Anuluj skanowanie",
+      "statusPending": "W kolejce",
+      "statusProcessing": "Uzgadnianie katalogu...",
+      "statusCompleted": "Uzgadnianie zakończone",
+      "statusFailed": "Błąd uzgadniania",
+      "progressLabel": "{processed} z {total} wydań ({percent}%)"
+    },
+    "auditLog": {
+      "title": "Dziennik zdarzeń uzgadniania",
+      "description": "Bieżący podgląd pojedynczych zdarzeń uzgadniania LOD.",
+      "filterAll": "Wszystkie wyniki",
+      "filterSuccess": "Tylko udane",
+      "filterSkipped": "Tylko pominięte",
+      "filterWarn": "Ostrzeżenia i błędy",
+      "autoScroll": "Autoprzewijanie",
+      "noLogs": "Brak zdarzeń uzgadniania. Uruchom skanowanie, aby obserwować proces na żywo.",
+      "linksAdded": "Dodano {count} powiązań",
+      "noLinksAdded": "Brak pasujących powiązań",
+      "manifestationLabel": "Wydanie #{id}"
+    }
   }
 }
+
+

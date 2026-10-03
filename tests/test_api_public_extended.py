@@ -93,6 +93,101 @@ def test_shared_collection_with_status_filter(client, app, test_user):
         assert item["status"] == "read"
 
 
+def test_shared_collection_with_multiple_statuses(client, app, test_user):
+    """A multi-status share must include every listed status.
+
+    The collection page allows multi-select, but the share dialog used to pass
+    only statuses[0], so a link was published covering a subset of what the
+    sharer had on screen. The stored filter keeps the full list.
+    """
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Multi Status Share Test")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id)
+        db.session.add(mani)
+        db.session.flush()
+
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="wish_list"))
+        # want_to_read is a real ITEM_STATUSES value; to_read is not, and the
+        # ck_items_status constraint rejects it -- which is why this test caught
+        # the bad fixture the first time round.
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="want_to_read"))
+
+        collection = SharedCollection(
+            user_id=user.id,
+            name="Read and Wishlist",
+            filters={"status": ["read", "wish_list"]},
+        )
+        db.session.add(collection)
+        db.session.commit()
+        token = collection.share_token
+
+    response = client.get(f"/api/public/share/{token}")
+    data = json.loads(response.data)
+    statuses = {item["status"] for item in data["data"]["items"]}
+
+    assert statuses == {"read", "wish_list"}
+    assert "want_to_read" not in statuses, "an unlisted status must not leak into the share"
+
+
+def test_shared_collection_single_status_still_works(client, app, test_user):
+    """Backwards compatibility: links created before this change store a bare string."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Scalar Status Compat Test")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id)
+        db.session.add(mani)
+        db.session.flush()
+
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="wish_list"))
+
+        collection = SharedCollection(user_id=user.id, name="Scalar Status", filters={"status": "read"})
+        db.session.add(collection)
+        db.session.commit()
+        token = collection.share_token
+
+    response = client.get(f"/api/public/share/{token}")
+    data = json.loads(response.data)
+    assert {item["status"] for item in data["data"]["items"]} == {"read"}
+
+
+def test_shared_collection_malformed_status_matches_nothing(client, app, test_user):
+    """A junk filter must narrow, never widen, the shared result set."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Malformed Status Test")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id)
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+
+        collection = SharedCollection(user_id=user.id, name="Junk Status", filters={"status": []})
+        db.session.add(collection)
+        db.session.commit()
+        token = collection.share_token
+
+    response = client.get(f"/api/public/share/{token}")
+    data = json.loads(response.data)
+    assert data["data"]["items"] == [], "an empty status list must not expose the whole library"
+
+
 def test_check_inventory_missing_query(client, test_user):
     response = client.post(f"/api/public/u/{test_user}/check", json={})
     assert response.status_code == 400

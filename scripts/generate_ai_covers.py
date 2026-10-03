@@ -24,8 +24,10 @@ import logging
 import os
 from typing import Any, cast
 
+from sqlalchemy.orm import selectinload
+
 from app.config import Config
-from app.db.models import Manifestation, db
+from app.db.models import Expression, Manifestation, db
 from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -59,6 +61,11 @@ def get_unwatermarked_manifestations(limit: int | None = None) -> list[Manifesta
     )
     if limit:
         query = query.limit(limit)
+    # `process_batch` reads `manif.expression.work.title` for every row, which
+    # is ~7.5 SELECTs per manifestation on a lazy graph because Work pulls in
+    # semantic links, work parts and contributions. Same N+1 C18 2.9 fixed in
+    # fetch_covers.py and retry_missing_covers.py.
+    query = query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
     return cast(list[Manifestation], query.all())
 
 
@@ -75,8 +82,13 @@ def process_batch(
 
     logger.info("Starting batch cover processing for %d manifestations (dry_run=%s)", total, dry_run)
 
-    if os.environ.get("RCLONE_COVERS_REMOTE"):
-        logger.info("Using rclone global cache for covers")
+    # The shared cache is what makes a batch worth running: covers already
+    # generated on another instance are pulled instead of re-paid for.
+    covers_bucket = os.environ.get("S3_BUCKET_COVERS", "").strip()
+    if covers_bucket:
+        logger.info("Shared cover cache enabled (bucket %s)", covers_bucket)
+    else:
+        logger.info("No S3_BUCKET_COVERS set: every cover will be generated rather than reused")
 
     for idx, manif in enumerate(manifestations, start=1):
         # Circuit breaker: skip items that have failed too many times
@@ -164,6 +176,7 @@ def process_batch(
 
 
 def main() -> None:
+    """Run a batch of LLM cover generation with watermarking."""
     parser = argparse.ArgumentParser(description="Batch AI Cover Generation and Watermarking CLI")
     parser.add_argument("--batch-all-unwatermarked", action="store_true", help="Process all missing or unwatermarked AI covers")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of manifestations to process")

@@ -69,6 +69,7 @@ class WishlistCreateSchema(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
+        """Constrain the wishlist entry status to its vocabulary."""
         from app.db.core import WORK_INTENT_STATUSES
 
         if v not in WORK_INTENT_STATUSES:
@@ -77,6 +78,11 @@ class WishlistCreateSchema(BaseModel):
 
     @model_validator(mode="after")
     def check_manifestation_requires_expression(self) -> WishlistCreateSchema:
+        """Require an expression on a new wishlist entry.
+
+        A wishlist entry with no Expression would be an unresolvable record, so it is
+        rejected at the schema boundary rather than created and repaired later.
+        """
         if self.manifestation_id is not None and self.expression_id is None:
             raise ValueError("manifestation_id requires expression_id to be set")
         return self
@@ -95,6 +101,7 @@ class WishlistUpdateSchema(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
+        """Constrain the wishlist entry status to its vocabulary."""
         if v is None:
             return v
         from app.db.core import WORK_INTENT_STATUSES

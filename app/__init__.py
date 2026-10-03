@@ -13,7 +13,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Flask application factory and blueprint registration.
+
+Holds create_app(), which wires configuration, extensions and the API blueprints
+together. Importing this package must stay cheap: it is imported by the
+entrypoints of every container, so module-level work is limited to building the
+Flask app and nothing else."""
+
 import logging
+import os
 from typing import Any
 
 # Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
@@ -66,6 +74,15 @@ def _coerce_list(value, default=None):
 
 
 def create_app(config_class=Config, config_override=None):
+    """Build and configure the Flask application.
+
+    Args:
+        config_class: The configuration object to load defaults from.
+        config_override: Values applied on top of ``config_class``, used by tests and
+            by the preview/production stacks to point at a different stack.
+
+    Returns:
+        The configured application, with extensions and blueprints registered."""
     load_dotenv()
 
     # Configure logging early
@@ -89,6 +106,23 @@ def create_app(config_class=Config, config_override=None):
 
     if config_override:
         app.config.from_mapping(config_override)
+
+    # Flask does not read TESTING from the environment, so the E2E harness could
+    # never enable it: POST /lending/test/reset has always returned 403 in CI and
+    # the spec discarded the response. Honour an explicit TESTING env var so the
+    # harness can actually reach the helpers that gate on it.
+    #
+    # This is deliberately narrow. TESTING disables the scheduler
+    # (`app/core/scheduler.py`), so an accidental `TESTING=true` in a production
+    # environment would silently stop background jobs. That is why it is opt-in
+    # from the environment at all rather than inferred, and why the lending reset
+    # additionally requires E2E_RESET_SECRET -- so a stray TESTING alone is not
+    # enough to expose a state-mutating endpoint.
+    _testing_env = os.environ.get("TESTING", "").strip().lower()
+    if _testing_env in {"1", "true", "yes"}:
+        app.config["TESTING"] = True
+    elif _testing_env in {"0", "false", "no"}:
+        app.config["TESTING"] = False
 
     # Initialize database and migrations
     db.init_app(app)
@@ -157,7 +191,13 @@ def create_app(config_class=Config, config_override=None):
     from app.core.cache import cache
     from app.core.limiter import limiter
 
-    redis_url = app.config.get("REDIS_URL")
+    # Config.REDIS_URL already resolves from the environment, so app.config is the
+    # single source of truth. Falling back to os.environ unconditionally here meant
+    # an explicit `config_override={"REDIS_URL": None}` lost to the ambient
+    # environment: `None or <env>` is the env value, because `None` is falsy, so an
+    # override meant to disable Redis silently kept Redis enabled. The env lookup is
+    # kept only for a config class that does not define REDIS_URL at all.
+    redis_url = app.config["REDIS_URL"] if "REDIS_URL" in app.config else os.environ.get("REDIS_URL")
     if redis_url:
         redis_available = False
         try:

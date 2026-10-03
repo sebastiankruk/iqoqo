@@ -20,11 +20,24 @@ setup() {
   export PATH="${TEST_TEMP_DIR}/stub-bin:${PATH}"
   mkdir -p "${TEST_TEMP_DIR}/stub-bin"
 
+  PYTHON_BIN=".venv/bin/python"
+  if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="$(command -v python3 || command -v python)"
+  fi
+  export PYTHON_BIN
+  export ABS_PYTHON_BIN="$(cd "$(dirname "$PYTHON_BIN")" && pwd)/$(basename "$PYTHON_BIN")"
+
   # Stub docker build
   cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
 #!/bin/bash
 if [[ "$1" == "build" ]]; then
   echo "BUILDING_DOCKER_IMAGE: $*"
+  exit 0
+fi
+# The build script now runs the size gate against the image it just built, so
+# the stub has to answer `docker image inspect` too. 1 MiB is inside any budget.
+if [[ "$1" == "image" && "$2" == "inspect" ]]; then
+  echo 1048576
   exit 0
 fi
 exit 0
@@ -46,6 +59,11 @@ EOF
   fi
   mkdir -p "${TEST_TEMP_DIR}/frontend"
   touch "${TEST_TEMP_DIR}/frontend/Dockerfile.prod"
+
+  # The real gate and budget, so the happy-path tests exercise the real wiring.
+  mkdir -p "${TEST_TEMP_DIR}/scripts"
+  cp scripts/check_image_size.py "${TEST_TEMP_DIR}/scripts/"
+  cp deploy/image-size-budget.txt "${TEST_TEMP_DIR}/deploy/"
 }
 
 teardown() {
@@ -89,6 +107,79 @@ teardown() {
 @test "deploy/Dockerfile never bakes rclone credentials into image layers" {
   run grep -E "COPY.*rclone\.conf" "${BATS_TEST_DIRNAME}/../../deploy/Dockerfile"
   [ "$status" -ne 0 ]
+}
+
+@test "deploy/image-size-budget.txt records both enforced figures" {
+  local budget="${BATS_TEST_DIRNAME}/../../deploy/image-size-budget.txt"
+  # MAX_BYTES is the ceiling; MEASURED_BYTES is the measurement that justifies it.
+  # A ceiling with no measurement is the old prose-requirement failure mode.
+  run grep -E "^MAX_BYTES=[0-9]+$" "${budget}"
+  [ "$status" -eq 0 ]
+  run grep -E "^MEASURED_BYTES=[0-9]+$" "${budget}"
+  [ "$status" -eq 0 ]
+}
+
+@test "the release plan quotes the enforced image size figures" {
+  # Same check scripts/validate_release.py runs on release/* branches. If these
+  # ever diverge, the number a release is judged against stops being the number
+  # the build enforces.
+  run "${ABS_PYTHON_BIN}" "${BATS_TEST_DIRNAME}/../../scripts/validate_release.py" --image-size-only
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "OK: image size budget" ]]
+}
+
+@test "build_docker_images.sh aborts the build when the built image is over budget" {
+  # The gate must judge the real measured size, so a stubbed inspect reporting an
+  # oversized image has to abort the build too. Note build_docker_images.sh
+  # `cd`s to the repo root itself, so overriding files in TEST_TEMP_DIR would not
+  # affect it -- the stubbed `docker` on PATH is the only lever that reaches it.
+  cd "${TEST_TEMP_DIR}"
+  budget="$(grep -E '^MAX_BYTES=' "${BATS_TEST_DIRNAME}/../../deploy/image-size-budget.txt" | cut -d= -f2)"
+  cat << EOF > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "\$1" == "build" ]]; then echo "BUILDING_DOCKER_IMAGE: \$*"; exit 0; fi
+if [[ "\$1" == "image" && "\$2" == "inspect" ]]; then echo $((budget + 1)); exit 0; fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "image size gate FAILED" ]]
+  [[ "$output" =~ "EXCEEDS budget" ]]
+  [[ ! "$output" =~ "All iqoqo container images built successfully" ]]
+}
+
+@test "build_docker_images.sh reports the gate result on a passing build" {
+  cd "${TEST_TEMP_DIR}"
+  run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "image size gate" ]]
+  [[ "$output" =~ "within budget" ]]
+}
+
+@test "check_image_size.py rejects an unparseable budget instead of passing" {
+  # A blank budget must fail loudly rather than read as "unlimited", which would
+  # make the gate a no-op. Invoked directly because the build script always
+  # resolves the real budget file relative to the repo root.
+  cd "${TEST_TEMP_DIR}"
+  printf '# no MAX_BYTES here\n' > broken-budget.txt
+  run bash -c "'${ABS_PYTHON_BIN}' '${BATS_TEST_DIRNAME}/../../scripts/check_image_size.py' iqoqo-backend:preview --budget-file '${TEST_TEMP_DIR}/broken-budget.txt'"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "cannot read size budget" ]]
+}
+
+@test "check_image_size.py prints the size breakdown when over budget" {
+  # The failure output has to name the cause, so nobody needs a second build to
+  # find out what grew. Both keys are required, so the fixture supplies both.
+  # The stubbed `docker` in setup() reports 1048576 bytes, so the ceiling must
+  # sit below that for the gate to trip.
+  cd "${TEST_TEMP_DIR}"
+  printf 'MAX_BYTES=1024\nMEASURED_BYTES=1024\n' > tight-budget.txt
+  run bash -c "'${ABS_PYTHON_BIN}' '${BATS_TEST_DIRNAME}/../../scripts/check_image_size.py' iqoqo-backend:preview --budget-file '${TEST_TEMP_DIR}/tight-budget.txt'"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "EXCEEDS budget" ]]
+  [[ "$output" =~ "Size breakdown" ]]
 }
 
 @test "docker-compose.prebuilt.yml resets volumes on migration service" {

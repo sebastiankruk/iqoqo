@@ -73,26 +73,15 @@ class TestAdversarialQueries:
         with pytest.raises(SPARQLTimeout):
             execute_sparql(graph, cartesian_query, timeout=0.01)
 
-    def test_repeated_timeouts_dont_leak_resources(self):
+    def test_repeated_timeouts_dont_leak_resources(self, sparql_deadline):
         """Repeated timeouts should not leak worker processes."""
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "expression_id": "e-1",
-                "work_id": "w-1",
-                "title": "Test Book",
-                "authors": ["Author"],
-                "tags": ["tag1"],
-                "status": "read",
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
-        # Execute multiple queries with very short timeouts
+        # Execute multiple queries with a deadline the graph's own serialization
+        # outlasts, so each one is guaranteed to time out.
         for _ in range(5):
             with pytest.raises(SPARQLTimeout):
-                execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+                execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
 
         # After timeouts, a normal query should still work
         result = execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o } LIMIT 1", timeout=5.0)

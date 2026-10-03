@@ -314,8 +314,22 @@ class TestSPARQLValidation:
         elapsed = time.time() - start_time
 
         assert operation == "SELECT"
-        # 100 validations should take < 1 second
-        assert elapsed < 1.0, f"100 validations took {elapsed:.2f}s"
+        # The bound below encodes a machine-speed assumption, so it is set from
+        # the slowest environment observed rather than a workstation.
+        #
+        # Measured 2026-10-02 on identical code: 0.29s here, and 1.57s on the
+        # shared GitHub runner, which failed this assertion at 1.0s. That 5.3x
+        # spread means a bound below the slowest observed environment does not
+        # detect a performance regression -- it detects which machine ran the
+        # suite, and fails intermittently under runner load.
+        #
+        # 5.0s keeps the regression signal (a change large enough to slow this
+        # workload by 5x on a workstation, or 3x on the runner, still fails) and
+        # drops the assumption. The three load tests in this file were checked
+        # at the same time and left alone: their whole-test wall times are
+        # 1.08s / 2.24s / 4.57s against 5s / 10s / 15s query-only bounds, which
+        # absorbs the same spread without weakening anything.
+        assert elapsed < 5.0, f"100 validations took {elapsed:.2f}s, expected < 5s"
 
     def test_validate_large_query_rejected(self):
         """Verify large queries are rejected quickly."""

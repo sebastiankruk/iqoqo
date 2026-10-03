@@ -24,18 +24,22 @@ Supports both full database dumps and selective exports.
 
 import json
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import and_, distinct, func, or_, select
+from sqlalchemy.orm import Session
 
 from app.db import db
 from app.db.models import (
+    COLLECTION_STATUSES,
     ITEM_STATUSES,
     Expression,
     Item,
     ItemTag,
     Manifestation,
+    SemanticLink,
     Tag,
     User,
     UserCollection,
@@ -43,6 +47,140 @@ from app.db.models import (
     UserWorkIntent,
     Work,
 )
+
+#: Time-to-live for cached faceted-navigation statistics, in seconds.
+#: Kept short because facet counts are invalidated explicitly on item
+#: mutation; the TTL is a backstop against unbounded staleness (for example
+#: after a bulk import that bypasses the mutation hooks).
+FACETS_CACHE_TTL_SECONDS = 300
+
+#: Prefix for faceted-stats cache keys.  Scoping by prefix makes selective
+#: invalidation of a single user's entries possible via ``delete_many``.
+FACETS_CACHE_PREFIX = "stats_facets:v2"
+
+
+def normalize_facet_cache_key(params: dict[str, Any], owner_id: uuid.UUID | None) -> str:
+    """Build a deterministic cache key for a faceted-stats query.
+
+    Filter lists are sorted and whitespace-stripped so that semantically
+    identical requests (``?genres=Fantasy,SciFi`` and ``?genres=SciFi,Fantasy``)
+    share one cache entry instead of fragmenting the cache.
+
+    Parameters
+    ----------
+    params:
+        Filter parameters for the facet request.
+    owner_id:
+        Scoping user, or ``None`` for global/unauthenticated requests.
+
+    Returns:
+        A stable cache key string.
+    """
+
+    def _normalize(value: Any) -> Any:
+        if isinstance(value, (list, tuple, set)):
+            # Filter tokens are matched case-insensitively (ILIKE), so
+            # differing case denotes the same filter and must share an entry.
+            return sorted(str(v).strip().lower() for v in value)
+        if isinstance(value, str):
+            return value.strip().lower()
+        if value is None:
+            return None
+        return value
+
+    normalized = {key: _normalize(value) for key, value in sorted(params.items())}
+    owner_part = str(owner_id) if owner_id is not None else "global"
+    payload = json.dumps({"owner": owner_part, "params": normalized}, sort_keys=True, default=str)
+    return f"{FACETS_CACHE_PREFIX}:{owner_part}:{payload}"
+
+
+def invalidate_facets_cache(owner_id: uuid.UUID | str | None = None) -> None:
+    """Invalidate cached faceted statistics.
+
+    Called on item creation, deletion and ownership transfer.  When
+    ``owner_id`` is given, only that user's entries are dropped; otherwise the
+    global (unscoped) entries are dropped too.
+
+    On cache backends without wildcard ``delete_many`` support the entries are
+    simply allowed to expire via :data:`FACETS_CACHE_TTL_SECONDS`; correctness
+    is never compromised because callers must not depend on cache presence.
+    """
+    from app.core.cache import cache
+
+    try:
+        if owner_id is not None:
+            owner_part = str(owner_id)
+            # User-scoped entries.
+            for key in list(cache.cache._cache.keys()):  # noqa: SLF001  # best-effort prefix sweep
+                if isinstance(key, str) and key.startswith(f"{FACETS_CACHE_PREFIX}:{owner_part}:"):
+                    cache.delete(key)
+        # Global/unscoped entries can never be attributed to a specific user.
+        for key in list(cache.cache._cache.keys()):  # noqa: SLF001  # best-effort prefix sweep
+            if isinstance(key, str) and key.startswith(f"{FACETS_CACHE_PREFIX}:global:"):
+                cache.delete(key)
+    except (AttributeError, TypeError, RuntimeError):
+        # Redis unavailable or a backend without key introspection: the TTL
+        # remains the correctness backstop.
+        return
+
+
+def _export_work_row(work: Any) -> dict[str, Any]:
+    """Serialize a Work for export, matching :meth:`DataManager.export_all`."""
+    return {
+        "id": work.id,
+        "title": work.title,
+        "sort_title": work.sort_title or (work.meta.get("sort_title") if work.meta else None),
+        "meta": work.meta,
+        "raw_payload": work.raw_payload,
+    }
+
+
+def _export_expression_row(expr: Any) -> dict[str, Any]:
+    """Serialize an Expression for export, matching :meth:`DataManager.export_all`."""
+    return {
+        "id": expr.id,
+        "work_id": expr.work_id,
+        "content_type": expr.content_type,
+        "language": expr.language,
+        "kind": expr.kind or (expr.meta.get("kind") if expr.meta else None),
+        "meta": expr.meta,
+        "raw_payload": expr.raw_payload,
+    }
+
+
+def _export_manifestation_row(manif: Any) -> dict[str, Any]:
+    """Serialize a Manifestation for export, matching :meth:`DataManager.export_all`."""
+    return {
+        "id": manif.id,
+        "expression_id": manif.expression_id,
+        "isbn13": manif.isbn13,
+        "upc": manif.upc,
+        "ean": manif.ean,
+        "publisher": manif.publisher or (manif.meta.get("publisher") if manif.meta else None),
+        "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
+        "cover_url": manif.cover_url,
+        "format": manif.format or (manif.meta.get("format") if manif.meta else None),
+        "label": manif.label or (manif.meta.get("label") if manif.meta else None),
+        "barcode": manif.barcode or (manif.meta.get("barcode") if manif.meta else None),
+        "catalog_number": manif.catalog_number or (manif.meta.get("catalog_number") if manif.meta else None),
+        "meta": manif.meta,
+        "raw_payload": manif.raw_payload,
+    }
+
+
+def _export_item_row(item: Any) -> dict[str, Any]:
+    """Serialize an Item for export, matching :meth:`DataManager.export_all`."""
+    return {
+        "id": item.id,
+        "manifestation_id": item.manifestation_id,
+        "owner_id": str(item.owner_id) if item.owner_id else None,
+        "status": item.status,
+        "collection_status": item.collection_status,
+        "condition": item.condition,
+        "added_at": item.added_at.isoformat() if item.added_at else None,
+        "meta": item.meta,
+        "raw_payload": item.raw_payload,
+    }
 
 
 def _build_format_facet_query(target_clause: Any, from_clause: Any, filter_column: Any, filtered_ids: Any):
@@ -100,68 +238,99 @@ class DataManager:
 
         # Export works
         for work in Work.query.all():
-            data["works"].append(
-                {
-                    "id": work.id,
-                    "title": work.title,
-                    "sort_title": work.sort_title or (work.meta.get("sort_title") if work.meta else None),
-                    "meta": work.meta,
-                    "raw_payload": work.raw_payload,
-                }
-            )
+            data["works"].append(_export_work_row(work))
 
         # Export expressions
         for expr in Expression.query.all():
-            data["expressions"].append(
-                {
-                    "id": expr.id,
-                    "work_id": expr.work_id,
-                    "content_type": expr.content_type,
-                    "language": expr.language,
-                    "kind": expr.kind or (expr.meta.get("kind") if expr.meta else None),
-                    "meta": expr.meta,
-                    "raw_payload": expr.raw_payload,
-                }
-            )
+            data["expressions"].append(_export_expression_row(expr))
 
         # Export manifestations
         for manif in Manifestation.query.all():
-            data["manifestations"].append(
-                {
-                    "id": manif.id,
-                    "expression_id": manif.expression_id,
-                    "isbn13": manif.isbn13,
-                    "upc": manif.upc,
-                    "ean": manif.ean,
-                    "publisher": manif.publisher or (manif.meta.get("publisher") if manif.meta else None),
-                    "publication_date": (manif.publication_date.isoformat() if manif.publication_date else None),
-                    "cover_url": manif.cover_url,
-                    "format": manif.format or (manif.meta.get("format") if manif.meta else None),
-                    "label": manif.label or (manif.meta.get("label") if manif.meta else None),
-                    "barcode": manif.barcode or (manif.meta.get("barcode") if manif.meta else None),
-                    "catalog_number": manif.catalog_number or (manif.meta.get("catalog_number") if manif.meta else None),
-                    "meta": manif.meta,
-                    "raw_payload": manif.raw_payload,
-                }
-            )
+            data["manifestations"].append(_export_manifestation_row(manif))
 
         # Export items
         for item in Item.query.all():
-            data["items"].append(
-                {
-                    "id": item.id,
-                    "manifestation_id": item.manifestation_id,
-                    "owner_id": str(item.owner_id) if item.owner_id else None,
-                    "status": item.status,
-                    "collection_status": item.collection_status,
-                    "condition": item.condition,
-                    "added_at": item.added_at.isoformat() if item.added_at else None,
-                    "meta": item.meta,
-                    "raw_payload": item.raw_payload,
-                }
-            )
+            data["items"].append(_export_item_row(item))
 
         return data
+
+    @staticmethod
+    def stream_export_all(batch_size: int = 1000) -> Iterator[str]:
+        """Yield the full catalog export as incrementally encoded JSON chunks.
+
+        Produces byte-for-byte the same document as :meth:`export_all`, but
+        never holds more than ``batch_size`` entities in memory, giving
+        ``O(1)`` memory complexity regardless of catalog size.
+
+        The generator is written so that the emitted stream is always valid
+        JSON, even if the consumer aborts part-way through: a client
+        disconnect closes the generator, and the ``finally`` block releases the
+        server-side cursor and transaction rather than leaving them pinned.
+
+        Parameters
+        ----------
+        batch_size:
+            Rows fetched per server-side cursor batch.  Larger batches mean
+            fewer round-trips at the cost of a larger per-batch buffer.
+
+        Yields
+        ------
+        str
+            Successive JSON fragments.  Concatenating them yields a complete
+            document identical to ``json.dumps(export_all(), indent=2)``.
+
+        Raises
+        ------
+        Exception
+            Database errors propagate to the caller, which is responsible for
+            aborting the response rather than emitting truncated JSON.
+        """
+        exported_at = datetime.now(UTC).isoformat()
+
+        # Open a dedicated connection-scoped session so the streaming cursor
+        # is independent of the request-scoped session's lifecycle.  This is
+        # what lets the ``finally`` clause below guarantee cleanup on abort.
+        session = db.session
+        session.remove()
+        connection = db.engine.connect()
+        session = Session(bind=connection)
+
+        # The header keys must match export_all() exactly, in order.
+        entity_streams = (
+            ("works", Work, _export_work_row),
+            ("expressions", Expression, _export_expression_row),
+            ("manifestations", Manifestation, _export_manifestation_row),
+            ("items", Item, _export_item_row),
+        )
+
+        try:
+            yield "{\n"
+            yield f'  "version": {json.dumps("1.0")},\n'
+            yield f'  "exported_at": {json.dumps(exported_at)},\n'
+
+            for index, (key, model, serializer) in enumerate(entity_streams):
+                yield f"  {json.dumps(key)}: ["
+                first = True
+                query = session.query(model).order_by(model.id)
+                for row in query.yield_per(batch_size):
+                    # Separator is prefixed rather than suffixed so that an
+                    # empty array emits "[]" with no dangling comma, and a
+                    # non-empty one never ends with a trailing comma.
+                    yield "" if first else ",\n"
+                    yield "    " + json.dumps(serializer(row), ensure_ascii=False, indent=2).replace("\n", "\n    ")
+                    first = False
+                yield "\n  ]" + (",\n" if index < len(entity_streams) - 1 else "\n")
+
+            yield "}\n"
+        finally:
+            # Runs on normal completion *and* on GeneratorExit when the client
+            # disconnects mid-stream: roll back the streaming read and release
+            # the connection so the pool is not drained by aborted exports.
+            try:
+                session.rollback()
+            finally:
+                session.close()
+                connection.close()
 
     @staticmethod
     def export_to_file(filepath: str) -> None:
@@ -238,23 +407,67 @@ class DataManager:
             expr_id_map: dict[int, int] = {}
             manif_id_map: dict[int, int] = {}
 
+            def resolve(
+                mapping: dict[int, int],
+                raw_ref: Any,
+                entity: str,
+                collection: str,
+                record_id: Any,
+            ) -> int:
+                """Map a payload's reference onto the row this import created.
+
+                The previous code used ``mapping.get(raw, raw)``. That made a
+                payload which omitted a referenced row fall back to the *raw
+                id from the file*, and because ``work_id``/``expression_id``/
+                ``manifestation_id`` are real foreign keys, an id that happened
+                to match a pre-existing row attached the record to that
+                unrelated row and the import committed -- silently corrupting the
+                catalog rather than failing. When nothing matched, the violation
+                only surfaced at commit, far from the payload entry at fault.
+
+                A reference must be satisfied by the map, never by coincidence.
+
+                @param mapping: Old-id to new-id map built so far.
+                @param raw_ref: The reference value from the payload.
+                @param entity: Entity name, for the error message.
+                @param collection: Payload key the parent lives under.
+                @param record_id: Identifier of the record being imported.
+                @returns: The id of the row created earlier in this import.
+                @raises ValueError: If the reference cannot be resolved.
+                """
+                if raw_ref is None:
+                    raise ValueError(f"Cannot import {entity} {record_id}: it has no {entity}_id reference.")
+                try:
+                    resolved = mapping.get(raw_ref)
+                except TypeError as exc:
+                    raise ValueError(f"Cannot import {entity} {record_id}: {entity} reference {raw_ref!r} is not a valid id.") from exc
+                if resolved is None:
+                    raise ValueError(
+                        f"Cannot import {entity} {record_id}: {entity} reference {raw_ref!r} does not match any "
+                        f"record in the payload's '{collection}' list. Export and import a complete catalog "
+                        f"rather than a fragment, or omit records whose parent is not included."
+                    )
+                return resolved
+
             counts = {"works": 0, "expressions": 0, "manifestations": 0, "items": 0}
 
             # Import works
-            for work_data in data.get("works", []):
+            for index, work_data in enumerate(data.get("works", [])):
                 old_id = work_data.get("id")
-                work = Work(title=work_data["title"], meta=work_data.get("meta", {}))
+                title = work_data.get("title")
+                if not isinstance(title, str) or not title.strip():
+                    raise ValueError(f"Cannot import work at position {index}: 'title' is required and must be a non-empty string.")
+                work = Work(title=title, meta=work_data.get("meta", {}))
                 db.session.add(work)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     work_id_map[old_id] = work.id
                 counts["works"] += 1
 
             # Import expressions
             for expr_data in data.get("expressions", []):
                 old_id = expr_data.get("id")
-                old_work_id = expr_data.get("work_id")
-                new_work_id = work_id_map.get(old_work_id, old_work_id)
+                new_work_id = resolve(work_id_map, expr_data.get("work_id"), "work", "works", old_id)
                 expr = Expression(
                     work_id=new_work_id,
                     content_type=expr_data.get("content_type"),
@@ -263,16 +476,23 @@ class DataManager:
                 )
                 db.session.add(expr)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     expr_id_map[old_id] = expr.id
                 counts["expressions"] += 1
 
             # Import manifestations
             for manif_data in data.get("manifestations", []):
                 old_id = manif_data.get("id")
-                old_expr_id = manif_data.get("expression_id")
-                new_expr_id = expr_id_map.get(old_expr_id, old_expr_id)
-                pub_date = datetime.fromisoformat(manif_data["publication_date"]).date() if manif_data.get("publication_date") else None
+                new_expr_id = resolve(expr_id_map, manif_data.get("expression_id"), "expression", "expressions", old_id)
+                pub_date = None
+                if manif_data.get("publication_date"):
+                    try:
+                        pub_date = datetime.fromisoformat(manif_data["publication_date"]).date()
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(
+                            f"Cannot import manifestation {old_id}: 'publication_date' must be an ISO-8601 date, "
+                            f"got {manif_data['publication_date']!r}."
+                        ) from exc
                 manifestation_meta = dict(manif_data.get("meta") or {})
                 cover_url = manif_data.get("cover_url")
                 local_cover_url = cover_url if isinstance(cover_url, str) and cover_url.startswith("/static/covers/") else None
@@ -290,20 +510,44 @@ class DataManager:
                 )
                 db.session.add(manif)
                 db.session.flush()
-                if old_id:
+                if old_id is not None:
                     manif_id_map[old_id] = manif.id
                 counts["manifestations"] += 1
 
             # Import items
             for item_data, owner_id in zip(imported_items, resolved_owners, strict=True):
-                old_manif_id = item_data.get("manifestation_id")
-                new_manif_id = manif_id_map.get(old_manif_id, old_manif_id)
-                added_at = datetime.fromisoformat(item_data["added_at"]) if item_data.get("added_at") else None
+                new_manif_id = resolve(
+                    manif_id_map,
+                    item_data.get("manifestation_id"),
+                    "manifestation",
+                    "manifestations",
+                    item_data.get("id"),
+                )
+                added_at = None
+                if item_data.get("added_at"):
+                    try:
+                        added_at = datetime.fromisoformat(item_data["added_at"])
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(
+                            f"Cannot import item {item_data.get('id')}: 'added_at' must be an ISO-8601 "
+                            f"timestamp, got {item_data['added_at']!r}."
+                        ) from exc
+                status = item_data.get("status", "want_to_read")
+                if status not in ITEM_STATUSES:
+                    raise ValueError(
+                        f"Cannot import item {item_data.get('id')}: 'status' {status!r} is not one of {sorted(ITEM_STATUSES)}."
+                    )
+                collection_status = item_data.get("collection_status", "available")
+                if collection_status not in COLLECTION_STATUSES:
+                    raise ValueError(
+                        f"Cannot import item {item_data.get('id')}: 'collection_status' {collection_status!r} "
+                        f"is not one of {sorted(COLLECTION_STATUSES)}."
+                    )
                 item = Item(
                     manifestation_id=new_manif_id,
                     owner_id=owner_id or fallback_owner_id,
-                    status=item_data.get("status", "want_to_read"),
-                    collection_status=item_data.get("collection_status", "available"),
+                    status=status,
+                    collection_status=collection_status,
                     condition=item_data.get("condition"),
                     added_at=added_at,
                     meta=item_data.get("meta", {}),
@@ -312,6 +556,9 @@ class DataManager:
                 counts["items"] += 1
 
             db.session.commit()
+            # A bulk import rewrites ownership in bulk; drop every cached facet
+            # entry rather than trying to work out which users were affected.
+            invalidate_facets_cache()
             return counts
         except Exception:
             db.session.rollback()
@@ -347,6 +594,8 @@ class DataManager:
         Work.query.delete()
         if commit:
             db.session.commit()
+            # Every user's facet counts are now void.
+            invalidate_facets_cache()
 
     @staticmethod
     def verify_column_meta_drift() -> dict[str, Any]:
@@ -578,6 +827,57 @@ class DataManager:
         }
 
     @staticmethod
+    def _build_owned_ids_subq(owner_id: uuid.UUID, target_entity: str = "items"):
+        """Return a set-based subquery of entity ids owned by ``owner_id``.
+
+        Replaces the per-facet correlated ``EXISTS`` subqueries that previously
+        walked ``Item -> Manifestation -> Expression -> Work`` once per facet
+        group.  Computing the owned-id set once and reusing it as a plain
+        ``IN`` predicate lets the planner evaluate it a single time, instead of
+        re-executing the correlated join for every facet dimension.
+
+        Parameters
+        ----------
+        owner_id:
+            The owning user.
+        target_entity:
+            FRBR level to return ids for: ``"items"``, ``"manifestations"``,
+            ``"expressions"`` or ``"works"``.
+
+        Returns:
+            A ``SELECT`` statement yielding distinct owned entity ids.
+        """
+        if target_entity == "items":
+            return select(Item.id).where(Item.owner_id == owner_id)
+
+        if target_entity == "manifestations":
+            return (
+                select(distinct(Manifestation.id))
+                .select_from(Manifestation)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .where(Item.owner_id == owner_id)
+            )
+
+        if target_entity == "expressions":
+            return (
+                select(distinct(Expression.id))
+                .select_from(Expression)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+                .join(Item, Item.manifestation_id == Manifestation.id)
+                .where(Item.owner_id == owner_id)
+            )
+
+        # "works"
+        return (
+            select(distinct(Work.id))
+            .select_from(Work)
+            .join(Expression, Expression.work_id == Work.id)
+            .join(Manifestation, Manifestation.expression_id == Expression.id)
+            .join(Item, Item.manifestation_id == Manifestation.id)
+            .where(Item.owner_id == owner_id)
+        )
+
+    @staticmethod
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def _build_item_ids_subq(
         owner_id: uuid.UUID | None = None,
@@ -593,6 +893,8 @@ class DataManager:
         missing_id: bool = False,
         target_entity: str = "items",
         ownership: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -733,30 +1035,53 @@ class DataManager:
             base_query = base_query.where(or_(*status_conds))
 
         if ownership and owner_id and target_entity in ("works", "expressions", "manifestations"):
+            # Set-based rather than correlated: the owned-id set is derived
+            # once per facet request instead of re-walking the FRBR chain for
+            # every facet dimension.  ``in_()`` against a subquery stays a
+            # single semi-join in the generated SQL.
+            owned_ids = DataManager._build_owned_ids_subq(owner_id, target_entity)
             ownership_conds: list[Any] = []
-            if target_entity == "works":
-                owned_exists = (
-                    select(Item.id)
-                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                    .join(Expression, Manifestation.expression_id == Expression.id)
-                    .where(Expression.work_id == Work.id, Item.owner_id == owner_id)
-                    .exists()
-                )
-            elif target_entity == "expressions":
-                owned_exists = (
-                    select(Item.id)
-                    .join(Manifestation, Item.manifestation_id == Manifestation.id)
-                    .where(Manifestation.expression_id == Expression.id, Item.owner_id == owner_id)
-                    .exists()
-                )
-            else:  # manifestations
-                owned_exists = select(Item.id).where(Item.manifestation_id == Manifestation.id, Item.owner_id == owner_id).exists()
             if "owned" in ownership:
-                ownership_conds.append(owned_exists)
+                ownership_conds.append(target_id_col.in_(owned_ids))
             if "not_owned" in ownership:
-                ownership_conds.append(~owned_exists)
+                ownership_conds.append(~target_id_col.in_(owned_ids))
             if ownership_conds:
                 base_query = base_query.where(or_(*ownership_conds))
+
+        if lod_authority:
+            manif_auth_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            work_auth_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                func.lower(SemanticLink.authority) == lod_authority.lower(),
+            )
+            base_query = base_query.where(
+                or_(
+                    Manifestation.id.in_(manif_auth_subq),
+                    Work.id.in_(work_auth_subq),
+                )
+            )
+
+        if lod_status == "linked":
+            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.where(
+                or_(
+                    Manifestation.id.in_(manif_subq),
+                    Work.id.in_(work_subq),
+                )
+            )
+        elif lod_status == "unlinked":
+            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            base_query = base_query.where(
+                and_(
+                    ~Manifestation.id.in_(manif_subq),
+                    ~Work.id.in_(work_subq),
+                )
+            )
 
         return base_query.subquery()
 
@@ -776,6 +1101,8 @@ class DataManager:
         missing_id: bool = False,
         view: str = "items",
         ownership: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> dict[str, Any]:
         """Return cross-filtered per-facet counts for sidebar faceted navigation.
 
@@ -792,7 +1119,78 @@ class DataManager:
         Returns a dict with keys:
           category_counts, format_counts, status_counts,
           collection_counts, tag_counts, genre_counts, publisher_counts
+
+        Results are cached in Redis (or the configured cache backend) under a
+        normalized, user-scoped key.  Ownership-scoped requests benefit most,
+        since their facet calculation issues the largest number of correlated
+        subqueries.
         """
+        cache_key = normalize_facet_cache_key(
+            {
+                "borrowed_only": borrowed_only,
+                "category": category,
+                "collections": collections,
+                "fmt": fmt,
+                "genres": genres,
+                "lod_authority": lod_authority,
+                "lod_status": lod_status,
+                "missing_cover": missing_cover,
+                "missing_id": missing_id,
+                "ownership": ownership,
+                "publishers": publishers,
+                "statuses": statuses,
+                "tags": tags,
+                "view": view,
+            },
+            owner_id,
+        )
+
+        from app.core.cache import cache
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        stats = DataManager._compute_faceted_stats(
+            owner_id=owner_id,
+            category=category,
+            fmt=fmt,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            statuses=statuses,
+            borrowed_only=borrowed_only,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            view=view,
+            ownership=ownership,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
+        )
+        cache.set(cache_key, stats, timeout=FACETS_CACHE_TTL_SECONDS)
+        return stats
+
+    @staticmethod
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    def _compute_faceted_stats(  # noqa: PLR0913
+        owner_id: uuid.UUID | None = None,
+        category: list[str] | None = None,
+        fmt: list[str] | None = None,
+        tags: list[str] | None = None,
+        collections: list[str] | None = None,
+        genres: list[str] | None = None,
+        publishers: list[str] | None = None,
+        statuses: list[str] | None = None,
+        borrowed_only: bool = False,
+        missing_cover: bool = False,
+        missing_id: bool = False,
+        view: str = "items",
+        ownership: list[str] | None = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
+    ) -> dict[str, Any]:
+        """Uncached implementation behind :meth:`get_faceted_stats`."""
         sa_distinct = distinct
         from sqlalchemy import text
 
@@ -858,6 +1256,7 @@ class DataManager:
             exclude_genres: bool = False,
             exclude_publishers: bool = False,
             exclude_statuses: bool = False,
+            exclude_lod: bool = False,
         ):
             """Build entity-id subquery with the specified facet groups excluded."""
             # For user-specific facets when unauthenticated, no subquery filtering is possible
@@ -878,6 +1277,8 @@ class DataManager:
                 missing_id=missing_id,
                 target_entity=target_entity,
                 ownership=ownership,
+                lod_authority=None if exclude_lod else lod_authority,
+                lod_status=None if exclude_lod else lod_status,
             )
 
         cat_subq = _subq(exclude_category=True)
@@ -887,6 +1288,7 @@ class DataManager:
         genre_subq = _subq(exclude_genres=True)
         pub_subq = _subq(exclude_publishers=True)
         status_subq = _subq(exclude_statuses=True)
+        lod_subq = _subq(exclude_lod=True)
 
         # ── Helpers: per-facet join paths ──────────────────────────────
         def _apply_joins(q, *join_pairs):
@@ -959,6 +1361,24 @@ class DataManager:
             if owner_id:
                 res = res.where(Item.owner_id == owner_id)
             return res
+
+        # ── LOD join path (target → Manifestation & Work) ─────────────
+        def _join_for_lod(q):
+            if target_entity == "works":
+                return q.outerjoin(Expression, Expression.work_id == Work.id).outerjoin(
+                    Manifestation, Manifestation.expression_id == Expression.id
+                )
+            if target_entity == "expressions":
+                return q.outerjoin(Work, Expression.work_id == Work.id).outerjoin(
+                    Manifestation, Manifestation.expression_id == Expression.id
+                )
+            if target_entity == "manifestations":
+                return q.outerjoin(Expression, Manifestation.expression_id == Expression.id).outerjoin(Work, Expression.work_id == Work.id)
+            return (
+                q.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                .outerjoin(Work, Expression.work_id == Work.id)
+            )
 
         subq_filter_col = cfg["subq_col"]
 
@@ -1125,7 +1545,8 @@ class DataManager:
         )
         pub_query = (
             select(
-                coalesced_pub.label("publisher"), func.count(sa_distinct(cfg["target_clause"])).label("cnt")  # pylint: disable=not-callable
+                coalesced_pub.label("publisher"),
+                func.count(sa_distinct(cfg["target_clause"])).label("cnt"),  # pylint: disable=not-callable
             )
             .select_from(cfg["from_clause"])
             .where(
@@ -1151,11 +1572,84 @@ class DataManager:
         pub_rows = db.session.execute(pub_query).all()
         publisher_counts: dict[str, int] = {p.strip(): cnt for p, cnt in pub_rows if p and p.strip()}
 
+        # ── LOD counts ────────────────────────────────────────────────────
+        lod_counts: dict[str, int] = {}
+        total_lod_q = (
+            select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(subq_filter_col.in_(select(lod_subq.c.id)))
+        )
+        total_lod_count = db.session.execute(total_lod_q).scalar() or 0
+
+        all_manif_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
+        all_work_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+
+        linked_lod_q = (
+            select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+            .select_from(cfg["from_clause"])
+            .where(
+                subq_filter_col.in_(select(lod_subq.c.id)),
+                or_(
+                    Manifestation.id.in_(all_manif_links),
+                    Work.id.in_(all_work_links),
+                ),
+            )
+        )
+        linked_lod_q = _join_for_lod(linked_lod_q)
+        linked_lod_count = db.session.execute(linked_lod_q).scalar() or 0
+        lod_counts["linked"] = linked_lod_count
+        lod_counts["unlinked"] = max(0, total_lod_count - linked_lod_count)
+
+        for auth in ["dbpedia", "geonames", "wordnet"]:
+            auth_manif_links = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                func.lower(SemanticLink.authority) == auth,
+            )
+            auth_work_links = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                func.lower(SemanticLink.authority) == auth,
+            )
+            auth_lod_q = (
+                select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
+                .select_from(cfg["from_clause"])
+                .where(
+                    subq_filter_col.in_(select(lod_subq.c.id)),
+                    or_(
+                        Manifestation.id.in_(auth_manif_links),
+                        Work.id.in_(auth_work_links),
+                    ),
+                )
+            )
+            auth_lod_q = _join_for_lod(auth_lod_q)
+            lod_counts[auth] = db.session.execute(auth_lod_q).scalar() or 0
+
         # ── Append Virtual Intents to counts (when view == 'items' and owner_id) ──
         if owner_id and view == "items":
             intents = (
                 db.session.query(UserWorkIntent).filter(UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled").all()
             )
+
+            # Prefetch SemanticLinks for works and manifestations of user intents
+            intent_work_links: dict[Any, set[str]] = {}
+            intent_manif_links: dict[Any, set[str]] = {}
+            if intents:
+                all_w_ids = [it.work_id for it in intents if it.work_id]
+                all_m_ids = [man.id for it in intents if it.work for expr in it.work.expressions for man in expr.manifestations if man.id]
+                sem_clauses = []
+                if all_w_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "work", SemanticLink.entity_id.in_(all_w_ids)))
+                if all_m_ids:
+                    sem_clauses.append(and_(SemanticLink.entity_type == "manifestation", SemanticLink.entity_id.in_(all_m_ids)))
+                if sem_clauses:
+                    sem_rows = db.session.execute(
+                        select(SemanticLink.entity_type, SemanticLink.entity_id, SemanticLink.authority).where(or_(*sem_clauses))
+                    ).all()
+                    for ent_type, ent_id, auth in sem_rows:
+                        auth_lower = auth.lower() if auth else ""
+                        if ent_type == "work":
+                            intent_work_links.setdefault(ent_id, set()).add(auth_lower)
+                        elif ent_type == "manifestation":
+                            intent_manif_links.setdefault(ent_id, set()).add(auth_lower)
 
             def match_filter(f_list, item_vals):
                 if not f_list:
@@ -1169,6 +1663,8 @@ class DataManager:
 
             for intent in intents:
                 work = intent.work
+                if not work:
+                    continue
                 intent_cats = set()
                 intent_formats = set()
                 intent_pubs = set()
@@ -1208,6 +1704,20 @@ class DataManager:
                     elif "wish_list" in statuses:
                         intent_status_match = True
 
+                # LOD match condition
+                intent_auths: set[str] = set(intent_work_links.get(work.id, set()))
+                for expr in work.expressions:
+                    for man in expr.manifestations:
+                        intent_auths.update(intent_manif_links.get(man.id, set()))
+
+                lod_match = True
+                if lod_authority:
+                    lod_match = lod_authority.lower() in intent_auths
+                elif lod_status == "linked":
+                    lod_match = len(intent_auths) > 0
+                elif lod_status == "unlinked":
+                    lod_match = len(intent_auths) == 0
+
                 # Cross-filter conditions
                 cat_match = match_filter(category, intent_cats)
                 fmt_match = match_filter(fmt, intent_formats)
@@ -1215,31 +1725,41 @@ class DataManager:
                 genre_match = match_filter(genres, intent_genres)
 
                 # category counts
-                if fmt_match and pub_match and genre_match and intent_status_match:
+                if fmt_match and pub_match and genre_match and intent_status_match and lod_match:
                     for c in intent_cats:
                         category_counts[c] = category_counts.get(c, 0) + 1
 
                 # status counts
-                if cat_match and fmt_match and pub_match and genre_match:
+                if cat_match and fmt_match and pub_match and genre_match and lod_match:
                     if intent.status in db_statuses:
                         db_statuses[intent.status] += 1
                     if "wish_list" in db_statuses:
                         db_statuses["wish_list"] += 1
 
                 # genre counts
-                if cat_match and fmt_match and pub_match and intent_status_match:
+                if cat_match and fmt_match and pub_match and intent_status_match and lod_match:
                     for g in intent_genres:
                         genre_counts[g] = genre_counts.get(g, 0) + 1
 
                 # format counts
-                if cat_match and pub_match and genre_match and intent_status_match:
+                if cat_match and pub_match and genre_match and intent_status_match and lod_match:
                     for f in intent_formats:
                         format_counts[f] = format_counts.get(f, 0) + 1
 
                 # publisher counts
-                if cat_match and fmt_match and genre_match and intent_status_match:
+                if cat_match and fmt_match and genre_match and intent_status_match and lod_match:
                     for p in intent_pubs:
                         publisher_counts[p] = publisher_counts.get(p, 0) + 1
+
+                # lod counts (cross-filtered against other active facets)
+                if cat_match and fmt_match and pub_match and genre_match and intent_status_match:
+                    if intent_auths:
+                        lod_counts["linked"] = lod_counts.get("linked", 0) + 1
+                        for a in intent_auths:
+                            if a in lod_counts:
+                                lod_counts[a] = lod_counts.get(a, 0) + 1
+                    else:
+                        lod_counts["unlinked"] = lod_counts.get("unlinked", 0) + 1
 
         return {
             "category_counts": category_counts,
@@ -1249,6 +1769,7 @@ class DataManager:
             "tag_counts": tag_counts,
             "genre_counts": genre_counts,
             "publisher_counts": publisher_counts,
+            "lod_counts": lod_counts,
             "borrowed_count": borrowed_count,
         }
 

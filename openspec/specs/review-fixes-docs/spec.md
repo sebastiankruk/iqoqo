@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Record the documentation-currency fixes from the v0.8.x review: restored TSDoc comments, finalized CHANGELOG release dates, and corrected version references in the README.
+
+## Requirements
 
 ### Requirement: TSDoc comment restoration
 The `CardWrapper` and `InstanceSettings` components in `instance-settings.tsx` SHALL have complete TSDoc block comments documenting their props, including newly added props (`saving`, `extraFooterContent`).

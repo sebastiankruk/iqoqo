@@ -2,29 +2,38 @@
 
 ## Purpose
 
-Ensure the rclone configuration directory exists before any application service
-starts in a container, preventing silent backup job failures on fresh deployments
-where no host bind-mount of the rclone config is present.
+Ensure no application container mounts a remote-storage credential file, and
+that a half-configured setup is reported at container start.
 
-Implemented via `deploy/docker-entrypoint.sh`, which runs `mkdir -p ${HOME}/.config/rclone`
-before exec-ing the container command. Synced from change `v0716-alembic-migration-sre`.
+Superseded from `rclone-preflight-check` by `devops-infrastructure-updates`. The
+original requirement created `${HOME}/.config/rclone` so the in-container
+`rclone` binary would find a config to read. With boto3
+(`app/core/s3_service.py`) the credential comes from environment variables, so
+there is no config file for a directory to hold — and creating one would imply a
+mount is expected, keeping a plaintext S3 secret one bind-mount away.
+
+`deploy/docker-entrypoint.sh` now warns when S3 storage is half-configured (a
+bucket with no credentials, or credentials with no bucket), because either way
+every remote operation silently no-ops and the first symptom is a backup archive
+that never appears. It also reports a leftover `rclone.conf` so the operator
+knows to drop the bind-mount.
 
 ## Requirements
 
-### Requirement: Pre-start rclone configuration directory check
+### Requirement: No container mounts a remote-storage credential file
 
-The container entrypoint SHALL create `${HOME}/.config/rclone` directory if it does
-not exist before starting any application services, preventing silent backup job
-failures on fresh deployments.
+No application service SHALL bind-mount a remote-storage credential file into a
+container. Remote storage configuration SHALL be supplied through environment
+variables.
 
-#### Scenario: Fresh container deployment without rclone directory
+#### Scenario: Starting the full stack
 
-- **WHEN** a container starts for the first time and `${HOME}/.config/rclone` does not exist
-- **THEN** the entrypoint SHALL create the directory with appropriate permissions
-- **AND** backup jobs SHALL be able to write rclone configuration files
+- **WHEN** the compose stack starts
+- **THEN** no service SHALL mount `rclone.conf`, an AWS credentials file, or any other remote-storage secret from the host
+- **AND** remote storage SHALL function from the `AWS_*` and `S3_*` variables alone
 
-#### Scenario: Existing container with rclone directory already present
+#### Scenario: A stale bind-mount is left in place
 
-- **WHEN** a container restarts and `${HOME}/.config/rclone` already exists
-- **THEN** the entrypoint SHALL not fail or modify existing directory contents
-- **AND** the check SHALL be idempotent (safe to run on every start)
+- **WHEN** a deployment still bind-mounts `rclone.conf` after upgrading
+- **THEN** the container SHALL still start
+- **AND** the entrypoint SHALL report the file as unused so the mount can be removed

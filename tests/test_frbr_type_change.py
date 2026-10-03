@@ -16,7 +16,7 @@
 import pytest
 
 from app.core.frbr_service import update_expression, update_frbr_entity_type
-from app.db.models import EscalationRequest, Expression, Item, Manifestation, Work, db
+from app.db.models import EscalationRequest, Expression, Item, Manifestation, User, Work, db
 
 
 def test_update_frbr_entity_type_upward_propagation(app):
@@ -187,3 +187,84 @@ def test_update_expression_content_type_preserves_child_carriers(app):
         assert manif.format == "vinyl"
         assert manif.meta["format"] == "vinyl"
         assert manif.meta["Format"] == "vinyl"
+
+
+def test_item_level_metadata_is_not_propagated(app):
+    """Characterisation: a type change stops at the Manifestation.
+
+    `update_frbr_entity_type` walks Work -> Expression -> Manifestation and syncs
+    each entity's `type`/`format`/`Format` metadata, degrading the carrier to the
+    new type's `unknown_*` placeholder when it no longer applies. It does not
+    descend into Items: `Item` has no `format` column, so the Manifestation is
+    the only structural carrier record, but `Item.meta` commonly carries a copy
+    of `type`/`format` from the ingest payload.
+
+    Measured after reclassifying an Expression from `text` to `music`:
+
+        manifestation.format  book -> unknown_audio
+        manifestation.meta    {'type': 'music', 'format': 'unknown_audio', ...}
+        item.meta             {'type': 'text',  'format': 'book', ...}   <- stale
+
+    This is a real inconsistency, not intended behaviour -- and it escapes:
+    `DataManager._export_item_row` serialises `"meta": item.meta` verbatim into
+    the JSON export, so a reclassified title is exported still claiming
+    `type: text, format: book`.
+
+    It is recorded rather than fixed here. The direction is a judgement call:
+    propagating means writing into a free-form dict that also holds
+    user-annotated fields, across every Item under the changed Manifestation, in
+    the same transaction as the type change. Reading the item's copy at all is
+    the other option, since the Manifestation is authoritative. Either is a
+    production behaviour change with its own trade-offs, and belongs in its own
+    change rather than inside a test-hardening sweep.
+
+    The test pins the current boundary so that whoever does fix it can see
+    exactly what moves, and so the gap does not quietly become "expected".
+
+    @param app: The Flask application.
+    @returns: Nothing; different behaviour fails the test.
+    """
+    with app.app_context():
+        user = User(email="item-propagation@iqoqo.local", display_name="P")
+        db.session.add(user)
+        db.session.flush()
+        work = Work(title="Item Propagation Work", meta={"type": "text"}, sort_title="Item Propagation Work")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(
+            expression_id=expr.id,
+            format="book",
+            meta={"type": "text", "format": "book", "Format": "book"},
+        )
+        db.session.add(manif)
+        db.session.flush()
+        item = Item(
+            manifestation_id=manif.id,
+            owner_id=user.id,
+            status="available",
+            meta={"type": "text", "format": "book", "Format": "book"},
+        )
+        db.session.add(item)
+        db.session.commit()
+        expr_id, manif_id, item_id = expr.id, manif.id, item.id
+
+    update_frbr_entity_type(Expression, expr_id, "music")
+
+    with app.app_context():
+        manifest = db.session.get(Manifestation, manif_id)
+        physical = db.session.get(Item, item_id)
+
+        # The Manifestation -- the structural authority -- is updated correctly.
+        assert manifest.format == "unknown_audio"
+        assert manifest.meta["type"] == "music"
+        assert manifest.meta["format"] == "unknown_audio"
+
+        # The Item's denormalised copy is not, which is the defect.
+        assert physical.meta == {"type": "text", "format": "book", "Format": "book"}
+
+        # And the copy genuinely disagrees with its parent, which is what makes
+        # it a defect rather than a harmless duplicate.
+        assert physical.meta["format"] != manifest.meta["format"]

@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-09-16
+goal: Provide UI and backend support to modify Work->Expression->Manifestation
+  relations, admin UI to reassign/merge/split FRBR hierarchy nodes, and database
+  normalization so roadmap items point strictly to a single FRBR level.

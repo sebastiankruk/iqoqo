@@ -23,7 +23,14 @@ import type { EscalationRequest } from "@/types/frbr";
  */
 export function getTargetHref(esc: EscalationRequest): string | null {
   if (esc.manifestation_id) return `/manifestation/${esc.manifestation_id}`;
-  if (esc.expression_id && esc.work_id) return `/work/${esc.work_id}#expression-${esc.expression_id}`;
+  // An Expression escalation stores `expression_id` with `work_id` NULL, because
+  // `chk_escalation_target_exactly_one` allows at most one target and
+  // `create_escalation_request` writes only `f"{level}_id"`. The previous
+  // `if (esc.expression_id && esc.work_id)` therefore never matched for an
+  // Expression, and fell through to `null` -- so every Expression escalation
+  // rendered as unclickable text. `work_id` stays in the condition for the
+  // legacy shape where both were set, which /work/[id] can anchor into.
+  if (esc.expression_id) return `/expression/${esc.expression_id}`;
   if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
   if (esc.item_id) return `/item/${esc.item_id}`;
   return null;
@@ -38,7 +45,9 @@ export function getTargetHref(esc: EscalationRequest): string | null {
  */
 export function getAdminTargetHref(esc: EscalationRequest): string | null {
   if (esc.manifestation_id) return `/admin/content?tab=metadata&manifestationId=${esc.manifestation_id}`;
-  if (esc.expression_id && esc.work_id) return `/work/${esc.work_id}#expression-${esc.expression_id}`;
+  // See getTargetHref: an Expression escalation has work_id NULL, so the old
+  // `&& esc.work_id` guard sent every one of them to `null` here too.
+  if (esc.expression_id) return `/expression/${esc.expression_id}`;
   if (esc.work_id) return `/collection?work_id=${esc.work_id}`;
   if (esc.item_id) return `/item/${esc.item_id}`;
   return null;

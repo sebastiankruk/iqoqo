@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require the HelpRequests translation keys to stay structurally aligned across locales -- the same key set in every language file, with no empty values -- because a missing or blank key renders as raw key text rather than falling back to English.
+
+## Requirements
 
 ### Requirement: HelpRequests i18n keys are identical between en.json and pl.json
 

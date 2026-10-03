@@ -218,29 +218,17 @@ class TestSPARQLService:
         formatted = format_select_results(result)
         assert formatted.get("boolean") is True
 
-    def test_execute_timeout_handling(self):
+    def test_execute_timeout_handling(self, sparql_deadline):
         """Test that timeout is enforced with a very short deadline."""
         from app.core.sparql_service import SPARQLTimeout
 
         # Create a small graph
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "expression_id": "e-1",
-                "work_id": "w-1",
-                "title": "Test Book",
-                "authors": ["Author One"],
-                "tags": ["fiction"],
-                "status": "read",
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
-        # Use an extremely short timeout that will be exceeded even for simple queries
-        # due to process startup overhead
+        # The graph is sized so its own serialization outlasts the deadline, so
+        # this asserts deadline enforcement rather than process-spawn latency.
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
 
     def test_build_graph_excludes_other_users_private_items(self):
         items = [

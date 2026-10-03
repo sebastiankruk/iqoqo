@@ -293,3 +293,127 @@ def test_register_rate_limiting(app):
         limiter.enabled = False
         limiter._enabled = False
         app.config["RATELIMIT_ENABLED"] = False
+
+
+# ---------------------------------------------------------------------------
+# Login timing (MOD-TEST-07)
+# ---------------------------------------------------------------------------
+#
+# The KDF is scrypt, which costs ~90 ms -- far more than any network or
+# framework overhead around it. So whether or not the login path hashes the
+# submitted password is directly observable in the response time.
+#
+# These tests assert *that the hash happens*, not how long the endpoint takes.
+# A wall-clock assertion here would repeat the mistake in
+# `tests/test_sparql_performance.py`: it would measure the runner rather than the
+# behaviour, and fail intermittently on identical code.
+
+
+def _count_hash_verifications(monkeypatch) -> list[str]:
+    """Replace the login path's hash comparison with a counting stub.
+
+    Returns a list that receives the stored hash passed to each comparison, so a
+    test can assert both that a comparison happened and what it was made
+    against. The stub does no hashing, which also keeps these tests fast.
+
+    @param monkeypatch: The pytest fixture used to install the stub.
+    @returns: The list that collects each compared hash.
+    """
+    seen: list[str] = []
+    monkeypatch.setattr("app.api.auth.check_password_hash", lambda stored, _password: seen.append(stored) or False)
+    return seen
+
+
+def test_login_verifies_a_password_for_an_unknown_email(client, monkeypatch):
+    """An email with no account must still cost a password verification.
+
+    Measured on the unfixed code: 0.00 ms for an unknown email against 90.40 ms
+    for a registered one with a wrong password. That gap enumerates every
+    registered address more reliably than the generic "Invalid credentials"
+    response hides it, and the endpoint's own docstring claims the failure
+    response does not reveal whether an account exists.
+
+    @param client: The Flask test client.
+    @param monkeypatch: The pytest fixture used to install the counting stub.
+    @returns: Nothing; skipping the verification fails the test.
+    """
+    seen = _count_hash_verifications(monkeypatch)
+
+    response = client.post("/api/auth/login", json={"email": "nobody@iqoqo.local", "password": "wrong-password"})
+
+    assert response.status_code == 401
+    assert len(seen) == 1, "the unknown-email path skipped the password verification entirely"
+    assert seen[0], "the comparison must be made against some hash, so the KDF still runs"
+
+
+def test_login_verifies_a_password_for_a_google_only_account(app, client, monkeypatch):
+    """An account with no local password must still cost a verification.
+
+    `password_hash` is nullable and `ck_user_auth_method` permits NULL when
+    `google_id` is set, so every Google-only account has a NULL hash. Before the
+    fix, `User.check_password` returned False immediately for those, making them
+    exactly as fast as an address that does not exist.
+
+    @param app: The Flask application.
+    @param client: The Flask test client.
+    @param monkeypatch: The pytest fixture used to install the counting stub.
+    @returns: Nothing; skipping the verification fails the test.
+    """
+    with app.app_context():
+        google_user = User(email="google-only@iqoqo.local", display_name="G", google_id="google-oid-1")
+        google_user.password_hash = None
+        db.session.add(google_user)
+        db.session.commit()
+
+    seen = _count_hash_verifications(monkeypatch)
+
+    response = client.post("/api/auth/login", json={"email": "google-only@iqoqo.local", "password": "wrong-password"})
+
+    assert response.status_code == 401
+    assert len(seen) == 1, "the Google-only path skipped the password verification entirely"
+
+
+def test_login_verifies_a_password_for_every_account_shape(client, monkeypatch):
+    """All three account shapes must do the same amount of password work.
+
+    Nothing observable should differ between "no such account", "account with no
+    local password" and "account with a password": not the status code, not the
+    body, and -- the property this file is about -- not whether the KDF runs.
+
+    @param client: The Flask test client.
+    @param monkeypatch: The pytest fixture used to install the counting stub.
+    @returns: Nothing; a shape that behaves differently fails the test.
+    """
+    bodies = [
+        client.post("/api/auth/login", json={"email": email, "password": "wrong-password"}).get_json()
+        for email in ("nobody@iqoqo.local", "google-only@iqoqo.local")
+    ]
+    assert bodies[0] == bodies[1] == {"error": "Invalid credentials"}
+
+    for email in ("nobody@iqoqo.local", "google-only@iqoqo.local"):
+        seen = _count_hash_verifications(monkeypatch)
+        client.post("/api/auth/login", json={"email": email, "password": "wrong-password"})
+        assert len(seen) == 1, f"the {email} path did not do exactly one password verification"
+
+
+def test_login_still_rejects_a_wrong_password_and_accepts_the_right_one(client):
+    """Equalising the timing must not weaken the check itself.
+
+    The stub used by the timing tests returns False unconditionally, so this test
+    covers the real comparison and pins both outcomes.
+
+    @param client: The Flask test client.
+    @returns: Nothing; a wrong password accepted, or a right one refused, fails.
+    """
+    registered = client.post(
+        "/api/auth/register",
+        json={"email": "timing@iqoqo.local", "password": "correct-horse-battery", "display_name": "T"},
+    )
+    assert registered.status_code == 201
+
+    wrong = client.post("/api/auth/login", json={"email": "timing@iqoqo.local", "password": "wrong-password"})
+    assert wrong.status_code == 401
+
+    right = client.post("/api/auth/login", json={"email": "timing@iqoqo.local", "password": "correct-horse-battery"})
+    assert right.status_code == 200
+    assert right.get_json()["user"]["email"] == "timing@iqoqo.local"

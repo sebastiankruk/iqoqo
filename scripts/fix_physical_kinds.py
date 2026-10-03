@@ -547,6 +547,7 @@ def apply_mode(dry_run: bool = False) -> int:
 
 
 def main() -> int:
+    """Apply the physical expression-kind repair and report what changed."""
     parser = argparse.ArgumentParser(description="Audit and fix non-canonical physical kind (format) values in the iqoqo database.")
     parser.add_argument(
         "--interactive",

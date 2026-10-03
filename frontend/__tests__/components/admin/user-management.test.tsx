@@ -83,4 +83,44 @@ describe("UserManagement Component", () => {
     expect(screen.getByText("User Access Control")).toBeInTheDocument();
     expect(screen.getByText("Save Permissions")).toBeInTheDocument();
   });
+  // --- C18 3.12 (MOD-FE_UI-22/23/24): a failed fetch must not read as "no users" ---
+
+  it("shows a failure message instead of 'No users found.' when the fetch rejects", async () => {
+    vi.mocked(adminApi.getUsers).mockRejectedValue(new Error("503 Service Unavailable"));
+
+    render(<UserManagement canEdit />);
+
+    await waitFor(() => expect(screen.getByText(/Could not load users/)).toBeInTheDocument());
+    // The regression this guards: an admin must not read a broken API as an
+    // empty tenant and conclude every account was deleted.
+    expect(screen.queryByText("No users found.")).not.toBeInTheDocument();
+    expect(screen.getByText(/503 Service Unavailable/)).toBeInTheDocument();
+  });
+
+  it("distinguishes a genuine empty result from a failure", async () => {
+    vi.mocked(adminApi.getUsers).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, pages: 1 },
+    });
+
+    render(<UserManagement canEdit />);
+
+    await waitFor(() => expect(screen.getByText("No users found.")).toBeInTheDocument());
+    expect(screen.queryByText(/Could not load users/)).not.toBeInTheDocument();
+  });
+
+  it("recovers from an error once a later fetch succeeds", async () => {
+    vi.mocked(adminApi.getUsers)
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue({ data: mockUsers, meta: { total: 2, page: 1, pages: 1 } });
+
+    render(<UserManagement canEdit />);
+    await waitFor(() => expect(screen.getByText(/Could not load users/)).toBeInTheDocument());
+
+    // Retyping in the search box re-runs the fetch; the stale error must clear.
+    fireEvent.change(screen.getByPlaceholderText("Search users..."), { target: { value: "test" } });
+
+    await waitFor(() => expect(screen.getByText("test1@test.com")).toBeInTheDocument());
+    expect(screen.queryByText(/Could not load users/)).not.toBeInTheDocument();
+  });
 });

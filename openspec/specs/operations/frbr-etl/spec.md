@@ -2,7 +2,7 @@
 
 Provides database integrity auditing, duplicate entity reconciliation, ISBN-13 normalization, and automated backup-first ETL operations for FRBR Group 1 catalog hierarchies.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: FRBR Integrity Audit
 

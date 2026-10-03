@@ -12,6 +12,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
+"""Video and disc metadata lookup via TMDB and UPC/EAN resolution.
+
+Also owns the Blu-ray deferral rule: a disc whose UPC resolves to an audio
+release is handed to the audio strategy rather than filed as a film."""
+
 from app.strategies.audio import classify_bluray_carrier
 from app.strategies.base import LookupStrategy
 from app.utils.tmdb import clean_video_title, fetch_video_metadata
@@ -45,6 +50,8 @@ def should_defer_bluray_to_audio(
 
 
 class VideoLookupStrategy(LookupStrategy):
+    """Video and disc metadata lookup, with Blu-ray deferral."""
+
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
         meta, provider = None, None
         upc_meta = resolve_physical_media(barcode)

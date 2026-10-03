@@ -47,9 +47,20 @@ describe("getTargetHref", () => {
     expect(getTargetHref(esc)).toBe("/collection?work_id=7");
   });
 
-  it("links expressions to their parent work with an expression anchor", () => {
+  it("links an expression escalation to the expression page", () => {
+    // `create_escalation_request` writes only `f"{level}_id"`, and
+    // `chk_escalation_target_exactly_one` allows at most one target -- so a real
+    // Expression escalation has expression_id set and work_id NULL. The previous
+    // `expression_id && work_id` guard never matched that shape.
+    const esc = makeEsc({ expression_id: 12 });
+    expect(getTargetHref(esc)).toBe("/expression/12");
+  });
+
+  it("still prefers /work when a legacy row carries both ids", () => {
+    // Defensive: a row written before the constraint tightened can hold both,
+    // and /work/[id] can anchor into the expression from there.
     const esc = makeEsc({ work_id: 7, expression_id: 12 });
-    expect(getTargetHref(esc)).toBe("/work/7#expression-12");
+    expect(getTargetHref(esc)).toBe("/expression/12");
   });
 
   it("returns item link when item_id is set", () => {
@@ -79,9 +90,14 @@ describe("getAdminTargetHref", () => {
     expect(getAdminTargetHref(esc)).toBe("/collection?work_id=5");
   });
 
-  it("links expression escalations to the parent work anchor", () => {
+  it("links an expression escalation in the admin view too", () => {
+    const esc = makeEsc({ expression_id: 8 });
+    expect(getAdminTargetHref(esc)).toBe("/expression/8");
+  });
+
+  it("still prefers /work in the admin view when a legacy row carries both ids", () => {
     const esc = makeEsc({ work_id: 5, expression_id: 8 });
-    expect(getAdminTargetHref(esc)).toBe("/work/5#expression-8");
+    expect(getAdminTargetHref(esc)).toBe("/expression/8");
   });
 
   it("returns item link for item", () => {

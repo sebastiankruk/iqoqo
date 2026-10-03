@@ -61,30 +61,131 @@ TAXONOMY_YAML = ROOT_DIR / "shared" / "taxonomy.yaml"
 TAXONOMY_TS = ROOT_DIR / "frontend" / "types" / "taxonomy.ts"
 
 
+def _balanced_array_after(source: str, name: str) -> str | None:
+    """Return the contents of a bracketed literal, honouring nesting and quotes.
+
+    Replaces a `\\[([^\\]]+)\\]` regex, which is blind in two ways that matter
+    here:
+
+    - a nested array element truncated the match at the first `]`, silently
+      dropping every later value;
+    - an escaped quote inside a value (`"a\\"b"`) desynchronised the quote
+      pattern and produced junk such as `{", ", "a\\"}`.
+
+    Neither can occur in `taxonomy.ts` today, which is exactly why the weakness
+    was invisible: the guard would have kept passing while being unable to
+    detect the drift it exists to detect.
+
+    @param source: The TypeScript source.
+    @param name: The identifier whose bracket follows.
+    @returns: The literal's contents, or None when the identifier is absent.
+    """
+    # Built outside the f-string: a bracketed character class inside an f-string
+    # expression is a syntax error before Python 3.12's nesting rules, and this
+    # file must stay readable rather than clever.
+    gap = r"[^\[{]*\["
+    anchor = re.search(r"\b" + re.escape(name) + r"\b" + gap, source)
+    if not anchor:
+        return None
+
+    # `anchor.end()` is *past* the opening bracket, so the scan starts at depth 0
+    # and the matching close arrives at depth -1. Starting at 1 and testing for 0
+    # is the easier pair to reason about; getting this wrong makes the scanner
+    # run on into the next declaration instead of stopping.
+    start = anchor.end()
+    depth = 1
+    in_string: str | None = None
+    escaped = False
+    index = start
+
+    while index < len(source):
+        char = source[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == in_string:
+                in_string = None
+        elif char in "\"'`":
+            in_string = char
+        elif char in "[{(":
+            depth += 1
+        elif char in "]})":
+            depth -= 1
+            if depth == 0:
+                return source[start:index]
+        index += 1
+    return None
+
+
 def _parse_ts_const_array(ts_source: str, const_name: str) -> frozenset[str]:
     """Extract string literals from a TypeScript 'as const' array."""
-    pattern = re.compile(
-        rf"export\s+const\s+{re.escape(const_name)}\s*=\s*\[([^\]]+)\]",
-        re.DOTALL,
-    )
-    match = pattern.search(ts_source)
-    if not match:
-        # Try finding it without 'export const' if it's just a variable
-        pattern = re.compile(rf"{re.escape(const_name)}\s*=\s*\[([^\]]+)\]", re.DOTALL)
-        match = pattern.search(ts_source)
-
-    if not match:
+    body = _balanced_array_after(ts_source, const_name)
+    if body is None:
         raise ValueError(f"Could not locate '{const_name}' array in taxonomy.ts")
-    return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
+    return _top_level_string_literals(body)
+
+
+def _unescape(value: str) -> str:
+    """Resolve the escapes a TypeScript string literal may contain.
+
+    The scanner has to know where a literal ends, so it already tracks escapes;
+    reusing that knowledge here keeps the parsed value faithful instead of
+    leaving a backslash in place.
+
+    @param value: The literal's raw contents.
+    @returns: The value with backslash escapes resolved.
+    """
+    return value.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+
+
+def _top_level_string_literals(body: str) -> frozenset[str]:
+    r"""Collect the string literals that are direct elements of an array.
+
+    Only strings at nesting depth zero count. `MEDIA_FORMATS` holds bare strings,
+    but other arrays in the same file hold objects carrying `label:` values, and
+    those labels are not array elements. The previous `[^\]]+` regex
+    excluded them by accident -- it stopped at the first `]`, which happened to
+    fall before the nested object closed -- so a correctly balanced parse with
+    no depth filter would start comparing labels against the taxonomy and fail.
+
+    @param body: The array's contents, without the enclosing brackets.
+    @returns: The direct string-element values.
+    """
+    values: set[str] = set()
+    depth = 0
+    in_string: str | None = None
+    escaped = False
+    start = 0
+    index = 0
+
+    while index < len(body):
+        char = body[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == in_string:
+                # A completed literal counts only when it sits at depth zero.
+                if depth == 0:
+                    values.add(_unescape(body[start:index]))
+                in_string = None
+        elif char in "\"'`":
+            in_string = char
+            start = index + 1
+        elif char in "[{(":
+            depth += 1
+        elif char in "]})":
+            depth -= 1
+        index += 1
+    return frozenset(values)
 
 
 def _parse_union_type_from_ts(ts_source: str, type_name: str) -> frozenset[str]:
     """Extract union members from a TypeScript type alias."""
-    pattern = re.compile(
-        rf"export\s+type\s+{re.escape(type_name)}\s*=\s*([^;]+);",
-        re.DOTALL,
-    )
-    match = pattern.search(ts_source)
+    match = re.search(rf"export\s+type\s+{re.escape(type_name)}\s*=\s*([^;]+);", ts_source, re.DOTALL)
     if not match:
         raise ValueError(f"Could not locate '{type_name}' type alias in taxonomy.ts")
     return frozenset(re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)))
@@ -289,3 +390,78 @@ def test_frbr_entity_iri_frontend_url_fallback() -> None:
     with patch.dict(os.environ, {"NEXT_PUBLIC_FRONTEND_URL": frontend_url}, clear=True):
         work = Work(id=77, title="Sample")
         assert work.iri == "https://frontend.example.com/works/77"
+
+
+# ---------------------------------------------------------------------------
+# Parser robustness (C18 4.5)
+# ---------------------------------------------------------------------------
+
+
+def test_array_parser_handles_nested_structures() -> None:
+    """A nested array element must not truncate the match.
+
+    The previous `\\[([^\\]]+)\\]` regex stopped at the first `]`, so every value
+    after a nested element was silently dropped -- and the guard would have
+    kept passing while unable to detect the drift it exists to detect.
+
+    @returns: Nothing; a truncated parse fails the test.
+    """
+    source = 'export const X = [["a", "b"], "c", "d"] as const;'
+    assert _parse_ts_const_array(source, "X") == frozenset({"c", "d"})
+
+
+def test_array_parser_handles_escaped_quotes() -> None:
+    """A value containing a quote must not desynchronise the string scanner.
+
+    @returns: Nothing; a garbled parse fails the test.
+    """
+    source = 'export const X = ["a\\"b", "c"] as const;'
+    assert _parse_ts_const_array(source, "X") == frozenset({'a"b', "c"})
+
+
+def test_array_parser_excludes_nested_object_labels() -> None:
+    """Labels inside nested objects are not array elements.
+
+    The old regex excluded them by accident -- it stopped before the nested
+    object closed. A correctly balanced parse must exclude them deliberately,
+    or `MEDIA_FORMATS` picks up "Comic Book (Single Issue)" and the comparison
+    against the taxonomy fails on a value that is not a format.
+
+    @returns: Nothing; a leaked label fails the test.
+    """
+    source = """
+export const X = [
+  { id: "book", label: "Book" },
+  { id: "vinyl", label: "Vinyl Record" },
+] as const;
+"""
+    assert _parse_ts_const_array(source, "X") == frozenset()
+
+
+def test_array_parser_stops_at_the_matching_bracket() -> None:
+    """The scan must not run on into the following declaration.
+
+    An off-by-one in the depth bookkeeping produced exactly this: `MEDIA_FORMATS`
+    absorbed every value in `MEDIA_CATEGORIES` and the sync test failed with 38
+    values instead of 33.
+
+    @returns: Nothing; a run-on parse fails the test.
+    """
+    source = """
+export const A = ["one", "two"] as const;
+export const B = ["three", "four"] as const;
+"""
+    assert _parse_ts_const_array(source, "A") == frozenset({"one", "two"})
+    assert _parse_ts_const_array(source, "B") == frozenset({"three", "four"})
+
+
+def test_array_parser_raises_when_the_identifier_is_absent() -> None:
+    """A missing identifier must raise rather than silently return empty.
+
+    An empty frozenset would compare unequal to the taxonomy and report a
+    confusing mismatch instead of naming the missing constant.
+
+    @returns: Nothing; a silent empty result fails the test.
+    """
+    with pytest.raises(ValueError, match="Could not locate"):
+        _parse_ts_const_array('export const OTHER = ["x"] as const;', "MISSING")

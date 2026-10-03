@@ -25,6 +25,13 @@ load_dotenv()
 
 
 class Config:
+    """Environment-derived application configuration.
+
+    Every value is read from the environment once at import time, and a missing
+    required variable raises here rather than at first use -- a container that is
+    misconfigured should fail to start, not fail on the first request that happens
+    to touch the value."""
+
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     # Default secret key logic: random in dev, mandatory in production to prevent JWT forgery
     _default_secret = None
@@ -73,6 +80,7 @@ class Config:
     # Protect against huge payload attacks
     MAX_CONTENT_LENGTH = _get_int_env("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)  # 16 MB max
 
+    REDIS_URL = os.environ.get("REDIS_URL")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console
@@ -119,9 +127,12 @@ class Config:
     # Max words to display on the generated cover overlay (0 = no limit)
     LLM_TITLE_MAX_WORDS = _get_int_env("LLM_TITLE_MAX_WORDS", 12)
 
-    # Backup Configuration
-    RCLONE_REMOTE_FAST = os.environ.get("RCLONE_REMOTE_FAST", "iqoqo-backup")
-    RCLONE_REMOTE_ARCHIVE = os.environ.get("RCLONE_REMOTE_ARCHIVE", "iqoqo-glacier")
+    # Remote object storage is configured entirely through `app/core/s3_service.py`,
+    # which reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / S3_* directly from
+    # the environment. The former RCLONE_REMOTE_FAST and RCLONE_REMOTE_ARCHIVE
+    # settings are gone: they named rclone remotes, and nothing reads them now.
+    # Each storage role (backup, covers, feedback) degrades to a local no-op when
+    # its bucket is unset, so no config-level flag is needed here.
 
     # Background scheduler (cover cleanup watchdog)
     SCHEDULER_AUTOSTART = os.environ.get("SCHEDULER_AUTOSTART", "false").lower() in {"true", "1", "yes"}

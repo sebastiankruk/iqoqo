@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Record the UI-density fixes from the v0.8.x review: one primary action per instance-settings card, an overflow menu for secondary FRBR editor actions, and a processing overlay on the camera viewfinder.
+
+## Requirements
 
 ### Requirement: InstanceSettings single CTA per domain card
 The `InstanceSettings` component SHALL group default setting items under a single unified category `CardWrapper` per domain with a single primary "Save Changes" CTA at the card footer. Secondary integration actions (e.g., "Authorize Allegro") SHALL use `variant="outline"` or `variant="secondary"` styling.

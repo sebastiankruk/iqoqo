@@ -199,19 +199,54 @@ Because different regions and APIs have different placeholder images, you can de
 **How to block a generic cover:**
 
 1. Save the annoying placeholder image to your computer (e.g., `junk_cover.jpg`).
-2. Run a quick python script to compute its pHash:
+2. Compute its pHash:
 
-    ```python
-    import imagehash
-    from PIL import Image
-    print(imagehash.phash(Image.open("junk_cover.jpg")))
+    ```bash
+    # locally
+    python scripts/phash_cover.py junk_cover.jpg
+
+    # or inside the running container
+    docker compose exec web python scripts/phash_cover.py /tmp/junk_cover.jpg
     ```
 
-3. This will output a hash string like `e1e1e1e1e1e1e1e1`. Add this to your `.env`:
+    This prints one hash per image, e.g. `e1e1e1e1e1e1e1e1  junk_cover.jpg`.
+
+3. Add the hash to your `.env`:
 
     ```bash
     IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     ```
+
+    Entries must be exactly 16 hex characters. Anything else is ignored with a
+    warning in the log rather than being silently reinterpreted.
+
+### Hash stability
+
+The hash is computed by `app/utils/phash.py`, on Pillow alone. It previously
+came from the `imagehash` package, which required `numpy` and `scipy` — 167 MB
+of the production image for a single function call — so it was replaced. The
+algorithm is unchanged: the same image produces the same hash as before, and
+`tests/test_phash.py` pins that against values captured from `imagehash` itself.
+
+**Verify your existing hashes after upgrading:**
+
+```bash
+docker compose exec web python scripts/phash_cover.py --check junk_cover.jpg
+```
+
+This reports `blocked` if the image matches a configured hash. If a placeholder
+you *did* block now reports `ACCEPTED`, recompute its hash with the command above
+and replace the old entry.
+
+There is one narrow caveat. For mathematically symmetric images — a perfect
+cross, an exactly repeating pattern — several DCT coefficients tie exactly at
+the median, and `imagehash`'s answer for those was decided by floating-point
+rounding noise rather than arithmetic. The current implementation returns the
+exact result, so a hash captured for such an image under the old code may no
+longer match. The effect is limited: one placeholder cover is accepted and
+displayed where it would previously have been rejected and replaced by a
+generated cover. Recomputing the entry restores blocking. See
+`KNOWN_DIVERGENCES` in `tests/test_phash.py` for the pinned scope.
 
 ## 4. Batch Processing
 

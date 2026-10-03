@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""API blueprint construction and shared request/response helpers.
+
+Every API module registers routes on the blueprint created here, which is what
+keeps the URL prefix and error handling in one place."""
+
 from flask import Blueprint, Response, jsonify
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")

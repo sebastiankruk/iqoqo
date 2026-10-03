@@ -16,72 +16,12 @@
 "use client";
 
 import { useProfile } from "@/lib/api/hooks";
-import {
-  Loader2,
-  Settings,
-  Users,
-  Shield,
-  BadgeCheck,
-  Building2,
-  DollarSign,
-  Key,
-  Database,
-  Image as ImageIcon,
-  Code2,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { GroupManagement } from "@/components/admin/group-management";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
-import Link from "next/link";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { PermissionName } from "@/lib/permissions";
-
-interface NavItemProps {
-  label: string;
-  icon: LucideIcon;
-  isActive: boolean;
-  onClick: () => void;
-  href?: string;
-}
-
-/**
- * Navigation item for settings sidebar.
- * @param props - Navigation item properties
- * @param props.label - Display label
- * @param props.icon - Lucide icon component
- * @param props.isActive - Whether this item is currently active
- * @param props.onClick - Click handler
- * @param props.href - Optional href for external navigation
- * @returns Navigation item component
- */
-function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
-  const className = cn(
-    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-  );
-
-  const content = (
-    <>
-      <Icon className="h-4 w-4" />
-      {label}
-    </>
-  );
-
-  if (href) {
-    return (
-      <Link href={href} className={className} onClick={onClick}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {content}
-    </button>
-  );
-}
 
 /**
  * Roles management page.
@@ -99,29 +39,9 @@ export default function GroupsPage() {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const isAdmin = profile.roles?.includes("admin");
   const permissions = profile.permissions ?? [];
   const hasPermission = (perm: PermissionName): boolean => permissions.includes(perm);
-  const canViewRoles = hasPermission(PermissionName.READ_ROLES);
   const canEditRoles = hasPermission(PermissionName.WRITE_ROLES);
-  const canViewUsers = hasPermission(PermissionName.READ_USERS);
-  const canViewMetadata = hasPermission(PermissionName.READ_METADATA);
-  const canEditCover = hasPermission(PermissionName.EDIT_COVER);
-  const canAccessSparql =
-    hasPermission(PermissionName.READ_METADATA) ||
-    hasPermission(PermissionName.WRITE_METADATA) ||
-    (profile.roles ?? []).includes("admin") ||
-    (profile.roles ?? []).includes("contributor");
-
-  const hasCustodianAccess = canViewMetadata || canEditCover || canAccessSparql;
-  const canViewSettings =
-    hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) ||
-    hasPermission(PermissionName.CONFIG_FEDERATION) ||
-    hasPermission(PermissionName.CONFIG_AFFILIATE) ||
-    hasPermission(PermissionName.CONFIG_INTERNAL) ||
-    canViewUsers ||
-    canViewRoles;
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -129,99 +49,7 @@ export default function GroupsPage() {
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-12 flex flex-col md:flex-row gap-12">
         {/* Left Sidebar Navigation */}
-        <aside className="w-full md:w-64 shrink-0 flex flex-col gap-8">
-          {hasCustodianAccess && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Custodians</h2>
-              <nav className="flex flex-col gap-1">
-                {canViewMetadata && (
-                  <NavItem
-                    label="Metadata"
-                    icon={Database}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=metadata"
-                  />
-                )}
-                {canEditCover && (
-                  <NavItem
-                    label="Cover Art"
-                    icon={ImageIcon}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/content?tab=cover-art"
-                  />
-                )}
-                {canAccessSparql && (
-                  <NavItem
-                    label="SPARQL Explorer"
-                    icon={Code2}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/sparql"
-                  />
-                )}
-              </nav>
-            </div>
-          )}
-
-          {canViewSettings && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 px-3">Administration</h2>
-              <nav className="flex flex-col gap-1">
-                <NavItem label="Settings" icon={Settings} isActive={false} onClick={() => {}} href="/admin/settings" />
-                {hasPermission(PermissionName.CONFIG_FEDERATION) && (
-                  <NavItem
-                    label="Federation"
-                    icon={Building2}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=federation"
-                  />
-                )}
-                {hasPermission(PermissionName.CONFIG_AFFILIATE) && (
-                  <NavItem
-                    label="Monetization"
-                    icon={DollarSign}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=monetization"
-                  />
-                )}
-                {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
-                  <NavItem
-                    label="API Keys"
-                    icon={Key}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=apikeys"
-                  />
-                )}
-                {canViewUsers && (
-                  <NavItem
-                    label="Users"
-                    icon={Users}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=users"
-                  />
-                )}
-                {canViewRoles && (
-                  <NavItem label="Roles" icon={BadgeCheck} isActive={true} onClick={() => {}} href="/admin/groups" />
-                )}
-                {hasPermission(PermissionName.CONFIG_INTERNAL) && (
-                  <NavItem
-                    label="Security"
-                    icon={Shield}
-                    isActive={false}
-                    onClick={() => {}}
-                    href="/admin/settings?tab=security"
-                  />
-                )}
-              </nav>
-            </div>
-          )}
-        </aside>
+        <AdminSidebar activeTab="roles" />
 
         {/* Main Content Area */}
         <div className="flex-1 min-w-0 pb-20">

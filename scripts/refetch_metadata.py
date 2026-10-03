@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Re-fetches bibliographic metadata for existing manifestations.
+
+Resumable: progress is recorded per manifestation, so a re-run continues where
+the last one stopped rather than reprocessing the whole library."""
+
 import argparse
 import logging
 import os
@@ -26,6 +31,7 @@ from sqlalchemy import and_, or_, text
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
+from app.config import Config
 from app.db import db
 from app.db.core import Expression, Manifestation, MetadataRefetchLog, Work
 from app.utils.bgg import fetch_bgg_metadata
@@ -38,7 +44,18 @@ from app.utils.tmdb import fetch_video_metadata
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-IQOQO_VERSION = "0.7.10"
+# MOD-OPS-12: was hardcoded to "0.7.10" and drifted as the project advanced.
+#
+# This string is stamped onto every MetadataRefetchLog row and is then used as a
+# resume check ("skip this manifestation if it was already refetched by *this*
+# version"). With the literal frozen at 0.7.10 while the project moved to
+# 0.8.x, the comparison never matched any row written by a real run, so the
+# resume logic was inert and every invocation refetched the whole library —
+# hammering the external APIs against their rate limits for no benefit.
+#
+# Config.VERSION resolves APP_VERSION -> pyproject.toml [project].version ->
+# "dev-local", which is the same value the running application reports.
+IQOQO_VERSION = Config.VERSION
 
 RATE_LIMITS = {
     "tmdb": 0.025,
@@ -51,6 +68,10 @@ RATE_LIMITS = {
 
 
 def get_gap_query(gap: str, content_type: str | None = None):
+    """Return the SQL for one gap kind.
+
+    Gaps are the reasons a record is missing metadata. Kept as a lookup rather than
+    a chain of branches so adding a gap is one entry here."""
     q = db.session.query(Manifestation).join(Expression).join(Work)
     if content_type:
         q = q.filter(Expression.content_type == content_type)
@@ -97,6 +118,10 @@ def get_gap_query(gap: str, content_type: str | None = None):
 
 
 def determine_strategy(man: Manifestation) -> str | None:
+    """Decide which provider to re-query for a manifestation.
+
+    Returns ``None`` when the record is already complete, so a full pass over the
+    library skips the rows that need no work."""
     ct = man.expression.content_type if man.expression else None
     if ct == "movie":
         return "tmdb"
@@ -112,6 +137,10 @@ def determine_strategy(man: Manifestation) -> str | None:
 
 
 def run_refetch(gap: str, content_type: str | None, dry_run: bool, force: bool, limit: int | None):
+    """Re-fetch metadata for manifestations matching a gap.
+
+    Resumable via the recorded resume marker, so an interrupted run continues where
+    it stopped instead of reprocessing the library."""
     app = create_app()
     with app.app_context():
         gaps = ["format", "publisher", "genres", "cover"] if gap == "all" else [gap]

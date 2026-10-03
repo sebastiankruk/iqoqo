@@ -113,6 +113,10 @@ def run_scan(verbose: bool = False) -> int:
 
 
 def main() -> int:
+    """Run Gitleaks over the working tree and branch commits.
+
+    Exits non-zero on a finding, so it is usable as a CI step as well as a local
+    check."""
     parser = argparse.ArgumentParser(description="Run local Gitleaks secret scan.")
     parser.add_argument(
         "--verbose",

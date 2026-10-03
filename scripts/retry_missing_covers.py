@@ -32,13 +32,20 @@ import time
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 
+from sqlalchemy.orm import selectinload
+
 from app import create_app
 from app.db import db
-from app.db.models import Manifestation
+from app.db.models import Expression, Manifestation
 from app.utils.covers import process_cover_pipeline
 
 
 def retry_missing_covers(batch_limit=None, dry_run=False):
+    """Retry covers for items left pending by the circuit breaker.
+
+    Walks the backlog of items that exhausted their attempt budget and re-queues
+    them with a fresh budget, so a transient provider outage does not permanently
+    strand them."""
     app = create_app()
     with app.app_context():
         query = Manifestation.query.filter(
@@ -53,6 +60,12 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
 
         if batch_limit:
             query = query.limit(batch_limit)
+
+        # The loop below reads `man.expression.work` for every row. On a lazy
+        # graph that is ~7.5 SELECTs per manifestation, because Work pulls in
+        # semantic links, work parts and contributions -- the same N+1 C18 2.9
+        # fixed in fetch_covers.py.
+        query = query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
 
         missing = query.all()
         print(f"Found {len(missing)} manifestations with missing covers that have meta['cover_url']")
@@ -106,6 +119,7 @@ def retry_missing_covers(batch_limit=None, dry_run=False):
 
 
 def main():
+    """Parse arguments and run the pending-cover retry."""
     parser = argparse.ArgumentParser(description="Retry cover processing for failed items")
     parser.add_argument("--limit", type=int, help="Maximum items to process", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Show what would be processed without changes")

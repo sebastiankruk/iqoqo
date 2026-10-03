@@ -56,16 +56,12 @@ class LoanRequest(db.Model):  # type: ignore[name-defined]
     __tablename__ = "loan_requests"
     __table_args__ = (
         db.CheckConstraint("status IN ('pending', 'approved', 'rejected')", name="ck_loan_requests_status"),
-        *(
-            (
-                {
-                    "schema": _INVENTORY,
-                    "extend_existing": True,
-                },
-            )
-            if _INVENTORY
-            else ({"extend_existing": True},)
-        ),
+        # Schema placement only. This table was previously declared with
+        # extend_existing=True, which implied the table was being redefined
+        # somewhere; reproducing the exact configuration with and without the
+        # flag produced an identical model, and no migration used it. Removed
+        # rather than documented, because it was not a deliberate choice.
+        *(({"schema": _INVENTORY},) if _INVENTORY else ()),
     )
 
     id = db.Column(db.Integer, primary_key=True)

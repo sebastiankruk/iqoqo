@@ -26,7 +26,9 @@ import type {
   ExpressionShelfEntry,
   WorkPartEntry,
   TaxonomiesResponse,
+  SemanticLinksData,
 } from "@/types/frbr";
+
 import { queryKeys } from "./query-keys";
 
 /**
@@ -149,7 +151,9 @@ export function useInfiniteItems(
   collections?: string[],
   genres?: string[],
   publishers?: string[],
-  includePublic = false
+  includePublic = false,
+  lodAuthority?: string,
+  lodStatus?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -171,6 +175,8 @@ export function useInfiniteItems(
       missingCover,
       missingId,
       includePublic,
+      lodAuthority,
+      lodStatus,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -188,6 +194,8 @@ export function useInfiniteItems(
       if (genres && genres.length > 0) params.genres = genres.join(",");
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (includePublic) params.include_public = true;
+      if (lodAuthority) params.lod_authority = lodAuthority;
+      if (lodStatus) params.lod_status = lodStatus;
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },
@@ -285,7 +293,9 @@ export function useInfiniteManifestations(
   genres?: string[],
   publishers?: string[],
   statuses?: string[],
-  ownership?: string[]
+  ownership?: string[],
+  lodAuthority?: string,
+  lodStatus?: string
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -306,6 +316,8 @@ export function useInfiniteManifestations(
       missingCover,
       missingId,
       ownership,
+      lodAuthority,
+      lodStatus,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -321,6 +333,8 @@ export function useInfiniteManifestations(
       if (publishers && publishers.length > 0) params.publishers = publishers.join(",");
       if (statuses && statuses.length > 0) params.statuses = statuses.join(",");
       if (ownership && ownership.length > 0) params.ownership = ownership.join(",");
+      if (lodAuthority) params.lod_authority = lodAuthority;
+      if (lodStatus) params.lod_status = lodStatus;
       const res = await apiClient.get<ApiResponse<CatalogEntry[]>>("/manifestations", { params });
       return res.data;
     },
@@ -857,6 +871,65 @@ export function useTaxonomies(options?: { scope?: "global" | "user"; filters?: R
       return res.data.data;
     },
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Custom hook to fetch Linked Open Data external semantic links for a manifestation.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns Query result containing SemanticLinksData.
+ */
+export function useSemanticLinks(manifestationId: number) {
+  return useQuery({
+    queryKey: queryKeys.semanticLinks(manifestationId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<SemanticLinksData>>(
+        `/manifestations/${manifestationId}/semantic-links`
+      );
+      return res.data.data;
+    },
+    enabled: !!manifestationId && manifestationId > 0,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Mutation hook to trigger on-demand background LOD re-linking for a manifestation.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns TanStack Mutation result object.
+ */
+export function useTriggerRelink(manifestationId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post<ApiResponse<{ task_id: string; message: string; status: string }>>(
+        `/manifestations/${manifestationId}/semantic-links/relink`
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.semanticLinks(manifestationId) });
+    },
+  });
+}
+
+/**
+ * Mutation hook to delete/dismiss an incorrect semantic link.
+ *
+ * @param manifestationId - Manifestation entity ID.
+ * @returns TanStack Mutation result object.
+ */
+export function useDeleteSemanticLink(manifestationId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (linkId: number) => {
+      await apiClient.delete(`/manifestations/${manifestationId}/semantic-links/${linkId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.semanticLinks(manifestationId) });
+    },
   });
 }
 

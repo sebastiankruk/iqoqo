@@ -21,6 +21,7 @@ Handles public collection feeds, item grids, shared collection tokens, and sitem
 import datetime
 from typing import Any
 
+import sqlalchemy as sa
 from flask import Response, current_app, jsonify, request, stream_with_context
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
@@ -520,9 +521,22 @@ def get_shared_collection(token: str):
     filters = collection.filters
 
     if "status" in filters:
-        # The frontend sends 'status' which could map to either Item.status or Item.collection_status
+        # 'status' maps to either Item.status or Item.collection_status.
+        #
+        # The value may be a single status or a list of them. It is a list
+        # whenever the sharer had several statuses selected on /collection,
+        # which its filters allow -- and the share dialog used to pass only
+        # statuses[0], silently publishing a link to a subset of what was on
+        # screen. Accepting both shapes keeps every already-shared link working
+        # while making the multi-status case mean what the sharer intended.
         status_val = filters["status"]
-        query = query.where(or_(Item.status == status_val, Item.collection_status == status_val))
+        statuses = status_val if isinstance(status_val, list) else [status_val]
+        statuses = [s for s in statuses if isinstance(s, str) and s]
+        if statuses:
+            query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+        else:
+            # A malformed value must not widen the link to the whole library.
+            query = query.where(sa.false())
 
     if "tags" in filters:
         # tags array maps to Expression.content_type

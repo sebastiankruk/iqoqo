@@ -90,3 +90,20 @@ describe("ItemHeader", () => {
     expect(screen.queryByText("Book")).not.toBeInTheDocument();
   });
 });
+
+describe("ItemHeader identifier fallback", () => {
+  it("falls back to the OCR capitalised ISBN key", () => {
+    // app/utils/vision.py:300-324 returns Title/Authors/ISBN/Year capitalised,
+    // while provider adapters write lowercase. Both must resolve.
+    render(<ItemHeader item={{ ...mockItem, isbn: undefined, manifestation_meta: { ISBN: "9780261102217" } }} />);
+    expect(screen.getByText("9780261102217")).toBeInTheDocument();
+  });
+
+  it("prefers lowercase isbn over the capitalised spelling", () => {
+    render(
+      <ItemHeader item={{ ...mockItem, isbn: undefined, manifestation_meta: { isbn: "lowercase", ISBN: "CAPITAL" } }} />
+    );
+    expect(screen.getByText("lowercase")).toBeInTheDocument();
+    expect(screen.queryByText("CAPITAL")).not.toBeInTheDocument();
+  });
+});

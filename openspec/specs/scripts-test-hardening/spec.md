@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require the operational scripts that CI depends on to carry their own tests, so a change to `validate_yaml.py`, `sync_version.py` or the changelog JSON dialect helper is caught by the script suite instead of by a downstream job.
+
+## Requirements
 
 ### Requirement: validate_yaml.py has unit and integration test coverage
 

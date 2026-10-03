@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Record the test-stability fixes from the v0.8.x review: E2E screenshots wait on a stable state rather than a fixed delay, and the Allegro OAuth device flow is covered by component tests.
+
+## Requirements
 
 ### Requirement: E2E screenshot wait state stability
 Playwright E2E tests in `ux_audit.spec.ts` SHALL use `networkidle` wait state for screenshots instead of `domcontentloaded`, and SHALL intercept image network requests (`**/*.jpg`) with mock image buffers to prevent external network flakiness.

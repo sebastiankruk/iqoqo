@@ -19,16 +19,16 @@ import hmac
 import json
 import logging
 import os
-from io import BytesIO
+from collections.abc import Iterator
+from datetime import UTC, datetime
 
-from flask import g, jsonify, make_response, request, send_file, send_from_directory
+from flask import Response, g, jsonify, make_response, request, send_from_directory, stream_with_context
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import admin_required, optional_auth, require_auth
 from app.api.filters import parse_csv_param
 from app.config import Config
-from app.core.cache import cache
 from app.core.data_manager import DataManager
 from app.core.limiter import limiter
 from app.core.shacl_service import validate_rdf_string
@@ -166,30 +166,19 @@ def get_system_status():
 @api_bp.route("/stats", methods=["GET"])
 @require_auth
 def get_dashboard_stats():
+    """Return aggregate counts for the caller's dashboard.
+
+    ``scope=global`` switches to instance-wide totals and is restricted by the route's
+    permission; otherwise the counts are the caller's own."""
     scope = request.args.get("scope", "personal")
     owner_id = getattr(g, "user_id", None) if scope != "global" else None
     stats = DataManager.get_stats(owner_id=owner_id)
     return jsonify({"success": True, "data": stats, "error": None})
 
 
-def make_facets_cache_key():
-    """Generate a deterministic cache key for faceted stats.
-
-    Normalizes query parameter ordering to prevent Redis cache key
-    fragmentation (e.g., ``?a=1&b=2`` and ``?b=2&a=1`` produce the same key).
-    """
-    from urllib.parse import parse_qsl, urlencode, urlparse
-
-    user_id = getattr(g, "user_id", "anon")
-    parsed = urlparse(request.full_path)
-    sorted_params = urlencode(sorted(parse_qsl(parsed.query)))
-    return f"stats_facets:{user_id}:{parsed.path}?{sorted_params}"
-
-
 @api_bp.route("/stats/facets", methods=["GET"])
 @optional_auth
 @limiter.limit("60 per minute")
-@cache.cached(timeout=300, key_prefix=make_facets_cache_key)  # type: ignore[arg-type]
 def get_faceted_stats():
     """Return cross-filtered per-facet counts for the faceted navigation sidebar.
 
@@ -200,6 +189,11 @@ def get_faceted_stats():
 
     The ``view`` param controls the FRBR level at which counts are aggregated:
     ``items``, ``manifestations``, ``expressions``, or ``works``.
+
+    Caching lives in :meth:`DataManager.get_faceted_stats`, which owns the
+    normalized, user-scoped cache key and the invalidation hooks.  Caching at
+    the view layer instead would key on raw query strings and could not be
+    invalidated when an item is created, deleted or transferred.
     """
     scope = request.args.get("scope", "user")
     view = request.args.get("view", "items")
@@ -215,6 +209,8 @@ def get_faceted_stats():
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    lod_authority = request.args.get("lod_authority")
+    lod_status = request.args.get("lod_status")
 
     category_list = parse_csv_param(category_str)
     fmt_list_raw = parse_csv_param(fmt_str)
@@ -243,6 +239,8 @@ def get_faceted_stats():
         missing_id=missing_id,
         view=view,
         ownership=ownership_list,
+        lod_authority=lod_authority,
+        lod_status=lod_status,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 
@@ -281,6 +279,7 @@ def get_global_stats():
 @require_auth
 @admin_required
 def get_stats():
+    """Return instance-wide catalogue statistics."""
     stats = DataManager.get_stats()
     return jsonify(stats)
 
@@ -289,20 +288,39 @@ def get_stats():
 @require_auth
 @admin_required
 def export_data():
-    try:
-        data = DataManager.export_all()
-        output = BytesIO()
-        output.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
-        output.seek(0)
-        return send_file(output, mimetype="application/json", as_attachment=True, download_name=f"iqoqo_export_{data['exported_at']}.json")
-    except (OSError, ValueError, TypeError) as e:
-        return jsonify({"error": str(e)}), 500
+    """Stream the full catalog export as incrementally encoded JSON.
+
+    Chunks are emitted as they are produced rather than buffering the whole
+    catalog in memory, so peak memory stays constant regardless of catalog
+    size.  ``stream_with_context`` keeps the request context (and therefore the
+    database session) alive for the lifetime of the stream.
+    """
+    exported_at = datetime.now(UTC).isoformat()
+    filename = f"iqoqo_export_{exported_at}.json"
+
+    def _generate() -> Iterator[str]:
+        try:
+            yield from DataManager.stream_export_all()
+        except (SQLAlchemyError, DBAPIError):
+            # The response is already committed and partially written, so an
+            # error cannot be signalled with a status code.  Abort the stream
+            # so the client sees truncated JSON and can retry, and log for the
+            # operator.
+            logger.exception("Streaming catalog export failed")
+            raise
+
+    response = Response(stream_with_context(_generate()), mimetype="application/json")
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Exports are point-in-time snapshots; never let a proxy cache one.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api_bp.route("/admin/import", methods=["POST"])
 @require_auth
 @admin_required
 def import_data():
+    """Import a data file into the instance."""
     try:
         clear_existing = request.args.get("clear_existing", "false").lower() == "true"
 
@@ -339,6 +357,10 @@ def import_data():
 @require_auth
 @admin_required
 def clear_data():
+    """Purge instance data.
+
+    Irreversible, so it requires the admin permission and an explicit confirmation
+    flag in the request body."""
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return invalid_json_payload_response()

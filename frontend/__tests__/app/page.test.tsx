@@ -129,3 +129,72 @@ describe("Dashboard RSS Feed Integration", () => {
     expect(rssLink.getAttribute("target")).toBe("_blank");
   });
 });
+
+// ---------------------------------------------------------------------------
+// C18 3.7 (MOD-FE_UI-03): the stats strip must reserve its layout while loading
+//
+// GlobalStats returned null while its fetch was in flight, so the strip
+// appeared only once data landed and pushed everything below it down --
+// Cumulative Layout Shift on the landing page, above the fold.
+// ---------------------------------------------------------------------------
+
+describe("GlobalStats loading placeholder", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Render the landing page with the stats hook pinned to a fixed outcome.
+   *
+   * @param stats - Value for useGlobalStats().data.
+   * @param isLoading - Value for useGlobalStats().isLoading.
+   * @returns The testing-library render result.
+   */
+  function renderWithStats(stats: unknown, isLoading: boolean) {
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: null, isLoading: false } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useGlobalStats").mockReturnValue({ data: stats, isLoading } as unknown as ReturnType<
+      typeof hooks.useGlobalStats
+    >);
+    vi.spyOn(hooks, "useRecentManifestations").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useRecentManifestations
+    >);
+    return renderWithQueryClient(<DashboardPage />);
+  }
+
+  it("renders a placeholder grid rather than nothing while loading", () => {
+    renderWithStats(undefined, true);
+
+    // The regression this guards: a null render means zero reserved height.
+    expect(screen.getByTestId("global-stats-skeleton")).toBeInTheDocument();
+    expect(screen.queryByTestId("global-stats-skeleton")).not.toBeNull();
+  });
+
+  it("reserves four slots, matching the four real stat cards", () => {
+    renderWithStats(undefined, true);
+
+    // Works / Manifestations / Items / Curators. A mismatched count would shift
+    // the layout in the other direction, so pin it to the real grid.
+    expect(screen.getAllByTestId("skeleton").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps the placeholder hidden from assistive technology", () => {
+    const { container } = renderWithStats(undefined, true);
+    const grid = screen.getByTestId("global-stats-skeleton");
+
+    // A screen reader announcing four empty cards mid-load is worse than
+    // announcing nothing, so the boxes are aria-hidden and the real text
+    // replaces them wholesale.
+    expect(grid).toHaveAttribute("aria-hidden", "true");
+    expect(container.textContent).not.toContain("Works");
+  });
+
+  it("replaces the placeholder with real values once data arrives", () => {
+    renderWithStats({ works: 10, manifestations: 20, items: 30, users: 5 }, false);
+
+    expect(screen.queryByTestId("global-stats-skeleton")).not.toBeInTheDocument();
+    expect(screen.getByText("Works")).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+  });
+});

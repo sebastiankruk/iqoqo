@@ -13,11 +13,21 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Cover resolution, storage and the background generation pipeline.
+
+Owns the tiered cover strategy -- user photo, direct URL, provider APIs, LLM
+generation, and finally a PIL placeholder -- plus the shared cache in front of
+it. The pipeline is a single entry point so every caller (API, ingest, scripts)
+gets the same fallback behaviour."""
+
+import dataclasses
 import hashlib
 import io
 import logging
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -32,7 +42,7 @@ from app.db.models import Manifestation
 from app.utils.http_client import SSRFError, is_safe_url, safe_get
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.isbn import canonicalize_isbn
-from app.utils.llm_covers import apply_corner_watermark, fetch_llm_cover
+from app.utils.llm_covers import CoverRequest, apply_corner_watermark, fetch_llm_cover
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +394,7 @@ def _fetch_musicbrainz_cover(barcode: str) -> tuple[str, str] | None:
     """Query MusicBrainz by barcode, download front cover from Cover Art Archive."""
     url = f"https://musicbrainz.org/ws/2/release/?query=barcode:{barcode}&fmt=json"
     try:
-        with safe_get(url, timeout=10, headers={"User-Agent": "iqoqo/0.7.1 ( dev@kruk.me )"}) as resp:
+        with safe_get(url, timeout=10, headers={"User-Agent": f"iqoqo/{Config.VERSION} ( dev@kruk.me )"}) as resp:
             if resp.status_code != 200:
                 return None
             releases = resp.json().get("releases", [])
@@ -438,18 +448,59 @@ def _fetch_igdb_cover(barcode: str) -> tuple[str, str] | None:
     return download_direct_url(barcode, meta["cover_url"], "api_igdb", suffix="igdb")
 
 
+@dataclass(frozen=True)
+class CoverJob:
+    """The optional half of a cover job, shared by the pipeline and its launcher.
+
+    ``manifestation_id``, ``identifier``, ``title`` and ``author`` stay
+    positional: they identify the job, and every call site passes the same
+    handful of values for them.
+
+    Everything else used to be a run of optional parameters, and the two
+    functions that consumed them had *different* sets -- ``process_cover_pipeline``
+    took ``legacy_source_only`` and a ``_tag`` that the launcher did not. That
+    asymmetry is why this is one dataclass rather than two signatures: the
+    launcher can now pass whatever the pipeline understands, and the pipeline's
+    real contract is visible in one place.
+
+    ``_tag`` is retained because it is still passed by some script call sites;
+    it is documented as ignored.
+    """
+
+    user_id: str = "system"
+    llm_permissions: dict[str, bool] | None = None
+    user_image_path: str | None = None
+    description: str = ""
+    genre: str = ""
+    _tag: str = ""
+    legacy_source_only: bool = False
+
+
+def _cover_job(job: "CoverJob | None", kwargs: dict[str, Any]) -> CoverJob:
+    """Build a :class:`CoverJob` from an explicit value or legacy kwargs.
+
+    A typo'd field raises rather than being ignored. Silently dropping
+    ``legacy_source_only`` would look like a successful run while taking the
+    opposite code path.
+    """
+    if job is not None:
+        return job
+    if not kwargs:
+        return CoverJob()
+    unknown = set(kwargs) - {f.name for f in dataclasses.fields(CoverJob)}
+    if unknown:
+        raise TypeError(f"unexpected cover job fields: {sorted(unknown)}")
+    return CoverJob(**kwargs)
+
+
 def process_cover_pipeline(
     manifestation_id: int,
     identifier: str,
     title: str,
     author: str,
-    llm_permissions: dict[str, bool],
-    user_id: str = "system",
-    user_image_path: str | None = None,
-    description: str = "",
-    genre: str = "",
-    _tag: str = "",  # pylint: disable=unused-argument
-    legacy_source_only: bool = False,
+    llm_permissions: dict[str, bool] | None = None,
+    job: CoverJob | None = None,
+    **kwargs: Any,
 ):
     """
     The single cover-generation pipeline.
@@ -461,7 +512,18 @@ def process_cover_pipeline(
 
     When ``legacy_source_only`` is true, only an allowlisted legacy direct URL
     is attempted; provider fallbacks and generated covers are disabled.
+
+    The optional inputs are accepted either as a :class:`CoverJob` or as
+    individual keyword arguments, so existing call sites keep working.
     """
+    job = _cover_job(job, kwargs)
+    llm_permissions = job.llm_permissions if llm_permissions is None else llm_permissions
+    user_id = job.user_id
+    user_image_path = job.user_image_path
+    description = job.description
+    genre = job.genre
+    legacy_source_only = job.legacy_source_only
+
     from flask import current_app, has_app_context
 
     if has_app_context():
@@ -556,10 +618,12 @@ def process_cover_pipeline(
                     title,
                     author,
                     user_id,
-                    description,
-                    genre,
-                    format_type=format_type,
-                    allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
+                    CoverRequest(
+                        description=description,
+                        genre=genre,
+                        format_type=format_type,
+                        allow_cloud_llm=llm_permissions.get("allow_cloud_llm", False),
+                    ),
                 )
                 if llm_result:
                     assert isinstance(llm_result[0], str)
@@ -574,8 +638,6 @@ def process_cover_pipeline(
                 local_cover_url, source = result
 
         # Update DB
-        from typing import Any
-
         updates: dict[str, Any] = {"cover_status_updated_at": datetime.now(UTC).isoformat()}
 
         if local_cover_url:
@@ -619,9 +681,8 @@ def start_cover_processing(
     author: str,
     user_id: str = "system",
     llm_permissions: dict[str, bool] | None = None,
-    user_image_path: str | None = None,
-    description: str = "",
-    genre: str = "",
+    job: CoverJob | None = None,
+    **kwargs: Any,
 ) -> str | None:
     """Fires off the background executor using the centralized task pool.
 
@@ -630,17 +691,20 @@ def start_cover_processing(
             Callers should treat None as a deferred/unavailable state and still
             return a success response — the data has been saved even without the task.
     """
+    job = _cover_job(job, kwargs)
+    if llm_permissions is not None:
+        job = dataclasses.replace(job, llm_permissions=llm_permissions)
+    if user_id != "system":
+        job = dataclasses.replace(job, user_id=user_id)
+
     return submit_task(
         process_cover_pipeline,
         manifestation_id,
         identifier,
         title,
         author,
-        llm_permissions or {},
-        user_id=user_id,
-        user_image_path=user_image_path,
-        description=description,
-        genre=genre,
+        job.llm_permissions or {},
+        job=job,
     )
 
 

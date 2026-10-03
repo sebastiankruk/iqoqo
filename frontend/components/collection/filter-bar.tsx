@@ -33,7 +33,17 @@ function getFormatLabel(formatId: string): string | undefined {
 }
 
 /** Filter type */
-export type FilterType = "status" | "category" | "format" | "tag" | "collection" | "genre" | "publisher" | "ownership";
+export type FilterType =
+  | "status"
+  | "category"
+  | "format"
+  | "tag"
+  | "collection"
+  | "genre"
+  | "publisher"
+  | "ownership"
+  | "lod_authority"
+  | "lod_status";
 
 /** Active filter */
 export interface ActiveFilter {
@@ -90,6 +100,17 @@ export function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "genre") return `Genre: ${filter.value}`;
   if (filter.type === "publisher") return `Publisher: ${filter.value}`;
   if (filter.type === "ownership") return `Ownership: ${filter.value === "owned" ? "Owned" : "Not Owned"}`;
+  if (filter.type === "lod_authority") {
+    const authMap: Record<string, string> = {
+      dbpedia: "DBpedia",
+      geonames: "GeoNames",
+      wordnet: "WordNet",
+    };
+    return `LOD: ${authMap[filter.value.toLowerCase()] ?? filter.value}`;
+  }
+  if (filter.type === "lod_status") {
+    return `LOD: ${filter.value === "linked" ? "Linked" : "Unlinked"}`;
+  }
   return filter.value;
 }
 
@@ -111,6 +132,8 @@ function chipColor(filter: ActiveFilter): string {
     return "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-500 dark:border-purple-500/20";
   if (filter.type === "publisher")
     return "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-500 dark:border-orange-500/20";
+  if (filter.type === "lod_authority" || filter.type === "lod_status")
+    return "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20";
   return "bg-secondary text-secondary-foreground border-border";
 }
 

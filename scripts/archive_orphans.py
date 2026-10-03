@@ -36,9 +36,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from app.config import Config
-from app.db.models import Manifestation
+from app.db.models import Manifestation, db
 
 COVERS_DIR = os.path.join(Config.BASE_DIR, "app", "static", "covers")
+
+# MOD-OPS-16: rows fetched per server-side cursor batch. 1000 keeps each
+# round-trip small enough to stay responsive while avoiding the per-row
+# round-trip cost of a batch size of 1.
+STREAM_BATCH_SIZE = 1000
 
 
 def archive_orphaned_covers(app=None):
@@ -52,8 +57,25 @@ def archive_orphaned_covers(app=None):
         app = create_app()
 
     with app.app_context():
-        # Collect all basenames referenced by the DB
-        valid_paths = {os.path.basename(m.cover_url) for m in Manifestation.query.filter(Manifestation.cover_url.isnot(None)).all()}
+        # MOD-OPS-16: stream the candidate set in chunks.
+        #
+        # `.all()` instantiated one Manifestation object per row — the whole
+        # table plus per-row ORM overhead in memory simultaneously. On a large
+        # library that is hundreds of thousands of objects for a maintenance
+        # script whose only output is a set of basenames, and the Oracle Free
+        # Tier boxes iqoqo targets have 1 GB of RAM. `yield_per` additionally
+        # asks the driver to fetch rows in batches rather than letting the
+        # client buffer the entire result set.
+        #
+        # Only the `cover_url` column is selected, so no whole entities cross
+        # the wire and none are constructed.
+        valid_paths = {
+            os.path.basename(row[0])
+            for row in db.session.execute(
+                db.select(Manifestation.cover_url).where(Manifestation.cover_url.isnot(None)).execution_options(yield_per=STREAM_BATCH_SIZE)
+            )
+            if row[0]
+        }
 
         archived_count = 0
         for filename in os.listdir(COVERS_DIR):
@@ -91,22 +113,45 @@ def schedule_missing_covers(app=None):
         app = create_app()
 
     with app.app_context():
-        all_manifestations = Manifestation.query.all()
+        # MOD-OPS-16: two passes instead of one `.all()`.
+        #
+        # Pass 1 streams only the (id, cover_url) pairs in batches, so the
+        # resident set is bounded by STREAM_BATCH_SIZE rows rather than the
+        # whole table. Deliberately *not* done with a single `yield_per` query
+        # consumed lazily: pass 2 writes to the database via
+        # process_cover_pipeline, and a commit invalidates any server-side
+        # cursor still being iterated — with a lazy cursor that surfaces as a
+        # mid-loop error or a silently truncated work list.
+        #
+        # Collecting scalar ids first keeps the memory bound and makes the
+        # snapshot explicit, so the work list cannot shift underneath us.
+        candidates = list(
+            db.session.execute(db.select(Manifestation.id, Manifestation.cover_url).execution_options(yield_per=STREAM_BATCH_SIZE))
+        )
 
         missing = []
-        for manif in all_manifestations:
-            if manif.cover_url is None:
-                missing.append(manif)
+        for manif_id, cover_url in candidates:
+            if cover_url is None:
+                missing.append(manif_id)
                 continue
             # Resolve absolute path from the "/static/covers/<file>" URL stored in DB
-            abs_path = os.path.join(Config.BASE_DIR, "app", manif.cover_url.lstrip("/"))
+            abs_path = os.path.join(Config.BASE_DIR, "app", cover_url.lstrip("/"))
             if not os.path.exists(abs_path):
-                missing.append(manif)
+                missing.append(manif_id)
 
         print(f"Found {len(missing)} manifestation(s) with missing covers.")
 
         scheduled = 0
-        for manif in missing:
+        for manif_id in missing:
+            # Re-read each row individually. This is a primary-key lookup, so
+            # it is cheap, and it guarantees a fresh object that reflects any
+            # state written by the previous pipeline run rather than an
+            # identity-map instance pinned to the snapshot.
+            manif = db.session.get(Manifestation, manif_id)
+            if manif is None:
+                # Deleted between the scan and now; nothing left to fix.
+                continue
+
             isbn = manif.isbn13 or str(manif.id)
 
             work = manif.expression.work if (manif.expression and manif.expression.work) else None

@@ -14,6 +14,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Issues an admin API token for a named user.
+
+Writes only the token hash to the database and prints the plaintext value once,
+so a leaked database does not yield usable tokens."""
+
 import os
 import sys
 
@@ -31,6 +36,10 @@ from app.db.models import User, db
 
 
 def generate_token(email):
+    """Issue an admin API token for the given email.
+
+    Stores only the hash and prints the plaintext once, so a leaked database row
+    does not yield a usable token."""
     app = create_app()
     with app.app_context():
         user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()

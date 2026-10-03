@@ -18,13 +18,15 @@
 Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 """
 
+import dataclasses
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import bindparam, text
 
-from app.api.filters import apply_genre_filter
+from app.api.filters import CatalogFilterBuilder
 from app.db import db
 from app.db.models import Expression, Item, Manifestation, Work
 
@@ -55,7 +57,45 @@ def sanitize_search_query(q: str) -> str:
     return q.translate(str.maketrans("’‘ʼ", "'''")).strip()
 
 
+@dataclass(frozen=True)
+class ItemSearchFilters:
+    """The filter set shared by the item-search backends.
+
+    These fourteen parameters were previously passed individually to
+    ``_pg_item_fts`` and ``_ilike_item_search``. A sixteen-parameter positional
+    run is where a call site stops being readable: ``borrowed_only`` and
+    ``missing_cover`` are both ``bool``, so passing one where the other belongs
+    is invisible to a type checker and produces wrong rows rather than an error.
+
+    Grouping them also stops the two backends drifting. When the filter list
+    lived in two signatures, adding one to the PostgreSQL path and forgetting
+    the SQLite path was a silent behaviour split between deployments.
+
+    Frozen so a filter set cannot be mutated while a query is being built.
+    """
+
+    statuses: list[str] | None = None
+    category: list[str] | None = None
+    format_filter: list[str] | None = None
+    borrowed_only: bool = False
+    missing_cover: bool = False
+    missing_id: bool = False
+    tags: list[str] | None = None
+    collections: list[str] | None = None
+    genres: list[str] | None = None
+    publishers: list[str] | None = None
+    lod_authority: str | None = None
+    lod_status: str | None = None
+
+
 class SearchService:
+    """Entry points for item and manifestation search.
+
+    Dispatches to PostgreSQL full-text search when the dialect and the filter set
+    allow it, and to ILIKE otherwise. The two backends must return equivalent
+    results for the same query; :class:`ItemSearchFilters` is shared between them
+    so a filter cannot be added to one and forgotten in the other."""
+
     @staticmethod
     def search_manifestations(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         q: str,
@@ -72,13 +112,17 @@ class SearchService:
         statuses: list[str] | None = None,
         ownership: list[str] | None = None,
         user_id: Any = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         q = sanitize_search_query(q)
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers or statuses or ownership):
+        if db.engine.dialect.name == "postgresql" and not (
+            tags or collections or genres or publishers or statuses or ownership or lod_authority or lod_status
+        ):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
@@ -100,55 +144,59 @@ class SearchService:
             statuses=statuses,
             ownership=ownership,
             user_id=user_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
         )
 
     @staticmethod
-    def search_items(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def search_items(
         q: str,
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
-        tags: list[str] | None = None,
-        collections: list[str] | None = None,
-        genres: list[str] | None = None,
-        publishers: list[str] | None = None,
+        filters: ItemSearchFilters | None = None,
+        **kwargs: Any,
     ) -> tuple[int, list[dict]]:
-        """Returns (total_count, list_of_item_data_mappings) ordered by relevance."""
+        """Returns (total_count, list_of_item_data_mappings) ordered by relevance.
+
+        Args:
+            q: The free-text query, sanitised below.
+            user_id: Owner whose items are searched.
+            limit: Maximum rows to return.
+            offset: Row offset for pagination.
+            filters: The filter set. Built from *kwargs* when omitted, so
+                existing keyword call sites keep working unchanged while new
+                callers can pass a typed value.
+            **kwargs: Any :class:`ItemSearchFilters` field, accepted for
+                backwards compatibility with the pre-DTO signature.
+        """
+        if filters is None:
+            # The field names are checked explicitly rather than filtered out: a
+            # typo'd filter must raise, because silently ignoring
+            # ``missing_covr=True`` would widen the result set and look correct.
+            unknown = set(kwargs) - {f.name for f in dataclasses.fields(ItemSearchFilters)}
+            if unknown:
+                raise TypeError(f"search_items() got unexpected keyword arguments: {sorted(unknown)}")
+            filters = ItemSearchFilters(**kwargs)
+
         q = sanitize_search_query(q)
         if not q:
             return 0, []
 
-        if db.engine.dialect.name == "postgresql" and not (tags or collections or genres or publishers):
+        # Full-text search cannot express the facet filters, so a query carrying
+        # any of them is routed to ILIKE rather than silently dropping them.
+        has_facets = bool(
+            filters.tags or filters.collections or filters.genres or filters.publishers or filters.lod_authority or filters.lod_status
+        )
+
+        if db.engine.dialect.name == "postgresql" and not has_facets:
             try:
-                return SearchService._pg_item_fts(
-                    q, user_id, limit, offset, statuses, category, format_filter, borrowed_only, missing_cover, missing_id
-                )
+                return SearchService._pg_item_fts(q, user_id, limit, offset, filters)
             except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as exc:
                 logger.exception("PostgreSQL FTS failed for items, falling back to ILIKE", exc_info=exc)
                 db.session.rollback()
 
-        return SearchService._ilike_item_search(
-            q,
-            user_id,
-            limit,
-            offset,
-            statuses,
-            category,
-            format_filter,
-            borrowed_only,
-            missing_cover,
-            missing_id,
-            tags=tags,
-            collections=collections,
-            genres=genres,
-            publishers=publishers,
-        )
+        return SearchService._ilike_item_search(q, user_id, limit, offset, filters)
 
     @staticmethod
     def _pg_manifestation_fts(
@@ -233,6 +281,8 @@ class SearchService:
         statuses: list[str] | None = None,
         ownership: list[str] | None = None,
         user_id: Any = None,
+        lod_authority: str | None = None,
+        lod_status: str | None = None,
     ) -> tuple[int, list[int]]:
         pattern = f"%{q}%"
         base_query = (
@@ -241,94 +291,23 @@ class SearchService:
             .join(Work, Expression.work_id == Work.id)
             .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
         )
-        if ownership and user_id:
-            ownership_conditions = []
-            owned_exists = db.session.query(Item.id).filter(Item.manifestation_id == Manifestation.id, Item.owner_id == user_id).exists()
-            if "owned" in ownership:
-                ownership_conditions.append(owned_exists)
-            if "not_owned" in ownership:
-                ownership_conditions.append(~owned_exists)
-            if ownership_conditions:
-                base_query = base_query.filter(db.or_(*ownership_conditions))
-        if category:
-            base_query = base_query.filter(Expression.content_type.in_(category))
-        if format_filter:
-            base_query = base_query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
-        if missing_cover:
-            base_query = base_query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            base_query = base_query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                    db.or_(
-                        Manifestation.meta["catalog_number"].as_string().is_(None),
-                        Manifestation.meta["catalog_number"].as_string() == "",
-                    ),
-                )
-            )
-
-        # Apply taxonomy filters
-        has_item_joined = False
-        if tags:
-            from app.db.models import ItemTag, Tag
-
-            if not has_item_joined:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            base_query = base_query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
-            base_query = base_query.filter(db.or_(*tags_conditions))
-
-        if collections:
-            from app.db.models import UserCollection, UserCollectionItem
-
-            if not has_item_joined:
-                base_query = base_query.join(Item, Manifestation.id == Item.manifestation_id)
-                has_item_joined = True
-            base_query = base_query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
-            base_query = base_query.filter(db.or_(*coll_conditions))
-            if user_id:
-                base_query = base_query.filter(UserCollection.owner_id == user_id)
-
-        if genres:
-            base_query = apply_genre_filter(base_query, genres)
-
-        if publishers:
-            pubs_conditions = []
-            for p in publishers:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            base_query = base_query.filter(db.or_(*pubs_conditions))
-
-        if statuses and user_id:
-            if not has_item_joined:
-                base_query = base_query.join(Item, db.and_(Manifestation.id == Item.manifestation_id, Item.owner_id == user_id))
-                has_item_joined = True
-            base_query = base_query.filter(Item.status.in_(statuses))
+        # The ILIKE path historically applied the narrower ``Item.status IN
+        # (...)`` predicate rather than the full taxonomy semantics, hence
+        # ``statuses_style="progress_only"``.
+        base_query = CatalogFilterBuilder(base_query, user_id=user_id, statuses_style="progress_only").apply(
+            category=category,
+            fmt=format_filter,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            statuses=statuses,
+            ownership=ownership,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
+        )
 
         total = base_query.count()
         result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
@@ -340,13 +319,23 @@ class SearchService:
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
+        filters: ItemSearchFilters,
     ) -> tuple[int, list[dict]]:
+        # Unpacked into locals so the raw SQL below reads as it did before the
+        # DTO. Only the first six fields are unpacked: this backend is reached
+        # only when `search_items` has established that no facet filter is set,
+        # because hand-written SQL cannot express them. Unpacking the rest
+        # would imply they are honoured here.
+        (
+            statuses,
+            category,
+            format_filter,
+            borrowed_only,
+            missing_cover,
+            missing_id,
+        ) = dataclasses.astuple(
+            filters
+        )[:6]
         catalog_prefix, inventory_prefix = _validated_schema_prefixes()
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
@@ -428,22 +417,29 @@ class SearchService:
         return total, [dict(r) for r in results]
 
     @staticmethod
-    def _ilike_item_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _ilike_item_search(
         q: str,
         user_id: Any,
         limit: int,
         offset: int,
-        statuses: list[str] | None = None,
-        category: list[str] | None = None,
-        format_filter: list[str] | None = None,
-        borrowed_only: bool = False,
-        missing_cover: bool = False,
-        missing_id: bool = False,
-        tags: list[str] | None = None,
-        collections: list[str] | None = None,
-        genres: list[str] | None = None,
-        publishers: list[str] | None = None,
+        filters: ItemSearchFilters,
     ) -> tuple[int, list[dict]]:
+        # The fallback for every filter combination, including the facet ones,
+        # so it unpacks the full DTO.
+        (
+            statuses,
+            category,
+            format_filter,
+            borrowed_only,
+            missing_cover,
+            missing_id,
+            tags,
+            collections,
+            genres,
+            publishers,
+            lod_authority,
+            lod_status,
+        ) = dataclasses.astuple(filters)
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
         matching_items_sub = (
@@ -504,45 +500,25 @@ class SearchService:
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
-        if category:
-            query = query.filter(Expression.content_type.in_(category))
-
-        if format_filter:
-            query = query.filter(Manifestation.meta["format"].as_string().in_(format_filter))
-
-        # Apply taxonomy filters
-        if tags:
-            from app.db.models import ItemTag, Tag
-
-            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags]
-            query = query.filter(db.or_(*tags_conditions))
-
-        if collections:
-            from app.db.models import UserCollection, UserCollectionItem
-
-            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections]
-            query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
-
-        if genres:
-            query = apply_genre_filter(query, genres)
-
-        if publishers:
-            pub_conds = []
-            for p in publishers:
-                p_term = f"%{p.strip()}%"
-                pub_conds.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            query = query.filter(db.or_(*pub_conds))
+        # The Item -> Manifestation -> Expression -> Work chain is already
+        # INNER-joined by the base query above, so the builder must not re-join it.
+        query = CatalogFilterBuilder(
+            query,
+            root=CatalogFilterBuilder.ROOT_ITEM,
+            user_id=user_id,
+            ensure_frbr_join=False,
+        ).apply(
+            category=category,
+            fmt=format_filter,
+            tags=tags,
+            collections=collections,
+            genres=genres,
+            publishers=publishers,
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority,
+            lod_status=lod_status,
+        )
 
         total = query.count()
         results = query.limit(limit).offset(offset).all()

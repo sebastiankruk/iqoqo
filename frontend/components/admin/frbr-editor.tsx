@@ -376,11 +376,13 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
       });
       toast.success(`Created new ${childType}`);
       setAddChildDialog({ open: false, parentLevel: null });
-      await refetch();
+      // No explicit refetch: `useAddFrbrChild` already invalidates this tree's
+      // query key on success (lib/api/hooks/admin.ts), so awaiting a refetch
+      // here would only add a second network round-trip for stale data.
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create child entity");
     }
-  }, [addChildDialog.parentLevel, tree, newChildTitle, addChild, manifestationId, refetch]);
+  }, [addChildDialog.parentLevel, tree, newChildTitle, addChild, manifestationId]);
 
   /**
    * Handles the "Escalate" action.
@@ -398,6 +400,10 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
    */
   const confirmEscalation = useCallback(async () => {
     if (!escalateDialog.level || !escalateDialog.id) return;
+    // The endpoint has no de-duplication: `create_escalation_request` inserts a
+    // fresh `pending` row per call (`app/api/social.py:455`), so a double-click
+    // files the same request twice and both land in the custodian queue.
+    if (createEscalation.isPending) return;
     try {
       await createEscalation.mutateAsync({
         level: escalateDialog.level,
@@ -677,7 +683,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
               onChange={e => setEscalationNote(e.target.value)}
               className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
-            <Button onClick={confirmEscalation}>Submit Request</Button>
+            <Button onClick={confirmEscalation} disabled={createEscalation.isPending}>
+              {createEscalation.isPending ? "Submitting…" : "Submit Request"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

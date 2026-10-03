@@ -30,7 +30,9 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
+from sqlalchemy import and_
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import foreign
 
 from app.core.iri import canonical_frbr_iri
 from app.core.taxonomy import (  # noqa: F401
@@ -85,6 +87,96 @@ EXPRESSION_KIND_LIVE_PERFORMANCE: str = "live_performance"
 #: Controlled vocabulary for :attr:`WorkExpansionLink.link_type`.
 WORK_LINK_TYPES: tuple[str, ...] = ("is_expansion_of",)
 WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
+
+#: Controlled vocabulary for :attr:`DuplicateCandidate.entity_tier`.
+#:
+#: Duplicates are detected at the two abstract FRBR tiers where consolidation is
+#: meaningful.  ``Item`` is deliberately excluded: two Items are distinct
+#: physical or digital exemplars even when they describe the same edition.
+DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "manifestation")
+
+#: Controlled vocabulary for :attr:`DuplicateCandidate.status`.
+#:
+#: ``pending``   — awaiting administrative review.
+#: ``merged``    — the pair was consolidated into a single surviving entity.
+#: ``dismissed`` — an administrator marked the pair as a false positive.
+DUPLICATE_CANDIDATE_STATUSES: tuple[str, ...] = ("pending", "merged", "dismissed")
+DUPLICATE_STATUS_PENDING: str = "pending"
+DUPLICATE_STATUS_MERGED: str = "merged"
+DUPLICATE_STATUS_DISMISSED: str = "dismissed"
+
+#: Controlled vocabulary for :attr:`DuplicateCandidate.resolution_source`.
+#:
+#: ``heuristic`` — queued by the deterministic classifier, with no probability
+#:                attached.  A heuristic ``1.0`` means "these two records share
+#:                an edition identifier", which is a far stronger claim than an
+#:                LLM's ``0.9``, so the two must not be presented alike.
+#: ``llama``     — confirmed by local LLM evaluation; ``confidence`` is then a
+#:                model-reported probability.
+DUPLICATE_RESOLUTION_SOURCES: tuple[str, ...] = ("heuristic", "llama")
+DUPLICATE_RESOLUTION_HEURISTIC: str = "heuristic"
+DUPLICATE_RESOLUTION_LLAMA: str = "llama"
+
+
+class SemanticLink(db.Model):  # type: ignore[name-defined]
+    """
+    Linked Open Data (LOD) link connecting FRBR entities to external authorities.
+
+    Supported authorities: ``dbpedia``, ``geonames``, ``wordnet``.
+    Entities mapped:
+    - ``work``: DBpedia creative works / authors, WordNet synsets
+    - ``manifestation``: GeoNames publication places, publishers, format URIs
+    - ``contributor``: DBpedia person / organisation
+    """
+
+    __tablename__ = "semantic_links"
+    __table_args__: tuple = (
+        (
+            db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
+            db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+            {"schema": _CATALOG},
+        )
+        if _CATALOG
+        else (
+            db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
+            db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+        )
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    authority = db.Column(db.String(50), nullable=False)
+    external_uri = db.Column(db.String(2048), nullable=False)
+    pref_label = db.Column(db.String(500), nullable=True)
+    confidence = db.Column(db.Float, default=1.0, nullable=False)
+    match_strategy = db.Column(db.String(50), nullable=True)
+    attributes = db.Column(db.JSON, nullable=True)
+    verified = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+    def to_dict(self) -> dict:
+        """Serialize semantic link to dictionary."""
+        return {
+            "id": self.id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "authority": self.authority,
+            "external_uri": self.external_uri,
+            "pref_label": self.pref_label,
+            "confidence": self.confidence,
+            "match_strategy": self.match_strategy,
+            "attributes": self.attributes or {},
+            "verified": self.verified,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class Work(db.Model):  # type: ignore[name-defined]
@@ -169,6 +261,23 @@ class Work(db.Model):  # type: ignore[name-defined]
         back_populates="expansion_work",
         uselist=False,
     )
+
+    semantic_links = db.relationship(
+        "SemanticLink",
+        primaryjoin=lambda: and_(
+            Work.id == foreign(SemanticLink.entity_id),
+            SemanticLink.entity_type == "work",
+        ),
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    def get_semantic_links(self, authority: str | None = None) -> list[SemanticLink]:
+        """Retrieve Work-scoped semantic links, optionally filtered by authority."""
+        links = list(self.semantic_links)
+        if authority:
+            links = [link for link in links if link.authority == authority]
+        return links
 
     @property
     def iri(self) -> str:
@@ -406,6 +515,35 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         cascade="all, delete-orphan",
     )
 
+    semantic_links = db.relationship(
+        "SemanticLink",
+        primaryjoin=lambda: and_(
+            Manifestation.id == foreign(SemanticLink.entity_id),
+            SemanticLink.entity_type == "manifestation",
+        ),
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        overlaps="semantic_links",
+    )
+
+    def get_semantic_links(
+        self,
+        include_work: bool = True,
+        authority: str | None = None,
+    ) -> list[SemanticLink]:
+        """Retrieve semantic links adhering strictly to FRBR scoping rules.
+
+        Manifestation-level links include publication places (GeoNames), publishers, formats.
+        If ``include_work`` is True and manifestation is linked to an expression/work,
+        inherited Work-level links (DBpedia creative work/authors, WordNet synsets) are included.
+        """
+        links = list(self.semantic_links)
+        if include_work and self.expression and self.expression.work:
+            links.extend(self.expression.work.semantic_links)
+        if authority:
+            links = [link for link in links if link.authority == authority]
+        return links
+
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Manifestation."""
@@ -434,7 +572,15 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    manifestation_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"), nullable=False)
+    # Indexed explicitly: PostgreSQL does not create an index for a foreign key,
+    # so without this every lookup by Manifestation -- and every ON DELETE
+    # CASCADE from one -- scanned the whole items table.
+    manifestation_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status = db.Column(db.String(50), default="want_to_read")  # see PROGRESS_STATUSES for valid values
@@ -715,8 +861,12 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
     :attr entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
     :attr entity_id: The primary key of the affected entity.
-    :attr change_type: A label such as ``"metadata_edit"``, ``"merge"``,
-        ``"duplicate_resolved"``, or ``"field_update"``.
+    :attr change_type: A label such as ``"metadata_edit"``,
+        ``"merge_work"``, ``"merge_expression"``, ``"merge_manifestation"``,
+        ``"duplicate_resolved"``, or ``"field_update"``.  Merges are labelled
+        per tier by both entry points, so one query reconstructs every merge
+        regardless of whether it came from Relation Management or the
+        duplicate-review queue.
     :attr diff: Optional JSON snapshot of the before/after field values.
     """
 
@@ -749,6 +899,119 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     actor = db.relationship("User", backref="entity_audit_logs_as_actor")
+
+
+class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
+    """
+    Review queue entry for a suspected duplicate pair at the Work or Manifestation tier.
+
+    Detection is a two-stage pipeline: cheap heuristic screening prunes the
+    catalog down to plausible pairs (see :mod:`app.core.duplicate_service`), then
+    a local LLM scores each surviving pair.  Only pairs scoring above the
+    detection threshold are persisted here as ``pending`` rows for
+    administrative review in ``/admin/duplicates``.
+
+    :attr entity_tier: Either ``"work"`` or ``"manifestation"``
+        (see :data:`DUPLICATE_ENTITY_TIERS`).
+    :attr source_id: Primary key of the first entity of the pair.  The reference
+        is intentionally *not* a real foreign key: ``entity_tier`` is
+        polymorphic, so a single column cannot point at both ``catalog.works``
+        and ``catalog.manifestations``.  This mirrors the polymorphic
+        :class:`SemanticLink` pattern.  Merge code must resolve and validate the
+        entity before acting on the id.
+    :attr target_id: Primary key of the second entity of the pair.
+    :attr confidence: Match confidence between ``0.0`` and ``1.0``.  Nullable,
+        because a candidate queued by the deterministic classifier has no
+        probability attached to it.  See :data:`DUPLICATE_RESOLUTION_SOURCES`.
+    :attr resolution_source: Which stage decided this candidate
+        (see :data:`DUPLICATE_RESOLUTION_SOURCES`).  The review UI must label a
+        heuristic score differently from an LLM one, because ``1.0`` from the
+        classifier means "shared identifier", not "99% certain".
+    :attr llm_reasoning: Verbatim rationale.  Holds the classifier's reasons
+        when no LLM was consulted.
+    :attr status: One of ``"pending"``, ``"merged"``, or ``"dismissed"``
+        (see :data:`DUPLICATE_CANDIDATE_STATUSES`).
+    """
+
+    __tablename__ = "duplicate_candidates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: See :data:`DUPLICATE_ENTITY_TIERS`.
+    entity_tier = db.Column(db.String(20), nullable=False)
+    #: Primary key of the first entity in the pair (polymorphic, see class docstring).
+    source_id = db.Column(db.Integer, nullable=False)
+    #: Primary key of the second entity in the pair (polymorphic, see class docstring).
+    target_id = db.Column(db.Integer, nullable=False)
+    #: Match probability in the closed interval ``[0.0, 1.0]``.  ``NULL`` when
+    #: the deterministic classifier queued the candidate with no score.
+    confidence = db.Column(db.Float, nullable=True, default=None)
+    #: See :data:`DUPLICATE_RESOLUTION_SOURCES`.
+    resolution_source = db.Column(
+        db.String(20), nullable=False, default=DUPLICATE_RESOLUTION_HEURISTIC, server_default=DUPLICATE_RESOLUTION_HEURISTIC
+    )
+    #: Verbatim explanation of why the pair was (or was not) judged equivalent.
+    llm_reasoning = db.Column(db.Text, nullable=True)
+    #: See :data:`DUPLICATE_CANDIDATE_STATUSES`.
+    status = db.Column(db.String(20), nullable=False, default=DUPLICATE_STATUS_PENDING)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # A pair must be registered at most once regardless of which side was
+    # discovered first.  ``LEAST``/``GREATEST`` are unavailable on SQLite, so the
+    # canonical ordering is expressed as portable scalar ``CASE`` expressions
+    # that both PostgreSQL and SQLite accept inside an index.  The expressions
+    # are inlined into ``__table_args__`` so they are not mistaken for mapped
+    # class attributes.
+    __table_args__: tuple = (
+        db.CheckConstraint(
+            f"entity_tier IN ({', '.join(repr(t) for t in DUPLICATE_ENTITY_TIERS)})",
+            name="ck_duplicate_candidates_entity_tier",
+        ),
+        db.CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in DUPLICATE_CANDIDATE_STATUSES)})",
+            name="ck_duplicate_candidates_status",
+        ),
+        db.CheckConstraint("source_id <> target_id", name="ck_duplicate_candidates_distinct_entities"),
+        db.CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_duplicate_candidates_confidence_range"),
+        db.Index("ix_duplicate_candidates_status_confidence", "status", "confidence"),
+        db.Index("ix_duplicate_candidates_tier_pair", "entity_tier", "source_id", "target_id"),
+        db.Index("ix_duplicate_candidates_resolved_by_id", "resolved_by_id"),
+        # Order-insensitive uniqueness: (5, 9) and (9, 5) collide on one pair.
+        # The CASE expressions MUST be parenthesized: PostgreSQL parses an
+        # unparenthesized expression as a column separator inside CREATE INDEX,
+        # so the unparenthesized form makes `db.create_all()` -- and therefore
+        # scripts/init_db.py -- fail outright on PostgreSQL.  This is the same
+        # DDL the v0_8_2_duplicate_candidates migration emits.
+        db.Index(
+            "uq_duplicate_candidates_pair",
+            "entity_tier",
+            db.text("(CASE WHEN source_id <= target_id THEN source_id ELSE target_id END)"),
+            db.text("(CASE WHEN source_id <= target_id THEN target_id ELSE source_id END)"),
+            unique=True,
+        ),
+        *(({"schema": _INVENTORY},) if _INVENTORY else ()),
+    )
+
+    def to_dict(self) -> dict:
+        """Serialize candidate queue fields (lifecycle, not entity metadata)."""
+        return {
+            "id": self.id,
+            "entity_tier": self.entity_tier,
+            "source_id": self.source_id,
+            "target_id": self.target_id,
+            "confidence": self.confidence,
+            "llm_reasoning": self.llm_reasoning,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolved_by_id": str(self.resolved_by_id) if self.resolved_by_id else None,
+        }
 
 
 class MetadataRefetchLog(db.Model):  # type: ignore[name-defined]

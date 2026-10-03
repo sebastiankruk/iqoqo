@@ -13,11 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Extracts the changelog section for the version being released."""
+
 import re
 import sys
 
 
 def extract_release_notes(version: str) -> None:
+    """Print the changelog section for *version* to stdout."""
     try:
         with open("docs/CHANGELOG.md", encoding="utf-8") as f:
             content = f.read()

@@ -52,8 +52,23 @@ COPYRIGHT_HEADER = """# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 """
 
 
+# Emitted into the generated Python module so a regenerated file is identical to
+# the committed one. Without it the freshness test fails on every regeneration,
+# and the only "fixes" are to stop documenting the module or to hand-edit a file
+# marked DO NOT EDIT.
+PYTHON_MODULE_DOCSTRING = (
+    '"""Ontology-derived vocabularies and the lookup-strategy map.\n'
+    "\n"
+    "Term lists come from the OWL/SHACL documents under docs/ontology rather than\n"
+    "being hand-maintained, so a term added to the ontology is usable by the\n"
+    "application without a matching Python edit.\n"
+    '"""'
+)
+
+
 def generate_python(data: dict) -> str:
-    py_code = [COPYRIGHT_HEADER, ""]
+    """Render the taxonomy tables as a Python module."""
+    py_code = [COPYRIGHT_HEADER, PYTHON_MODULE_DOCSTRING, ""]
 
     # Categories
     py_code.append("class MediaCategory:")
@@ -139,6 +154,7 @@ def generate_python(data: dict) -> str:
 
 
 def generate_typescript(data: dict) -> str:
+    """Render the taxonomy tables as a TypeScript module."""
     ts_header = COPYRIGHT_HEADER.replace("#", "//").replace("// THIS FILE", "\n// THIS FILE")
     ts_code = [ts_header, ""]
 
@@ -229,6 +245,11 @@ def generate_typescript(data: dict) -> str:
 
 
 def generate_turtle(data: dict) -> str:
+    """Render the taxonomy tables as Turtle.
+
+    The same data is emitted in three formats because it is consumed by the Python
+    application, the frontend, and the published OWL ontology; generating all three
+    from one source is what keeps them in agreement."""
     ttl_code = [
         COPYRIGHT_HEADER.replace("#", "#"),
         "@prefix : <https://iqoqo.org/ontology#> .",
