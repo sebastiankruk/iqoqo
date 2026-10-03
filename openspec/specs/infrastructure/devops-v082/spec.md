@@ -16,7 +16,13 @@ The production container image build process MUST employ multi-stage compilation
 - **THEN** the runtime installs pre-built wheels without a package index, so it cannot silently compile a source distribution
 - **THEN** the build artifacts are transferred to the runtime stage without entering an image layer
 
-The numeric size target is deliberately not stated here. C17 measured 826.7 MB against its own `<500MB` requirement, because `ImageHash` pulls in `scipy` and `numpy` (167 MB, 20% of the image) for a single function. Publishing an unmet figure as a requirement would make the specification actively wrong; the target and the work required to meet it are tracked by the `container-image-size-target` change.
+The numeric size target is deliberately not stated here, because it is enforced
+rather than asserted. C17 measured 826.7 MB against its own `<500MB` requirement,
+which made this specification actively wrong; publishing an unmet figure as a
+requirement is exactly what allowed it to go unmet for a release without anything
+failing. The cause was `ImageHash`, which pulled in `scipy` and `numpy` for a
+single function call. That dependency has since been removed, and the budget is
+now enforced at build time by `infrastructure/container-image-size`.
 
 ### Requirement: Hardened Production Nginx Configuration Template
 The deployment assets MUST provide a production-ready `deploy/nginx.conf.example` reverse-proxy configuration incorporating strict security headers, modern TLS termination, and request rate limiting.
