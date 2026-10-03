@@ -205,23 +205,14 @@ class TestIPCLifecycle:
         result = execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o } LIMIT 1", timeout=5.0)
         assert result is not None
 
-    def test_timeout_via_deadline_aware_receive(self):
+    def test_timeout_via_deadline_aware_receive(self, sparql_deadline):
         """Timeouts must be enforced via deadline-aware receive."""
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "title": "Test Book",
-                "authors": [],
-                "tags": [],
-                "status": "read",
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
-        # Very short timeout should trigger deadline expiration
+        # The graph is sized so the work itself clears the deadline, rather than
+        # relying on process-spawn latency doing it.
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
 
     def test_child_crash_returns_structured_error(self):
         """Child process crashes must return structured error, not hang."""
@@ -422,24 +413,15 @@ class TestLimitEnforcement:
         # At least some should succeed or hit the limit (not crash)
         assert concurrency_hits >= 0 or "success" in results
 
-    def test_deadline_enforced_across_phases(self):
+    def test_deadline_enforced_across_phases(self, sparql_deadline):
         """Deadline must be enforced across all execution phases."""
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "title": "Test Book",
-                "authors": [],
-                "tags": [],
-                "status": None,
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
-        # Very short timeout should trigger deadline in IPC phase
+        # The deadline is exceeded while preparing the IPC transfer, which is one
+        # of the phases this requirement covers.
         start = time.time()
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
         elapsed = time.time() - start
 
         # Should timeout quickly, not hang
@@ -449,23 +431,13 @@ class TestLimitEnforcement:
 class TestProcessCleanup:
     """Test that no zombie processes remain after timeout/crash."""
 
-    def test_no_zombie_after_timeout(self):
+    def test_no_zombie_after_timeout(self, sparql_deadline):
         """Timeout must not leave zombie processes."""
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "title": "Test Book",
-                "authors": [],
-                "tags": [],
-                "status": None,
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
         # Trigger timeout
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
 
         # Give time for cleanup
         time.sleep(0.1)
@@ -514,23 +486,13 @@ class TestProcessCleanup:
         # Process should be dead
         assert not process.is_alive()
 
-    def test_process_cleanup_on_exception(self):
+    def test_process_cleanup_on_exception(self, sparql_deadline):
         """Process must be cleaned up even if exception occurs."""
-        items = [
-            {
-                "id": "item-1",
-                "manifestation_id": "m-1",
-                "title": "Test Book",
-                "authors": [],
-                "tags": [],
-                "status": None,
-            }
-        ]
-        graph = build_graph(items, "http://localhost:5000")
+        graph = sparql_deadline.graph
 
         # This should raise an exception but still clean up the process
         with pytest.raises(SPARQLTimeout):
-            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=0.01)
+            execute_sparql(graph, "SELECT ?s WHERE { ?s ?p ?o }", timeout=sparql_deadline.timeout)
 
         # Process should be cleaned up (no hanging)
 

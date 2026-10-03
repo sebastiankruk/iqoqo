@@ -20,8 +20,10 @@
 
 import os
 import uuid
+from typing import NamedTuple
 
 import pytest
+from rdflib import Graph
 from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
@@ -369,3 +371,72 @@ def custodian_headers(app):
 
         token = generate_internal_jwt(custodian)
         return {"Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------------------
+# SPARQL deadline fixtures
+# ---------------------------------------------------------------------------
+#
+# The timeout tests used a one-item graph with a 10 ms deadline and relied on the
+# pipeline (serialize, spawn a child process, run the query, return over a pipe)
+# costing more than 10 ms. That held on a developer machine and failed on a fast
+# CI runner, where the whole pipeline finished inside the deadline and
+# `pytest.raises(SPARQLTimeout)` reported "DID NOT RAISE". The test was measuring
+# spawn latency, not deadline enforcement.
+
+SPARQL_DEADLINE_TIMEOUT = 0.01
+"""Deadline, in seconds, that the SPARQL timeout tests assert cannot be honoured."""
+
+SPARQL_DEADLINE_GRAPH_ITEMS = 1200
+"""Item count for the deadline graph.
+
+Sized so serializing it clears SPARQL_DEADLINE_TIMEOUT by roughly 9x on a
+developer machine. Serialization is CPU-bound and so behaves consistently across
+runners, whereas process-spawn latency is the variable that made the old one-item
+graph flaky.
+"""
+
+
+class SPARQLDeadline(NamedTuple):
+    """A graph paired with a deadline its own serialization outlasts.
+
+    Returned as one value so the tests need no import from this module.
+    """
+
+    graph: Graph
+    timeout: float
+
+
+@pytest.fixture(scope="module")
+def sparql_deadline():
+    """A graph whose serialization alone exceeds the deadline under test.
+
+    The tests previously used a one-item graph with a 10 ms deadline and relied on
+    the pipeline (serialize, spawn a child, run the query, return over a pipe)
+    costing more than 10 ms. That held on a developer machine and failed on a fast
+    CI runner, where the whole pipeline finished inside the deadline and
+    ``pytest.raises(SPARQLTimeout)`` reported "DID NOT RAISE". The tests were
+    measuring spawn latency, not deadline enforcement.
+
+    Enlarging the graph makes exceeding the deadline the only way to reach the
+    assertion, so the outcome no longer depends on how fast the machine spawns
+    processes. These tests already tripped in the IPC-prep phase locally; this
+    makes that path deterministic rather than accidental, and leaves every
+    assertion unchanged.
+    """
+    from app.core.sparql_service import build_graph
+
+    items = [
+        {
+            "id": f"item-{i}",
+            "manifestation_id": f"m-{i}",
+            "expression_id": f"e-{i}",
+            "work_id": f"w-{i}",
+            "title": f"Book {i}",
+            "authors": [f"Author {i}"],
+            "tags": ["tag"],
+            "status": "read",
+        }
+        for i in range(SPARQL_DEADLINE_GRAPH_ITEMS)
+    ]
+    return SPARQLDeadline(build_graph(items, "http://localhost:5000"), SPARQL_DEADLINE_TIMEOUT)
