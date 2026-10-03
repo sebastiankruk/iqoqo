@@ -160,8 +160,8 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
                 # Make the context manager return a mock image
                 mock_image_open.return_value.__enter__.return_value = mock_img
 
-                # Also mock imagehash.phash so the hashing step doesn't try to inspect the fake image
-                with patch("app.utils.images.imagehash.phash", return_value=MagicMock()):
+                # Also stub perceptual_hash so the hashing step doesn't try to inspect the fake image
+                with patch("app.utils.images.perceptual_hash", return_value="0" * 16):
                     result = fetch_external_api_cover("9780553380163")
 
                     assert result is not None
