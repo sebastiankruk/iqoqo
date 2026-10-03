@@ -191,7 +191,13 @@ def create_app(config_class=Config, config_override=None):
     from app.core.cache import cache
     from app.core.limiter import limiter
 
-    redis_url = app.config.get("REDIS_URL") or os.environ.get("REDIS_URL")
+    # Config.REDIS_URL already resolves from the environment, so app.config is the
+    # single source of truth. Falling back to os.environ unconditionally here meant
+    # an explicit `config_override={"REDIS_URL": None}` lost to the ambient
+    # environment: `None or <env>` is the env value, because `None` is falsy, so an
+    # override meant to disable Redis silently kept Redis enabled. The env lookup is
+    # kept only for a config class that does not define REDIS_URL at all.
+    redis_url = app.config["REDIS_URL"] if "REDIS_URL" in app.config else os.environ.get("REDIS_URL")
     if redis_url:
         redis_available = False
         try:
