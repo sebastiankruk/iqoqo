@@ -1,3 +1,7 @@
+## Purpose
+
+Require `docs/ARCHITECTURE.md` to document the subsystems a contributor or operator must understand before changing them: virtual wishlist items and their promotion to physical Items, the API-edge permission decorators, format normalization, faceted navigation, custody and audit models, the shared collection UI, and scheduler context handling.
+
 ## Requirements
 
 ### Requirement: Architecture documentation covers virtual wishlist items

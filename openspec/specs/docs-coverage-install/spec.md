@@ -1,3 +1,7 @@
+## Purpose
+
+Require `docs/INSTALL.md` to state the current version requirements and to document the format-mapping setup and the `make fix-physical-kinds` command.
+
 ## Requirements
 
 ### Requirement: Installation guide documents format mappings setup

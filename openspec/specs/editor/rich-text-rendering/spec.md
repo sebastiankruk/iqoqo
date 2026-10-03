@@ -2,7 +2,7 @@
 
 Provides secure client-side sanitization and markdown rendering for rich text description fields alongside accurate value binding for FRBR editor selection controls.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Safe Rich Text and Markdown Description Rendering
 

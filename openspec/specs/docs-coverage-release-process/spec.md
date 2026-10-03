@@ -1,3 +1,7 @@
+## Purpose
+
+Require `docs/RELEASE_PROCESS.md` to document the OpenSpec workflow, the multi-agent review matrix, memory-graph synchronization, and the pre-release checklist.
+
 ## Requirements
 
 ### Requirement: Release process documents OpenSpec workflow

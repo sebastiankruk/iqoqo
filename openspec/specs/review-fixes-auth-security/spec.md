@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Record the authorization and abuse-control fixes from the v0.8.x review: Allegro OAuth is admin-only, and barcode preview requests are rate limited.
+
+## Requirements
 
 ### Requirement: Allegro OAuth admin-only access
 The `/api/auth/allegro/device-flow` and `/api/auth/allegro/device-token` endpoints SHALL require `@admin_required` authorization. Unauthenticated or non-admin users SHALL receive HTTP 403.

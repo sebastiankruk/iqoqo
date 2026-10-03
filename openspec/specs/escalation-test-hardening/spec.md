@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require the escalation request path -- Work, Expression and Item targets -- to be covered end to end: queue filtering and resolution across every status, resolver identity in API responses, target links, the multi-escalation accordion, the help-requests badge, and an E2E submit-to-resolve workflow.
+
+## Requirements
 
 ### Requirement: Backend escalation queue filters by status parameter
 
