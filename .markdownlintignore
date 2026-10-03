@@ -1,3 +1,13 @@
+# INERT -- markdownlint-cli2 does not read this file.
+#
+# It is honoured by the older standalone `markdownlint` CLI, which this project
+# does not use. markdownlint-cli2 reads only .markdownlint-cli2.jsonc, so every
+# entry below has no effect -- including `.caim`, which once made it look as
+# though session logs were excluded when nothing was excluding them.
+#
+# The authoritative exclusion list is in .markdownlint-cli2.jsonc. Kept here
+# only for the older CLI; see that file for what actually applies.
+
 node_modules/
 .venv/
 frontend/node_modules/

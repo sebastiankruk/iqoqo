@@ -18,11 +18,14 @@
     "**/.agent/**",
     "**/.agents/**",
     "**/.gemini/**",
+    "**/.caim/**",
     "**/.opencode/**",
     "**/.claude/**",
+    "**/.pytest_cache/**",
     "**/mykg_sessions/**",
     "**/.mykg_sessions/**",
     "**/.mykg_work/**",
-    "**/graphify-out/**"
+    "**/graphify-out/**",
+    "**/openspec/changes/**"
   ]
 }

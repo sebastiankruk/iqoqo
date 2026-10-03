@@ -82,7 +82,11 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run Markdownlint
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github" "!.pytest_cache" "!.agent" "!.agents" "!.gemini" "!.caim" "!frontend/playwright-report" "!frontend/test-results" "!graphify-out" "!mykg_sessions" "!.context" "!openspec/changes"
+        # Identical to the Makefile's `lint-markdown` target; exclusions live in
+        # .markdownlint-cli2.jsonc rather than in either invocation. When the list
+        # was duplicated into both, the two drifted, and a hand-written subset
+        # that dropped `.caim` linted 43 AI session logs.
+        run: markdownlint-cli2 "**/*.md"
 
   lint-license:
     runs-on: ubuntu-latest

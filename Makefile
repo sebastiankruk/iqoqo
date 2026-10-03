@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
 
 SHELL := /bin/bash
 
@@ -118,6 +118,7 @@ help:
 	@echo "  lint-license   - Check copyright headers"
 	@echo "  validate-yaml  - Validate YAML configuration files"
 	@echo "  validate-nginx - Validate deploy/nginx.conf.example with a real nginx"
+	@echo "  validate-openspec - Validate OpenSpec main specs (SCOPE=all|<capability>)"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
@@ -566,7 +567,11 @@ lint-css:
 
 lint-markdown:
 	$(AI_ECHO) "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.caim" "#.context" "#graphify-out" "#openspec/changes"
+	@# Exclusions live in .markdownlint-cli2.jsonc, not here. This invocation is
+	@# deliberately identical to the CI one in .github/workflows/quality.yml; when
+	@# the list was duplicated in both places it silently drifted, and a
+	@# hand-written subset that dropped `.caim` linted 43 AI session logs.
+	$(NPX) markdownlint-cli2 "**/*.md"
 
 validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
@@ -575,6 +580,19 @@ validate-yaml: .venv/bin/activate
 validate-nginx: .venv/bin/activate ## Validate deploy/nginx.conf.example with a real nginx
 	$(AI_ECHO) "Checking production nginx reference config..."
 	@.venv/bin/python scripts/validate_nginx_example.py
+
+# OpenSpec spec validation. SCOPE=... restricts it, mirroring `openspec validate
+# --specs` (everything) versus `openspec validate <capability> --strict` (one).
+# Not wired into CI: no workflow runs it today, and wiring it in would fail on the
+# pre-existing failures listed in docs/OPENSPEC_VALIDATION.md rather than on
+# anything this change introduced. See that file before adding a CI step.
+validate-openspec: ## Validate OpenSpec main specs (SCOPE=all|<capability>)
+	$(AI_ECHO) "Validating OpenSpec specs..."
+	@if [ -n "$(SCOPE)" ] && [ "$(SCOPE)" != "all" ]; then \
+		openspec validate "$(SCOPE)" --strict; \
+	else \
+		openspec validate --specs; \
+	fi
 
 secret-scan: .venv/bin/activate ## Scan repository working tree and branch commits for secrets using Gitleaks
 	$(AI_ECHO) "Scanning code for secrets (Gitleaks)..."
