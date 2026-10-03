@@ -79,31 +79,12 @@ CANONICAL_JOBS: list[tuple[str, list[Check]]] = [
         "lint-markdown",
         [
             ("Install Markdownlint", ["npm", "install", "-g", "markdownlint-cli2"], ROOT, True),
-            (
-                "Markdownlint",
-                [
-                    "markdownlint-cli2",
-                    "**/*.md",
-                    "!node_modules",
-                    "!.venv",
-                    "!frontend/node_modules",
-                    "!frontend/.next",
-                    "!.github",
-                    "!.pytest_cache",
-                    "!.agent",
-                    "!.agents",
-                    "!.gemini",
-                    "!.caim",
-                    "!frontend/playwright-report",
-                    "!frontend/test-results",
-                    "!graphify-out",
-                    "!mykg_sessions",
-                    "!.context",
-                    "!openspec/changes",
-                ],
-                ROOT,
-                True,
-            ),
+            # Exclusions live in .markdownlint-cli2.jsonc, which markdownlint-cli2
+            # reads by itself. Listing them here as well meant a third copy to keep
+            # in sync with the Makefile and CI; this bare glob is what all three now
+            # share. test_ci_executable_lint_steps_match_local_canonical_map asserts
+            # this stays identical to the CI step.
+            ("Markdownlint", ["markdownlint-cli2", "**/*.md"], ROOT, True),
         ],
     ),
     ("lint-license", [("License headers", ["./scripts/check_license.sh"], ROOT, True)]),
