@@ -132,6 +132,8 @@ help:
 	@echo "  stop           - Stop all development servers and containers"
 	@echo "  docker-build   - Build backend, frontend, and nginx Docker images locally (TAG=...)"
 	@echo "  docker-build-preview - Build all images locally tagged for preview environment"
+	@echo "  validate-image-size - Check a built backend image against its size budget (IMAGE=...)"
+	@echo "  validate-release - Validate release invariants (versions, CHANGELOG, image size budget)"
 	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
@@ -432,6 +434,25 @@ docker-build: ## Build backend, frontend, and nginx Docker images locally (TAG d
 
 docker-build-preview: ## Build all images locally tagged for preview environment (preview tag)
 	@./scripts/build_docker_images.sh --tag preview $(if $(PREFIX),--prefix $(PREFIX),)
+
+# The size gate also runs automatically at the end of scripts/build_docker_images.sh,
+# so this target is for checking an image that is already built -- a CI artifact, or
+# an image pulled from a registry -- without paying for a rebuild. The budget and the
+# measurement that justifies it live in deploy/image-size-budget.txt.
+.PHONY: validate-image-size
+validate-image-size: ## Check an already-built backend image against its size budget (IMAGE=...)
+	@PYTHON_BIN=$${PYTHON:-$$([ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)}; \
+	TAG=$${IMAGE:-$$($(PYTHON_BIN) scripts/extract_version.py 2>/dev/null || echo latest)}; \
+	echo "Checking backend image size budget for iqoqo-backend:$${TAG}"; \
+	$(PYTHON_BIN) scripts/check_image_size.py "iqoqo-backend:$${TAG}"
+
+# Same script the release/* validate-release CI job runs, exposed locally so the
+# check does not only surface on CI. Pass VERSION=... to validate a specific
+# version; without it the version is taken from the branch name.
+.PHONY: validate-release
+validate-release: ## Validate release invariants (versions, CHANGELOG, image size budget)
+	@PYTHON_BIN=$${PYTHON:-$$([ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)}; \
+	$(PYTHON_BIN) scripts/validate_release.py $(if $(VERSION),$(VERSION),)
 
 # monitoring-start and monitoring-stop removed — the monitoring stack is now
 # always composed together with the main stack via run.sh (line 751-754).

@@ -146,6 +146,45 @@ jobs:
           ADMIN_PASSWORD: dummy-admin-password
         run: pytest tests/ -v
 
+  image-size-gate:
+    # The size budget is enforced at build time, but deploy.yml builds with
+    # `push: true` and buildx never leaves a local image behind, so the published
+    # images would otherwise ship ungated. This builds the backend image and runs
+    # the same gate the local build script runs.
+    #
+    # Restricted to main and the release/hotfix branches: the job builds a Docker
+    # image, which costs real runner minutes, and the outcome it produces is a
+    # property of the branch rather than of the change. Feature-branch PRs still
+    # get the budget for free via validate_release.py --image-size-only, which
+    # checks that the release plan and the budget agree without building anything.
+    #
+    # Keyed on both refs for the same reason validate-release below is: on a
+    # push, head_ref is empty and ref_name is the branch; on a pull_request,
+    # head_ref is the source branch and ref_name is "<n>/merge".
+    if: >-
+      github.ref_name == 'main' || github.head_ref == 'main' ||
+      startsWith(github.ref_name, 'release/') || startsWith(github.head_ref, 'release/') ||
+      startsWith(github.ref_name, 'hotfix/') || startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./deploy/Dockerfile
+          load: true # the gate needs a real image to inspect, not just a cache
+          push: false
+          tags: iqoqo-backend:ci-size-gate
+          cache-from: type=gha
+
+      - name: Check image size budget
+        run: python scripts/check_image_size.py iqoqo-backend:ci-size-gate
+
   validate-release:
     if: startsWith(github.head_ref, 'release/') || startsWith(github.ref_name, 'release/') || startsWith(github.head_ref, 'hotfix/') || startsWith(github.ref_name, 'hotfix/')
     runs-on: ubuntu-latest
@@ -168,6 +207,12 @@ jobs:
             VERSION="$BRANCH"
           fi
           python scripts/validate_release.py "$VERSION"
+
+      - name: Validate container image size budget is quoted in the release plan
+        # check_image_size_reference runs inside validate_release.py too, but a
+        # failing run there stops at the version checks, so this names the image
+        # size drift explicitly in the job log.
+        run: python scripts/validate_release.py --image-size-only
 
   test-frontend:
     runs-on: ubuntu-latest

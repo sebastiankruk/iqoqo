@@ -160,8 +160,8 @@ def test_fetch_external_api_cover_openlibrary(mock_requests_get, tmp_path):
                 # Make the context manager return a mock image
                 mock_image_open.return_value.__enter__.return_value = mock_img
 
-                # Also mock imagehash.phash so the hashing step doesn't try to inspect the fake image
-                with patch("app.utils.images.imagehash.phash", return_value=MagicMock()):
+                # Also stub perceptual_hash so the hashing step doesn't try to inspect the fake image
+                with patch("app.utils.images.perceptual_hash", return_value="0" * 16):
                     result = fetch_external_api_cover("9780553380163")
 
                     assert result is not None
@@ -744,56 +744,110 @@ def test_watermark_preserves_dimensions_and_format(mock_image_assets):
         assert img.mode == "RGB"
 
 
-def test_generate_fallback_cover_design_elements(tmp_path):
-    """Verify fallback cover has separator line, 28px footer, no CTA, centered footer."""
-    import numpy as np
-
+def _render_fallback_cover(tmp_path, identifier="designtest", title="Design Test Book", author="Test Author"):
+    """Render the deterministic fallback cover and return it as an RGB image."""
     with patch("app.utils.covers.COVERS_DIR", str(tmp_path)):
-        result = generate_fallback_cover("designtest", "Design Test Book", "Test Author")
-        assert result is not None
-        _cover_url, source = result
-        assert source == "fallback_pil"
+        result = generate_fallback_cover(identifier, title, author)
 
-        filepath = os.path.join(str(tmp_path), "designtest_generated.jpg")
-        assert os.path.exists(filepath)
+    assert result is not None, "fallback cover generation returned None"
+    _cover_url, source = result
+    assert source == "fallback_pil"
 
-        with Image.open(filepath) as img:
-            assert img.format == "JPEG"
-            width, height = img.size
-            assert (width, height) == (600, 900)
+    filepath = os.path.join(str(tmp_path), f"{identifier}_generated.jpg")
+    assert os.path.exists(filepath)
 
-            # Convert to numpy array for pixel inspection
-            pixels = np.array(img)
+    with Image.open(filepath) as raw:
+        assert raw.format == "JPEG"
+        return raw.convert("RGB")
 
-            # 1. Verify separator line exists at y ≈ height - 92 (line_y = height - 80 - 12)
-            separator_y = height - 92
-            # Look for the line in a band around separator_y — the line should be
-            # the #475569 color (R≈71, G≈85, B≈105) and different from gradient background
-            line_margin = int(width * 0.2)
-            line_region = pixels[separator_y - 1 : separator_y + 2, line_margin : width - line_margin, :]
-            # The line should exist — at least some pixels should differ from the background
-            # Check that the region isn't all the same color (a line creates variation)
-            assert line_region.size > 0, "Line region should have pixels"
 
-            # 2. Verify no CTA text in bottom 100px area
-            bottom_strip = pixels[height - 100 : height, :, :]
-            # CTA text would be white, but the footer area has separator + "powered by iqoqo"
-            # The key check: the bottom area should not contain "scan to get started" or other CTA
-            # Simple pixel check: the bottom area should have the footer text pattern
-            assert bottom_strip.size > 0, "Should have footer content"
+def _differs_from_background(pixel, reference, tolerance=60):
+    """Whether ``pixel`` is far enough from ``reference`` to be drawn content.
 
-            # 3. Verify footer centered within 5px tolerance
-            # The footer_x is set to (width - text_width) // 2
-            # We can check that the middle of the image has content (footer is there)
-            center_column = pixels[height - 75 : height - 60, (width // 2) - 5 : (width // 2) + 5, :]
-            assert center_column.size > 0, "Footer should be centered"
+    The tolerance is a sum over RGB channels. Measured on the rendered cover, the
+    separator reads (58, 88, 123) against a background of (33, 67, 105) -- a
+    distance near 64 -- while JPEG quality-85 ringing stays under 5, so 60
+    separates drawn content from compression noise with a wide margin.
+    """
+    return sum(abs(channel - base) for channel, base in zip(pixel, reference, strict=True)) > tolerance
 
-            # 4. Footer font ≥ 28px: the bbox height for 28px DejaVuSans-Bold ≈ 30-32px
-            # The footer is rendered at footer_y (height - 80), so it occupies roughly
-            # y: [height-80, height-80+30] => [820, 850]
-            # Check that footer text region has non-background pixels
-            footer_region = pixels[height - 85 : height - 50, int(width * 0.25) : int(width * 0.75), :]
-            assert footer_region.size > 0, "Footer text region should exist"
+
+def _background_at(px, y):
+    """Background colour for row ``y``, sampled from the untouched left margin.
+
+    A fixed colour would be wrong here: the background is a vertical gradient
+    whose endpoints derive from an MD5 of identifier and title, so its value at
+    any row depends on the inputs. The gradient is drawn edge-to-edge and neither
+    the separator nor the footer reaches x=10, which makes the margin a clean
+    per-row reference.
+    """
+    return px[10, y]
+
+
+def test_generate_fallback_cover_design_elements(tmp_path):
+    """Separator drawn where it belongs, footer centred, no call-to-action below it.
+
+    This test previously imported numpy purely to get 2-D pixel slicing, and then
+    asserted only that its slices were non-empty -- ``assert region.size > 0``,
+    which holds for any 600x900 image and so could not fail. Deleting the
+    separator, moving the footer off-centre, or adding a call-to-action would all
+    have passed it. numpy is also no longer a dependency at all: app/utils/phash.py
+    replaced ImageHash and took scipy, numpy and PyWavelets with it, so this test
+    no longer had numpy to import.
+
+    Regions are read through Pillow and each design element is asserted by what it
+    actually draws.
+    """
+    img = _render_fallback_cover(tmp_path)
+    width, height = img.size
+    assert (width, height) == (600, 900)
+    px = img.load()
+
+    footer_y = height - 80
+    separator_y = footer_y - 12
+    line_margin = int(width * 0.2)
+
+    # 1. The separator is a real horizontal rule at footer_y - 12, not merely a
+    #    non-empty region: it differs from the background of its own row across
+    #    the whole 20%-80% span the code draws it over.
+    separator_background = _background_at(px, separator_y)
+    inside_span = sum(
+        1 for x in range(line_margin, width - line_margin) if _differs_from_background(px[x, separator_y], separator_background)
+    )
+    span_width = width - 2 * line_margin
+    assert inside_span / span_width > 0.9, f"separator only covers {inside_span}/{span_width} of its span"
+
+    # 2. ...and it stops at that span, so the rule is centred rather than edge-to-edge.
+    outside = [(x, px[x, separator_y]) for x in (line_margin - 6, line_margin - 2, width - line_margin + 2, width - line_margin + 6)]
+    assert not any(
+        _differs_from_background(pixel, separator_background) for _x, pixel in outside
+    ), f"separator bleeds outside its 20% margin at x={[x for x, _ in outside]}"
+
+    # 3. It is one pixel tall. A rule drawn several rows thick, or at the wrong
+    #    height, would show up as content on the rows above and below.
+    for neighbour in (separator_y - 2, separator_y + 2):
+        neighbour_background = _background_at(px, neighbour)
+        assert not any(
+            _differs_from_background(px[x, neighbour], neighbour_background) for x in range(line_margin, width - line_margin, 8)
+        ), f"unexpected content on row {neighbour}, adjacent to the separator"
+
+    # 4. The footer is centred. The code computes (width - text_width) // 2, so the
+    #    drawn glyph run must straddle the middle; measuring that run is what makes
+    #    this an assertion about centring rather than about the footer existing.
+    footer_columns = [
+        x
+        for x in range(width)
+        if any(_differs_from_background(px[x, y], _background_at(px, y)) for y in range(footer_y - 4, footer_y + 32))
+    ]
+    assert footer_columns, "footer text is missing entirely"
+    footer_centre = (min(footer_columns) + max(footer_columns)) / 2
+    assert abs(footer_centre - width / 2) <= 5, f"footer centre {footer_centre} is not within 5px of {width // 2}"
+
+    # 5. No call-to-action underneath. The footer is the last thing this tier
+    #    draws, so content below it would mean a CTA had been added.
+    assert not any(
+        _differs_from_background(px[x, y], _background_at(px, y)) for y in range(footer_y + 40, height - 2) for x in range(0, width, 4)
+    ), f"unexpected content below the footer at rows {footer_y + 40}..{height - 2}"
 
 
 # ---------------------------------------------------------------------------

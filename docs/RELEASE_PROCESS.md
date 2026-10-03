@@ -25,6 +25,9 @@ Before branching a release, complete the following verification steps:
   # 1. Build backend, frontend, and nginx images locally with preview tag:
   make docker-build-preview
   # (or: ./scripts/build_docker_images.sh --tag <version>)
+  # The backend size gate runs automatically as part of this build and fails it
+  # if the image exceeds its budget, printing the per-path breakdown. No separate
+  # step is needed after a local build.
 
   # 2. Test launch in isolated preview directory:
   cd /opt/pre.iqoqo
@@ -36,6 +39,30 @@ Before branching a release, complete the following verification steps:
   # 4. Verify health:
   make status STACK=preview
   ```
+
+- [ ] **Container Image Size Budget**: The backend image size gate is enforced at
+  build time, so a build that produced an oversized image never reaches this
+  checklist. When verifying an image that was *not* built locally — a CI artifact,
+  or one pulled from a registry — check it explicitly:
+
+  ```bash
+  make validate-image-size IMAGE=<tag>
+  ```
+
+  The budget and the measurement that justifies it both live in
+  `deploy/image-size-budget.txt`, which is the single source of truth. Current
+  figures, quoted verbatim so `scripts/validate_release.py` can assert they match:
+
+  | Key | Value |
+  | --- | --- |
+  | `MAX_BYTES` | `650000000` (619.9 MiB) |
+  | `MEASURED_BYTES` | `635350015` (605.8 MiB) |
+
+  If this check fails, either the change is doing what it should and you must
+  remove the growth, or the change is legitimate and you must raise `MAX_BYTES`
+  *and* update `MEASURED_BYTES` in the same commit. Never raise one without the
+  other — an unexplained ceiling is how the previous `<500 MB` requirement came
+  to be missed for a whole release.
 
 ## How to Create a New Release
 

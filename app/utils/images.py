@@ -27,7 +27,6 @@ import os
 import textwrap
 from typing import Any
 
-import imagehash
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from app.core.s3_service import (
@@ -36,6 +35,7 @@ from app.core.s3_service import (
     get_s3_service,
     warn_if_legacy_rclone_configured,
 )
+from app.utils.phash import parse_hash, perceptual_hash
 
 # Safety threshold for decompression bombs.
 # Set to 200MP to accommodate even the largest modern smartphone cameras
@@ -46,17 +46,18 @@ Image.MAX_IMAGE_PIXELS = 200_000_000
 logger = logging.getLogger(__name__)
 
 
-# Load known junk cover pHashes from environment for configurable rejection
-# Use `imagehash.phash(Image.open("your_placeholder.jpg"))` locally to compute.
+# Load known junk cover pHashes from environment for configurable rejection.
+# Compute one with `python scripts/phash_cover.py your_placeholder.jpg`; see
+# docs/COVERS_SETUP.md for why the hex value is stable across upgrades.
 
 
-def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
+def _load_known_junk_phashes() -> set[str]:
     """
     Load known junk cover pHashes from the environment.
     Format: IQOQO_KNOWN_JUNK_PHASHES="e1e1e1e1e1e1e1e1,ffffffff00000000,eea4985b94846fe8"
     """
     raw_value = os.getenv("IQOQO_KNOWN_JUNK_PHASHES", "")
-    hashes: set[imagehash.ImageHash] = set()
+    hashes: set[str] = set()
 
     if not raw_value:
         return hashes
@@ -66,8 +67,8 @@ def _load_known_junk_phashes() -> set[imagehash.ImageHash]:
         if not hex_value:
             continue
         try:
-            hashes.add(imagehash.hex_to_hash(hex_value))
-        except (ValueError, TypeError) as exc:  # narrow failures to this token only
+            hashes.add(parse_hash(hex_value))
+        except ValueError as exc:  # narrow failures to this token only
             logger.warning("Invalid junk pHash '%s' in IQOQO_KNOWN_JUNK_PHASHES: %s", hex_value, exc)
 
     return hashes
@@ -94,7 +95,7 @@ def is_valid_cover(image_bytes: bytes) -> bool:
 
         # Re-open to compute perceptual hash
         with Image.open(io.BytesIO(image_bytes)) as img:
-            img_hash = imagehash.phash(img)
+            img_hash = perceptual_hash(img)
             if img_hash in KNOWN_JUNK_PHASHES:
                 logger.debug(f"Image rejected: Matches known junk pHash ({img_hash}).")
                 return False
