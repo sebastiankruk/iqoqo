@@ -197,7 +197,10 @@ def _log_decrypt_failure(key: str, exc: Exception) -> None:
             key,
             type(exc).__name__,
         )
-    except Exception:  # pragma: no cover - logging must never break a read
+    except RuntimeError:
+        # No application context: this read happened outside a request or CLI
+        # command (a script, a migration). Logging is best-effort and must never
+        # turn a read into an error.
         pass
 
 

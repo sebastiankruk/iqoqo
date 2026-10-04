@@ -49,6 +49,7 @@ ENVELOPE = {"_encrypted": True, "ciphertext": "gAAAAA-not-a-real-token"}
 # Decrypt failure is unset, not the envelope
 # ---------------------------------------------------------------------------
 
+
 def rotated_cipher():
     """A real Fernet built from a *different* key, so decrypt() raises InvalidToken.
 
@@ -65,8 +66,6 @@ def rotated_cipher():
     return Fernet(key)
 
 
-
-
 def test_decrypt_failure_returns_none_not_the_envelope(monkeypatch):
     """A rotated key must not produce a dict masquerading as a value."""
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
@@ -75,9 +74,7 @@ def test_decrypt_failure_returns_none_not_the_envelope(monkeypatch):
 
 def test_get_value_returns_the_caller_default_when_decryption_fails(app, monkeypatch):
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
-    db.session.add(
-        InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE))
-    )
+    db.session.add(InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE)))
     db.session.commit()
 
     # Without the default-honouring fix this would be None.
@@ -86,9 +83,7 @@ def test_get_value_returns_the_caller_default_when_decryption_fails(app, monkeyp
 
 def test_get_value_returns_none_with_no_default_when_decryption_fails(app, monkeypatch):
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
-    db.session.add(
-        InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE))
-    )
+    db.session.add(InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE)))
     db.session.commit()
     assert InstanceSettings.get_value("OPENOBSERVE_RUM_CLIENT_TOKEN") is None
 
@@ -151,9 +146,7 @@ def test_other_keys_are_not_shape_checked():
 def test_ciphertext_envelope_never_reaches_the_browser(app, monkeypatch):
     """The end-to-end invariant: what get_value returns is a usable token."""
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
-    db.session.add(
-        InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE))
-    )
+    db.session.add(InstanceSettings(key="OPENOBSERVE_RUM_CLIENT_TOKEN", value=dict(ENVELOPE)))
     db.session.commit()
 
     value = InstanceSettings.get_value("OPENOBSERVE_RUM_CLIENT_TOKEN")
