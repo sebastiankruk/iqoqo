@@ -856,17 +856,76 @@ class TestCsrfProtection:
         page = client.get(f"/api/account/deletion/confirm?token={pending_token}")
         csrf = client.get_cookie("iqoqo_csrf")
         assert csrf is not None, "the confirmation page must mint a CSRF cookie"
+        del page
 
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
             headers={"X-CSRF-Token": csrf.value},
             data={"confirm": "delete", "csrf_token": csrf.value},
         )
-        del page
 
         assert response.status_code == 200
         with client.application.app_context():
             assert db.session.get(User, owner) is None
+
+    def test_the_first_visit_form_is_immediately_submittable(self, client, configured_mail, owner, pending_token) -> None:
+        """A form rendered before any CSRF cookie existed must still work.
+
+        Regression, and the one the test above could not catch. On a first visit
+        there is no CSRF cookie in the *request*: it is being set on this very
+        response, after the body has been rendered. An implementation that read
+        the token back out of the request therefore rendered the form with no
+        token field at all, and the user's submit was rejected with "This form
+        has expired" -- permanently, because reloading was the only way out.
+
+        Asserted on a client whose CSRF cookie jar starts empty, which is exactly
+        the real first-visit state.
+        """
+        _authenticate_cookie(client, owner)
+        client.delete_cookie("iqoqo_csrf", domain="localhost")
+        assert client.get_cookie("iqoqo_csrf") is None
+
+        page = client.get(f"/api/account/deletion/confirm?token={pending_token}")
+
+        # The form must carry the field *and* the cookie must carry the same value.
+        assert 'name="csrf_token"' in page.data.decode()
+        csrf = client.get_cookie("iqoqo_csrf")
+        assert csrf is not None
+        assert csrf.value in page.data.decode()
+
+        response = client.post(
+            f"/api/account/deletion/confirm?token={pending_token}",
+            headers={"X-CSRF-Token": csrf.value},
+            data={"confirm": "delete", "csrf_token": csrf.value},
+        )
+
+        assert response.status_code == 200, "the first-visit form was not submittable"
+        with client.application.app_context():
+            assert db.session.get(User, owner) is None
+
+    def test_the_first_visit_verification_form_is_immediately_submittable(self, client, configured_mail, owner) -> None:
+        """The same first-visit requirement for email verification."""
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        _authenticate_cookie(client, owner)
+        client.delete_cookie("iqoqo_csrf", domain="localhost")
+
+        page = client.get(f"/api/account/email/verify?token={raw}")
+        assert 'name="csrf_token"' in page.data.decode()
+        csrf = client.get_cookie("iqoqo_csrf")
+        assert csrf is not None
+        assert csrf.value in page.data.decode()
+
+        response = client.post(
+            f"/api/account/email/verify?token={raw}",
+            headers={"X-CSRF-Token": csrf.value},
+            data={"csrf_token": csrf.value},
+        )
+
+        assert response.status_code == 200, "the first-visit form was not submittable"
+        with client.application.app_context():
+            assert db.session.get(User, owner).is_email_verified is True
 
     def test_a_forged_csrf_value_is_refused(self, client, configured_mail, owner, pending_token) -> None:
         """Cookie injection must not be enough.

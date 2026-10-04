@@ -71,7 +71,6 @@ from app.db.models import User, db
 
 from . import account_pages
 from .decorators import (
-    CSRF_COOKIE_NAME,
     CSRF_FIELD_NAME,
     enforce_csrf_if_cookie_authenticated,
     issue_csrf_token,
@@ -141,26 +140,27 @@ def _token_from_request() -> str:
     return candidate[:_MAX_TOKEN_LENGTH]
 
 
-def _csrf_field() -> str:
-    """Render the hidden CSRF input for a confirmation form.
-
-    Mirrors :func:`enforce_csrf_if_cookie_authenticated` exactly, by reading the
-    same ``g.authenticated_via_cookie`` flag.  That symmetry is the point: a
-    field emitted for a request whose CSRF will never be checked would be a
-    hidden input carrying a credential that means nothing, and -- because the
-    field's value changes per response -- it would make an otherwise identical
-    page render differently on every GET, which is precisely the instability the
-    scanner-safety requirement rules out.
+def _csrf_proof_for_page() -> tuple[str, str]:
+    """Mint the CSRF material for a confirmation page.
 
     Returns:
-        An HTML fragment, or an empty string when there is nothing to prove.
+        ``(token, field_html)``.  Both are empty when the caller is not
+        cookie-authenticated, matching
+        :func:`enforce_csrf_if_cookie_authenticated` exactly -- a field emitted
+        for a request whose CSRF is never checked would be a hidden input
+        carrying a credential that means nothing.
+
+        The token is minted *here* rather than read back from the request
+        cookie. On a first visit there is no cookie to read: it is being set on
+        this very response, after the body has already been rendered. Reading it
+        from the request therefore produced a form with no token field at all,
+        and the user could not submit it without reloading first.
     """
     if not getattr(g, "authenticated_via_cookie", False):
-        return ""
-    token = request.cookies.get(CSRF_COOKIE_NAME) or ""
-    if not token:
-        return ""
-    return f'<input type="hidden" name="{CSRF_FIELD_NAME}" value="{escape(token, quote=True)}">'
+        return "", ""
+    token = issue_csrf_token()
+    field = f'<input type="hidden" name="{CSRF_FIELD_NAME}" value="{escape(token, quote=True)}">'
+    return token, field
 
 
 def _csrf_failure_page(message: str) -> Response:
@@ -324,8 +324,9 @@ def verify_email_page():
     if user is None:  # pragma: no cover - require_auth-equivalent already guarantees this
         return account_pages.invalid_link_page(action="verify")
 
-    response = account_pages.email_verification_page(account_hint=user.email, csrf_field=_csrf_field())
-    return set_csrf_cookie(response)
+    csrf_token_value, csrf_field = _csrf_proof_for_page()
+    response = account_pages.email_verification_page(account_hint=user.email, csrf_field=csrf_field)
+    return set_csrf_cookie(response, csrf_token_value)
 
 
 @account_bp.route("/email/verify", methods=["POST"])
@@ -466,8 +467,9 @@ def deletion_confirm_page():
     if user is None:  # pragma: no cover - lookup_outstanding already proved the row is live
         return account_pages.invalid_link_page(action="delete")
 
-    response = account_pages.deletion_confirmation_page(account_hint=user.email, csrf_field=_csrf_field())
-    return set_csrf_cookie(response)
+    csrf_token_value, csrf_field = _csrf_proof_for_page()
+    response = account_pages.deletion_confirmation_page(account_hint=user.email, csrf_field=csrf_field)
+    return set_csrf_cookie(response, csrf_token_value)
 
 
 @account_bp.route("/deletion/confirm", methods=["POST"])
@@ -491,11 +493,11 @@ def confirm_account_deletion():
     if request.form.get("confirm") != "delete":
         # The typed confirmation. Not a CSRF defence -- CSRF is already handled
         # above -- but it is the last checkpoint before something irreversible,
-        # and it costs one field.
-        return account_pages.deletion_confirmation_page(
-            account_hint="your account",
-            csrf_field=_csrf_field(),
-        )
+        # and it costs one field. Re-mints the CSRF material so the re-rendered
+        # form is immediately submittable.
+        csrf_token_value, csrf_field = _csrf_proof_for_page()
+        response = account_pages.deletion_confirmation_page(account_hint="your account", csrf_field=csrf_field)
+        return set_csrf_cookie(response, csrf_token_value)
 
     token = _token_from_request()
     acting_user_id = getattr(g, "user_id", None)

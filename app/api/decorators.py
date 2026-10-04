@@ -387,28 +387,32 @@ def verify_csrf_token(token: str) -> bool:
 _CSRF_CLOCK_SKEW_SECONDS = 60
 
 
-def set_csrf_cookie(response):
-    """Attach a fresh CSRF cookie to *response*.
-
-    Called on the confirmation pages, which is where a token is first needed.
-    Minting it there rather than on every response keeps it off the hot path and
-    keeps the cookie's lifetime tied to the page that uses it.
+def set_csrf_cookie(response, token: str | None = None):
+    """Attach a CSRF cookie to *response*.
 
     Args:
         response: The response to mutate.
+        token: A pre-minted token to set, or None to mint one here.
 
     Returns:
         The same response, for chaining.
+
+    Callers that also embed the token in a rendered form must pass it in, so the
+    cookie and the form field carry the same value. Reading the cookie back out
+    of the *request* cannot work for that: on a first visit the cookie does not
+    exist yet, because it is being set on this very response. That mismatch left
+    the confirmation form with no token at all on first load -- a form that could
+    only be submitted after a reload.
     """
-    token = issue_csrf_token()
+    value = token or issue_csrf_token()
     # Not `secure=` unconditionally: a local development instance on plain HTTP
     # would then never receive the cookie and CSRF protection would look broken
-    # rather than absent.  Sent over HTTPS in any deployment that sets a public
+    # rather than absent. Sent over HTTPS in any deployment that sets a public
     # origin, which the production configuration requires.
     is_https = request.is_secure or bool(str(current_app.config.get("PUBLIC_APP_URL", "")).startswith("https://"))
     response.set_cookie(
         CSRF_COOKIE_NAME,
-        token,
+        value,
         httponly=False,
         secure=is_https,
         # `strict`, not `lax`: the cookie must survive no cross-site navigation
