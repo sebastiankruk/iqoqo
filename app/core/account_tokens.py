@@ -204,19 +204,19 @@ def issue_token(
     # account and purpose: an invalidation must never disturb a verification
     # token because a deletion link was resent, or vice versa.
     #
-    # `expunge_all` rather than `expire_all` afterwards, and it matters: the bulk
-    # DELETE below is invisible to the ORM's identity map, which still holds the
-    # row object.  SQLite reuses the freed primary key on the next INSERT, so the
-    # new row would be flushed onto an identity the session believes it owns --
-    # a stale object handed to any caller that kept a reference, and an
-    # SAWarning that turns into real corruption if the stale one is written back.
+    # The expunge afterwards is narrow -- token rows only.  The bulk DELETE is
+    # invisible to the ORM's identity map, which still holds the retired row, and
+    # SQLite reuses the freed primary key on the next INSERT, so the new row
+    # would otherwise be flushed onto an identity the session believes it owns.
+    # A blanket `expunge_all()` would also detach the `User` passed in here,
+    # which every caller keeps using after issuance.
     db.session.execute(
         db.delete(AccountActionToken).where(
             AccountActionToken.user_id == user.id,
             AccountActionToken.purpose == purpose.value,
         )
     )
-    db.session.expunge_all()
+    _expunge_consumed_tokens()
 
     row = AccountActionToken(
         user_id=user.id,
@@ -367,11 +367,27 @@ def consume_token(token: str, purpose: AccountTokenPurpose) -> AccountActionToke
     if row is None:
         return None
     # `synchronize_session=False` means the session still holds a now-stale row
-    # for the token just consumed.  Detach everything so a later read cannot
-    # serve it, and so the identity map cannot hand it back on a reuse of the
-    # primary key.
-    db.session.expunge_all()
+    # for the token just consumed.  Expunge *only the token rows* -- never
+    # `expunge_all()`, which also detaches the `User` a caller has already
+    # loaded and intends to mutate.  Email verification did exactly that:
+    # `mark_email_verified` on a detached object, a commit that persisted
+    # nothing, and a success page shown to a user whose address was still
+    # unverified.
+    _expunge_consumed_tokens()
     return AccountActionToken(user_id=row.user_id, purpose=purpose.value, email=row.email, consumed_at=now)
+
+
+def _expunge_consumed_tokens() -> None:
+    """Detach only :class:`AccountActionToken` instances from the session.
+
+    Narrow on purpose. The conditional ``DELETE`` used for consumption bypasses
+    the identity map, so any token row the session still references is stale and
+    could be handed back to a caller or written over on a primary-key reuse.
+    Everything else in the session is live and belongs to the caller.
+    """
+    for instance in list(db.session.identity_map.values()):
+        if isinstance(instance, AccountActionToken):
+            db.session.expunge(instance)
 
 
 def mark_verified_from_oidc(user: User, claims: dict | None) -> bool:

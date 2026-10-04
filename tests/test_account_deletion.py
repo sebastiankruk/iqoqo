@@ -138,6 +138,26 @@ def configured_mail(app, recorder):
 
 
 @pytest.fixture
+def unverified_user(app):
+    """An account whose address starts unverified.
+
+    Separate from `owner` because that one is already verified, and a
+    verification test asserting against it proves nothing: it would pass whether
+    or not the endpoint saved anything.
+
+    Yields:
+        The new account's id.
+    """
+    with app.app_context():
+        record = User(email="unverified-fixture@iqoqo.local", display_name="Not Yet Verified")
+        record.set_password("test-password")
+        db.session.add(record)
+        db.session.commit()
+        yield record.id
+        db.session.rollback()
+
+
+@pytest.fixture
 def owner(app):
     """An account with a verified address, the actor for most deletion tests."""
     with app.app_context():
@@ -903,12 +923,19 @@ class TestCsrfProtection:
         with client.application.app_context():
             assert db.session.get(User, owner) is None
 
-    def test_the_first_visit_verification_form_is_immediately_submittable(self, client, configured_mail, owner) -> None:
-        """The same first-visit requirement for email verification."""
-        with client.application.app_context():
-            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
+    def test_the_first_visit_verification_form_is_immediately_submittable(self, client, configured_mail, unverified_user) -> None:
+        """The same first-visit requirement for email verification.
 
-        _authenticate_cookie(client, owner)
+        Uses an account that starts *unverified*. The `owner` fixture is already
+        verified, so asserting on it passes whatever the endpoint does -- which
+        is how a variant of this bug stayed green while the success page reported
+        a verification that had never been saved.
+        """
+        target = unverified_user
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, target), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        _authenticate_cookie(client, target)
         client.delete_cookie("iqoqo_csrf", domain="localhost")
 
         page = client.get(f"/api/account/email/verify?token={raw}")
@@ -924,8 +951,16 @@ class TestCsrfProtection:
         )
 
         assert response.status_code == 200, "the first-visit form was not submittable"
+
+        # `remove()` first, so the read cannot be answered from the identity map.
+        # An in-memory mutation can satisfy such an assertion even when the
+        # commit persisted nothing -- exactly the shape of the bug this exists
+        # to catch.
         with client.application.app_context():
-            assert db.session.get(User, owner).is_email_verified is True
+            db.session.remove()
+            stored = db.session.get(User, target)
+        assert stored is not None and stored.is_email_verified, "email verification reported success but persisted nothing"
+        assert stored.email_verified_source == "local"
 
     def test_a_forged_csrf_value_is_refused(self, client, configured_mail, owner, pending_token) -> None:
         """Cookie injection must not be enough.
