@@ -21,6 +21,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -135,6 +136,37 @@ def is_sensitive_key(key: str) -> bool:
     return key in SENSITIVE_SETTING_KEYS or any(k in key for k in ("_KEY", "_SECRET", "_TOKEN", "_DATA"))
 
 
+#: Keys whose value is a browser-bound credential rather than an operator
+#: secret. These are validated for shape on read: a value that is not a plain
+#: token string is treated as unset, so a malformed or undecryptable row can
+#: never be handed to the browser as though it were the token.
+BROWSER_BOUND_TOKEN_KEYS = frozenset({"OPENOBSERVE_RUM_CLIENT_TOKEN"})
+
+#: OpenObserve RUM client tokens are opaque URL-safe strings. This mirrors the
+#: shape check in scripts/provision_rum_token.py so a token accepted at deploy
+#: time is not re-validated away on read (and vice versa).
+_TOKEN_VALUE_SHAPE = re.compile(r"\A[A-Za-z0-9_\-.=]{16,512}\Z")
+
+
+def normalise_setting_value(key: str, value: Any) -> Any:
+    """Shape-check a value before any consumer uses it.
+
+    ``decrypt_setting_value`` already returns ``None`` for an undecryptable
+    row, but a stored value can still be well-formed JSON of the wrong type —
+    a dict, a list, a number. For a browser-bound token that would mean the
+    value reaches the client component and breaks the RUM SDK at runtime, so
+    validate the type and shape here and treat a mismatch as unset.
+    """
+    if key not in BROWSER_BOUND_TOKEN_KEYS:
+        return value
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _TOKEN_VALUE_SHAPE.match(value):
+        _log_decrypt_failure(key, TypeError("value is not a well-formed token string"))
+        return None
+    return value
+
+
 def encrypt_setting_value(key: str, value: Any) -> Any:
     """Encrypt sensitive setting values before persisting to the database."""
     if not is_sensitive_key(key) or value is None:
@@ -148,6 +180,25 @@ def encrypt_setting_value(key: str, value: Any) -> Any:
     raw_bytes = json.dumps(value).encode("utf-8")
     ciphertext = cipher.encrypt(raw_bytes).decode("utf-8")
     return {"_encrypted": True, "ciphertext": ciphertext}
+
+
+def _log_decrypt_failure(key: str, exc: Exception) -> None:
+    """Record that a setting could not be decrypted, naming the key only.
+
+    Without this a rotated SECRET_KEY is silent: reads quietly degrade and the
+    operator finds out when a provider API key stops working.
+    """
+    try:
+        from flask import current_app
+
+        current_app.logger.warning(
+            "Setting %s could not be decrypted (%s); treating as unset. "
+            "If SECRET_KEY was rotated, run `make migrate-secrets` to re-encrypt stored values.",
+            key,
+            type(exc).__name__,
+        )
+    except Exception:  # pragma: no cover - logging must never break a read
+        pass
 
 
 def decrypt_setting_value(key: str, stored_value: Any) -> Any:
@@ -164,9 +215,22 @@ def decrypt_setting_value(key: str, stored_value: Any) -> Any:
         cipher = _get_fernet_cipher()
         decrypted_bytes = cipher.decrypt(ciphertext.encode("utf-8"))
         return json.loads(decrypted_bytes.decode("utf-8"))
-    except (InvalidToken, ValueError, json.JSONDecodeError):
-        # Fall back gracefully if decryption fails
-        return stored_value
+    except (InvalidToken, ValueError, json.JSONDecodeError) as exc:
+        # A decryption failure means SECRET_KEY has been rotated since this row
+        # was written. Report the value as **unset** and never as the stored
+        # envelope: returning `stored_value` handed callers a dict shaped like
+        # {"_encrypted": True, "ciphertext": ...}, which consumers then used as
+        # if it were the credential itself — including, for a RUM token,
+        # shipping ciphertext to the browser.
+        #
+        # Nothing is lost: this path is read-only and the ciphertext remains in
+        # the row. Recovery is `make migrate-secrets`, which overwrites the row
+        # from .env with None in place of a conflict.
+        #
+        # The key name is logged; the value is not, because the "value" here is
+        # ciphertext whose plaintext is a live credential.
+        _log_decrypt_failure(key, exc)
+        return None
 
 
 class InstanceSettings(db.Model):  # type: ignore[name-defined]
@@ -201,7 +265,11 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
             setting = db.session.execute(stmt).scalar_one_or_none()
             if setting is None:
                 return default
-            return decrypt_setting_value(key, setting.value)
+            value = decrypt_setting_value(key, setting.value)
+            value = normalise_setting_value(key, value)
+            # A decryption failure resolves to None; honour the caller's
+            # default in that case rather than silently returning None.
+            return default if value is None else value
         except (SQLAlchemyError, DBAPIError, RuntimeError, AttributeError):
             return default
 

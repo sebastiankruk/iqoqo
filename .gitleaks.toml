@@ -32,6 +32,34 @@ description = "Hardcoded legacy OpenObserve fallback password"
 regex = '''SuperSecret!123'''
 tags = ["monitoring", "openobserve", "credentials"]
 
+[[rules]]
+id = "iqoqo-openobserve-rum-client-token"
+description = "Hardcoded OpenObserve RUM client token"
+# A RUM client token is public by construction — it is a write-only bearer
+# credential that necessarily reaches the browser. But "public" is not the same
+# as "fine to commit": any token-shaped literal in a tracked file is
+# indistinguishable from a leak to every future scanner and reviewer, and a
+# committed token silently outlives the instance it was provisioned for.
+#
+# The token is provisioned at deploy time by scripts/provision_rum_token.py and
+# is never written to a tracked file, so a match here is always a mistake.
+#
+# Shape mirrors TOKEN_SHAPE in scripts/provision_rum_token.py and
+# _TOKEN_VALUE_SHAPE in app/db/settings.py: URL-safe, 16-512 chars. Kept
+# deliberately tight so it fires on a token-shaped literal rather than on
+# ordinary long identifiers.
+#
+# Capture group 1 MUST be the token value, not the key name: gitleaks reports
+# group 1 as the secret, so grouping the key first reports `RUM_CLIENT_TOKEN`
+# as the finding and buries the value that actually needs redaction.
+#
+# The separators use `[ \t]*` rather than `\s*` on purpose. With `\s*` the
+# match crosses newlines: an empty `OPENOBSERVE_RUM_CLIENT_TOKEN=` on one line
+# satisfies the key, and the capture then swallows an unrelated value from the
+# following line — producing findings on clean files.
+regex = '''(?i)["'\'']?(?:rum[_-]?client[_-]?token|rum_token)["'\'']?[ \t]*[:=][ \t]*["'\'']?([A-Za-z0-9_\-.=]{16,512})'''
+tags = ["monitoring", "openobserve", "rum"]
+
 [[allowlists]]
 description = "Global allowlist for build artifacts, dependencies, changelogs, and specs"
 paths = [

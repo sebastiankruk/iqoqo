@@ -34,10 +34,17 @@ teardown() {
 
 # Extract `update_env_var` from run.sh (from its definition to the closing brace
 # at column 0) and evaluate it in this shell.
+#
+# `tighten_env_permissions` must be loaded too: update_env_var calls it to
+# narrow a secrets file's mode, and the awk extractor stops at the first
+# column-0 `}` so it cannot pull in a dependency by itself.
 load_update_env_var() {
-  local fn
+  local fn perms
   fn=$(awk '/^update_env_var\(\) \{$/{f=1} f{print} f&&/^\}$/{exit}' "$RUN_SH")
   [ -n "$fn" ] || { echo "failed to extract update_env_var from run.sh" >&2; return 1; }
+  perms=$(awk '/^tighten_env_permissions\(\) \{$/{f=1} f{print} f&&/^\}$/{exit}' "$RUN_SH")
+  [ -n "$perms" ] || { echo "failed to extract tighten_env_permissions from run.sh" >&2; return 1; }
+  eval "$perms"
   eval "$fn"
 }
 # Extract `terminate_from_pidfile` from run.sh.
@@ -202,4 +209,77 @@ load_terminate_from_pidfile() {
   run terminate_from_pidfile "$pidfile" "empty pidfile"
   [ "$status" -eq 0 ]
   [ ! -f "$pidfile" ]
+}
+
+# ───────────────────── tracked-file guard and escaping ─────────────────────
+
+@test "update_env_var refuses to write a secret into a version-controlled file" {
+  load_update_env_var
+  local repo="${TEST_TEMP_DIR}/repo"
+  mkdir -p "$repo"
+  (
+    cd "$repo"
+    git init -q .
+    echo "SECRET_KEY=old" > .env.test
+    git add .env.test
+  )
+
+  # Run inside the throwaway repo so `git ls-files` reports the file as tracked.
+  run bash -c "cd '$repo' && source /dev/stdin <<'EOF'
+$(declare -f update_env_var tighten_env_permissions)
+update_env_var '.env.test' 'SECRET_KEY' 'rotated-value'
+EOF"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"version-controlled"* ]]
+  # The original value must survive: a refused rotation must not half-apply.
+  grep -q "SECRET_KEY=old" "$repo/.env.test"
+}
+
+@test "update_env_var allows an untracked file" {
+  load_update_env_var
+  local repo="${TEST_TEMP_DIR}/repo2"
+  mkdir -p "$repo"
+  (
+    cd "$repo"
+    git init -q .
+    echo "SECRET_KEY=old" > .env
+  )
+
+  run bash -c "cd '$repo' && source /dev/stdin <<'EOF'
+$(declare -f update_env_var tighten_env_permissions)
+update_env_var '.env' 'SECRET_KEY' 'rotated-value'
+EOF"
+  [ "$status" -eq 0 ]
+  grep -q "rotated-value" "$repo/.env"
+}
+
+@test "update_env_var escapes shell metacharacters in a value" {
+  # The env file is later read with `source` under `set -o allexport`, so an
+  # unescaped backtick or $(...) in a value becomes command execution as the
+  # deploying user. Values here can originate in an HTTP response body.
+  load_update_env_var
+  local env_file="${TEST_TEMP_DIR}/.env.escape"
+  echo "EXISTING=1" > "$env_file"
+
+  update_env_var "$env_file" "TOKEN" 'a`touch pwned`b$(touch pwned2)c$d"e'
+
+  # Sourcing must not execute anything, and must restore the value exactly.
+  local roundtrip
+  roundtrip=$(bash -c "set -a; . '$env_file'; set +a; printf '%s' \"\$TOKEN\"")
+  [ "$roundtrip" = 'a`touch pwned`b$(touch pwned2)c$d"e' ]
+  [ ! -f "./pwned" ]
+  [ ! -f "./pwned2" ]
+  # The stored form must carry the escapes, not the raw metacharacters.
+  grep -q 'TOKEN="a\\`' "$env_file"
+}
+
+@test "update_env_var tightens a secrets file to 0600" {
+  load_update_env_var
+  local env_file="${TEST_TEMP_DIR}/.env.perms"
+  echo "EXISTING=1" > "$env_file"
+  chmod 0664 "$env_file"
+
+  update_env_var "$env_file" "SECRET_KEY" "a-secret-value"
+
+  [ "$(stat -c '%a' "$env_file")" = "600" ]
 }

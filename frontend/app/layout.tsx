@@ -41,6 +41,46 @@ const inter = Inter({
 
 const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc";
 
+/**
+ * Resolve the OpenObserve RUM configuration to hand to the browser.
+ *
+ * Read here, on the server, at request time — not from `NEXT_PUBLIC_*`, which
+ * Next.js inlines into the client bundle at build time. `--prebuilt`
+ * deployments pull the frontend image from a registry where it was built on
+ * CI, so a build-time value would either be impossible to set per instance or
+ * would bake one instance's token into a shared image.
+ *
+ * Returns null when no token is configured, which disables the SDK cleanly.
+ *
+ * A RUM client token is public by construction: it is a write-only bearer
+ * credential that necessarily reaches the browser, so serving it here changes
+ * nothing about what an attacker can do with it. What *is* enforced is that it
+ * only ever travels alongside a validated ingest target.
+ *
+ * @returns The RUM configuration to hand to the client component, or null to leave RUM disabled.
+ */
+function resolveRumConfig(): {
+  clientToken: string;
+  site?: string;
+  insecureHTTP?: boolean;
+} | null {
+  const clientToken = (process.env.OPENOBSERVE_RUM_CLIENT_TOKEN ?? "").trim();
+  if (!clientToken) return null;
+
+  // Set by the provisioning step (scripts/provision_rum_token.py) only after
+  // validating the target. Unset means "use the page host", which is the
+  // component's own safe default.
+  const site = (process.env.OPENOBSERVE_RUM_SITE ?? "").trim();
+
+  // Left undefined when not configured, so the component derives the transport
+  // from the page it is running on: correct for a bare-HTTP dev instance and
+  // secure for an HTTPS deployment, with no per-mode override to get wrong.
+  const configured = (process.env.OPENOBSERVE_RUM_INSECURE_HTTP ?? "").trim();
+  const insecureHTTP = configured === "" ? undefined : configured === "true";
+
+  return { clientToken, site: site || undefined, insecureHTTP };
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL(frontendUrl),
   title: "iqoqo – The Library of Everything",
@@ -74,6 +114,9 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  // Resolved per request on the server; see resolveRumConfig for why this is
+  // not a NEXT_PUBLIC_* build-time value.
+  const rumConfig = resolveRumConfig();
 
   return (
     <html
@@ -89,7 +132,7 @@ export default async function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <Providers>
-              <BrowserOpenObserveRum />
+              {rumConfig ? <BrowserOpenObserveRum {...rumConfig} /> : <BrowserOpenObserveRum />}
               {children}
               <CookieConsent />
             </Providers>

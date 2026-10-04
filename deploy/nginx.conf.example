@@ -92,8 +92,12 @@
 # api_scanner is tighter because /api/scan triggers barcode/OCR lookups against
 # external metadata providers and accepts multi-image uploads — it is the most
 # expensive endpoint in the app, and the one most worth throttling.
+# api_rum is the OpenObserve RUM/Logs ingest endpoint. It is unauthenticated by
+# construction — the RUM client token is a public credential embedded in the
+# browser bundle — so it gets a tight budget to bound abuse volume.
 limit_req_zone $binary_remote_addr zone=api_general:10m rate=20r/s;
 limit_req_zone $binary_remote_addr zone=api_scanner:10m  rate=5r/s;
+limit_req_zone $binary_remote_addr zone=api_rum:10m     rate=10r/s;
 
 # Websocket upgrade map for the Next.js dev/prod server. Without this, the
 # Connection header is copied verbatim from the client, which is a request
@@ -124,6 +128,16 @@ upstream iqoqo_frontend {
     zone iqoqo_frontend 64k;
     resolver 127.0.0.11 valid=30s ipv6=off;
     server ${FRONTEND_UPSTREAM}:${FRONTEND_PORT} resolve;
+}
+
+# OpenObserve is only in the network when the monitoring compose file is
+# composed alongside the main stack, so this upstream is declared unconditionally
+# and resolved lazily by `resolve` — a container that is absent yields a 502 on
+# /rum/ rather than an nginx startup failure.
+upstream iqoqo_openobserve {
+    zone iqoqo_openobserve 64k;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    server ${OPENOBSERVE_UPSTREAM}:${OPENOBSERVE_PORT} resolve;
 }
 
 # ---------------------------------------------------------------------------
@@ -307,6 +321,34 @@ server {
         proxy_pass http://iqoqo_frontend;
         proxy_http_version 1.1;
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # ── OpenObserve RUM & Logs ingest ───────────────────────────────────────
+    # Browser RUM and Logs ingest. OpenObserve is bound to loopback inside the
+    # compose network, so without this route an end user's browser has nowhere
+    # to send telemetry in a dockerized deployment and RUM is silently dead.
+    #
+    # This is an *unauthenticated write endpoint*: the RUM client token is a
+    # public credential embedded in the browser bundle, so anyone who can read
+    # it can post events here. It therefore gets its own tight rate limit, is
+    # never cached, and is never buffered — a buffered ingest queue would let a
+    # single client pin server memory.
+    location /rum/ {
+        limit_req zone=api_rum burst=20 nodelay;
+
+        proxy_pass http://iqoqo_openobserve;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        add_header Cache-Control "no-store" always;
         add_header X-Content-Type-Options "nosniff" always;
     }
 
