@@ -1,12 +1,13 @@
-## Purpose
+# observability/rum-token-hardening Specification
 
+## Purpose
 Security and correctness requirements for the deployment-time provisioning of
 the per-instance OpenObserve RUM client token. The provisioning path already
 ships in `run.sh`; these requirements govern how the credential it creates is
 emitted, persisted, and handed to the browser, and require RUM to keep working
 in both topologies the project ships.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: The RUM Client Token Is Never Emitted As A Value
 The provisioning step MUST report its outcome and MUST NOT print, log, or echo the token value on any path, including success.
@@ -236,8 +237,6 @@ Deployment documentation MUST state the access the RUM client token grants.
 - **THEN** it names the environment variables the code actually reads, in both their server-side and browser-bound form
 - **WHEN** a documented variable name is not one the code reads
 - **THEN** it MUST be corrected or removed
-
-## MODIFIED Requirements
 
 ### Requirement: Deployment Documentation Accurately Describes The Monitoring Stack
 Deployment documentation MUST accurately describe all instrumented layers, their default port topologies, the RUM token workflow, and how each layer is enabled.
