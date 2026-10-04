@@ -444,7 +444,6 @@ class User(db.Model):  # type: ignore[name-defined]
         )
         return data
 
-
     @classmethod
     def list_llm_permissions(cls, user: User | None) -> dict[str, bool]:
         """Return a dict of LLM-related permissions for *user*."""

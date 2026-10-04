@@ -26,16 +26,15 @@ import bleach
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
+# Imported for `pending_deletion_state` on the profile read.  Module-level so
+# the import graph is explicit; this module has no import cycle with it because
+# `account_lifecycle` only reaches back for the models.
+from app.core.account_lifecycle import pending_deletion_state
 from app.core.limiter import limiter
 from app.db.models import ConsentRecord, User, db
 from app.utils.http_client import is_safe_url
 
 from .decorators import require_auth
-
-# Imported for `pending_deletion_state` on the profile read.  Module-level so
-# the import graph is explicit; this module has no import cycle with it because
-# `account_lifecycle` only reaches back for the models.
-from app.core.account_lifecycle import pending_deletion_state
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 

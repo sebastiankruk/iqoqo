@@ -106,14 +106,16 @@ def _account_is_usable(user_id: uuid.UUID) -> bool:
     """
     try:
         user = db.session.get(User, user_id)
-    except Exception:
-        # A database blip must not authenticate anyone.  Failing closed here is
-        # the difference between a degraded read and an open door.
+    except Exception:  # pylint: disable=broad-except
+        # Deliberately broad, and deliberately fails closed. This sits on the
+        # auth path, so the failure modes are whatever the driver and the
+        # middleware can raise -- OperationalError, TimeoutError, a pool
+        # exhaustion error -- and enumerating them would mean a new one silently
+        # authenticated someone. A database blip must never be an open door.
         db.session.rollback()
         logger.error("Account lookup failed while authenticating a request", exc_info=True)
         return False
     return user is not None and bool(user.is_active)
-
 
 
 def _revocation_cache_timeout(expires_at: int | float | None) -> int:
@@ -373,7 +375,7 @@ def verify_csrf_token(token: str) -> bool:
         return False
     if not nonce or not signature:
         return False
-    expected = hmac.new(_csrf_key(), f"{nonce}.{issued_at}".encode("utf-8"), hashlib.sha256).hexdigest()
+    expected = hmac.new(_csrf_key(), f"{nonce}.{issued_at}".encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):
         return False
     age = int(time.time()) - issued_at
@@ -446,8 +448,11 @@ def csrf_proof_from_request() -> str:
     if request.mimetype in {"application/x-www-form-urlencoded", "multipart/form-data"}:
         try:
             return str(request.form.get(CSRF_FIELD_NAME) or "")
-        except Exception:
-            # A malformed body must fail the check, never raise past it.
+        except Exception:  # pylint: disable=broad-except
+            # Deliberately broad: this runs on the request path with
+            # attacker-controlled bodies, and a malformed one must fail the CSRF
+            # check rather than raise past it into a 500 that looks like a
+            # server fault rather than a rejected request.
             return ""
     return ""
 

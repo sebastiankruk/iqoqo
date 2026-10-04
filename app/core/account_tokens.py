@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.auth import AccountActionToken, AccountTokenPurpose
 from app.db.models import User, db
@@ -333,14 +333,14 @@ def consume_token(token: str, purpose: AccountTokenPurpose) -> AccountActionToke
         return None
 
     now = _now()
-    # SQLite is stored naive while `now` is aware, and the SQL comparison is
+    # SQLite stores `DateTime` naive while `now` is aware. The SQL comparison is
     # fine -- it happens in the database -- but SQLAlchemy's default
     # `synchronize_session='evaluate'` re-checks the criteria *in Python*
     # against whatever the session already holds, and that comparison raises
-    # TypeError on a mismatched offset.  That turned every deletion
-    # confirmation into a 500 on SQLite, which is every developer machine and
-    # the entire test suite.  Skipping the Python re-check is also cheaper: the
-    # `RETURNING` clause already told us exactly what was consumed.
+    # TypeError on a mismatched offset. That turned every deletion confirmation
+    # into a 500 on SQLite, which is every developer machine and the whole test
+    # suite. Binding a naive value there keeps both dialects on one code path;
+    # PostgreSQL compares aware to aware and is unaffected.
     if db.session.get_bind().dialect.name == "sqlite":
         now = now.replace(tzinfo=None)
     try:
@@ -356,12 +356,12 @@ def consume_token(token: str, purpose: AccountTokenPurpose) -> AccountActionToke
             .execution_options(synchronize_session=False)
         ).first()
     except SQLAlchemyError:
+        # Covers `IntegrityError` too, which subclasses it -- hence no separate
+        # clause for that. A conditional DELETE cannot insert, so an integrity
+        # failure here would mean the schema rejected something unexpected;
+        # logging under the broader handler is honest about that.
         db.session.rollback()
         logger.error("Account-lifecycle token consumption failed", exc_info=True)
-        return None
-    except IntegrityError:  # pragma: no cover - defensive; delete cannot insert
-        db.session.rollback()
-        logger.error("Unexpected integrity failure consuming an account-lifecycle token", exc_info=True)
         return None
 
     if row is None:

@@ -61,6 +61,7 @@ import uuid
 from html import escape
 
 from flask import Blueprint, Response, g, jsonify, request
+from kombu.exceptions import KombuError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core import account_lifecycle, account_tokens, mail_service
@@ -517,8 +518,7 @@ def confirm_account_deletion():
 
     response = account_pages.success_page(
         heading="Your account has been deleted",
-        detail="Everything associated with it has been removed, and you are signed out everywhere. "
-        "This cannot be undone.",
+        detail="Everything associated with it has been removed, and you are signed out everywhere. " "This cannot be undone.",
     )
     # The session cookie is the only thing left pointing at an account that no
     # longer exists. Clearing it means a stale browser cannot keep presenting it.
@@ -544,7 +544,13 @@ def _notify_deletion_completed(outcome: account_lifecycle.DeletionOutcome) -> No
 
         send_account_email_task.delay(outcome.recipient, rendered.subject, rendered.text)
         return
-    except Exception:
+    except (KombuError, OSError):
+        # The queue is unavailable. `submit_task` in app.core.tasks catches the
+        # same pair, so this mirrors the established convention for "the broker
+        # is not reachable" rather than inventing a new one. Deliberately not a
+        # bare `except Exception`: a bug inside the task wrapper should surface
+        # as a 500 to be investigated, not be silently converted into an inline
+        # send that hides it.
         logger.warning("Could not queue the deletion completion notice; sending it inline", exc_info=True)
 
     try:

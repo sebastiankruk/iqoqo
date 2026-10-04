@@ -22,6 +22,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic.migration import MigrationContext
@@ -1457,16 +1458,12 @@ def test_v0_8_3_adds_verification_columns_as_nullable(account_lifecycle_engine: 
     migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
 
     with account_lifecycle_engine.begin() as connection:
-        connection.execute(
-            sa.text("INSERT INTO users (id, email, password_hash) VALUES ('u1', 'pre@example.invalid', 'hash')")
-        )
+        connection.execute(sa.text("INSERT INTO users (id, email, password_hash) VALUES ('u1', 'pre@example.invalid', 'hash')"))
 
     _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
 
     with account_lifecycle_engine.connect() as connection:
-        row = connection.execute(
-            sa.text("SELECT email_verified_at, email_verified_source FROM users WHERE id = 'u1'")
-        ).one()
+        row = connection.execute(sa.text("SELECT email_verified_at, email_verified_source FROM users WHERE id = 'u1'")).one()
         assert row[0] is None
         assert row[1] is None
 

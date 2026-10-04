@@ -266,7 +266,6 @@ def purge_expired_account_tokens() -> dict[str, Any]:
     return {"status": "purged", "removed": removed}
 
 
-
 @celery.task(
     bind=True,
     name="app.core.tasks.link_manifestation_lod_task",

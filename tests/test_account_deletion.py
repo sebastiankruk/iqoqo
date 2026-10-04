@@ -256,9 +256,9 @@ class TestDeletionPlanCoverage:
         """
         with app.app_context():
             for model, column in account_lifecycle.NOT_NULL_USER_REFERENCES:
-                assert not model.__table__.columns[column].nullable, (
-                    f"{model.__tablename__}.{column} is nullable and does not belong in the deletion plan"
-                )
+                assert not model.__table__.columns[
+                    column
+                ].nullable, f"{model.__tablename__}.{column} is nullable and does not belong in the deletion plan"
 
     def test_nullable_user_references_are_set_to_null_or_orphaned_by_the_orm(self, app) -> None:
         """The other half of the contract: nullable references must resolve cleanly.
@@ -1113,9 +1113,9 @@ class TestCredentialsDieWithTheAccount:
             unsigned = client.get("/api/profile/", headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.e30.abc"})
 
             assert deleted.status_code == garbage.status_code == unsigned.status_code == 401
-            assert deleted.get_json() == garbage.get_json() == unsigned.get_json(), (
-                "a deleted account must be indistinguishable from a token that never existed"
-            )
+            assert (
+                deleted.get_json() == garbage.get_json() == unsigned.get_json()
+            ), "a deleted account must be indistinguishable from a token that never existed"
 
     def test_a_database_failure_fails_closed(self, client, owner, monkeypatch) -> None:
         """A database blip must not authenticate anyone."""
@@ -1162,8 +1162,7 @@ class TestRateLimiting:
             with client.application.app_context():
                 token = _session_cookie(client, owner)
                 statuses = [
-                    client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"}).status_code
-                    for _ in range(6)
+                    client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"}).status_code for _ in range(6)
                 ]
 
             assert 429 in statuses, f"the limiter never engaged: {statuses}"

@@ -176,7 +176,12 @@ class RedactionFilter(logging.Filter):
             # reaches the handler without passing through `msg` or `args`.
             if record.exc_text:
                 record.exc_text = redact_text(record.exc_text)
-        except Exception:  # pragma: no cover - a filter must never break logging
+        except Exception:  # pragma: no cover - a filter must never break logging  # pylint: disable=broad-except
+            # Deliberately broad: this runs on the emit path for every log
+            # record in the process. A narrow catch would let an unexpected type
+            # in `args` raise out of `logging.emit`, which swallows the
+            # exception *and* drops the line -- hiding the incident the log
+            # exists to record. Returning True keeps the line.
             return True
         return True
 

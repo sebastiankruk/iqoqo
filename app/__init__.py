@@ -244,8 +244,8 @@ def create_app(config_class=Config, config_override=None):
     limiter.init_app(app)
     cache.init_app(app)
 
-    from app.api.docs import docs_bp
     from app.api.account import account_bp
+    from app.api.docs import docs_bp
     from app.api.lending import lending_bp
     from app.api.roadmap import roadmap_bp
     from app.api.wishlist import wishlist_bp

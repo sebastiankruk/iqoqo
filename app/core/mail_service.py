@@ -59,7 +59,6 @@ from __future__ import annotations
 import logging
 import re
 import smtplib
-import socket
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid, parseaddr
@@ -77,7 +76,9 @@ MAX_ADDRESS_LENGTH = 254
 #: accepting them would mean accepting addresses that bounce.  This rejects
 #: them, which also removes every CR/LF and control character from the input
 #: before it is used as a header value.
-_ADDRESS_RE = re.compile(r"\A[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{1,64}@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\Z")
+_ADDRESS_RE = re.compile(
+    r"\A[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{1,64}@[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\Z"
+)
 
 #: SMTP host.  A hostname or an IPv4 literal -- never a URL, never a path, and
 #: never a bare ``user:pass@host``.  ``MAIL_HOST`` is operator configuration, so
@@ -297,9 +298,7 @@ def public_origin() -> str:
     """
     raw = str(_cfg("PUBLIC_APP_URL", "") or "").strip().rstrip("/")
     if not raw:
-        raise MailConfigurationError(
-            "PUBLIC_APP_URL is not set; iQoQo will not generate account email links without a known public origin"
-        )
+        raise MailConfigurationError("PUBLIC_APP_URL is not set; iQoQo will not generate account email links without a known public origin")
     if not raw.startswith("https://") and not raw.startswith("http://localhost"):
         raise MailConfigurationError("PUBLIC_APP_URL must be an https:// origin (http:// is allowed only for localhost)")
     if any(ch in raw for ch in "\r\n"):
@@ -357,7 +356,6 @@ class Transport(Protocol):
         Raises:
             MailDeliveryError: If the relay refused the message or was unreachable.
         """
-        ...  # pragma: no cover - protocol declaration
 
 
 class SmtpTransport:
@@ -379,9 +377,7 @@ class SmtpTransport:
         """
         try:
             if settings.use_ssl:
-                server: smtplib.SMTP = smtplib.SMTP_SSL(
-                    settings.host, settings.port, timeout=settings.timeout, local_hostname="iqoqo"
-                )
+                server: smtplib.SMTP = smtplib.SMTP_SSL(settings.host, settings.port, timeout=settings.timeout, local_hostname="iqoqo")
             else:
                 server = smtplib.SMTP(settings.host, settings.port, timeout=settings.timeout, local_hostname="iqoqo")
         except (OSError, smtplib.SMTPException) as exc:
@@ -400,7 +396,7 @@ class SmtpTransport:
             if settings.username:
                 server.login(settings.username, settings.password or "")
             server.sendmail(message.envelope_from, [message.recipient], message.raw)
-        except (smtplib.SMTPException, OSError, socket.timeout) as exc:
+        except (TimeoutError, smtplib.SMTPException, OSError) as exc:
             raise MailDeliveryError(f"The mail relay rejected or dropped the message: {type(exc).__name__}") from exc
         finally:
             try:
@@ -472,9 +468,7 @@ class MailService:
 
         settings = load_mail_settings()
         if settings is None:
-            raise MailConfigurationError(
-                "Outbound mail is disabled (MAIL_ENABLED is not set); this instance cannot send account email"
-            )
+            raise MailConfigurationError("Outbound mail is disabled (MAIL_ENABLED is not set); this instance cannot send account email")
 
         message = self._build(recipient=recipient, subject=subject, body_text=body_text, body_html=body_html, settings=settings)
         self._transport.deliver(message, settings)
@@ -548,7 +542,7 @@ def get_mail_service() -> MailService:
     Returns:
         The shared service.
     """
-    global _service  # noqa: PLW0603 - a process-lifetime singleton, set once
+    global _service  # noqa: PLW0603  # pylint: disable=global-statement
     if _service is None:
         transport: Transport = RecordingTransport() if _cfg("MAIL_TRANSPORT", "smtp") == "memory" else SmtpTransport()
         _service = MailService(transport=transport)
@@ -564,5 +558,5 @@ def set_mail_service(service: MailService | None) -> None:
     Args:
         service: The service to install, or None to restore the default.
     """
-    global _service  # noqa: PLW0603 - a process-lifetime singleton, set once
+    global _service  # noqa: PLW0603  # pylint: disable=global-statement
     _service = service
