@@ -73,6 +73,10 @@ Any provider reachable over SMTP works — there is no vendor SDK, deliberately,
 
 **No mail arrives, no error.** Almost always a relay-side rejection — greylisting, SPF/DKIM failure, or a blocked sender address. iQoQo's logs record a successful hand-off to the relay, not a delivery confirmation; only the relay knows the message arrived. For self-hosted diagnosis, run a local relay with an unthrottled destination and watch its logs.
 
+**The mail server could not be reached or refused the message.** The relay was contacted and would not take the message. This is deliberately reported differently from a configuration problem, because the causes and fixes differ: one needs a relay that accepts the message, the other needs `MAIL_HOST` set at all. The log line names the underlying SMTP error class (`SMTPRecipientsRefused`, `SMTPAuthenticationError`, and so on); read it there rather than guessing from the message.
+
+If this appeared only after a stack restart on a self-hosted setup, check whether your SMTP sink was detached from the project network — see [Trying it by hand](#trying-it-by-hand).
+
 **Links in the mail go to the wrong host.** `PUBLIC_APP_URL` is set incorrectly. It is never taken from the request, on purpose: a link built from the `Host` header is whatever an attacker chose to send, and for a mailbox-control token that means handing it to a domain of their choosing.
 
 ## Behaviour worth knowing
@@ -110,4 +114,51 @@ make test-backend           # or: .venv/bin/pytest tests/test_account_deletion.p
 cd frontend && npx vitest run __tests__/components/profile
 ```
 
-To exercise it without a relay, set `MAIL_TRANSPORT=memory` and inspect what would have been sent.
+### Trying it by hand
+
+A real relay is the only honest test — it catches header bugs and encoding problems a stub hides. Mailpit accepts any mail and shows it in a web UI, with nothing sent externally:
+
+```bash
+docker run -d --name iqoqo-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Then in `.env`:
+
+```bash
+MAIL_ENABLED=true
+MAIL_HOST=mailpit
+MAIL_PORT=1025
+MAIL_USE_TLS=false
+MAIL_FROM_ADDRESS=iqoqo@example.invalid
+PUBLIC_APP_URL=https://iqoqo.example.com
+```
+
+**If the containers cannot reach `mailpit`**, Mailpit is on the Docker default bridge while the stack is on its own project network. Attach it:
+
+```bash
+docker network connect --alias mailpit iqoqo-preview_default iqoqo-mailpit
+```
+
+Two things about that command:
+
+- The `--alias` is required. Without it Docker resolves the *container name* (`iqoqo-mailpit`), not `mailpit`, so `MAIL_HOST=mailpit` fails to resolve.
+- **Re-run it after every `preview-down`/`make preview-down`.** Removing the stack deletes the project network, which silently detaches Mailpit. Symptom: the first email works, everything after a stack restart fails with the mail-server-refused error while the configuration is still correct.
+
+Verify reachability from inside the stack before concluding anything else:
+
+```bash
+docker exec iqoqo-preview-web-1 python -c "import smtplib; s=smtplib.SMTP('mailpit',1025,timeout=8); print(s.ehlo()[0]); s.quit()"
+```
+
+### What `MAIL_TRANSPORT=memory` is for
+
+It swaps in a recorder that keeps messages in memory for the lifetime of the process. It exists for tests, which construct the recorder directly — **nothing exposes what it captured**, so it is not a way to inspect mail. Use Mailpit instead.
+
+### Walking the flow
+
+Sign in → **Profile → Email Address → Send verification link** → open the link in Mailpit → submit → **Delete Account** → open the link → confirm.
+
+Two properties are worth checking by hand, because they are what the design rests on and they are easier to confirm than to infer:
+
+- Open a confirmation link twice, or let browser prefetch fetch it. Nothing is consumed and nothing is deleted.
+- Open a deletion link while signed in as a different account. It refuses, and both accounts are untouched.

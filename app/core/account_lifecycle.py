@@ -194,9 +194,20 @@ def send_verification(user: User) -> None:
             subject=rendered.subject,
             body_text=rendered.text,
         )
-    except mail_service.MailError as exc:
+    except mail_service.MailConfigurationError:
+        # Retract the token, then let the configuration error through unchanged.
+        # It is a *different* kind of failure from a refused send -- mail is not
+        # usable at all -- and the caller reports the two differently. Wrapping
+        # it here collapsed that distinction before anyone could act on it.
         account_tokens.invalidate_tokens(user.id, AccountTokenPurpose.EMAIL_VERIFICATION, commit=True)
-        logger.warning("Verification mail for user %s was not delivered: %s", user.id, type(exc).__name__)
+        raise
+    except mail_service.MailDeliveryError as exc:
+        account_tokens.invalidate_tokens(user.id, AccountTokenPurpose.EMAIL_VERIFICATION, commit=True)
+        # `exc` is logged, not just its type: `MailDeliveryError` carries the
+        # underlying SMTP exception class, and logging only `type(exc).__name__`
+        # discarded the only signal that distinguishes "the relay refused this"
+        # from "the relay was unreachable". No message body or token is logged.
+        logger.warning("Verification mail for user %s was not delivered: %s", user.id, exc)
         raise MailUnavailableError(str(exc)) from exc
     logger.info("Issued an email-verification token for user %s", user.id)
 
@@ -236,9 +247,14 @@ def request_deletion(user: User) -> AccountActionToken:
             subject=rendered.subject,
             body_text=rendered.text,
         )
-    except mail_service.MailError as exc:
+    except mail_service.MailConfigurationError:
+        # See the note in `send_verification`: a configuration problem is a
+        # different failure from a refused send and must not be flattened into it.
         account_tokens.invalidate_tokens(user.id, AccountTokenPurpose.ACCOUNT_DELETION, commit=True)
-        logger.warning("Deletion-request mail for user %s was not delivered: %s", user.id, type(exc).__name__)
+        raise
+    except mail_service.MailDeliveryError as exc:
+        account_tokens.invalidate_tokens(user.id, AccountTokenPurpose.ACCOUNT_DELETION, commit=True)
+        logger.warning("Deletion-request mail for user %s was not delivered: %s", user.id, exc)
         raise MailUnavailableError(str(exc)) from exc
 
     logger.info("Created a pending deletion request for user %s", user.id)

@@ -431,6 +431,49 @@ class TestVerifiedEmailIsRequired:
 
             assert "Verify your email address" in response.get_json()["error"]
 
+    def test_a_relay_failure_is_not_reported_as_a_configuration_problem(self, client, configured_mail, owner) -> None:
+        """A reachable relay that refuses must not be described as "not configured".
+
+        Reporting both under one message sent a report of a live-but-refusing
+        relay to the wrong investigation -- and pointed the person debugging it
+        at settings that were already correct.
+        """
+        from app.core.mail_service import MailDeliveryError
+
+        class RefusingTransport:
+            def deliver(self, message, settings):
+                raise MailDeliveryError("The mail relay rejected or dropped the message: SMTPRecipientsRefused")
+
+        previous = mail_service.get_mail_service()
+        mail_service.set_mail_service(mail_service.MailService(transport=RefusingTransport()))
+        try:
+            with client.application.app_context():
+                token = _session_cookie(client, owner)
+                response = client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
+
+            assert response.status_code == 503
+            error = response.get_json()["error"]
+            assert "not configured" not in error
+            assert "mail server could not be reached or refused" in error
+        finally:
+            mail_service.set_mail_service(previous)
+
+    def test_a_configuration_failure_is_reported_as_a_configuration_problem(self, client, owner) -> None:
+        """The other half: an unusable configuration must still say so."""
+        with client.application.app_context():
+            record = User(email="nomail@iqoqo.local")
+            record.set_password("test-password")
+            record.mark_email_verified("local")
+            db.session.add(record)
+            db.session.commit()
+
+            token = _session_cookie(client, record)
+            # No `configured_mail`, so MAIL_ENABLED is unset and mail is unusable.
+            response = client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 503
+        assert "not configured to send mail" in response.get_json()["error"]
+
 
 # ---------------------------------------------------------------------------
 # Scanner safety
@@ -451,7 +494,15 @@ class TestScannerSafety:
         with client.application.app_context():
             token = _session_cookie(client, owner)
             client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
-            yield _link_token(configured_mail.sent[-1])
+            pending = _link_token(configured_mail.sent[-1])
+
+        # Yielded *outside* the app context deliberately. Flask binds `g` to the
+        # app context and the test client reuses an already-pushed one, so
+        # yielding inside it leaks `g.user_id` from the POST above into the
+        # test's own request. That made assertions pass against routes carrying
+        # no auth decorator at all, which is how the missing `optional_auth` on
+        # the two confirmation GETs went unnoticed.
+        yield pending
 
     def test_a_bare_get_does_not_delete_or_consume(self, client, configured_mail, owner, pending_token) -> None:
         """The scanner case: no session, no cookie, just the URL."""
@@ -496,12 +547,21 @@ class TestScannerSafety:
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
 
     def test_a_get_with_a_session_still_does_not_delete(self, client, configured_mail, owner, pending_token) -> None:
-        """Authenticated link preview is still just a preview."""
-        token = _session_cookie(client, owner)
-        response = client.get(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        """Authenticated link preview is still just a preview.
+
+        Deliberately driven with a *cookie* and issued outside any surrounding
+        ``app.app_context()``. Flask binds ``g`` to the app context, and the
+        test client reuses an already-pushed one, so a request made inside an
+        ``app_context()`` block inherits ``g.user_id`` from whatever ran before
+        it. Doing that here let this test pass against a route that had no auth
+        decorator at all -- the page rendered the confirmation form only because
+        ``g`` leaked from the fixture's earlier request. That masked a real bug
+        where every signed-in user saw "Sign in to continue" forever.
+        """
+        client.delete_cookie("iqoqo_session", domain="localhost")
+        client.set_cookie("iqoqo_session", _session_cookie(client, owner), domain="localhost")
+
+        response = client.get(f"/api/account/deletion/confirm?token={pending_token}")
 
         assert response.status_code == 200
         assert "Permanently delete your account" in response.data.decode()
@@ -509,6 +569,43 @@ class TestScannerSafety:
         with client.application.app_context():
             assert db.session.get(User, owner) is not None
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
+
+    def test_an_anonymous_get_asks_the_user_to_sign_in(self, client, configured_mail, owner, pending_token) -> None:
+        """With no session, the page routes to sign-in rather than rendering a form.
+
+        The counterpart to the test above, and the one that pins the branch:
+        signed-in users must reach the form, anonymous ones must not.
+        """
+        client.delete_cookie("iqoqo_session", domain="localhost")
+
+        response = client.get(f"/api/account/deletion/confirm?token={pending_token}")
+
+        assert "Sign in to continue" in response.data.decode()
+        assert "Permanently delete your account" not in response.data.decode()
+
+    def test_a_signed_in_user_reaches_the_verification_form(self, client, configured_mail, owner) -> None:
+        """The same applies to email verification, which has the same two branches."""
+        client.delete_cookie("iqoqo_session", domain="localhost")
+
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        client.set_cookie("iqoqo_session", _session_cookie(client, owner), domain="localhost")
+
+        response = client.get(f"/api/account/email/verify?token={raw}")
+
+        assert response.status_code == 200
+        assert "Confirm your email address" in response.data.decode()
+        assert "Sign in to continue" not in response.data.decode()
+
+    def test_an_anonymous_verification_get_asks_the_user_to_sign_in(self, client, configured_mail, owner) -> None:
+        """A verification token alone must not be able to change account state."""
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        response = client.get(f"/api/account/email/verify?token={raw}")
+
+        assert "Sign in to continue" in response.data.decode()
 
     def test_the_page_loads_no_third_party_resources(self, client, configured_mail, owner, pending_token) -> None:
         """Zero external references, enforced by a CSP that would break if one appeared.
@@ -597,7 +694,15 @@ class TestConfirmationRequiresBothFactors:
         with client.application.app_context():
             token = _session_cookie(client, owner)
             client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
-            yield _link_token(configured_mail.sent[-1])
+            pending = _link_token(configured_mail.sent[-1])
+
+        # Yielded *outside* the app context deliberately. Flask binds `g` to the
+        # app context and the test client reuses an already-pushed one, so
+        # yielding inside it leaks `g.user_id` from the POST above into the
+        # test's own request. That made assertions pass against routes carrying
+        # no auth decorator at all, which is how the missing `optional_auth` on
+        # the two confirmation GETs went unnoticed.
+        yield pending
 
     def test_the_email_url_alone_cannot_delete(self, client, configured_mail, owner, pending_token) -> None:
         """A forwarded, archived or scanned link must be inert.
@@ -719,7 +824,15 @@ class TestCsrfProtection:
         with client.application.app_context():
             token = _session_cookie(client, owner)
             client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
-            yield _link_token(configured_mail.sent[-1])
+            pending = _link_token(configured_mail.sent[-1])
+
+        # Yielded *outside* the app context deliberately. Flask binds `g` to the
+        # app context and the test client reuses an already-pushed one, so
+        # yielding inside it leaks `g.user_id` from the POST above into the
+        # test's own request. That made assertions pass against routes carrying
+        # no auth decorator at all, which is how the missing `optional_auth` on
+        # the two confirmation GETs went unnoticed.
+        yield pending
 
     def test_cookie_auth_without_csrf_proof_is_refused(self, client, configured_mail, owner, pending_token) -> None:
         """A cross-site POST carries the cookie but cannot read the CSRF cookie."""

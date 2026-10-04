@@ -75,6 +75,7 @@ from .decorators import (
     CSRF_FIELD_NAME,
     enforce_csrf_if_cookie_authenticated,
     issue_csrf_token,
+    optional_auth,
     require_auth,
     set_csrf_cookie,
 )
@@ -203,35 +204,40 @@ def request_email_verification():
 
     try:
         account_lifecycle.send_verification(user)
-    except MailUnavailableError:
-        # Names the misconfiguration but reveals nothing about the account: the
-        # caller is already authenticated as this user, so there is no
-        # enumeration to protect here, and an operator needs the key name.
-        logger.error("Email verification is unavailable: outbound mail is not configured or not delivering")
-        return (
-            jsonify(
-                {
-                    "error": "Verification email could not be sent. This instance is not configured to send mail; "
-                    "ask your administrator to configure it.",
-                    "code": 503,
-                }
-            ),
-            503,
-        )
-    except mail_service.MailConfigurationError:
-        logger.error("Email verification is unavailable: mail configuration is invalid")
-        return (
-            jsonify(
-                {
-                    "error": "Verification email could not be sent. This instance is not configured to send mail; "
-                    "ask your administrator to configure it.",
-                    "code": 503,
-                }
-            ),
-            503,
-        )
+    except MailUnavailableError as exc:
+        # The two failures are told apart on purpose. "Not configured" and
+        # "the relay refused the message" have different causes and different
+        # fixes -- one is an operator who never set MAIL_HOST, the other is a
+        # host that was reachable and said no. Reporting both as "not
+        # configured" sent a report of a live-but-refusing relay to the wrong
+        # investigation entirely.
+        logger.error("Email verification was not delivered (%s)", exc, exc_info=True)
+        return _mail_failure_response(delivery_problem=True)
+    except mail_service.MailConfigurationError as exc:
+        logger.error("Email verification is unavailable: mail configuration is invalid (%s)", exc)
+        return _mail_failure_response(delivery_problem=False)
 
     return jsonify({"success": True, "message": "If the address needs verification, a link is on its way."})
+
+
+def _mail_failure_response(*, delivery_problem: bool):
+    """Build the 503 body for a send that did not happen.
+
+    Args:
+        delivery_problem: True when the relay was reachable and refused or
+            dropped the message, False when mail is not usable as configured.
+
+    Returns:
+        A ``(Response, 503)`` tuple. 503 throughout: nothing was sent and no
+        state changed, so the caller may retry once the cause is fixed.
+    """
+    detail = (
+        "The mail server could not be reached or refused the message. Nothing has been changed; "
+        "please try again shortly, and tell your administrator if it keeps happening."
+        if delivery_problem
+        else "This instance is not configured to send mail. Ask your administrator to configure it. " "Nothing has been changed."
+    )
+    return jsonify({"error": detail, "code": 503}), 503
 
 
 @account_bp.route("/email", methods=["PUT"])
@@ -289,6 +295,7 @@ def change_account_email():
 
 
 @account_bp.route("/email/verify", methods=["GET"])
+@optional_auth
 def verify_email_page():
     """Render the email-verification confirmation page.
 
@@ -406,19 +413,12 @@ def request_account_deletion():
             ),
             409,
         )
-    except (MailUnavailableError, mail_service.MailConfigurationError):
-        logger.error("Account deletion request could not be delivered: outbound mail is not available")
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "The confirmation email could not be sent, so nothing has been changed. "
-                    "This instance is not configured to send mail; ask your administrator to configure it.",
-                    "code": 503,
-                }
-            ),
-            503,
-        )
+    except MailUnavailableError as exc:
+        logger.error("Account deletion request mail was not delivered (%s)", exc, exc_info=True)
+        return _mail_failure_response(delivery_problem=True)
+    except mail_service.MailConfigurationError as exc:
+        logger.error("Account deletion request mail is unavailable: configuration is invalid (%s)", exc)
+        return _mail_failure_response(delivery_problem=False)
 
     # 202: the request is recorded and the mail is on its way, but the account
     # is untouched. Returning 200 would imply the deletion itself is done.
@@ -436,6 +436,7 @@ def deletion_status():
 
 
 @account_bp.route("/deletion/confirm", methods=["GET"])
+@optional_auth
 def deletion_confirm_page():
     """Render the account-deletion confirmation page.
 
