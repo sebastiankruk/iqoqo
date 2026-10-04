@@ -105,6 +105,11 @@ SENSITIVE_SETTING_KEYS = {
     "ALLEGRO_TOKEN_DATA",
     "OPENOBSERVE_ROOT_PASSWORD",
     "OPENOBSERVE_BASIC_AUTH",
+    # Listed explicitly because the generic `_KEY`/`_SECRET`/`_TOKEN`/`_DATA`
+    # heuristic in `is_sensitive_key` does not match a `_PASSWORD` suffix.  This
+    # is a live SMTP credential for the account-deletion mail path, so leaving
+    # it out would store it in cleartext in `instance_settings`.
+    "MAIL_PASSWORD",
 }
 
 

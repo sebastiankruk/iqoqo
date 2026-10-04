@@ -20,8 +20,10 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -128,6 +130,164 @@ class OAuthExchangeCode(db.Model):  # type: ignore[name-defined]
 
 
 # ---------------------------------------------------------------------------
+# Account lifecycle
+# ---------------------------------------------------------------------------
+
+
+class AccountTokenPurpose(StrEnum):
+    """The closed set of account-lifecycle actions a token may authorise.
+
+    A token carries its purpose in the row it is persisted as *and* in the key
+    used to derive its digest, so a token minted for one purpose can neither be
+    replayed against the other endpoint nor be recognised there even if a caller
+    submits it verbatim.  Adding a purpose here is a deliberate widening of what
+    a single-use credential can authorise; the test suite asserts that every
+    purpose has a matching column-length allowance and a consuming endpoint.
+    """
+
+    EMAIL_VERIFICATION = "email_verification"
+    ACCOUNT_DELETION = "account_deletion"
+
+
+#: Column width for :attr:`AccountActionToken.purpose`.  Sized to hold every
+#: member of :class:`AccountTokenPurpose` with room to spare, and asserted
+#: against the enum in the test suite so a longer member cannot be silently
+#: truncated by PostgreSQL.
+TOKEN_PURPOSE_LENGTH = 32
+
+
+class AccountActionToken(db.Model):  # type: ignore[name-defined]
+    """Single-use, purpose-bound, expiring credential for an account action.
+
+    Only a keyed digest of the token is stored, never the token itself: a leaked
+    database row — or a backup, or a log of the query that read it — therefore
+    yields no usable credential.  The row additionally pins the account, the
+    purpose, the address the token was issued for, and an expiry, so a token
+    cannot be widened, retargeted at another mailbox, or replayed.
+
+    At most one *outstanding* token may exist per ``(user_id, purpose)`` pair.
+    That is enforced by a partial unique index rather than by application code,
+    so a resend supersedes the previous token even when two requests race and
+    even if a future caller forgets to invalidate first.
+    """
+
+    __tablename__ = "account_action_tokens"
+    __table_args__ = (
+        # Index names are declared explicitly rather than inferred from
+        # `index=True`.  SQLAlchemy derives `ix_<schema>_<table>_<column>` only
+        # when the table carries a schema, so a bare table silently produces a
+        # different name on SQLite than on PostgreSQL -- the model/migration
+        # divergence that `v0_8_2_fk_index_names` exists to undo.  Naming them
+        # here makes the agreement dialect-independent.
+        db.Index("ix_auth_account_action_tokens_token_digest", "token_digest", unique=True),
+        db.Index("ix_auth_account_action_tokens_user_id", "user_id"),
+        # Supersession: a resend may only ever insert after the previous
+        # outstanding token for the same account and purpose has been consumed
+        # or deleted.  `consumed_at IS NULL` is the "outstanding" predicate, and
+        # a partial unique index is the only form of that constraint both
+        # PostgreSQL and SQLite support.
+        db.Index(
+            "ix_auth_account_action_tokens_one_outstanding",
+            "user_id",
+            "purpose",
+            unique=True,
+            sqlite_where=db.text("consumed_at IS NULL"),
+            postgresql_where=db.text("consumed_at IS NULL"),
+        ),
+        # Cleanup sweeps this by expiry; without the index a purge is a full
+        # scan of a table whose rows are all short-lived.
+        db.Index(
+            "ix_auth_account_action_tokens_expires_at",
+            "expires_at",
+        ),
+        db.CheckConstraint(
+            f"purpose IN ('{AccountTokenPurpose.EMAIL_VERIFICATION.value}', '{AccountTokenPurpose.ACCOUNT_DELETION.value}')",
+            name="check_account_action_token_purpose",
+        ),
+        *(({"schema": _AUTH},) if _AUTH else ()),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    purpose = db.Column(String(TOKEN_PURPOSE_LENGTH), nullable=False)
+    #: Keyed digest (hex, 64 chars) of the raw token.  Unique so a collision --
+    #: which a 256-bit token makes negligible -- fails loudly instead of
+    #: resolving to whichever row the query happened to find first.
+    token_digest = db.Column(String(64), nullable=False)
+    #: The address the token was issued for, copied at issue time.  A
+    #: verification token is only honoured while this still matches the
+    #: account's current address, so changing the address invalidates it even if
+    #: the row somehow survives.
+    email = db.Column(String(255), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    consumed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    @property
+    def is_outstanding(self) -> bool:
+        """Whether this token may still be presented.
+
+        Read-side only.  Acceptance still re-checks under a row lock in
+        :mod:`app.core.account_tokens`; a property here exists for the API
+        surfaces that only report state.
+        """
+        if self.consumed_at is not None:
+            return False
+        return _as_utc(self.expires_at) > datetime.now(UTC)
+
+    @classmethod
+    def purge_expired(cls, now: datetime | None = None) -> int:
+        """Delete rows whose expiry has passed and return how many went away.
+
+        Consumed rows are retained until they expire: an audit trail that a
+        token *was* used is worth more than the bytes, and the rows are bounded
+        by the token expiry rather than by usage.
+
+        Args:
+            now: Override for the current time; used by tests to exercise the
+                boundary without sleeping.
+
+        Returns:
+            The number of rows deleted.
+        """
+        from . import db as _db
+
+        cutoff = now or datetime.now(UTC)
+        # SQLite stores `DateTime` values without a timezone, so comparing a
+        # column read back as naive against an aware `now()` raises rather than
+        # working. Binding a naive cutoff there keeps both dialects on the same
+        # code path; PostgreSQL compares an aware value to an aware column and
+        # is unaffected by the bound parameter's shape.
+        if _db.session.get_bind().dialect.name == "sqlite":
+            cutoff = cutoff.replace(tzinfo=None)
+        result = _db.session.execute(_db.delete(cls).where(cls.expires_at <= cutoff))
+        return int(getattr(result, "rowcount", 0) or 0)
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normalise a stored timestamp to timezone-aware UTC.
+
+    SQLite round-trips ``DateTime(timezone=True)`` as a naive value, so a token
+    read back from the test database would otherwise be compared against an
+    aware ``now()`` and raise.  Production PostgreSQL is already aware, so this
+    is a no-op there.
+
+    Args:
+        value: The stored timestamp, or None.
+
+    Returns:
+        An aware UTC datetime, or None when ``value`` was None.
+    """
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+# ---------------------------------------------------------------------------
 # RBAC
 # ---------------------------------------------------------------------------
 
@@ -179,10 +339,60 @@ class User(db.Model):  # type: ignore[name-defined]
     last_login = db.Column(db.DateTime, nullable=True)
     visibility = db.Column(db.String(20), default="private")
 
+    # -- Email verification -------------------------------------------------
+    # The address on the row is *not* evidence of mailbox control: it may have
+    # been supplied by whoever registered, typed by an administrator, or copied
+    # from an unverified federated claim.  These two columns are the only
+    # trustworthy signal, and account deletion is gated on them.
+    #
+    # Both start NULL, including for rows that predate this column.  A migration
+    # cannot retroactively prove control of a mailbox, and defaulting to
+    # "verified" would silently re-enable deletion for every existing account
+    # based on nothing.
+    email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Where the verification came from: ``local`` (a confirmation link the owner
+    #: followed) or ``oidc`` (a validated identity response asserting
+    #: `email_verified`).  Kept for audit and so a future policy can require
+    #: re-verification of federated addresses without losing the history.
+    email_verified_source = db.Column(db.String(16), nullable=True)
+
     roles: Mapped[list[Role]] = relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
     items = db.relationship("Item", foreign_keys="Item.owner_id", backref="owner", lazy="dynamic", cascade="all, delete-orphan")
     lent_items = db.relationship("Item", foreign_keys="Item.lent_to_user_id", backref="borrower", lazy="dynamic")
     consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")
+
+    @property
+    def is_email_verified(self) -> bool:
+        """Whether the address currently stored on the account is verified."""
+        return self.email_verified_at is not None
+
+    @property
+    def has_verified_email(self) -> bool:
+        """Whether the account owns a usable, verified address.
+
+        Distinct from :attr:`is_email_verified` in intent only: both reduce to
+        the same predicate today, but the API surfaces and the deletion gate read
+        better as "does this account have an address it can be reached at".
+        """
+        return bool(self.email) and self.email_verified_at is not None
+
+    def mark_email_verified(self, source: str) -> None:
+        """Record mailbox control of the current address.
+
+        Args:
+            source: Where the evidence came from — ``local`` or ``oidc``.  The
+                column is a ``String(16)``; the test suite asserts both accepted
+                values fit.
+        """
+        if len(source) > 16:
+            raise ValueError(f"email verification source {source!r} exceeds the 16-character column width")
+        self.email_verified_at = datetime.now(UTC)
+        self.email_verified_source = source
+
+    def clear_email_verification(self) -> None:
+        """Drop verification state, leaving the address itself untouched."""
+        self.email_verified_at = None
+        self.email_verified_source = None
 
     def set_password(self, password: str) -> None:
         """Hash and store a new password."""
@@ -215,6 +425,25 @@ class User(db.Model):  # type: ignore[name-defined]
             "visibility": self.visibility,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+    def to_private_dict(self) -> dict:
+        """Serialize fields only the account owner may read.
+
+        Separated from :meth:`to_dict` because the verification state is
+        deliberately *not* in the public projection: telling a third party
+        whether an address is confirmed is a small but free disclosure, and the
+        owner-facing surfaces are the only consumers that need it.
+        """
+        data = self.to_dict()
+        data.update(
+            {
+                "email_verified": self.is_email_verified,
+                "email_verified_at": self.email_verified_at.isoformat() if self.email_verified_at else None,
+                "email_verified_source": self.email_verified_source,
+            }
+        )
+        return data
+
 
     @classmethod
     def list_llm_permissions(cls, user: User | None) -> dict[str, bool]:

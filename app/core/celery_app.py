@@ -79,6 +79,14 @@ celery.conf.update(
             "task": "app.core.tasks.refresh_taxonomies_cache",
             "schedule": 3600.0,
         },
+        # Expired email-verification and deletion tokens.  Issuance purges on
+        # every call, so this only matters for an instance where nobody ever
+        # asks for a second link; hourly is ample for rows that all expire
+        # within a day, and the delete is an indexed range scan.
+        "purge-account-tokens-hourly": {
+            "task": "app.core.tasks.purge_expired_account_tokens",
+            "schedule": 3600.0,
+        },
     },
 )
 

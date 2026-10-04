@@ -24,6 +24,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 
 # Add project root to path to import scripts
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -453,10 +455,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_2_fk_index_names"
+    assert heads[0] == "v0_8_3_account_lifecycle"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_3_account_lifecycle",
         "v0_8_2_fk_index_names",
         "v0_8_2_fk_indexes_and_quantity",
         "v0_8_2_duplicate_provenance",
@@ -1370,3 +1373,246 @@ def test_v0_8_2_duplicate_candidates_pair_index_is_order_insensitive() -> None:
                 )
     finally:
         engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# v0_8_3_account_lifecycle
+# ---------------------------------------------------------------------------
+
+
+def _run_account_lifecycle_migration(migration: Any, operation, engine: Any) -> None:
+    """Apply one operation of the account-lifecycle migration to *engine*.
+
+    The chain has to go through ``Operations`` rather than the bare Alembic API,
+    matching the pattern the rest of this module uses: ``migrations/env.py``
+    reads ``current_app``, so a standalone invocation would target SQLite
+    regardless of the URL.
+
+    Args:
+        migration: The imported migration module.
+        operation: ``upgrade`` or ``downgrade``.
+        engine: A live SQLAlchemy engine.
+    """
+    with engine.begin() as connection:
+        previous_op = migration.op
+        migration.op = Operations(MigrationContext.configure(connection))
+        try:
+            operation()
+        finally:
+            migration.op = previous_op
+
+
+@pytest.fixture
+def account_lifecycle_engine() -> Any:
+    """A SQLite database with the ``auth.users`` table the migration alters.
+
+    Only the parent table is created, not the whole schema. The migration's
+    ``batch_alter_table`` on ``users`` is the part under test, and standing up
+    every model would make a failure in an unrelated table look like a failure
+    here.
+
+    Yields:
+        A SQLAlchemy engine with ``users`` present.
+    """
+    import sqlalchemy as sa
+
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "CREATE TABLE users ("
+                "id VARCHAR(36) NOT NULL PRIMARY KEY, "
+                "email VARCHAR(255) NOT NULL, "
+                "password_hash VARCHAR(255)"
+                ")"
+            )
+        )
+    yield engine
+    engine.dispose()
+
+
+def test_v0_8_3_account_lifecycle_metadata() -> None:
+    """The revision must chain from the previous head and fit the version column."""
+    from importlib import import_module
+
+    migration = import_module("migrations.versions.v0_8_3_account_lifecycle")
+    assert migration.revision == "v0_8_3_account_lifecycle"
+    assert migration.down_revision == "v0_8_2_fk_index_names"
+    # `alembic_version.version_num` is VARCHAR(32) on PostgreSQL.
+    assert len(migration.revision) <= 32
+
+
+def test_v0_8_3_adds_verification_columns_as_nullable(account_lifecycle_engine: Any) -> None:
+    """Verification state is added nullable, so pre-existing rows are unverified.
+
+    A migration cannot retroactively prove who controlled a mailbox. Backfilling
+    ``verified`` would silently authorise irreversible account deletion for every
+    account already in the database, so the column must arrive empty.
+    """
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+
+    with account_lifecycle_engine.begin() as connection:
+        connection.execute(
+            sa.text("INSERT INTO users (id, email, password_hash) VALUES ('u1', 'pre@example.invalid', 'hash')")
+        )
+
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+
+    with account_lifecycle_engine.connect() as connection:
+        row = connection.execute(
+            sa.text("SELECT email_verified_at, email_verified_source FROM users WHERE id = 'u1'")
+        ).one()
+        assert row[0] is None
+        assert row[1] is None
+
+
+def test_v0_8_3_creates_token_table_with_supersession_index(account_lifecycle_engine: Any) -> None:
+    """The token table exists with the columns and the partial unique index."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+
+    inspector = sa.inspect(account_lifecycle_engine)
+    assert inspector.has_table("account_action_tokens")
+
+    columns = {col["name"] for col in inspector.get_columns("account_action_tokens")}
+    assert {
+        "id",
+        "user_id",
+        "purpose",
+        "token_digest",
+        "email",
+        "created_at",
+        "expires_at",
+        "consumed_at",
+    } <= columns
+
+    index_names = {idx["name"] for idx in inspector.get_indexes("account_action_tokens")}
+    assert "ix_auth_account_action_tokens_one_outstanding" in index_names
+    assert "ix_auth_account_action_tokens_token_digest" in index_names
+    assert "ix_auth_account_action_tokens_expires_at" in index_names
+
+
+def test_v0_8_3_only_one_outstanding_token_per_account_and_purpose(account_lifecycle_engine: Any) -> None:
+    """A resend must be impossible while an unconsumed token exists.
+
+    This is the constraint that makes supersession safe under concurrency: two
+    simultaneous "send me a link" requests cannot both produce a live token, so
+    only the newest link works. Asserted against the schema rather than against
+    the service, because the guarantee has to survive a caller that forgets to
+    invalidate first.
+    """
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from sqlalchemy.exc import IntegrityError
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+
+    def insert(digest: str, purpose: str = "account_deletion", consumed: bool = False) -> None:
+        with account_lifecycle_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO account_action_tokens "
+                    "(user_id, purpose, token_digest, email, created_at, expires_at, consumed_at) "
+                    "VALUES ('u1', :purpose, :digest, 'a@example.invalid', "
+                    "'2026-01-01 00:00:00', '2026-01-02 00:00:00', :consumed)"
+                ),
+                {"purpose": purpose, "digest": digest, "consumed": "2026-01-01 12:00:00" if consumed else None},
+            )
+
+    insert("d1")
+    with pytest.raises(IntegrityError):
+        insert("d2")  # second outstanding token, same account and purpose
+
+    # A different purpose is a different credential and must coexist.
+    insert("d3", purpose="email_verification")
+
+    # A consumed token frees the outstanding slot, which is what lets a
+    # verification be followed later by a deletion request. The digest column is
+    # globally unique, so a digest already used by an outstanding row is updated
+    # in place rather than inserted twice -- the point under test is the
+    # *partial* index, not the global one.
+    with account_lifecycle_engine.begin() as connection:
+        connection.execute(sa.text("UPDATE account_action_tokens SET consumed_at = '2026-01-01 12:00:00' WHERE token_digest = 'd1'"))
+    insert("d4")
+
+
+def test_v0_8_3_rejects_an_unknown_purpose(account_lifecycle_engine: Any) -> None:
+    """The CHECK constraint keeps the purpose vocabulary closed."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from sqlalchemy.exc import IntegrityError
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+
+    with pytest.raises(IntegrityError):
+        with account_lifecycle_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO account_action_tokens "
+                    "(user_id, purpose, token_digest, email, created_at, expires_at) "
+                    "VALUES ('u1', 'made_up_purpose', 'dd1', 'a@example.invalid', "
+                    "'2026-01-01 00:00:00', '2026-01-02 00:00:00')"
+                )
+            )
+
+
+def test_v0_8_3_downgrade_removes_everything_it_added(account_lifecycle_engine: Any) -> None:
+    """The migration is reversible and leaves the parent table as it found it."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+    _run_account_lifecycle_migration(migration, migration.downgrade, account_lifecycle_engine)
+
+    inspector = sa.inspect(account_lifecycle_engine)
+    assert not inspector.has_table("account_action_tokens")
+
+    users_columns = {col["name"] for col in inspector.get_columns("users")}
+    assert "email_verified_at" not in users_columns
+    assert "email_verified_source" not in users_columns
+
+    # The original data must still be there: a downgrade that dropped rows would
+    # destroy accounts while claiming to be reversible.
+    with account_lifecycle_engine.connect() as connection:
+        assert connection.execute(sa.text("SELECT count(*) FROM users")).scalar_one() == 0
+
+
+def test_v0_8_3_upgrade_after_downgrade_converges(account_lifecycle_engine: Any) -> None:
+    """Re-applying after a downgrade must succeed, not collide with leftovers."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+
+    migration: Any = import_module("migrations.versions.v0_8_3_account_lifecycle")
+
+    for _ in range(2):
+        _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+        _run_account_lifecycle_migration(migration, migration.downgrade, account_lifecycle_engine)
+
+    _run_account_lifecycle_migration(migration, migration.upgrade, account_lifecycle_engine)
+
+    inspector = sa.inspect(account_lifecycle_engine)
+    assert inspector.has_table("account_action_tokens")
+    users_columns = {col["name"] for col in inspector.get_columns("users")}
+    assert "email_verified_at" in users_columns

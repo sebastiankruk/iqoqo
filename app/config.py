@@ -111,6 +111,34 @@ class Config:
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
+    # Public origin used to build links in outbound email (email verification,
+    # account-deletion confirmation).  Never derived from the request: a link
+    # built from the Host header is whatever an attacker chose to send, which
+    # for a mailbox-control token means handing it to a domain of their
+    # choosing.  Required for the mail features and left unset by default, so
+    # an instance that never configures it fails a send loudly instead of
+    # mailing `http://localhost/...` to a real person.
+    PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL")
+
+    # Transactional mail (see app/core/mail_service.py).  Disabled by default
+    # because an instance with no relay must still boot and serve its catalogue;
+    # the credential itself is held in InstanceSettings and Fernet-encrypted at
+    # rest once set from the admin UI.
+    MAIL_ENABLED = os.environ.get("MAIL_ENABLED", "false")
+    MAIL_HOST = os.environ.get("MAIL_HOST")
+    MAIL_PORT = _get_int_env("MAIL_PORT", 587)
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true")
+    MAIL_USE_SSL = os.environ.get("MAIL_USE_SSL", "false")
+    MAIL_FROM_ADDRESS = os.environ.get("MAIL_FROM_ADDRESS")
+    MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "iQoQo")
+    MAIL_TIMEOUT_SECONDS = _get_int_env("MAIL_TIMEOUT_SECONDS", 10)
+    #: ``smtp`` talks to a relay; ``memory`` records messages instead of sending
+    #: them.  The latter exists for the end-to-end stack and for local
+    #: development; it must never be set on a deployment that expects real mail.
+    MAIL_TRANSPORT = os.environ.get("MAIL_TRANSPORT", "smtp")
+
     # Admin Init
     ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@iqoqo.local")
     _admin_password = os.environ.get("ADMIN_PASSWORD")

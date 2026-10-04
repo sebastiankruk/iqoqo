@@ -33,7 +33,7 @@ work unchanged thanks to this shim.
 """
 
 from app.db.audio import MANIFESTATION_AUDIO_META_KEYS  # noqa: F401
-from app.db.auth import ConsentRecord, OAuthExchangeCode, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
+from app.db.auth import AccountActionToken, AccountTokenPurpose, ConsentRecord, OAuthExchangeCode, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
 from app.db.contributions import (  # noqa: F401
     EXPRESSION_CONTRIBUTION_ROLES,
     WORK_CONTRIBUTION_ROLES,

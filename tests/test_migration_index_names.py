@@ -209,7 +209,12 @@ def test_downgrade_one_step_only_renames_back() -> None:
     """
     url = _migrated()
     try:
-        _flask_db(url, "downgrade")
+        # Target the revision by name rather than stepping once from head.
+        # `downgrade` with no argument means "one revision back", which was
+        # `v0_8_2_fk_index_names` when that was the head -- but head has since
+        # moved on, so a bare downgrade would now only undo the newer revision
+        # and leave the rename in place. Naming the target states the intent.
+        _flask_db(url, "downgrade", "v0_8_2_fk_indexes_and_quantity")
 
         assert "ix_items_manifestation_id" in _index_names(url, "items", "inventory")
         assert "ix_reading_roadmaps_user_id" in _index_names(url, "reading_roadmaps", "catalog")
