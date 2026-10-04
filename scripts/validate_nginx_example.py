@@ -61,6 +61,11 @@ RENDER_VALUES = {
     "API_PORT": "5000",
     "FRONTEND_UPSTREAM": "127.0.0.1",
     "FRONTEND_PORT": "3000",
+    # OpenObserve ingest upstream. Present only when the monitoring compose
+    # file is composed alongside the main stack, which is why the /rum/
+    # location degrades to a 502 rather than blocking nginx startup.
+    "OPENOBSERVE_UPSTREAM": "127.0.0.1",
+    "OPENOBSERVE_PORT": "5080",
 }
 
 # nginx image used for the parse. Pinned to a digest-free tag on purpose: this

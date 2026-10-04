@@ -416,7 +416,22 @@ preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local p
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
 		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
 	fi
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	@set -a; . $(PREVIEW_ENV_FILE); set +a; \
+	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+	 fi; \
+	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(PREVIEW_ENV_FILE))"; \
+	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
+	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
+	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
+	 if [ -n "$$rum_token" ] && [ -n "$$rum_site" ]; then \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
+		export OPENOBSERVE_RUM_SITE="$$rum_site"; \
+		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
+	 else \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
 
 preview-down: ## Stop preview stack in PREVIEW_DIR (/opt/pre.iqoqo) cleanly
 	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml down

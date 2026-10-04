@@ -32,7 +32,13 @@ services:
     environment:
       - ZO_ROOT_USER_EMAIL=${OPENOBSERVE_ROOT_USER:-admin@iqoqo.local}
       - ZO_ROOT_USER_PASSWORD=${OPENOBSERVE_ROOT_PASSWORD:?OPENOBSERVE_ROOT_PASSWORD must be set in environment or .env}
-      - ZO_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000}
+      # Browser RUM/Logs ingest arrives from the end user's browser, so the
+      # deployment's own public origin must be permitted alongside localhost.
+      # Without a public origin here, RUM is only reachable from the operator's
+      # own machine and every real user's telemetry is dropped by the preflight.
+      # CORS_ALLOW_ORIGIN is the fallback for operators who have not set
+      # NEXT_PUBLIC_FRONTEND_URL.
+      - ZO_CORS_ALLOWED_ORIGINS=${OPENOBSERVE_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000},${NEXT_PUBLIC_FRONTEND_URL:-}}
       - ZO_DATA_DIR=/data
     volumes:
       - openobserve_data:/data

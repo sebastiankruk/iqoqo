@@ -314,6 +314,11 @@ except Exception:
     if [[ -z "$oo_auth" ]]; then
         check "OpenObserve API" info "unconfigured (OPENOBSERVE_BASIC_AUTH not set in environment or DB) [${oo_status}]"
     else
+        # Must be initialised before the probe: it is only assigned on success,
+        # and this script runs under `set -u`, so a failed probe previously
+        # aborted on "oo_health: unbound variable" and reported a healthy
+        # instance as unreachable.
+        oo_health="unreachable"
         if python3 -c "
 import urllib.request, sys
 req = urllib.request.Request('http://127.0.0.1:${oo_host_port}/healthz')
@@ -326,10 +331,10 @@ except Exception:
 " 2>/dev/null; then
             oo_health="ok"
         fi
-        if echo "$oo_health" | grep -iq "ok"; then
-            check "OpenObserve API" pass "HTTP 200, status=ok (:5080/healthz) [${oo_status}]"
+        if [[ "$oo_health" == "ok" ]]; then
+            check "OpenObserve API" pass "HTTP 200, status=ok (:${oo_host_port}/healthz) [${oo_status}]"
         else
-            check "OpenObserve API" warn "container running but health endpoint unreachable [${oo_status}]"
+            check "OpenObserve API" warn "container running but health endpoint unreachable (:${oo_host_port}/healthz) [${oo_status}]"
         fi
     fi
 else

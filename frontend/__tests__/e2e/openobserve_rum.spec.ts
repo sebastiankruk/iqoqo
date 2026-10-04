@@ -42,7 +42,13 @@ test.describe("OpenObserve RUM Integration & Telemetry Validation", () => {
     // Wait a brief moment to allow telemetry buffers to flush/ship
     await page.waitForTimeout(5000);
 
-    const openobserveUrl = process.env.NEXT_PUBLIC_OPENOBSERVE_API_URL || "http://localhost:5080";
+    // The base URL is built from OPENOBSERVE_HOST_PORT, the same variable that
+    // binds the container, rather than a NEXT_PUBLIC_ name nothing reads.
+    // The previous `NEXT_PUBLIC_OPENOBSERVE_API_URL` never existed, so this
+    // whole verification silently fell through to the loopback default and
+    // skipped itself on every multi-stack host — it proved nothing.
+    const openobserveHostPort = process.env.OPENOBSERVE_HOST_PORT || "5080";
+    const openobserveUrl = `http://127.0.0.1:${openobserveHostPort}`;
     const basicAuth = process.env.OPENOBSERVE_BASIC_AUTH ? `Basic ${process.env.OPENOBSERVE_BASIC_AUTH}` : "";
     if (!basicAuth) {
       console.warn("⚠️ OPENOBSERVE_BASIC_AUTH is not set. Skipping backend telemetry verification.");
