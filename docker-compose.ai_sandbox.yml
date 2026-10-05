@@ -52,17 +52,17 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # 2. Resource Exhaustion Protection
+    # 2. Resource Exhaustion Protection (increased for large prompt processing)
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
+          cpus: '1.0'
+          memory: 3G
     # 3. Read-Only Filesystem with strict ephemeral tmpfs
     read_only: true
     tmpfs:
-      - /tmp
-      - /home/appuser:uid=1000,gid=1000,mode=0700
+      - /tmp:size=1G
+      - /home/appuser:uid=1000,gid=1000,mode=0700,size=1G
     # 4. Strict, Minimal Volume Mounts
     volumes:
       - ./mykg_sessions:/workspace/mykg_sessions:rw  
