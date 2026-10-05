@@ -8,17 +8,6 @@
       ".agents/skills"
     ]
   },
-  "mcp": {
-    "mykg": {
-      "type": "local",
-      "command": [
-        ".venv/bin/mykg",
-        "mcp-serve"
-      ],
-      "enabled": true,
-      "environment": {}
-    }
-  },
   "provider": {
   },
   "permissions": [
