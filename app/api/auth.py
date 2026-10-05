@@ -33,6 +33,7 @@ from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -294,6 +295,20 @@ def google_callback():
             if picture and user.avatar_url != picture:
                 user.avatar_url = picture
 
+            # Federated addresses count as verified only on the identity
+            # provider's word, and only when the claim says so literally.
+            # `mark_verified_from_oidc` refuses the string "false", which a
+            # truthiness check would have read as verified -- the exact inverse
+            # of the claim, and the reason this is not an `if claims.get(...)`.
+            #
+            # A provider that omits the claim leaves the address unverified, so
+            # the owner confirms it themselves. That costs one email; getting it
+            # wrong would let an unproven address authorise account deletion.
+            from app.core.account_tokens import mark_verified_from_oidc
+
+            if mark_verified_from_oidc(user, user_info):
+                logger.info("Marked the federated address for user %s as verified on provider assertion", user.id)
+
         user.last_login = datetime.now(UTC)
         db.session.commit()
     except SQLAlchemyError as e:
@@ -393,8 +408,12 @@ def local_register():
     if not isinstance(password, str) or len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters long"}), 400
 
-    # Check if user already exists
-    if db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none():
+    # Check if user already exists. The comparison is case-insensitive because
+    # the account-lifecycle endpoints normalise addresses to lower case, so a
+    # mixed-case registration here would otherwise create a second account for
+    # the same mailbox -- and then block the owner from ever re-verifying the
+    # address their profile reports.
+    if db.session.execute(db.select(User).filter(func.lower(User.email) == email.strip().lower())).scalar_one_or_none():
         return jsonify({"error": "Email already registered"}), 409
 
     # Create new user
@@ -408,6 +427,13 @@ def local_register():
 
     db.session.add(new_user)
     db.session.commit()
+
+    # `email_verified_at` is deliberately left NULL. A self-registered address is
+    # exactly the unproven case the column exists for: whoever typed it may not
+    # control it, so it starts unverified and the owner confirms it themselves.
+    # Noted explicitly because the next reader will otherwise go looking for the
+    # place verification happens.
+    logger.info("Registered a local account; its address starts unverified pending confirmation")
 
     # Automatically log the user in by generating a token
     internal_token = generate_internal_jwt(new_user)

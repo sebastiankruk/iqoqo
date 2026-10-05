@@ -98,6 +98,16 @@ def create_app(config_class=Config, config_override=None):
         force=True,
     )
 
+    # Scrub credentials from every log line the process emits.  Installed
+    # immediately after basicConfig because that call replaces the root
+    # handlers, so a filter added before it would be discarded.  It covers
+    # token-bearing query strings in access logs and 404s, the JWTs this app
+    # mints, and -- registered once the config below is resolved -- the signing
+    # secrets themselves.
+    from app.core.log_redaction import install_redaction
+
+    install_redaction()
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -106,6 +116,14 @@ def create_app(config_class=Config, config_override=None):
 
     if config_override:
         app.config.from_mapping(config_override)
+
+    # Registered from the resolved config rather than from the environment, so
+    # a test that supplies its own SECRET_KEY through `config_override` gets the
+    # same protection a deployment does.
+    from app.core.log_redaction import register_secret
+
+    register_secret(app.config.get("SECRET_KEY"))
+    register_secret(app.config.get("JWT_SECRET_KEY"))
 
     # Flask does not read TESTING from the environment, so the E2E harness could
     # never enable it: POST /lending/test/reset has always returned 403 in CI and
@@ -226,6 +244,7 @@ def create_app(config_class=Config, config_override=None):
     limiter.init_app(app)
     cache.init_app(app)
 
+    from app.api.account import account_bp
     from app.api.docs import docs_bp
     from app.api.lending import lending_bp
     from app.api.roadmap import roadmap_bp
@@ -235,6 +254,7 @@ def create_app(config_class=Config, config_override=None):
     app.register_blueprint(lod_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(account_bp)
     app.register_blueprint(roadmap_bp)
     app.register_blueprint(lending_bp)
     app.register_blueprint(wishlist_bp)

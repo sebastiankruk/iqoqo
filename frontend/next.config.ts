@@ -44,6 +44,34 @@ const nextConfig: NextConfig = {
 
   allowedDevOrigins: ["dev.iqoqo.cc", "*.iqoqo.cc"],
 
+  /**
+   * Response headers.
+   *
+   * The token-bearing routes get `no-referrer`. A single-use token arrives in
+   * these pages' query strings, and this header -- not the absence of
+   * subresources -- is what prevents it being handed onward to anything the
+   * browser loads or navigates to. It is set here rather than in the page so it
+   * applies before any script runs.
+   *
+   * `frame-ancestors 'none'` for the same reason as on the API side: these pages
+   * are a clickjacking target, since being framed turns "confirm" into "confirm
+   * what the frame's owner says".
+   */
+  async headers() {
+    return [
+      {
+        source: "/account/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
+        ],
+      },
+    ];
+  },
+
   // Increase Next.js proxy body size and timeout for multi-attachment uploads
   experimental: {
     proxyClientMaxBodySize: "60mb",

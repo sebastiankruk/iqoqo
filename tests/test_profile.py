@@ -68,7 +68,14 @@ def test_update_profile(client):
     assert json.loads(response.data)["data"]["display_name"] == "New Name"
 
 
-def test_delete_account_temporarily_disabled(client):
+def test_delete_account_requires_email_confirmation(client):
+    """The unconditional delete must refuse and must not remove anything.
+
+    A single authenticated call that irreversibly deletes an account is what the
+    confirmation flow exists to replace, so the legacy route has to keep refusing
+    rather than quietly forwarding somewhere that would delete on a session
+    cookie alone.
+    """
     client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "test-password"})
     res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
@@ -78,8 +85,10 @@ def test_delete_account_temporarily_disabled(client):
     assert user is not None
 
     response = client.delete("/api/profile/", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 501
-    assert "email confirmation required" in response.get_json()["error"]
+    assert response.status_code == 409
+    body = response.get_json()
+    assert "requires confirmation by email" in body["error"]
+    assert body["replacement"] == "/api/account/deletion/request"
 
     # Verify user is NOT removed (blocked)
     user_after = User.query.filter_by(email="delete@iqoqo.local").first()

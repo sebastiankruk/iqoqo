@@ -28,6 +28,7 @@ from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
 from app.core.celery_app import celery
+from app.core.mail_service import MailDeliveryError
 from app.core.s3_service import (
     BUCKET_FEEDBACK,
     S3UploadError,
@@ -201,6 +202,68 @@ def refresh_taxonomies_cache() -> dict[str, Any]:
     cache_key = "taxonomies:global:/api/taxonomies?"
     cache.set(cache_key, {"success": True, "data": data}, timeout=3600)
     return {"status": "refreshed", "data": data}
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.send_account_email_task",
+    autoretry_for=(MailDeliveryError,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def send_account_email_task(self, recipient: str, subject: str, body_text: str) -> dict[str, Any]:
+    """Deliver a pre-rendered account-lifecycle email off the request path.
+
+    Used for notices whose send must not be able to affect the outcome of the
+    operation that produced them -- above all the post-deletion notice, which is
+    sent after the account is already gone.  There, a relay outage has to
+    degrade into "the notice arrives late", never into "the deletion is
+    reported as failed", so the send is queued and retried rather than awaited.
+
+    Retries cover :class:`~app.core.mail_service.MailDeliveryError` only.  A
+    :class:`~app.core.mail_service.MailConfigurationError` is not retried:
+    nothing about waiting will make ``MAIL_HOST`` appear, and retrying it would
+    burn five attempts and delay the useful log line that names the missing key.
+
+    The body is passed as already-rendered text rather than as a template name,
+    so a retry sends exactly what the first attempt would have.  It carries no
+    token for the same reason the completion notice does: a queued message
+    sitting in Redis is data at rest, and a single-use credential should not
+    outlive the request that minted it.
+
+    Args:
+        recipient: Destination address.
+        subject: Rendered subject line.
+        body_text: Rendered ``text/plain`` body.
+
+    Returns:
+        A summary dict, safe to inspect in the task result backend.
+    """
+    from app.core.mail_service import get_mail_service
+
+    get_mail_service().send(recipient=recipient, subject=subject, body_text=body_text)
+    return {"status": "sent", "subject": subject}
+
+
+@celery.task(name="app.core.tasks.purge_expired_account_tokens")
+def purge_expired_account_tokens() -> dict[str, Any]:
+    """Remove expired account-lifecycle tokens on a schedule.
+
+    Issuance already purges, so this is belt-and-braces for an instance where
+    nobody ever requests a second token.  Kept as a task rather than an
+    APScheduler job so it runs on the worker that already has the database
+    connections, instead of on a scheduler thread that has to open its own.
+    """
+    from app.core.account_lifecycle import purge_expired_tokens
+
+    removed = purge_expired_tokens()
+    if removed:
+        logger.info("Purged %d expired account-lifecycle token(s)", removed)
+    return {"status": "purged", "removed": removed}
 
 
 @celery.task(

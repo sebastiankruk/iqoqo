@@ -237,8 +237,6 @@ Deployment documentation MUST state the access the RUM client token grants.
 - **WHEN** a documented variable name is not one the code reads
 - **THEN** it MUST be corrected or removed
 
-## MODIFIED Requirements
-
 ### Requirement: Deployment Documentation Accurately Describes The Monitoring Stack
 Deployment documentation MUST accurately describe all instrumented layers, their default port topologies, the RUM token workflow, and how each layer is enabled.
 

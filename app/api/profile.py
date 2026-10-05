@@ -26,6 +26,10 @@ import bleach
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
+# Imported for `pending_deletion_state` on the profile read.  Module-level so
+# the import graph is explicit; this module has no import cycle with it because
+# `account_lifecycle` only reaches back for the models.
+from app.core.account_lifecycle import pending_deletion_state
 from app.core.limiter import limiter
 from app.db.models import ConsentRecord, User, db
 from app.utils.http_client import is_safe_url
@@ -77,7 +81,9 @@ def get_profile():
     # Extract unique permissions from all roles the user holds and return them
     permissions = sorted({perm.name for role in user.roles for perm in role.permissions})
 
-    data = user.to_dict()
+    # `to_private_dict`, not `to_dict`: the verification state belongs to the
+    # owner, and this is the only surface that reports it.
+    data = user.to_private_dict()
     data.update(
         {
             "roles": [r.name for r in user.roles],
@@ -85,6 +91,7 @@ def get_profile():
             "consents": consents,
         }
     )
+    data["deletion"] = pending_deletion_state(user)
 
     return jsonify(
         {
@@ -176,15 +183,30 @@ def update_profile():
 @profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
 @require_auth
 def delete_profile():
-    """Right to be forgotten: Temporarily disabled pending email confirmation flow (C33, v0.8.2)."""
+    """Right to be forgotten.
+
+    Account deletion is no longer a single authenticated call, and this
+    endpoint is where that used to live.  It now refuses and points at the
+    confirmed flow rather than deleting anything, because a request that
+    irreversibly removes an account on the strength of a session cookie alone
+    is exactly what the confirmation flow exists to prevent.
+
+    It is not removed, and not aliased to a bypass: a caller that treats a 409
+    as "not implemented yet" and retries is harmless, whereas a silent
+    auto-forward to an unconditional delete would undo the whole design.  The
+    client must call ``POST /api/account/deletion/request``, follow the emailed
+    link, and submit the confirmation.
+    """
     return (
         jsonify(
             {
-                "error": "Account deletion temporarily disabled — email confirmation required (v0.8.2)",
-                "code": 501,
+                "error": "Account deletion requires confirmation by email. "
+                "Start a request with POST /api/account/deletion/request and follow the link you receive.",
+                "code": 409,
+                "replacement": "/api/account/deletion/request",
             }
         ),
-        501,
+        409,
     )
 
 

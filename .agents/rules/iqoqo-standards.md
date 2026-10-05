@@ -70,6 +70,16 @@ Talk like caveman
 - **Interactive UI Wiring & Safety:** Every interactive UI control (buttons, menus, actions) MUST be wired to an active handler or, if deferred to a future milestone, explicitly disabled with an explanatory badge or tooltip (e.g., "Coming in v0.8.0"). Dead, unwired, or silently failing UI controls are prohibited.
 - **Linear Migration DAG:** Alembic migrations MUST maintain a single, strictly linear DAG with exactly one head (`len(ScriptDirectory.get_heads()) == 1`). Branching, multiple heads, and unbatched full-table DDL/DML in migrations are strictly prohibited.
 - **Operational Script Guards:** Operational scripts performing destructive actions (database drops, table purges, or bulk deletions) MUST enforce environment checks against production (`FLASK_ENV=production`) and require typed interactive confirmation of the target database name before execution.
+- **Flask Is API-Only; Never the Presentation Layer:** The Flask backend (`app/`) MUST NOT render user-facing HTML, and MUST NOT serve HTML documents, pages, templates, or hand-written CSS. Every user-visible surface is rendered by the Next.js frontend. Return JSON (or a redirect); let the frontend own the markup.
+
+  This is a hard boundary, not a preference. It was introduced after the account-email-confirmation pages were built in Flask with their own hand-written stylesheet: the result was a second, divergent visual language with no navbar or footer, which looked to a user exactly like a phishing page arriving by email. That is a security failure, not just an aesthetic one — an email link leading to an unbranded page teaches recipients to distrust the genuine article.
+
+  When a flow needs a page reached from an email, a deep link, or a scan — email verification, account-deletion confirmation, share links — implement it as a frontend route under `app/` using `Navbar`, `Footer`, and the Shadcn components in `components/ui/`, and expose a JSON endpoint for its state and its mutations.
+
+  Security properties that must survive the move to the frontend, and belong in `next.config.ts` or the route, not in a hand-written page:
+  - `Referrer-Policy: no-referrer` on any page whose URL carries a single-use token. This -- not the absence of subresources -- is what stops the token leaking onward.
+  - A `GET` on such a route MUST NOT mutate state. Mail scanners, link previewers and browser prefetchers fetch links automatically within seconds of arrival.
+  - No inline hand-written CSS. Use the Tailwind theme tokens in `app/globals.css`.
 
 ### 🔄 Post-Session Knowledge Sync
 - **Fast Knowledge Sync**: After committing and pushing code changes, RECOMMEND running `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
@@ -96,7 +106,8 @@ Talk like caveman
 - **Linting:** The CI compatibility gate is `make lint`; stricter local checks are available through `make lint-all` (including Pylint and frontend source linters). Do not mute return values: handle or propagate them instead of silencing warnings with `# type: ignore`, `# noqa`, or `# pylint: disable`.
 - **Pylint & SQLAlchemy:** `pylint` falsely flags SQLAlchemy's `func.count` as not callable (`E1102`). Whenever you write `func.count()`, immediately append `# pylint: disable=not-callable` to the line to prevent CI failures.
 - **Alembic Migrations:** Revision identifiers (the `revision` variable in migration files) MUST NOT exceed 32 characters (`len(revision) <= 32`). PostgreSQL default `alembic_version.version_num` is `VARCHAR(32)`; longer identifiers cause `StringDataRightTruncation` errors during `flask db upgrade`.
-- **API Responses:** All API responses must be JSON. Use consistent error formatting: `{"error": "description", "code": 400}`.
+- **API Responses:** All API responses must be JSON. Use consistent error formatting: `{"error": "description", "code": 400}`. Flask MUST NOT return rendered HTML documents -- see **Flask Is API-Only** under General Architectural Principles. `flask.render_template`, inline HTML in a `Response(mimetype="text/html")`, and hand-written CSS inside `app/` are all prohibited.
+- **Tokens In URLs:** A single-use token MUST NOT be returned to the browser inside a response body. Issue it in a URL, or deliver it out-of-band, so it cannot be logged by an intermediary or captured by `sqlalchemy.engine.echo`.
 - **Aggregates:** Prefer `GROUP BY` aggregate queries over dictionary comprehensions that execute N+1 `COUNT` queries.
 
 ## Frontend (Next.js / TypeScript)

@@ -62,11 +62,11 @@ Each deletion-confirmation token SHALL be cryptographically random, bound to one
 - **THEN** the system rejects the replay and performs no additional action
 
 ### Requirement: Scanner-Safe Explicit Confirmation
-Opening an email confirmation URL SHALL NOT delete the account, consume the token, or otherwise mutate state. Final confirmation SHALL require an explicit state-changing request by an authenticated session for the same account, with CSRF protection when cookie authentication is used. The confirmation page SHALL clearly explain that account deletion is permanent.
+Opening an email confirmation URL SHALL NOT delete the account, consume the token, or otherwise mutate state. Final confirmation SHALL require an explicit state-changing request by an authenticated session for the same account, with CSRF protection when cookie authentication is used. The confirmation page SHALL be rendered by the application frontend, so that it carries the product's own navigation, layout and design system rather than a separate hand-written surface, and it SHALL clearly explain that account deletion is permanent.
 
 #### Scenario: Email client or scanner opens the link
 - **WHEN** a mail scanner, preview service, or browser prefetcher requests the confirmation URL with GET
-- **THEN** the system renders or redirects to a confirmation page without consuming the token or changing account state
+- **THEN** the system renders a frontend confirmation route, or redirects to one, without consuming the token or changing account state
 
 #### Scenario: Correct account confirms deletion
 - **WHEN** the account owner authenticates as the account associated with the pending request and explicitly submits a valid confirmation with required CSRF protection

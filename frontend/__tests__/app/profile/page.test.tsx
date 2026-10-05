@@ -99,8 +99,10 @@ describe("ProfilePage", () => {
     expect(screen.getByText("Loading...")).toBeInTheDocument();
 
     await waitFor(() => {
-      // Email is rendered as text in the header
-      expect(screen.getByText("user@iqoqo.local")).toBeInTheDocument();
+      // Email appears in the header and again in the email-verification card,
+      // so assert on the card's explicitly-labelled element rather than
+      // loosening the query to "at least one match".
+      expect(screen.getByTestId("account-email")).toHaveTextContent("user@iqoqo.local");
       // Display name is in an input field
       expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
     });
@@ -213,16 +215,31 @@ describe("ProfilePage", () => {
     });
   });
 
-  it("renders delete account button disabled with v0.8.2 tooltip", async () => {
+  it("offers a real deletion flow instead of a disabled placeholder", async () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Delete Account" })).toBeInTheDocument();
     });
 
+    // Account deletion is confirmed by email now, so the control is live rather
+    // than permanently disabled with a "coming soon" tooltip. What this pins is
+    // that it is no longer inert.
     const deleteBtn = screen.getByRole("button", { name: "Delete Account" });
-    expect(deleteBtn).toBeDisabled();
-    expect(deleteBtn).toHaveAttribute("title", expect.stringContaining("Coming in v0.8.2"));
-    expect(screen.getByText("Coming in v0.8.2")).toBeInTheDocument();
+    expect(deleteBtn).toBeEnabled();
+    expect(deleteBtn).not.toHaveAttribute("title", expect.stringContaining("Coming in"));
+    expect(screen.queryByText("Coming in v0.8.2")).not.toBeInTheDocument();
+  });
+
+  it("explains that verification is required before deletion", async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("account-email")).toBeInTheDocument();
+    });
+
+    // An unverified address cannot delete an account, so the page has to say so
+    // before the user ever reaches the dialog.
+    expect(screen.getByTestId("email-unverified-state")).toBeInTheDocument();
   });
 });

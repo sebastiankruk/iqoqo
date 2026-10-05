@@ -249,7 +249,12 @@ def test_item_collections_forbidden_for_non_owner(client, app, auth_headers, ite
     with app.app_context():
         other_user = User(email="other_user@iqoqo.local", display_name="Other")
         db.session.add(other_user)
-        db.session.flush()
+        # `commit`, not `flush`. The JWT is only useful if the account behind it
+        # actually exists: `require_auth` resolves the subject to a row and
+        # refuses a token whose account is gone, so a merely-flushed user yields
+        # 401 "Invalid token" rather than reaching the 403 this test is about.
+        # Flushing was enough when authentication only checked the signature.
+        db.session.commit()
         other_token = generate_internal_jwt(other_user)
 
     other_headers = {"Authorization": f"Bearer {other_token}"}

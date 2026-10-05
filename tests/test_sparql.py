@@ -354,7 +354,12 @@ class TestSPARQLEndpoint:
         with app.app_context():
             user = User(email="norole@iqoqo.local", display_name="No Role User")
             db.session.add(user)
-            db.session.flush()
+            # `commit`, not `flush`. `require_auth` resolves the token's subject
+            # to an account row and refuses one whose account is gone, so an
+            # uncommitted user produces 401 before this endpoint's own permission
+            # check can answer 403. Flushing sufficed while authentication only
+            # verified the signature.
+            db.session.commit()
             token = generate_internal_jwt(user)
 
         response = client.post(
