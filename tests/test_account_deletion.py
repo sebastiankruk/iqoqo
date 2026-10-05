@@ -642,12 +642,22 @@ class TestScannerSafety:
         )
         html = response.data.decode()
 
-        # No external URLs at all -- not http, not protocol-relative, not //host.
-        assert "http://" not in html
-        assert "https://" not in html
-        # No script, frame, img, iframe, object or link elements.
-        for tag in ("<script", "<iframe", "<img", "<object", "<embed", "<link", "<video", "<audio", "<source"):
+        # The inline favicon's SVG namespace is an XML declaration that browsers
+        # never resolve; everything else absolute would be a real request.
+        scrubbed = html.replace("http://www.w3.org/2000/svg", "")
+        assert "http://" not in scrubbed, "the page references a remote http resource"
+        assert "https://" not in scrubbed, "the page references a remote https resource"
+
+        # No script, frame or media elements. `<img>` is absent too -- the brand
+        # mark is text, and the favicon is a `<link>` carrying a data: URI.
+        for tag in ("<script", "<iframe", "<img", "<object", "<embed", "<video", "<audio", "<source"):
             assert tag not in html.lower(), f"{tag} must not appear on a token-bearing page"
+
+        # Every link and every src/href must be inline.
+        for link in re.findall(r"<link[^>]*>", html, re.IGNORECASE):
+            assert "data:image/svg+xml" in link, f"unexpected external link element: {link}"
+        for ref in re.findall(r'(?:src|href)="([^"]+)"', html, re.IGNORECASE):
+            assert ref.startswith("data:"), f"unexpected subresource reference: {ref}"
 
         csp = response.headers["Content-Security-Policy"]
         assert "default-src 'none'" in csp
@@ -1457,3 +1467,143 @@ class TestStatusReporting:
         assert response.status_code == 200
         body = json.dumps(response.get_json())
         assert "email_verified" not in body
+
+
+# ---------------------------------------------------------------------------
+# The rendered pages
+# ---------------------------------------------------------------------------
+
+
+class TestConfirmationPageAppearance:
+    """The emailed pages must be styled, and must be recognisably iQoQo.
+
+    Two separate regressions, both found by rendering the page in a browser
+    rather than by reading it.
+
+    The stylesheet was missing a closing brace after the dark-mode ``body`` rule,
+    which nested ``.card`` inside the ``prefers-color-scheme: dark`` query. The
+    card was therefore styled in dark mode and completely unstyled in light mode,
+    so a user in a light-mode browser saw unstyled text on a near-white
+    background. It survived `curl` checks because `curl` never renders, and
+    because the dark path happened to be the correct-looking one.
+
+    Separately, the pages carried no branding at all. An email link leading to an
+    unbranded page is indistinguishable from a phishing page, and a user who
+    cannot tell where they are will reasonably distrust the genuine article --
+    which defeats the point of confirming ownership of a mailbox.
+    """
+
+    @staticmethod
+    def _style(html: str) -> str:
+        """Extract the inline stylesheet from a rendered page."""
+        match = re.search(r"<style>(.*?)</style>", html, re.DOTALL)
+        assert match, "the page rendered no stylesheet"
+        return match.group(1)
+
+    def test_the_stylesheet_is_brace_balanced(self, client, configured_mail, owner) -> None:
+        """One missing `}` silently disables every rule inside the unclosed block."""
+        token = _session_cookie(client, owner)
+        html = client.get(
+            f"/api/account/deletion/confirm?token={'z' * 43}",
+            headers={"Authorization": f"Bearer {token}"},
+        ).data.decode()
+        style = self._style(html)
+
+        assert style.count("{") == style.count(
+            "}"
+        ), f"unbalanced stylesheet: {style.count('{')} opening vs {style.count('}')} closing braces"
+
+    def test_the_card_is_styled_outside_any_media_query(self, client, configured_mail, owner) -> None:
+        """`.card` inside `prefers-color-scheme: dark` is unstyled in light mode.
+
+        Asserted by brace-depth tracking rather than by regex, because the whole
+        failure is about *where* the rule sits in the block structure.
+        """
+        token = _session_cookie(client, owner)
+        style = self._style(
+            client.get(
+                f"/api/account/deletion/confirm?token={'z' * 43}",
+                headers={"Authorization": f"Bearer {token}"},
+            ).data.decode()
+        )
+
+        depth = 0
+        media_depths: list[int] = []
+        i = 0
+        while i < len(style):
+            char = style[i]
+            if char == "{":
+                depth += 1
+                preceding = style[max(0, i - 60) : i]
+                if "prefers-color-scheme" in preceding:
+                    media_depths.append(depth)
+            elif char == "}":
+                if depth in media_depths:
+                    media_depths.remove(depth)
+                depth -= 1
+            i += 1
+
+        assert not media_depths, (
+            "an unclosed media query is swallowing the rules after it; every rule "
+            f"inside it is inert outside dark mode (still open at depths {media_depths})"
+        )
+
+    def test_light_mode_backgrounds_are_defined_outside_a_media_query(self, client, configured_mail, owner) -> None:
+        """The default `body` and `.card` rules must apply with no media query."""
+        token = _session_cookie(client, owner)
+        style = self._style(
+            client.get(
+                f"/api/account/deletion/confirm?token={'z' * 43}",
+                headers={"Authorization": f"Bearer {token}"},
+            ).data.decode()
+        )
+
+        head, _, tail = style.partition("@media (prefers-color-scheme: dark)")
+        assert "body" in head and "background" in head, "body has no light-mode background"
+        assert ".card" in head, ".card has no light-mode styling"
+
+    def test_the_page_is_branded_as_iqoqo(self, client, configured_mail, owner) -> None:
+        """A user must be able to tell where they are before confirming anything."""
+        token = _session_cookie(client, owner)
+        html = client.get(
+            f"/api/account/deletion/confirm?token={'z' * 43}",
+            headers={"Authorization": f"Bearer {token}"},
+        ).data.decode()
+
+        assert "iQoQo" in html, "the page carries no product wordmark"
+        assert 'class="brand"' in html
+        # The favicon is inline so it costs no request, but must still exist --
+        # it is the mark visible in the tab, which is what a user glances at.
+        assert 'rel="icon"' in html and "data:image/svg+xml" in html
+
+    def test_branding_costs_no_network_request(self, client, configured_mail, owner) -> None:
+        """Everything must stay inlined: a remote asset would leak the referrer."""
+        token = _session_cookie(client, owner)
+        html = client.get(
+            f"/api/account/deletion/confirm?token={'z' * 43}",
+            headers={"Authorization": f"Bearer {token}"},
+        ).data.decode()
+
+        # The SVG namespace (`xmlns='http://www.w3.org/2000/svg'`) is an XML
+        # declaration that browsers never resolve, so it is stripped before
+        # checking. Everything that *is* fetchable must be absent.
+        scrubbed = html.replace("http://www.w3.org/2000/svg", "")
+        assert "http://" not in scrubbed, "the page references a remote http resource"
+        assert "https://" not in scrubbed, "the page references a remote https resource"
+        assert "//cdn" not in scrubbed
+
+    def test_the_csp_still_permits_only_inline_styles(self, client, configured_mail, owner) -> None:
+        """`img-src data:` is added for the favicon; nothing else may loosen."""
+        token = _session_cookie(client, owner)
+        csp = client.get(
+            f"/api/account/deletion/confirm?token={'z' * 43}",
+            headers={"Authorization": f"Bearer {token}"},
+        ).headers["Content-Security-Policy"]
+
+        assert "default-src 'none'" in csp
+        assert "style-src 'unsafe-inline'" in csp
+        assert "form-action 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
+        assert "img-src data:" in csp
+        for forbidden in ("script-src", "http://", "https://", "*;"):
+            assert forbidden not in csp, f"CSP must not allow {forbidden!r}"

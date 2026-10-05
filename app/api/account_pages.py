@@ -11,40 +11,37 @@
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
 """The HTML pages served from an emailed account link.
 
-The confirmation pages are rendered here, by the API, rather than by the
-Next.js frontend.  That is a deliberate choice, and it is what makes the
+Rendered here, by the API, rather than by the Next.js frontend. That keeps the
 security properties structural instead of aspirational:
 
-**No third-party resource can be requested.**  The page has an inline
-stylesheet, no script, no font, no image and no favicon, and a
-``Content-Security-Policy`` of ``default-src 'none'; style-src 'unsafe-inline';
-form-action 'self'; base-uri 'none'; frame-ancestors 'none'`` that enforces it.
-The specification asks for a page that loads nothing from elsewhere; a CSP
-means a future edit that adds a script or an analytics pixel breaks the page
-loudly instead of quietly phoning home.  ``frame-ancestors 'none'`` matters for
-the same reason -- these pages are a clickjacking target, since being framed
-turns "confirm" into "confirm what the attacker behind the frame says".
+**No third-party resource can be requested.** An inline stylesheet, no script,
+no font, no remote image, and a ``Content-Security-Policy`` of ``default-src
+'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none';
+frame-ancestors 'none'`` that enforces it. A future edit that adds a script or
+an analytics pixel breaks the page loudly instead of quietly phoning home.
+``frame-ancestors 'none'`` matters for the same reason -- these pages are a
+clickjacking target, since being framed turns "confirm" into "confirm what the
+attacker behind the frame says".
 
-**No referrer can leak the token.**  The token arrives in the query string, so
-any subresource, any outbound link, or any analytics beacon would carry it.
-With ``no-referrer`` and no subresource there is nothing left to leak it, and
-the header is set on the response rather than only in a meta tag, because
-some user agents have historically honoured one and not the other.
+**No referrer can leak the token.** The token arrives in the query string, so any
+subresource or outbound link would carry it. With ``no-referrer`` and no
+subresource there is nothing left to leak it, and the header is set on the
+response rather than only in a meta tag.
 
-**The page cannot act.**  Everything here is a ``GET`` that renders, plus a form
-that ``POST``s.  A mail scanner, a link prefetcher, or an assistant reading the
-user's inbox produces byte-identical behaviour: an HTML page.  That is the whole
-reason the irreversible operation lives behind the POST.
+**The page cannot act.** Everything is a ``GET`` that renders, plus a form that
+``POST``s. A mail scanner or prefetcher produces byte-identical behaviour to a
+human. That is the whole reason the irreversible operation lives behind the POST.
 
-**Nothing is cached.**  ``Cache-Control: no-store`` plus ``noindex``, so a
-shared machine, a corporate proxy, or a browser's back button cannot replay a
-page containing a live token.
-
-Escaping is not optional here: the display name and address are user-controlled
-and this is an HTML response.
+**It looks like iQoQo.** This one is a security property, not decoration. An
+email link leading to an unbranded page is indistinguishable from a phishing
+page, and a user who cannot tell where they are will reasonably distrust the
+real thing. So the wordmark, the palette, and the favicon are all inlined --
+zero network requests, but unmistakably this product. The colours are taken from
+``frontend/app/globals.css`` so the two cannot drift apart in appearance.
 """
 
 from __future__ import annotations
@@ -53,7 +50,8 @@ from html import escape
 
 from flask import Response
 
-#: Sent on every page this module renders.  ``no-store`` for the reasons above.
+#: Sent on every page this module renders.  ``no-store`` so a shared machine, a
+#: proxy cache, or the back button cannot replay a page containing a live token.
 _NO_STORE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
     "Pragma": "no-cache",
@@ -63,44 +61,87 @@ _NO_STORE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     # No script, no connect, no image, no font, no frame: the page can only draw
-    # itself and post a form back to this origin.  `frame-ancestors 'none'` is
-    # what makes the page un-frameable.  `sandbox` is deliberately *not* used:
-    # a sandboxed document gets an opaque origin, which makes the `form-action
-    # 'self'` source expression below fail to match, silently disabling the very
-    # form this page exists to submit.
+    # itself and post a form back to this origin. `frame-ancestors 'none'` is
+    # what makes the page un-frameable.
+    #
+    # `data:` is permitted for images solely so the favicon can be an inline SVG
+    # rather than a request. It cannot be used to exfiltrate anything: there is
+    # no script and no form action outside `'self'`.
+    #
+    # `sandbox` is deliberately *not* used. A sandboxed document gets an opaque
+    # origin, which makes the `form-action 'self'` source expression fail to
+    # match -- silently disabling the very form this page exists to submit.
     "Content-Security-Policy": (
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+        "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; " "base-uri 'none'; frame-ancestors 'none'"
     ),
 }
 
-#: Inline and minimal.  A stylesheet is the one thing a CSP still has to permit,
-#: and inlining it is what lets the policy drop `style-src` down to a single
-#: value with no host to point at.
-_STYLE = """
-:root{color-scheme:light dark}
-*{box-sizing:border-box}
-body{margin:0;padding:2rem 1rem;background:#f6f6f7;color:#18181b;
-font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-@media (prefers-color-scheme:dark){
-body{background:#18181b;color:#e4e4e7}
-.card{max-width:32rem;margin:0 auto;background:#fff;border:1px solid #e4e4e7;
-border-radius:12px;padding:2rem}
-@media (prefers-color-scheme:dark){.card{background:#27272a;border-color:#3f3f46}}
-h1{font-size:1.35rem;margin:0 0 1rem;line-height:1.3}
-p{margin:0 0 1rem}
-.muted{color:#71717a;font-size:.9rem}
-.danger{border:1px solid #dc2626;background:#fef2f2;color:#7f1d1d;
-border-radius:8px;padding:.85rem 1rem;font-size:.9rem;margin:0 0 1.25rem}
-@media (prefers-color-scheme:dark){.danger{border-color:#7f1d1d;background:#2a1414;color:#fecaca}}
-button{font:inherit;width:100%;padding:.7rem 1rem;border-radius:8px;border:1px solid transparent;
-cursor:pointer;font-weight:600}
-.go{background:#18181b;color:#fafafa}
-@media (prefers-color-scheme:dark){.go{background:#fafafa;color:#18181b}}
-.go:hover{opacity:.9}
-.go:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
-.cancel{display:block;margin-top:1rem;text-align:center;font-size:.9rem;color:#71717a}
-hr{border:0;border-top:1px solid #e4e4e7;margin:1.5rem 0}
-@media (prefers-color-scheme:dark){hr{border-color:#3f3f46}}
+#: Inline favicon, so even the tab carries the product mark. A ``data:`` URI, so
+#: it costs no request. Deliberately simple rather than the real logo asset: it
+#: has to survive being written inside an HTML attribute.
+_FAVICON = (
+    "data:image/svg+xml,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='7' fill='%23334352'/%3E"
+    "%3Ctext x='16' y='22' font-family='Helvetica,Arial,sans-serif' font-size='15' "
+    "font-weight='700' fill='%23fbf7ef' text-anchor='middle'%3Ei%3C/text%3E%3C/svg%3E"
+)
+
+#: Palette mirrored from `frontend/app/globals.css` (HSL, light and dark).
+_BRAND_INK = "hsl(210 29% 24%)"
+_BRAND_PAPER = "hsl(43 50% 98%)"
+_BRAND_DARK_INK = "hsl(43 50% 90%)"
+_BRAND_DARK_PAPER = "hsl(210 11% 15%)"
+_BRAND_MUTED = "hsl(210 12% 45%)"
+
+# Inline and minimal. A stylesheet is the one thing a CSP still has to permit,
+# and inlining it is what lets the policy drop `style-src` down to a single value
+# with no host to point at.
+#
+# Written one rule per line and brace-balanced. An earlier revision was missing
+# a closing brace after the dark-mode `body` rule, which nested `.card` inside
+# the `prefers-color-scheme: dark` query: the card was styled in dark mode and
+# completely unstyled in light mode. It survived because the pages were checked
+# with `curl`, which never renders, and because the dark path happened to work.
+_STYLE = f"""
+:root {{ color-scheme: light dark; }}
+* {{ box-sizing: border-box; }}
+body {{
+  margin: 0; padding: 2.5rem 1rem; background: {_BRAND_PAPER}; color: {_BRAND_INK};
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}}
+.wrap {{ max-width: 32rem; margin: 0 auto; }}
+.brand {{ display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }}
+.brand b {{ font-size: 1.05rem; letter-spacing: -.01em; color: {_BRAND_INK}; }}
+.card {{
+  background: #fff; border: 1px solid hsl(210 12% 88%); border-radius: 12px;
+  padding: 2rem; box-shadow: 0 1px 2px hsl(210 29% 24% / .06);
+}}
+h1 {{ font-size: 1.35rem; margin: 0 0 1rem; line-height: 1.3; }}
+p {{ margin: 0 0 1rem; }}
+.muted {{ color: {_BRAND_MUTED}; font-size: .9rem; }}
+.danger {{
+  border: 1px solid #dc2626; background: #fef2f2; color: #7f1d1d;
+  border-radius: 8px; padding: .85rem 1rem; font-size: .9rem; margin: 0 0 1.25rem;
+}}
+button {{
+  font: inherit; width: 100%; padding: .7rem 1rem; border-radius: 8px;
+  border: 1px solid transparent; cursor: pointer; font-weight: 600;
+}}
+.go {{ background: {_BRAND_INK}; color: {_BRAND_PAPER}; }}
+.go:hover {{ opacity: .9; }}
+.go:focus-visible {{ outline: 2px solid #2563eb; outline-offset: 2px; }}
+.cancel {{ display: block; margin-top: 1rem; text-align: center; font-size: .9rem; color: {_BRAND_MUTED}; }}
+hr {{ border: 0; border-top: 1px solid hsl(210 12% 88%); margin: 1.5rem 0; }}
+@media (prefers-color-scheme: dark) {{
+  body {{ background: {_BRAND_DARK_PAPER}; color: {_BRAND_DARK_INK}; }}
+  .brand b {{ color: {_BRAND_DARK_INK}; }}
+  .card {{ background: hsl(210 11% 19%); border-color: hsl(210 11% 28%); box-shadow: none; }}
+  .muted, .cancel {{ color: hsl(210 12% 65%); }}
+  .danger {{ border-color: #7f1d1d; background: #2a1414; color: #fecaca; }}
+  .go {{ background: hsl(210 29% 80%); color: hsl(210 29% 24%); }}
+  hr {{ border-color: hsl(210 11% 28%); }}
+}}
 """
 
 
@@ -127,12 +168,16 @@ def _page(*, title: str, body: str, status: int = 200) -> Response:
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <title>{escape(title)}</title>
+<link rel="icon" href="{_FAVICON}">
 <style>{_STYLE}</style>
 </head>
 <body>
+<div class="wrap">
+<div class="brand"><b>iQoQo</b></div>
 <main class="card">
 {body}
 </main>
+</div>
 </body>
 </html>"""
     return Response(document, status=status, mimetype="text/html; charset=utf-8", headers=_NO_STORE_HEADERS)
@@ -173,8 +218,6 @@ def deletion_confirmation_page(*, account_hint: str, csrf_field: str) -> Respons
     The wording is deliberately blunt and repeated.  This page asks for the one
     action in the product that cannot be undone and cannot be recovered by the
     owner, and the person reading it may have been sent here by someone else.
-    The browser's own confirmation dialog is layered on top as well -- defence in
-    depth, not a substitute for the page being clear on its own.
 
     Args:
         account_hint: A short description of the account, so the user can tell
@@ -255,7 +298,11 @@ def expired_form_page(*, detail: str) -> Response:
         A 403 HTML response carrying the same hardened headers as every other
         page in this flow.
     """
-    return _page(title="This page has expired", body=f"<h1>This page has expired</h1><p>{escape(detail)}</p>", status=403)
+    return _page(
+        title="This page has expired",
+        body=f"<h1>This page has expired</h1><p>{escape(detail)}</p>",
+        status=403,
+    )
 
 
 def success_page(*, heading: str, detail: str) -> Response:
