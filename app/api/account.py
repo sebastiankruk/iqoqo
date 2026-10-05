@@ -116,16 +116,30 @@ def _rate_limit_key() -> str:
 
 
 def _token_from_request() -> str:
-    """Extract the token from a query string or form body.
+    """Extract the single-use token from wherever the caller put it.
+
+    Three sources, in order: the query string, a form body, and a JSON body.
+
+    The JSON case is not optional. The confirmation screens are frontend routes
+    now, so the browser POSTs ``{"token": ...}`` as JSON and the URL carries no
+    query string. ``request.values`` covers only args and form, so reading it
+    alone silently yielded an empty token: the state GET reported the link usable
+    and the very next POST refused it as spent, with nothing changed and no clue
+    why.
 
     Args:
         None.
 
     Returns:
-        The raw token, or an empty string.
+        The raw token, truncated to :data:`_MAX_TOKEN_LENGTH`, or an empty string.
     """
-    candidate = request.values.get("token") or ""
-    if not isinstance(candidate, str):  # pragma: no cover - werkzeug always yields str here
+    candidate = request.values.get("token")
+    if candidate is None and request.mimetype == "application/json":
+        # `silent=True`: a malformed body is a rejected token, not a 500.
+        body = request.get_json(silent=True)
+        if isinstance(body, dict):
+            candidate = body.get("token")
+    if not isinstance(candidate, str):
         return ""
     return candidate[:_MAX_TOKEN_LENGTH]
 

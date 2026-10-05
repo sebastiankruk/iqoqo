@@ -1527,3 +1527,83 @@ class TestStatusReporting:
         assert response.status_code == 200
         body = json.dumps(response.get_json())
         assert "email_verified" not in body
+
+
+class TestTokenTransport:
+    """The token must be readable from however the client sends it.
+
+    Regression, and the one the frontend migration caused. The confirmation
+    screens became frontend routes, so the browser POSTs `{"token": ...}` as JSON
+    and the URL no longer carries a query string. `_token_from_request` read only
+    `request.values`, which covers args and form but not a JSON body -- so the
+    state GET reported the link usable and the immediately following POST refused
+    it as spent, changing nothing and explaining nothing.
+    """
+
+    def test_a_json_body_token_is_accepted_for_verification(self, client, configured_mail, unverified_user) -> None:
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, unverified_user), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        token = _session_cookie(client, unverified_user)
+        minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+
+        response = client.post(
+            "/api/account/email/verify",
+            headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": minted},
+            json={"token": raw},
+        )
+
+        assert response.status_code == 200, "a JSON body token must be readable"
+        with client.application.app_context():
+            db.session.remove()
+            assert db.session.get(User, unverified_user).is_email_verified is True
+
+    def test_a_json_body_token_is_accepted_for_deletion(self, client, configured_mail, owner) -> None:
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.ACCOUNT_DELETION)
+
+        token = _session_cookie(client, owner)
+        minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+
+        response = client.post(
+            "/api/account/deletion/confirm",
+            headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": minted},
+            json={"token": raw},
+        )
+
+        assert response.status_code == 200, "a JSON body token must be readable"
+        with client.application.app_context():
+            db.session.remove()
+            assert db.session.get(User, owner) is None
+
+    def test_a_query_string_token_still_works(self, client, configured_mail, owner) -> None:
+        """The query form is still supported; both sources must work."""
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.ACCOUNT_DELETION)
+
+        token = _session_cookie(client, owner)
+        minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+
+        response = client.post(
+            f"/api/account/deletion/confirm?token={raw}",
+            headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": minted},
+        )
+
+        assert response.status_code == 200
+        with client.application.app_context():
+            db.session.remove()
+            assert db.session.get(User, owner) is None
+
+    def test_a_missing_token_is_refused_rather_than_crashing(self, client, configured_mail, owner) -> None:
+        """No token anywhere: a clean rejection, not a 500 from parsing nothing."""
+        token = _session_cookie(client, owner)
+        minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+
+        response = client.post(
+            "/api/account/deletion/confirm",
+            headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": minted},
+            json={"nothing": "useful"},
+        )
+
+        assert response.status_code == 400
+        assert response.get_json()["usable"] is False
