@@ -490,14 +490,17 @@ def confirm_account_deletion():
     if csrf_error is not None:
         return _csrf_failure_page(csrf_error[0])
 
-    if request.form.get("confirm") != "delete":
-        # The typed confirmation. Not a CSRF defence -- CSRF is already handled
-        # above -- but it is the last checkpoint before something irreversible,
-        # and it costs one field. Re-mints the CSRF material so the re-rendered
-        # form is immediately submittable.
-        csrf_token_value, csrf_field = _csrf_proof_for_page()
-        response = account_pages.deletion_confirmation_page(account_hint="your account", csrf_field=csrf_field)
-        return set_csrf_cookie(response, csrf_token_value)
+    # No separate "type DELETE to confirm" gate here. There was one, requiring a
+    # `confirm=delete` field that the rendered form never contained -- so the
+    # submit silently re-rendered the page instead of deleting, and looked to
+    # the user like a reload that did nothing. A fixed hidden field would not
+    # have fixed that; it would only have made the flow pass, while still
+    # proving nothing about intent, since a browser submits it automatically.
+    #
+    # What actually gates this is already explicit: a POST (not a GET), a live
+    # session for this account, CSRF proof for cookie sessions, and a
+    # single-use token that the GET page is built around. The button itself is
+    # labelled with the permanence of the action.
 
     token = _token_from_request()
     acting_user_id = getattr(g, "user_id", None)

@@ -784,25 +784,40 @@ class TestConfirmationRequiresBothFactors:
             # And the owner's token is still usable by the right account.
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
 
-    def test_the_explicit_confirmation_field_is_required(self, client, configured_mail, owner, pending_token) -> None:
-        """The final POST without the typed confirmation re-renders the page.
+    def test_the_rendered_form_is_submittable_exactly_as_served(self, client, configured_mail, owner, pending_token) -> None:
+        """Post back the form the GET returned, unmodified.
 
-        Not the CSRF defence -- that is separate -- but the last checkpoint before
-        something irreversible, and it costs one field.
+        Regression, and the one that matters most in this class. The server used
+        to require a `confirm=delete` field that the page never contained, so
+        submitting the page as rendered re-displayed it and deleted nothing --
+        which looked to the user like a button that did nothing.
+
+        Every earlier test in this class hand-built its POST body, so each one
+        supplied the very field the page omitted and none could notice. This one
+        extracts the inputs from the served HTML instead.
         """
         token = _session_cookie(client, owner)
+        # Cookie auth, not bearer: this is the flow a browser takes, and the only
+        # one where the form carries inputs to extract at all. A bearer session
+        # needs no CSRF proof, so the page renders no fields and the test would
+        # pass without exercising anything.
+        client.set_cookie("iqoqo_session", token, domain="localhost")
+        page = client.get(f"/api/account/deletion/confirm?token={pending_token}").data.decode()
+
+        served = dict(re.findall(r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', page))
+        assert served, "the confirmation page rendered no submittable inputs"
+
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-            data={},
+            data=served,
         )
 
-        assert response.status_code == 200
-        assert "Permanently delete your account" in response.data.decode()
-
+        assert (
+            "Your account has been deleted" in response.data.decode()
+        ), f"submitting the served form did not delete the account: {response.data.decode()[:200]}"
         with client.application.app_context():
-            assert db.session.get(User, owner) is not None
-            assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
+            db.session.remove()
+            assert db.session.get(User, owner) is None, "the page reported success but the account survived"
 
     def test_an_expired_token_cannot_confirm(self, client, configured_mail, owner) -> None:
         """Expiry is enforced at confirmation, not merely advertised."""
