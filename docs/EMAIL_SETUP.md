@@ -95,7 +95,13 @@ Confirming an address proves you can receive mail there. It is **not** a second 
 
 ### Opening the link does nothing by itself
 
-Mail clients preview links, security scanners fetch every URL in an incoming message, and browsers prefetch. Opening the confirmation link therefore only ever renders a page. Nothing is deleted until you submit the form on that page while signed in.
+Mail clients preview links, security scanners fetch every URL in an incoming message, and browsers prefetch. Opening the confirmation link therefore only ever renders a page. Nothing is deleted until you press the confirmation button on that page while signed in.
+
+### The confirmation pages are part of the iqoqo site
+
+The link points at an ordinary page of the application — you will see the normal iqoqo header, navigation and footer, because that is exactly what is being rendered. A confirmation page with no branding, no navigation and its own styling, arriving by email, is indistinguishable from a phishing page and is the reason these screens are frontend routes rather than server-rendered responses. If the page you land on does not look like the rest of iqoqo, stop.
+
+These routes are also served with `Referrer-Policy: no-referrer`, so the token in the address bar is not passed on to anything else the page loads, and with `Cache-Control: no-store` so it cannot be replayed from a cache or the back button.
 
 ### Tokens expire after 30 minutes
 
@@ -156,9 +162,10 @@ It swaps in a recorder that keeps messages in memory for the lifetime of the pro
 
 ### Walking the flow
 
-Sign in → **Profile → Email Address → Send verification link** → open the link in Mailpit → submit → **Delete Account** → open the link → confirm.
+Sign in → **Profile → Email Address → Send verification link** → open the link in Mailpit → press **Confirm this address** → **Delete Account** → open the link → press **Yes, permanently delete my account**.
 
-Two properties are worth checking by hand, because they are what the design rests on and they are easier to confirm than to infer:
+Three properties are worth checking by hand, because they are what the design rests on and they are easier to confirm than to infer:
 
 - Open a confirmation link twice, or let browser prefetch fetch it. Nothing is consumed and nothing is deleted.
-- Open a deletion link while signed in as a different account. It refuses, and both accounts are untouched.
+- Open a deletion link while signed in as a different account. It refuses, and both accounts are untouched — and the real owner's link still works afterwards.
+- Load a confirmation link with JavaScript disabled or with the network tab open. The GET that reports the link's state is read-only; the delete is a separate POST that you have to trigger.

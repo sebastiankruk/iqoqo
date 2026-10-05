@@ -57,6 +57,14 @@ Consume the token and apply the existing account deletion operation in one datab
 
 The account and associated data are deleted according to current cascade semantics after the final confirmation. No post-confirmation grace period is provided. The UI and email must clearly state that the confirmed action is permanent; a request can be abandoned before confirmation without any account data being removed.
 
+### Decision 8: Confirmation screens are frontend routes, not backend responses
+
+The emailed links point at application routes (`/account/verify`, `/account/delete`) rendered by the Next.js frontend, and the backend exposes JSON for their state and mutations. Response headers that protect a token-bearing page (`Referrer-Policy: no-referrer`, `X-Frame-Options`, `Cache-Control: no-store`, `X-Robots-Tag`) move with them into `next.config.ts`.
+
+**Alternative considered:** Server-rendered confirmation pages from the backend, with their own stylesheet. Rejected on security grounds rather than aesthetic ones: a styleless, unbranded page arriving by email is what a phishing page looks like, so it trains recipients to distrust the genuine article. It was built this way first and had to be redone. The boundary is now a project rule ("Flask Is API-Only") enforced by `tests/test_api_only_rule.py`.
+
+**Consequence:** the browser sends the token in a JSON POST body rather than a query string, so the backend must read the token from args, form, *and* JSON. Getting this wrong was silent: the state GET reported the link usable and the next POST refused the same token as spent.
+
 ## Risks / Trade-offs
 
 - **[Risk] Mailbox compromise enables confirmation** → Require a currently authenticated session for the same account as well as possession of the email token; accurately describe email as mailbox ownership, not fresh authentication.
