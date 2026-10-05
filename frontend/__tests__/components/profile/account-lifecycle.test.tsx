@@ -61,6 +61,23 @@ describe("EmailVerificationCard", () => {
     expect(screen.queryByRole("button", { name: "Send verification link" })).not.toBeInTheDocument();
   });
 
+  it("does not tell a verified user that verification is still required", () => {
+    // Regression. A static subtitle read "Your account needs a verified email
+    // address before you can delete it" directly above "Verified". The card
+    // exists to answer whether the account can be deleted, and it answered both
+    // ways at once.
+    render(<EmailVerificationCard email="me@iqoqo.local" verified onChanged={vi.fn()} />);
+
+    expect(screen.getByTestId("email-card-subtitle")).not.toHaveTextContent(/needs a verified email address/i);
+    expect(screen.getByTestId("email-card-subtitle")).toHaveTextContent(/confirmation link/i);
+  });
+
+  it("tells an unverified user that verification is required", () => {
+    render(<EmailVerificationCard email="me@iqoqo.local" verified={false} onChanged={vi.fn()} />);
+
+    expect(screen.getByTestId("email-card-subtitle")).toHaveTextContent(/needs a verified email address/i);
+  });
+
   it("calls the API when requesting a verification link", async () => {
     vi.mocked(requestEmailVerification).mockResolvedValue(undefined);
     render(<EmailVerificationCard email="me@iqoqo.local" verified={false} onChanged={vi.fn()} />);

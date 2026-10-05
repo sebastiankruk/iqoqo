@@ -102,8 +102,14 @@ export function EmailVerificationCard({ email, verified, onChanged }: EmailVerif
     <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="email-verification-card">
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">Email Address</h2>
-        <p className="text-sm text-muted-foreground">
-          Your account needs a verified email address before you can delete it.
+        {/* Conditional, and it has to be. A static line here read "Your account
+            needs a verified email address" directly above "Verified", which is
+            worse than saying nothing: the card exists to answer whether the
+            account can be deleted, and that answer contradicted itself. */}
+        <p className="text-sm text-muted-foreground" data-testid="email-card-subtitle">
+          {verified
+            ? "This address is confirmed, so we can send you a confirmation link if you delete your account."
+            : "Your account needs a verified email address before you can delete it."}
         </p>
       </div>
 
