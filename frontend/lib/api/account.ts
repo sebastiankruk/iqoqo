@@ -144,3 +144,84 @@ export async function getDeletionStatus(): Promise<{ pending: boolean; expires_a
 }
 
 export { CSRF_FIELD_NAME };
+
+/** Shape returned by the verification-state endpoint. */
+export interface EmailVerificationState {
+  usable: boolean;
+  /** Present when `usable`, so the screen can name the address being confirmed. */
+  email?: string | null;
+  /** True when the address is already verified, which is not a failure. */
+  already_verified?: boolean;
+}
+
+/**
+ * Ask whether a verification token can be spent.
+ *
+ * Read-only by contract: this is called with the URL that arrives by email, and
+ * mail clients and scanners fetch it automatically.
+ *
+ * @param token - The raw token from the link
+ * @returns Whether the link is usable, and for which address
+ */
+export async function getEmailVerificationState(token: string): Promise<EmailVerificationState> {
+  await fetchCsrfToken();
+  const res = await apiClient.get<{ success: boolean; data: EmailVerificationState }>("/account/email/verify", {
+    params: { token },
+  });
+  return res.data.data;
+}
+
+/**
+ * Consume a verification token.
+ *
+ * @param token - The raw token from the link
+ * @returns The confirmed address
+ */
+export async function confirmEmailVerification(token: string): Promise<{ email: string; verified: boolean }> {
+  const res = await csrfMutation<{ success: boolean; data: { email: string; verified: boolean } }>(
+    "post",
+    "/account/email/verify",
+    { token }
+  );
+  return res.data;
+}
+
+/** Shape returned by the deletion-confirmation endpoint. */
+export interface DeletionConfirmationState {
+  usable: boolean;
+  email?: string | null;
+}
+
+/**
+ * Ask whether a deletion token can be spent, without spending it.
+ *
+ * @param token - The raw token from the link
+ * @returns Whether the link is usable, and for which account
+ */
+export async function getDeletionConfirmationState(token: string): Promise<DeletionConfirmationState> {
+  await fetchCsrfToken();
+  const res = await apiClient.get<{ success: boolean; data: DeletionConfirmationState }>("/account/deletion/confirm", {
+    params: { token },
+  });
+  return res.data.data;
+}
+
+/**
+ * Consume a deletion token and delete the account.
+ *
+ * The response clears the session cookie, so the caller should navigate away
+ * rather than assume it is still authenticated.
+ *
+ * @param token - The raw token from the link
+ * @returns Confirmation that the account was removed
+ */
+export async function confirmAccountDeletion(token: string): Promise<{ deleted: boolean }> {
+  const res = await csrfMutation<{ success: boolean; data: { deleted: boolean } }>(
+    "post",
+    "/account/deletion/confirm",
+    {
+      token,
+    }
+  );
+  return res.data;
+}

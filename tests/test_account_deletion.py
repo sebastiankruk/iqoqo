@@ -35,6 +35,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.api.decorators import CSRF_COOKIE_NAME
 from app.core import account_lifecycle, account_tokens, mail_service
 from app.core.account_tokens import AccountTokenPurpose
 from app.core.mail_service import RecordingTransport
@@ -377,10 +378,10 @@ class TestInitiationIsInert:
             client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
 
             links = re.findall(
-                r"https://iqoqo\.example/api/account/deletion/confirm\?token=([A-Za-z0-9_-]+)",
+                r"https://iqoqo\.example/account/delete\?token=([A-Za-z0-9_-]+)",
                 _body(configured_mail.sent[0]),
             )
-            assert len(links) == 1
+            assert len(links) == 1, "the mail must link to the frontend confirmation route, once"
 
     def test_the_request_email_carries_no_reusable_token_for_another_purpose(self, client, configured_mail, owner) -> None:
         """The emailed token must not work for verification, or vice versa."""
@@ -495,17 +496,17 @@ class TestVerifiedEmailIsRequired:
         assert "not configured to send mail" in response.get_json()["error"]
 
 
-# ---------------------------------------------------------------------------
-# Scanner safety
-# ---------------------------------------------------------------------------
-
-
 class TestScannerSafety:
     """A ``GET`` of the emailed link must change nothing.
 
     Mail-security scanners fetch every URL in an inbound message within seconds
     of arrival, before the user has read it. Any state change on ``GET`` would
     therefore delete accounts that the user never intended to delete.
+
+    The confirmation screens are frontend routes now; these tests exercise the
+    JSON state endpoint they read, which is the Flask side of the same guarantee.
+    The browser-facing security headers moved with the pages and are asserted in
+    ``frontend/__tests__/config/token-page-headers.test.ts``.
     """
 
     @pytest.fixture
@@ -515,200 +516,114 @@ class TestScannerSafety:
             token = _session_cookie(client, owner)
             client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
             pending = _link_token(configured_mail.sent[-1])
-
-        # Yielded *outside* the app context deliberately. Flask binds `g` to the
-        # app context and the test client reuses an already-pushed one, so
-        # yielding inside it leaks `g.user_id` from the POST above into the
-        # test's own request. That made assertions pass against routes carrying
-        # no auth decorator at all, which is how the missing `optional_auth` on
-        # the two confirmation GETs went unnoticed.
         yield pending
 
     def test_a_bare_get_does_not_delete_or_consume(self, client, configured_mail, owner, pending_token) -> None:
         """The scanner case: no session, no cookie, just the URL."""
         response = client.get(f"/api/account/deletion/confirm?token={pending_token}")
 
-        assert response.status_code == 200
-        assert response.mimetype == "text/html"
+        # No credential at all, so nothing is disclosed and nothing changes.
+        assert response.status_code == 401
+        assert response.mimetype == "application/json"
 
         with client.application.app_context():
-            # The account survives and the token is still live.
             assert db.session.get(User, owner) is not None
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
 
-    def test_repeated_gets_are_stable(self, client, configured_mail, owner, pending_token) -> None:
+    def test_an_authenticated_get_does_not_delete_or_consume(self, client, configured_mail, owner, pending_token) -> None:
+        """Authenticated link preview is still just a preview."""
+        token = _session_cookie(client, owner)
+        response = client.get(
+            f"/api/account/deletion/confirm?token={pending_token}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.mimetype == "application/json"
+        assert response.get_json()["data"]["usable"] is True
+
+        with client.application.app_context():
+            assert db.session.get(User, owner) is not None
+            assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
+
+    def test_repeated_gets_leave_the_token_spendable(self, client, configured_mail, owner, pending_token) -> None:
         """A prefetching browser or an over-eager scanner may fetch many times."""
         token = _session_cookie(client, owner)
         bodies = [
             client.get(
                 f"/api/account/deletion/confirm?token={pending_token}",
                 headers={"Authorization": f"Bearer {token}"},
-            ).data.decode()
+            ).get_json()
             for _ in range(5)
         ]
 
-        # The rendered page must be byte-identical across identical GETs. The
-        # CSRF cookie legitimately differs -- each response mints a fresh one,
-        # which is the correct behaviour -- so it is compared separately below.
-        assert len(set(bodies)) == 1, "the page must not vary between identical GETs"
-
-        # A cookie-authenticated GET mints a CSRF token for the form. Each
-        # response must hand back a *different* one: a fixed value would let a
-        # page replayed from a cache keep authorising submissions.
-        client.delete_cookie("iqoqo_csrf", domain="localhost")
-        minted = set()
-        for _ in range(3):
-            client.get(f"/api/account/deletion/confirm?token={pending_token}")
-            minted.add(client.get_cookie("iqoqo_csrf").value)
-        assert len(minted) == 3, "each GET must mint a fresh CSRF token"
+        assert len({str(b) for b in bodies}) == 1, "the reported state must not vary between identical GETs"
 
         with client.application.app_context():
             assert db.session.get(User, owner) is not None
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
 
-    def test_a_get_with_a_session_still_does_not_delete(self, client, configured_mail, owner, pending_token) -> None:
-        """Authenticated link preview is still just a preview.
+    def test_the_endpoint_returns_json_not_html(self, client, configured_mail, owner, pending_token) -> None:
+        """Flask is API-only. A `text/html` response here would reintroduce the
+        hand-styled server-rendered page this flow moved away from."""
+        token = _session_cookie(client, owner)
+        response = client.get(
+            f"/api/account/deletion/confirm?token={pending_token}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
-        Deliberately driven with a *cookie* and issued outside any surrounding
-        ``app.app_context()``. Flask binds ``g`` to the app context, and the
-        test client reuses an already-pushed one, so a request made inside an
-        ``app_context()`` block inherits ``g.user_id`` from whatever ran before
-        it. Doing that here let this test pass against a route that had no auth
-        decorator at all -- the page rendered the confirmation form only because
-        ``g`` leaked from the fixture's earlier request. That masked a real bug
-        where every signed-in user saw "Sign in to continue" forever.
-        """
-        client.delete_cookie("iqoqo_session", domain="localhost")
-        client.set_cookie("iqoqo_session", _session_cookie(client, owner), domain="localhost")
+        assert response.mimetype == "application/json"
+        assert "<html" not in response.data.decode().lower()
 
-        response = client.get(f"/api/account/deletion/confirm?token={pending_token}")
+    def test_an_unknown_token_is_indistinguishable_from_an_expired_one(self, client, configured_mail, owner) -> None:
+        """One answer for every rejection, so nothing can be learned from it."""
+        token = _session_cookie(client, owner)
+        first = client.get(
+            "/api/account/deletion/confirm?token=" + "A" * 43,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        second = client.get(
+            "/api/account/deletion/confirm?token=" + "B" * 43,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert first.status_code == second.status_code == 200
+        assert first.get_json() == second.get_json()
+        assert first.get_json()["data"]["usable"] is False
+        # No account or address is echoed back for an unusable token.
+        assert "email" not in first.get_json()["data"]
+
+    def test_a_signed_in_user_sees_the_verification_state(self, client, configured_mail, unverified_user) -> None:
+        """The verification endpoint has the same read-only contract."""
+        target = unverified_user
+        with client.application.app_context():
+            raw, _row = account_tokens.issue_token(db.session.get(User, target), AccountTokenPurpose.EMAIL_VERIFICATION)
+
+        token = _session_cookie(client, target)
+        response = client.get(
+            f"/api/account/email/verify?token={raw}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
         assert response.status_code == 200
-        assert "Permanently delete your account" in response.data.decode()
+        assert response.get_json()["data"]["usable"] is True
 
         with client.application.app_context():
-            assert db.session.get(User, owner) is not None
-            assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
+            assert db.session.get(User, target).is_email_verified is False, "a GET must not verify"
 
-    def test_an_anonymous_get_asks_the_user_to_sign_in(self, client, configured_mail, owner, pending_token) -> None:
-        """With no session, the page routes to sign-in rather than rendering a form.
+    def test_an_anonymous_get_discloses_nothing(self, client, configured_mail, owner) -> None:
+        """Without a session there is no answer at all, not even 'unusable'.
 
-        The counterpart to the test above, and the one that pins the branch:
-        signed-in users must reach the form, anonymous ones must not.
+        Distinguishing "you are not signed in" from "this token is dead" would let
+        a caller with a stolen token probe which accounts exist.
         """
-        client.delete_cookie("iqoqo_session", domain="localhost")
-
-        response = client.get(f"/api/account/deletion/confirm?token={pending_token}")
-
-        assert "Sign in to continue" in response.data.decode()
-        assert "Permanently delete your account" not in response.data.decode()
-
-    def test_a_signed_in_user_reaches_the_verification_form(self, client, configured_mail, owner) -> None:
-        """The same applies to email verification, which has the same two branches."""
-        client.delete_cookie("iqoqo_session", domain="localhost")
-
         with client.application.app_context():
             raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
 
-        client.set_cookie("iqoqo_session", _session_cookie(client, owner), domain="localhost")
-
         response = client.get(f"/api/account/email/verify?token={raw}")
 
-        assert response.status_code == 200
-        assert "Confirm your email address" in response.data.decode()
-        assert "Sign in to continue" not in response.data.decode()
-
-    def test_an_anonymous_verification_get_asks_the_user_to_sign_in(self, client, configured_mail, owner) -> None:
-        """A verification token alone must not be able to change account state."""
-        with client.application.app_context():
-            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.EMAIL_VERIFICATION)
-
-        response = client.get(f"/api/account/email/verify?token={raw}")
-
-        assert "Sign in to continue" in response.data.decode()
-
-    def test_the_page_loads_no_third_party_resources(self, client, configured_mail, owner, pending_token) -> None:
-        """Zero external references, enforced by a CSP that would break if one appeared.
-
-        A confirmation page is the ideal beacon target: it is opened from an email,
-        it carries a live single-use token in the URL, and it is visited by exactly
-        the users least likely to be suspicious. Any subresource -- analytics,
-        a font CDN, a favicon -- would receive the token as a referrer.
-        """
-        token = _session_cookie(client, owner)
-        response = client.get(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        html = response.data.decode()
-
-        # The inline favicon's SVG namespace is an XML declaration that browsers
-        # never resolve; everything else absolute would be a real request.
-        scrubbed = html.replace("http://www.w3.org/2000/svg", "")
-        assert "http://" not in scrubbed, "the page references a remote http resource"
-        assert "https://" not in scrubbed, "the page references a remote https resource"
-
-        # No script, frame or media elements. `<img>` is absent too -- the brand
-        # mark is text, and the favicon is a `<link>` carrying a data: URI.
-        for tag in ("<script", "<iframe", "<img", "<object", "<embed", "<video", "<audio", "<source"):
-            assert tag not in html.lower(), f"{tag} must not appear on a token-bearing page"
-
-        # Every link and every src/href must be inline.
-        for link in re.findall(r"<link[^>]*>", html, re.IGNORECASE):
-            assert "data:image/svg+xml" in link, f"unexpected external link element: {link}"
-        for ref in re.findall(r'(?:src|href)="([^"]+)"', html, re.IGNORECASE):
-            assert ref.startswith("data:"), f"unexpected subresource reference: {ref}"
-
-        csp = response.headers["Content-Security-Policy"]
-        assert "default-src 'none'" in csp
-        assert "frame-ancestors 'none'" in csp
-        assert "form-action 'self'" in csp
-
-    def test_the_page_sets_a_no_referrer_policy(self, client, configured_mail, owner, pending_token) -> None:
-        """The token is in the query string; nothing may send it onward.
-
-        Set as a response header rather than only in a meta tag: user agents have
-        historically honoured one and not the other, and this is the control that
-        keeps a token out of a third party's logs.
-        """
-        token = _session_cookie(client, owner)
-        response = client.get(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        assert response.headers["Referrer-Policy"] == "no-referrer"
-        assert 'name="referrer" content="no-referrer"' in response.data.decode()
-
-    def test_the_page_is_not_cacheable_or_indexable(self, client, configured_mail, owner, pending_token) -> None:
-        """A shared machine, a proxy cache, or the back button must not replay it."""
-        token = _session_cookie(client, owner)
-        response = client.get(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        assert "no-store" in response.headers["Cache-Control"]
-        assert "noindex" in response.headers["X-Robots-Tag"]
-
-    def test_the_page_refuses_framing(self, client, configured_mail, owner, pending_token) -> None:
-        """Framing turns "confirm" into "confirm what the frame's owner says"."""
-        token = _session_cookie(client, owner)
-        response = client.get(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
-        assert response.headers["X-Frame-Options"] == "DENY"
-
-    def test_an_invalid_token_renders_the_same_page_as_an_expired_one(self, client, configured_mail, owner) -> None:
-        """One page for every rejection, so nothing can be learned from timing or wording."""
-        unknown = client.get("/api/account/deletion/confirm?token=" + "A" * 43)
-        assert unknown.status_code == 200
-        assert "no longer valid" in unknown.data.decode()
-
-        # Same page for a syntactically valid but unknown token.
-        assert unknown.data == client.get("/api/account/deletion/confirm?token=" + "B" * 43).data
+        assert response.status_code == 401
+        assert "usable" not in response.get_json()
 
 
 # ---------------------------------------------------------------------------
@@ -785,8 +700,8 @@ class TestConfirmationRequiresBothFactors:
             data={"confirm": "delete"},
         )
 
-        assert response.status_code == 200
-        assert "no longer valid" in response.data.decode()
+        assert response.status_code == 400
+        assert response.get_json()["usable"] is False
 
         with client.application.app_context():
             assert db.session.get(User, owner) is not None, "the owner's account must survive"
@@ -794,37 +709,27 @@ class TestConfirmationRequiresBothFactors:
             # And the owner's token is still usable by the right account.
             assert account_tokens.lookup_outstanding(pending_token, AccountTokenPurpose.ACCOUNT_DELETION) is not None
 
-    def test_the_rendered_form_is_submittable_exactly_as_served(self, client, configured_mail, owner, pending_token) -> None:
-        """Post back the form the GET returned, unmodified.
+    def test_confirmation_is_a_post_of_only_the_token(self, client, configured_mail, owner, pending_token) -> None:
+        """Confirming needs nothing but the token and the session.
 
-        Regression, and the one that matters most in this class. The server used
-        to require a `confirm=delete` field that the page never contained, so
-        submitting the page as rendered re-displayed it and deleted nothing --
-        which looked to the user like a button that did nothing.
+        The predecessor of this test posted the form exactly as the server rendered
+        it, which caught a `confirm=delete` field the page never contained -- a
+        submit that re-displayed the page and deleted nothing, indistinguishable
+        from a dead button. The screen has since moved to the frontend, so the
+        contract is now expressed directly: a JSON POST carrying only the token.
 
-        Every earlier test in this class hand-built its POST body, so each one
-        supplied the very field the page omitted and none could notice. This one
-        extracts the inputs from the served HTML instead.
+        Any field the client must echo back is a field the client can be made to
+        send for the wrong reason.
         """
         token = _session_cookie(client, owner)
-        # Cookie auth, not bearer: this is the flow a browser takes, and the only
-        # one where the form carries inputs to extract at all. A bearer session
-        # needs no CSRF proof, so the page renders no fields and the test would
-        # pass without exercising anything.
-        client.set_cookie("iqoqo_session", token, domain="localhost")
-        page = client.get(f"/api/account/deletion/confirm?token={pending_token}").data.decode()
-
-        served = dict(re.findall(r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', page))
-        assert served, "the confirmation page rendered no submittable inputs"
-
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
-            data=served,
+            headers={"Authorization": f"Bearer {token}"},
         )
 
-        assert (
-            "Your account has been deleted" in response.data.decode()
-        ), f"submitting the served form did not delete the account: {response.data.decode()[:200]}"
+        assert response.status_code == 200, "confirming needs only the token and the session"
+        assert response.get_json()["data"]["deleted"] is True
+
         with client.application.app_context():
             db.session.remove()
             assert db.session.get(User, owner) is None, "the page reported success but the account survived"
@@ -854,6 +759,20 @@ class TestConfirmationRequiresBothFactors:
 # ---------------------------------------------------------------------------
 # CSRF
 # ---------------------------------------------------------------------------
+
+
+def _csrf_cookie_from(response) -> str | None:
+    """Read the CSRF cookie value out of a response's ``Set-Cookie`` header.
+
+    Parsed from the header rather than read from the test client's cookie jar,
+    because the jar accumulates same-named entries once a test also sets the
+    cookie explicitly, and `get_cookie` then returns whichever came first. That
+    ambiguity made these tests assert against a stale value.
+    """
+    for value in response.headers.getlist("Set-Cookie"):
+        if value.startswith(f"{CSRF_COOKIE_NAME}="):
+            return value.split(f"{CSRF_COOKIE_NAME}=", 1)[1].split(";", 1)[0]
+    return None
 
 
 class TestCsrfProtection:
@@ -897,119 +816,70 @@ class TestCsrfProtection:
         """The happy path for the form flow, proving the check is not blocking everything."""
         _authenticate_cookie(client, owner)
 
-        # The page mints the CSRF cookie; a real browser would have it by now.
-        page = client.get(f"/api/account/deletion/confirm?token={pending_token}")
-        csrf = client.get_cookie("iqoqo_csrf")
-        assert csrf is not None, "the confirmation page must mint a CSRF cookie"
-        del page
+        minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
 
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"X-CSRF-Token": csrf.value},
-            data={"confirm": "delete", "csrf_token": csrf.value},
+            headers={"X-CSRF-Token": minted},
         )
 
         assert response.status_code == 200
         with client.application.app_context():
             assert db.session.get(User, owner) is None
 
-    def test_the_first_visit_form_is_immediately_submittable(self, client, configured_mail, owner, pending_token) -> None:
-        """A form rendered before any CSRF cookie existed must still work.
+    def test_a_minted_csrf_token_is_accepted_by_the_json_client(self, client, configured_mail, owner, pending_token) -> None:
+        """The happy path for the browser client, proving the check is not blocking everything.
 
-        Regression, and the one the test above could not catch. On a first visit
-        there is no CSRF cookie in the *request*: it is being set on this very
-        response, after the body has been rendered. An implementation that read
-        the token back out of the request therefore rendered the form with no
-        token field at all, and the user's submit was rejected with "This form
-        has expired" -- permanently, because reloading was the only way out.
-
-        Asserted on a client whose CSRF cookie jar starts empty, which is exactly
-        the real first-visit state.
+        This is exactly what `frontend/lib/api/account.ts` does: GET
+        `/api/account/csrf`, then echo the cookie's value in the `X-CSRF-Token`
+        header on the mutation. It replaces an earlier version of this test that
+        posted a server-rendered form, which no longer exists.
         """
         _authenticate_cookie(client, owner)
-        client.delete_cookie("iqoqo_csrf", domain="localhost")
-        assert client.get_cookie("iqoqo_csrf") is None
 
-        page = client.get(f"/api/account/deletion/confirm?token={pending_token}")
-
-        # The form must carry the field *and* the cookie must carry the same value.
-        assert 'name="csrf_token"' in page.data.decode()
-        csrf = client.get_cookie("iqoqo_csrf")
-        assert csrf is not None
-        assert csrf.value in page.data.decode()
+        minted_response = client.get("/api/account/csrf")
+        minted = minted_response.get_json()["data"]["csrf_token"]
+        cookie_value = _csrf_cookie_from(minted_response)
+        assert cookie_value is not None, "GET /api/account/csrf must set the cookie"
+        assert cookie_value == minted, "the response body and the cookie must carry the same token"
 
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"X-CSRF-Token": csrf.value},
-            data={"confirm": "delete", "csrf_token": csrf.value},
+            headers={"X-CSRF-Token": cookie_value},
         )
 
-        assert response.status_code == 200, "the first-visit form was not submittable"
-        with client.application.app_context():
-            assert db.session.get(User, owner) is None
-
-    def test_the_first_visit_verification_form_is_immediately_submittable(self, client, configured_mail, unverified_user) -> None:
-        """The same first-visit requirement for email verification.
-
-        Uses an account that starts *unverified*. The `owner` fixture is already
-        verified, so asserting on it passes whatever the endpoint does -- which
-        is how a variant of this bug stayed green while the success page reported
-        a verification that had never been saved.
-        """
-        target = unverified_user
-        with client.application.app_context():
-            raw, _row = account_tokens.issue_token(db.session.get(User, target), AccountTokenPurpose.EMAIL_VERIFICATION)
-
-        _authenticate_cookie(client, target)
-        client.delete_cookie("iqoqo_csrf", domain="localhost")
-
-        page = client.get(f"/api/account/email/verify?token={raw}")
-        assert 'name="csrf_token"' in page.data.decode()
-        csrf = client.get_cookie("iqoqo_csrf")
-        assert csrf is not None
-        assert csrf.value in page.data.decode()
-
-        response = client.post(
-            f"/api/account/email/verify?token={raw}",
-            headers={"X-CSRF-Token": csrf.value},
-            data={"csrf_token": csrf.value},
-        )
-
-        assert response.status_code == 200, "the first-visit form was not submittable"
-
-        # `remove()` first, so the read cannot be answered from the identity map.
-        # An in-memory mutation can satisfy such an assertion even when the
-        # commit persisted nothing -- exactly the shape of the bug this exists
-        # to catch.
+        assert response.status_code == 200
         with client.application.app_context():
             db.session.remove()
-            stored = db.session.get(User, target)
-        assert stored is not None and stored.is_email_verified, "email verification reported success but persisted nothing"
-        assert stored.email_verified_source == "local"
+            assert db.session.get(User, owner) is None
 
-    def test_a_forged_csrf_value_is_refused(self, client, configured_mail, owner, pending_token) -> None:
-        """Cookie injection must not be enough.
+    def test_the_csrf_endpoint_mints_a_fresh_token_every_time(self, client, configured_mail) -> None:
+        """A fixed token would let a replayed page keep authorising submissions.
 
-        Someone who can set a cookie for the domain -- a sibling subdomain, or a
-        plain-HTTP request during the HTTPS redirect -- must not be able to plant
-        their own CSRF value. The HMAC signature is what prevents that.
+        Matters because the confirmation pages live in the frontend now and are
+        re-fetched on every visit; a cached value would outlive the page it was
+        minted for.
         """
-        _authenticate_cookie(client, owner)
-        # A planted cookie whose value the attacker chose -- the sibling-subdomain
-        # and plain-HTTP-redirect attack. It must match the header to satisfy the
-        # double submit, and then fail the signature check.
-        forged = "attacker.controlled.value"
-        client.set_cookie("iqoqo_csrf", forged, domain="localhost")
+        first_response = client.get("/api/account/csrf")
+        first = first_response.get_json()["data"]["csrf_token"]
+        first_cookie = _csrf_cookie_from(first_response)
+        second_response = client.get("/api/account/csrf")
+        second = second_response.get_json()["data"]["csrf_token"]
+        second_cookie = _csrf_cookie_from(second_response)
 
-        response = client.post(
-            f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"X-CSRF-Token": forged},
-            data={"confirm": "delete", "csrf_token": forged},
-        )
+        assert first != second, "every mint must produce a distinct token"
+        assert first_cookie == first
+        assert second_cookie == second
 
-        assert response.status_code == 403
-        with client.application.app_context():
-            assert db.session.get(User, owner) is not None
+    def test_the_csrf_cookie_is_not_readable_by_scripts_only_by_being_echoed(self, client, configured_mail) -> None:
+        """The cookie is deliberately not httpOnly: double submit needs the client
+        to read it. What makes it safe is the signature, asserted in the forgery
+        tests below."""
+        response = client.get("/api/account/csrf")
+
+        # httponly absent => readable by JS, which is required for the double submit.
+        assert "HttpOnly" not in response.headers.get("Set-Cookie", "")
+        assert "SameSite=Strict" in response.headers.get("Set-Cookie", "")
 
     def test_a_csrf_value_absent_from_the_cookie_is_refused(self, client, configured_mail, owner, pending_token) -> None:
         """The double submit must compare against the cookie actually presented.
@@ -1021,9 +891,9 @@ class TestCsrfProtection:
         but never one whose value they chose.
         """
         _authenticate_cookie(client, owner)
-        client.get(f"/api/account/deletion/confirm?token={pending_token}")
-        csrf = client.get_cookie("iqoqo_csrf")
-        assert csrf is not None
+        csrf_response = client.get("/api/account/csrf")
+        csrf = csrf_response.get_json()["data"]["csrf_token"]
+        assert _csrf_cookie_from(csrf_response) is not None
 
         # Remove the CSRF cookie, keeping the session. This is the cross-site
         # shape: the browser attaches the session automatically, but the
@@ -1032,8 +902,7 @@ class TestCsrfProtection:
 
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
-            headers={"X-CSRF-Token": csrf.value},
-            data={"confirm": "delete", "csrf_token": csrf.value},
+            headers={"X-CSRF-Token": csrf},
         )
 
         assert response.status_code == 403
@@ -1048,16 +917,14 @@ class TestCsrfProtection:
         deletion. This asserts that check exists.
         """
         _authenticate_cookie(client, owner)
-        client.get(f"/api/account/deletion/confirm?token={pending_token}")
-        csrf = client.get_cookie("iqoqo_csrf")
-        nonce, issued, _signature = csrf.value.rsplit(".", 2)
+        csrf = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+        nonce, issued, _signature = csrf.rsplit(".", 2)
         tampered = f"{nonce}.{issued}.{'0' * 64}"
         client.set_cookie("iqoqo_csrf", tampered, domain="localhost")
 
         response = client.post(
             f"/api/account/deletion/confirm?token={pending_token}",
             headers={"X-CSRF-Token": tampered},
-            data={"confirm": "delete", "csrf_token": tampered},
         )
 
         assert response.status_code == 403
@@ -1471,139 +1338,192 @@ class TestStatusReporting:
 
 # ---------------------------------------------------------------------------
 # The rendered pages
+class TestCredentialsDieWithTheAccount:
+    """A deleted account's outstanding JWTs must stop working immediately.
+
+    The tokens are stateless and live for seven days, and the per-token blocklist
+    only knows about explicit logouts -- so without a live-account check on every
+    authenticated request, deleting an account would leave a working session in
+    the hands of whoever had the cookie.
+    """
+
+    def test_a_bearer_jwt_stops_working_after_deletion(self, client, configured_mail, owner) -> None:
+        from app.api.auth import generate_internal_jwt
+
+        with client.application.app_context():
+            token = _session_cookie(client, owner)
+            # It works before deletion.
+            assert client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.ACCOUNT_DELETION)
+            account_lifecycle.confirm_deletion(raw, owner)
+
+            after = client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"})
+            assert after.status_code == 401
+
+    def test_a_session_cookie_stops_working_after_deletion(self, client, configured_mail, owner) -> None:
+        with client.application.app_context():
+            _authenticate_cookie(client, owner)
+
+            assert client.get("/api/profile/").status_code == 200
+
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.ACCOUNT_DELETION)
+            account_lifecycle.confirm_deletion(raw, owner)
+
+            assert client.get("/api/profile/").status_code == 401
+
+    def test_a_suspended_accounts_jwt_stops_working(self, client, owner) -> None:
+        """The same check covers suspension, which had the identical gap."""
+        from app.api.auth import generate_internal_jwt
+
+        with client.application.app_context():
+            token = _session_cookie(client, owner)
+            assert client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+            db.session.get(User, owner).is_active = False
+            db.session.commit()
+
+            assert client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+    def test_the_rejection_does_not_distinguish_a_deleted_account(self, client, configured_mail, owner) -> None:
+        """A distinct status or message would be an enumeration oracle.
+
+        A caller holding a stolen token could otherwise learn whether the account
+        is gone, which confirms a successful deletion to someone who should not
+        know it happened.
+        """
+        from app.api.auth import generate_internal_jwt
+
+        with client.application.app_context():
+            deleted_token = _session_cookie(client, owner)
+            raw, _row = account_tokens.issue_token(db.session.get(User, owner), AccountTokenPurpose.ACCOUNT_DELETION)
+            account_lifecycle.confirm_deletion(raw, owner)
+
+            deleted = client.get("/api/profile/", headers={"Authorization": f"Bearer {deleted_token}"})
+
+            garbage = client.get("/api/profile/", headers={"Authorization": "Bearer not.a.jwt"})
+            unsigned = client.get("/api/profile/", headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.e30.abc"})
+
+            assert deleted.status_code == garbage.status_code == unsigned.status_code == 401
+            assert (
+                deleted.get_json() == garbage.get_json() == unsigned.get_json()
+            ), "a deleted account must be indistinguishable from a token that never existed"
+
+    def test_a_database_failure_fails_closed(self, client, owner, monkeypatch) -> None:
+        """A database blip must not authenticate anyone."""
+        from app.api.auth import generate_internal_jwt
+
+        with client.application.app_context():
+            token = _session_cookie(client, owner)
+
+            def explode(*_args, **_kwargs):
+                raise RuntimeError("connection reset")
+
+            monkeypatch.setattr(db.session, "get", explode)
+
+            assert client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting
 # ---------------------------------------------------------------------------
 
 
-class TestConfirmationPageAppearance:
-    """The emailed pages must be styled, and must be recognisably iQoQo.
+class TestRateLimiting:
+    """Issuance is rate limited per account."""
 
-    Two separate regressions, both found by rendering the page in a browser
-    rather than by reading it.
+    def test_repeated_requests_are_refused_after_the_limit(self, app, client, configured_mail, owner) -> None:
+        """Issuance must stop, not merely slow down.
 
-    The stylesheet was missing a closing brace after the dark-mode ``body`` rule,
-    which nested ``.card`` inside the ``prefers-color-scheme: dark`` query. The
-    card was therefore styled in dark mode and completely unstyled in light mode,
-    so a user in a light-mode browser saw unstyled text on a near-white
-    background. It survived `curl` checks because `curl` never renders, and
-    because the dark path happened to be the correct-looking one.
-
-    Separately, the pages carried no branding at all. An email link leading to an
-    unbranded page is indistinguishable from a phishing page, and a user who
-    cannot tell where they are will reasonably distrust the genuine article --
-    which defeats the point of confirming ownership of a mailbox.
-    """
-
-    @staticmethod
-    def _style(html: str) -> str:
-        """Extract the inline stylesheet from a rendered page."""
-        match = re.search(r"<style>(.*?)</style>", html, re.DOTALL)
-        assert match, "the page rendered no stylesheet"
-        return match.group(1)
-
-    def test_the_stylesheet_is_brace_balanced(self, client, configured_mail, owner) -> None:
-        """One missing `}` silently disables every rule inside the unclosed block."""
-        token = _session_cookie(client, owner)
-        html = client.get(
-            f"/api/account/deletion/confirm?token={'z' * 43}",
-            headers={"Authorization": f"Bearer {token}"},
-        ).data.decode()
-        style = self._style(html)
-
-        assert style.count("{") == style.count(
-            "}"
-        ), f"unbalanced stylesheet: {style.count('{')} opening vs {style.count('}')} closing braces"
-
-    def test_the_card_is_styled_outside_any_media_query(self, client, configured_mail, owner) -> None:
-        """`.card` inside `prefers-color-scheme: dark` is unstyled in light mode.
-
-        Asserted by brace-depth tracking rather than by regex, because the whole
-        failure is about *where* the rule sits in the block structure.
+        Every accepted request sends a mail to a real mailbox, so the thing being
+        protected is the recipient's tolerance. Three per hour is the limit; past
+        it the endpoint must refuse.
         """
-        token = _session_cookie(client, owner)
-        style = self._style(
-            client.get(
-                f"/api/account/deletion/confirm?token={'z' * 43}",
-                headers={"Authorization": f"Bearer {token}"},
-            ).data.decode()
-        )
+        from app.core.limiter import limiter
 
-        depth = 0
-        media_depths: list[int] = []
-        i = 0
-        while i < len(style):
-            char = style[i]
-            if char == "{":
-                depth += 1
-                preceding = style[max(0, i - 60) : i]
-                if "prefers-color-scheme" in preceding:
-                    media_depths.append(depth)
-            elif char == "}":
-                if depth in media_depths:
-                    media_depths.remove(depth)
-                depth -= 1
-            i += 1
+        # The suite runs with the limiter disabled, so it has to be switched on
+        # explicitly. `init_app` is re-run because the enabled flag is read from
+        # config at wiring time.
+        app.config["RATELIMIT_ENABLED"] = True
+        app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+        limiter.enabled = True
+        limiter._enabled = True
+        limiter.init_app(app)
+        limiter.reset()
+        try:
+            with client.application.app_context():
+                token = _session_cookie(client, owner)
+                statuses = [
+                    client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"}).status_code for _ in range(6)
+                ]
 
-        assert not media_depths, (
-            "an unclosed media query is swallowing the rules after it; every rule "
-            f"inside it is inert outside dark mode (still open at depths {media_depths})"
-        )
+            assert 429 in statuses, f"the limiter never engaged: {statuses}"
+            # At most the configured three per hour were allowed through.
+            assert statuses.count(202) <= 3, f"too many requests were accepted: {statuses}"
+        finally:
+            limiter.enabled = False
+            limiter._enabled = False
 
-    def test_light_mode_backgrounds_are_defined_outside_a_media_query(self, client, configured_mail, owner) -> None:
-        """The default `body` and `.card` rules must apply with no media query."""
-        token = _session_cookie(client, owner)
-        style = self._style(
-            client.get(
-                f"/api/account/deletion/confirm?token={'z' * 43}",
-                headers={"Authorization": f"Bearer {token}"},
-            ).data.decode()
-        )
+    def test_the_limit_is_keyed_on_the_account_not_the_address(self, app) -> None:
+        """The mailbox's tolerance is what is being protected.
 
-        head, _, tail = style.partition("@media (prefers-color-scheme: dark)")
-        assert "body" in head and "background" in head, "body has no light-mode background"
-        assert ".card" in head, ".card has no light-mode styling"
+        An IP-keyed bucket would let one host exhaust a victim's quota while the
+        victim's own retries went through, protecting the attacker instead.
+        """
+        from app.api.account import _rate_limit_key
 
-    def test_the_page_is_branded_as_iqoqo(self, client, configured_mail, owner) -> None:
-        """A user must be able to tell where they are before confirming anything."""
-        token = _session_cookie(client, owner)
-        html = client.get(
-            f"/api/account/deletion/confirm?token={'z' * 43}",
-            headers={"Authorization": f"Bearer {token}"},
-        ).data.decode()
+        with app.test_request_context():
+            from flask import g
 
-        assert "iQoQo" in html, "the page carries no product wordmark"
-        assert 'class="brand"' in html
-        # The favicon is inline so it costs no request, but must still exist --
-        # it is the mark visible in the tab, which is what a user glances at.
-        assert 'rel="icon"' in html and "data:image/svg+xml" in html
+            g.user_id = "11111111-1111-1111-1111-111111111111"
+            assert _rate_limit_key() == "11111111-1111-1111-1111-111111111111"
 
-    def test_branding_costs_no_network_request(self, client, configured_mail, owner) -> None:
-        """Everything must stay inlined: a remote asset would leak the referrer."""
-        token = _session_cookie(client, owner)
-        html = client.get(
-            f"/api/account/deletion/confirm?token={'z' * 43}",
-            headers={"Authorization": f"Bearer {token}"},
-        ).data.decode()
+            g.user_id = None
+            assert _rate_limit_key() == "anon"
 
-        # The SVG namespace (`xmlns='http://www.w3.org/2000/svg'`) is an XML
-        # declaration that browsers never resolve, so it is stripped before
-        # checking. Everything that *is* fetchable must be absent.
-        scrubbed = html.replace("http://www.w3.org/2000/svg", "")
-        assert "http://" not in scrubbed, "the page references a remote http resource"
-        assert "https://" not in scrubbed, "the page references a remote https resource"
-        assert "//cdn" not in scrubbed
 
-    def test_the_csp_still_permits_only_inline_styles(self, client, configured_mail, owner) -> None:
-        """`img-src data:` is added for the favicon; nothing else may loosen."""
-        token = _session_cookie(client, owner)
-        csp = client.get(
-            f"/api/account/deletion/confirm?token={'z' * 43}",
-            headers={"Authorization": f"Bearer {token}"},
-        ).headers["Content-Security-Policy"]
+# ---------------------------------------------------------------------------
+# Status reporting
+# ---------------------------------------------------------------------------
 
-        assert "default-src 'none'" in csp
-        assert "style-src 'unsafe-inline'" in csp
-        assert "form-action 'self'" in csp
-        assert "frame-ancestors 'none'" in csp
-        assert "img-src data:" in csp
-        for forbidden in ("script-src", "http://", "https://", "*;"):
-            assert forbidden not in csp, f"CSP must not allow {forbidden!r}"
+
+class TestStatusReporting:
+    """The profile page needs to know whether a request is pending."""
+
+    def test_status_reports_a_pending_request(self, client, configured_mail, owner) -> None:
+        with client.application.app_context():
+            token = _session_cookie(client, owner)
+
+            before = client.get("/api/account/deletion/status", headers={"Authorization": f"Bearer {token}"})
+            assert before.get_json()["data"]["pending"] is False
+
+            client.post("/api/account/deletion/request", headers={"Authorization": f"Bearer {token}"})
+
+            after = client.get("/api/account/deletion/status", headers={"Authorization": f"Bearer {token}"})
+            assert after.get_json()["data"]["pending"] is True
+            assert after.get_json()["data"]["expires_at"] is not None
+
+    def test_the_profile_response_carries_the_verification_state(self, client, owner) -> None:
+        """The owner-facing projection includes what the public one deliberately omits."""
+        with client.application.app_context():
+            token = _session_cookie(client, owner)
+            response = client.get("/api/profile/", headers={"Authorization": f"Bearer {token}"})
+
+            data = response.get_json()["data"]
+            assert data["email_verified"] is True
+            assert data["email_verified_source"] == "local"
+            assert data["deletion"]["pending"] is False
+
+    def test_the_public_projection_omits_the_verification_state(self, client, app) -> None:
+        """Telling a third party whether an address is confirmed is a free disclosure."""
+        with client.application.app_context():
+            record = User(email="quiet@iqoqo.local", public_username="quietuser", visibility="public")
+            record.set_password("test-password")
+            record.mark_email_verified("local")
+            db.session.add(record)
+            db.session.commit()
+
+        response = client.get("/api/public/u/quietuser")
+        assert response.status_code == 200
+        body = json.dumps(response.get_json())
+        assert "email_verified" not in body

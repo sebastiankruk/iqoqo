@@ -58,9 +58,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from html import escape
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from kombu.exceptions import KombuError
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -69,12 +68,9 @@ from app.core.account_tokens import AccountTokenPurpose, MailUnavailableError
 from app.core.limiter import limiter
 from app.db.models import User, db
 
-from . import account_pages
 from .decorators import (
-    CSRF_FIELD_NAME,
     enforce_csrf_if_cookie_authenticated,
     issue_csrf_token,
-    optional_auth,
     require_auth,
     set_csrf_cookie,
 )
@@ -82,12 +78,6 @@ from .decorators import (
 logger = logging.getLogger(__name__)
 
 account_bp = Blueprint("account", __name__, url_prefix="/api/account")
-
-#: The two paths an emailed link can point at.  Kept as constants because the
-#: rendered sign-in page echoes one back into the browser, and a caller-supplied
-#: path there would be an open redirect.
-_EMAIL_VERIFY_PATH = "/api/account/email/verify"
-_DELETION_CONFIRM_PATH = "/api/account/deletion/confirm"
 
 #: Longest accepted token in a query string.  A real one is 43 characters; this
 #: only bounds the work an oversized parameter can cause before it reaches a
@@ -140,40 +130,30 @@ def _token_from_request() -> str:
     return candidate[:_MAX_TOKEN_LENGTH]
 
 
-def _csrf_proof_for_page() -> tuple[str, str]:
-    """Mint the CSRF material for a confirmation page.
+def _link_unusable():
+    """The one answer for every unusable-token case.
+
+    Unknown, expired, consumed, superseded and wrong-account all look identical
+    from outside. Distinguishing them would tell whoever holds an unreadable token
+    how far they got, and would tell a legitimate user nothing, because in every
+    case the next step is the same: ask for a new link.
 
     Returns:
-        ``(token, field_html)``.  Both are empty when the caller is not
-        cookie-authenticated, matching
-        :func:`enforce_csrf_if_cookie_authenticated` exactly -- a field emitted
-        for a request whose CSRF is never checked would be a hidden input
-        carrying a credential that means nothing.
-
-        The token is minted *here* rather than read back from the request
-        cookie. On a first visit there is no cookie to read: it is being set on
-        this very response, after the body has already been rendered. Reading it
-        from the request therefore produced a form with no token field at all,
-        and the user could not submit it without reloading first.
+        A ``(Response, 400)`` tuple.
     """
-    if not getattr(g, "authenticated_via_cookie", False):
-        return "", ""
-    token = issue_csrf_token()
-    field = f'<input type="hidden" name="{CSRF_FIELD_NAME}" value="{escape(token, quote=True)}">'
-    return token, field
+    return jsonify({"success": False, "usable": False, "error": "This link is no longer valid."}), 400
 
 
-def _csrf_failure_page(message: str) -> Response:
-    """Render a CSRF rejection as a page the user can act on.
+def _csrf_failure(message: str):
+    """Build the 403 body for a rejected CSRF proof.
 
     Args:
         message: Human-readable explanation.
 
     Returns:
-        A 403 HTML response, using the same hardened headers as every other page
-        this flow renders.
+        A ``(Response, 403)`` tuple.
     """
-    return account_pages.expired_form_page(detail=message)
+    return jsonify({"success": False, "error": message, "code": 403}), 403
 
 
 # ---------------------------------------------------------------------------
@@ -295,38 +275,38 @@ def change_account_email():
 
 
 @account_bp.route("/email/verify", methods=["GET"])
-@optional_auth
-def verify_email_page():
-    """Render the email-verification confirmation page.
+@require_auth
+def email_verification_state():
+    """Report whether a verification token can be spent, without spending it.
 
-    Side-effect free by contract.  A scanner, a preview pane or a prefetcher
-    that fetches this URL gets exactly the bytes a human would, and the token
-    remains outstanding.
+    The confirmation screen is a frontend route; this is the JSON it reads to
+    decide what to render. Side-effect free by contract, because the URL it is
+    called with is the one that arrives by email, and mail clients, link
+    previewers and security scanners fetch every link in a message within
+    seconds of it landing -- long before a human opens it. A scanner must get the
+    same answer as the user and change nothing.
 
-    An anonymous visitor holding a valid token is told to sign in rather than
-    shown a form they cannot submit: verification also requires the account's
-    session, because a verification token found in a forwarded mail should not
-    be usable on its own.
+    Requires the session for the account the token belongs to. A verification
+    token proves mailbox control, not identity, so on its own it must not be able
+    to change or even inspect an account's state.
     """
-    token = _token_from_request()
-    row = account_tokens.lookup_outstanding(token, AccountTokenPurpose.EMAIL_VERIFICATION)
-
-    if row is None:
-        return account_pages.invalid_link_page(action="verify")
-
-    if getattr(g, "user_id", None) is None:
-        return set_csrf_cookie(account_pages.sign_in_page(next_path=_EMAIL_VERIFY_PATH))
-
-    if row.user_id != g.user_id:
-        return account_pages.invalid_link_page(action="verify")
-
     user = _current_user()
-    if user is None:  # pragma: no cover - require_auth-equivalent already guarantees this
-        return account_pages.invalid_link_page(action="verify")
+    token = _token_from_request()
 
-    csrf_token_value, csrf_field = _csrf_proof_for_page()
-    response = account_pages.email_verification_page(account_hint=user.email, csrf_field=csrf_field)
-    return set_csrf_cookie(response, csrf_token_value)
+    if user is None:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    row = account_tokens.lookup_outstanding(token, AccountTokenPurpose.EMAIL_VERIFICATION)
+    if row is None or row.user_id != g.user_id:
+        # One answer for unknown, expired, consumed, superseded and wrong-account
+        # alike: distinguishing them would report how far a holder of an
+        # unreadable token got.
+        return jsonify({"success": True, "data": {"usable": False}})
+
+    if user.is_email_verified:
+        return jsonify({"success": True, "data": {"usable": False, "already_verified": True, "email": user.email}})
+
+    return jsonify({"success": True, "data": {"usable": True, "email": user.email}})
 
 
 @account_bp.route("/email/verify", methods=["POST"])
@@ -343,7 +323,7 @@ def confirm_email_verification():
     """
     csrf_error = enforce_csrf_if_cookie_authenticated()
     if csrf_error is not None:
-        return _csrf_failure_page(csrf_error[0])
+        return _csrf_failure(csrf_error[0])
 
     user = _current_user()
     token = _token_from_request()
@@ -353,27 +333,24 @@ def confirm_email_verification():
     except SQLAlchemyError:
         db.session.rollback()
         logger.error("Email verification failed while consuming a token", exc_info=True)
-        return account_pages.invalid_link_page(action="verify"), 500
+        return _link_unusable(), 500
 
-    if consumed is None or consumed.user_id != g.user_id:
+    if consumed is None or consumed.user_id != g.user_id or user is None:
         db.session.rollback()
-        return account_pages.invalid_link_page(action="verify")
+        return _link_unusable()
 
-    # The address must still be the one the token was issued for.  A token row
+    # The address must still be the one the token was issued for. A token row
     # survives an address change only if something bypassed
     # `account_lifecycle.set_email`, so this is the belt to that braces.
-    if user is None or consumed.email != (user.email or "").strip().lower():
+    if consumed.email != (user.email or "").strip().lower():
         db.session.rollback()
-        return account_pages.invalid_link_page(action="verify")
+        return _link_unusable()
 
     user.mark_email_verified("local")
     db.session.commit()
     logger.info("Verified the email address for user %s via a local confirmation link", user.id)
 
-    return account_pages.success_page(
-        heading="Email address confirmed",
-        detail="You can close this page and return to your profile.",
-    )
+    return jsonify({"success": True, "data": {"email": user.email, "verified": True}})
 
 
 # ---------------------------------------------------------------------------
@@ -437,39 +414,34 @@ def deletion_status():
 
 
 @account_bp.route("/deletion/confirm", methods=["GET"])
-@optional_auth
-def deletion_confirm_page():
-    """Render the account-deletion confirmation page.
+@require_auth
+def deletion_confirmation_state():
+    """Report whether a deletion token can be spent, without spending it.
 
-    Side-effect free by contract, and this is the endpoint the specification
-    cares about most: a mail scanner fetches this URL within seconds of the
-    message arriving, before the user has read a word of it.  Nothing is
-    consumed, nothing is deleted, and the rendered page is identical whether a
-    human or a scanner asked for it.
+    The confirmation screen is a frontend route; this is the JSON it reads. This
+    is the endpoint the specification cares about most, because the URL is the one
+    that arrives by email and a security appliance will fetch it within seconds of
+    the message landing -- before the recipient has read a word. Nothing is
+    consumed, nothing is deleted, and a scanner gets exactly what the user gets.
+
+    Requires the session for the account the token belongs to. Accepting a token
+    from any authenticated session would make it a universal deletion key, which
+    is precisely what binding it to one account prevents.
     """
-    token = _token_from_request()
-    row = account_tokens.lookup_outstanding(token, AccountTokenPurpose.ACCOUNT_DELETION)
-
-    if row is None:
-        # One page for unknown, expired, superseded and already-consumed alike.
-        return account_pages.invalid_link_page(action="delete")
-
-    if getattr(g, "user_id", None) is None:
-        return set_csrf_cookie(account_pages.sign_in_page(next_path=_DELETION_CONFIRM_PATH))
-
-    if row.user_id != g.user_id:
-        # Bound to one account. Rendering the form here would invite a user to
-        # confirm something that would then be refused -- a confusing failure
-        # that also confirms the token is live to whoever is signed in.
-        return set_csrf_cookie(account_pages.invalid_link_page(action="delete"))
-
     user = _current_user()
-    if user is None:  # pragma: no cover - lookup_outstanding already proved the row is live
-        return account_pages.invalid_link_page(action="delete")
+    token = _token_from_request()
 
-    csrf_token_value, csrf_field = _csrf_proof_for_page()
-    response = account_pages.deletion_confirmation_page(account_hint=user.email, csrf_field=csrf_field)
-    return set_csrf_cookie(response, csrf_token_value)
+    if user is None:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    row = account_tokens.lookup_outstanding(token, AccountTokenPurpose.ACCOUNT_DELETION)
+    if row is None or row.user_id != g.user_id:
+        # One answer for unknown, expired, superseded, consumed and wrong-account
+        # alike. A distinct reply would confirm to whoever is signed in that the
+        # token is live.
+        return jsonify({"success": True, "data": {"usable": False}})
+
+    return jsonify({"success": True, "data": {"usable": True, "email": user.email}})
 
 
 @account_bp.route("/deletion/confirm", methods=["POST"])
@@ -477,30 +449,24 @@ def deletion_confirm_page():
 def confirm_account_deletion():
     """Consume the token and permanently delete the account.
 
-    Requires, in this order: a live session for the account the token belongs
-    to, valid CSRF proof when that session came from a cookie, an unexpired
-    single-use token, and a second confirmation of the permanent effect.  All
-    four must hold, and the token consumption and the delete commit together.
+    Requires, in order: a live session for the account the token belongs to, valid
+    CSRF proof when that session came from a cookie, and an unexpired single-use
+    token. The token consumption and the delete commit together.
 
-    On success the response is a page: the account is gone, so the JSON client
-    has nothing left to talk to, and the browser should not be left holding a
-    session cookie for a user that no longer exists.
+    There is no separate "type DELETE to confirm" gate. There was one, requiring a
+    `confirm=delete` field the rendered form never contained, so submitting the
+    page re-displayed it and deleted nothing -- indistinguishable from a dead
+    button. A fixed hidden field would not have fixed that; it would only have made
+    the flow pass while proving nothing about intent, since a browser posts it
+    automatically. What gates this is already explicit: a POST rather than a GET,
+    a live session bound to this account, CSRF proof, and a single-use token.
+
+    The confirmation screen itself is a frontend route; this endpoint is the
+    mutation behind its button.
     """
     csrf_error = enforce_csrf_if_cookie_authenticated()
     if csrf_error is not None:
-        return _csrf_failure_page(csrf_error[0])
-
-    # No separate "type DELETE to confirm" gate here. There was one, requiring a
-    # `confirm=delete` field that the rendered form never contained -- so the
-    # submit silently re-rendered the page instead of deleting, and looked to
-    # the user like a reload that did nothing. A fixed hidden field would not
-    # have fixed that; it would only have made the flow pass, while still
-    # proving nothing about intent, since a browser submits it automatically.
-    #
-    # What actually gates this is already explicit: a POST (not a GET), a live
-    # session for this account, CSRF proof for cookie sessions, and a
-    # single-use token that the GET page is built around. The button itself is
-    # labelled with the permanence of the action.
+        return _csrf_failure(csrf_error[0])
 
     token = _token_from_request()
     acting_user_id = getattr(g, "user_id", None)
@@ -511,21 +477,24 @@ def confirm_account_deletion():
         outcome = account_lifecycle.confirm_deletion(token, acting_user_id)
     except account_lifecycle.DeletionRejected:
         db.session.rollback()
-        return account_pages.invalid_link_page(action="delete")
+        return _link_unusable()
     except account_lifecycle.DeletionFailed:
         db.session.rollback()
         logger.error("Account deletion failed; the account and its pending request are unchanged")
-        return account_pages.success_page(
-            heading="Deletion could not be completed",
-            detail="Nothing has been changed and your account is intact. Please try again.",
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "The account could not be deleted. Nothing has changed and your account is intact.",
+                    "code": 500,
+                }
+            ),
+            500,
         )
 
     _notify_deletion_completed(outcome)
 
-    response = account_pages.success_page(
-        heading="Your account has been deleted",
-        detail="Everything associated with it has been removed, and you are signed out everywhere. " "This cannot be undone.",
-    )
+    response = jsonify({"success": True, "data": {"deleted": True}})
     # The session cookie is the only thing left pointing at an account that no
     # longer exists. Clearing it means a stale browser cannot keep presenting it.
     response.delete_cookie("iqoqo_session", path="/")
@@ -581,9 +550,16 @@ def _notify_deletion_completed(outcome: account_lifecycle.DeletionOutcome) -> No
 def csrf_token():
     """Mint a CSRF token for the JSON client.
 
-    The confirmation pages set the same cookie themselves, so this exists only
-    for the profile page's direct calls -- changing an address or requesting a
-    deletion -- which go through axios rather than a form.
+    Used by the profile page's direct calls -- changing an address, requesting a
+    deletion -- and by the frontend confirmation routes before they read any
+    token state.
+
+    The token is minted once and used for both the body and the cookie. Minting
+    separately gave two different tokens, so the value in the response body was
+    never the one a client would echo back: `document.cookie` yields the cookie's,
+    not the body's. It happened to work because both are validly signed, but the
+    API was reporting a token no request could ever use.
     """
-    response = jsonify({"success": True, "data": {"csrf_token": issue_csrf_token(), "header_name": "X-CSRF-Token"}})
-    return set_csrf_cookie(response)
+    minted = issue_csrf_token()
+    response = jsonify({"success": True, "data": {"csrf_token": minted, "header_name": "X-CSRF-Token"}})
+    return set_csrf_cookie(response, minted)

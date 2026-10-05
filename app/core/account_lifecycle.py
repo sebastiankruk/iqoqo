@@ -64,6 +64,16 @@ from app.db.roadmap import ReadingRoadmap
 
 logger = logging.getLogger(__name__)
 
+#: Frontend routes the emailed links point at.
+#:
+#: These are Next.js pages, not API paths. The confirmation screens are rendered
+#: by the frontend so they carry the real navbar, footer and design system -- a
+#: hand-styled server-rendered page arrived by email is indistinguishable from a
+#: phishing page, which is the opposite of what a confirmation mail needs. The
+#: JSON endpoints behind them live under `/api/account/...`.
+EMAIL_VERIFICATION_PATH = "/account/verify"
+DELETION_CONFIRM_PATH = "/account/delete"
+
 #: Child tables with a ``NOT NULL`` foreign key to ``auth.users`` that no ORM
 #: relationship cascades, as ``(model, column)``.  These must be emptied before
 #: the user row goes, or the delete fails on the constraint.
@@ -187,7 +197,7 @@ def send_verification(user: User) -> None:
     _purge_expired()
     token, _row = account_tokens.issue_token(user, AccountTokenPurpose.EMAIL_VERIFICATION, commit=True)
     try:
-        link = mail_service.build_link("/api/account/email/verify", token)
+        link = mail_service.build_link(EMAIL_VERIFICATION_PATH, token)
         rendered = account_mail.email_verification(user.display_name, link)
         mail_service.get_mail_service().send(
             recipient=user.email,
@@ -236,7 +246,7 @@ def request_deletion(user: User) -> AccountActionToken:
     _purge_expired()
     token, row = account_tokens.issue_token(user, AccountTokenPurpose.ACCOUNT_DELETION, commit=True)
     try:
-        link = mail_service.build_link("/api/account/deletion/confirm", token)
+        link = mail_service.build_link(DELETION_CONFIRM_PATH, token)
         rendered = account_mail.deletion_requested(
             user.display_name,
             link,
