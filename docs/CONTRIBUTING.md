@@ -295,6 +295,12 @@ mypy reaches module resolution and that the account-deletion suite declares
 exactly what pytest collects. If you find a gate that cannot fail, fix it or
 delete it — do not leave it reported as coverage.
 
+A gate that is wired up but **red on arrival** is the same defect wearing a
+different hat: reviewers learn to ignore it, and it stops protecting anything.
+Before enabling a linter that has never run, check its current exit status and
+either clear the findings or scope the rule to match how the codebase is
+actually written — do not enable it with a threshold the tree cannot meet.
+
 #### Narrow catch blocks and lint suppressions
 
 `except Exception` needs a written justification, and
