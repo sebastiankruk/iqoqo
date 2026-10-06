@@ -3,35 +3,19 @@
   "instructions": [
     "../.agents/rules/iqoqo-standards.md"
   ],
-  "plugin": [
-    "opencode-ignore",
-    ".opencode/plugins/graphify.js"
-  ],
   "skills": {
     "paths": [
       ".agents/skills"
     ]
   },
-  "mcp": {
-    "mykg": {
-      "type": "local",
-      "command": [
-        ".venv/bin/mykg",
-        "mcp-serve"
-      ],
-      "enabled": true,
-      "environment": {}
-    }
-  },
   "provider": {
   },
-  "permission": {
-    "external_directory": {},
-    "edit": {},
-    "bash": {
-      "cat *.env*": "deny",
-      "printenv*": "deny",
-      "env": "deny"
-    }
-  }
+  "permissions": [
+    { "action": "read", "resource": "*.env*", "effect": "deny" },
+    { "action": "edit", "resource": "*.env*", "effect": "deny" },
+    { "action": "glob", "resource": "*.env*", "effect": "deny" },
+    { "action": "shell", "resource": "cat *.env*", "effect": "deny" },
+    { "action": "shell", "resource": "printenv*", "effect": "deny" },
+    { "action": "shell", "resource": "env", "effect": "deny" }
+  ]
 }

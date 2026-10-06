@@ -93,19 +93,197 @@ echo "🚀 iqoqo Management: Entering mode '$MODE'..."
 cd "$(dirname "$0")" || exit 1
 
 # Helper function to update or append environment variables in env files
+#
+# MOD-OPS-03: this function rewrites SECRET_KEY, JWT_SECRET_KEY and AUTH_SECRET
+# during automatic key rotation. It edits in place via `grep -v > tmp && mv`,
+# so an interrupted run (Ctrl-C, OOM kill, full disk) destroys the only copy of
+# the current secrets — and those secrets are also the key material for the
+# Fernet-encrypted values in InstanceSettings, so a loss is a full instance
+# lockout requiring `make migrate-secrets`-style manual recovery. A timestamped
+# snapshot is taken before every mutation so the prior state is always
+# recoverable.
+#
+# The backup is created before the file is touched, and only when the file
+# already exists and is non-empty (a fresh `touch` has nothing to lose).
 update_env_var() {
     local file="$1"
     local key="$2"
     local val="$3"
+
+    # Refuse to write secrets into a version-controlled file.
+    #
+    # `.env.test` is explicitly un-ignored (.gitignore:28) and is reachable as
+    # `$target_file` in the key-rotation path, so a `SECRET_KEY` write in test
+    # mode lands in a tracked file. The guard belongs here rather than at any
+    # individual call site because it is this function that rewrites the Fernet
+    # key material — those three keys are worth far more protecting than the
+    # RUM client token, which is public by construction.
+    if [ -n "$file" ] && command -v git &>/dev/null; then
+        local tracked
+        tracked=$(git ls-files --error-unmatch "$file" 2>/dev/null) && [ -n "$tracked" ] && {
+            echo "❌ Refusing to rotate ${key} into version-controlled file: $file" >&2
+            echo "   git reports this path as tracked. Writing key material there would" >&2
+            echo "   commit it. Untrack it (git rm --cached) or point the deployment at" >&2
+            echo "   an untracked env file, then re-run." >&2
+            # Abort rather than return, for the same reason the backup failure
+            # below does: run.sh does not run under `set -e`, so a returned 1
+            # would be ignored by the callers and the script would carry on
+            # exporting a freshly rotated key that never reached the file —
+            # leaving the running process unable to decrypt the Fernet-
+            # encrypted values in InstanceSettings.
+            exit 1
+        }
+    fi
+
     if [ ! -f "$file" ]; then
         touch "$file"
     fi
-    # Delete existing entry if present, to avoid duplicates
+
+    # Snapshot before any mutation. Overwrite a same-second backup rather than
+    # clobbering it with a partially rewritten file.
+    if [ -s "$file" ]; then
+        # Declared and assigned separately (SC2155): with a single `local x=$(...)`
+        # the exit status of the command substitution is masked, so a failing
+        # `date` would look like success and yield a ".bak." name with no timestamp.
+        local backup
+        backup="${file}.bak.$(date +%Y%m%d_%H%M%S)"
+        if cp -p "$file" "$backup" 2>/dev/null; then
+            # Backups hold the same secrets as the source; match its mode
+            # (0600 in production, 0644 in dev) and never widen it.
+            chmod --reference="$file" "$backup" 2>/dev/null || chmod 0600 "$backup" 2>/dev/null || true
+        else
+            # run.sh does not run under `set -e`, so returning 1 here would be
+            # ignored by the callers: the script would carry on and export a
+            # freshly rotated key that never reached the file, leaving the
+            # running process unable to decrypt the Fernet-encrypted values in
+            # InstanceSettings. Abort instead.
+            echo "❌ Could not create ${backup} before updating ${key}." >&2
+            echo "   Refusing to rotate secrets without a recoverable snapshot of ${file}." >&2
+            echo "   Check free space and write permissions on $(dirname "$file"), then re-run." >&2
+            exit 1
+        fi
+    fi
+
+    # Delete existing entry if present, to avoid duplicates.
+    # `grep -v` exits 1 when it selects no lines at all, which is the normal
+    # result when the key being updated was the only entry in the file. Under
+    # `set -e` that non-zero status aborts the caller, so the rewrite is
+    # guarded explicitly rather than relying on grep's exit status.
     if grep -q "^${key}=" "$file"; then
-        grep -v "^${key}=" "$file" > "${file}.tmp"
+        # `mv` replaces the inode, so the rewritten file takes the mode of the
+        # freshly created temp file (0644 under the default umask) instead of
+        # the original. For a production .env that means a 0600 file silently
+        # becomes world-readable after every key rotation, exposing SECRET_KEY
+        # to every local user. Restore the original mode after the swap, and
+        # tighten rather than widen if the source was already restrictive.
+        local orig_mode
+        orig_mode=$(stat -c '%a' "$file" 2>/dev/null || echo "")
+        grep -v "^${key}=" "$file" > "${file}.tmp" || true
+        if [ -n "$orig_mode" ]; then
+            chmod "$orig_mode" "${file}.tmp" 2>/dev/null || true
+        fi
         mv "${file}.tmp" "$file"
     fi
-    echo "${key}=\"${val}\"" >> "$file"
+
+    # Escape for the `source ... set -o allexport` context this file is read
+    # back in (run.sh:293-297). Without this, a backtick, `$(...)` or `$VAR` in
+    # a value becomes executable the next time the file is sourced — and values
+    # here can originate in an HTTP response body.
+    local escaped
+    escaped=$(printf '%s' "$val" | sed -e 's/[\\"`$]/\\&/g')
+    echo "${key}=\"${escaped}\"" >> "$file"
+
+    # Never widen the mode of a secrets file. `mv` above already restores the
+    # original mode, but a fresh `touch` creates at the default umask.
+    tighten_env_permissions "$file"
+}
+
+# Ensure an env file holding secrets is readable only by its owner.
+#
+# These files carry SECRET_KEY, JWT_SECRET_KEY, AUTH_SECRET,
+# OPENOBSERVE_ROOT_PASSWORD and OPENOBSERVE_BASIC_AUTH. A deployment left at
+# 0644 (or the 0664 this repo's files were observed at) exposes all of them to
+# every local user, and `update_env_var`'s `chmod --reference` faithfully
+# preserves whatever mode is already there.
+#
+# This is an explicit mode, not a parity claim: `ensure_env_secrets.py` performs
+# no chmod at all and writes via write_text at the default umask, so there is no
+# existing 0600 behaviour to inherit.
+tighten_env_permissions() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    chmod 0600 "$file" 2>/dev/null || true
+}
+
+# Provision the per-instance OpenObserve RUM client token and export it, plus a
+# validated ingest target, for the frontend started later in this run.
+#
+# Shared by both serving topologies:
+#   dev    — bare host; loopback target, plaintext permitted.
+#   preview/prod — dockerized; the browser cannot reach a loopback-bound
+#            OpenObserve, so the target must be this deployment's own public
+#            origin over TLS, routed via the /rum/ location in nginx.conf.
+#
+# One invocation. stdout carries KEY=VALUE lines that we parse here; stderr is
+# left inherited so the provisioner's diagnostics land in the deploy log while
+# the token stays inside our variables. The token is never echoed and never
+# written to a file: /api/default/rumtoken is a server-side get-or-create, so
+# the next run re-fetches the same value, and persisting it would only add a
+# plaintext copy to a file this script later `source`s under `allexport`.
+#
+# Always returns 0: RUM is optional telemetry and no failure here may abort a
+# deployment.
+provision_rum_token() {
+    local mode="${1:-$MODE}"
+
+    if ! command -v python3 &>/dev/null; then
+        echo "rum-token: SKIPPED reason=provisioner-unavailable (python3 missing)" >&2
+        return 0
+    fi
+    if [ ! -f "scripts/provision_rum_token.py" ]; then
+        echo "rum-token: SKIPPED reason=provisioner-unavailable (scripts/provision_rum_token.py missing)" >&2
+        return 0
+    fi
+
+    # MODE is passed explicitly rather than relying on the environment: it is a
+    # plain shell variable in run.sh and is not exported, so the provisioner
+    # would otherwise fall back to its "dev" default on every mode.
+    local rum_env
+    rum_env=$(MODE="$mode" python3 scripts/provision_rum_token.py)
+    local rum_key rum_val
+    local rum_token="" rum_site="" rum_insecure="" rum_topology=""
+
+    # Allowlisted key=value parse. No `eval`, so a value can never be
+    # interpreted as shell.
+    while IFS='=' read -r rum_key rum_val; do
+        case "$rum_key" in
+            RUM_CLIENT_TOKEN) rum_token="$rum_val" ;;
+            RUM_SITE) rum_site="$rum_val" ;;
+            RUM_INSECURE_HTTP) rum_insecure="$rum_val" ;;
+            RUM_TOPOLOGY) rum_topology="$rum_val" ;;
+        esac
+    done <<< "$rum_env"
+
+    [ -n "$rum_token" ] || return 0
+    [ -n "$rum_site" ] || return 0
+
+    # Post-provision assertion: the credential is only handed over alongside a
+    # topology the provisioner actually validated. Anything else leaves RUM
+    # disabled, rather than the browser POSTing the token to whatever the end
+    # user's own `localhost` happens to be.
+    if [ "$rum_topology" = "loopback" ] && [ "$rum_insecure" = "true" ]; then
+        export OPENOBSERVE_RUM_CLIENT_TOKEN="$rum_token"
+        export OPENOBSERVE_RUM_SITE="$rum_site"
+        export OPENOBSERVE_RUM_INSECURE_HTTP="$rum_insecure"
+        echo "🪵 rum-token: PROVISIONED topology=loopback — browser RUM targets this machine only."
+    elif [ "$rum_topology" = "public-origin" ] && [ "$rum_insecure" = "false" ]; then
+        export OPENOBSERVE_RUM_CLIENT_TOKEN="$rum_token"
+        export OPENOBSERVE_RUM_SITE="$rum_site"
+        export OPENOBSERVE_RUM_INSECURE_HTTP="$rum_insecure"
+        echo "🪵 rum-token: PROVISIONED topology=public-origin — browser RUM targets this deployment's own origin over TLS."
+    else
+        echo "⚠️  rum-token: DEGRADED reason=assertion-failed topology=${rum_topology:-unset} insecure=${rum_insecure:-unset} — RUM left disabled." >&2
+    fi
 }
 
 # Auto-generate or rotate keys in production/preview modes
@@ -114,6 +292,11 @@ auto_generate_or_rotate_keys() {
     if [ -f ".env.$MODE" ]; then
         target_file=".env.$MODE"
     fi
+
+    # Tighten before writing: the pre-flight pass below reads and rewrites this
+    # file, so narrow the mode first rather than after.
+    tighten_env_permissions ".env"
+    tighten_env_permissions "$target_file"
 
     # Run Python pre-flight to guarantee all core secrets and OpenObserve credentials exist
     if command -v python3 &>/dev/null && [ -f "scripts/ensure_env_secrets.py" ]; then
@@ -322,8 +505,21 @@ terminate_from_pidfile() {
     # First try graceful shutdown (SIGTERM).
     kill "${pid}" 2>/dev/null || true
 
-    # Wait up to 5 seconds for the process to exit.
-    for _ in 1 2 3 4 5; do
+    # MOD-OPS-02: wait up to 15 seconds before escalating to SIGKILL.
+    #
+    # The previous 5 s budget was too short for a real shutdown. Gunicorn drains
+    # in-flight requests, and a Flask worker finishing a long SPARQL export or a
+    # cover-generation batch routinely needs longer than that. SIGKILL after 5 s
+    # aborted those requests mid-write, which showed up as truncated
+    # `/data/backups` archives and half-committed Postgres transactions. Longer
+    # than necessary is merely slower; too short corrupts data.
+    #
+    # Overridable via IQOQO_GRACEFUL_SHUTDOWN_SECONDS for slow-storage hosts.
+    local grace="${IQOQO_GRACEFUL_SHUTDOWN_SECONDS:-15}"
+    case "$grace" in
+        ''|*[!0-9]*) grace=15 ;;
+    esac
+    for ((i = 0; i < grace; i++)); do
         if ! kill -0 "${pid}" 2>/dev/null; then
             break
         fi
@@ -478,35 +674,9 @@ if [ "$MODE" == "dev" ]; then
             iqoqo-otel-collector 2>/dev/null || true
         docker compose -f docker-compose.monitoring.yml up -d || true
 
-        # Wait for OpenObserve readiness and fetch the dynamic RUM client token
-        echo "📊 Waiting for OpenObserve to be ready..."
-        auth_header=""
-        if [ -n "$OPENOBSERVE_BASIC_AUTH" ]; then
-            auth_header="Basic $OPENOBSERVE_BASIC_AUTH"
-        elif [ -n "$OPENOBSERVE_ROOT_USER" ] && [ -n "$OPENOBSERVE_ROOT_PASSWORD" ]; then
-            encoded=$(python3 -c "import base64; print(base64.b64encode(b'${OPENOBSERVE_ROOT_USER}:${OPENOBSERVE_ROOT_PASSWORD}').decode('utf-8'))" 2>/dev/null)
-            if [ -n "$encoded" ]; then
-                auth_header="Basic $encoded"
-            fi
-        fi
-
-        for i in {1..30}; do
-            token_response=$(curl -s -H "Authorization: $auth_header" http://localhost:5080/api/default/rumtoken 2>/dev/null)
-            if echo "$token_response" | grep -q "rum_token"; then
-                fetched_token=$(echo "$token_response" | python3 -c "import sys, json; print(json.load(sys.stdin)['data']['rum_token'])" 2>/dev/null)
-                if [ -n "$fetched_token" ]; then
-                    echo "📊 Successfully fetched active OpenObserve RUM token: $fetched_token"
-                    export OPENOBSERVE_RUM_CLIENT_TOKEN="$fetched_token"
-                    # Keep local configuration files updated
-                    update_env_var ".env" "OPENOBSERVE_RUM_CLIENT_TOKEN" "$fetched_token"
-                    if [ -f ".env.dev" ]; then
-                        update_env_var ".env.dev" "OPENOBSERVE_RUM_CLIENT_TOKEN" "$fetched_token"
-                    fi
-                    break
-                fi
-            fi
-            sleep 1
-        done
+        provision_rum_token "$MODE"
+    else
+        echo "rum-token: SKIPPED reason=monitoring-stack-not-started exporter=${OTEL_TRACES_EXPORTER:-unset} compose=$(if [ -f docker-compose.monitoring.yml ]; then echo present; else echo absent; fi) — RUM was not provisioned." >&2
     fi
 
     # Wait for DB readiness
@@ -626,6 +796,26 @@ if [ "$MODE" == "dev" ]; then
     echo $! > "$PID_DIR/celery.pid"
 
     # Start Next.js
+    # NOTE: the RUM token and its ingest target are passed as ordinary
+    # (non-NEXT_PUBLIC_) variables and read at request time by the root layout.
+    # A NEXT_PUBLIC_ value would be inlined into the client bundle at build
+    # time, which breaks the request-time model the dockerized topology depends
+    # on -- and a hardcoded fallback token would silently send every deployment's
+    # browser telemetry to whichever OpenObserve org it was provisioned for.
+    # Unset leaves the RUM SDK cleanly disabled.
+    #
+    # RUM_SITE and RUM_INSECURE_HTTP carry no default either. They were
+    # previously forced to `localhost:5080` and `true`, overriding the
+    # frontend's safer defaults of `window.location.host` and an
+    # `=== "true"`-means-false transport. On any deployment that is not the
+    # operator's own machine the end user's browser resolves `localhost` to
+    # *their own computer* and POSTs the token there in cleartext. The
+    # provisioning step sets both, but only after validating them.
+    #
+    # RUM_PRIVACY_LEVEL defaults to mask-user-input rather than `allow`:
+    # session replay recording is unconditional in browser-openobserve-rum.tsx,
+    # so `allow` records DOM text and user input unmasked, and no RUM retention
+    # is configured anywhere in this repository.
     if [ -d "frontend" ]; then
         (cd frontend && \
          NEXT_PUBLIC_API_URL="/api" \
@@ -638,13 +828,13 @@ if [ "$MODE" == "dev" ]; then
          OTEL_SERVICE_NAME="iqoqo-frontend" \
          OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT}" \
          OTEL_TRACES_EXPORTER="${OTEL_TRACES_EXPORTER}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-rumST8CMTyDstlTbPUm}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_SITE="${OPENOBSERVE_RUM_SITE:-localhost:5080}" \
+         OPENOBSERVE_RUM_CLIENT_TOKEN="${OPENOBSERVE_RUM_CLIENT_TOKEN:-}" \
+         OPENOBSERVE_RUM_SITE="${OPENOBSERVE_RUM_SITE:-}" \
+         OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ENV="${OPENOBSERVE_RUM_ENV:-development}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_ORG_ID="${OPENOBSERVE_RUM_ORG_ID:-default}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_INSECURE_HTTP="${OPENOBSERVE_RUM_INSECURE_HTTP:-true}" \
          NEXT_PUBLIC_OPENOBSERVE_RUM_API_VERSION="${OPENOBSERVE_RUM_API_VERSION:-v1}" \
-         NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL="${OPENOBSERVE_RUM_PRIVACY_LEVEL:-allow}" \
+         NEXT_PUBLIC_OPENOBSERVE_RUM_PRIVACY_LEVEL="${OPENOBSERVE_RUM_PRIVACY_LEVEL:-mask-user-input}" \
          nohup npx next dev -p "${FRONTEND_PORT:-3000}" >> "$PID_DIR/next.log" 2>&1 & \
          echo $! > "$PID_DIR/next.pid"
         )
@@ -768,8 +958,10 @@ except Exception:
     fi
 
     COMPOSE_CMD="docker compose -f docker-compose.yml"
+    MONITORING_COMPOSE=""
     if [ -f "docker-compose.monitoring.yml" ]; then
         echo "📊 Found docker-compose.monitoring.yml, starting with OpenObserve monitoring..."
+        MONITORING_COMPOSE="docker compose -f docker-compose.monitoring.yml"
         COMPOSE_CMD="$COMPOSE_CMD -f docker-compose.monitoring.yml"
     fi
 
@@ -823,13 +1015,38 @@ except Exception:
         printf '{}\n' > ".allegro_token.json"
     fi
 
-    # Ensure rclone.conf is a regular file before bind-mounting
-    if [ ! -f "$HOME/.config/rclone/rclone.conf" ]; then
-        mkdir -p "$HOME/.config/rclone"
-        touch "$HOME/.config/rclone/rclone.conf"
-    fi
+    # No rclone.conf is created here. The containers no longer use rclone:
+    # app/core/s3_service.py (boto3) reads the S3_* / AWS_* variables from .env,
+    # and nothing is bind-mounted in, so there is no credential file for docker
+    # to resolve. This block used to manufacture an empty rclone.conf, which
+    # docker turns into a *directory* on hosts where the file is missing, and
+    # that then breaks the container restart.
+    #
+    # Host-side backup scripts still use rclone, and still read the operator's
+    # own ~/.config/rclone/rclone.conf — untouched by this.
 
     echo "🚀 Starting full stack for $COMPOSE_PROJECT_NAME (v$APP_VERSION)..."
+    # Start OpenObserve *before* the main stack, so the RUM client token can be
+    # provisioned and exported into the environment in time for `compose up` to
+    # pass it to the frontend service.
+    #
+    # This ordering is load-bearing: the frontend reads the token at request
+    # time from its container environment (see frontend/app/layout.tsx), so a
+    # token provisioned after `compose up` would arrive too late and RUM would
+    # be dead until the next deploy. It mirrors the dev path, where the
+    # monitoring stack is likewise started before the app services.
+    if [ -n "$MONITORING_COMPOSE" ] && [ "$OTEL_TRACES_EXPORTER" = "otlp" ]; then
+        $MONITORING_COMPOSE up -d || true
+        if [ -z "${OPENOBSERVE_RUM_SITE:-}" ]; then
+            echo "rum-token: SKIPPED reason=ingest-site-unset — set OPENOBSERVE_RUM_SITE to this deployment's public origin (e.g. https://${NEXT_PUBLIC_FRONTEND_URL:-your-domain}) to enable browser RUM in $MODE." >&2
+        fi
+        # A dockerized browser cannot reach a loopback-bound OpenObserve, so the
+        # provisioner only hands the token over when this deployment's own
+        # public origin is the configured ingest target; otherwise it leaves RUM
+        # disabled rather than pointing visitors' browsers at their `localhost`.
+        provision_rum_token "$MODE"
+    fi
+
     if ! $COMPOSE_CMD up -d $BUILD_FLAG --remove-orphans; then
         echo "❌ Error: Failed to start full stack for $COMPOSE_PROJECT_NAME."
         exit 1

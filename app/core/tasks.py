@@ -20,17 +20,21 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 """
 
 import logging
-import os
-import subprocess
 from collections.abc import Callable
 from typing import Any
 
+import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
 
-from app.config import Config
 from app.core.celery_app import celery
-from app.utils.rclone_utils import get_rclone_target
+from app.core.mail_service import MailDeliveryError
+from app.core.s3_service import (
+    BUCKET_FEEDBACK,
+    S3UploadError,
+    get_s3_service,
+    warn_if_legacy_rclone_configured,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,83 +165,31 @@ def shutdown_executor() -> None:
     pass
 
 
-class BackupManager:
-    """Helper class to manage backups in local storage and remote cloud via rclone."""
-
-    def __init__(self, backup_dir: str = "/data/backups", rclone_remote_fast: str | None = None, rclone_remote_archive: str | None = None):
-        self.backup_dir = backup_dir
-        self.rclone_remote_fast = rclone_remote_fast or getattr(Config, "RCLONE_REMOTE_FAST", "iqoqo-backup")
-        self.rclone_remote_archive = rclone_remote_archive or getattr(Config, "RCLONE_REMOTE_ARCHIVE", "iqoqo-glacier")
-
-    def list_backups(self) -> list[str]:
-        """Mockable method to list backups."""
-        if not os.path.exists(self.backup_dir):
-            return []
-        return [f for f in os.listdir(self.backup_dir) if os.path.isfile(os.path.join(self.backup_dir, f))]
-
-    def delete_backup(self, filename: str) -> None:
-        """Mockable method to delete a backup from fast storage."""
-        file_path = os.path.join(self.backup_dir, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-    def upload_to_glacier(self, filename: str) -> None:
-        """Uploads a file to long-term storage via rclone proxy."""
-        file_path = os.path.join(self.backup_dir, filename)
-        try:
-            remote_archive = str(self.rclone_remote_archive or "iqoqo-glacier")
-            target = get_rclone_target(remote_archive, "archives")
-            subprocess.run(["rclone", "copy", "--s3-no-check-bucket", "--", file_path, target], check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            logger.error("rclone upload failed: %s", e.stderr)
-            raise RuntimeError(f"Backup sync failed: {e.stderr}") from e
-
-
-@celery.task(bind=True)
-def rotate_and_archive_backups(self) -> None:
-    """
-    Automated Backup Retention Task.
-    Enforces 7 daily and 5 weekly backups in fast storage (Dropbox).
-    Archives older backups to AWS S3 Glacier and removes them from fast storage.
-    """
-    manager = BackupManager()
-    backups = manager.list_backups()
-
-    # Sort backups by modification time (newest first)
-    def get_mtime(filename: str) -> float:
-        return os.path.getmtime(os.path.join(manager.backup_dir, filename))
-
-    backups.sort(key=get_mtime, reverse=True)
-
-    for i, backup in enumerate(backups):
-        # Keep 7 daily + 5 weekly = 12 newest backups in fast storage
-        if i < 12:
-            continue
-
-        # Archive older backups
-        try:
-            manager.upload_to_glacier(backup)
-            manager.delete_backup(backup)
-            logger.info("Archived %s to Glacier and removed from local storage.", backup)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Failed to archive %s: %s", backup, e)
-
-
 @celery.task(bind=True)
 def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: object) -> None:
-    """Uploads a feedback screenshot via rclone to RCLONE_FEEDBACK_REMOTE."""
-    rclone_remote = getattr(Config, "RCLONE_FEEDBACK_REMOTE", None) or os.environ.get("RCLONE_FEEDBACK_REMOTE")
-    if not rclone_remote:
-        logger.info("RCLONE_FEEDBACK_REMOTE not configured, skipping remote upload.")
+    """Uploads a feedback screenshot to the configured feedback bucket.
+
+    Args:
+        local_path: Absolute path to the screenshot on local storage.
+        filename: Base name to store the object under. Validated as a single
+            safe key component, so a caller-supplied value cannot place the
+            object outside the ``feedback/`` prefix.
+
+    Raises:
+        RuntimeError: if the upload failed. The local file is left in place.
+    """
+    service = get_s3_service(BUCKET_FEEDBACK)
+    if service is None:
+        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
+        logger.info("Feedback object storage not configured, skipping remote upload.")
         return
 
     try:
-        target = get_rclone_target(rclone_remote, "feedback", filename)
-        subprocess.run(["rclone", "copyto", "--", local_path, target], check=True, capture_output=True, text=True)
-        logger.info("Successfully uploaded feedback screenshot %s to rclone remote.", filename)
-    except subprocess.CalledProcessError as e:
-        logger.error("rclone copyto failed for feedback screenshot %s: %s", filename, e.stderr)
-        raise RuntimeError(f"Feedback screenshot upload failed: {e.stderr}") from e
+        service.upload_file(local_path, service.key_for(filename), content_type="image/jpeg")
+        logger.info("Successfully uploaded feedback screenshot %s to remote storage.", filename)
+    except (ValueError, S3UploadError) as exc:
+        logger.error("Failed to upload feedback screenshot %s: %s", filename, type(exc).__name__)
+        raise RuntimeError("Feedback screenshot upload failed") from exc
 
 
 @celery.task(name="app.core.tasks.refresh_taxonomies_cache")
@@ -250,3 +202,352 @@ def refresh_taxonomies_cache() -> dict[str, Any]:
     cache_key = "taxonomies:global:/api/taxonomies?"
     cache.set(cache_key, {"success": True, "data": data}, timeout=3600)
     return {"status": "refreshed", "data": data}
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.send_account_email_task",
+    autoretry_for=(MailDeliveryError,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def send_account_email_task(self, recipient: str, subject: str, body_text: str) -> dict[str, Any]:
+    """Deliver a pre-rendered account-lifecycle email off the request path.
+
+    Used for notices whose send must not be able to affect the outcome of the
+    operation that produced them -- above all the post-deletion notice, which is
+    sent after the account is already gone.  There, a relay outage has to
+    degrade into "the notice arrives late", never into "the deletion is
+    reported as failed", so the send is queued and retried rather than awaited.
+
+    Retries cover :class:`~app.core.mail_service.MailDeliveryError` only.  A
+    :class:`~app.core.mail_service.MailConfigurationError` is not retried:
+    nothing about waiting will make ``MAIL_HOST`` appear, and retrying it would
+    burn five attempts and delay the useful log line that names the missing key.
+
+    The body is passed as already-rendered text rather than as a template name,
+    so a retry sends exactly what the first attempt would have.  It carries no
+    token for the same reason the completion notice does: a queued message
+    sitting in Redis is data at rest, and a single-use credential should not
+    outlive the request that minted it.
+
+    Args:
+        recipient: Destination address.
+        subject: Rendered subject line.
+        body_text: Rendered ``text/plain`` body.
+
+    Returns:
+        A summary dict, safe to inspect in the task result backend.
+    """
+    from app.core.mail_service import get_mail_service
+
+    get_mail_service().send(recipient=recipient, subject=subject, body_text=body_text)
+    return {"status": "sent", "subject": subject}
+
+
+@celery.task(name="app.core.tasks.purge_expired_account_tokens")
+def purge_expired_account_tokens() -> dict[str, Any]:
+    """Remove expired account-lifecycle tokens on a schedule.
+
+    Issuance already purges, so this is belt-and-braces for an instance where
+    nobody ever requests a second token.  Kept as a task rather than an
+    APScheduler job so it runs on the worker that already has the database
+    connections, instead of on a scheduler thread that has to open its own.
+    """
+    from app.core.account_lifecycle import purge_expired_tokens
+
+    removed = purge_expired_tokens()
+    if removed:
+        logger.info("Purged %d expired account-lifecycle token(s)", removed)
+    return {"status": "purged", "removed": removed}
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.link_manifestation_lod_task",
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def link_manifestation_lod_task(self, manifestation_id: int) -> dict[str, Any]:
+    """Resolve and persist Linked Open Data links for a single manifestation asynchronously."""
+    from flask import has_app_context
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return self.run(manifestation_id=manifestation_id)
+
+    from app.core.lod_linking_service import get_manifestation_semantic_links_dict, resolve_manifestation_links
+
+    try:
+        self.update_state(state="STARTED", meta={"manifestation_id": manifestation_id})
+    except (ValueError, AttributeError):
+        pass
+    links = resolve_manifestation_links(manifestation_id)
+    summary = get_manifestation_semantic_links_dict(manifestation_id)
+    return {
+        "status": "completed",
+        "manifestation_id": manifestation_id,
+        "resolved_count": len(links),
+        "summary": summary,
+    }
+
+
+@celery.task(
+    bind=True,
+    name="app.core.tasks.batch_link_catalog_lod_task",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def batch_link_catalog_lod_task(
+    self,
+    manifestation_ids: list[int] | None = None,
+    unlinked_only: bool = False,
+    chunk_size: int = 10,
+    throttle_delay: float = 0.5,
+) -> dict[str, Any]:
+    """Batch reconcile Linked Open Data links for multiple catalog manifestations with chunking and throttling."""
+    import time
+    from datetime import UTC, datetime
+
+    from flask import has_app_context
+    from sqlalchemy import select
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return self.run(
+                manifestation_ids=manifestation_ids,
+                unlinked_only=unlinked_only,
+                chunk_size=chunk_size,
+                throttle_delay=throttle_delay,
+            )
+
+    from app.core.cache import cache
+    from app.core.lod_linking_service import resolve_manifestation_links
+    from app.db import db
+    from app.db.core import Expression, Manifestation, SemanticLink
+    from app.db.models import InstanceSettings
+
+    task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
+    if task_id:
+        try:
+            cache.set("lod:active_task_id", task_id, timeout=86400)
+            InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", task_id)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    try:
+        if manifestation_ids is None:
+            query = select(Manifestation.id)
+            if unlinked_only:
+                manif_subq = select(1).where(
+                    SemanticLink.entity_type == "manifestation",
+                    SemanticLink.entity_id == Manifestation.id,
+                )
+                work_subq = (
+                    select(1)
+                    .select_from(Expression)
+                    .where(
+                        Expression.id == Manifestation.expression_id,
+                        SemanticLink.entity_type == "work",
+                        SemanticLink.entity_id == Expression.work_id,
+                    )
+                )
+                query = query.where(~manif_subq.exists()).where(~work_subq.exists())
+            manifestation_ids = list(db.session.execute(query).scalars().all())
+        elif unlinked_only and manifestation_ids:
+            manif_linked = set(
+                db.session.execute(
+                    select(SemanticLink.entity_id).where(
+                        SemanticLink.entity_type == "manifestation",
+                        SemanticLink.entity_id.in_(manifestation_ids),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            # Also find works linked to these manifestations via expression
+            manif_work_map = dict(
+                db.session.execute(
+                    select(Manifestation.id, Expression.work_id)
+                    .join(Expression, Manifestation.expression_id == Expression.id)
+                    .where(
+                        Manifestation.id.in_(manifestation_ids),
+                        Expression.work_id.isnot(None),
+                    )
+                ).all()
+            )
+            work_ids = list({w for w in manif_work_map.values() if w})
+            linked_work_ids = (
+                set(
+                    db.session.execute(
+                        select(SemanticLink.entity_id).where(
+                            SemanticLink.entity_type == "work",
+                            SemanticLink.entity_id.in_(work_ids),
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                if work_ids
+                else set()
+            )
+            manifestation_ids = [
+                mid for mid in manifestation_ids if mid not in manif_linked and manif_work_map.get(mid) not in linked_work_ids
+            ]
+
+        total = len(manifestation_ids)
+        counts: dict[str, int] = {"dbpedia": 0, "geonames": 0, "wordnet": 0}
+        recent_logs: list[dict[str, Any]] = []
+
+        if total == 0:
+            return {
+                "status": "completed",
+                "total": 0,
+                "processed": 0,
+                "percentage": 100.0,
+                "total_resolved": 0,
+                "counts": counts,
+                "recent_logs": [],
+            }
+
+        try:
+            self.update_state(
+                state="STARTED",
+                meta={
+                    "total": total,
+                    "processed": 0,
+                    "percentage": 0.0,
+                    "total_resolved": 0,
+                    "counts": counts,
+                    "recent_logs": [],
+                },
+            )
+        except (ValueError, AttributeError):
+            pass
+
+        processed = 0
+        total_resolved = 0
+
+        for i in range(0, total, chunk_size):
+            chunk = manifestation_ids[i : i + chunk_size]
+            for mid in chunk:
+                if task_id and (
+                    cache.get(f"lod:cancel_task:{task_id}")
+                    or (cache.get("lod:active_task_id") != task_id and InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") != task_id)
+                ):
+                    logger.info("Batch LOD reconciliation task %s cancelled by user request", task_id)
+                    percentage = round((processed / total) * 100, 1) if total > 0 else 0.0
+                    try:
+                        self.update_state(
+                            state="REVOKED",
+                            meta={
+                                "total": total,
+                                "processed": processed,
+                                "percentage": percentage,
+                                "total_resolved": total_resolved,
+                                "counts": counts,
+                                "recent_logs": list(recent_logs),
+                            },
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+                    return {
+                        "status": "cancelled",
+                        "total": total,
+                        "processed": processed,
+                        "percentage": percentage,
+                        "total_resolved": total_resolved,
+                        "counts": counts,
+                        "recent_logs": list(recent_logs),
+                    }
+
+                item_title = f"Manifestation #{mid}"
+                try:
+                    manif = db.session.get(Manifestation, mid)
+                    if manif and manif.title:
+                        item_title = manif.title
+                except Exception:  # pylint: disable=broad-except
+                    pass
+
+                try:
+                    links = resolve_manifestation_links(mid)
+                    total_resolved += len(links)
+                    for link in links:
+                        auth = (link.authority or "").lower()
+                        counts[auth] = counts.get(auth, 0) + 1
+
+                    log_entry = {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "manifestation_id": mid,
+                        "title": item_title,
+                        "status": "success" if links else "skipped",
+                        "links_added": len(links),
+                        "authorities": list({link.authority for link in links}),
+                        "error": None,
+                    }
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.warning("Batch LOD resolution failed for manifestation %d: %s", mid, exc)
+                    log_entry = {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "manifestation_id": mid,
+                        "title": item_title,
+                        "status": "error",
+                        "links_added": 0,
+                        "authorities": [],
+                        "error": str(exc),
+                    }
+
+                processed += 1
+                recent_logs.append(log_entry)
+                if len(recent_logs) > 50:
+                    recent_logs.pop(0)
+
+                percentage = round((processed / total) * 100, 1)
+                try:
+                    self.update_state(
+                        state="PROGRESS",
+                        meta={
+                            "total": total,
+                            "processed": processed,
+                            "percentage": percentage,
+                            "total_resolved": total_resolved,
+                            "counts": counts,
+                            "recent_logs": list(recent_logs),
+                        },
+                    )
+                except (ValueError, AttributeError):
+                    pass
+
+            if i + chunk_size < total and throttle_delay > 0:
+                time.sleep(throttle_delay)
+
+        return {
+            "status": "completed",
+            "total": total,
+            "processed": processed,
+            "percentage": 100.0,
+            "total_resolved": total_resolved,
+            "counts": counts,
+            "recent_logs": list(recent_logs),
+        }
+    finally:
+        if task_id:
+            try:
+                if cache.get("lod:active_task_id") == task_id:
+                    cache.delete("lod:active_task_id")
+                if InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") == task_id:
+                    InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+            except Exception:  # pylint: disable=broad-except
+                pass

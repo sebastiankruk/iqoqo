@@ -22,7 +22,10 @@ services:
     environment:
       - COMMANDLINE_ARGS=--api --listen
     ports:
-      - "7860:3000"
+      # MOD-OPS-01: bind loopback only. The AUTOMATIC1111 web UI has no
+      # authentication and allows arbitrary model/extension downloads, so it
+      # must never be reachable from a public network interface.
+      - "127.0.0.1:7860:3000"
     volumes:
       - sd_models:/workspace/stable-diffusion-webui/models
     deploy:

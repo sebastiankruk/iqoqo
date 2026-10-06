@@ -40,6 +40,7 @@ class ContainerAggregation(db.Model):  # type: ignore[name-defined]
             name="ck_container_aggregation_type_match",
         ),
         db.CheckConstraint("aggregated_type IN ('work', 'item')", name="check_container_aggregation_type"),
+        db.CheckConstraint("quantity > 0", name="check_container_aggregation_quantity"),
         *(({"schema": _CATALOG},) if _CATALOG else ()),
     )
 
@@ -57,7 +58,12 @@ class ContainerAggregation(db.Model):  # type: ignore[name-defined]
 
     #: Human-readable name of the component (e.g., "Main Board", "Red Meeples")
     component_name = db.Column(db.String(255), nullable=False)
-    quantity = db.Column(db.Integer, default=1)
+    #: How many of this component the container holds.  NOT NULL with a
+    #: server-side default: a Python-side ``default=1`` applies on INSERT only,
+    #: so an UPDATE could still store NULL -- and the serializer emitted
+    #: ``quantity or 1``, making that indistinguishable from a real 1.  A box
+    #: holding zero of a component is not a meaningful state to persist.
+    quantity = db.Column(db.Integer, nullable=False, default=1, server_default="1")
 
     # Relationships
     container_work = db.relationship(

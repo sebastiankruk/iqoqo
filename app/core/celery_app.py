@@ -18,7 +18,7 @@
 import logging
 import os
 
-from celery import Celery
+from celery import Celery, Task
 from celery.signals import worker_process_init
 
 # Suppress highly verbose urllib3 connectionpool logs at DEBUG level (caused by OTel exporter POSTs)
@@ -26,12 +26,43 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+
+class ContextTask(Task):  # type: ignore[misc]
+    """Celery task that automatically ensures an active Flask application context."""
+
+    _flask_app = None
+
+    @classmethod
+    def get_app(cls):
+        """Retrieve existing Flask app or create a new one on demand."""
+        from flask import current_app, has_app_context
+
+        if has_app_context():
+            return current_app
+        if cls._flask_app is None:
+            from app import create_app
+
+            cls._flask_app = create_app()
+        return cls._flask_app
+
+    def __call__(self, *args, **kwargs):
+        """Execute task inside an active Flask application context."""
+        from flask import has_app_context
+
+        if has_app_context():
+            return self.run(*args, **kwargs)
+        with self.get_app().app_context():
+            return self.run(*args, **kwargs)
+
+
 celery: Celery = Celery(
     "iqoqo",
     broker=REDIS_URL,
     backend=REDIS_URL,
+    task_cls=ContextTask,
     include=["app.core.tasks"],
 )
+celery.Task = ContextTask
 
 celery.conf.update(
     task_serializer="json",
@@ -48,19 +79,21 @@ celery.conf.update(
             "task": "app.core.tasks.refresh_taxonomies_cache",
             "schedule": 3600.0,
         },
+        # Expired email-verification and deletion tokens.  Issuance purges on
+        # every call, so this only matters for an instance where nobody ever
+        # asks for a second link; hourly is ample for rows that all expire
+        # within a day, and the delete is an indexed range scan.
+        "purge-account-tokens-hourly": {
+            "task": "app.core.tasks.purge_expired_account_tokens",
+            "schedule": 3600.0,
+        },
     },
 )
 
 
 def init_celery(app) -> None:
     """Bind Flask app context to Celery tasks."""
-
-    class ContextTask(celery.Task):  # type: ignore[misc]
-        def __call__(self, *args, **kwargs):
-            with app.app_context():
-                return self.run(*args, **kwargs)
-
-    celery.Task = ContextTask
+    ContextTask._flask_app = app
 
 
 @worker_process_init.connect

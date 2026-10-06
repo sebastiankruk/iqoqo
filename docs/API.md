@@ -6,7 +6,7 @@ Complete reference for iqoqo's REST API endpoints, including the Semantic Web la
 
 Most endpoints require JWT authentication. Obtain a token via:
 
-```bash
+```http
 POST /api/auth/login
 Content-Type: application/json
 
@@ -14,7 +14,7 @@ Content-Type: application/json
   "email": "you@example.com",
   "password": "your_password"
 }
-```json
+```
 
 **Response:**
 
@@ -30,18 +30,68 @@ Content-Type: application/json
 
 Use the token in subsequent requests:
 
-```bash
+```http
 Authorization: Bearer eyJ...
-```text
+```
+
+Signing out revokes the token server-side, not just in the browser:
+
+```http
+POST /api/auth/logout
+Authorization: Bearer eyJ...
+```
+
+The browser's logout handler **forwards the token to the backend as a `Bearer`
+header before clearing the cookie**. Revocation depends on that forward: the
+JWT in the cookie stays cryptographically valid until it expires unless the
+backend adds its `jti` to the blocklist, so clearing the cookie alone leaves any
+copy of it working.
 
 ### Permission Requirements
 
-| Endpoint Category        | Permission       | Auth Type       |
-| ------------------------ | ---------------- | --------------- |
-| SPARQL                   | `read:metadata`  | Required        |
-| Data Export              | Any authenticated | Required        |
-| Public Linked Data       | None             | Not required    |
-| Public Feeds             | None             | Not required    |
+Access is granted by **permission**, not by role. The `contributor` role holds
+every `*:metadata` permission, so a curator gets the metadata workflow without
+being an administrator.
+
+| Endpoint Category | Permission | Auth Type |
+| ----------------- | ---------- | --------- |
+| SPARQL | `read:metadata` | Required |
+| Data Export | Any authenticated | Required |
+| Semantic-link relink / delete | `write:metadata` | Required |
+| Duplicate review — list | `read:metadata` | Required |
+| Duplicate review — scan, dismiss, merge | `write:metadata` | Required |
+| Public Linked Data | None | Not required |
+| Public Feeds | None | Not required |
+
+### Admin Endpoints
+
+Duplicate review lives on the `admin` blueprint, which is mounted at
+`/api/v1/admin`. All four routes are audit-logged with the acting user.
+
+| Route | Method | Permission | Purpose |
+| ----- | ------ | ---------- | ------- |
+| `/api/v1/admin/duplicates/` | `GET` | `read:metadata` | Paginated pending-candidate queue; filter by tier, status, confidence |
+| `/api/v1/admin/duplicates/scan` | `POST` | `write:metadata` | Trigger a detection run |
+| `/api/v1/admin/duplicates/<id>/dismiss` | `POST` | `write:metadata` | Mark a false positive |
+| `/api/v1/admin/duplicates/<id>/merge` | `POST` | `write:metadata` | Execute a transactional merge for a chosen primary |
+
+A scan defaults to the `heuristic` engine, which classifies candidate pairs
+without contacting an inference service:
+
+```json
+{ "tier": "all", "engine": "heuristic" }
+```
+
+`engine` accepts `heuristic` (default) or `llama`. Under `heuristic` a scan
+completes with no inference service reachable; `llama` submits only the pairs the
+classifier could not decide. Merge requests are rate limited.
+
+### Test-Only Endpoints
+
+`POST /api/lending/test/reset` resets lending state for E2E runs. It is gated on
+the `TESTING` flag **and** requires a matching `X-E2E-Reset-Secret` header,
+compared in constant time. When `E2E_RESET_SECRET` is unset the endpoint refuses
+every request rather than falling open.
 
 ---
 
@@ -55,8 +105,8 @@ Execute a SPARQL query via URL parameter (SPARQL Protocol compliance).
 
 **Parameters:**
 
-| Parameter | Type   | Required | Description                    |
-| --------- | ------ | -------- | ------------------------------ |
+| Parameter | Type   | Required | Description                     |
+| --------- | ------ | -------- | ------------------------------- |
 | `query`   | string | Yes      | URL-encoded SPARQL query string |
 
 **Example:**

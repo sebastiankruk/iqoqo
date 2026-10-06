@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import type { FrbrContribution } from "@/lib/api/admin";
@@ -52,10 +52,18 @@ export function ContributorRowsEditor({ roles, contributions, onChange }: Contri
   );
   const nameInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  useEffect(() => {
+  // Re-seed the editable rows when the parent hands down a different
+  // contribution list. This adjusts state *during* render rather than in an
+  // effect: an effect would render once with the previous rows before
+  // correcting them, so the editor would visibly flash stale values whenever
+  // the parent switched entity. Comparing against the last synced value is
+  // what keeps an unrelated parent re-render from discarding in-progress edits.
+  const [syncedContributions, setSyncedContributions] = useState(contributions);
+  if (contributions !== syncedContributions) {
+    setSyncedContributions(contributions);
     setRows(contributions.map((c, i) => ({ ...c, _internalId: i })));
     setInternalIdCounter(contributions.length);
-  }, [contributions]);
+  }
 
   const updateRows = (next: (FrbrContribution & { _internalId: number })[]) => {
     setRows(next);
@@ -113,7 +121,9 @@ export function ContributorRowsEditor({ roles, contributions, onChange }: Contri
       <h4 className="text-sm font-semibold">Contributors</h4>
 
       {rows.length === 0 && (
-        <p className="text-sm text-muted-foreground italic">No contributors yet. Click "Add Contributor" to begin.</p>
+        <p className="text-sm text-muted-foreground italic">
+          No contributors yet. Click &quot;Add Contributor&quot; to begin.
+        </p>
       )}
 
       <div className="space-y-2 max-h-80 overflow-y-auto">

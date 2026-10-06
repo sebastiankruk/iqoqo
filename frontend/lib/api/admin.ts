@@ -15,6 +15,12 @@
 //
 import { apiFetch, apiClient } from "./client";
 import type { ApiResponse, FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/types/frbr";
+import type {
+  LODReconciliationTaskStatus,
+  LODStats,
+  LODReconciliationTriggerParams,
+  LODReconciliationTriggerResponse,
+} from "@/types/admin";
 
 export interface AdminUser {
   id: string;
@@ -560,6 +566,289 @@ export async function splitFrbrEntity(payload: FrbrSplitPayload): Promise<{ id: 
   const res = await apiClient.post<ApiResponse<{ id: number }>>("/v1/admin/frbr/relations/split", payload);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to split FRBR entity");
+  }
+  return res.data.data;
+}
+
+// ---------------------------------------------------------------------------
+// Linked Open Data (LOD) Reconciliation Management API Client
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger background batch reconciliation of Linked Open Data links across the catalog.
+ *
+ * @param params - Optional reconciliation filter and throttling parameters
+ * @returns The scheduled task information
+ */
+export async function triggerLodReconciliation(
+  params?: LODReconciliationTriggerParams
+): Promise<LODReconciliationTriggerResponse> {
+  const res = await apiClient.post<ApiResponse<LODReconciliationTriggerResponse>>(
+    "/v1/admin/lod/reconcile",
+    params ?? {}
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to trigger LOD reconciliation");
+  }
+  return res.data.data;
+}
+
+/**
+ * Retrieve the status and progress of a batch LOD reconciliation task.
+ *
+ * @param taskId - The Celery task ID
+ * @returns The task status and metrics
+ */
+export async function getLodTaskStatus(taskId: string): Promise<LODReconciliationTaskStatus> {
+  const res = await apiClient.get<ApiResponse<LODReconciliationTaskStatus>>(`/v1/admin/lod/tasks/${taskId}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch LOD task status");
+  }
+  return res.data.data;
+}
+
+/**
+ * Retrieve lifetime statistics for Linked Open Data links in the catalog.
+ *
+ * @returns Aggregate LOD link counts by authority
+ */
+export async function getLodStats(): Promise<LODStats> {
+  const res = await apiClient.get<ApiResponse<LODStats>>("/v1/admin/lod/stats");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch LOD stats");
+  }
+  return res.data.data;
+}
+
+/**
+ * Retrieve the currently executing batch LOD reconciliation task, or null.
+ *
+ * @returns Active task ID and status if a task is running, otherwise nulls.
+ */
+export async function getActiveLodTask(): Promise<{
+  active_task_id: string | null;
+  task: LODReconciliationTaskStatus | null;
+}> {
+  const res = await apiClient.get<
+    ApiResponse<{
+      active_task_id: string | null;
+      task: LODReconciliationTaskStatus | null;
+    }>
+  >("/v1/admin/lod/tasks/active");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch active LOD task");
+  }
+  return res.data.data;
+}
+
+/**
+ * Cancel the active batch LOD reconciliation task.
+ *
+ * @param taskId - Optional specific task ID to cancel
+ * @returns Object with cancelled task ID
+ */
+export async function cancelLodTask(taskId?: string | null): Promise<{ task_id: string | null }> {
+  const url = taskId ? `/v1/admin/lod/tasks/${taskId}/cancel` : "/v1/admin/lod/cancel";
+  const res = await apiClient.post<ApiResponse<{ task_id: string | null }>>(url);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to cancel LOD task");
+  }
+  return res.data.data ?? { task_id: taskId ?? null };
+}
+
+// --- Duplicate Detection ---
+
+/** Entity tier a duplicate candidate belongs to. */
+export type DuplicateEntityTier = "work" | "manifestation";
+
+/** Lifecycle status of a duplicate candidate. */
+export type DuplicateCandidateStatus = "pending" | "merged" | "dismissed";
+
+/**
+ * Which stage decided a candidate.
+ *
+ * `heuristic` means the deterministic classifier queued it, so `confidence` is
+ * null and the decision is categorical. `llama` means a local model returned a
+ * probability. The two must never be presented as the same kind of number: a
+ * classifier "1.0" means "these records share an edition identifier", which is a
+ * far stronger claim than a model's "0.99".
+ */
+export type DuplicateResolutionSource = "heuristic" | "llama";
+
+/**
+ * One side of a Work duplicate, as rendered by the review comparison table.
+ */
+export interface DuplicateWorkSide {
+  tier: "work";
+  id: number;
+  title: string | null;
+  sort_title: string | null;
+  creators: string[];
+  expression_count: number;
+  genres: string | string[] | null;
+  description_present: boolean;
+}
+
+/**
+ * One side of a Manifestation duplicate.
+ *
+ * ISBN-family identifiers appear only here: they are edition-defining on the
+ * Manifestation (FRBRoo F3) and never on the Work or Expression.
+ */
+export interface DuplicateManifestationSide {
+  tier: "manifestation";
+  id: number;
+  title: string;
+  creators: string[];
+  isbn13: string | null;
+  ean: string | null;
+  upc: string | null;
+  barcode: string | null;
+  format: string | null;
+  publisher: string | null;
+  publication_date: string | null;
+  label: string | null;
+  catalog_number: string | null;
+  language: string | null;
+  content_type: string | null;
+  work_title: string | null;
+  work_id: number | null;
+  item_count: number;
+  cover_url: string | null;
+}
+
+/** Either side of a candidate, discriminated by the entity tier it came from. */
+export type DuplicateSide = DuplicateWorkSide | DuplicateManifestationSide;
+
+/** A queued duplicate pair awaiting administrative review. */
+export interface DuplicateCandidate {
+  id: number;
+  entity_tier: DuplicateEntityTier;
+  source_id: number;
+  target_id: number;
+  /** Null for a candidate queued by the deterministic classifier, which has no probability. */
+  confidence: number | null;
+  llm_reasoning: string | null;
+  /** Which stage decided this candidate; see `DuplicateResolutionSource`. */
+  resolution_source: DuplicateResolutionSource;
+  status: DuplicateCandidateStatus;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by_id: string | null;
+  resolved_by_email: string | null;
+  source: DuplicateSide | null;
+  target: DuplicateSide | null;
+}
+
+/** Counters returned by a detection run. */
+export interface DuplicateDetectionReport {
+  tier: string;
+  threshold: number;
+  dry_run: boolean;
+  entities_screened: number;
+  candidate_pairs: number;
+  llm_evaluations: number;
+  llm_failures: number;
+  below_threshold: number;
+  already_known: number;
+  created: number;
+  work_candidates: number;
+  manifestation_candidates: number;
+}
+
+/** Result of merging one candidate's pair. */
+export interface DuplicateMergeResult {
+  candidate_id: number;
+  entity_tier: DuplicateEntityTier;
+  primary_id: number;
+  merged_id: number;
+}
+
+/** Filters for the duplicate review queue. */
+export interface DuplicateQueryParams {
+  status?: DuplicateCandidateStatus | "all";
+  entity_tier?: DuplicateEntityTier;
+  min_confidence?: number;
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Fetch a filtered, paginated page of duplicate candidates.
+ *
+ * @param params - Optional status, tier, confidence, and pagination filters
+ * @returns The candidates and total matching count
+ */
+export async function getDuplicateCandidates(params?: DuplicateQueryParams): Promise<{
+  data: DuplicateCandidate[];
+  meta: { total: number; page: number; limit: number };
+}> {
+  const query = new URLSearchParams();
+  if (params?.status) query.append("status", params.status);
+  if (params?.entity_tier) query.append("entity_tier", params.entity_tier);
+  if (params?.min_confidence !== undefined) query.append("min_confidence", params.min_confidence.toString());
+  if (params?.page) query.append("page", params.page.toString());
+  if (params?.limit) query.append("limit", params.limit.toString());
+
+  const res = await apiClient.get<ApiResponse<DuplicateCandidate[]>>(`/v1/admin/duplicates?${query.toString()}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch duplicate candidates");
+  }
+
+  const meta = (res.data as unknown as { meta: { total: number; page: number; limit: number } }).meta;
+  return { data: res.data.data, meta };
+}
+
+/**
+ * Dismiss a candidate as a false positive so it is never re-queued.
+ *
+ * @param candidateId - The candidate to dismiss
+ * @returns The updated candidate
+ */
+export async function dismissDuplicateCandidate(candidateId: number): Promise<DuplicateCandidate> {
+  const res = await apiClient.post<ApiResponse<DuplicateCandidate>>(`/v1/admin/duplicates/${candidateId}/dismiss`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to dismiss duplicate candidate");
+  }
+  return res.data.data;
+}
+
+/**
+ * Merge a candidate's two entities, keeping the chosen primary.
+ *
+ * @param candidateId - The candidate to resolve
+ * @param primaryId - Entity id to keep; the other side is merged into it
+ * @returns The surviving entity id and the merged-away id
+ */
+export async function mergeDuplicateCandidate(candidateId: number, primaryId: number): Promise<DuplicateMergeResult> {
+  const res = await apiClient.post<ApiResponse<DuplicateMergeResult>>(`/v1/admin/duplicates/${candidateId}/merge`, {
+    primary_id: primaryId,
+  });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to merge duplicate candidate");
+  }
+  return res.data.data;
+}
+
+/**
+ * Trigger a duplicate detection run.
+ *
+ * @param params - Detection run options
+ * @param params.tier - Entity tier to screen, or "all"
+ * @param params.threshold - Minimum LLM confidence required to queue a candidate
+ * @param params.limit - Maximum number of catalog entities to load per tier
+ * @param params.dry_run - Evaluate and report without writing candidate rows
+ * @returns Counters describing the run
+ */
+export async function runDuplicateScan(params?: {
+  tier?: DuplicateEntityTier | "all";
+  threshold?: number;
+  limit?: number;
+  dry_run?: boolean;
+}): Promise<DuplicateDetectionReport> {
+  const res = await apiClient.post<ApiResponse<DuplicateDetectionReport>>("/v1/admin/duplicates/scan", params ?? {});
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to run duplicate scan");
   }
   return res.data.data;
 }

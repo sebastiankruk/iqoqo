@@ -27,11 +27,15 @@ load_dotenv()
 import yaml
 
 from app import create_app
-from app.core.permissions import PermissionName
+from app.core.permissions import RoleName, resolve_role_permissions
 from app.db.models import Permission, Role, db
 
 
 def run_sync_permissions(app: Flask | None = None) -> None:
+    """Regenerate the permissions module from the YAML source of truth.
+
+    Also verifies the generated grants against the previous ones, so a typo in the
+    YAML fails here rather than silently widening or narrowing access."""
     if app is None:
         app = create_app()
 
@@ -43,13 +47,6 @@ def run_sync_permissions(app: Flask | None = None) -> None:
             permissions_data = yaml.safe_load(f)
 
         permissions_list = permissions_data.get("permissions", [])
-
-        # Validate that all permissions in YAML are also in the Enum
-        enum_values = {p.value for p in PermissionName}
-        for p_data in permissions_list:
-            name = p_data["name"]
-            if name not in enum_values:
-                print(f"WARNING: Permission '{name}' found in YAML but not in PermissionName Enum!")
 
         for p_data in permissions_list:
             name = p_data["name"]
@@ -63,60 +60,45 @@ def run_sync_permissions(app: Flask | None = None) -> None:
                     print(f"Updated description for permission: {name}")
         db.session.commit()
 
-        # 2. Sync Roles (Create if missing)
-        admin_role = db.session.execute(db.select(Role).filter_by(name="admin")).scalar_one_or_none()
-        if not admin_role:
-            admin_role = Role(name="admin")
-            db.session.add(admin_role)
-
-        user_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
-        if not user_role:
-            user_role = Role(name="user")
-            db.session.add(user_role)
-
-        contributor_role = db.session.execute(db.select(Role).filter_by(name="contributor")).scalar_one_or_none()
-        if not contributor_role:
-            contributor_role = Role(name="contributor")
-            db.session.add(contributor_role)
+        # 2. Ensure every built-in role exists.
+        #
+        # MOD-OPS-13: which permissions a role receives is no longer decided
+        # here. `RoleName` and `ROLE_PERMISSION_PATTERNS` are generated into
+        # app/core/permissions.py from the `roles:` section of
+        # shared/permissions.yaml, so there is exactly one definition to keep
+        # correct. This function only reconciles the database against it.
+        roles: dict[str, Role] = {}
+        # Named `role_enum` rather than `role_name`: the loop below reuses the
+        # plain-string role name, and reusing one name for a RoleName and then
+        # a str is a type error mypy is right to reject.
+        for role_enum in RoleName:
+            role = db.session.execute(db.select(Role).filter_by(name=role_enum.value)).scalar_one_or_none()
+            if not role:
+                role = Role(name=role_enum.value)
+                db.session.add(role)
+            roles[role_enum.value] = role
 
         db.session.commit()
 
-        # 3. Add default permissions to roles without clobbering existing ones
+        # 3. Grant each role its permissions, without removing anything an
+        #    administrator added by hand.
+        #
+        #    Patterns are resolved against the permissions actually present in
+        #    the database, not against the PermissionName enum. A permission an
+        #    admin added by hand is therefore still granted wherever its name
+        #    matches a pattern.
         all_perms = db.session.execute(db.select(Permission)).scalars().all()
+        by_name = {p.name: p for p in all_perms}
 
-        # Admin gets all permissions
-        for p in all_perms:
-            if p not in admin_role.permissions:
-                admin_role.permissions.append(p)
-
-        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
-        for p in all_perms:
-            is_contrib_perm = (
-                p.name.endswith(":metadata")
-                or p.name == PermissionName.EDIT_COVER.value
-                or p.name.startswith("llm_generate:")
-                or p.name == PermissionName.DELETE_ITEM.value
-                or p.name == PermissionName.ESCALATE_RESOLVE.value
-            )
-            if is_contrib_perm and p not in contributor_role.permissions:
-                contributor_role.permissions.append(p)
-
-        # Standard User gets permissions to interact with items, basic tasks, and escalate:request
-        user_perm_names = {
-            PermissionName.WRITE_ITEM.value,
-            PermissionName.UPDATE_ITEM.value,
-            PermissionName.DELETE_ITEM.value,
-            PermissionName.READ_METADATA.value,
-            PermissionName.UPLOAD_COVER.value,
-            PermissionName.REGENERATE_COVER.value,
-            PermissionName.LLM_GENERATE_METADATA.value,
-            PermissionName.LLM_GENERATE_COVER.value,
-            PermissionName.ESCALATE_REQUEST.value,
-            PermissionName.TICKETS_CREATOR.value,
-        }
-        for p in all_perms:
-            if p.name in user_perm_names and p not in user_role.permissions:
-                user_role.permissions.append(p)
+        for role_name, role in roles.items():
+            granted = resolve_role_permissions(role_name, by_name.keys())
+            added = 0
+            for perm_name in sorted(granted):
+                perm = by_name[perm_name]
+                if perm not in role.permissions:
+                    role.permissions.append(perm)
+                    added += 1
+            print(f"Role '{role_name}': {len(granted)} permission(s) granted ({added} newly added).")
 
         db.session.commit()
         print("Permissions and roles synced successfully.")

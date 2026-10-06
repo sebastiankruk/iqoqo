@@ -288,6 +288,28 @@ iqoqo uses a layered approach to configuration to support seamless switching bet
 
 **Note:** Only variables prefixed with `NEXT_PUBLIC_` are accessible in the browser.
 
+### Optional Feature Variables
+
+All of these are optional; leaving them unset disables the feature cleanly.
+Full annotated reference: `.env.example`.
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `ENABLE_LOD_LINKING` | `true` | Linked Open Data entity linking. Disabling it never deletes existing links. See `docs/OPERATIONS.md`. |
+| `GEONAMES_USERNAME` | unset | Enables GeoNames authority lookups. Free account required; the other two authorities work without it. |
+| `OLLAMA_DEDUPE_MODEL` | `llama3:latest` | Model used by the optional `llama` duplicate-detection engine. The default `heuristic` engine needs no model at all. |
+| `IQOQO_KNOWN_JUNK_PHASHES` | unset | Perceptual hashes of placeholder covers to avoid re-fetching. Verify with `scripts/phash_cover.py --check`. |
+| `E2E_RESET_SECRET` | unset | Shared secret for `X-E2E-Reset-Secret` on the lending test-reset endpoint. When unset, that endpoint refuses every request rather than failing open. |
+
+### Remote Storage (v0.8.2)
+
+`S3_BACKEND` selects `auto` (default), `rclone` or `s3`. The containers stopped
+shelling out to rclone and no longer mount `rclone.conf`; host-side backup
+scripts still use your existing rclone install. `RCLONE_REMOTE_ARCHIVE` and
+`RCLONE_FEEDBACK_REMOTE` are deprecated in favour of `S3_BUCKET_BACKUP` and
+`S3_BUCKET_FEEDBACK`. Full variable list and provider support:
+`docs/BACKUPS.md`.
+
 ## Database Setup
 
 This project uses PostgreSQL as its database. You have two options:
@@ -926,6 +948,17 @@ make lint-css       # stylelint
 
 # Markdown
 make lint-markdown  # markdownlint
+
+# Project invariants
+make validate-yaml     # shared/format_mappings.yaml structure
+make validate-nginx    # deploy/nginx.conf.example, parsed by a real nginx
+make validate-openspec # published OpenSpec capabilities
+make validate-release  # versions + CHANGELOG + image-size budget agreement
+make validate-image-size IMAGE=<tag>   # an image not built locally
+
+# PostgreSQL-only suites (SQLite cannot see dialect-specific defects)
+make test-merge-integrity-pg
+make test-backend-pg
 ```
 
 `make lint` is the CI compatibility baseline: Ruff, Black, isort, advisory

@@ -17,10 +17,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+import dataclasses
 import itertools
 import logging
 import re
 from collections.abc import Generator, Iterable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -31,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
+from app.core import frbr_merge
 from app.core.iri import canonical_frbr_iri, canonical_related_iri
 from app.core.ontology_validation import (
     validate_container_not_linked_as_expansion,
@@ -461,6 +464,14 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     )
     db.session.add(manifestation)
     db.session.commit()
+
+    try:
+        from app.core.tasks import link_manifestation_lod_task
+
+        link_manifestation_lod_task.delay(manifestation.id)
+    except Exception as exc:  # pylint: disable=broad-except
+        _logger_frbr.debug("Failed to dispatch LOD task for manifestation %d: %s", manifestation.id, exc)
+
     return manifestation
 
 
@@ -1024,29 +1035,56 @@ def update_work(
     return work
 
 
+@dataclass(frozen=True)
+class ExpressionChange:
+    """A partial update to an :class:`Expression`.
+
+    Every field is optional and ``None`` means "leave unchanged", so this is a
+    patch rather than a replacement. It is frozen because a change is assembled
+    once and then applied; mutating it mid-apply would make the resulting
+    expression depend on evaluation order.
+
+    This replaces seven optional parameters. They were all ``| None``, so
+    passing ``language`` where ``kind`` was meant was invisible to a type
+    checker -- and ``kind`` is validated against a controlled vocabulary, so the
+    mistake showed up as a puzzling ``ValueError`` far from the call site.
+    """
+
+    work_id: int | None = None
+    content_type: str | None = None
+    language: str | None = None
+    meta: dict[str, Any] | None = None
+    kind: str | None = None
+    raw_payload: dict[str, Any] | None = None
+    contributions: list[dict[str, Any]] | None = None
+
+
+def _expression_change(change: "ExpressionChange | None", kwargs: dict[str, Any]) -> ExpressionChange:
+    """Build an :class:`ExpressionChange` from an explicit value or legacy kwargs."""
+    if change is not None:
+        return change
+    if not kwargs:
+        return ExpressionChange()
+    unknown = set(kwargs) - {f.name for f in dataclasses.fields(ExpressionChange)}
+    if unknown:
+        raise TypeError(f"update_expression() got unexpected keyword arguments: {sorted(unknown)}")
+    return ExpressionChange(**kwargs)
+
+
 def update_expression(
     expression_id: int,
-    work_id: int | None = None,
-    content_type: str | None = None,
-    language: str | None = None,
-    meta: dict[str, Any] | None = None,
-    kind: str | None = None,
-    raw_payload: dict[str, Any] | None = None,
-    contributions: list[dict[str, Any]] | None = None,
+    change: ExpressionChange | None = None,
+    **kwargs: Any,
 ) -> Expression:
     """
     Update an existing Expression.
 
     Args:
-        expression_id: The ID of the expression to update
-        work_id: New parent work ID
-        content_type: New content type
-        language: New language code
-        meta: Metadata to merge with existing
-        kind: New expression kind (``live_performance`` or ``None`` to clear
-              via :func:`clear_expression_kind`).
-        raw_payload: Verbatim provider payload JSON
-        contributions: Optional structured contribution list to reconcile.
+        expression_id: The ID of the expression to update.
+        change: The fields to change. May also be supplied as individual
+            keyword arguments, which is what existing call sites do; a field
+            name that is not a member raises ``TypeError`` rather than being
+            ignored.
 
     Returns:
         The updated Expression object
@@ -1054,7 +1092,19 @@ def update_expression(
     Raises:
         ValueError: If the Expression/Work does not exist, or *kind* is not in
                     the controlled vocabulary.
+        TypeError: If an unknown field name is passed.
     """
+    change = _expression_change(change, kwargs)
+    (
+        work_id,
+        content_type,
+        language,
+        meta,
+        kind,
+        raw_payload,
+        contributions,
+    ) = dataclasses.astuple(change)
+
     expr = db.session.get(Expression, expression_id)
     if expr is None:
         raise ValueError(f"Expression with id {expression_id} not found")
@@ -1591,6 +1641,15 @@ def reassign_frbr_parent(
     return entity
 
 
+#: Audit ``change_type`` per tier, so a single query reconstructs every merge
+#: regardless of whether it came from this entry point or the review queue.
+_MERGE_CHANGE_TYPES: dict[str, str] = {
+    "work": "merge_work",
+    "expression": "merge_expression",
+    "manifestation": "merge_manifestation",
+}
+
+
 def merge_frbr_entities(
     entity_type: str,
     source_id: int,
@@ -1598,6 +1657,12 @@ def merge_frbr_entities(
     user_id: Any | None = None,
 ) -> Any:
     """Merge two entities at the same FRBR level, reparenting children and contributions.
+
+    Every table that references the tier is re-pointed onto the surviving entity
+    by :mod:`app.core.frbr_merge`, so wishlist entries, box-set memberships,
+    work expansions, container aggregations, social feedback, notes and
+    escalation requests follow the survivor instead of being destroyed by the
+    source row's ``ON DELETE CASCADE``.
 
     Args:
         entity_type: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
@@ -1619,65 +1684,54 @@ def merge_frbr_entities(
     source = _get_entity_or_raise(entity_type, source_id)
     target = _get_entity_or_raise(entity_type, target_id)
 
-    child_cls, child_fk_attr = _ENTITY_CHILD_MAP[entity_type]
+    entity_cls = _ENTITY_CLASS_MAP[entity_type]
 
-    # Reparent all children from source to target
-    children: list[Any] = list(db.session.execute(select(child_cls).where(getattr(child_cls, child_fk_attr) == source_id)).scalars().all())
-    migrated_count = 0
-    for child in children:
-        setattr(child, child_fk_attr, target_id)
-        migrated_count += 1
+    try:
+        # Lock both rows in ascending id order so a concurrent merge of the same
+        # pair cannot interleave and double-consolidate.
+        locked = frbr_merge.lock_pair(entity_cls, source_id, target_id)
+        if len(locked) != 2:
+            raise ValueError("One of the entities no longer exists; the merge was aborted")
 
-    # Re-link contributions, avoiding duplicates
-    contrib_migrated = 0
-    if entity_type == "work":
-        contrib_cls = WorkContribution
-        contrib_fk = "work_id"
-    elif entity_type == "expression":
-        contrib_cls = ExpressionContribution
-        contrib_fk = "expression_id"
-    else:  # manifestation
-        contrib_cls = ManifestationContribution
-        contrib_fk = "manifestation_id"
+        # Re-point every referencing table for this tier.  Child entities and
+        # contributions are included in the map, so this replaces the previous
+        # hand-rolled per-tier blocks that covered only two of thirteen columns.
+        repointed = frbr_merge.repoint_references(entity_type, source_id, target_id)
 
-    source_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == source_id)).scalars().all()
-    target_contribs = db.session.execute(select(contrib_cls).where(getattr(contrib_cls, contrib_fk) == target_id)).scalars().all()
+        # Merge metadata
+        target.meta = _merge_metadata(target.meta, source.meta)
 
-    # Build set of existing (contributor_id, role) on target
-    existing_keys = {(c.contributor_id, c.role) for c in target_contribs}
-    for sc in source_contribs:
-        key = (sc.contributor_id, sc.role)
-        if key not in existing_keys:
-            # Re-link to target
-            setattr(sc, contrib_fk, target_id)
-            contrib_migrated += 1
-            existing_keys.add(key)
-        else:
-            # Duplicate — delete the source contribution
-            db.session.delete(sc)
+        if entity_type == "manifestation":
+            # FRBRoo F3: identifiers belong to the Manifestation and nowhere else.
+            frbr_merge.consolidate_manifestation_identifiers(target, source)
 
-    # Merge metadata
-    merged_meta = _merge_metadata(target.meta, source.meta)
-    target.meta = merged_meta
+        # Record audit log
+        audit = EntityAuditLog(
+            entity_type=entity_type,
+            entity_id=source_id,
+            actor_id=user_id,
+            change_type=_MERGE_CHANGE_TYPES[entity_type],
+            diff={
+                "source_id": source_id,
+                "target_id": target_id,
+                "migrated_children": repointed.get(_ENTITY_CHILD_MAP[entity_type][0].__name__ + "." + _ENTITY_CHILD_MAP[entity_type][1], 0),
+                "migrated_contributions": repointed.get("WorkContribution.work_id")
+                or repointed.get("ExpressionContribution.expression_id")
+                or repointed.get("ManifestationContribution.manifestation_id")
+                or 0,
+                "repointed": repointed,
+            },
+        )
+        db.session.add(audit)
 
-    # Record audit log
-    audit = EntityAuditLog(
-        entity_type=entity_type,
-        entity_id=source_id,
-        actor_id=user_id,
-        change_type="merge",
-        diff={
-            "source_id": source_id,
-            "target_id": target_id,
-            "migrated_children": migrated_count,
-            "migrated_contributions": contrib_migrated,
-        },
-    )
-    db.session.add(audit)
+        # Drop the source with a Core-level DELETE; an ORM delete would cascade
+        # delete-orphan over re-pointed children (see frbr_merge.delete_source_row).
+        frbr_merge.delete_source_row(source)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
-    # Delete source entity
-    db.session.delete(source)
-    db.session.commit()
     return target
 
 

@@ -79,11 +79,16 @@ vi.mock("next/image", async () => {
     default: ({ src, alt, className, fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest }: any) => {
       void fill;
       void sizes;
-      void unoptimized;
       void priority;
       void placeholder;
       void blurDataURL;
-      return createElement("img", { src, alt, className, ...rest });
+      return createElement("img", {
+        src,
+        alt,
+        className,
+        ...(unoptimized ? { "data-unoptimized": "true" } : {}),
+        ...rest,
+      });
     },
   };
 });
@@ -129,6 +134,11 @@ vi.mock("axios", async importOriginal => {
     put: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
+    // The generic verb, used by `frontend/lib/api/account.ts` for CSRF-bearing
+    // mutations. Without it, code that calls `apiClient.request(...)` fails with
+    // "the property request is not defined" -- which reads as a product bug
+    // rather than an incomplete test double.
+    request: vi.fn(),
     interceptors: {
       request: { use: vi.fn(), eject: vi.fn() },
       response: { use: vi.fn(), eject: vi.fn() },

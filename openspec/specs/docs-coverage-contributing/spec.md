@@ -1,3 +1,7 @@
+## Purpose
+
+Require `docs/CONTRIBUTING.md` to document the OpenSpec change workflow, the Makefile targets a contributor is expected to use, the format-normalization conventions, and how to test across FRBR tiers.
+
 ## Requirements
 
 ### Requirement: Contributing guide documents OpenSpec workflow

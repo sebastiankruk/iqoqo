@@ -16,13 +16,15 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Disc, Dices, Film, HeartOff, Puzzle } from "lucide-react";
 import type { WishlistItem } from "@/types/frbr";
 import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { resolveMediaBadge } from "@/lib/media-badge";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 
 interface WishlistCardProps {
   item: WishlistItem;
@@ -55,7 +57,12 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
     }
   };
 
-  const coverUrl = item.cover_url;
+  const timestamp = getCoverTimestamp(item.manifestation_meta);
+  const coverUrl =
+    getCoverUrl(item.cover_url || undefined, timestamp) ||
+    getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ||
+    item.cover_url ||
+    (item.manifestation_meta?.["cover_url"] as string | undefined);
   const title = item.title || "Untitled";
   const authors = item.authors || [];
   const targetHref = item.manifestation_id ? `/manifestation/${item.manifestation_id}` : "/wishlist";
@@ -75,16 +82,9 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
   });
 
   const isAudio = badge.isAudio || isAudioMedia(format ?? undefined) || isAudioMedia(rawContentType ?? undefined);
-  const isVideo =
-    badge.typeKey === "movie" ||
-    ["dvd", "bluray", "video", "moving image"].includes((format || rawContentType || "").toLowerCase());
-  const isBoardGame =
-    badge.typeKey === "game" ||
-    ["boardgame", "board_game", "three-dimensional object"].includes((format || rawContentType || "").toLowerCase());
-  const isPuzzle =
-    rawContentType === "puzzle" ||
-    format?.toLowerCase() === "puzzle" ||
-    ["puzzle", "jigsaw", "jigsaw puzzle"].includes((format || "").toLowerCase());
+  const isVideo = badge.typeKey === "movie" || isVideoFormat(format, rawContentType);
+  const isBoardGame = badge.typeKey === "game" || isBoardGameFormat(format, rawContentType);
+  const isPuzzle = rawContentType === "puzzle" || format?.toLowerCase() === "puzzle" || isPuzzleFormat(format);
 
   const MediaIcon = isAudio
     ? Disc
@@ -112,7 +112,7 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
           className={`relative ${aspectClass} w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20`}
         >
           {coverUrl ? (
-            <img src={coverUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+            <Image src={coverUrl} alt={title} fill unoptimized className="object-cover" sizes="5rem" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <MediaIcon className="h-6 w-6 text-muted-foreground/40" />
@@ -145,11 +145,13 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
       {/* Cover image */}
       <div className={`relative ${aspectClass} overflow-hidden bg-muted`}>
         {coverUrl ? (
-          <img
+          <Image
             src={coverUrl}
             alt={title}
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-            loading="lazy"
+            fill
+            unoptimized
+            className="object-cover transition-transform group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, 33vw"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground">

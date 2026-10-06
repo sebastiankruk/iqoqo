@@ -25,6 +25,9 @@ Before branching a release, complete the following verification steps:
   # 1. Build backend, frontend, and nginx images locally with preview tag:
   make docker-build-preview
   # (or: ./scripts/build_docker_images.sh --tag <version>)
+  # The backend size gate runs automatically as part of this build and fails it
+  # if the image exceeds its budget, printing the per-path breakdown. No separate
+  # step is needed after a local build.
 
   # 2. Test launch in isolated preview directory:
   cd /opt/pre.iqoqo
@@ -37,9 +40,56 @@ Before branching a release, complete the following verification steps:
   make status STACK=preview
   ```
 
+- [ ] **Container Image Size Budget**: The backend image size gate is enforced at
+  build time, so a build that produced an oversized image never reaches this
+  checklist. When verifying an image that was *not* built locally — a CI artifact,
+  or one pulled from a registry — check it explicitly:
+
+  ```bash
+  make validate-image-size IMAGE=<tag>
+  ```
+
+- [ ] **Release Invariants**: `make validate-release` checks that every version
+  file agrees with the CHANGELOG section header, and that the image-size figures
+  quoted in this document match `deploy/image-size-budget.txt` byte for byte.
+  Run it before opening the PR — it is the check that stops the build gate and
+  the release plan drifting apart.
+
+  ```bash
+  make validate-release
+  ```
+
+- [ ] **Type Checker Actually Ran**: `make lint` runs mypy as a *non-blocking*
+  step, matching the CI workflow's `continue-on-error`. Verify it is checking
+  files rather than exiting during module resolution — a resolution abort prints
+  `errors prevented further checking` and checks nothing at all:
+
+  ```bash
+  .venv/bin/mypy app/ tests/
+  ```
+
+  A non-zero exit with a `Found N errors in M files (checked K source files)`
+  summary is the known, recorded backlog. A summary that mentions
+  `errors prevented further checking` is a broken gate, not a type error.
+
+  The budget and the measurement that justifies it both live in
+  `deploy/image-size-budget.txt`, which is the single source of truth. Current
+  figures, quoted verbatim so `scripts/validate_release.py` can assert they match:
+
+  | Key | Value |
+  | --- | --- |
+  | `MAX_BYTES` | `650000000` (619.9 MiB) |
+  | `MEASURED_BYTES` | `635350015` (605.8 MiB) |
+
+  If this check fails, either the change is doing what it should and you must
+  remove the growth, or the change is legitimate and you must raise `MAX_BYTES`
+  *and* update `MEASURED_BYTES` in the same commit. Never raise one without the
+  other — an unexplained ceiling is how the previous `<500 MB` requirement came
+  to be missed for a whole release.
+
 ## How to Create a New Release
 
-1. **Create a Release Branch**: Branch off from `main` (e.g., `git checkout -b release/0.7.17`).
+1. **Create a Release Branch**: Branch off from `main` (e.g., `git checkout -b release/X.Y.Z`).
 2. **Update Versions & Changelog**:
    - Update `pyproject.toml` and `frontend/package.json`.
    - Update `docs/CHANGELOG.md` date header.
@@ -51,8 +101,8 @@ Before branching a release, complete the following verification steps:
    - **Test Craftsman / QA**: Ensures unit, integration, and E2E coverage.
    - **TechComm Specialist**: Validates documentation currency, ATX markdown syntax, and code block tags.
    - **Code Quality / Linter**: Run `make lint` for the GitHub quality-workflow gates; `make lint-all` adds stricter local-only checks.
-4. **Commit and Push**: `git commit -am "chore(release): prep release v0.7.17"` and push the branch.
-5. **Create & Merge Pull Request**: Open a PR from `release/0.7.17` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
+4. **Commit and Push**: `git commit -am "chore(release): prep release vX.Y.Z"` and push the branch.
+5. **Create & Merge Pull Request**: Open a PR from `release/X.Y.Z` into `main`. Once approved and merged, GitHub Actions will trigger image builds and release tagging.
 6. **Memory Graph Synchronization**:
    After the release PR is merged into `main`, sync architectural decisions and release notes to the persistent memory graph:
 
@@ -66,4 +116,4 @@ Upon PR merge to `main`, GitHub Actions automatically:
 - Reads the version from `pyproject.toml`.
 - Extracts the release notes from `docs/CHANGELOG.md`.
 - Builds and pushes `iqoqo-backend`, `iqoqo-frontend`, and `iqoqo-nginx` images to GHCR.
-- Creates the Git Tag (e.g., `v0.7.17`) and formal GitHub Release.
+- Creates the Git Tag (e.g., `vX.Y.Z`) and formal GitHub Release.

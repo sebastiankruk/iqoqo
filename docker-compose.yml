@@ -89,7 +89,6 @@ services:
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
       - ./scripts:/usr/src/app/scripts
       - ./shared:/usr/src/app/shared
-      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
     ports:
       - "127.0.0.1:${WEB_PORT:-5000}:5000"
     extra_hosts:
@@ -120,6 +119,16 @@ services:
       - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.cc}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
       - APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
+      # Browser RUM/Logs. NOT a NEXT_PUBLIC_* build arg on purpose:
+      # `NEXT_PUBLIC_*` values are inlined into the client bundle at build
+      # time, and `--prebuilt` deployments pull this image from a registry
+      # where it was built on CI — a per-instance token baked in at build time
+      # would either be impossible or would leak one instance's token into a
+      # shared image. The token is therefore a server-side env var read per
+      # request by app/layout.tsx and handed to the client component as a prop.
+      - OPENOBSERVE_RUM_CLIENT_TOKEN=${OPENOBSERVE_RUM_CLIENT_TOKEN:-}
+      - OPENOBSERVE_RUM_SITE=${OPENOBSERVE_RUM_SITE:-}
+      - OPENOBSERVE_RUM_INSECURE_HTTP=${OPENOBSERVE_RUM_INSECURE_HTTP:-}
       - OTEL_SERVICE_NAME=iqoqo-frontend
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
@@ -191,7 +200,6 @@ services:
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
       - ./shared:/usr/src/app/shared
-      - ${HOME}/.config/rclone/rclone.conf:/home/appuser/.config/rclone/rclone.conf:ro
     depends_on:
       db:
         condition: service_healthy

@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -400,9 +401,16 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
         assert "run" in args
         assert "--auto" in args
         assert "-m" in args
-        assert args[args.index("-m") + 1] == "opencode-go/muse-spark-1.3-contributor"
-        assert "--variant" in args
-        assert args[args.index("--variant") + 1] == "minimal"
+        # Default effort is "minimal"; the variant rides on the model string.
+        assert args[args.index("-m") + 1] == "opencode-go/space-bunny-free#minimal"
+
+        # opencode v2 removed these flags; passing either exits 1 on every task.
+        assert "--pure" not in args
+        assert "--variant" not in args
+
+        # Standalone avoids the background `serve --service` process, which
+        # intermittently spins at 100% CPU and never becomes ready.
+        assert "--standalone" in args
 
         # Verify output files
         done_file = outbox / f"{task_id}.done"
@@ -416,7 +424,7 @@ def test_opencode_process_task_success(opencode_daemon_module, tmp_path):
 
 
 def test_opencode_process_task_with_model_and_effort(opencode_daemon_module, tmp_path):
-    """Test process_task forwards model and effort flags to opencode CLI."""
+    """Test process_task forwards model and effort to the opencode v2 model spec."""
     inbox = tmp_path / "inbox"
     outbox = tmp_path / "outbox"
     inbox.mkdir()
@@ -435,14 +443,127 @@ def test_opencode_process_task_with_model_and_effort(opencode_daemon_module, tmp
         )
         assert success is True
         args = mock_run.call_args[0][0]
-        assert "-m" in args
-        assert args[args.index("-m") + 1] == "opencode-go/deepseek-v4-pro"
-        assert "--variant" in args
-        assert args[args.index("--variant") + 1] == "high"
+        assert args[args.index("-m") + 1] == "opencode-go/deepseek-v4-pro#high"
+        assert "--variant" not in args
+        assert "--pure" not in args
 
 
-def test_opencode_process_task_medium_effort_omits_variant(opencode_daemon_module, tmp_path):
-    """Test that medium effort maps to no --variant flag (default variant)."""
+def test_opencode_process_task_degrades_on_unavailable_variant(opencode_daemon_module, tmp_path):
+    """A rejected variant must degrade down the ladder, not fail the task.
+
+    opencode v2 exits 1 with "Variant unavailable for <model>: <variant>" when
+    a model does not publish the requested variant. Variant sets are per-model,
+    so a hardcoded mapping fails every task on any model that lacks it.
+    """
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_variant_degrade"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    # space-bunny-free publishes low..max but not "minimal", so the default
+    # minimal effort must fall through to "low".
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        spec = cmd[cmd.index("-m") + 1]
+        if spec.endswith("#minimal"):
+            return _make_subprocess_mock("", "Error: Variant unavailable for space-bunny-free: minimal", 1)(cmd, **kwargs)
+        return _make_subprocess_mock('{"nodes": []}', "", 0)(cmd, **kwargs)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        success = opencode_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="opencode-go/space-bunny-free",
+            effort="minimal",
+        )
+
+    assert success is True
+    assert len(calls) == 2
+    assert calls[0][calls[0].index("-m") + 1] == "opencode-go/space-bunny-free#minimal"
+    assert calls[1][calls[1].index("-m") + 1] == "opencode-go/space-bunny-free#low"
+
+
+def test_opencode_process_task_degrades_to_bare_model(opencode_daemon_module, tmp_path):
+    """When every variant is rejected the daemon falls back to no variant."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_variant_bare"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    specs = []
+
+    def fake_run(cmd, **kwargs):
+        spec = cmd[cmd.index("-m") + 1]
+        specs.append(spec)
+        if "#" in spec:
+            return _make_subprocess_mock("", "Error: Variant unavailable for m: x", 1)(cmd, **kwargs)
+        return _make_subprocess_mock('{"nodes": []}', "", 0)(cmd, **kwargs)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        success = opencode_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="opencode-go/some-model",
+            effort="minimal",
+        )
+
+    assert success is True
+    assert specs[-1] == "opencode-go/some-model"
+
+
+def test_opencode_does_not_retry_ladder_on_unrelated_failure(opencode_daemon_module, tmp_path):
+    """Only 'Variant unavailable' may trigger a retry; other errors must not loop."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_unrelated_failure"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock("", "Error: unauthorized", 1)) as mock_run:
+        success = opencode_daemon_module.process_task(task_file, outbox, effort="minimal")
+
+    assert success is False
+    assert mock_run.call_count == 1
+    # The cause must reach the error envelope, not just an exit code.
+    error_file = outbox / f"{task_id}.error"
+    assert error_file.exists()
+    assert "unauthorized" in error_file.read_text(encoding="utf-8")
+
+
+def test_opencode_build_model_spec_strips_existing_variant(opencode_daemon_module):
+    build = opencode_daemon_module.build_model_spec
+    assert build("opencode-go/muse-spark-1.3-contributor", "high") == "opencode-go/muse-spark-1.3-contributor#high"
+    assert build("opencode-go/muse-spark-1.3-contributor", None) == "opencode-go/muse-spark-1.3-contributor"
+    # A model passed with a variant already pinned must not get a second one.
+    assert build("opencode-go/muse-spark-1.3-contributor#low", "high") == "opencode-go/muse-spark-1.3-contributor#high"
+
+
+def test_opencode_effort_ladder_always_ends_unpinned(opencode_daemon_module):
+    """Every ladder must terminate at None so no task can exhaust all variants."""
+    module = opencode_daemon_module
+    for effort in ("minimal", "low", "medium", "high"):
+        candidates = module.variant_candidates(effort)
+        assert candidates[-1] is None, effort
+    # Unknown/empty effort still produces a runnable spec.
+    assert module.variant_candidates("bogus") == (None,)
+    assert module.variant_candidates(None) == (None,)
+
+
+def test_opencode_process_task_medium_effort_uses_medium_variant(opencode_daemon_module, tmp_path):
+    """Test that medium effort maps to the medium variant."""
     inbox = tmp_path / "inbox"
     outbox = tmp_path / "outbox"
     inbox.mkdir()
@@ -460,17 +581,19 @@ def test_opencode_process_task_medium_effort_omits_variant(opencode_daemon_modul
         )
         assert success is True
         args = mock_run.call_args[0][0]
+        assert args[args.index("-m") + 1].endswith("#medium")
         assert "--variant" not in args
 
 
 def test_opencode_map_effort_to_variant(opencode_daemon_module):
-    """Test effort-to-variant mapping for opencode CLI."""
+    """Test the effort-to-variant ladder for the opencode v2 CLI."""
     mapper = opencode_daemon_module.map_effort_to_variant
-    assert mapper("low") == "minimal"
     assert mapper("minimal") == "minimal"
-    assert mapper("medium") is None
+    assert mapper("low") == "low"
+    assert mapper("medium") == "medium"
     assert mapper("high") == "high"
-    assert mapper("LOW") == "minimal"  # case-insensitive
+    assert mapper("LOW") == "low"  # case-insensitive
+    assert mapper("nonsense") is None
 
 
 def test_opencode_credential_bootstrap(tmp_path, opencode_daemon_module, monkeypatch):
@@ -722,7 +845,11 @@ def test_opencode_process_task_uses_task_timeout(opencode_daemon_module, tmp_pat
         assert success is True
         mock_run.assert_called_once()
         timeout_kwarg = mock_run.call_args.kwargs.get("timeout")
-        assert timeout_kwarg == 1800, f"Expected timeout=1800, got {timeout_kwarg}"
+        # The task timeout is capped: an invocation that never returns must not
+        # park a worker for the full task timeout.
+        assert (
+            timeout_kwarg == opencode_daemon_module.MAX_CLI_TIMEOUT
+        ), f"Expected capped timeout={opencode_daemon_module.MAX_CLI_TIMEOUT}, got {timeout_kwarg}"
 
 
 def test_daemon_core_guardrail_not_empty(daemon_core_module):
@@ -753,16 +880,97 @@ def test_write_error_envelope_atomic(daemon_core_module, tmp_path):
     assert "timestamp" in data
 
 
-def test_write_error_envelope_does_not_overwrite(daemon_core_module, tmp_path):
-    """SECURITY: First error wins — existing .error files are not overwritten."""
-    # Write first error
-    daemon_core_module.write_error_envelope("task_dup", "First error", tmp_path)
-    # Attempt to write second error
-    result = daemon_core_module.write_error_envelope("task_dup", "Second error", tmp_path)
-    assert result is False
+def test_write_error_envelope_counts_attempts_up_to_the_cap(daemon_core_module, tmp_path):
+    """Envelopes are overwritten while the retry budget lasts, then frozen.
 
+    The original contract was "first error wins", which made a single transient
+    failure permanent. Attempts are counted so the task can be retried, and the
+    cap still stops a permanently broken model from churning forever.
+    """
+    cap = daemon_core_module.MAX_TASK_ATTEMPTS
+
+    for attempt in range(1, cap):
+        assert daemon_core_module.write_error_envelope("task_dup", f"Error {attempt}", tmp_path) is True
+        data = json.loads((tmp_path / "task_dup.error").read_text(encoding="utf-8"))
+        assert data["attempts"] == attempt
+        assert f"Error {attempt}" in data["error"]
+
+    # The attempt that spends the budget is the last one accepted.
+    assert daemon_core_module.write_error_envelope("task_dup", "Final error", tmp_path) is True
     data = json.loads((tmp_path / "task_dup.error").read_text(encoding="utf-8"))
-    assert "First error" in data["error"]
+    assert data["attempts"] == cap
+
+    # Past the cap the record is frozen: the terminal error is preserved.
+    assert daemon_core_module.write_error_envelope("task_dup", "Overflow error", tmp_path) is False
+    data = json.loads((tmp_path / "task_dup.error").read_text(encoding="utf-8"))
+    assert data["attempts"] == cap
+    assert "Final error" in data["error"]
+    assert "Overflow error" not in data["error"]
+
+
+def test_write_error_envelope_never_clobbers_a_spent_envelope(daemon_core_module, tmp_path):
+    """SECURITY: the first *terminal* error is preserved; later ones are refused.
+
+    The protection is the retry budget rather than "first write wins". A single
+    transient failure used to be permanent, which silently dropped that
+    extraction from the graph while the run still reported success -- so
+    overwriting is now allowed while budget remains. What must never happen is
+    the opposite failure: once the budget is spent, a further write replacing
+    the recorded error with fresh text, because that erases the diagnostic for
+    a task that has definitively failed.
+
+    Refusal is also only useful if the existing envelope survives it, so the
+    file is re-read after the refused write rather than trusting the return
+    value alone.
+    """
+    cap = daemon_core_module.MAX_TASK_ATTEMPTS
+
+    for attempt in range(1, cap + 1):
+        assert daemon_core_module.write_error_envelope("task_terminal", f"Terminal {attempt}", tmp_path) is True
+
+    before = (tmp_path / "task_terminal.error").read_text(encoding="utf-8")
+
+    # A permanently broken model must not be able to rewrite history.
+    assert daemon_core_module.write_error_envelope("task_terminal", "Attempt after the cap", tmp_path) is False
+
+    after = json.loads((tmp_path / "task_terminal.error").read_text(encoding="utf-8"))
+    assert after["attempts"] == cap
+    assert f"Terminal {cap}" in after["error"]
+    assert "Attempt after the cap" not in after["error"]
+    # The refused write must not have touched the file at all -- not even the
+    # timestamp, which a rewrite-then-restore implementation would churn.
+    assert (tmp_path / "task_terminal.error").read_text(encoding="utf-8") == before
+
+
+def test_write_error_envelope_treats_a_legacy_envelope_as_one_attempt(daemon_core_module, tmp_path):
+    """Envelopes predating the retry budget must not be stranded.
+
+    `read_error_attempts` maps a record with no `attempts` field to 1, so an
+    envelope written by an earlier version gets the *benefit* of the new budget
+    rather than being treated as already exhausted. Treating the missing field
+    as the cap would permanently freeze every task that failed once before the
+    upgrade -- which is precisely the silent extraction loss the budget exists
+    to fix.
+
+    The three cases are: a well-formed legacy record, a record whose
+    `attempts` is not a usable integer, and an unreadable one.
+    """
+    envelope = tmp_path / "task_legacy.error"
+
+    for name, content in (
+        ("no attempts field", json.dumps({"task_id": "task_legacy", "error": "old failure"})),
+        ("attempts is not an int", json.dumps({"task_id": "task_legacy", "error": "old failure", "attempts": "many"})),
+        ("not JSON at all", "{ truncated"),
+    ):
+        envelope.write_text(content, encoding="utf-8")
+
+        assert daemon_core_module.read_error_attempts(envelope) == 1, name
+
+        # And the budget is therefore still spendable on that record.
+        assert daemon_core_module.write_error_envelope("task_legacy", "retrying after upgrade", tmp_path) is True
+        data = json.loads(envelope.read_text(encoding="utf-8"))
+        assert data["attempts"] == 2, name
+        assert "retrying after upgrade" in data["error"], name
 
 
 def test_sanitize_error_text_redacts_paths(daemon_core_module):
@@ -836,12 +1044,39 @@ def test_write_error_envelope_rejects_invalid_task_id(daemon_core_module, tmp_pa
 
 
 def test_is_task_done_includes_error_sentinel(daemon_core_module, tmp_path):
-    """is_task_done returns True when .error sentinel exists."""
-    # No files → not done
+    """An error only marks a task done once its retry budget is spent."""
+    cap = daemon_core_module.MAX_TASK_ATTEMPTS
+
+    # No files -> not done
     assert daemon_core_module.is_task_done("t1", tmp_path) is False
 
-    # .error file → done
-    (tmp_path / "t1.error").write_text('{"error": "fail"}', encoding="utf-8")
+    # A transient failure must NOT be terminal.
+    (tmp_path / "t1.error").write_text(json.dumps({"error": "blip", "attempts": 1}), encoding="utf-8")
+    assert daemon_core_module.is_task_done("t1", tmp_path) is False
+
+    # Legacy envelopes with no attempts field count as one attempt.
+    (tmp_path / "t2.error").write_text('{"error": "fail"}', encoding="utf-8")
+    assert daemon_core_module.is_task_done("t2", tmp_path) is False
+
+    # Budget exhausted -> terminal, so a broken model is not retried forever.
+    (tmp_path / "t1.error").write_text(json.dumps({"error": "blip", "attempts": cap}), encoding="utf-8")
+    assert daemon_core_module.is_task_done("t1", tmp_path) is True
+
+    # A real answer always wins, whatever the envelope says.
+    (tmp_path / "t3.error").write_text(json.dumps({"error": "blip", "attempts": 1}), encoding="utf-8")
+    (tmp_path / "t3.answer.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "t3.done").touch()
+    assert daemon_core_module.is_task_done("t3", tmp_path) is True
+
+
+def test_successful_retry_clears_the_stale_error(daemon_core_module, tmp_path):
+    """A recovered task must not keep advertising a failure."""
+    daemon_core_module.write_error_envelope("t1", "transient blip", tmp_path)
+    assert (tmp_path / "t1.error").exists()
+
+    daemon_core_module.write_answer_envelope("t1", "{}", tmp_path)
+
+    assert not (tmp_path / "t1.error").exists(), "stale error envelope survived a successful retry"
     assert daemon_core_module.is_task_done("t1", tmp_path) is True
 
 
@@ -943,3 +1178,384 @@ def test_opencode_daemon_writes_error_on_nonzero_exit(opencode_daemon_module, tm
 
         error_file = outbox / f"{task_id}.error"
         assert error_file.exists(), "Expected .error sentinel for non-zero exit"
+
+
+@pytest.fixture
+def retry_failed_module():
+    """Load retry_failed module."""
+    script_path = Path(__file__).parent.parent / ".agents" / "skills" / "iqoqo-mykg" / "scripts" / "retry_failed.py"
+    return _load_module("iqoqo_mykg_retry_failed", script_path)
+
+
+def _make_session(root: Path, name: str = "2026-01-01T00-00-00") -> tuple[Path, Path, Path]:
+    """Create a session with intermediate inbox/outbox. Returns (session, inbox, outbox)."""
+    session = root / "mykg_sessions" / name
+    inbox = session / "intermediate" / "agent_inbox"
+    outbox = session / "intermediate" / "agent_outbox"
+    inbox.mkdir(parents=True)
+    outbox.mkdir(parents=True)
+    return session, inbox, outbox
+
+
+def test_retry_failed_classifies_retryable_answered_and_orphaned(retry_failed_module, tmp_path):
+    """Envelopes are bucketed by whether re-processing them can actually help."""
+    _, inbox, outbox = _make_session(tmp_path)
+
+    # Failed, task payload still present -> retryable.
+    (inbox / "t_retry.task.json").write_text("{}", encoding="utf-8")
+    (outbox / "t_retry.error").write_text("{}", encoding="utf-8")
+
+    # Failed earlier but a good answer landed afterwards -> stale, leave alone.
+    (inbox / "t_ok.task.json").write_text("{}", encoding="utf-8")
+    (outbox / "t_ok.error").write_text("{}", encoding="utf-8")
+    (outbox / "t_ok.answer.json").write_text("{}", encoding="utf-8")
+    (outbox / "t_ok.done").write_text("", encoding="utf-8")
+
+    # Failed and the task payload is gone -> clearing the marker changes nothing.
+    (outbox / "t_orphan.error").write_text("{}", encoding="utf-8")
+
+    buckets = retry_failed_module.classify(outbox, inbox)
+    assert buckets["retryable"] == ["t_retry"]
+    assert buckets["already_answered"] == ["t_ok"]
+    assert buckets["orphaned"] == ["t_orphan"]
+
+
+def test_retry_failed_quarantine_clears_the_terminal_marker(retry_failed_module, tmp_path):
+    """Quarantining the envelope must make the task eligible again.
+
+    This is the whole point: is_task_done() returns True when an .error file
+    exists, so the envelope has to leave the outbox for a retry to happen.
+    """
+    session, inbox, outbox = _make_session(tmp_path)
+    (inbox / "t1.task.json").write_text("{}", encoding="utf-8")
+    (outbox / "t1.error").write_text("{}", encoding="utf-8")
+
+    destination = session / "intermediate" / "failed_envelopes" / "stamp"
+    moved = retry_failed_module.quarantine(outbox, ["t1"], destination)
+
+    assert moved == 1
+    assert not (outbox / "t1.error").exists()
+    assert (destination / "t1.error").exists()
+    # The payload is untouched, so the daemon has something to re-run.
+    assert (inbox / "t1.task.json").exists()
+
+
+def test_retry_failed_quarantine_is_reversible(retry_failed_module, tmp_path):
+    """A reset must be undoable; that is why envelopes are moved, not deleted."""
+    session, inbox, outbox = _make_session(tmp_path)
+    (inbox / "t1.task.json").write_text("{}", encoding="utf-8")
+    (outbox / "t1.error").write_text("boom", encoding="utf-8")
+
+    destination = session / "intermediate" / "failed_envelopes" / "stamp"
+    retry_failed_module.quarantine(outbox, ["t1"], destination)
+
+    # Restore, as the tool's own output instructs.
+    (outbox / "t1.error").write_text((destination / "t1.error").read_text(encoding="utf-8"), encoding="utf-8")
+    assert (outbox / "t1.error").read_text(encoding="utf-8") == "boom"
+
+
+def test_retry_failed_finds_latest_session_via_symlink(retry_failed_module, tmp_path):
+    """A symlinked mykg_sessions/ is valid and must be followed.
+
+    Sessions live in a Dropbox folder here, so a symlink is the normal case,
+    not an edge case. Abandoning the path would silently find nothing.
+    """
+    real = tmp_path / "dropbox" / "mykg_sessions"
+    (real / "2026-01-01T00-00-00").mkdir(parents=True)
+    (real / "2026-02-02T00-00-00").mkdir(parents=True)
+    (tmp_path / "mykg_sessions").symlink_to(real)
+
+    name, path = retry_failed_module.find_session(tmp_path, None)
+    assert name is not None
+    assert path is not None
+    assert path.is_dir()
+    # Newest by mtime.
+    assert name == "2026-02-02T00-00-00"
+
+
+def test_retry_failed_explicit_session_and_missing_session(retry_failed_module, tmp_path):
+    _make_session(tmp_path, "2026-03-03T00-00-00")
+    _make_session(tmp_path, "2026-04-04T00-00-00")
+
+    name, _ = retry_failed_module.find_session(tmp_path, "2026-03-03T00-00-00")
+    assert name == "2026-03-03T00-00-00"
+
+    # A bogus name must not silently fall back to "latest".
+    name, path = retry_failed_module.find_session(tmp_path, "does-not-exist")
+    assert name is None
+    assert path is None
+
+
+def test_retry_failed_empty_outbox_is_a_noop(retry_failed_module, tmp_path):
+    """A clean session must not error or touch anything."""
+    _, _, outbox = _make_session(tmp_path)
+    assert retry_failed_module.classify(outbox, outbox.parent / "agent_inbox") == {
+        "retryable": [],
+        "already_answered": [],
+        "orphaned": [],
+    }
+
+
+def test_opencode_reads_provider_key_from_mounted_secret(opencode_daemon_module, tmp_path, monkeypatch):
+    """opencode v2 needs OPENCODE_API_KEY; auth.json is only the source.
+
+    v2 ignores auth.json for provider credentials (they live in its SQLite
+    `credential` table, populated only by an interactive `auth login`), so the
+    daemon must lift the key out of the read-only mount and pass it via env.
+    Without this every task fails "Model unavailable: <provider>".
+    """
+    secret = tmp_path / "opencode-auth.json"
+    secret.write_text(json.dumps({"opencode-go": {"type": "api", "key": "oc_s_test"}}), encoding="utf-8")
+
+    monkeypatch.setattr(opencode_daemon_module, "AUTH_SECRET_PATH", secret)
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+
+    assert opencode_daemon_module.read_provider_api_key("opencode-go/space-bunny-free") == "oc_s_test"
+
+    env = opencode_daemon_module.build_subprocess_env("opencode-go/space-bunny-free")
+    assert env["OPENCODE_API_KEY"] == "oc_s_test"
+
+
+def test_opencode_existing_env_var_wins_over_secret(opencode_daemon_module, tmp_path, monkeypatch):
+    """A key already in the environment (e.g. injected by compose) takes priority."""
+    secret = tmp_path / "opencode-auth.json"
+    secret.write_text(json.dumps({"opencode-go": {"type": "api", "key": "from-file"}}), encoding="utf-8")
+
+    monkeypatch.setattr(opencode_daemon_module, "AUTH_SECRET_PATH", secret)
+    monkeypatch.setenv("OPENCODE_API_KEY", "from-env")
+
+    assert opencode_daemon_module.read_provider_api_key("opencode-go/x") == "from-env"
+    assert opencode_daemon_module.build_subprocess_env("opencode-go/x")["OPENCODE_API_KEY"] == "from-env"
+
+
+def test_opencode_missing_secret_does_not_invent_a_key(opencode_daemon_module, tmp_path, monkeypatch):
+    """An absent/malformed secret must leave the env untouched, not crash."""
+    # Isolate the $HOME fallback so the developer's real auth.json cannot leak in.
+    monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))
+    (tmp_path / "empty-home").mkdir()
+
+    missing = tmp_path / "nope.json"
+    monkeypatch.setattr(opencode_daemon_module, "AUTH_SECRET_PATH", missing)
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+
+    assert opencode_daemon_module.read_provider_api_key("opencode-go/x") is None
+    assert "OPENCODE_API_KEY" not in opencode_daemon_module.build_subprocess_env("opencode-go/x")
+
+    malformed = tmp_path / "bad.json"
+    malformed.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(opencode_daemon_module, "AUTH_SECRET_PATH", malformed)
+    assert opencode_daemon_module.read_provider_api_key("opencode-go/x") is None
+
+
+def test_opencode_falls_back_to_home_auth_json(opencode_daemon_module, tmp_path, monkeypatch):
+    """Without the secret mount (unsandboxed runs), the home copy is used."""
+    home = tmp_path / "home"
+    auth = home / ".local" / "share" / "opencode" / "auth.json"
+    auth.parent.mkdir(parents=True)
+    auth.write_text(json.dumps({"opencode-go": {"type": "api", "key": "oc_s_home"}}), encoding="utf-8")
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(opencode_daemon_module, "AUTH_SECRET_PATH", tmp_path / "absent.json")
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+
+    assert opencode_daemon_module.read_provider_api_key("opencode-go/x") == "oc_s_home"
+
+
+def test_opencode_passes_env_to_subprocess(opencode_daemon_module, tmp_path):
+    """The key must reach the child process, not just be computed."""
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_env_passed"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "", 0)) as mock_run:
+        success = opencode_daemon_module.process_task(
+            task_file,
+            outbox,
+            model="opencode-go/space-bunny-free",
+        )
+
+    assert success is True
+    kwargs = mock_run.call_args[1]
+    assert "env" in kwargs
+    assert isinstance(kwargs["env"], dict)
+
+
+def test_opencode_never_spawns_a_background_server(opencode_daemon_module, tmp_path):
+    """The invocation must not depend on a background `serve --service`.
+
+    `opencode run` without `--standalone` spawns `opencode serve --service` and
+    waits for it to become ready. That server intermittently spins at 100% CPU
+    without ever becoming ready, leaving the client blocked until the task
+    timeout -- and with a single worker that stalled the entire queue. The
+    daemon must therefore always pass `--standalone`.
+    """
+    inbox = tmp_path / "inbox"
+    outbox = tmp_path / "outbox"
+    inbox.mkdir()
+    outbox.mkdir()
+
+    task_id = "oc_no_server"
+    task_file = inbox / f"{task_id}.task.json"
+    task_file.write_text(json.dumps({"task_id": task_id, "user": "extract"}), encoding="utf-8")
+
+    with patch("subprocess.run", side_effect=_make_subprocess_mock('{"nodes": []}', "", 0)) as mock_run:
+        assert opencode_daemon_module.process_task(task_file, outbox) is True
+
+    args = mock_run.call_args[0][0]
+    assert "--standalone" in args
+    assert "serve" not in " ".join(args)
+
+
+def test_opencode_pins_small_model_to_avoid_unrequested_paid_model(opencode_daemon_module, tmp_path, monkeypatch):
+    """opencode's auxiliary model must be pinned, not left to its own default.
+
+    opencode routes title generation and auto-compaction to a `small_model`
+    from its config. When that key is absent opencode picks one itself, and
+    that choice has been observed to be a paid model (gpt-6-luna) served over
+    a different protocol (/responses) than the extraction model. The daemon
+    container mounts no opencode config, so the daemon must write one.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    opencode_daemon_module.write_opencode_small_model_config("opencode-go/space-bunny-free#low")
+
+    config = home / ".config" / "opencode" / "opencode.json"
+    assert config.is_file(), "no opencode config written"
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    # provider/model only -- small_model does not take a variant.
+    assert payload["small_model"] == "opencode-go/space-bunny-free"
+    assert "#" not in payload["small_model"]
+
+
+def test_opencode_small_model_pin_never_names_a_paid_model(opencode_daemon_module, tmp_path, monkeypatch):
+    """The pinned auxiliary model must be free-tier.
+
+    Its whole purpose is to stop opencode reaching for a paid default, so
+    pinning a paid model would defeat it.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    opencode_daemon_module.write_opencode_small_model_config(None)
+
+    config = home / ".config" / "opencode" / "opencode.json"
+    pinned = json.loads(config.read_text(encoding="utf-8"))["small_model"]
+    for paid in ("muse-spark", "glm-", "mimo-v", "grok-", "gpt-6", "deepseek-v4", "longcat"):
+        assert paid not in pinned, f"pinned auxiliary model looks paid: {pinned}"
+
+
+def test_opencode_small_model_pin_survives_an_unwritable_home(opencode_daemon_module, tmp_path, monkeypatch):
+    """A failed config write must warn, not crash the daemon."""
+    blocker = tmp_path / "home"
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(blocker))
+
+    # Must not raise.
+    opencode_daemon_module.write_opencode_small_model_config("opencode-go/space-bunny-free")
+
+
+# ---------------------------------------------------------------------------
+# Diagnosable failures (task 4.1, regression)
+#
+# The subprocess failure path could quote the CLI's own stderr, but a raised
+# exception reached the generic handler with only ``type(exc).__name__``. Six
+# tasks burned the full retry budget on envelopes reading "Unexpected error:
+# ValueError", which identifies nothing -- the real cause ("Expecting ','
+# delimiter") was only recoverable by grepping a 9 MB run log.
+# ---------------------------------------------------------------------------
+
+
+def test_prompt_strips_nul_bytes(daemon_core_module):
+    """A NUL in the prompt must be dropped, not passed to the OS.
+
+    Both harnesses put the prompt in argv, and subprocess raises
+    "ValueError: embedded null byte" before the CLI is contacted, so a single
+    NUL in the indexed source fails the task irrecoverably.
+    """
+    prompt = daemon_core_module.build_combined_prompt({"user": "before\x00after"})
+    assert "\x00" not in prompt
+    assert "beforeafter" in prompt
+    # And it must now be acceptable to the OS.
+    assert subprocess.run(["/bin/echo", prompt], capture_output=True).returncode == 0
+
+
+def test_prompt_without_nul_is_untouched(daemon_core_module):
+    """Stripping must be a no-op on normal content."""
+    clean = daemon_core_module.build_combined_prompt({"user": "plain text"})
+    assert "\x00" not in clean
+    assert "plain text" in clean
+
+
+def test_describe_unexpected_error_keeps_the_message(daemon_core_module):
+    """An exception's own message is the whole point; it must survive."""
+    try:
+        int("not-a-number")
+    except ValueError as exc:
+        detail = daemon_core_module.describe_unexpected_error(exc)
+
+    assert detail.startswith("ValueError:")
+    assert "invalid literal for int()" in detail
+
+
+def test_describe_unexpected_error_locates_a_bare_exception(daemon_core_module):
+    """A bare ValueError from json.loads has no message, so report where it came from.
+
+    This is the exact shape of the six stuck tasks: json.JSONDecodeError is a
+    ValueError whose str() names the offset, but a plainly raised ValueError
+    carries nothing, and the class name alone cannot distinguish 2,710 chunks.
+    """
+    try:
+        raise ValueError
+    except ValueError as exc:
+        detail = daemon_core_module.describe_unexpected_error(exc)
+
+    assert "ValueError with no message" in detail
+    assert "test_iqoqo_mykg.py" in detail
+    # The frame must name a line, not just the file.
+    assert ".py:" in detail
+
+
+def test_describe_unexpected_error_survives_no_traceback(daemon_core_module):
+    """An exception constructed but never raised still describes itself."""
+    detail = daemon_core_module.describe_unexpected_error(ValueError())
+    assert "ValueError with no message and no traceback" in detail
+
+
+def test_describe_unexpected_error_still_redacts(daemon_core_module):
+    """Adding the message must not weaken redaction -- it is sanitized on write."""
+    exc = RuntimeError("could not read /home/appuser/.config/opencode/auth.json with OPENCODE_API_KEY=sk-abc")
+    sanitized = daemon_core_module.sanitize_error_text(f"Unexpected error: {daemon_core_module.describe_unexpected_error(exc)}")
+    assert "/home/appuser" not in sanitized
+    assert "sk-abc" not in sanitized
+
+
+@pytest.mark.parametrize("daemon_fixture", ["opencode_daemon_module", "agy_daemon_module"])
+def test_process_task_envelope_records_the_real_cause(request, daemon_fixture, tmp_path):
+    """End to end: the generic handler must not reduce a failure to a type name.
+
+    Both harnesses are covered because the defect was copy-pasted into each.
+    """
+    module = request.getfixturevalue(daemon_fixture)
+
+    task_path = tmp_path / "abc123.task.json"
+    task_path.write_text(json.dumps({"prompt": "extract nodes"}), encoding="utf-8")
+
+    def boom(*args, **kwargs):
+        raise ValueError("Expecting ',' delimiter: line 1 column 13 (char 12)")
+
+    with patch.object(module.subprocess, "run", side_effect=boom):
+        assert module.process_task(task_path, tmp_path) is False
+
+    envelope = json.loads((tmp_path / "abc123.error").read_text(encoding="utf-8"))
+    assert "Expecting ',' delimiter" in envelope["error"]
+    # The regression this guards: the class name used to be the entire record.
+    assert envelope["error"] != "Unexpected error: ValueError"

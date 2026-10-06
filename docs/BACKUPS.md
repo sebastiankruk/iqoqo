@@ -6,44 +6,95 @@ Starting in **v0.7.14** and extended in **v0.7.16**, iQoQo supports a multi-tier
 
 ---
 
-## Architecture & Remotes
+## Two Storage Backends
 
-Four separate `rclone` remotes can be configured via environment variables in `.env`:
+Since **v0.8.2** iqoqo has two remote-storage backends, and which one is in use
+is a single variable:
 
-| Environment Variable | Default Remote Name | Purpose | Recommended Storage Class |
-| -------------------- | ------------------- | ------- | ------------------------- |
-| `RCLONE_REMOTE_FAST` | `iqoqo-backup` | Daily database dumps & asset backups | AWS S3 Standard / S3 Standard-IA / Dropbox |
-| `RCLONE_REMOTE_ARCHIVE` | `iqoqo-glacier` | Long-term cold storage archive | AWS S3 Glacier Flexible Retrieval / Deep Archive |
-| `RCLONE_COVERS_REMOTE` | `iqoqo-s3-cache` | Shared AI cover cache across instances | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
-| `RCLONE_FEEDBACK_REMOTE` | `remote:feedback` | Feedback screenshot attachment persistence | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| Variable | Values | Meaning |
+| -------- | ------ | ------- |
+| `S3_BACKEND` | `auto` (default), `rclone`, `s3` | Which backend the **containers** use. `auto` prefers rclone when a remote is already configured, so existing installs change nothing. |
+
+**This changed for the containers only.** `app/core/s3_service.py` (boto3) lets
+the app reach object storage directly, and the containers **no longer shell out
+to rclone or mount `rclone.conf`** — handing a plaintext credential file to the
+process that parses untrusted input was the risk. Host-side backup and restore
+scripts on your machine still use your existing rclone install, unchanged.
+
+Two names are **deprecated** in favour of the `S3_BUCKET_*` variables, and iqoqo
+warns by name when one is set without a replacement:
+
+- `RCLONE_REMOTE_ARCHIVE` → `S3_BUCKET_BACKUP`
+- `RCLONE_FEEDBACK_REMOTE` → `S3_BUCKET_FEEDBACK`
+
+Leaving every S3 value blank runs fully local; each role degrades to a no-op
+rather than failing. Full variable reference: `.env.example`, and
+`docs/INSTALL.md`.
+
+### Remote storage roles
+
+| Role | rclone variable (host scripts) | Native variable (containers) | Recommended storage class |
+| ---- | ------------------------------ | ---------------------------- | ------------------------- |
+| Daily database dumps & asset backups | `RCLONE_REMOTE_FAST` | `S3_BUCKET_BACKUP` | AWS S3 Standard / Standard-IA / Dropbox |
+| Long-term cold storage archive | `RCLONE_REMOTE_ARCHIVE` | `S3_BUCKET_BACKUP` | AWS S3 Glacier Flexible Retrieval / Deep Archive |
+| Shared AI cover cache across instances | `RCLONE_COVERS_REMOTE` | `S3_BUCKET_COVERS` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| Feedback screenshot archive | `RCLONE_FEEDBACK_REMOTE` | `S3_BUCKET_FEEDBACK` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+
+The native backend works against AWS S3, MinIO, Cloudflare R2, Wasabi, Backblaze
+B2 and Oracle Cloud Object Storage. Server-side encryption is available via
+`S3_SSE` (with `S3_SSE_KMS_KEY_ID` for KMS).
 
 ---
 
 ## 1. Fast Daily Backups (`RCLONE_REMOTE_FAST`)
 
-The backup script (`scripts/cloud_backup.sh`) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
+The backup script ([`scripts/cloud_backup.sh`](../scripts/cloud_backup.sh)) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
 
 ### Setup Instructions
 
 1. Install [rclone](https://rclone.org/install/) on your host machine.
-2. Run `rclone config` to set up your primary remote named **`iqoqo-backup`**.
-3. Test manually:
+2. Run `rclone config` to set up your primary remote named **`iqoqo-backup`** (or your preferred S3 / cloud provider).
+3. Configure your `.env`:
 
    ```bash
-   ./scripts/cloud_backup.sh iqoqo-backup
+   RCLONE_REMOTE_FAST=iqoqo-backup
+   # Optional: explicitly set path if rclone is configured under a non-root user
+   RCLONE_CONFIG=/home/username/.config/rclone/rclone.conf
    ```
 
-4. Schedule nightly execution via cron (e.g. 03:00 AM):
+4. Test immediately:
 
    ```bash
-   0 3 * * * /path/to/iqoqo/scripts/cloud_backup.sh iqoqo-backup >> /var/log/iqoqo_backup.log 2>&1
+   make backup-run
+   # Or with an explicit remote: make backup-run remote=iqoqo-backup
+   ```
+
+5. Install daily 03:00 AM cron job:
+
+   ```bash
+   make backup-install
+   # Or with an explicit remote: make backup-install remote=iqoqo-backup
+   ```
+
+   *(Installs to `/etc/cron.d/iqoqo-backup` logging to `/var/log/iqoqo_backup.log`)*
+
+6. Verify backup health:
+
+   ```bash
+   make backup-check
+   ```
+
+7. To remove the daily cron job:
+
+   ```bash
+   make backup-uninstall
    ```
 
 ---
 
 ## 2. Long-Term Archiving & AWS S3 Glacier (`RCLONE_REMOTE_ARCHIVE`)
 
-For long-term retention and compliance, iQoQo supports pushing cold backups directly to **AWS S3 Glacier**.
+For long-term retention and compliance, iQoQo supports pushing cold backups directly to **AWS S3 Glacier** on a monthly schedule.
 
 ### AWS S3 Glacier Setup via Rclone
 
@@ -51,7 +102,7 @@ For long-term retention and compliance, iQoQo supports pushing cold backups dire
    - Create an IAM User in AWS Console with S3 permissions (`s3:PutObject`, `s3:GetObject`, `s3:ListBucket`).
    - Generate an **Access Key ID** and **Secret Access Key**.
 
-2. **Configure Rclone**:
+2. **Configure Rclone Profile**:
    Run `rclone config` and create a new remote named **`iqoqo-glacier`**:
 
    ```bash
@@ -62,21 +113,65 @@ For long-term retention and compliance, iQoQo supports pushing cold backups dire
    # env_auth: false
    # access_key_id: <YOUR_AWS_ACCESS_KEY_ID>
    # secret_access_key: <YOUR_AWS_SECRET_ACCESS_KEY>
-   # region: us-east-1 (or your preferred region)
-   # storage_class: GLACIER (or DEEP_ARCHIVE)
+   # region: eu-north-1 (or your preferred AWS region)
+   # storage_class: GLACIER_IR (or GLACIER / DEEP_ARCHIVE)
    ```
 
-3. **Run Long-Term Archive Backup**:
-   Pass the archive remote explicitly to the backup script:
+   > [!TIP]
+   > - `GLACIER_IR` (Glacier Instant Retrieval): Fast millisecond retrieval at low cold storage cost (~$0.004/GB/mo).
+   > - `GLACIER` (Flexible Retrieval): Cheaper (~$0.0036/GB/mo), but restore takes 3–5 hours before downloading.
+   > - `DEEP_ARCHIVE`: Lowest cost (~$0.00099/GB/mo), restore takes 12–48 hours.
+
+3. **Configure `.env`**:
+
+   For S3-based remotes, specify the target using the `<remote_name>:<bucket_name>` syntax:
+
+   - **Production**:
+
+     ```bash
+     RCLONE_REMOTE_FAST=iqoqo-s3:iqoqo-backup
+     RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive
+     ```
+
+   - **Preview / Staging**:
+
+     ```bash
+     RCLONE_REMOTE_FAST=iqoqo-s3:iqoqo-backup-preview
+     RCLONE_REMOTE_ARCHIVE=iqoqo-glacier:iqoqo-archive-preview
+     ```
+
+   > [!NOTE]
+   > If `RCLONE_REMOTE_ARCHIVE` is unset in `.env`, `archive-run` and `archive-install` default to `iqoqo-glacier:iqoqo-archive`. You can also override the destination at runtime with `remote=...`.
+
+4. **Run Long-Term Archive Immediately**:
 
    ```bash
-   ./scripts/cloud_backup.sh iqoqo-glacier
+   make archive-run
+   # Or with explicit remote/bucket: make archive-run remote=iqoqo-glacier:iqoqo-archive
    ```
 
-4. **Schedule Monthly Glacier Sync via Cron**:
+5. **Install Monthly Cold Archive Cron Job (1st of month at 04:00 AM)**:
 
    ```bash
-   0 4 1 * * /path/to/iqoqo/scripts/cloud_backup.sh iqoqo-glacier >> /var/log/iqoqo_glacier.log 2>&1
+   make archive-install
+   # Or with explicit remote/bucket: make archive-install remote=iqoqo-glacier:iqoqo-archive
+   ```
+
+   *(Installs to `/etc/cron.d/iqoqo-archive` logging to `/var/log/iqoqo_archive.log` without affecting the daily backup)*
+
+6. **Verify Archive Health**:
+
+   ```bash
+   make archive-check
+   # Or with explicit remote/bucket: make archive-check remote=iqoqo-glacier:iqoqo-archive
+   ```
+
+   *(Verifies `/etc/cron.d/iqoqo-archive`, remote reachability, and monthly freshness within 35 days)*
+
+7. **To remove the monthly archive cron job**:
+
+   ```bash
+   make archive-uninstall
    ```
 
 ---
@@ -116,8 +211,8 @@ Introduced in **v0.7.16**, user feedback submissions with attached screenshot im
 ### How Feedback Screenshot Sync Works
 
 1. When a user submits a bug report or feedback ticket with screenshot attachments, the file is temporarily accepted by the API.
-2. If `RCLONE_FEEDBACK_REMOTE` is configured in `.env`, a background task runs `rclone copyto --` to store the screenshot on the cloud remote.
-3. If `RCLONE_FEEDBACK_REMOTE` is unconfigured, iQoQo gracefully falls back to local volume storage at `./app/static/gallery/`.
+2. If a feedback remote is configured, a background task stores the screenshot there — via `S3_BUCKET_FEEDBACK` on the native backend, or `RCLONE_FEEDBACK_REMOTE` (deprecated) on the rclone backend.
+3. If neither is configured, iqoqo gracefully falls back to local volume storage at `./app/static/gallery/`.
 
 ---
 

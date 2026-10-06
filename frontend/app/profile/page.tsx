@@ -16,6 +16,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAppConfig } from "@/lib/api/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { MyEscalations } from "@/components/escalation/my-escalations";
+import { EmailVerificationCard } from "@/components/profile/email-verification-card";
+import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog";
+import { DeletionPendingNotice } from "@/components/profile/deletion-pending-notice";
 
 /**
  * User consent record
@@ -54,6 +58,14 @@ interface UserProfile {
   visibility: "public" | "private";
   created_at: string;
   consents: ConsentRecord;
+  /**
+   * Owner-only verification state. Absent from the public projection, so this
+   * is the only place it appears.
+   */
+  email_verified?: boolean;
+  email_verified_source?: string | null;
+  /** Whether a deletion request is awaiting email confirmation. */
+  deletion?: { pending: boolean; expires_at: string | null };
 }
 
 /**
@@ -63,6 +75,7 @@ interface UserProfile {
  * @returns {JSX.Element} The page component
  */
 export default function ProfilePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const { data: config } = useAppConfig();
   const queryClient = useQueryClient();
@@ -78,6 +91,17 @@ export default function ProfilePage() {
 
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("json-ld");
   const [isExporting, setIsExporting] = useState(false);
+
+  /**
+   * Reload the profile after an action that changes it.
+   *
+   * @returns {Promise<void>} Resolves once local state reflects the server
+   */
+  const refreshProfile = useCallback(async () => {
+    const data = await apiFetch<UserProfile>("/profile/");
+    setProfile(data);
+    await queryClient.invalidateQueries({ queryKey: ["profile"] });
+  }, [queryClient]);
 
   useEffect(() => {
     // Note the trailing slash to match Flask's route: /profile/
@@ -155,28 +179,9 @@ export default function ProfilePage() {
     try {
       // Call the Next.js logout route to clear the session cookie
       await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/";
+      router.push("/");
     } catch {
       toast.error("Failed to logout");
-    }
-  };
-
-  /**
-   * Handles the deletion of the user's account.
-   * @returns {Promise<void>} A promise that resolves when the account deletion is complete.
-   */
-  const handleDeleteAccount = async () => {
-    const confirmed = window.confirm(
-      "Are you absolutely sure? This will permanently delete your account, your library collection, and all your data. This cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      await apiClient.delete("/profile/");
-      toast.success("Account deleted permanently.");
-      handleLogout();
-    } catch {
-      toast.error("Failed to delete account");
     }
   };
 
@@ -358,6 +363,16 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* ── Email Verification ── */}
+        <EmailVerificationCard
+          email={profile.email}
+          verified={profile.email_verified ?? false}
+          onChanged={refreshProfile}
+        />
+
+        {/* ── Pending Deletion Notice ── */}
+        <DeletionPendingNotice expiresAt={profile.deletion?.pending ? (profile.deletion.expires_at ?? null) : null} />
+
         {/* ── Privacy & Consents Card ── */}
         <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="privacy-consents-card">
           <div className="flex justify-between items-center">
@@ -453,14 +468,15 @@ export default function ProfilePage() {
           </Button>
 
           <div className="text-right flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Coming in v0.8.2</span>
-            <Button
-              variant="destructive"
-              disabled
-              title="Account deletion temporarily disabled — email confirmation required (Coming in v0.8.2)"
-            >
-              Delete Account
-            </Button>
+            {profile.deletion?.pending ? (
+              <span className="text-xs text-muted-foreground">Awaiting email confirmation</span>
+            ) : (
+              <DeleteAccountDialog
+                emailVerified={profile.email_verified ?? false}
+                pending={profile.deletion?.pending ?? false}
+                onRequested={refreshProfile}
+              />
+            )}
           </div>
         </div>
       </main>

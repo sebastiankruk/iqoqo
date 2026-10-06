@@ -52,17 +52,17 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # 2. Resource Exhaustion Protection
+    # 2. Resource Exhaustion Protection (increased for large prompt processing)
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
+          cpus: '1.0'
+          memory: 3G
     # 3. Read-Only Filesystem with strict ephemeral tmpfs
     read_only: true
     tmpfs:
-      - /tmp
-      - /home/appuser:uid=1000,gid=1000,mode=0700
+      - /tmp:size=1G
+      - /home/appuser:uid=1000,gid=1000,mode=0700,size=1G
     # 4. Strict, Minimal Volume Mounts
     volumes:
       - ./mykg_sessions:/workspace/mykg_sessions:rw  
@@ -110,6 +110,18 @@ services:
       - ./.agents:/workspace/.agents:ro
       # SURGICAL CREDENTIAL MOUNT: Mount ONLY the single opencode auth.json file into read-only secret path
       - ~/.local/share/opencode/auth.json:/run/secrets/opencode-auth.json:ro
+      # PERSISTENT OPENCODE STATE: keeps opencode's SQLite db, log, cache and
+      # XDG state dirs out of the ephemeral tmpfs home. Every task otherwise
+      # starts from an empty home and re-runs the full 48-migration database
+      # schema bootstrap; the server has been observed to spin at 100% CPU
+      # immediately after that bootstrap and never signal readiness, hanging
+      # the task. Persisting means the bootstrap happens once, not once per task.
+      #
+      # Mounted at .local rather than .local/share because opencode also writes
+      # .local/state (service.json) and bootstrap_opencode_auth() needs the
+      # parent to exist and be writable by uid 1000.
+      # Holds no credentials: auth.json stays on the read-only secret mount.
+      - opencode-store:/home/appuser/.local
     environment:
       - HOME=/home/appuser
       - HTTP_PROXY=http://sandbox-egress-proxy:3128
@@ -134,4 +146,9 @@ networks:
     internal: true
   sandbox-egress:
     driver: bridge
+
+volumes:
+  # Non-secret opencode runtime state (db, logs, cache). See the mount comment on
+  # mykg-opencode-daemon. No credentials are stored here.
+  opencode-store:
 

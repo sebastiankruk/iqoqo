@@ -52,6 +52,7 @@ import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
 import { useRouter } from "next/navigation";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
+import { isBoardGameFormat, isVideoFormat } from "@/lib/media-classification";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
 import {
   Dialog,
@@ -124,8 +125,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     (item.meta?.["format"] as string | undefined) ??
     "book";
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
-  const isGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isVideo = isVideoFormat(format);
+  const isGame = isBoardGameFormat(format);
   const isBook = !isAudio && !isVideo && !isGame;
 
   const aspectClass = isAudio || isGame ? "aspect-square" : "aspect-[2/3]";

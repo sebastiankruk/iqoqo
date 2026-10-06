@@ -23,6 +23,7 @@ import { resolveApiUrl } from "@/lib/utils";
 import { buildProfileJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
 import { CollectionGrid } from "@/components/collection/collection-grid";
+import { PublicProfilePager } from "@/components/public/public-profile-pager";
 import { ShareButton } from "@/components/ui/share-button";
 import { CheckInventory } from "@/components/public/check-inventory";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -30,8 +31,12 @@ import { Avatar } from "@/components/ui/avatar";
 import { Footer } from "@/components/dashboard/footer";
 import { Navbar } from "@/components/dashboard/navbar";
 
+/** Items requested per page on the public profile. Matches the API default. */
+const ITEMS_PER_PAGE = 24;
+
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
+  searchParams?: Promise<{ page?: string }>;
 }
 
 /**
@@ -52,13 +57,21 @@ async function getProfile(username: string) {
 }
 
 /**
- * Fetches the public items for a given user.
+ * Fetches one page of the public items for a given user.
+ *
+ * The endpoint is paginated server-side (`page`/`per_page`, capped at 100 by
+ * the API), and defaults to 24. Without forwarding the page number a collector
+ * with more items than that had no way to reach the rest -- the first 24 were
+ * simply all they ever saw.
+ *
  * @param username - The public username to fetch items for.
- * @returns The items list.
+ * @param page - 1-based page number.
+ * @returns The items list plus the pagination envelope.
  */
-async function getItems(username: string) {
+async function getItems(username: string, page = 1) {
   try {
-    const res = await fetch(resolveApiUrl(`/public/u/${username}/items`, true), {
+    const qs = `?page=${encodeURIComponent(page)}&per_page=${ITEMS_PER_PAGE}`;
+    const res = await fetch(resolveApiUrl(`/public/u/${username}/items${qs}`, true), {
       next: { revalidate: 60 },
     });
     if (!res.ok) return { data: { items: [] } };
@@ -110,33 +123,57 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
  * Public profile page for a user.
  * @param props - Component props.
  * @param props.params - The route parameters.
+ * @param props.searchParams - Query string, carrying an optional `page`.
  * @returns The rendered page.
  */
-export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
-  const { username } = await params;
+export default async function PublicProfilePage({ params, searchParams }: PublicProfilePageProps) {
+  const emptySearch: { page?: string } = {};
+  const [{ username }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams ?? Promise.resolve(emptySearch),
+  ]);
 
-  // Guard first: if the profile is not found (private or non-existent), return 404
-  // immediately BEFORE calling getTranslations(). This prevents TypeScript from
-  // executing subsequent lines (like profileRes.data) on a null profileRes, which
-  // would cause a runtime TypeError → HTTP 500 instead of the expected 404.
+  // Clamp before use. The value comes straight off the query string, so an
+  // arbitrary string ("abc", "-3") must not reach the API or the pager. A
+  // non-numeric or out-of-range page falls back to the first page.
+  const rawPage = Number.parseInt(resolvedSearchParams?.page ?? "1", 10);
+  const currentPage = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+
+  // The profile guard has to resolve before anything reads profileRes.data, but
+  // the items fetch and the translations do not depend on it -- only on
+  // `username`, which is already known. Running them concurrently removes a
+  // serial round trip from every public profile render. The 404 check below
+  // still gates rendering, so the early fetch is wasted only when the profile
+  // does not exist.
+  const itemsPromise = getItems(username, currentPage);
+  const translationsPromise = getTranslations("Public");
+
+  // Guard: if the profile is not found (private or non-existent), return 404
+  // immediately BEFORE reading profileRes.data. Accessing it on a null
+  // profileRes would cause a runtime TypeError → HTTP 500 instead of 404.
   const profileRes = await getProfile(username);
   if (!profileRes || !profileRes.success) {
     return notFound();
   }
 
-  const t = await getTranslations("Public");
+  const t = await translationsPromise;
 
   const user = profileRes.data;
 
-  const itemsRes = await getItems(username);
+  const itemsRes = await itemsPromise;
   const items = itemsRes.data.items || [];
+  const meta = itemsRes.meta ?? {};
+  const totalPages = typeof meta.pages === "number" && meta.pages > 0 ? meta.pages : 1;
 
   const profileJsonLd = buildProfileJsonLd({
     username: user.username,
     displayName: user.display_name,
     bio: user.bio,
     avatarUrl: user.avatar_url,
-    publicItemCount: items.length,
+    // The API's own count, not this page's slice length: a profile with 500
+    // public items reports 24 here, which would publish a wrong count to
+    // search engines via the JSON-LD.
+    publicItemCount: user.public_item_count ?? items.length,
   });
 
   return (
@@ -198,7 +235,16 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
             </div>
 
             {items.length > 0 ? (
-              <CollectionGrid items={items} />
+              <>
+                <CollectionGrid items={items} />
+                <PublicProfilePager
+                  username={username}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  shown={items.length}
+                  total={typeof meta.total === "number" ? meta.total : undefined}
+                />
+              </>
             ) : (
               <EmptyState
                 title="Nothing here yet"

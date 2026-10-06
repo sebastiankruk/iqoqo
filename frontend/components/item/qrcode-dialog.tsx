@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
+import { escapeHtml } from "@/lib/html";
 
 interface PrintQrCodeDialogProps {
   isOpen: boolean;
@@ -77,6 +78,10 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
 
   const title = item.work?.title || item.title || "Untitled";
   const authors = React.useMemo(() => item.work?.authors || [], [item.work?.authors]);
+  // `content_type` is a free-text column with no CHECK constraint, written
+  // verbatim from the request body by a `write:metadata` caller -- which the
+  // contributor role holds. It is untrusted input, so it needs escaping like
+  // the title and authors do, not a `|| "Item"` fallback as protection.
   const contentType = item.expression?.content_type || "Item";
 
   const handlePrint = React.useCallback(() => {
@@ -96,7 +101,7 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
     printWindow.document.write(`
       <html>
         <head>
-          <title>Print Label - ${title}</title>
+          <title>Print Label - ${escapeHtml(title)}</title>
           <style>
             @page {
               size: auto;
@@ -159,9 +164,9 @@ export function PrintQrCodeDialog({ isOpen, onOpenChange, item }: PrintQrCodeDia
         <body>
           <div class="label-container">
             <img class="qr-image" src="${qrBlobUrl}" alt="QR Code" />
-            <div class="title">${title}</div>
-            ${authorsText ? `<div class="author">${authorsText}</div>` : ""}
-            <div class="meta">iqoqo ID: #${item.id} &bull; ${contentType}</div>
+            <div class="title">${escapeHtml(title)}</div>
+            ${authorsText ? `<div class="author">${escapeHtml(authorsText)}</div>` : ""}
+            <div class="meta">iqoqo ID: #${item.id} &bull; ${escapeHtml(contentType)}</div>
           </div>
           <script>
             window.onload = function() {

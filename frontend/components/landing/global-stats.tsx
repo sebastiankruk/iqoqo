@@ -17,6 +17,7 @@
 
 import { useGlobalStats } from "@/lib/api/hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, Layers, Library, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -29,7 +30,29 @@ export function GlobalStats() {
   const t = useTranslations("GlobalStats");
   const { data: stats, isLoading } = useGlobalStats();
 
-  if (isLoading || !stats) return null;
+  if (isLoading || !stats) {
+    // Reserve the same box the real grid occupies. Returning null here made
+    // the strip appear only after its fetch landed, pushing the sections below
+    // it down -- Cumulative Layout Shift, on the landing page, above the fold.
+    return (
+      <div
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-12"
+        data-testid="global-stats-skeleton"
+        aria-hidden="true"
+      >
+        {[0, 1, 2, 3].map(i => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-20" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   const statItems = [
     { title: t("works"), value: stats.works, icon: BookOpen },

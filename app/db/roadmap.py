@@ -51,10 +51,14 @@ class ReadingRoadmap(db.Model):  # type: ignore[name-defined]
     __table_args__ = ({"schema": _CATALOG},) if _CATALOG else ()
 
     id = db.Column(db.Integer, primary_key=True)
+    # Indexed explicitly: PostgreSQL does not index foreign keys, and this one
+    # is a UUID, so the absence is easy to miss and every per-user roadmap
+    # lookup scanned the table.
     user_id = db.Column(
         UUID(as_uuid=True),
         db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)

@@ -47,17 +47,43 @@ def upgrade():
     # Clean up or lock the transitional legacy system user (00000000-0000-4000-a000-000000000000 / legacy@iqoqo.cc)
     # seeded by 2973a4475ace_add_user_profiles_auth_and_rbac during v0.2.0 before authentication constraints existed.
     legacy_user_id = "00000000-0000-4000-a000-000000000000"
-    if is_pg:
-        has_items = False
-        try:
-            has_items = bool(
-                bind.execute(
-                    sa.text(f"SELECT 1 FROM inventory.items WHERE owner_id::text = '{legacy_user_id}' LIMIT 1")
-                ).scalar()
-            )
-        except Exception:
-            has_items = False
 
+    def _legacy_has_items() -> bool:
+        """Whether the legacy user still owns anything.
+
+        A failure here must not be read as "owns nothing". `auth.users.owner_id`
+        references cascade (`Item.owner_id` is `ondelete="CASCADE"`), so
+        concluding that a user owns nothing and deleting their row would take
+        their entire collection with it. The original code caught `Exception`
+        and defaulted to `False`, which made every transient error -- a dropped
+        connection, a permission problem, a typo -- destructive.
+
+        Failing closed matches the pattern the same migration uses twenty lines
+        below for `check_user_auth_method`, and it is the only safe direction:
+        a false negative merely disables the account, which is reversible.
+
+        @returns: True when the legacy user owns at least one row.
+        @raises RuntimeError: If the check cannot be performed.
+        """
+        if is_pg:
+            sql = sa.text(f"SELECT 1 FROM inventory.items WHERE owner_id::text = '{legacy_user_id}' LIMIT 1")
+        else:
+            sql = sa.text(
+                f"SELECT 1 FROM items WHERE (owner_id = '{legacy_user_id}' OR owner_id IN "
+                f"(SELECT id FROM {users_table} WHERE email = 'legacy@iqoqo.cc')) LIMIT 1"
+            )
+        try:
+            return bool(bind.execute(sql).scalar())
+        except Exception as exc:
+            raise RuntimeError(
+                "Cannot determine whether the legacy system user owns items, so the migration "
+                "refuses to decide between deleting and disabling that account. Re-run once "
+                "inventory.items is readable; nothing has been changed."
+            ) from exc
+
+    has_items = _legacy_has_items()
+
+    if is_pg:
         if not has_items:
             bind.execute(
                 sa.text(
@@ -74,19 +100,6 @@ def upgrade():
                 )
             )
     else:
-        has_items = False
-        try:
-            has_items = bool(
-                bind.execute(
-                    sa.text(
-                        f"SELECT 1 FROM items WHERE (owner_id = '{legacy_user_id}' OR owner_id IN "
-                        f"(SELECT id FROM {users_table} WHERE email = 'legacy@iqoqo.cc')) LIMIT 1"
-                    )
-                ).scalar()
-            )
-        except Exception:
-            has_items = False
-
         if not has_items:
             bind.execute(
                 sa.text(

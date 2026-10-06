@@ -65,7 +65,9 @@ opentelemetry-distro
 # Layer 7: LLM telemetry — auto-instruments openai SDK calls with token usage, prompt payloads, latency
 opentelemetry-instrumentation-openai
 
-imagehash==4.3.2
+# No imagehash: the perceptual hash is computed by app/utils/phash.py on Pillow
+# alone. ImageHash required numpy and scipy, which together were 167 MB of the
+# production image for a single call. OpenSpec `container-image-size-target`.
 PyYAML==6.0.3
 
 # Testing

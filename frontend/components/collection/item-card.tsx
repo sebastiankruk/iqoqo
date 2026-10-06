@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Disc, Loader2, Film, Dices, Puzzle, EyeOff, Check, HeartOff } from "lucide-react";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp, classifyCoverType } from "@/lib/utils";
+import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { resolveMediaBadge } from "@/lib/media-badge";
 import { apiClient } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -175,15 +176,9 @@ export function ItemCard({
   const badge = resolveMediaBadge(rawContentType, rawKind, format, rawWorkType, rawMediumType);
 
   const isAudio = badge.isAudio || isAudioMedia(format);
-  const isVideo =
-    badge.typeKey === "movie" || ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
-  const isBoardGame =
-    badge.typeKey === "game" ||
-    ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
-  const isPuzzle =
-    rawContentType === "puzzle" ||
-    format?.toLowerCase() === "puzzle" ||
-    ["puzzle", "jigsaw", "jigsaw puzzle"].includes(format?.toLowerCase() || "");
+  const isVideo = badge.typeKey === "movie" || isVideoFormat(format);
+  const isBoardGame = badge.typeKey === "game" || isBoardGameFormat(format);
+  const isPuzzle = rawContentType === "puzzle" || isPuzzleFormat(format);
 
   const MediaIcon = isAudio
     ? Disc

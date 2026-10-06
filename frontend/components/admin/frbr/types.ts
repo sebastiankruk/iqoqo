@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import type { FrbrTree, FrbrItem, FrbrContribution } from "@/lib/api/admin";
+import type { FrbrItem, FrbrContribution } from "@/lib/api/admin";
 
 /**
  * A key-value pair for dynamic metadata editing.
@@ -133,12 +133,15 @@ export interface ItemFormData {
 }
 
 /**
- * Props shared by entity editors.
+ * Props shared by every entity editor.
+ *
+ * `onSubmit` is intentionally not narrowed to a single form type: each editor
+ * declares its own precise signature (`WorkFormData`, `ExpressionFormData`,
+ * `ManifestationFormData`, `ItemFormData`) against the shared `tree`, which is
+ * what actually constrains them. A common `onSubmit` here would have to erase
+ * that to `any` to be assignable from all four, and this interface is what that
+ * erasure existed to serve — it had no other referrer.
  */
-export interface EntityEditorProps {
-  tree: FrbrTree;
-  onSubmit: (data: any) => Promise<void>;
-}
 
 /**
  * Props for the ItemEditor component.

@@ -268,6 +268,76 @@ def add_book(isbn: str, metadata: dict) -> Item:
     return item
 ```
 
+## 🔗 Duplicate Detection & FRBR Merge Integrity (v0.8.2)
+
+The "check if the Work already exists" guidance above is still correct for
+**ingest**, but it does not scale and it cannot repair a catalog that already
+holds duplicates. Two modules own that problem, and the invariant between them
+is the one to understand.
+
+### `app/core/frbr_merge.py` — one map of what must move
+
+Merging two FRBR entities is one operation with two halves: re-point every
+reference, then drop the source. iqoqo had **two** implementations of that — a
+manual merge endpoint and a duplicate-review queue — and they disagreed about
+what a merge meant. The shared module answers "what must move when a Work,
+Expression or Manifestation is consolidated" exactly once:
+
+| Tier | Real foreign keys | Plus polymorphic | Total ref-points |
+| ---- | ----------------- | --------------- | --------------- |
+| Work | 13 across 10 tables | `SemanticLink` | 14 |
+| Expression | 7 | `SemanticLink` | 8 |
+| Manifestation | 9 across 9 tables | `SemanticLink` | 10 |
+
+Three consequences worth knowing before editing it:
+
+- **Both `ON DELETE CASCADE` and `SET NULL` links are re-pointed.** The cascade
+  links would otherwise **silently destroy user data** — a wishlist row is not
+  something a merge is entitled to delete — and the `SET NULL` links would be
+  orphaned. Where a re-pointed row would collide with a natural-key unique
+  constraint, it collapses onto the survivor instead of violating it.
+- **The coverage is enforced mechanically.** `tests/test_frbr_merge_coverage.py`
+  reflects the SQLAlchemy metadata for every foreign key targeting
+  `works.id`, `expressions.id` or `manifestations.id`, and fails naming the
+  offending `(model, column)` when one appears without a map entry or a
+  justified exclusion. Adding a referencing column without updating the map is a
+  test failure, not a production incident. It needs PostgreSQL
+  (`make test-merge-integrity-pg`) because SQLite does not enforce foreign keys
+  and therefore cannot see this class of defect at all.
+- **Source removal is a row-level delete, never an ORM cascade.** Re-pointing a
+  child by assigning its foreign key does **not** remove it from the parent's
+  loaded collection, so a cascading ORM delete of the parent would delete the
+  very row that was just migrated.
+
+### `app/core/duplicate_service.py` — deterministic first, inference last
+
+Screening produces candidate pairs; the classifier then assigns each pair exactly
+one verdict **before** any model is consulted:
+
+| Verdict | Condition |
+| ------- | --------- |
+| `AUTO_ACCEPT` | A shared edition-family identifier (`isbn13`/`ean`/`upc`/`barcode`), or an identical normalized title **and** a shared creator |
+| `AUTO_REJECT` | A shared creator, but title similarity below the floor — same-author noise |
+| `NEEDS_LLM` | Everything else: the only class eligible for inference |
+
+A shared title alone is never `AUTO_ACCEPT`, because distinct works routinely
+share one. The default engine is `heuristic`, so **a scan needs no inference
+service running at all** — which also removes a GPU dependency from
+containerized deployments. Measured on a production clone (2001 Works, 2058
+Manifestations): 658 candidate pairs resolved into 40 queued, 144 auto-rejected
+and 474 left explicitly undecided, with zero inference calls, in seconds rather
+than the 1–6 hours the previous path needed at 9–45 s per pair.
+
+`duplicate_candidates.resolution_source` records **which stage** decided each pair,
+and `confidence` is nullable for the same reason: a rule verdict is categorical,
+not probabilistic, so it must not be stored or displayed as `0.99` beside a
+genuine model score of `0.99`.
+
+Access is by **permission, not role** — listing needs `read:metadata`, and
+scan/dismiss/merge need `write:metadata`. The `contributor` role holds every
+`*:metadata` permission, so a curator gets the full workflow without being an
+administrator.
+
 ## 🧭 Faceted Navigation & Cross-FRBR Filtering
 
 iqoqo provides multi-dimensional faceted search and aggregated statistics via `DataManager.get_faceted_stats`:
@@ -380,7 +450,7 @@ def test_frbr_hierarchy():
     assert item.manifestation.expression.work.meta["authors"] == ["Test Author"]
 ```
 
-See [tests/test_web.py](../tests/test_web.py) for comprehensive FRBR hierarchy tests.
+See [tests/test_book_operations.py](../tests/test_book_operations.py) for comprehensive FRBR hierarchy tests, and [tests/test_ontology.py](../tests/test_ontology.py) for the ontology mapping.
 
 ## 🔍 ISBN Lookup (`app/utils/isbn.py`)
 
@@ -993,7 +1063,7 @@ If you're unsure about where data should live in the FRBR hierarchy:
 
 1. Ask: "Is this about the **concept** (Work), the **version** (Expression), the **edition** (Manifestation), or **my copy** (Item)?"
 2. Check the [models.py](../app/db/models.py) documentation
-3. Look at existing tests in [tests/test_web.py](../tests/test_web.py)
+3. Look at existing tests in [tests/test_book_operations.py](../tests/test_book_operations.py)
 4. Open an issue for discussion
 
 Remember: **When in doubt, follow the hierarchy!**

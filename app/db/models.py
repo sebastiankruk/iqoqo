@@ -18,7 +18,8 @@
 All model definitions have been split into domain-specific modules:
 
 - :mod:`app.db.auth`          — User, Role, Permission, TokenBlocklist, ConsentRecord
-- :mod:`app.db.core`          — Work, Expression, Manifestation, Item, ITEM_STATUSES
+- :mod:`app.db.core`          — Work, Expression, Manifestation, Item, DuplicateCandidate,
+                                ITEM_STATUSES
 - :mod:`app.db.contributions` — Contributor, WorkContribution, ExpressionContribution,
                                 ManifestationContribution, WorkPart (shared FRBRoo events)
 - :mod:`app.db.audio`         — MANIFESTATION_AUDIO_META_KEYS (+ shared event re-exports)
@@ -32,7 +33,18 @@ work unchanged thanks to this shim.
 """
 
 from app.db.audio import MANIFESTATION_AUDIO_META_KEYS  # noqa: F401
-from app.db.auth import ConsentRecord, OAuthExchangeCode, Permission, Role, TokenBlocklist, User, role_permissions, user_roles  # noqa: F401
+from app.db.auth import (  # noqa: F401
+    AccountActionToken,
+    AccountTokenPurpose,
+    ConsentRecord,
+    OAuthExchangeCode,
+    Permission,
+    Role,
+    TokenBlocklist,
+    User,
+    role_permissions,
+    user_roles,
+)
 from app.db.contributions import (  # noqa: F401
     EXPRESSION_CONTRIBUTION_ROLES,
     WORK_CONTRIBUTION_ROLES,
@@ -43,9 +55,15 @@ from app.db.contributions import (  # noqa: F401
 )
 from app.db.core import (  # noqa: F401
     COLLECTION_STATUSES,
+    DUPLICATE_CANDIDATE_STATUSES,
+    DUPLICATE_ENTITY_TIERS,
+    DUPLICATE_STATUS_DISMISSED,
+    DUPLICATE_STATUS_MERGED,
+    DUPLICATE_STATUS_PENDING,
     ITEM_STATUSES,
     PROGRESS_STATUSES,
     BoardgameMechanic,
+    DuplicateCandidate,
     EntityAuditLog,
     Expression,
     ImageScan,
@@ -57,6 +75,7 @@ from app.db.core import (  # noqa: F401
     MediaCategory,
     MediaFormat,
     MetadataRefetchLog,
+    SemanticLink,
     Tag,
     UserCollection,
     UserCollectionItem,

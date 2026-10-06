@@ -21,7 +21,7 @@ import { Search, CheckCircle2, XCircle, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTranslations } from "next-intl";
-import { resolveApiUrl } from "@/lib/utils";
+import { apiClient } from "@/lib/api/client";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -40,11 +40,6 @@ interface CheckResultData {
   publisher?: string;
 }
 
-interface CheckResult {
-  success: boolean;
-  data: CheckResultData[];
-}
-
 /**
  * A search component for visitors to check if a specific item exists in a public collection.
  * @param root0 - The component props.
@@ -54,7 +49,8 @@ interface CheckResult {
 export function CheckInventory({ username }: CheckInventoryProps) {
   const t = useTranslations("Public");
   const [query, setQuery] = React.useState("");
-  const [result, setResult] = React.useState<CheckResult | null>(null);
+  const [result, setResult] = React.useState<CheckResultData[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   const handleCheck = async (e: React.FormEvent) => {
@@ -63,19 +59,24 @@ export function CheckInventory({ username }: CheckInventoryProps) {
 
     setLoading(true);
     setResult(null);
+    setError(null);
 
     try {
-      const res = await fetch(resolveApiUrl(`/public/u/${username}/check`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
+      const res = await apiClient.post<{ success: boolean; data: CheckResultData[] }>(`/public/u/${username}/check`, {
+        query: query.trim(),
       });
-      const data = await res.json();
-      if (data.success) {
-        setResult(data);
+      // An empty `data` is a real answer ("not in this collection") and must
+      // render as such; only a missing/failed request is an error.
+      if (!res.data?.success || !Array.isArray(res.data.data)) {
+        setError(t("checkFailed"));
+        return;
       }
-    } catch (err) {
-      console.error("Check failed", err);
+      setResult(res.data.data);
+    } catch {
+      // The axios interceptor has already normalised the backend's `error`
+      // string onto the exception message. The previous raw `fetch` discarded
+      // it, so a 404 "User not found" rendered as a blank panel.
+      setError(t("checkFailed"));
     } finally {
       setLoading(false);
     }
@@ -100,15 +101,30 @@ export function CheckInventory({ username }: CheckInventoryProps) {
         </Button>
       </form>
 
+      {error && (
+        <Card id="inventory-error-card" className="overflow-hidden border-destructive/40">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4">
+              <div className="bg-destructive/10 p-2 rounded-full">
+                <XCircle className="h-6 w-6 text-destructive" />
+              </div>
+              <p className="font-medium text-destructive" role="alert">
+                {error}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {result && (
         <Card
           id="inventory-result-card"
           className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 text-left"
         >
           <CardContent className="p-4">
-            {result.data && result.data.length > 0 ? (
+            {result.length > 0 ? (
               <div className="flex flex-wrap justify-center gap-4">
-                {result.data.map(item => (
+                {result.map(item => (
                   <Link
                     href={`/manifestation/${item.type === "item" ? item.manifestation_id : item.id}`}
                     key={`${item.type}-${item.id}`}
@@ -122,7 +138,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                               item.type === "manifestation" ? "opacity-60 grayscale" : ""
                             }`}
                           >
-                            <Image src={item.cover_url} alt={item.title} fill className="object-cover" />
+                            <Image src={item.cover_url} alt={item.title} fill unoptimized className="object-cover" />
                           </div>
                         ) : (
                           <div className="h-28 w-20 bg-muted rounded shadow-sm flex items-center justify-center">

@@ -205,7 +205,7 @@ def test_lookup_isbn_provider_exception_is_sanitized_and_logged(client, monkeypa
 
 @patch("app.utils.isbn.fetch_isbn_metadata")
 def test_lookup_isbn_from_open_library(mock_fetch, client):
-    """Test ISBN lookup fetches from external sources when not in DB."""
+    """ISBN lookup returns external metadata without writing to the database."""
     mock_fetch.return_value = {"Title": "1984", "Authors": ["George Orwell"]}
 
     response = client.get("/api/isbn/9780451524935")
@@ -214,11 +214,23 @@ def test_lookup_isbn_from_open_library(mock_fetch, client):
     assert data["Title"] == "1984"
     assert data["Authors"] == ["George Orwell"]
 
-    # Verify the book was saved to the database
+    # GET must be read-only: nothing may be persisted.
     with client.application.app_context():
-        manifestation = Manifestation.query.filter_by(isbn13="9780451524935").first()
-        assert manifestation is not None
-        assert manifestation.expression.work.title == "1984"
+        assert Manifestation.query.filter_by(isbn13="9780451524935").first() is None
+        assert Work.query.filter_by(title="1984").first() is None
+
+
+@patch("app.utils.isbn.fetch_isbn_metadata")
+def test_lookup_isbn_does_not_dispatch_background_tasks(mock_fetch, client):
+    """A read request must not enqueue cover or LOD background work."""
+    with patch("app.utils.covers.start_cover_processing") as mock_cover, patch("app.core.tasks.link_manifestation_lod_task") as mock_lod:
+        mock_fetch.return_value = {"Title": "Dune", "Authors": ["Frank Herbert"]}
+
+        response = client.get("/api/isbn/9780441013593")
+        assert response.status_code == 200
+
+    assert mock_cover.call_count == 0, "GET must not schedule cover processing"
+    assert mock_lod.delay.call_count == 0, "GET must not schedule LOD linking"
 
 
 def test_update_manifestation(client, sample_book, admin_headers):
@@ -314,7 +326,14 @@ def test_add_item_creates_manifestation_if_not_exists(mock_fetch, client, normal
     mock_fetch.return_value = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
 
     metadata = {"Title": "The Road", "Authors": ["Cormac McCarthy"]}
-    response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
+    # Cover resolution performs live HTTP downloads; stub it so the test
+    # stays hermetic and does not depend on provider availability.
+    with (
+        patch("app.api.manifestations.process_fast_cover", return_value=True),
+        patch("app.api.manifestations.start_cover_processing", return_value="task-1"),
+        patch("app.core.tasks.link_manifestation_lod_task"),
+    ):
+        response = client.post("/api/item/9780307277671", json=metadata, headers=normal_user_headers, content_type="application/json")
     assert response.status_code == 200
 
     # Verify manifestation and item were created

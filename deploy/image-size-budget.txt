@@ -1,0 +1,56 @@
+# Production backend image size budget.
+#
+# Single source of truth. scripts/check_image_size.py enforces this, and
+# scripts/build_docker_images.sh runs that check after every build, so exceeding
+# it fails the build rather than shipping.
+#
+# Why a budget file and not a number in a spec: the previous requirement was
+# "<500 MB" in prose, and it went unmet through a whole release (1019.2 MB ->
+# 826.7 MB) with nothing failing, because prose cannot fail. A gate pointing at a
+# number nothing can reach is worse than no gate -- it only trains people to
+# disable it -- so this file records both the limit and the measurement that
+# justifies it.
+#
+# Measured against `docker image inspect .Size`, i.e. uncompressed layer bytes,
+# which is what this budget is compared against. The pulled/compressed size is
+# smaller and is deliberately NOT the gate value.
+
+# Uncompressed image size ceiling, in bytes. Enforced by scripts/check_image_size.py
+# on every build. Machine-readable: read by tooling, do not reformat.
+MAX_BYTES=650000000
+
+# The measured size of the current image that MAX_BYTES is set against.
+# scripts/validate_release.py asserts that docs/RELEASE_PROCESS.md quotes exactly
+# these two numbers, so the build gate, the release plan and this file cannot drift
+# apart. Re-measure by rebuilding and updating both values in the same commit.
+MEASURED_BYTES=635350015
+
+# Why those numbers. ImageHash was used for exactly one call (imagehash.phash, in
+# app/utils/images.py) and declared three heavy transitive dependencies that nothing
+# else in the application uses:
+#
+#   scipy + scipy.libs        111 MB
+#   numpy + numpy.libs         57 MB
+#   PyWavelets (pywt)           9 MB
+#   ImageHash itself            1 MB
+#                          -------
+#                           178 MB   removed, replaced by app/utils/phash.py
+#
+# Measured on python:3.14-slim, tag iqoqo-backend:sizecheck2, 2026-10-02.
+# Reproducible: two consecutive builds produced the same size to 0.1 MB.
+#
+# The "before" figure is deliberately not recorded as a byte count. The
+# iqoqo-backend:preview tag predates other Dockerfile work, so its 879 MB is not a
+# clean baseline for this change; the attributable delta is 178 MB, itemised above.
+# Rebuild with ImageHash restored if an exact byte-level before/after is needed.
+#
+# After the removal the remaining large consumers are real application
+# dependencies: botocore 29 MB, grpc 18 MB, sqlalchemy 16 MB, cryptography 15 MB,
+# pillow.libs 14 MB, openai 14 MB.
+#
+# Headroom is MAX_BYTES - MEASURED_BYTES = 14,649,985 bytes, about 2.3%.
+# Deliberately small: this is a regression detector, not an allowance for new
+# functionality. A dependency that needs more room means raising MAX_BYTES
+# knowingly, with MEASURED_BYTES updated in the same commit, not stretching the
+# limit quietly. That is exactly how the previous "<500 MB" requirement came to be
+# unmet for an entire release without anything failing.

@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Public user profile and collection endpoints.
+
+Profiles are authenticated but not privileged: the routes expose only what a
+profile owner or a permitted viewer may see, and hide entries through visibility
+flags rather than by omitting them from the query."""
+
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -20,6 +26,10 @@ import bleach
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
 
+# Imported for `pending_deletion_state` on the profile read.  Module-level so
+# the import graph is explicit; this module has no import cycle with it because
+# `account_lifecycle` only reaches back for the models.
+from app.core.account_lifecycle import pending_deletion_state
 from app.core.limiter import limiter
 from app.db.models import ConsentRecord, User, db
 from app.utils.http_client import is_safe_url
@@ -28,10 +38,40 @@ from .decorators import require_auth
 
 profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 
+#: Maximum accepted biography length, in characters.
+BIO_MAX_LENGTH = 500
+
+
+def _apply_bio(user: User, raw_bio) -> Response | None:
+    """Sanitize and length-check a biography, then assign it to ``user``.
+
+    Shared by every profile write path (``PUT /api/profile/`` and
+    ``PATCH /api/profile/settings``) so the two cannot drift apart: an
+    unsanitized or oversized bio must be rejected no matter which endpoint
+    the client reaches for.
+
+    Returns a ready-to-return ``Response`` on rejection, or ``None`` when the
+    value was accepted and assigned. ``None`` clears the biography.
+    """
+    if raw_bio is None:
+        user.bio = None
+        return None
+
+    clean_bio = bleach.clean(str(raw_bio).strip(), tags=[], attributes={}, protocols=[], strip=True)
+    if len(clean_bio) > BIO_MAX_LENGTH:
+        return jsonify({"error": f"Biography cannot exceed {BIO_MAX_LENGTH} characters", "code": 400}), 400
+
+    user.bio = clean_bio
+    return None
+
 
 @profile_bp.route("/", methods=["GET"], strict_slashes=False)
 @require_auth
 def get_profile():
+    """Return the caller's own profile, roles and resolved permissions.
+
+    Permissions are unioned across every role the user holds, so the response
+    reflects what the user can actually do rather than what any single role grants."""
     user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -41,7 +81,9 @@ def get_profile():
     # Extract unique permissions from all roles the user holds and return them
     permissions = sorted({perm.name for role in user.roles for perm in role.permissions})
 
-    data = user.to_dict()
+    # `to_private_dict`, not `to_dict`: the verification state belongs to the
+    # owner, and this is the only surface that reports it.
+    data = user.to_private_dict()
     data.update(
         {
             "roles": [r.name for r in user.roles],
@@ -49,6 +91,7 @@ def get_profile():
             "consents": consents,
         }
     )
+    data["deletion"] = pending_deletion_state(user)
 
     return jsonify(
         {
@@ -61,6 +104,10 @@ def get_profile():
 @profile_bp.route("/consent", methods=["POST"])
 @require_auth
 def update_consent():
+    """Grant or revoke a single consent type.
+
+    Consent is recorded as a row with an explicit boolean rather than by deleting
+    it, so a withdrawal is auditable after the fact."""
     data = request.get_json()
     consent_type = data.get("consent_type")
     is_granted = data.get("is_granted", False)
@@ -88,6 +135,10 @@ def update_consent():
 @profile_bp.route("/", methods=["PUT"], strict_slashes=False)
 @require_auth
 def update_profile():
+    """Update the caller's display name and profile fields.
+
+    Restricted to self-service fields. Role and permission changes are not reachable
+    here; they belong to the admin blueprint."""
     data = request.get_json()
     user = db.session.get(User, getattr(g, "user_id", None))
     if not user:
@@ -106,14 +157,9 @@ def update_profile():
             return err
 
     if "bio" in data:
-        bio_val = data["bio"]
-        if bio_val is not None:
-            clean_bio = bleach.clean(str(bio_val).strip(), tags=[], attributes={}, protocols=[], strip=True)
-            if len(clean_bio) > 500:
-                return jsonify({"error": "Biography cannot exceed 500 characters", "code": 400}), 400
-            user.bio = clean_bio
-        else:
-            user.bio = None
+        err = _apply_bio(user, data["bio"])
+        if err:
+            return err
 
     if "visibility" in data:
         val = data["visibility"]
@@ -137,15 +183,30 @@ def update_profile():
 @profile_bp.route("/", methods=["DELETE"], strict_slashes=False)
 @require_auth
 def delete_profile():
-    """Right to be forgotten: Temporarily disabled pending email confirmation flow (C33, v0.8.2)."""
+    """Right to be forgotten.
+
+    Account deletion is no longer a single authenticated call, and this
+    endpoint is where that used to live.  It now refuses and points at the
+    confirmed flow rather than deleting anything, because a request that
+    irreversibly removes an account on the strength of a session cookie alone
+    is exactly what the confirmation flow exists to prevent.
+
+    It is not removed, and not aliased to a bypass: a caller that treats a 409
+    as "not implemented yet" and retries is harmless, whereas a silent
+    auto-forward to an unconditional delete would undo the whole design.  The
+    client must call ``POST /api/account/deletion/request``, follow the emailed
+    link, and submit the confirmation.
+    """
     return (
         jsonify(
             {
-                "error": "Account deletion temporarily disabled — email confirmation required (v0.8.2)",
-                "code": 501,
+                "error": "Account deletion requires confirmation by email. "
+                "Start a request with POST /api/account/deletion/request and follow the link you receive.",
+                "code": 409,
+                "replacement": "/api/account/deletion/request",
             }
         ),
-        501,
+        409,
     )
 
 
@@ -234,7 +295,9 @@ def update_profile_settings():
                 return err
 
     if "bio" in data:
-        user.bio = data["bio"].strip()
+        err = _apply_bio(user, data["bio"])
+        if err:
+            return err
 
     if "visibility" in data:
         # User feedback: reuse visibility to value == public

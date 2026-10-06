@@ -68,7 +68,14 @@ def test_update_profile(client):
     assert json.loads(response.data)["data"]["display_name"] == "New Name"
 
 
-def test_delete_account_temporarily_disabled(client):
+def test_delete_account_requires_email_confirmation(client):
+    """The unconditional delete must refuse and must not remove anything.
+
+    A single authenticated call that irreversibly deletes an account is what the
+    confirmation flow exists to replace, so the legacy route has to keep refusing
+    rather than quietly forwarding somewhere that would delete on a session
+    cookie alone.
+    """
     client.post("/api/auth/register", json={"email": "delete@iqoqo.local", "password": "test-password"})
     res = client.post("/api/auth/login", json={"email": "delete@iqoqo.local", "password": "test-password"})
     token = json.loads(res.data)["token"]
@@ -78,8 +85,10 @@ def test_delete_account_temporarily_disabled(client):
     assert user is not None
 
     response = client.delete("/api/profile/", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 501
-    assert "email confirmation required" in response.get_json()["error"]
+    assert response.status_code == 409
+    body = response.get_json()
+    assert "requires confirmation by email" in body["error"]
+    assert body["replacement"] == "/api/account/deletion/request"
 
     # Verify user is NOT removed (blocked)
     user_after = User.query.filter_by(email="delete@iqoqo.local").first()
@@ -114,6 +123,56 @@ def test_update_profile_bio_length_limit(client):
     resp_valid = client.put("/api/profile/", headers=headers, json={"bio": valid_bio})
     assert resp_valid.status_code == 200
     assert resp_valid.get_json()["data"]["bio"] == valid_bio
+
+
+def test_update_profile_settings_bio_length_limit(client):
+    """PATCH /api/profile/settings must enforce the same 500-char bio limit as PUT."""
+    client.post("/api/auth/register", json={"email": "biosettings@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "biosettings@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    oversized_bio = "a" * 501
+    resp = client.patch("/api/profile/settings", headers=headers, json={"bio": oversized_bio})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "Biography cannot exceed 500 characters"
+
+    valid_bio = "b" * 500
+    resp_valid = client.patch("/api/profile/settings", headers=headers, json={"bio": valid_bio})
+    assert resp_valid.status_code == 200
+    assert resp_valid.get_json()["data"]["bio"] == valid_bio
+
+
+def test_update_profile_settings_bio_sanitization(client):
+    """PATCH /api/profile/settings must strip HTML, not just enforce length."""
+    client.post("/api/auth/register", json={"email": "xsssettings@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "xsssettings@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {"bio": "<p>Hello</p> <img src=x onerror=alert(1)>World<iframe src='//bad.site'></iframe>"}
+    resp = client.patch("/api/profile/settings", headers=headers, json=payload)
+    assert resp.status_code == 200
+    bio = resp.get_json()["data"]["bio"]
+    assert bio == "Hello World"
+    assert "<" not in bio
+    assert ">" not in bio
+
+
+def test_update_profile_settings_bio_non_string_does_not_crash(client):
+    """A null or non-string bio must be handled, not raise (regression: 500)."""
+    client.post("/api/auth/register", json={"email": "biobad@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "biobad@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp_null = client.patch("/api/profile/settings", headers=headers, json={"bio": None})
+    assert resp_null.status_code == 200
+    assert resp_null.get_json()["data"]["bio"] is None
+
+    resp_int = client.patch("/api/profile/settings", headers=headers, json={"bio": 12345})
+    assert resp_int.status_code == 200
+    assert resp_int.get_json()["data"]["bio"] == "12345"
 
 
 def test_update_profile_html_sanitization(client):

@@ -15,6 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
+"""Physical item endpoints: create, update, lend, and cover management.
+
+Items are the physical layer of the FRBR model, so every endpoint here acts on
+an existing manifestation rather than creating bibliographic records."""
 
 import logging
 import uuid
@@ -28,9 +32,10 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
-from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
-from app.api.manifestations import lookup_isbn
+from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.core.data_manager import invalidate_facets_cache
 from app.core.export_service import ExportService
 from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
@@ -50,11 +55,16 @@ from app.db.models import (
     Work,
     db,
 )
+from app.utils import isbn as isbn_utils
 
 logger = logging.getLogger(__name__)
 
 
 def sync_tags(item_id: int, user_id, tags: list[str] | None):
+    """Replace an item's tag set with *tags*.
+
+    Replaces rather than merges, so a caller can clear tags by sending an empty
+    list. Unknown tags are created on demand."""
     if tags is None:
         return
     existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
@@ -224,6 +234,10 @@ def export_user_items():
 @api_bp.route("/items", methods=["GET"])
 @require_auth
 def get_items():
+    """List the caller's physical items with filtering and pagination.
+
+    Scoped to the caller unless the request carries a permission that allows seeing
+    another user's items."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return (
@@ -253,6 +267,8 @@ def get_items():
     collections_filter = request.args.get("collections", None)
     genres_filter = request.args.get("genres", None)
     publishers_filter = request.args.get("publishers", None)
+    lod_authority = (request.args.get("lod_authority") or "").strip().lower()
+    lod_status = (request.args.get("lod_status") or "").strip().lower()
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
@@ -290,6 +306,8 @@ def get_items():
             collections=collections_list,
             genres=genres_list,
             publishers=publishers_list,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
         )
 
         for row in results:
@@ -342,78 +360,36 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id)
-        needs_work_join = bool(genres_list or publishers_list or sort_by in ("title", "title-desc", "author"))
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or lod_authority or lod_status)
+        needs_work_join = bool(
+            genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
+        )
+        builder = CatalogFilterBuilder(
+            query,
+            root=CatalogFilterBuilder.ROOT_ITEM,
+            user_id=user_id,
+            borrowed_only=borrowed_only,
+            ensure_frbr_join=True,
+            frbr_join_outer=True,
+        )
         if needs_mfn_join or needs_work_join:
-            query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-            query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
+            # Sorting by work title requires the FRBR chain even when no
+            # filter does, so the join is requested explicitly.
+            query = builder.ensure_frbr_joins()
 
-        if category_list:
-            query = query.filter(Expression.content_type.in_(category_list))
-
-        if format_list:
-            query = query.filter(Manifestation.meta["format"].as_string().in_(format_list))
-
-        if missing_cover:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.cover_url.is_(None), Manifestation.cover_url == ""),
-                    db.or_(
-                        Manifestation.meta["cover_url"].as_string().is_(None),
-                        Manifestation.meta["cover_url"].as_string() == "",
-                    ),
-                )
-            )
-        if missing_id:
-            query = query.filter(
-                db.and_(
-                    db.or_(Manifestation.isbn13.is_(None), Manifestation.isbn13 == ""),
-                    db.or_(Manifestation.upc.is_(None), Manifestation.upc == ""),
-                    db.or_(Manifestation.ean.is_(None), Manifestation.ean == ""),
-                    db.or_(
-                        Manifestation.meta["barcode"].as_string().is_(None),
-                        Manifestation.meta["barcode"].as_string() == "",
-                    ),
-                    db.or_(
-                        Manifestation.meta["catalog_number"].as_string().is_(None),
-                        Manifestation.meta["catalog_number"].as_string() == "",
-                    ),
-                )
-            )
-
-        if tags_list:
-            query = query.join(ItemTag, Item.id == ItemTag.item_id).join(Tag, ItemTag.tag_id == Tag.id)
-            tags_conditions = [Tag.name.ilike(t.strip()) for t in tags_list]
-            query = query.filter(db.or_(*tags_conditions))
-
-        if collections_list:
-            query = query.join(UserCollectionItem, Item.id == UserCollectionItem.item_id).join(
-                UserCollection, UserCollectionItem.collection_id == UserCollection.id
-            )
-            coll_conditions = [UserCollection.name.ilike(c.strip()) for c in collections_list]
-            query = query.filter(db.or_(*coll_conditions), UserCollection.owner_id == user_id)
-
-        if genres_list:
-            query = apply_genre_filter(query, genres_list)
-
-        if publishers_list:
-            pubs_conditions = []
-            for p in publishers_list:
-                p_term = f"%{p.strip()}%"
-                pubs_conditions.append(
-                    db.or_(
-                        Manifestation.publisher.ilike(p_term),
-                        Manifestation.meta["Publisher"].as_string().ilike(p_term),
-                        Manifestation.meta["publisher"].as_string().ilike(p_term),
-                        db.and_(Expression.content_type == "music", Manifestation.meta["label"].as_string().ilike(p_term)),
-                    )
-                )
-            query = query.filter(db.or_(*pubs_conditions))
-
-        if statuses_filter:
-            statuses_list = parse_csv_param(statuses_filter)
-            query = apply_statuses_filter(query, statuses_list, user_id=user_id, borrowed_only=borrowed_only)
+        query = builder.apply(
+            category=category_list,
+            fmt=format_list,
+            tags=tags_list,
+            collections=collections_list,
+            genres=genres_list,
+            publishers=publishers_list,
+            statuses=parse_csv_param(statuses_filter),
+            missing_cover=missing_cover,
+            missing_id=missing_id,
+            lod_authority=lod_authority or None,
+            lod_status=lod_status or None,
+        )
 
         total_physical = query.order_by(None).count()
 
@@ -573,6 +549,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 @limiter.limit("300 per hour", override_defaults=True)
 @optional_auth
 def get_item_detail(item_id: int):
+    """Return one item with its manifestation, expression and work."""
     if item_id <= 0:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
     return _get_physical_item_detail(item_id)
@@ -668,6 +645,8 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
 
     try:
         db.session.commit()
+        # Tag/status changes alter this user's facet counts.
+        invalidate_facets_cache(user_id)
         return jsonify({"success": True, "data": {"id": item.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
@@ -698,6 +677,8 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
 
     db.session.delete(item)
     db.session.commit()
+    # Facet counts for this user changed; drop the cached entries.
+    invalidate_facets_cache(user_id)
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
@@ -707,6 +688,10 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
 @require_physical_item
 @require_item_access()
 def delete_item(item_id: int):
+    """Delete a physical item.
+
+    Only the item is removed; the manifestation it referenced is left intact,
+    because a work may still be shelved on another copy."""
     user_id = getattr(g, "user_id", None)
     try:
         return _delete_physical_item(item_id, user_id)
@@ -857,6 +842,9 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
 
 @api_bp.route("/item/<isbn>", methods=["GET"])
 def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
+    """List every physical item of the manifestation with this ISBN.
+
+    The endpoint a scanner uses to decide whether a code is already shelved."""
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
@@ -872,6 +860,10 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
 def add_item(isbn: str) -> Response | tuple[Response, int]:
+    """Shelve a physical copy of the manifestation with this ISBN.
+
+    Creates the item against an existing manifestation; it does not create
+    bibliographic records, which is what ingest does."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -879,12 +871,23 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
 
     if not manifestation:
-        lookup_response = lookup_isbn(isbn)
-        if isinstance(lookup_response, tuple):
-            status_code = lookup_response[1] if len(lookup_response) > 1 else 404
-            if status_code != 200:
-                return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
-        manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+        # Explicit ingestion. `GET /api/isbn/<isbn>` is read-only by design, so
+        # the POST endpoint owns creating the FRBR hierarchy and scheduling
+        # background cover/LOD work.
+        canonical_isbn = isbn_utils.canonicalize_isbn(isbn)
+        if not canonical_isbn:
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        try:
+            metadata = isbn_utils.fetch_isbn_metadata(canonical_isbn)
+        except Exception:
+            current_app.logger.exception("External provider failed during ISBN metadata lookup for %s", isbn)
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        if not metadata:
+            return jsonify({"success": False, "data": None, "error": f"Manifestation not found for ISBN = {isbn}"}), 404
+
+        manifestation = persist_isbn_manifestation(canonical_isbn, metadata)
 
     payload_json = request.get_json(silent=True)
     payload = None
@@ -941,6 +944,8 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
+        # A new item changes this user's facet counts.
+        invalidate_facets_cache(user_id)
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
@@ -1039,6 +1044,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
+    invalidate_facets_cache(user_id)
 
     return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
 
@@ -1104,6 +1110,7 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         for item in created_items:
             log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         db.session.commit()
+        invalidate_facets_cache(user_id)
         return jsonify(
             {
                 "success": True,
@@ -1213,6 +1220,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
         db.session.commit()
+        invalidate_facets_cache(user_id)
 
         return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:

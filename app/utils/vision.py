@@ -189,7 +189,13 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
     reraise=True,
 )
 def _call_ollama_api(url, payload):
-    response = requests.post(f"{url}/api/generate", json=payload, timeout=30)
+    # Vision inference on a local model is slower than its text counterpart: the
+    # same model needed 45.7s cold and 9.1s warm on a real pairing run, so a 30s
+    # ceiling cuts off a cold start that would otherwise succeed. Overridable
+    # because the right value depends on the host, and an OCI Free Tier ARM box
+    # is slower still -- a hardcoded number here is wrong for somebody.
+    timeout = int(os.environ.get("OLLAMA_VISION_TIMEOUT", "90"))
+    response = requests.post(f"{url}/api/generate", json=payload, timeout=timeout)
     response.raise_for_status()
     return response
 
@@ -253,6 +259,31 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
     return None
 
 
+def _extract_json_object(raw: str) -> dict | None:
+    """Pull the first complete JSON object out of a model response.
+
+    Local vision models do not reliably emit bare JSON. They wrap it in prose
+    ("Here is the result: {...} hope that helps"), fence it, or emit more than
+    one object. A greedy ``\\{.*\\}`` substring is the obvious fix and is wrong
+    twice over: on ``{"Title": "A"} {"Title": "B"}`` it spans both objects and
+    fails to parse, and on a response with trailing prose containing a brace it
+    captures past the object and fails again.
+
+    ``raw_decode`` returns the first valid JSON value and the index it stopped
+    at, so trailing prose and sibling objects are simply left unconsumed.
+    """
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", raw):
+        try:
+            value, _ = decoder.raw_decode(raw[match.start() :])
+        except ValueError:
+            # Not the start of a valid object -- keep scanning for the next "{".
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
+
+
 def _parse_json_response(raw: str) -> dict | None:
     if not raw:
         return None
@@ -262,7 +293,9 @@ def _parse_json_response(raw: str) -> dict | None:
         raw = re.sub(r"^" + ticks + r"(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*" + ticks + r"$", "", raw)
 
-        data = json.loads(raw)
+        data = _extract_json_object(raw)
+        if data is None:
+            raise ValueError("no complete JSON object found in response")
 
         title = data.get("Title", "")
         authors = data.get("Authors", [])

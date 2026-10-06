@@ -20,6 +20,7 @@ import hashlib
 import io
 import re
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from flask import Response, current_app, g, jsonify, request
@@ -564,17 +565,43 @@ def _scan_to_wishlist(
     )
 
 
+@dataclass(frozen=True)
+class ScanLibraryContext:
+    """How this particular scan should be filed into the library.
+
+    These five values all come from the request and the resolved manifestation
+    rather than from the scan itself, and they were previously five positional
+    parameters. Two of them (``collection_status`` and ``default_progress``) are
+    plain strings drawn from the same vocabulary, so passing them in the wrong
+    order produced a library item filed under the wrong status with no error.
+    """
+
+    format_hint: str | None = None
+    collection_status: str = "available"
+    is_new_manifestation: bool = False
+    default_progress: str = "in_progress"
+    user_id: uuid.UUID | None = None
+
+
 def _scan_to_library(
     barcode: str | None,
     manifestation: Manifestation,
-    format_hint: str | None,
-    collection_status: str,
     payload: ScanBarcodeSchema,
-    is_new_manifestation: bool,
-    default_progress: str,
-    user_id: uuid.UUID | None,
+    context: ScanLibraryContext,
 ) -> tuple[Response, int]:
-    """Helper to save physical item to library."""
+    """Helper to save physical item to library.
+
+    Args:
+        barcode: The scanned code, or ``None`` for a non-barcode scan.
+        manifestation: The resolved or newly created manifestation.
+        payload: The validated request body.
+        context: The scan-mode settings that decide where the item lands.
+    """
+    format_hint = context.format_hint
+    collection_status = context.collection_status
+    is_new_manifestation = context.is_new_manifestation
+    default_progress = context.default_progress
+    user_id = context.user_id
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
         manifestation_id=manifestation.id,
@@ -752,7 +779,16 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
         return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
 
     return _scan_to_library(
-        barcode, manifestation, format_hint, collection_status, payload, is_new_manifestation, default_progress, user_id
+        barcode,
+        manifestation,
+        payload,
+        ScanLibraryContext(
+            format_hint=format_hint,
+            collection_status=collection_status,
+            is_new_manifestation=is_new_manifestation,
+            default_progress=default_progress,
+            user_id=user_id,
+        ),
     )
 
 

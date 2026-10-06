@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require the scanning flow to be covered at each layer: bottom-sheet and top-bar components, camera capture across every upload mode, one strategy test per media type, and E2E coverage of both the scan workflow and the policy switcher.
+
+## Requirements
 
 ### Requirement: Bottom-sheet component has unit test coverage
 

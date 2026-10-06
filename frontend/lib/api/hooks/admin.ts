@@ -23,7 +23,13 @@ import {
   updateFrbrEntity as updateFrbrEntityApi,
   type FrbrEntityUpdatePayload,
   type FrbrItem as FrbrItemType,
+  getLodStats,
+  getLodTaskStatus,
+  getActiveLodTask,
+  triggerLodReconciliation,
+  cancelLodTask,
 } from "../admin";
+import type { LODReconciliationTriggerParams } from "@/types/admin";
 import { ARRAY_META_FIELDS, ensureArray } from "@/components/admin/frbr/types";
 import { getFrbrTree } from "../admin";
 import { queryKeys } from "./query-keys";
@@ -238,6 +244,109 @@ export function useDeleteFrbrEntity() {
     },
     onSettled: (_data, _error, variables) => {
       qc.invalidateQueries({ queryKey: queryKeys.frbrTree(variables.manifestationId) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Linked Open Data (LOD) Hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * Custom hook to fetch lifetime Linked Open Data catalog statistics.
+ *
+ * @returns Query result containing the LODStats
+ */
+export function useLodStats() {
+  return useQuery({
+    queryKey: queryKeys.lodStats,
+    queryFn: () => getLodStats(),
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * Custom hook to poll the status and progress of an active LOD reconciliation task.
+ *
+ * Polls every 1500ms while the task is pending or processing, and stops
+ * automatically upon completion or failure.
+ *
+ * @param taskId - The Celery task ID, or null if no task is active
+ * @returns Query result containing the LODReconciliationTaskStatus
+ */
+export function useLodTaskStatus(taskId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.lodTaskStatus(taskId),
+    queryFn: () => {
+      if (!taskId) throw new Error("Task ID is required");
+      return getLodTaskStatus(taskId);
+    },
+    enabled: Boolean(taskId),
+    refetchInterval: query => {
+      const status = query.state.data?.status;
+      if (status === "completed" || status === "failed") {
+        return false;
+      }
+      return 1500;
+    },
+    refetchIntervalInBackground: true,
+  });
+}
+
+/**
+ * Custom hook to trigger batch Linked Open Data reconciliation across the catalog.
+ *
+ * Invalidates LOD statistics and the specific task query upon success.
+ *
+ * @returns Mutation result for triggering LOD reconciliation
+ */
+export function useTriggerLodReconciliation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params?: LODReconciliationTriggerParams) => triggerLodReconciliation(params),
+    onSuccess: data => {
+      qc.invalidateQueries({ queryKey: queryKeys.lodStats });
+      if (data?.task_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.lodTaskStatus(data.task_id) });
+        qc.invalidateQueries({ queryKey: queryKeys.lodActiveTask });
+      }
+    },
+  });
+}
+
+/**
+ * Custom hook to retrieve the currently active LOD reconciliation task, if any.
+ *
+ * Useful for restoring state across page navigations and reloads.
+ *
+ * @returns Query result containing the active task ID and state
+ */
+export function useActiveLodTask() {
+  return useQuery({
+    queryKey: queryKeys.lodActiveTask,
+    queryFn: () => getActiveLodTask(),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+/**
+ * Custom hook to cancel an active LOD reconciliation task.
+ *
+ * Invalidates LOD active task, task status, and stats upon success.
+ *
+ * @returns Mutation result for cancelling LOD reconciliation
+ */
+export function useCancelLodTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId?: string | null) => cancelLodTask(taskId),
+    onSuccess: data => {
+      qc.invalidateQueries({ queryKey: queryKeys.lodActiveTask });
+      qc.invalidateQueries({ queryKey: queryKeys.lodStats });
+      if (data?.task_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.lodTaskStatus(data.task_id) });
+      }
     },
   });
 }

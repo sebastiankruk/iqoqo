@@ -272,6 +272,24 @@ describe("CurrentContext", () => {
     expect(screen.getByText("Project Hail Mary")).toBeInTheDocument();
   });
 
+  it("renders cover images with unoptimized attribute for wishlist items in the 'Wish List' section", () => {
+    const itemWithCover = {
+      ...WISH_LIST_ITEM,
+      cover_url: "/static/covers/hail-mary.jpg",
+    };
+    mockUseItems.mockReturnValue(makeApiResponse([]));
+    mockUseWishlist.mockReturnValue({
+      data: { data: [itemWithCover], total: 1 },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useWishlist>);
+    renderWithProviders(<CurrentContext />);
+    const img = screen.getByRole("img", { name: "Project Hail Mary" });
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute("src", "/api/static/covers/hail-mary.jpg");
+    expect(img).toHaveAttribute("data-unoptimized", "true");
+  });
+
   it("does not render the 'Wish List' section when no wish_list items exist", () => {
     mockUseItems.mockReturnValue(makeApiResponse([READING_ITEM]));
     mockUseWishlist.mockReturnValue({

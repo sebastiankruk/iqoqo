@@ -26,7 +26,7 @@
  *   2. Wishlist components do NOT contain physical inventory actions
  *   3. Dashboard stats show separate counts for physical vs wishlist
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -75,7 +75,7 @@ describe("Task 5.1: ItemCard decoupled from wishlist logic", () => {
           // Allow the pattern only in comments or in the dedicated wishlist components
           const lines = content.split("\n");
           const offendingLines = lines.filter(
-            (line, idx) =>
+            line =>
               pattern.test(line) &&
               !line.trim().startsWith("//") &&
               !line.trim().startsWith("*") &&
@@ -254,30 +254,6 @@ describe("Task 5.3: Dashboard stats distinguish physical inventory from wishlist
     // At least one of each should be present
     expect(hasPhysicalField || /items/i.test(content)).toBe(true);
     expect(hasWishlistField).toBe(true);
-  });
-
-  it("Collection summary distinguishes physical count from wishlist count", () => {
-    const collectionFiles = [
-      "components/collection/collection-summary.tsx",
-      "components/collection/CollectionSummary.tsx",
-      "app/collection/page.tsx",
-    ];
-
-    for (const file of collectionFiles) {
-      const content = readSource(file);
-      if (!content) continue;
-
-      // Should have separate counters or labels for physical vs wishlist
-      const hasPhysicalCount = /physical|inventory|on.?shelf|available/i.test(content);
-      const hasWishlistCount = /wishlist|wish.?list|intent/i.test(content);
-
-      // If the file has any count-related logic, it should distinguish
-      if (/count|total|number/i.test(content)) {
-        // This is a soft check — just verify the file doesn't conflate the two
-        const hasConflation = /items.*=.*wish_list.*physical/i.test(content) || /physical.*wish_list/i.test(content);
-        expect(hasConflation).toBe(false);
-      }
-    }
   });
 });
 

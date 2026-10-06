@@ -4,6 +4,7 @@
 
 | Version | Supported          |
 |---------|--------------------|
+| 0.8.x   | :white_check_mark: |
 | 0.7.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
@@ -11,6 +12,26 @@
 If you discover a security vulnerability in this project, please email the maintainer or create a private security advisory on GitHub.
 
 ## Recent Security Updates
+
+### Session, Credential & Egress Hardening (October 2026)
+
+#### Authentication & Session Integrity
+
+- **Logout Now Actually Revokes the Token**: `POST /api/auth/logout` resolved in the browser to the Next.js route handler, which deleted the session cookie and nothing else. Next route handlers take precedence over the `/api/:path*` rewrite, so Flask's blocklisting of the token's `jti` was unreachable from any browser request — the JWT stayed valid until it expired, and any copy of it (a proxy log, a shared machine, an exfiltrated cookie) still authenticated after sign-out. The handler now forwards the token to Flask as a `Bearer` header before clearing the cookie.
+- **Login No Longer Reveals Which Addresses Are Registered**: an unknown email returned without running the password hash, measured at **0.00 ms against 90.40 ms** for a registered address with a wrong password. Scrypt dominates the request, so the gap enumerates every registered account far more reliably than the identical `"Invalid credentials"` body hides it. Login now always performs a password verification, comparing against a throwaway hash of a fresh per-process random value when there is nothing to check. The measured gap is **−0.28 ms**. Note that rate limiting and the minimum password length do **not** mitigate a timing oracle.
+- **Profile Bio Length Enforced on Every Write Path**: the limit was applied to the primary profile-update route only, so other write paths accepted arbitrarily long biographies.
+
+#### Egress & Privileged Operations
+
+- **Linked-Open-Data Mutation Routes Require `write:metadata`**: the semantic-link relink and delete endpoints were declared `@require_auth` with no permission check, letting any signed-in standard user schedule outbound authority lookups for any manifestation, or delete links the reconciler had established. The relink route is an egress trigger reachable from the inside — the same amplification the SSRF allowlist prevents from the outside.
+- **Browser RUM Credential Is Provisioned, Not Shipped**: the OpenObserve RUM ingest token was baked into the frontend bundle. It is now provisioned at deploy time by `scripts/provision_rum_token.py` and injected server-side.
+- **Bounded DNS Resolution Pool** *(corrected — see the August 2026 entry, which described the vulnerable mechanism as the fix)*: a single process-wide pool behind a bounded semaphore that fails closed with `SSRFError` on exhaustion.
+
+#### Scanning & Supply Chain
+
+- **Secret Scanner No Longer Exempts the OpenSpec Tree**: a path allowlist covering `openspec/` silenced every credential ever added to a change proposal or delta spec — and did not even work, because CI reported 17 findings from the scan range of already-redacted text. The allowlist is now keyed on the three historical commits, and OpenSpec files are in scope for every current and future commit.
+- **Unauthenticated Test-Reset Endpoint Requires a Shared Secret**: `POST /api/lending/test/reset` mutates state with no authentication of its own; requests must now present a matching `X-E2E-Reset-Secret`, and the endpoint refuses every request when `E2E_RESET_SECRET` is unset rather than falling open.
+- **QR Label Print Escapes Catalog Data**: the print path builds an HTML string for `document.write()`. Work titles, author lines and `expression.content_type` all pass through `escapeHtml()`.
 
 ### Secret Encryption & Operational Hardening (September 2026)
 
@@ -36,7 +57,7 @@ If you discover a security vulnerability in this project, please email the maint
 #### Network & SSRF Resilience
 
 - **SSRF-Safe HTTP Client**: Integrated `app/utils/http_client.py` for fetching external assets, blocking private and link-local IP ranges (RFC 1918, localhost, AWS metadata `169.254.169.254`).
-- **Thread-Safe DNS Resolution**: Refactored DNS resolution timeouts (`_resolve_with_timeout`) with unblocked executor shutdowns (`executor.shutdown(wait=False)`) to prevent Celery worker thread starvation DoS.
+- **Bounded DNS Resolution Pool**: `_resolve_with_timeout` submits lookups to a single process-wide `ThreadPoolExecutor` behind a bounded semaphore, and **fails closed with `SSRFError` when the pool has no capacity** — it never falls back to an unchecked or unbounded resolution. The previous implementation built a *new* single-worker pool per call and then called `executor.shutdown(wait=False)`, which releases the executor object while leaving its worker thread alive; a sustained DNS stall therefore accumulated live threads until the process exhausted its thread budget and the web tier went down with it. A blocked lookup is now abandoned rather than cancelled, because a thread already inside the C-level resolver cannot be interrupted — which is exactly why the worker count is capped.
 - **Redirect URL Type Coercion**: Enforced strict string coercion on redirect `Location` headers in `safe_get()` to avoid `TypeError` denial-of-service crashes.
 - **XXE Prevention**: Enforced `defusedxml` across XML parsers (`app/utils/bgg.py`, `app/api/items.py`) to block entity expansion and external entity retrieval attacks.
 

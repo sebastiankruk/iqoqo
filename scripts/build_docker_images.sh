@@ -127,6 +127,23 @@ docker build \
     --build-arg APP_VERSION="$VERSION" \
     "${TAG_ARGS[@]}" \
     -f deploy/Dockerfile .
+
+# Size gate. The budget lives in deploy/image-size-budget.txt; this runs against
+# the image just built and prints the per-path breakdown when it is over. The
+# previous target was a "<500 MB" line in a spec, which nothing could fail, so
+# it went unmet for a release. This one can.
+echo ""
+echo "📏 Checking backend image size budget..."
+PYTHON_BIN="python3"
+if [ -x ".venv/bin/python" ]; then
+    PYTHON_BIN=".venv/bin/python"
+fi
+"$PYTHON_BIN" scripts/check_image_size.py "iqoqo-backend:${TAG}" || {
+    echo "" >&2
+    echo "💥 Backend image exceeds its size budget; see deploy/image-size-budget.txt." >&2
+    exit 1
+}
+echo ""
 echo "✅ Backend image built successfully!"
 echo ""
 

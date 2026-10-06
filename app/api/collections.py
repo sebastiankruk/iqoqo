@@ -92,23 +92,107 @@ def create_collection() -> Response | tuple[Response, int]:
         return jsonify({"success": False, "error": "Database error"}), 500
 
 
+#: Maximum number of ancestors considered plausible for a collection tree.
+#: Collections nest a handful of levels deep in practice, so this only trips
+#: on structurally corrupt data (a pre-existing cycle written by a migration
+#: or a direct database edit) and serves as a hard stop on traversal cost.
+MAX_HIERARCHY_DEPTH = 50
+
+
+def get_collection_hierarchy_ids(collection_id: int, user_id) -> set[int]:
+    """Return ``collection_id`` plus every ancestor of it, in one query.
+
+    Walks the ``parent_id`` chain upward with a single recursive CTE instead
+    of one sequential query per hierarchy level, reducing validation from
+    ``O(depth)`` round-trips to ``O(1)``.
+
+    The starting collection is included in the result, so callers can tell a
+    *missing* collection (empty result) apart from a collection that exists but
+    sits at the root of the tree (result of size 1) without a second query.
+
+    The recursion is a ``UNION`` (de-duplicating) over ``(id, parent_id)``
+    rather than ``UNION ALL``.  That distinction matters for safety: if the
+    stored data already contains a cycle, de-duplication makes the walk
+    revisit each ``(id, parent_id)`` pair once and stop, whereas
+    ``UNION ALL`` would re-expand the cycle on every iteration and burn CPU
+    until the query timed out.
+
+    Parameters
+    ----------
+    collection_id:
+        Id of the collection whose ancestors are requested.
+    user_id:
+        Owning user.  Scoped so one user can never traverse another's tree.
+
+    Returns:
+        The set containing ``collection_id`` itself and all of its ancestors.
+
+    Raises
+    ------
+    ValueError
+        If the stored hierarchy already contains a cycle reachable from
+        ``collection_id``, or the chain exceeds :data:`MAX_HIERARCHY_DEPTH`.
+        Both indicate corrupt data that callers must not silently accept.
+    """
+    base = (
+        db.select(
+            UserCollection.id.label("id"),
+            UserCollection.parent_id.label("parent_id"),
+        )
+        .where(UserCollection.id == collection_id, UserCollection.owner_id == user_id)
+        .cte("collection_ancestors", recursive=True)
+    )
+
+    # The recursive branch needs its own alias of the CTE so it can reference
+    # the previous iteration's ``parent_id``. Walking *up* the tree means
+    # selecting the node whose own ``id`` equals the current row's ``parent_id``.
+    current = base.alias("c")
+    recursive = base.union(
+        db.select(
+            UserCollection.id.label("id"),
+            UserCollection.parent_id.label("parent_id"),
+        ).where(
+            UserCollection.id == current.c.parent_id,
+            UserCollection.owner_id == user_id,
+        )
+    )
+
+    rows = db.session.execute(db.select(recursive.c.id, recursive.c.parent_id)).all()
+    # A set-based UNION does not guarantee row order, and ordering is not
+    # meaningful here: cycle detection only depends on membership.
+    visited = {row.id for row in rows}
+
+    # If any reachable node names ``collection_id`` as its own parent, the
+    # starting node is its own ancestor: the stored data already contains a
+    # cycle. Callers must not silently treat that as a valid hierarchy.
+    if any(row.parent_id == collection_id for row in rows):
+        raise ValueError("Circular reference detected in collection hierarchy")
+
+    if len(visited) - 1 > MAX_HIERARCHY_DEPTH:
+        raise ValueError("Collection hierarchy exceeds maximum depth")
+
+    return visited
+
+
 def _validate_parent_hierarchy(collection_id: int, parent_id: int, user_id) -> str | None:
-    """Helper to validate parent collection hierarchy and detect circular references."""
+    """Validate parent collection hierarchy and detect circular references.
+
+    Resolves the full ancestor chain of the proposed parent with a single
+    recursive CTE, then rejects the update if the collection being moved
+    already appears in it.
+    """
     if parent_id == collection_id:
         return "A collection cannot be its own parent"
-    parent_collection = db.session.query(UserCollection).filter(UserCollection.id == parent_id, UserCollection.owner_id == user_id).first()
-    if not parent_collection:
+
+    # One query resolves both existence and the full ancestor chain. An empty
+    # set means the parent does not exist for this user; a parent that exists
+    # but sits at the root of the tree yields a set containing only itself.
+    hierarchy = get_collection_hierarchy_ids(parent_id, user_id)
+    if not hierarchy:
         return "Invalid parent collection"
 
-    # Walk up parent ancestor chain to prevent circular references
-    curr: UserCollection | None = parent_collection
-    while curr is not None:
-        if curr.id == collection_id:
-            return "Circular reference detected in collection hierarchy"
-        if curr.parent_id is not None:
-            curr = db.session.query(UserCollection).filter(UserCollection.id == curr.parent_id, UserCollection.owner_id == user_id).first()
-        else:
-            curr = None
+    if collection_id in hierarchy:
+        return "Circular reference detected in collection hierarchy"
     return None
 
 
@@ -129,7 +213,13 @@ def update_collection(collection_id: int) -> Response | tuple[Response, int]:
     if data.name is not None:
         collection.name = data.name
     if data.parent_id is not None:
-        err = _validate_parent_hierarchy(collection.id, data.parent_id, user_id)
+        try:
+            err = _validate_parent_hierarchy(collection.id, data.parent_id, user_id)
+        except ValueError:
+            # Structurally corrupt hierarchy data: reject the write rather
+            # than propagating a 500 to the client.
+            logger.error("Collection hierarchy exceeds maximum depth for collection %s", collection_id)
+            return jsonify({"success": False, "error": "Invalid parent collection"}), 400
         if err:
             return jsonify({"success": False, "error": err}), 400
         collection.parent_id = data.parent_id

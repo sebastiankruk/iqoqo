@@ -19,6 +19,7 @@ This module ensures that all linting tools pass when tests are run.
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
+import os
 import pathlib
 import py_compile
 import subprocess
@@ -103,12 +104,29 @@ def test_no_todo_fixme_in_critical_files():
 
 
 def test_shellcheck():
-    """Verify that all bash scripts pass shellcheck if installed."""
+    """Verify that all bash scripts pass shellcheck.
+
+    shellcheck is a system package, not a Python dependency, so it is absent
+    from the Docker image and from most developer machines. Skipping silently
+    there means a shell-script regression passes locally and fails in CI, which
+    is the worst possible split: the author sees green, the reviewer sees red.
+
+    So: skip only outside CI. Under CI a missing shellcheck is a hard failure,
+    because that means the gate has silently switched itself off and every
+    shell script is now unlinted. The workflow installs a pinned 0.10.0 before
+    running the suite, so a failure here is a genuine misconfiguration.
+    """
     import shutil
 
     shellcheck_bin = shutil.which("shellcheck")
     if not shellcheck_bin:
-        pytest.skip("shellcheck is not installed on this system")
+        if os.environ.get("CI", "").lower() in {"true", "1"}:
+            pytest.fail(
+                "shellcheck is not installed on this runner, so the shell-script gate is "
+                "silently disabled and every .sh file is unlinted. The `test` job installs a "
+                "pinned shellcheck before this suite; check that step still runs."
+            )
+        pytest.skip("shellcheck is not installed on this system (install it with `apt-get install shellcheck`)")
 
     # Find all .sh files in scripts/ and project root
     sh_files = list(pathlib.Path("scripts").rglob("*.sh"))

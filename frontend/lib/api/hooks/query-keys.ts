@@ -108,6 +108,8 @@ export const queryKeys = {
       ownership?.join(",") ?? "",
     ] as const,
   manifestation: (id: number) => ["manifestation", id] as const,
+  semanticLinks: (manifestationId: number) => ["manifestation", manifestationId, "semantic-links"] as const,
+
   worksShelf: (
     query?: string,
     category?: string,
@@ -164,5 +166,8 @@ export const queryKeys = {
    * @returns The query key for the FRBR tree
    */
   frbrTree: (id: number) => ["admin", "frbr", "tree", id] as const,
+  lodStats: ["admin", "lod", "stats"] as const,
+  lodTaskStatus: (taskId: string | null) => ["admin", "lod", "task", taskId] as const,
+  lodActiveTask: ["admin", "lod", "task", "active"] as const,
   config: ["config"] as const,
 };

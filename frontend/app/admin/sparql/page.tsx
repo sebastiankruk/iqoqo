@@ -237,9 +237,14 @@ export default function SPARQLExplorerPage() {
               Query the library catalog using SPARQL over the FRBR/Schema.org RDF graph.
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link href="/admin/content">Back to Custodians</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/lod">LOD Reconciliation</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/content">Back to Custodians</Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

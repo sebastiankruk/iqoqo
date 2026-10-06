@@ -51,7 +51,7 @@ vi.mock("@/components/item/item-header", () => ({
 }));
 
 vi.mock("@/components/item/item-actions", () => ({
-  ItemActions: ({ item }: { item: Item }) => (
+  ItemActions: () => (
     <div data-testid="item-actions">
       <button data-testid="edit-btn">Edit</button>
       <button data-testid="delete-btn">Delete</button>

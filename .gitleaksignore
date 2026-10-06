@@ -1,0 +1,38 @@
+# Gitleaks findings that are historical and cannot be fixed in place.
+#
+# Every entry here is scoped to ONE commit hash, one file, one rule and one
+# line. That precision is the whole point: a commit-scoped fingerprint stops
+# matching the moment the commit is amended, rebased or squashed, so it can
+# never silently hide a finding introduced later.
+#
+# The entries below are all for commit bd49b87, which introduced
+# tests/bash/sync_agy_memory.bats with secret-shaped fixtures written as
+# literals. That commit is already on the branch, so its findings are reported
+# on every run until the branch is rebased. They were false positives from the
+# start: every value is a public example key or a sequential placeholder.
+#
+# The underlying problem is fixed properly rather than suppressed, so this file
+# is expected to become empty and be deleted once bd49b87 leaves the branch:
+# the fixtures are now assembled at runtime from string fragments
+# (see the setup() block in that test), so no committed line contains a
+# complete credential and no rule can match one. Verified that pasting a
+# genuine key into that file is still reported by both gitleaks 8.24.3 (the
+# version CI runs) and 8.30.1.
+#
+# Do NOT add whole-file or broad-path entries here. A path-scoped entry would
+# keep working after the offending line is fixed, and would hide a real secret
+# pasted into the file later.
+#
+# Regenerate with:
+#   gitleaks detect --config .gitleaks.toml -v --log-opts="<range>" \
+#     | grep Fingerprint | awk '{print $2}'
+
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:aws-access-token:39
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:aws-access-token:67
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:curl-auth-header:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:gcp-api-key:40
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:gcp-api-key:68
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:github-pat:44
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:github-pat:73
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:jwt:42
+bd49b87974377a2894f3a87dfab2a8c33dcd1e20:tests/bash/sync_agy_memory.bats:private-key:43

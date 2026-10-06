@@ -27,6 +27,7 @@ import concurrent.futures
 import ipaddress
 import logging
 import socket
+import threading
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
@@ -54,18 +55,57 @@ class SSRFError(Exception):
     """Raised when a request targets a restricted IP range."""
 
 
+# socket.getaddrinfo() has no native timeout, so a stalling resolver could pin a
+# worker thread indefinitely and starve the pool -- the DNS-based thread
+# starvation defense documented in tests/test_http_client.py.
+#
+# The executor is a module-level singleton rather than one-per-call. A per-call
+# executor is not a defense: shutdown(wait=False) releases the executor object
+# but leaves the worker thread alive, so a burst of requests -- or of *timeout*
+# responses -- spawned one unkillable thread each, with nothing capping the
+# total. A shared pool makes the thread count O(max_workers) for the process
+# lifetime, so one DNS stall costs one worker rather than one thread per
+# request.
+#
+# _DNS_MAX_SLOTS is deliberately larger than the worker count so brief bursts
+# queue instead of failing, but it is finite: the pool cannot accumulate an
+# unbounded backlog of pending lookups. When it is exhausted the lookup fails
+# closed, because this is a security check and skipping resolution would
+# defeat the SSRF protection entirely.
+_DNS_MAX_WORKERS = 8
+_DNS_MAX_SLOTS = 16
+# Intentionally never used as a context manager: a module-level pool must
+# outlive any single call, and `with` would tear it down after the first one.
+# pylint: disable=consider-using-with
+_DNS_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=_DNS_MAX_WORKERS, thread_name_prefix="iqoqo-dns")
+_DNS_SLOTS = threading.BoundedSemaphore(_DNS_MAX_SLOTS)
+
+
 def _resolve_with_timeout(hostname: str, timeout: float = 5.0) -> list:
-    """Executes DNS resolution in a separate thread to enforce a strict timeout."""
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(socket.getaddrinfo, hostname, None)
+    """Executes DNS resolution in a bounded shared thread pool to enforce a strict timeout.
+
+    Raises ``SSRFError`` when the resolver stalls, when the lookup fails, or
+    when the pool has no capacity -- never falls back to an unbounded or
+    unchecked resolution.
+    """
+    if not _DNS_SLOTS.acquire(timeout=timeout):
+        raise SSRFError(f"DNS resolver pool exhausted, refusing to resolve {hostname} unchecked")
+
     try:
-        return future.result(timeout=timeout)
-    except concurrent.futures.TimeoutError as exc:
-        raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
-    except (socket.gaierror, OSError) as exc:
-        raise SSRFError(f"DNS resolution failed for {hostname}") from exc
+        future = _DNS_POOL.submit(socket.getaddrinfo, hostname, None)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as exc:
+            # The future is abandoned, not cancelled: a thread already blocked in
+            # the C-level resolver cannot be interrupted. It stays checked out of
+            # the pool's worker set until the lookup returns, which is precisely
+            # why the worker count is capped.
+            future.cancel()
+            raise SSRFError(f"DNS resolution timed out for {hostname}") from exc
+        except (socket.gaierror, OSError) as exc:
+            raise SSRFError(f"DNS resolution failed for {hostname}") from exc
     finally:
-        executor.shutdown(wait=False)
+        _DNS_SLOTS.release()
 
 
 def is_ip_blocked(ip_str: str) -> bool:

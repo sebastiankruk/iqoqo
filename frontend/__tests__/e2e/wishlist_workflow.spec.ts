@@ -654,3 +654,125 @@ test.describe("Instant Wishlist Subtraction from Item Card", () => {
     }
   });
 });
+
+test.describe("Dashboard Wishlist Covers Rendering", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+    await page.route("**/api/profile**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: "test-user-id",
+            email: "test@iqoqo.local",
+            permissions: ["upload:cover", "update:item", "write:metadata"],
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { federation_enabled: false, version: packageJson.version },
+        }),
+      });
+    });
+  });
+
+  test("renders cover images for wishlist items on the dashboard without optimization errors", async ({ page }) => {
+    // Mock items (empty reading items so only wishlist shows)
+    await page.route("**/api/items?**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
+          meta: { total: 0, page: 1, limit: 10, pages: 1 },
+        }),
+      });
+    });
+
+    // Mock wishlist with local cover and external legacy cover
+    await page.route("**/api/wishlist**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [
+            {
+              id: 101,
+              work_id: 1,
+              manifestation_id: 11,
+              title: "Local Cover Book",
+              authors: ["Author Local"],
+              cover_url: "/static/covers/local-test.jpg",
+              cover_status: "ready",
+              collection_status: "wish_list",
+              status: "want_to_read",
+            },
+            {
+              id: 102,
+              work_id: 2,
+              manifestation_id: 12,
+              title: "External Cover Book",
+              authors: ["Author External"],
+              cover_url: "https://covers.openlibrary.org/b/id/12345-M.jpg",
+              cover_status: "ready",
+              collection_status: "wish_list",
+              status: "want_to_read",
+            },
+          ],
+          pagination: { total: 2, page: 1, limit: 10 },
+        }),
+      });
+    });
+
+    // Mock stats
+    await page.route("**/api/stats**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { total_items: 0, items_wish_list: 2 },
+        }),
+      });
+    });
+
+    // Mock recent manifestations
+    await page.route("**/api/manifestations/recent**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
+        }),
+      });
+    });
+
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    // Both cards should be visible
+    await expect(page.getByText("Local Cover Book")).toBeVisible();
+    await expect(page.getByText("External Cover Book")).toBeVisible();
+
+    // Verify images rendered with expected src
+    const localImg = page.locator('img[alt="Local Cover Book"]');
+    await expect(localImg).toBeVisible();
+    await expect(localImg).toHaveAttribute("src", /\/static\/covers\/local-test\.jpg/);
+
+    const extImg = page.locator('img[alt="External Cover Book"]');
+    await expect(extImg).toBeVisible();
+    await expect(extImg).toHaveAttribute("src", "https://covers.openlibrary.org/b/id/12345-M.jpg");
+  });
+});

@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Derives the application version from packaging metadata.
+
+Falls back through importlib.metadata, then a generated constant, then 'dev'.
+The version is stamped at image build time from the git tag, so this never needs
+a network call."""
 
 import pathlib
 import sys
@@ -20,6 +25,7 @@ import tomllib
 
 
 def main():
+    """Print the resolved application version to stdout."""
     pyproject_path = pathlib.Path("pyproject.toml")
     if not pyproject_path.exists():
         sys.exit("Error: pyproject.toml not found.")

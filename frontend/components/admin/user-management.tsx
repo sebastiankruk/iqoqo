@@ -17,7 +17,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getUsers, AdminUser } from "@/lib/api/admin";
-import { Loader2, Search, Filter } from "lucide-react";
+import { Loader2, Search, Filter, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { RbacSheet } from "./rbac-sheet";
 
 interface UserManagementProps {
@@ -36,6 +37,10 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  // Distinguishes "the request failed" from "this filter legitimately matched
+  // nobody". Without it a 500 renders "No users found." and an administrator
+  // reads that as an empty tenant rather than a broken admin page.
+  const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,8 +51,12 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
     try {
       const response = await getUsers({ search: searchQuery, status: statusFilter });
       setUsers(response.data);
+      setError(null);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch users";
       console.error(err);
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -105,6 +114,15 @@ export function UserManagement({ canEdit = false }: UserManagementProps) {
               <tr>
                 <td colSpan={4} className="py-12 text-center text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={4} className="py-8 text-center">
+                  <span className="inline-flex items-center gap-2 text-destructive">
+                    <AlertCircle className="w-4 h-4" />
+                    Could not load users: {error}
+                  </span>
                 </td>
               </tr>
             ) : users.length === 0 ? (

@@ -21,6 +21,15 @@ import { Footer } from "@/components/dashboard/footer";
 import { WishlistCard } from "@/components/collection/wishlist-card";
 import { useWishlist } from "@/lib/api/wishlist";
 
+/**
+ * The reader's wishlist, rendered independently of any owned Item.
+ *
+ * A wishlist entry is an `UserWorkIntent` and exists whether or not the reader
+ * owns a copy, which is why this page is not a filtered view of the
+ * collection.
+ *
+ * @returns The wishlist page element
+ */
 export default function WishlistPage() {
   const { data, isLoading, isError } = useWishlist({ limit: 100 });
   const items = data?.data ?? [];

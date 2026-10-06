@@ -150,6 +150,19 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
       { key: "LOCAL_SD_URL", label: "Local Stable Diffusion URL", type: "text", placeholder: "http://localhost:7860" },
     ],
   },
+  {
+    id: "lod_services",
+    title: "Linked Open Data (LOD) Services",
+    description: "External Linked Open Data resolvers such as GeoNames for spatial entity reconciliation.",
+    items: [
+      {
+        key: "GEONAMES_USERNAME",
+        label: "GeoNames Username",
+        type: "text",
+        placeholder: "Enter GeoNames username (free account on geonames.org)",
+      },
+    ],
+  },
 ];
 
 const SETTING_GROUPS = {
@@ -450,7 +463,7 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               }}
               placeholder={s.placeholder}
             />
-            {(isMasked || source !== "missing") && (
+            {(isMasked || (s.type === "api" && source !== "missing")) && (
               <button
                 type="button"
                 onClick={() => toggleReveal(s.key)}

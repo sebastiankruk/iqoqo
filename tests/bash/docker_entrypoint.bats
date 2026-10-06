@@ -12,21 +12,24 @@
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Tests for deploy/docker-entrypoint.sh pre-start rclone directory check
-# (OpenSpec v0716-alembic-migration-sre, task 3.3).
+# Tests for deploy/docker-entrypoint.sh pre-start checks.
 #
-# Verifies:
-#   - rclone config dir is created when absent (fresh container deployment)
-#   - check is idempotent: re-running does not fail when dir already exists
-#   - entrypoint exec's the given command and propagates its exit code
+# The entrypoint no longer creates an rclone config directory — remote storage
+# is configured from environment variables via boto3. What remains is a
+# half-configuration check, because a bucket with no credentials (or the
+# reverse) makes every remote operation silently no-op, and the first symptom
+# is a backup archive that never appears. Plus the legacy-config notice and the
+# exec/URL-rewrite behaviour.
+#
+# (Predecessor: OpenSpec v0716-alembic-migration-sre task 3.3.)
 
 ENTRYPOINT="${BATS_TEST_DIRNAME}/../../deploy/docker-entrypoint.sh"
 
 setup() {
   export TEST_TEMP_DIR="$(mktemp -d)"
-  # Override HOME so mkdir -p targets our temp dir, not the real one
+  # Override HOME so the legacy-config probe targets our temp dir, not the real one
   export HOME="${TEST_TEMP_DIR}/fakehome"
   mkdir -p "${HOME}"
 }
@@ -35,26 +38,16 @@ teardown() {
   rm -rf "${TEST_TEMP_DIR}"
 }
 
-@test "entrypoint creates rclone config dir on fresh container (dir absent)" {
-  # Confirm directory is absent before running
+@test "entrypoint does not create an rclone config directory" {
+  # The old implementation created ${HOME}/.config/rclone on every start. With
+  # rclone gone there is nothing to create, and an empty credential directory is
+  # exactly the kind of thing that suggests a mount is expected.
+  [ ! -d "${HOME}/.config" ]
+
+  run bash "${ENTRYPOINT}" true
+
+  [ "${status}" -eq 0 ]
   [ ! -d "${HOME}/.config/rclone" ]
-
-  run bash "${ENTRYPOINT}" true
-
-  [ "${status}" -eq 0 ]
-  [ -d "${HOME}/.config/rclone" ]
-}
-
-@test "entrypoint is idempotent: does not fail when rclone dir already exists" {
-  # Pre-create the directory (simulates an existing bind-mount or prior run)
-  mkdir -p "${HOME}/.config/rclone"
-  echo "rclone_config_placeholder = exists" > "${HOME}/.config/rclone/rclone.conf"
-
-  run bash "${ENTRYPOINT}" true
-
-  [ "${status}" -eq 0 ]
-  # Existing file inside the directory must still be present
-  [ -f "${HOME}/.config/rclone/rclone.conf" ]
 }
 
 @test "entrypoint exec's the given command and exits with its code" {
@@ -67,31 +60,54 @@ teardown() {
   [ "${status}" -eq 42 ]
 }
 
-@test "entrypoint warns when rclone.conf is not readable" {
-  mkdir -p "${HOME}/.config/rclone"
-  touch "${HOME}/.config/rclone/rclone.conf"
-  chmod 0000 "${HOME}/.config/rclone/rclone.conf"
-
-  # Create mock chmod to prevent chmod 0600 from making the file readable
-  MOCK_BIN="${TEST_TEMP_DIR}/mock-bin"
-  mkdir -p "${MOCK_BIN}"
-  printf '#!/bin/sh\nexit 1\n' > "${MOCK_BIN}/chmod"
-  chmod +x "${MOCK_BIN}/chmod"
-
-  PATH="${MOCK_BIN}:${PATH}" run bash "${ENTRYPOINT}" true
+@test "entrypoint warns when a bucket is set but credentials are missing" {
+  run env S3_BUCKET_BACKUP=my-backups bash "${ENTRYPOINT}" true
   [ "${status}" -eq 0 ]
   [[ "${output}" =~ "WARNING:" ]]
-  [[ "${output}" =~ "not readable" ]]
+  [[ "${output}" =~ "AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is empty" ]]
 }
 
-@test "entrypoint does not warn when rclone.conf is readable" {
-  mkdir -p "${HOME}/.config/rclone"
-  touch "${HOME}/.config/rclone/rclone.conf"
-  chmod 0600 "${HOME}/.config/rclone/rclone.conf"
+@test "entrypoint warns when credentials are set but no bucket is configured" {
+  run env AWS_ACCESS_KEY_ID=AKIAEXAMPLE AWS_SECRET_ACCESS_KEY=secret bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "WARNING:" ]]
+  [[ "${output}" =~ no.S3_BUCKET_.*.variable.is.set ]]
+}
 
+@test "entrypoint does not warn when S3 is fully configured" {
+  run env AWS_ACCESS_KEY_ID=AKIAEXAMPLE AWS_SECRET_ACCESS_KEY=secret \
+      S3_BUCKET_BACKUP=my-backups bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ ! "${output}" =~ "WARNING:" ]]
+}
+
+@test "entrypoint does not warn when S3 is entirely absent" {
   run bash "${ENTRYPOINT}" true
   [ "${status}" -eq 0 ]
   [[ ! "${output}" =~ "WARNING:" ]]
+}
+
+@test "entrypoint reports a leftover rclone.conf so the bind-mount gets removed" {
+  mkdir -p "${HOME}/.config/rclone"
+  touch "${HOME}/.config/rclone/rclone.conf"
+
+  run bash "${ENTRYPOINT}" true
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "is no longer used" ]]
+  [[ "${output}" =~ "Remove the rclone.conf bind-mount" ]]
+}
+
+@test "entrypoint survives a read-only HOME" {
+  RO_HOME="${TEST_TEMP_DIR}/readonly-home"
+  mkdir -p "${RO_HOME}"
+  chmod 0555 "${TEST_TEMP_DIR}" "${RO_HOME}"
+
+  run env HOME="${RO_HOME}" bash "${ENTRYPOINT}" true
+
+  [ "${status}" -eq 0 ]
+
+  chmod -R u+rwX "${TEST_TEMP_DIR}" 2>/dev/null || true
 }
 
 @test "entrypoint rewrites localhost database and redis URLs to docker service names" {
@@ -106,6 +122,24 @@ teardown() {
 @test "entrypoint rewrites 127.0.0.1 database and redis URLs to docker service names" {
   DATABASE_URL="postgresql://iqoqo:pass@127.0.0.1:5432/iqoqo" \
   REDIS_URL="redis://127.0.0.1:6379/0" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
+  [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
+}
+
+@test "entrypoint rewrites scheme-relative 127.0.0.1 URLs" {
+  # The `//host:port` form is what a socket-style URL looks like; it must be
+  # rewritten too, or the container silently talks to itself and fails to connect.
+  DATABASE_URL="postgresql://iqoqo:pass@//127.0.0.1:5432/iqoqo" \
+  run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "DB=postgresql://iqoqo:pass@//db:5432/iqoqo" ]]
+}
+
+@test "entrypoint leaves an already-correct service URL untouched" {
+  DATABASE_URL="postgresql://iqoqo:pass@db:5432/iqoqo" \
+  REDIS_URL="redis://redis:6379/0" \
   run bash "${ENTRYPOINT}" sh -c 'echo "DB=$DATABASE_URL REDIS=$REDIS_URL"'
   [ "${status}" -eq 0 ]
   [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]

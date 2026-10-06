@@ -1,0 +1,365 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# ============================================================================
+#  iqoqo — production edge reverse proxy (REFERENCE CONFIGURATION)
+# ============================================================================
+#
+# This is a *reference*, not a drop-in. The in-container proxy in
+# deploy/nginx.conf terminates plain HTTP on port 80 and relies on the operator
+# to put TLS in front of it. This file is the missing half: an edge nginx that
+# owns the certificate, redirects everything to HTTPS, and applies the
+# security headers the container config has no reason to care about.
+#
+# Why it is a separate file rather than a variant of deploy/nginx.conf:
+# the two run in different places with different trust assumptions. The
+# in-container proxy is reachable only from the compose network; this one is
+# internet-facing. Headers like HSTS and a strict CSP are only correct at the
+# edge, and a cookie-domain mistake in the container config has a blast radius
+# of one container rather than one host.
+#
+# ── How to use ──────────────────────────────────────────────────────────────
+#
+#   1. Copy this file to /etc/nginx/sites-available/iqoqo.conf
+#   2. Replace every ${...} placeholder below (grep for '${')
+#   3. Obtain certificates:  certbot --nginx -d ${SERVER_NAME}
+#   4. nginx -t && systemctl reload nginx
+#
+# ── What you must check before deploying ────────────────────────────────────
+#
+#   * Content-Security-Policy is deliberately strict. It allows Google Fonts
+#     and Google OAuth because the app uses them; it allows 'unsafe-inline'
+#     and 'unsafe-eval' for scripts because Next.js injects inline bootstrap
+#     and the bundle is not nonce-aware. That weakens the CSP, and it is
+#     honest about that: tighten it only after verifying the app still renders.
+#     A CSP that breaks the login page is worse than a slightly loose one.
+#
+#   * Permissions-Policy disables camera, microphone, geolocation and payment.
+#     The scanner flow uploads images from a file input, not a camera, so this
+#     is safe today — but a future "photograph the barcode" feature would need
+#     camera=(self) here.
+#
+#   * HSTS preload is NOT enabled. Preloading is effectively irreversible for
+#     a year and applies to every subdomain, so it is a deliberate omission
+#     rather than an oversight. Only add it once you are certain every
+#     subdomain is HTTPS-only.
+#
+#   * The API proxy sets `proxy_set_header X-Forwarded-Proto https` rather than
+#     trusting $http_x_forwarded_proto. This config is the edge, so it knows the
+#     scheme for certain; trusting a client-supplied header here would let a
+#     caller forge an http:// origin for generated links.
+#
+# OpenSpec change `devops-infrastructure-updates` §2.1–§2.3.
+
+# ── Version requirement ─────────────────────────────────────────────────────
+#
+# This config needs nginx >= 1.27.3, for two directives:
+#
+#   `http2 on;`                                  >= 1.25.1
+#   `resolve` on an upstream `server`, and
+#   `resolver` inside an `upstream` block         >= 1.27.3
+#
+# That is the same floor the project's own edge image uses (nginx:1.31.3), so
+# matching it keeps this file consistent with the deployed proxy. On an older
+# nginx — a stock Ubuntu 24.04 ships 1.24 — `nginx -t` reports
+# `"resolver" directive is not allowed here`, which is a parser limitation
+# rather than a defect in this file. Replace the `upstream` blocks with plain
+# `server host:port;` entries and a `resolver` in the `http {}` context if you
+# must run something that old, and accept that upstream addresses are then only
+# resolved at startup.
+
+# ---------------------------------------------------------------------------
+# Rate limiting (must be in the http{} block; this file is an http-include)
+# ---------------------------------------------------------------------------
+#
+# Zones are shared-state, so sizing is a memory decision, not a style choice.
+# 10m is roughly 160k tracked client addresses, which is ample for a
+# self-hosted instance and costs about 10 MB per zone.
+#
+# api_general is the baseline for all /api/ traffic.
+# api_scanner is tighter because /api/scan triggers barcode/OCR lookups against
+# external metadata providers and accepts multi-image uploads — it is the most
+# expensive endpoint in the app, and the one most worth throttling.
+# api_rum is the OpenObserve RUM/Logs ingest endpoint. It is unauthenticated by
+# construction — the RUM client token is a public credential embedded in the
+# browser bundle — so it gets a tight budget to bound abuse volume.
+limit_req_zone $binary_remote_addr zone=api_general:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=api_scanner:10m  rate=5r/s;
+limit_req_zone $binary_remote_addr zone=api_rum:10m     rate=10r/s;
+
+# Websocket upgrade map for the Next.js dev/prod server. Without this, the
+# Connection header is copied verbatim from the client, which is a request
+# smuggling primitive against some backends.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# ---------------------------------------------------------------------------
+# Upstreams
+# ---------------------------------------------------------------------------
+#
+# http-context only — nginx rejects `upstream` inside a `server` block, so these
+# must live outside both server blocks below.
+#
+# `zone` gives each upstream a shared-memory name, which is what allows multiple
+# nginx workers to share one connection pool instead of each opening its own.
+# `resolve` re-resolves the hostname on the Docker resolver's TTL, so a
+# restarted or rescheduled container is picked up without an nginx reload.
+upstream iqoqo_api {
+    zone iqoqo_api 64k;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    server ${API_UPSTREAM}:${API_PORT} resolve;
+}
+
+upstream iqoqo_frontend {
+    zone iqoqo_frontend 64k;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    server ${FRONTEND_UPSTREAM}:${FRONTEND_PORT} resolve;
+}
+
+# OpenObserve is only in the network when the monitoring compose file is
+# composed alongside the main stack, so this upstream is declared unconditionally
+# and resolved lazily by `resolve` — a container that is absent yields a 502 on
+# /rum/ rather than an nginx startup failure.
+upstream iqoqo_openobserve {
+    zone iqoqo_openobserve 64k;
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    server ${OPENOBSERVE_UPSTREAM}:${OPENOBSERVE_PORT} resolve;
+}
+
+# ---------------------------------------------------------------------------
+# Security headers
+# ---------------------------------------------------------------------------
+#
+# Repeated per location because `add_header` in nginx REPLACES the inherited
+# set rather than merging: a single add_header in a location drops every header
+# set at server level. That is the single most common way these headers silently
+# disappear, so the locations that matter include them explicitly.
+#
+# nginx also sends `Server: nginx/<version>` by default. `server_tokens off`
+# suppresses the version, which is minor but free.
+
+# ---------------------------------------------------------------------------
+# Port 80 — ACME challenge, then unconditional redirect to HTTPS
+# ---------------------------------------------------------------------------
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${SERVER_NAME};
+
+    # Certbot's webroot mode writes here. Keeping this location exempt from
+    # every other directive is what lets renewals work after hardening.
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+        default_type "text/plain";
+    }
+
+    # Everything else goes to 443. Including requests that already claim to be
+    # HTTPS: an unauthenticated client must never be able to keep talking
+    # plaintext just by sending the header itself.
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Port 443 — TLS termination
+# ---------------------------------------------------------------------------
+server {
+    # `http2 on` requires nginx >= 1.25.1, and the upstream `resolve` further
+    # down requires >= 1.27.3; see the version note at the top of this file. The
+    # older `listen 443 ssl http2;` spelling was removed in 1.25.1.
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${SERVER_NAME};
+
+    # ── Certificates ───────────────────────────────────────────────────────
+    # ${LETSENCRYPT_LIVE_DIR} is a symlink Certbot maintains; the
+    # fullchain.pem must be used, not cert.pem, or browsers reject the chain.
+    ssl_certificate     ${LETSENCRYPT_FULLCHAIN_PEM};
+    ssl_certificate_key ${LETSENCRYPT_PRIVKEY_PEM};
+
+    # Renewed roughly every 30 days by certbot's timer, and reloaded without
+    # dropping connections.
+    ssl_trusted_certificate ${LETSENCRYPT_CHAIN_PEM};
+    ssl_stapling on;
+    ssl_stapling_verify on;
+
+    # ── TLS policy ──────────────────────────────────────────────────────────
+    # TLS 1.2 is the floor. TLS 1.0/1.1 are broken and every current browser
+    # refuses them anyway; keeping them enabled only widens the attack surface
+    # for legacy clients.
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Forward-secret suites first, then AEAD. The CBC and 3DES suites from
+    # nginx's default are all removed: CBC is vulnerable to Lucky13-class
+    # attacks and 3DES to Sweet32, and neither is needed by any client that
+    # matters.
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+
+    # Enables TLS 1.3 cipher control. nginx ignores ssl_ciphers for 1.3, so
+    # this is what actually governs it.
+    ssl_conf_command Ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305;
+
+    ssl_prefer_server_ciphers off;   # let the client pick for 1.3
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;         # tickets weaken forward secrecy on resumption
+
+    # OCSP stapling needs a resolver; without this line stapling silently
+    # never works.
+    resolver ${RESOLVER} valid=300s ipv6=off;
+    resolver_timeout 5s;
+
+    # ── Baseline hardening ──────────────────────────────────────────────────
+    server_tokens off;
+    client_max_body_size 60M;
+    client_body_timeout 30s;
+    client_header_timeout 30s;
+    send_timeout 30s;
+
+    # Do not advertise the internal service layout. This is the default, set
+    # explicitly because it is a header people expect to see configured.
+    proxy_hide_header X-Powered-By;
+
+    # ── Security headers ────────────────────────────────────────────────────
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+
+    # 'unsafe-inline'/'unsafe-eval' are required by Next.js (see header note).
+    # 'unsafe-eval' is only needed in development; drop it in production once
+    # you have confirmed the bundle does not need it.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'; upgrade-insecure-requests" always;
+
+    # ── Proxy preamble ──────────────────────────────────────────────────────
+    # Set once here and inherited by every location, so a location cannot
+    # accidentally omit it and break absolute URL generation in Flask.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Host  $host;
+
+    # ── API: /api/scan — expensive, tighter budget and smaller body cap ─────
+    location /api/scan {
+        limit_req zone=api_scanner burst=5 nodelay;
+        # The scanner posts multi-image uploads; 60M globally is wasteful here
+        # and this endpoint is the one most likely to be abused for upload DoS.
+        client_max_body_size 25m;
+        limit_req_status 429;
+
+        proxy_pass http://iqoqo_api;
+        proxy_http_version 1.1;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # ── API: everything else ────────────────────────────────────────────────
+    location /api/ {
+        limit_req zone=api_general burst=20 nodelay;
+        limit_req_status 429;
+
+        proxy_pass http://iqoqo_api;
+        proxy_http_version 1.1;
+        # Matches the in-container proxy. A longer read timeout would let a
+        # slow query pin an edge worker instead of failing fast.
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # ── Cover and gallery images, served straight from disk ─────────────────
+    # These are content-addressed by upload time rather than by build hash, so
+    # a redeploy does not invalidate them: 30 days of caching is safe, and
+    # `immutable` is NOT safe here.
+    location /static/covers/ {
+        alias /usr/share/nginx/html/covers/;
+        expires 30d;
+        add_header Cache-Control "public, no-transform" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location /static/gallery/ {
+        alias /usr/share/nginx/html/gallery/;
+        expires 30d;
+        add_header Cache-Control "public, no-transform" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # ── Next.js build output: content-hashed, so cache forever ──────────────
+    # Filenames contain a build hash, so a deploy produces new URLs and a
+    # one-year immutable cache is correct. The upstream's own Cache-Control is
+    # overridden rather than appended, or the two policies would conflict.
+    location /_next/static/ {
+        proxy_pass http://iqoqo_frontend;
+        proxy_http_version 1.1;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # ── Next.js dynamic routes: Server Actions, RSC payloads ───────────────
+    # Never cacheable. A stale Server Action ID produces a flood of "Failed to
+    # find Server Action" errors after every deploy.
+    location /_next/ {
+        proxy_pass http://iqoqo_frontend;
+        proxy_http_version 1.1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # ── OpenObserve RUM & Logs ingest ───────────────────────────────────────
+    # Browser RUM and Logs ingest. OpenObserve is bound to loopback inside the
+    # compose network, so without this route an end user's browser has nowhere
+    # to send telemetry in a dockerized deployment and RUM is silently dead.
+    #
+    # This is an *unauthenticated write endpoint*: the RUM client token is a
+    # public credential embedded in the browser bundle, so anyone who can read
+    # it can post events here. It therefore gets its own tight rate limit, is
+    # never cached, and is never buffered — a buffered ingest queue would let a
+    # single client pin server memory.
+    location /rum/ {
+        limit_req zone=api_rum burst=20 nodelay;
+
+        proxy_pass http://iqoqo_openobserve;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+
+        proxy_buffering off;
+        proxy_request_buffering off;
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # ── Frontend pages and websockets ───────────────────────────────────────
+    location / {
+        proxy_pass http://iqoqo_frontend;
+        proxy_http_version 1.1;
+        # Upgrade the connection through the map rather than forwarding the
+        # client's raw Connection header.
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 60s;
+    }
+}

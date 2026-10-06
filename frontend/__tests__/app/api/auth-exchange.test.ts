@@ -24,6 +24,13 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ set: mockCookieSet }),
 }));
 
+/**
+ * Point the mocked `fetch` at a canned exchange response.
+ *
+ * @param payload - JSON body the exchange route will parse
+ * @param status - HTTP status to return
+ * @returns The installed fetch mock
+ */
 function installExchangeResponse(payload: object, status = 200) {
   const fetchMock = vi
     .fn()

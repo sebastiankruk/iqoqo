@@ -19,15 +19,7 @@ import { toast } from "sonner";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
 import * as adminApi from "@/lib/api/admin";
 import { PermissionName } from "@/lib/permissions";
-import {
-  useProfile,
-  useFrbrTree,
-  useUpdateFrbrEntity,
-  useDeleteFrbrEntity,
-  useAddFrbrChild,
-  useWorkParts,
-  useUserSearch,
-} from "@/lib/api/hooks";
+import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity, useAddFrbrChild } from "@/lib/api/hooks";
 
 vi.mock("@/lib/api/admin");
 
@@ -1014,6 +1006,32 @@ describe("FrbrEditor Component", () => {
       expect(toast.error).toHaveBeenCalledWith("Escalation failed");
       expect(screen.getByRole("button", { name: /Submit Request/i })).toBeInTheDocument();
     });
+  });
+
+  it("will not submit a second escalation while one is in flight", async () => {
+    // `create_escalation_request` inserts a fresh `pending` row per call with
+    // no de-duplication (`app/api/social.py:455`), so a double-click files the
+    // same request twice and both land in the custodian review queue.
+    (mockCreateEscalationMutation as { isPending: boolean }).isPending = true;
+
+    try {
+      render(<FrbrEditor manifestationId={3} />);
+      await waitFor(() => expect(screen.getByTestId("frbr-tree-view")).toBeInTheDocument());
+
+      fireEvent.click(screen.getAllByRole("button", { name: /^Escalate$/i })[0]);
+      await waitFor(() => expect(screen.getByText("Request Escalation")).toBeInTheDocument());
+
+      const submitButton = screen.getByRole("button", { name: /Submitting/i });
+
+      // Two independent defences, both asserted: the button is inert, and the
+      // handler refuses regardless of how the click arrives.
+      expect(submitButton).toBeDisabled();
+      fireEvent.click(submitButton);
+      fireEvent.click(submitButton);
+      expect(mockCreateEscalationMutation.mutateAsync).not.toHaveBeenCalled();
+    } finally {
+      (mockCreateEscalationMutation as { isPending: boolean }).isPending = false;
+    }
   });
 
   it("creates Manifestation child when Add Child is confirmed on Expression parent", async () => {

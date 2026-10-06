@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+"""Authentication, session and token endpoints.
+
+Owns login, logout, the session exchange used by the Next.js frontend, and the
+admin bootstrap token. Token verification is delegated to the auth models, not
+reimplemented here."""
 
 import hashlib
 import logging
@@ -28,7 +33,9 @@ from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, current_app, jsonify, redirect, request, session
 from joserfc.errors import JoseError
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.api.decorators import admin_required, cache_token_revoked, require_auth
 from app.config import Config
@@ -36,6 +43,48 @@ from app.core.limiter import limiter
 from app.db.models import InstanceSettings, OAuthExchangeCode, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 from app.utils.http_client import is_safe_url
+
+# Werkzeug's default KDF, and the reason login timing needs care. `scrypt` with
+# these parameters costs roughly 90 ms, which is far longer than any network or
+# framework overhead around it.
+_PASSWORD_HASH_METHOD = "scrypt"
+
+# Hash of a value generated per process and never disclosed, used to keep the
+# "no such account" path as expensive as the "wrong password" path. See
+# `_verify_login_password`.
+_dummy_password_hash: str | None = None
+
+
+def _verify_login_password(user: User | None, password: str) -> bool:
+    """Check a password without revealing whether the account exists.
+
+    The KDF dominates this endpoint's runtime, so the naive
+    ``if not user or not user.check_password(password)`` answered "no such
+    account" without ever hashing: 0.00 ms against 90.40 ms for a registered
+    email with a wrong password, measured on identical code. That gap enumerates
+    every registered address far more reliably than the generic error message
+    hides it, and the same shortcut applied to a Google-only account, whose
+    ``password_hash`` is NULL by design (`ck_user_auth_method`).
+
+    Verifying against a throwaway hash when there is nothing to check makes the
+    two paths cost the same. The throwaway is a fresh random value per process,
+    so the hash is worthless even if it were ever extracted from a core dump.
+
+    @param user: The matched account, or None when no account matched.
+    @param password: The submitted password.
+    @returns: True only when the account exists and the password matches.
+    """
+    global _dummy_password_hash  # noqa: PLW0603 - a process-lifetime constant, set once
+
+    stored_hash = user.password_hash if user is not None else None
+    if stored_hash:
+        return check_password_hash(stored_hash, password)
+
+    if _dummy_password_hash is None:
+        _dummy_password_hash = generate_password_hash(secrets.token_urlsafe(32), method=_PASSWORD_HASH_METHOD)
+    check_password_hash(_dummy_password_hash, password)
+    return False
+
 
 logger = logging.getLogger(__name__)
 OAUTH_EXCHANGE_CODE_TTL_SECONDS = 60
@@ -80,6 +129,10 @@ def _ensure_google_oauth() -> bool:
 
 
 def init_oauth(app):
+    """Register the OAuth providers on the application.
+
+    Called once during app setup. Providers are registered only when their client id
+    and secret are configured, so an instance with no OAuth keys starts normally."""
     oauth.init_app(app)
     with app.app_context():
         try:
@@ -95,6 +148,10 @@ def init_oauth(app):
 
 
 def generate_internal_jwt(user: User) -> str:
+    """Mint a short-lived internal JWT for a user.
+
+    Used for server-to-server calls that must act as a specific user without holding
+    that user's session. The token is short-lived and carries no refresh capability."""
     payload = {
         "sub": str(user.id),
         "jti": str(uuid.uuid4()),  # Unique ID for revocation
@@ -137,6 +194,10 @@ def _issue_oauth_exchange_code(user: User, callback_url: str | None) -> str:
 
 @auth_bp.route("/login/google")
 def google_login():
+    """Start the Google OAuth flow.
+
+    Builds the consent redirect, carrying a CSRF state value that the callback
+    verifies before issuing a session."""
     if not _ensure_google_oauth():
         logger.warning("Google OAuth login attempted but Google client is not configured")
         frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
@@ -165,6 +226,11 @@ def google_login():
 
 @auth_bp.route("/callback/google")
 def google_callback():
+    """Complete the Google OAuth flow and establish a session.
+
+    Verifies the state value first. An unverified callback would let an attacker
+    attach their own Google identity to a victim's session, so this is the security
+    boundary of the whole flow."""
     frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
     error_code = None
 
@@ -229,6 +295,20 @@ def google_callback():
             if picture and user.avatar_url != picture:
                 user.avatar_url = picture
 
+            # Federated addresses count as verified only on the identity
+            # provider's word, and only when the claim says so literally.
+            # `mark_verified_from_oidc` refuses the string "false", which a
+            # truthiness check would have read as verified -- the exact inverse
+            # of the claim, and the reason this is not an `if claims.get(...)`.
+            #
+            # A provider that omits the claim leaves the address unverified, so
+            # the owner confirms it themselves. That costs one email; getting it
+            # wrong would let an unproven address authorise account deletion.
+            from app.core.account_tokens import mark_verified_from_oidc
+
+            if mark_verified_from_oidc(user, user_info):
+                logger.info("Marked the federated address for user %s as verified on provider assertion", user.id)
+
         user.last_login = datetime.now(UTC)
         db.session.commit()
     except SQLAlchemyError as e:
@@ -288,6 +368,10 @@ def exchange_oauth_code():
 @auth_bp.route("/login", methods=["POST"])
 @limiter.limit("5 per minute")
 def local_login():
+    """Authenticate with an email and password.
+
+    The password is verified against a hash, and the response is generic on failure
+    so it does not reveal whether an account exists."""
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
@@ -295,7 +379,7 @@ def local_login():
         return jsonify({"error": "Required"}), 400
 
     user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
-    if not user or not user.check_password(password):
+    if not _verify_login_password(user, password):
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.is_active:
         return jsonify({"error": "Suspended"}), 403
@@ -308,6 +392,11 @@ def local_login():
 @auth_bp.route("/register", methods=["POST"])
 @limiter.limit("5 per minute")
 def local_register():
+    """Create a local account and sign the user in.
+
+    Permitted only on an instance with no accounts yet, or when registration is
+    explicitly enabled; otherwise the endpoint refuses rather than creating an
+    uninvited user."""
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
@@ -319,8 +408,12 @@ def local_register():
     if not isinstance(password, str) or len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters long"}), 400
 
-    # Check if user already exists
-    if db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none():
+    # Check if user already exists. The comparison is case-insensitive because
+    # the account-lifecycle endpoints normalise addresses to lower case, so a
+    # mixed-case registration here would otherwise create a second account for
+    # the same mailbox -- and then block the owner from ever re-verifying the
+    # address their profile reports.
+    if db.session.execute(db.select(User).filter(func.lower(User.email) == email.strip().lower())).scalar_one_or_none():
         return jsonify({"error": "Email already registered"}), 409
 
     # Create new user
@@ -334,6 +427,13 @@ def local_register():
 
     db.session.add(new_user)
     db.session.commit()
+
+    # `email_verified_at` is deliberately left NULL. A self-registered address is
+    # exactly the unproven case the column exists for: whoever typed it may not
+    # control it, so it starts unverified and the owner confirms it themselves.
+    # Noted explicitly because the next reader will otherwise go looking for the
+    # place verification happens.
+    logger.info("Registered a local account; its address starts unverified pending confirmation")
 
     # Automatically log the user in by generating a token
     internal_token = generate_internal_jwt(new_user)

@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
 
 SHELL := /bin/bash
 
@@ -110,12 +110,15 @@ help:
 	@echo "  lint-all       - Run canonical lint plus stricter local-only checks"
 	@echo "  lint-python    - Run Python linters (ruff, mypy, pylint)"
 	@echo "  lint-format    - Check Python code formatting (black)"
+	@echo "  lint-shell     - Check shell scripts (shellcheck; needed locally, it is skipped in tests without it)"
 	@echo "  lint-js        - Run legacy JavaScript linter (eslint)"
 	@echo "  lint-frontend  - Run Next.js / TypeScript linter"
 	@echo "  lint-css       - Run CSS linter (stylelint)"
 	@echo "  lint-markdown  - Run Markdown linter"
 	@echo "  lint-license   - Check copyright headers"
 	@echo "  validate-yaml  - Validate YAML configuration files"
+	@echo "  validate-nginx - Validate deploy/nginx.conf.example with a real nginx"
+	@echo "  validate-openspec - Validate OpenSpec main specs (SCOPE=all|<capability>)"
 	@echo "  format         - Format all code"
 	@echo "  format-python  - Format Python code (black, isort)"
 	@echo "  format-js      - Format JavaScript code (prettier)"
@@ -130,6 +133,8 @@ help:
 	@echo "  stop           - Stop all development servers and containers"
 	@echo "  docker-build   - Build backend, frontend, and nginx Docker images locally (TAG=...)"
 	@echo "  docker-build-preview - Build all images locally tagged for preview environment"
+	@echo "  validate-image-size - Check a built backend image against its size budget (IMAGE=...)"
+	@echo "  validate-release - Validate release invariants (versions, CHANGELOG, image size budget)"
 	@echo ""
 	@echo "Database targets:"
 	@echo "  db-init       - Initialize database with seed data"
@@ -144,6 +149,10 @@ help:
 	@echo "  backup-install   - Install daily 03:00 backup cron (remote=<name>)"
 	@echo "  backup-uninstall - Remove installed backup cron job"
 	@echo "  backup-check     - Verify backup health (cron, rclone, disk, freshness)"
+	@echo "  archive-run      - Run cloud archive immediately (remote=<name>)"
+	@echo "  archive-install  - Install monthly 04:00 cold archive cron (remote=<name>)"
+	@echo "  archive-uninstall - Remove installed archive cron job"
+	@echo "  archive-check    - Verify archive health (cron, rclone, disk, freshness)"
 	@echo ""
 	@echo "Curation:"
 	@echo "  retry-missing-covers - Retry processing covers for manifestations missing covers (supports preview|prod)"
@@ -168,8 +177,11 @@ help:
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
 	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
+	@echo ""
 	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
 	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
+	@echo "  mykg-retry          - Re-queue tasks whose myKG inference failed (ARGS=\"--dry-run\" to inspect)"
+	@echo "  mykg-probe          - Test opencode models in the sandbox, no mykg state touched (ARGS=\"<model>\")"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -207,8 +219,11 @@ MYKG_DEFAULT_EFFORT ?= low
 AI_AGENT ?= agy
 AGY_DEFAULT_MODEL ?= gemini-3.8-flash-low
 AGY_DEFAULT_EFFORT ?= low
-OPENCODE_DEFAULT_MODEL ?= opencode/mimo-v2.5-free
-OPENCODE_DEFAULT_EFFORT ?= minimal
+# Keep this on a model that actually exists in the registry — the previous
+# pin (opencode/mimo-v2.5-free) was retired and made every opencode mykg run
+# fail. The daemon degrades the effort->variant mapping per model.
+OPENCODE_DEFAULT_MODEL ?= opencode-go/space-bunny-free
+OPENCODE_DEFAULT_EFFORT ?= low
 AI_EFFECTIVE_MODEL = $(if $(MODEL),$(MODEL),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_MODEL),$(OPENCODE_DEFAULT_MODEL)))
 AI_EFFECTIVE_EFFORT = $(if $(EFFORT),$(EFFORT),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_EFFORT),$(OPENCODE_DEFAULT_EFFORT)))
 AI_PROFILE = $(if $(filter opencode,$(AI_AGENT)),agent-opencode,agent-claude-code)
@@ -219,112 +234,49 @@ endif
 mykg-scope: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
 
+# MOD-OPS-04: the sandbox lifecycle and agent-daemon wiring used to live inline
+# in these two recipes -- ~45 lines of backslash-continued shell each, duplicated
+# between the targets. A single missing continuation silently split a command in
+# two, and nothing could be shellchecked or unit-tested. Both targets now delegate
+# to scripts/mykg_sync.sh, which owns the cleanup trap and agent selection.
 mykg-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py --check
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	SESS_DIR=$$(.venv/bin/python -c "import pathlib, sys; p = pathlib.Path('mykg_sessions'); \
-		target = p.resolve() if p.exists() else pathlib.Path('.mykg_sessions').resolve(); \
-		sessions = sorted([d for d in target.iterdir() if d.is_dir()], key=lambda x: x.stat().st_mtime, reverse=True) if target.exists() else []; \
-		print(str(sessions[0])) if sessions else sys.exit(0)"); \
-	if [ -n "$$SESS_DIR" ] && command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "$$SESS_DIR/intermediate/agent_inbox" "$$SESS_DIR/intermediate/agent_outbox"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-	if [ -n "$$AI_BIN" ]; then \
-		docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-		AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-			-v "$$AI_BIN:$$AI_MOUNT" \
-			-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-			-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-			-e AI_AGENT="$(AI_AGENT)" \
-			"$$AI_CONTAINER" \
-			python3 "$$AI_SCRIPT" \
-			--workers 1 \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_inbox" \
-			"mykg_sessions/$$(basename $$SESS_DIR)/intermediate/agent_outbox" >/dev/null 2>&1 || true; \
-	fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_update.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh update $(if $(ARGS),$(ARGS),)
 
 mykg-index: .venv/bin/activate
 	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-	@cleanup() { \
-		EXIT_CODE=$$?; \
-		trap - EXIT INT TERM; \
-		if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-			docker compose -f docker-compose.ai_sandbox.yml down >/dev/null 2>&1 || true; \
-			docker rm -f mykg-agy-daemon >/dev/null 2>&1 || true; \
-			docker rm -f mykg-opencode-daemon >/dev/null 2>&1 || true; \
-		fi; \
-		exit $$EXIT_CODE; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
-		mkdir -p "mykg_sessions"; \
-		if [ "$(AI_AGENT)" = "opencode" ]; then \
-			AI_BIN=$$(which opencode 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-opencode-daemon"; \
-			AI_MOUNT="/usr/local/bin/opencode:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/opencode_daemon.py"; \
-		else \
-			AI_BIN=$$(which agy 2>/dev/null || echo ""); \
-			AI_CONTAINER="mykg-agy-daemon"; \
-			AI_MOUNT="/usr/local/bin/agy:ro"; \
-			AI_SCRIPT=".agents/skills/iqoqo-mykg/scripts/agy_daemon.py"; \
-		fi; \
-		if [ -n "$$AI_BIN" ]; then \
-			docker rm -f "$$AI_CONTAINER" >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml stop sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			docker compose -f docker-compose.ai_sandbox.yml rm -f sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml up -d sandbox-egress-proxy >/dev/null 2>&1 || true; \
-			AI_AGENT="$(AI_AGENT)" docker compose -f docker-compose.ai_sandbox.yml run --rm -d --name "$$AI_CONTAINER" \
-				-v "$$AI_BIN:$$AI_MOUNT" \
-				-e MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e OPENCODE_MODEL="$(AI_EFFECTIVE_MODEL)" \
-				-e OPENCODE_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-				-e AI_AGENT="$(AI_AGENT)" \
-				"$$AI_CONTAINER" \
-				python3 "$$AI_SCRIPT" \
-				--workers 1 \
-				"mykg_sessions" \
-				"mykg_sessions" >/dev/null 2>&1 || true; \
-		fi; \
-	fi; \
-	MYKG_PROFILE="$(AI_PROFILE)" .venv/bin/python .agents/skills/iqoqo-mykg/scripts/run_index.py $(if $(ARGS),$(ARGS),); \
-	EXIT_CODE=$$?; \
-	exit $$EXIT_CODE
+	@AI_AGENT="$(AI_AGENT)" \
+	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
+	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
+	MYKG_PROFILE="$(AI_PROFILE)" \
+	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
+	bash scripts/mykg_sync.sh index $(if $(ARGS),$(ARGS),)
 
 mykg-status: .venv/bin/activate
 	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
+
+# Re-queue tasks whose inference failed. An .error envelope is treated as
+# terminal by is_task_done() and is never overwritten, so a single failed run
+# permanently drops those extractions from the graph while the run still
+# reports success. This clears the marker (quarantined, not deleted) so the
+# next run retries them. ARGS="--dry-run" to inspect without changing state.
+mykg-retry: .venv/bin/activate
+	$(AI_ECHO) "Re-queueing failed mykg agent tasks (ARGS=$(ARGS))..."
+	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/retry_failed.py $(ARGS)
+
+# Test opencode model calls inside the AI sandbox WITHOUT touching mykg state.
+# Every failed mykg task writes a terminal .error envelope, so `make
+# mykg-update` is the wrong place to find out whether a model works — it
+# poisons real extraction work. ARGS="opencode-go/glm-5.3" to probe one model.
+# Makes real (billed) API calls that are visible on the opencode.ai side.
+mykg-probe:
+	$(AI_ECHO) "Probing opencode harness in the sandbox (no mykg state touched)..."
+	@bash scripts/probe_opencode_harness.sh $(ARGS)
 
 mykg-ask: .venv/bin/activate
 	@if [ -z "$(Q)" ]; then \
@@ -464,7 +416,22 @@ preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local p
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
 		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
 	fi
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	@set -a; . $(PREVIEW_ENV_FILE); set +a; \
+	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+	 fi; \
+	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(PREVIEW_ENV_FILE))"; \
+	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
+	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
+	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
+	 if [ -n "$$rum_token" ] && [ -n "$$rum_site" ]; then \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN="$$rum_token"; \
+		export OPENOBSERVE_RUM_SITE="$$rum_site"; \
+		export OPENOBSERVE_RUM_INSECURE_HTTP="$$rum_insecure"; \
+	 else \
+		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
 
 preview-down: ## Stop preview stack in PREVIEW_DIR (/opt/pre.iqoqo) cleanly
 	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml down
@@ -483,6 +450,25 @@ docker-build: ## Build backend, frontend, and nginx Docker images locally (TAG d
 
 docker-build-preview: ## Build all images locally tagged for preview environment (preview tag)
 	@./scripts/build_docker_images.sh --tag preview $(if $(PREFIX),--prefix $(PREFIX),)
+
+# The size gate also runs automatically at the end of scripts/build_docker_images.sh,
+# so this target is for checking an image that is already built -- a CI artifact, or
+# an image pulled from a registry -- without paying for a rebuild. The budget and the
+# measurement that justifies it live in deploy/image-size-budget.txt.
+.PHONY: validate-image-size
+validate-image-size: ## Check an already-built backend image against its size budget (IMAGE=...)
+	@PYTHON_BIN=$${PYTHON:-$$([ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)}; \
+	TAG=$${IMAGE:-$$($(PYTHON_BIN) scripts/extract_version.py 2>/dev/null || echo latest)}; \
+	echo "Checking backend image size budget for iqoqo-backend:$${TAG}"; \
+	$(PYTHON_BIN) scripts/check_image_size.py "iqoqo-backend:$${TAG}"
+
+# Same script the release/* validate-release CI job runs, exposed locally so the
+# check does not only surface on CI. Pass VERSION=... to validate a specific
+# version; without it the version is taken from the branch name.
+.PHONY: validate-release
+validate-release: ## Validate release invariants (versions, CHANGELOG, image size budget)
+	@PYTHON_BIN=$${PYTHON:-$$([ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)}; \
+	$(PYTHON_BIN) scripts/validate_release.py $(if $(VERSION),$(VERSION),)
 
 # monitoring-start and monitoring-stop removed — the monitoring stack is now
 # always composed together with the main stack via run.sh (line 751-754).
@@ -533,12 +519,44 @@ lint-python: .venv/bin/activate
 	rm -rf .mypy_cache || true
 	.venv/bin/mypy $(MYPY_FLAGS) app/ tests/
 	$(AI_ECHO) "Running pylint..."
-	.venv/bin/pylint $(PYLINT_FLAGS) app/ tests/ scripts/
+	.venv/bin/pylint $(PYLINT_FLAGS) app/ scripts/
+	$(AI_ECHO) "Running pylint on tests (docstring rules relaxed)..."
+	# Docstring rules are not applied to tests. A test's name is its
+	# documentation -- `test_rejects_non_positive_item_id` says what the test
+	# asserts -- and requiring a prose restatement would be 126 entries of
+	# filler that drift out of date the moment the assertion changes. The rules
+	# still apply to app/ and scripts/, where the docstring carries information
+	# the signature does not.
+	.venv/bin/pylint $(PYLINT_FLAGS) --disable=C0114,C0115,C0116 tests/
 
 lint-format: .venv/bin/activate
 	$(AI_ECHO) "Checking Python formatting..."
 	.venv/bin/black --check app/ tests/ scripts/
 	.venv/bin/isort --check-only app/ tests/ scripts/
+
+# shellcheck is a system package, so it is absent from the Docker image and
+# from most dev machines. `pytest tests/test_linting.py` skips its gate when
+# it is missing, which means a shell regression can pass locally and only fail
+# in CI. Run this target before pushing to catch that locally instead.
+# CI installs a pinned 0.10.0 and fails the suite outright if it is missing.
+lint-shell:
+	@command -v shellcheck >/dev/null 2>&1 || { \
+		echo "shellcheck is not installed. Install it with:"; \
+		echo "  Debian/Ubuntu: sudo apt-get install shellcheck"; \
+		echo "  macOS:         brew install shellcheck"; \
+		echo "Without it, tests/test_linting.py SKIPS the shell gate and shell"; \
+		echo "regressions will surface only in CI."; \
+		exit 1; \
+	}
+	@status=0; \
+	for f in $$(find scripts -name '*.sh') $$(ls *.sh 2>/dev/null); do \
+		shellcheck "$$f" || status=1; \
+	done; \
+	if [ $$status -ne 0 ]; then \
+		echo "shellcheck reported violations (see above)."; \
+		exit 1; \
+	fi; \
+	echo "shellcheck: all shell scripts clean."
 
 lint-js:
 	$(AI_ECHO) "Running eslint..."
@@ -564,11 +582,32 @@ lint-css:
 
 lint-markdown:
 	$(AI_ECHO) "Running markdownlint..."
-	$(NPX) markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#frontend/node_modules" "#frontend/.next" "#.github" "#.pytest_cache" "#.agents" "#.gemini" "#frontend/playwright-report" "#frontend/test-results" "#.caim" "#.context" "#graphify-out" "#openspec/changes"
+	@# Exclusions live in .markdownlint-cli2.jsonc, not here. This invocation is
+	@# deliberately identical to the CI one in .github/workflows/quality.yml; when
+	@# the list was duplicated in both places it silently drifted, and a
+	@# hand-written subset that dropped `.caim` linted 43 AI session logs.
+	$(NPX) markdownlint-cli2 "**/*.md"
 
 validate-yaml: .venv/bin/activate
 	$(AI_ECHO) "Checking YAML configuration files..."
 	@.venv/bin/python scripts/validate_yaml.py
+
+validate-nginx: .venv/bin/activate ## Validate deploy/nginx.conf.example with a real nginx
+	$(AI_ECHO) "Checking production nginx reference config..."
+	@.venv/bin/python scripts/validate_nginx_example.py
+
+# OpenSpec spec validation. SCOPE=... restricts it, mirroring `openspec validate
+# --specs` (everything) versus `openspec validate <capability> --strict` (one).
+# Not wired into CI: no workflow runs it today, and wiring it in would fail on the
+# pre-existing failures listed in docs/OPENSPEC_VALIDATION.md rather than on
+# anything this change introduced. See that file before adding a CI step.
+validate-openspec: ## Validate OpenSpec main specs (SCOPE=all|<capability>)
+	$(AI_ECHO) "Validating OpenSpec specs..."
+	@if [ -n "$(SCOPE)" ] && [ "$(SCOPE)" != "all" ]; then \
+		openspec validate "$(SCOPE)" --strict; \
+	else \
+		openspec validate --specs; \
+	fi
 
 secret-scan: .venv/bin/activate ## Scan repository working tree and branch commits for secrets using Gitleaks
 	$(AI_ECHO) "Scanning code for secrets (Gitleaks)..."
@@ -669,6 +708,50 @@ test-e2e-db-up: .venv/bin/activate
 test-e2e: test-e2e-db-up
 	@$(MAKE) --no-print-directory _test-e2e-run NO_RESET='$(NO_RESET)' args='$(args)'
 
+# FRBR merge integrity against a real PostgreSQL instance.
+#
+# SQLite does not enforce foreign keys unless PRAGMA foreign_keys=ON and it
+# accepts DDL PostgreSQL rejects, so two shipped data-loss defects were invisible
+# to the default suite: the manual merge path destroyed wishlist entries and
+# dropped unique contributors via a delete-orphan cascade, and the
+# duplicate_candidates pair index could not be created at all on PostgreSQL.
+# This target builds a throwaway database inside the same isolated E2E
+# PostgreSQL service, so no default, preview, or production stack is touched.
+#
+# The throwaway database is dropped on the next run and on failure; nothing
+# persists beyond this target.
+test-merge-integrity-pg: .venv/bin/activate
+	@set -euo pipefail; \
+		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
+		$(MAKE) --no-print-directory test-e2e-db-up; \
+		admin="$${E2E_SELECTED_DATABASE_URL%/*}/postgres"; \
+		probe="$${E2E_SELECTED_DATABASE_URL%/*}/iqoqo_merge_integrity"; \
+		echo "Recreating throwaway merge-integrity database..."; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'iqoqo_merge_integrity'" >/dev/null; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS iqoqo_merge_integrity' >/dev/null; \
+		psql "$$admin" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE iqoqo_merge_integrity' >/dev/null; \
+		trap 'psql "$$admin" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '"'"'iqoqo_merge_integrity'"'"'" >/dev/null 2>&1 || true; psql "$$admin" -c "DROP DATABASE IF EXISTS iqoqo_merge_integrity" >/dev/null 2>&1 || true' EXIT; \
+		psql "$$probe" -v ON_ERROR_STOP=1 \
+			-c 'CREATE SCHEMA IF NOT EXISTS auth' \
+			-c 'CREATE SCHEMA IF NOT EXISTS catalog' \
+			-c 'CREATE SCHEMA IF NOT EXISTS inventory' \
+			-c 'CREATE SCHEMA IF NOT EXISTS social' \
+			-c 'CREATE SCHEMA IF NOT EXISTS config' >/dev/null; \
+		echo "Running FRBR merge integrity suite against PostgreSQL..."; \
+		echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
+		echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
+		echo " code path that rejected the unparenthesized pair-index DDL)"; \
+		ENABLE_FTS_TESTS=true DATABASE_URL="$$probe" \
+			SECRET_KEY="$$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')" \
+			.venv/bin/pytest tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
+				tests/test_duplicate_detection.py -q -p no:randomly; \
+		echo "Running the schema-qualified index-name regression suite..."; \
+		echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
+		echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
+		echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
+		IQOQO_TEST_PG_ADMIN_URL="$${E2E_SELECTED_DATABASE_URL%/*}/" \
+			.venv/bin/pytest tests/test_migration_index_names.py -q -p no:randomly
+
 # Internal: verify runtime identity immediately before reset and again before
 # Playwright startup. set -e makes every failed prepare step fail closed.
 _test-e2e-run:
@@ -724,12 +807,16 @@ migrate-secrets: .venv/bin/activate
 	.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args)
 
 backup-run:
-	@if [ -z "$(remote)" ]; then \
+	@remote_target="$(remote)"; \
+	if [ -z "$$remote_target" ] && [ -f .env ]; then \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_FAST=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+	fi; \
+	if [ -z "$$remote_target" ]; then \
 		echo "Usage: make backup-run remote=<rclone_remote_name>"; \
 		echo "  Example: make backup-run remote=iqoqo-backup"; \
 		exit 1; \
-	fi
-	@cd $(CURDIR) && bash scripts/cloud_backup.sh $(remote)
+	fi; \
+	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
 
 backup-install: backup-run
 	@bash scripts/cloud_backup_cron.sh install $(remote)
@@ -739,6 +826,23 @@ backup-uninstall:
 
 backup-check:
 	@bash scripts/cloud_backup_check.sh $(remote)
+
+archive-run:
+	@remote_target="$(remote)"; \
+	if [ -z "$$remote_target" ] && [ -f .env ]; then \
+		remote_target=$$(grep -E '^RCLONE_REMOTE_ARCHIVE=' .env 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+	fi; \
+	remote_target="$${remote_target:-iqoqo-glacier:iqoqo-archive}"; \
+	cd $(CURDIR) && bash scripts/cloud_backup.sh "$$remote_target"
+
+archive-install: archive-run
+	@bash scripts/cloud_backup_cron.sh archive-install $(remote)
+
+archive-uninstall:
+	@bash scripts/cloud_backup_cron.sh archive-uninstall
+
+archive-check:
+	@bash scripts/cloud_backup_check.sh --archive $(remote)
 
 db-reset: pg-create-schemas .venv/bin/activate
 	@echo "Resetting database..."
@@ -894,3 +998,4 @@ sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi
+

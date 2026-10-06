@@ -50,9 +50,13 @@ jobs:
       - name: Run isort
         run: isort --check-only app/ tests/ scripts/
 
+      # `scripts/` is deliberately absent: pyproject.toml's mypy `exclude`
+      # lists it, so passing the directory produced "There are no .py[i] files
+      # in directory 'scripts'" and a non-zero exit that looks like a type
+      # error rather than an argument that checks nothing.
       - name: Run mypy
-        run: mypy app/ tests/ scripts/
-        continue-on-error: true # Start lenient
+        run: mypy app/ tests/
+        continue-on-error: true # Known backlog; the gate must at least run
 
   lint-javascript:
     runs-on: ubuntu-latest
@@ -63,10 +67,53 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
+      # `npm ci` from frontend/, not `npm install -g`. eslint is a devDependency
+      # of the frontend package, and the flat config does
+      # `import { defineConfig, globalIgnores } from 'eslint/config'` -- a
+      # module specifier resolved relative to frontend/eslint.config.mjs, so it
+      # has to resolve inside frontend/node_modules. A global install does not
+      # put it there, and the step dies with ERR_MODULE_NOT_FOUND before linting
+      # a single file. This is also why the pinned eslint 9 is the one that
+      # runs: the lockfile decides, not whatever `latest` is.
       - name: Install Node dependencies
-        run: |
-          npm install -g eslint prettier stylelint stylelint-config-standard
+        run: cd frontend && npm ci
+
+      # This job used to install the lint tools and then stop, so eslint had
+      # never actually run in CI. The rules in frontend/eslint.config.mjs were
+      # therefore unenforced for the whole life of the file: the jsdoc rules
+      # went in with v0.0.7 and had quietly accumulated 95 violations that
+      # nobody was ever shown. Wiring the run in exposed why nobody trusted the
+      # number -- eslint reported 29,009 problems, 28,878 of them from a
+      # generated Playwright build directory the config failed to ignore
+      # (`.next-e2e-<uid>-<token>`, which the literal `.next-e2e/**` ignore
+      # does not match).
+      #
+      # Errors only, deliberately. An earlier version of this step added
+      # `--max-warnings=0`, which made the job fail on the 31 pre-existing
+      # warnings in the tree -- turning the newly-wired gate red on arrival and
+      # training everyone to ignore it, which is the outcome this whole change
+      # exists to prevent. Warnings are reported and left non-blocking; the
+      # count is recorded in docs/CHANGELOG.md so it cannot grow unnoticed.
+      #
+      # stylelint has no configuration in this repository, so there is no CSS
+      # gate to run; it stays out rather than being wired to a no-op.
+      - name: Run eslint
+        run: cd frontend && npm run lint
+
+      # Deliberately NOT wired up. Prettier reports 1306 files needing
+      # formatting, so this glob is not a gate anyone has ever satisfied --
+      # adding it as a blocking step would fail the release on a whole-tree
+      # reformat that carries no defect signal. eslint (above) covers
+      # correctness; Prettier stays a local `npx prettier --write` until the
+      # tree is formatted in one dedicated pass. Recorded in docs/CHANGELOG.md.
+
+      # NOTE: `tsc --noEmit` is NOT run here. The `test-frontend` job already
+      # runs it via `npm run type-check`, and has done so since well before this
+      # change. An earlier version of this comment claimed the type check was
+      # missing from CI; that was wrong.
 
   lint-markdown:
     runs-on: ubuntu-latest
@@ -82,7 +129,11 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run Markdownlint
-        run: markdownlint-cli2 "**/*.md" "!node_modules" "!.venv" "!frontend/node_modules" "!frontend/.next" "!.github" "!.pytest_cache" "!.agent" "!.agents" "!.gemini" "!.caim" "!frontend/playwright-report" "!frontend/test-results" "!graphify-out" "!mykg_sessions" "!.context" "!openspec/changes"
+        # Identical to the Makefile's `lint-markdown` target; exclusions live in
+        # .markdownlint-cli2.jsonc rather than in either invocation. When the list
+        # was duplicated into both, the two drifted, and a hand-written subset
+        # that dropped `.caim` linted 43 AI session logs.
+        run: markdownlint-cli2 "**/*.md"
 
   lint-license:
     runs-on: ubuntu-latest
@@ -123,11 +174,139 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      # shellcheck is NOT part of requirements.txt, so tests/test_linting.py
+      # would skip its gate on any machine that lacks it -- including this
+      # runner, which only has it by accident of the ubuntu-latest image.
+      # Install a pinned version so the shell gate is deterministic and a
+      # future runner-image change cannot silently add or remove findings.
+      - name: Install shellcheck
+        run: |
+          SHELLCHECK_VERSION=0.10.0
+          curl -sSL \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            -o /tmp/shellcheck.tar.xz
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install -m 0755 \
+            "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" \
+            /usr/local/bin/shellcheck
+          shellcheck --version
+
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
           ADMIN_PASSWORD: dummy-admin-password
         run: pytest tests/ -v
+
+  test-postgres-gated:
+    # The suites below are skipped by the `test` job, and that skip is the
+    # point of this job rather than an oversight.
+    #
+    # `tests/conftest.py` forces DATABASE_URL back to sqlite:///:memory: unless
+    # ENABLE_FTS_TESTS is exactly "true", so the `test` job's PostgreSQL service
+    # is unused and the whole backend suite runs on SQLite there. That is a
+    # reasonable default -- SQLite needs no service container -- but it cannot
+    # see dialect-specific defects, and the class of defect it cannot see has
+    # already shipped twice in this release: an index whose SQLAlchemy-generated
+    # name differs from the hardcoded one on PostgreSQL, and a `CASE` pair index
+    # that only PostgreSQL rejects. Both regressed silently because their
+    # regression tests were PostgreSQL-gated and ran nowhere automated.
+    #
+    # This job gives those tests an actual PostgreSQL to run against, by pointing
+    # IQOQO_TEST_PG_ADMIN_URL at this job's own service container. Without it,
+    # the changelog's claim that the index-name defect class is "covered rather
+    # than the three instances known today" is not true anywhere but one laptop.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine # Locked to match docker-compose.yml
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run PostgreSQL-gated migration and schema suites
+        env:
+          IQOQO_TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/
+          ADMIN_PASSWORD: dummy-admin-password
+        run: |
+          # Guard against the silent-skip failure mode this job exists to
+          # remove: if the service is unreachable the suite skips and this job
+          # reports green, which is precisely what CI was doing before.
+          pytest tests/test_migration_index_names.py \
+            --collect-only -q > /dev/null
+          python - <<'PY'
+          import os, sys
+          import sqlalchemy as sa
+          url = os.environ["IQOQO_TEST_PG_ADMIN_URL"] + "postgres"
+          try:
+              engine = sa.create_engine(url, connect_args={"connect_timeout": 5})
+              with engine.connect():
+                  pass
+          except Exception as exc:
+              sys.exit(f"PostgreSQL unreachable at {url}: {exc}")
+          print(f"PostgreSQL reachable at {url}")
+          PY
+          pytest tests/test_migration_index_names.py -v -p no:randomly
+
+  image-size-gate:
+    # The size budget is enforced at build time, but deploy.yml builds with
+    # `push: true` and buildx never leaves a local image behind, so the published
+    # images would otherwise ship ungated. This builds the backend image and runs
+    # the same gate the local build script runs.
+    #
+    # Restricted to main and the release/hotfix branches: the job builds a Docker
+    # image, which costs real runner minutes, and the outcome it produces is a
+    # property of the branch rather than of the change. Feature-branch PRs still
+    # get the budget for free via validate_release.py --image-size-only, which
+    # checks that the release plan and the budget agree without building anything.
+    #
+    # Keyed on both refs for the same reason validate-release below is: on a
+    # push, head_ref is empty and ref_name is the branch; on a pull_request,
+    # head_ref is the source branch and ref_name is "<n>/merge".
+    if: >-
+      github.ref_name == 'main' || github.head_ref == 'main' ||
+      startsWith(github.ref_name, 'release/') || startsWith(github.head_ref, 'release/') ||
+      startsWith(github.ref_name, 'hotfix/') || startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./deploy/Dockerfile
+          load: true # the gate needs a real image to inspect, not just a cache
+          push: false
+          tags: iqoqo-backend:ci-size-gate
+          cache-from: type=gha
+
+      - name: Check image size budget
+        run: python scripts/check_image_size.py iqoqo-backend:ci-size-gate
 
   validate-release:
     if: startsWith(github.head_ref, 'release/') || startsWith(github.ref_name, 'release/') || startsWith(github.head_ref, 'hotfix/') || startsWith(github.ref_name, 'hotfix/')
@@ -151,6 +330,12 @@ jobs:
             VERSION="$BRANCH"
           fi
           python scripts/validate_release.py "$VERSION"
+
+      - name: Validate container image size budget is quoted in the release plan
+        # check_image_size_reference runs inside validate_release.py too, but a
+        # failing run there stops at the version checks, so this names the image
+        # size drift explicitly in the job log.
+        run: python scripts/validate_release.py --image-size-only
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -213,6 +398,13 @@ jobs:
       ADMIN_EMAIL: ci-admin@iqoqo.cc
       ADMIN_PASSWORD: E2EBootstrapPassword123!
       DATABASE_URL_TEST: postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/iqoqo_e2e_test
+      # Gates POST /lending/test/reset (C18 4.1). The endpoint fails closed when
+      # this is unset, so the E2E job must supply it. Deliberately a literal
+      # rather than a ${{ secrets.* }}: it is a throwaway CI-only value guarding a
+      # disposable database, and a secret would make the e2e suite depend on repo
+      # configuration it cannot verify. Playwright forwards this same variable
+      # into the Flask process it spawns (frontend/playwright.config.ts).
+      E2E_RESET_SECRET: ci-only-e2e-reset-secret-not-a-real-credential
     steps:
       - uses: actions/checkout@v7
 
@@ -265,4 +457,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: 8.30.1
 

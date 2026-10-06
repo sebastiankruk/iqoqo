@@ -30,17 +30,47 @@ ROOT = Path(__file__).resolve().parents[1]
 IQOQO = Namespace("https://iqoqo.org/ontology#")
 
 
+def _parse(path: Path) -> Graph:
+    """Parse a turtle file into a fresh graph.
+
+    @param path: The .ttl file to read.
+    @returns: The parsed graph.
+    """
+    graph = Graph()
+    graph.parse(path, format="turtle")
+    return graph
+
+
+# Parsed once per session. The two ontology files are static inputs and cost
+# 18.7 ms and 22.4 ms to parse respectively; with 8 tests each validating, that
+# was 0.53 s of re-parsing.
+#
+# The cached graph is the *pristine* parse and is never handed to pyshacl
+# directly. pyshacl mutates the shapes graph it is given -- it materialises RDFS
+# inferences into it, taking it from 387 to 389 triples on the first call and
+# staying there. Caching the live object would therefore leak inferred triples
+# from one test into the next, which could make a SHACL shape appear to pass for
+# the wrong reason. Every caller gets a copy instead.
+_SHAPES = _parse(ROOT / "docs" / "ontology" / "iqoqo-shapes.ttl")
+_ONTOLOGY = _parse(ROOT / "docs" / "ontology" / "iqoqo.ttl")
+
+
+def _copy(graph: Graph) -> Graph:
+    """Return an independent copy of a cached graph.
+
+    @param graph: The graph to copy.
+    @returns: A new graph with the same triples.
+    """
+    return Graph() + graph
+
+
 def _load_shapes_graph() -> Graph:
-    shapes = Graph()
-    shapes.parse(ROOT / "docs" / "ontology" / "iqoqo-shapes.ttl", format="turtle")
-    return shapes
+    return _copy(_SHAPES)
 
 
 def _load_ontology_graph() -> Graph:
     """The OWL vocabulary (iqoqo.ttl), used for RDFS inference (e.g. Work ⊑ F1_Work)."""
-    ontology = Graph()
-    ontology.parse(ROOT / "docs" / "ontology" / "iqoqo.ttl", format="turtle")
-    return ontology
+    return _copy(_ONTOLOGY)
 
 
 def _validate(data: Graph) -> tuple[bool, Graph, str]:
@@ -200,3 +230,45 @@ def test_container_aggregation_rejects_item_as_aggregated_work():
     )
     assert conforms is False
     assert "aggregatedWork must be of type Work" in report
+
+
+def test_cached_ontology_graphs_are_never_handed_out_directly():
+    """The session cache must survive pyshacl mutating the graph it receives.
+
+    pyshacl materialises RDFS inferences into the shapes graph it is given --
+    387 triples become 389 on the first call. A cache that handed out the live
+    object would leak those inferred triples into every later test, where a
+    shape could pass or fail for a reason that has nothing to do with the data
+    under test. This asserts each caller receives an independent, pristine graph.
+
+    @returns: Nothing; a shared or already-mutated graph fails the test.
+    """
+    pristine_shapes = len(_SHAPES)
+
+    first = _load_shapes_graph()
+    assert len(first) == pristine_shapes, "the cached graph was already mutated"
+
+    # Hand it to pyshacl and let it do whatever it does to it.
+    data = _build_data_graph(expansion_aggregated=True)
+    _validate(data)
+
+    second = _load_shapes_graph()
+    assert len(second) == pristine_shapes, "inferred triples leaked into the next caller"
+    assert len(_SHAPES) == pristine_shapes, "the cache itself was mutated"
+
+    # And the two callers are genuinely independent objects.
+    assert first is not second
+
+
+def test_each_validation_gets_its_own_graph():
+    """Two validations must not share a graph object.
+
+    @returns: Nothing; a shared object fails the test.
+    """
+    a = _load_shapes_graph()
+    b = _load_shapes_graph()
+    assert a is not b, "callers share one Graph instance"
+
+    c = _load_ontology_graph()
+    d = _load_ontology_graph()
+    assert c is not d, "callers share one ontology Graph instance"

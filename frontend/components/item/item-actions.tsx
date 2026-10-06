@@ -42,6 +42,7 @@ import { useMyEscalations } from "@/lib/api/escalations";
 import { apiClient } from "@/lib/api/client";
 import { PermissionName } from "@/lib/permissions";
 import { isAudioMedia } from "@/lib/utils";
+import { isBoardGameFormat, isVideoFormat } from "@/lib/media-classification";
 import type { Item } from "@/types/frbr";
 import { EscalationTrigger } from "@/components/escalation/escalation-trigger";
 
@@ -214,8 +215,8 @@ export function ItemActions({ item }: { item: Item }) {
     (item.meta?.["format"] as string | undefined) ??
     "book";
   const isAudio = isAudioMedia(format);
-  const isVideo = ["dvd", "bluray", "video", "moving image"].includes(format?.toLowerCase() || "");
-  const isGame = ["boardgame", "board_game", "three-dimensional object"].includes(format?.toLowerCase() || "");
+  const isVideo = isVideoFormat(format);
+  const isGame = isBoardGameFormat(format);
   const isBook = !isAudio && !isVideo && !isGame;
 
   return (

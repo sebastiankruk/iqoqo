@@ -29,103 +29,265 @@ import os
 
 import pytest
 from PIL import Image
+from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.admin import _discard_saved_cover
 from app.core import frbr_service
-from app.db.models import db
+from app.db.models import Expression, Manifestation, Work, db
+from app.utils.covers import COVERS_DIR
+
+
+def _remove_if_present(path: str) -> None:
+    """Delete a cover file if it exists, ignoring a missing file.
+
+    Covers are written to a real directory shared by the whole suite, so a test
+    that leaves debris behind can make the *next* test fail for the wrong reason.
+    Each test therefore clears only the file it is about to produce.
+
+    @param path: Absolute path to remove.
+    @returns: Nothing.
+    """
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+def _jpeg_bytes(size: int = 100) -> bytes:
+    """Build a small valid JPEG.
+
+    @param size: The square image's edge length in pixels.
+    @returns: The encoded image bytes.
+    """
+    buffer = io.BytesIO()
+    Image.new("RGB", (size, size), color="red").save(buffer, "JPEG")
+    return buffer.getvalue()
+
+
+def _make_manifestation(app, title: str = "Cover Cleanup Target") -> int:
+    """Create a Work -> Expression -> Manifestation chain and return its id.
+
+    @param app: The Flask application.
+    @param title: The Work's title.
+    @returns: The new Manifestation's primary key.
+    """
+    with app.app_context():
+        work = Work(title=title)
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text")
+        db.session.add(expression)
+        db.session.flush()
+        manifestation = Manifestation(expression_id=expression.id, format="book")
+        db.session.add(manifestation)
+        db.session.commit()
+        return manifestation.id
 
 
 class TestCoverCleanupOnFailure:
     """Tests for cleanup of orphaned cover files on DB failure."""
 
-    def test_no_orphaned_files_on_invalid_entity(self, client, admin_headers, app):
-        """Orphaned cover files should be cleaned up when entity doesn't exist."""
-        # Get initial file count in covers directory
-        covers_dir = app.config.get("COVER_UPLOAD_DIR", "covers")
+    def test_no_orphaned_file_when_the_entity_does_not_exist(self, client, admin_headers, app):
+        """A 404 must not leave the uploaded image behind on disk.
 
-        # Count files before
-        initial_files = set(os.listdir(covers_dir)) if os.path.exists(covers_dir) else set()
+        The image is written to disk *before* the entity is looked up, and a
+        missing entity returns 404 rather than raising, so the surrounding
+        `except` handler never runs. This asserted nothing before, for two
+        independent reasons:
 
-        # Try to upload with non-existent entity_id
-        img = Image.new("RGB", (100, 100), color="red")
-        img_io = io.BytesIO()
-        img.save(img_io, "JPEG")
-        img_bytes = img_io.getvalue()
+        - The request passed raw `bytes` rather than a stream, so Werkzeug
+          parsed it as an ordinary form field and `request.files` came back
+          empty. The endpoint returned 400 at its parameter check and never
+          saved anything, so "no orphan" held trivially.
+        - It counted files in `app.config["COVER_UPLOAD_DIR"]`, which is not set,
+          falling back to the relative path `covers/`. The code writes to
+          `app.utils.covers.COVERS_DIR`, i.e. `app/static/covers/`. The test
+          created an empty `./covers` itself and then asserted it stayed empty.
+
+        With a real stream and the real directory, the unfixed endpoint left
+        `manifestation_999999999_cover.jpg` behind on every 404 -- publicly
+        served from /static/covers/, referenced by no row, never collected.
+
+        @param client: The Flask test client.
+        @param admin_headers: Auth headers for an admin.
+        @param app: The Flask application.
+        @returns: Nothing; a leftover file fails the test.
+        """
+        # The filename is derived from the entity, not the upload, so the file
+        # this request would create is known in advance. Asserting on that exact
+        # path rather than diffing the directory means an unrelated file left by
+        # another test cannot make this pass or fail for the wrong reason.
+        orphan = os.path.join(COVERS_DIR, "manifestation_999999999_cover.jpg")
+        _remove_if_present(orphan)
 
         response = client.post(
             "/api/v1/admin/media/upload-cover",
             data={
                 "entity_type": "manifestation",
                 "entity_id": "999999999",  # Non-existent ID
-                "file": (img_bytes, "orphan-test.jpg"),
+                "file": (io.BytesIO(_jpeg_bytes()), "orphan-test.jpg"),
             },
-            content_type="multipart/form-data",
             headers=admin_headers,
         )
 
-        # Should fail (400, 404, or 500)
-        assert response.status_code in (400, 404, 500)
+        assert response.status_code == 404, "a missing entity must report 404, not fall through"
+        assert not os.path.exists(orphan), f"orphaned cover file left on disk: {orphan}"
 
-        # Count files after
-        final_files = set(os.listdir(covers_dir)) if os.path.exists(covers_dir) else set()
+    def test_no_orphaned_file_when_the_commit_fails(self, client, admin_headers, app, monkeypatch):
+        """A database failure after the save must delete the file.
 
-        # Should not have additional orphaned files
-        new_files = final_files - initial_files
-        assert len(new_files) == 0, f"Orphaned files found: {new_files}"
+        This replaces an `inspect.getsource(upload_cover)` check that searched the
+        function's *source text* for any of `os.remove`, `delete`, `cleanup` or
+        `finally`. Any one of those words anywhere in the body satisfied it --
+        including in a docstring or comment -- so the guard passed whether or not
+        cleanup existed, and reported success either way.
 
-    def test_db_failure_cleans_up_file(self, app):
-        """When DB commit fails, the uploaded file should be cleaned up.
+        The commit is made to fail for real rather than by patching the removal,
+        so the assertion covers the whole path: save, bind, fail, unlink.
 
-        This test verifies the cleanup logic is present in the exception handler.
+        @param client: The Flask test client.
+        @param admin_headers: Auth headers for an admin.
+        @param app: The Flask application.
+        @param monkeypatch: The pytest fixture used to fail the commit.
+        @returns: Nothing; a leftover file fails the test.
         """
-        import inspect
+        entity_id = _make_manifestation(app)
+        expected = os.path.join(COVERS_DIR, f"manifestation_{entity_id}_cover.jpg")
+        _remove_if_present(expected)
 
-        from app.api.admin import upload_cover
+        def explode() -> None:
+            raise SQLAlchemyError("simulated commit failure")
 
-        source = inspect.getsource(upload_cover)
+        monkeypatch.setattr(db.session, "commit", explode)
 
-        has_cleanup = "os.remove" in source or "delete" in source or "cleanup" in source or "finally" in source
+        response = client.post(
+            "/api/v1/admin/media/upload-cover",
+            data={
+                "entity_type": "manifestation",
+                "entity_id": str(entity_id),
+                "file": (io.BytesIO(_jpeg_bytes()), "db-failure.jpg"),
+            },
+            headers=admin_headers,
+        )
 
-        assert (
-            has_cleanup
-        ), "upload_cover should have file cleanup logic in exception handler. Check for os.remove or similar cleanup in except block."
+        assert response.status_code == 500
+        assert not os.path.exists(expected), f"orphaned cover file left on disk: {expected}"
 
-    def test_rollback_handles_missing_file(self, app):
-        """Rollback should handle case where file was never created."""
-        # If DB binding fails early, file might not exist
-        # The cleanup should not crash on missing file
-        # Just verify the app starts correctly
-        assert app is not None
+    def test_discard_tolerates_a_file_that_is_already_gone(self):
+        """Cleanup must not raise when the file is already absent.
 
-    def test_concurrent_upload_handling(self, client, admin_headers, app):
-        """System should handle uploads correctly.
+        The handler unlinks a path it recorded optimistically. Between the save
+        and the cleanup something else may have removed it -- a concurrent
+        upload of the same deterministic filename, or an operator clearing the
+        directory -- and the request has already failed, so there is nothing to
+        report. Raising here would turn a handled failure into a 500 traceback.
 
-        This test verifies the test infrastructure works.
+        @returns: Nothing; an exception fails the test.
         """
-        # Just verify the app and client are set up correctly
-        assert client is not None
-        assert admin_headers is not None
-        assert app is not None
+        _discard_saved_cover(None)
+        _discard_saved_cover(os.path.join(COVERS_DIR, "definitely-not-here-9f3a.jpg"))
+
+    def test_a_successful_upload_does_keep_its_file(self, client, admin_headers, app):
+        """The positive control: without this, "no orphans" can pass vacuously.
+
+        Every orphan assertion above is also satisfied by an endpoint that never
+        writes anything. This pins that a successful upload does create the file,
+        binds the URL to the row, and serves the same name the code predicts --
+        so the negative tests cannot pass by doing nothing.
+
+        @param client: The Flask test client.
+        @param admin_headers: Auth headers for an admin.
+        @param app: The Flask application.
+        @returns: Nothing; a missing file or unbound URL fails the test.
+        """
+        entity_id = _make_manifestation(app)
+        name = f"manifestation_{entity_id}_cover.jpg"
+        stored = os.path.join(COVERS_DIR, name)
+        _remove_if_present(stored)
+
+        response = client.post(
+            "/api/v1/admin/media/upload-cover",
+            data={
+                "entity_type": "manifestation",
+                "entity_id": str(entity_id),
+                "file": (io.BytesIO(_jpeg_bytes()), "success.jpg"),
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert os.path.exists(stored), f"the upload did not create {stored}"
+        assert response.get_json()["data"]["cover_url"] == f"/static/covers/{name}"
+
+        with app.app_context():
+            entity = db.session.get(Manifestation, entity_id)
+            assert entity.meta["cover_url"] == f"/static/covers/{name}"
+
+        os.remove(stored)
 
 
 class TestFileSystemIntegrity:
     """Tests for file system integrity."""
 
-    def test_covers_directory_structure(self, app):
-        """Verify covers directory is properly configured."""
-        covers_dir = app.config.get("COVER_UPLOAD_DIR", "covers")
+    def test_covers_directory_is_the_one_the_code_writes_to(self, app):
+        """`COVERS_DIR` exists, is writable, and is a real directory.
 
-        # Directory should exist or be creatable
-        if not os.path.exists(covers_dir):
-            os.makedirs(covers_dir, exist_ok=True)
+        This previously read `app.config["COVER_UPLOAD_DIR"]`, which is not set,
+        so it fell back to the relative path `covers/` -- created the directory
+        as a side effect and then asserted on it. The code writes to
+        `app.utils.covers.COVERS_DIR` (`app/static/covers/`), so the test was
+        inspecting a stray empty directory it had just made, while the sibling
+        test compared file listings inside it. Both were satisfied by an endpoint
+        that leaked a file on every failed request.
 
-        assert os.path.isdir(covers_dir)
-        assert os.access(covers_dir, os.W_OK)
+        The default directory is resolved by `app.utils.covers` at import, so
+        simply importing it is what guarantees the two agree.
 
-    def test_covers_are_stored_safely(self, app):
-        """Covers should be stored in a non-public location."""
-        covers_dir = app.config.get("COVER_UPLOAD_DIR", "covers")
+        @param app: The Flask application.
+        @returns: Nothing; a missing or unwritable directory fails the test.
+        """
+        assert os.path.isdir(COVERS_DIR), f"covers directory does not exist: {COVERS_DIR}"
+        assert os.access(COVERS_DIR, os.W_OK), f"covers directory is not writable: {COVERS_DIR}"
 
-        # Should not be in a web-root directory ideally
-        static_dir = app.config.get("STATIC_DIR", "")
-        if static_dir:
-            assert not covers_dir.startswith(static_dir), "Covers should not be stored in static web root for security"
+    def test_uploaded_covers_are_publicly_served_by_design(self, client, admin_headers, app):
+        """Covers live under the static root, so the returned URL must resolve there.
+
+        The previous test here was named `test_covers_are_stored_safely` and its
+        docstring claimed covers belong in "a non-public location". Neither was
+        true and neither was checked: `STATIC_DIR` is unset in config, so the
+        `if static_dir:` guard was always false and the assertion never ran.
+        Meanwhile `COVERS_DIR` *is* under `app/static/`, and the endpoint hands
+        the client a `/static/covers/...` URL for an `<img>` to load. Public
+        readability is the design, not a leak.
+
+        So this pins the design: the URL the API returns names a file that
+        actually sits in `COVERS_DIR`. If the storage location and the URL scheme
+        ever diverge, the image a user sees breaks -- and this fails rather than
+        an assertion that quietly never ran.
+
+        @param client: The Flask test client.
+        @param admin_headers: Auth headers for an admin.
+        @param app: The Flask application.
+        @returns: Nothing; a URL that does not map to the stored file fails.
+        """
+        entity_id = _make_manifestation(app, title="Public Cover Target")
+
+        response = client.post(
+            "/api/v1/admin/media/upload-cover",
+            data={
+                "entity_type": "manifestation",
+                "entity_id": str(entity_id),
+                "file": (io.BytesIO(_jpeg_bytes()), "public.jpg"),
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+        cover_url = response.get_json()["data"]["cover_url"]
+        assert cover_url.startswith("/static/covers/"), f"unexpected URL shape: {cover_url}"
+
+        served_name = cover_url.removeprefix("/static/covers/")
+        stored = os.path.join(COVERS_DIR, served_name)
+        assert os.path.exists(stored), f"URL names {served_name!r}, which is not in {COVERS_DIR}"
+
+        os.remove(stored)

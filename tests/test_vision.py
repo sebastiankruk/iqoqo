@@ -314,3 +314,95 @@ def test_extract_waterfall_ollama_json_decode_error_falls_to_tesseract(mock_tess
     mock_gemini.assert_called_once()
     mock_ollama.assert_called_once()
     mock_tesseract.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# C18 2.6 -- MOD-EXT-09: JSON extraction from noisy model output
+#
+# A local vision model does not reliably emit bare JSON. The previous parser
+# accepted only a fenced or bare payload, so any surrounding prose produced
+# None and silently fell through to Tesseract. The obvious fix -- a greedy
+# r"\{.*\}" substring -- is wrong: it spans sibling objects and swallows
+# trailing braces. raw_decode() consumes exactly one object and stops.
+# ---------------------------------------------------------------------------
+
+
+def test_parse_json_response_accepts_prose_wrapped_object():
+    """The regression: a valid payload wrapped in prose used to return None."""
+    from app.utils.vision import _parse_json_response
+
+    res = _parse_json_response('Here is the result: {"Title": "Dune"} Hope that helps!')
+    assert res is not None
+    assert res["Title"] == "Dune"
+
+
+def test_parse_json_response_takes_first_of_several_objects():
+    """A greedy .*} would span both objects and fail to parse at all."""
+    from app.utils.vision import _parse_json_response
+
+    res = _parse_json_response('{"Title": "First"} {"Title": "Second"}')
+    assert res is not None
+    assert res["Title"] == "First"
+
+
+def test_parse_json_response_tolerates_trailing_brace_in_prose():
+    """Trailing prose containing a brace must not swallow the real object."""
+    from app.utils.vision import _parse_json_response
+
+    res = _parse_json_response('Result: {"Title": "Dune", "Genre": "sci-fi"} (2020) {note}')
+    assert res is not None
+    assert res["Title"] == "Dune"
+    assert res["Genre"] == "sci-fi"
+
+
+def test_parse_json_response_skips_a_non_object_brace_run():
+    """A stray "{not json}" before the real object must not win."""
+    from app.utils.vision import _parse_json_response
+
+    res = _parse_json_response('{not json at all} {"Title": "Real"}')
+    assert res is not None
+    assert res["Title"] == "Real"
+
+
+def test_parse_json_response_still_handles_fenced_and_bare_payloads():
+    """The two shapes that already worked must keep working."""
+    from app.utils.vision import _parse_json_response
+
+    assert _parse_json_response('{"Title": "Bare"}')["Title"] == "Bare"
+    assert _parse_json_response('```json\n{"Title": "Fenced"}\n```')["Title"] == "Fenced"
+
+
+def test_parse_json_response_returns_none_without_a_json_object():
+    """No object anywhere still yields None, so the Tesseract fallback runs."""
+    from app.utils.vision import _parse_json_response
+
+    assert _parse_json_response("I could not read that image.") is None
+    assert _parse_json_response("") is None
+    # A bare JSON array is not the expected shape and must not be coerced.
+    assert _parse_json_response("[1, 2, 3]") is None
+
+
+def test_ollama_vision_timeout_is_overridable(monkeypatch):
+    """30s cut off a 45.7s cold start; the value depends on the host."""
+    from app.utils import vision
+
+    captured = {}
+
+    class _Resp:
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    def fake_post(url, json, timeout):  # noqa: A002 - mirrors requests.post signature
+        captured["timeout"] = timeout
+        return _Resp()
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    monkeypatch.delenv("OLLAMA_VISION_TIMEOUT", raising=False)
+    vision._call_ollama_api("http://ollama.local", {})
+    assert captured["timeout"] == 90, "default must clear the measured 45.7s cold start"
+
+    monkeypatch.setenv("OLLAMA_VISION_TIMEOUT", "180")
+    vision._call_ollama_api("http://ollama.local", {})
+    assert captured["timeout"] == 180, "a slower host must be able to raise the ceiling"

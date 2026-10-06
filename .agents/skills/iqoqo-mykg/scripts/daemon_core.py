@@ -28,6 +28,7 @@ import re
 import signal
 import sys
 import time
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,17 +38,32 @@ from typing import Any, Callable, Dict, Optional, Set
 # Timeout constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_TIMEOUT = 300       # Fallback when task has no timeout_seconds
-BASE_TIMEOUT = 600          # 10-minute base floor for dynamic formula
-MAX_TIMEOUT_CAP = 3600      # 1-hour absolute ceiling to prevent DoS
+DEFAULT_TIMEOUT = 300  # Fallback when task has no timeout_seconds
+BASE_TIMEOUT = 600  # 10-minute base floor for dynamic formula
+MAX_TIMEOUT_CAP = 3600  # 1-hour absolute ceiling to prevent DoS
 
 # ---------------------------------------------------------------------------
 # Task validation constants
 # ---------------------------------------------------------------------------
 
 MAX_TASK_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
-MAX_ERROR_SIZE_BYTES = 100 * 1024        # 100 KB — cap error files to prevent disk exhaustion
-MAX_TASK_ID_LENGTH = 128                 # SHA-256 hex = 64 chars, allow margin
+MAX_ERROR_SIZE_BYTES = 100 * 1024  # 100 KB — cap error files to prevent disk exhaustion
+MAX_TASK_ID_LENGTH = 128  # SHA-256 hex = 64 chars, allow margin
+
+# ---------------------------------------------------------------------------
+# Retry budget
+# ---------------------------------------------------------------------------
+# Most extraction failures are transient: a network blip, a rate limit, a
+# provider blip, a model temporarily unavailable. Treating the first failure as
+# terminal meant one bad run silently and permanently dropped those extractions
+# from the knowledge graph — nothing reported the loss, and neither an
+# incremental update nor a full reindex would ever revisit them, because both
+# consult the same per-task gate.
+#
+# Error envelopes therefore carry an attempt count and only become terminal once
+# the budget is spent. That cap is what stops a permanently broken model from
+# being retried forever.
+MAX_TASK_ATTEMPTS = int(os.environ.get("MYKG_MAX_TASK_ATTEMPTS", "3"))
 
 # ---------------------------------------------------------------------------
 # Security: Payload sanitization patterns
@@ -142,8 +158,7 @@ def compute_effective_timeout(
     # HARD CAP — non-negotiable security boundary
     if effective > max_timeout:
         print(
-            f"[daemon_core] WARNING: Requested timeout {effective}s exceeds "
-            f"cap, clamping to {max_timeout}s",
+            f"[daemon_core] WARNING: Requested timeout {effective}s exceeds " f"cap, clamping to {max_timeout}s",
             file=sys.stderr,
             flush=True,
         )
@@ -161,13 +176,36 @@ def build_combined_prompt(task_data: Dict[str, Any]) -> str:
     system_prompt = sanitize_task_payload(task_data.get("system", ""))
     user_prompt = sanitize_task_payload(task_data.get("user", ""))
 
-    return (
+    combined = (
         f"{SECURITY_GUARDRAIL}\n\n"
         f"System Instructions:\n{system_prompt}\n\n"
         f"User Prompt:\n{user_prompt}\n\n"
         "CRITICAL: Respond ONLY with the requested JSON payload. "
         "Do NOT include conversational text or markdown code fences."
     )
+
+    # Both harnesses pass the prompt as a command-line argument, and the OS
+    # layer rejects a NUL in argv: subprocess.run() raises
+    # "ValueError: embedded null byte" before the CLI is ever contacted. A
+    # single NUL anywhere in the indexed source therefore fails the whole
+    # task, and the retry budget cannot help because the input does not
+    # change. Observed on 6 of 2,710 chunks, where the extracted text
+    # happened to contain a real 0x00 byte.
+    #
+    # NUL is a terminator with no meaning in natural language, so dropping it
+    # is lossless for the model's purposes. Counted so the condition is
+    # visible rather than silent.
+    nul_count = combined.count("\x00")
+    if nul_count:
+        print(
+            f"[daemon_core] warning: stripped {nul_count} NUL byte(s) from prompt "
+            f"(a NUL in argv raises 'embedded null byte' and fails the task)",
+            file=sys.stderr,
+            flush=True,
+        )
+        combined = combined.replace("\x00", "")
+
+    return combined
 
 
 def write_answer_envelope(
@@ -201,6 +239,18 @@ def write_answer_envelope(
     temp_file.rename(answer_file)
     done_file.touch()
 
+    # A retried task that now succeeds must not keep its old failure envelope:
+    # it would misreport the task as failed to anyone reading the outbox, and
+    # it would consume a retry-budget slot for work that no longer failed.
+    error_file = outbox_dir / f"{task_id}.error"
+    if error_file.exists():
+        try:
+            error_file.unlink()
+        except OSError:
+            # Non-fatal: the answer is authoritative and is_task_done() already
+            # short-circuits on the answer+done pair.
+            pass
+
 
 def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
     """Sanitize error text to prevent information disclosure.
@@ -216,20 +266,49 @@ def sanitize_error_text(error_text: str, max_length: int = 500) -> str:
     sanitized = str(error_text)[:2000]
 
     # Redact absolute paths (Unix and Windows)
-    sanitized = re.sub(r'/[a-zA-Z0-9_./-]+', '[PATH_REDACTED]', sanitized)
-    sanitized = re.sub(r'[A-Z]:\\[^\s]+', '[PATH_REDACTED]', sanitized)
+    sanitized = re.sub(r"/[a-zA-Z0-9_./-]+", "[PATH_REDACTED]", sanitized)
+    sanitized = re.sub(r"[A-Z]:\\[^\s]+", "[PATH_REDACTED]", sanitized)
 
     # Redact environment variable references (e.g. HOME=/home/user)
-    sanitized = re.sub(r'\b[A-Z_]{3,}=[^\s,;]+', '[ENV_REDACTED]', sanitized)
+    sanitized = re.sub(r"\b[A-Z_]{3,}=[^\s,;]+", "[ENV_REDACTED]", sanitized)
 
     # Redact potential tokens/keys (long alphanumeric strings)
-    sanitized = re.sub(r'\b[a-zA-Z0-9_\-]{32,}\b', '[TOKEN_REDACTED]', sanitized)
+    sanitized = re.sub(r"\b[a-zA-Z0-9_\-]{32,}\b", "[TOKEN_REDACTED]", sanitized)
 
     # Final truncation
     if len(sanitized) > max_length:
         sanitized = sanitized[:max_length] + "... [TRUNCATED]"
 
     return sanitized
+
+
+def describe_unexpected_error(exc: BaseException) -> str:
+    """Build a diagnosable message for an exception that has no CLI context.
+
+    The subprocess failure path can quote the CLI's own stderr, but a raised
+    exception reaches the generic handler with only a bare type. Recording just
+    the class name makes an envelope like "Unexpected error: ValueError",
+    which identifies nothing -- the operator has to grep a multi-megabyte run
+    log to recover the cause, and often cannot.
+
+    So: prefer the exception message, and fall back to the deepest traceback
+    frame (file stem, function, line) when the message is empty, which is the
+    common case for bare ``ValueError`` raised by a JSON parser.
+
+    The result is always passed through sanitize_error_text() by the caller, so
+    including a path here is safe: it is redacted on the way to disk.
+    """
+    message = str(exc).strip()
+    if message:
+        return f"{type(exc).__name__}: {message}"
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    if frames:
+        deepest = frames[-1]
+        origin = Path(deepest.filename).stem
+        return f"{type(exc).__name__} with no message, raised at {origin}.py:{deepest.lineno} in {deepest.name}()"
+
+    return f"{type(exc).__name__} with no message and no traceback"
 
 
 def validate_task_id(task_id: str) -> bool:
@@ -243,7 +322,7 @@ def validate_task_id(task_id: str) -> bool:
         return False
 
     # Reject path separators and parent directory references
-    if any(char in task_id for char in ['/', '\\', '..']):
+    if any(char in task_id for char in ["/", "\\", ".."]):
         return False
 
     # Reject control characters
@@ -255,6 +334,23 @@ def validate_task_id(task_id: str) -> bool:
         return False
 
     return True
+
+
+def read_error_attempts(error_file: Path) -> int:
+    """Attempt count recorded in an error envelope.
+
+    Envelopes written before the retry budget existed carry no `attempts`
+    field; those are treated as a single attempt so they get the benefit of the
+    new budget rather than being stranded.
+    """
+    try:
+        payload = json.loads(error_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 1
+    attempts = payload.get("attempts") if isinstance(payload, dict) else None
+    if isinstance(attempts, int) and attempts > 0:
+        return attempts
+    return 1
 
 
 def write_error_envelope(
@@ -273,14 +369,14 @@ def write_error_envelope(
         outbox_dir: Directory to write the .error file.
 
     Returns:
-        True if error file was written, False if validation failed or
-        an error file already exists (first error wins).
+        True if the error file was written, False if validation failed or the
+        retry budget is already spent (in which case the existing terminal
+        envelope is preserved).
     """
     # SECURITY: Validate task_id to prevent path traversal
     if not validate_task_id(task_id):
         print(
-            f"[daemon_core] ERROR: Invalid task_id for error envelope: "
-            f"{repr(task_id)[:50]}",
+            f"[daemon_core] ERROR: Invalid task_id for error envelope: " f"{repr(task_id)[:50]}",
             file=sys.stderr,
             flush=True,
         )
@@ -288,9 +384,12 @@ def write_error_envelope(
 
     error_file = outbox_dir / f"{task_id}.error"
 
-    # Don't overwrite existing error (first error wins)
-    if error_file.exists():
+    # Retry budget: keep counting up to the cap, then leave the first terminal
+    # error in place rather than churning the record forever.
+    previous_attempts = read_error_attempts(error_file) if error_file.exists() else 0
+    if previous_attempts >= MAX_TASK_ATTEMPTS:
         return False
+    attempts = previous_attempts + 1
 
     # Sanitize and truncate error text
     sanitized_error = sanitize_error_text(error_text)
@@ -298,12 +397,13 @@ def write_error_envelope(
     error_envelope = {
         "task_id": task_id,
         "error": sanitized_error,
+        "attempts": attempts,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     # Verify size before writing
     error_json = json.dumps(error_envelope)
-    if len(error_json.encode('utf-8')) > MAX_ERROR_SIZE_BYTES:
+    if len(error_json.encode("utf-8")) > MAX_ERROR_SIZE_BYTES:
         # Hard truncation as final safety net
         error_envelope["error"] = sanitized_error[:50000] + "... [HARD TRUNCATION]"
         error_json = json.dumps(error_envelope)
@@ -316,11 +416,23 @@ def write_error_envelope(
 
 
 def is_task_done(task_id: str, outbox_dir: Path) -> bool:
-    """Check whether a task has already been completed or errored."""
+    """Check whether a task has already been completed or exhausted its retries.
+
+    A task counts as done when it has a real answer, or when its error envelope
+    has spent the retry budget. An envelope from a *transient* failure does not
+    block the task — it is retried on the next run, up to MAX_TASK_ATTEMPTS.
+    """
     done_file = outbox_dir / f"{task_id}.done"
     answer_file = outbox_dir / f"{task_id}.answer.json"
     error_file = outbox_dir / f"{task_id}.error"
-    return (done_file.exists() and answer_file.exists()) or error_file.exists()
+
+    if done_file.exists() and answer_file.exists():
+        return True
+
+    if error_file.exists():
+        return read_error_attempts(error_file) >= MAX_TASK_ATTEMPTS
+
+    return False
 
 
 def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:
@@ -334,8 +446,7 @@ def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:
         file_size = task_path.stat().st_size
         if file_size > MAX_TASK_SIZE_BYTES:
             print(
-                f"[daemon_core] ERROR: Task {task_path.name} exceeds size limit "
-                f"({file_size} > {MAX_TASK_SIZE_BYTES})",
+                f"[daemon_core] ERROR: Task {task_path.name} exceeds size limit " f"({file_size} > {MAX_TASK_SIZE_BYTES})",
                 file=sys.stderr,
                 flush=True,
             )
@@ -357,8 +468,7 @@ def load_and_validate_task(task_path: Path) -> Optional[Dict[str, Any]]:
             value = task_data.get(field, "")
             if not isinstance(value, str):
                 print(
-                    f"[daemon_core] WARNING: Task {task_path.name} field "
-                    f"'{field}' is not a string, converting to string",
+                    f"[daemon_core] WARNING: Task {task_path.name} field " f"'{field}' is not a string, converting to string",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -462,8 +572,7 @@ def run_daemon(
     config_str = f" ({', '.join(config_desc)})" if config_desc else ""
 
     print(
-        f"[{daemon_name}] Starting daemon watching {inbox_dir} "
-        f"(workers={workers}){config_str}...",
+        f"[{daemon_name}] Starting daemon watching {inbox_dir} " f"(workers={workers}){config_str}...",
         flush=True,
     )
 

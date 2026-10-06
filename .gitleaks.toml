@@ -15,19 +15,131 @@ tags = ["monitoring", "openobserve", "credentials"]
 [[rules]]
 id = "iqoqo-openobserve-hardcoded-password"
 description = "Hardcoded legacy OpenObserve fallback password"
-regex = '''(?i)(?:SuperSecret!123|supersecret)'''
+# Matches ONLY the exact legacy default that was removed in v0.8.1 (#309).
+#
+# This rule previously read `(?i)(?:SuperSecret!123|supersecret)`. The bare
+# `supersecret` alternative matched any case-variant of that word anywhere in
+# the repository — prose in docs/MONITORING.md, the `ghp_superSecretToken12345`
+# fixture in tests/test_models.py, and the `supersecretpassword` fixture in the
+# redaction test. It accounted for 54% of all findings (60 of 111 across
+# history) while being capable of detecting nothing real, because the actual
+# password it was written to catch no longer exists in the codebase.
+#
+# A rule that cries wolf on 60 findings trains reviewers to ignore the scanner
+# and to suppress whatever it next reports — including a genuine leak. Matching
+# the exact literal keeps the regression guard intact: if anyone reintroduces
+# the removed default password, this still fires.
+regex = '''SuperSecret!123'''
 tags = ["monitoring", "openobserve", "credentials"]
 
-[allowlist]
+[[rules]]
+id = "iqoqo-openobserve-rum-client-token"
+description = "Hardcoded OpenObserve RUM client token"
+# A RUM client token is public by construction — it is a write-only bearer
+# credential that necessarily reaches the browser. But "public" is not the same
+# as "fine to commit": any token-shaped literal in a tracked file is
+# indistinguishable from a leak to every future scanner and reviewer, and a
+# committed token silently outlives the instance it was provisioned for.
+#
+# The token is provisioned at deploy time by scripts/provision_rum_token.py and
+# is never written to a tracked file, so a match here is always a mistake.
+#
+# Shape mirrors TOKEN_SHAPE in scripts/provision_rum_token.py and
+# _TOKEN_VALUE_SHAPE in app/db/settings.py: URL-safe, 16-512 chars. Kept
+# deliberately tight so it fires on a token-shaped literal rather than on
+# ordinary long identifiers.
+#
+# Capture group 1 MUST be the token value, not the key name: gitleaks reports
+# group 1 as the secret, so grouping the key first reports `RUM_CLIENT_TOKEN`
+# as the finding and buries the value that actually needs redaction.
+#
+# The separators use `[ \t]*` rather than `\s*` on purpose. With `\s*` the
+# match crosses newlines: an empty `OPENOBSERVE_RUM_CLIENT_TOKEN=` on one line
+# satisfies the key, and the capture then swallows an unrelated value from the
+# following line — producing findings on clean files.
+regex = '''(?i)["'\'']?(?:rum[_-]?client[_-]?token|rum_token)["'\'']?[ \t]*[:=][ \t]*["'\'']?([A-Za-z0-9_\-.=]{16,512})'''
+tags = ["monitoring", "openobserve", "rum"]
+
+[[allowlists]]
 description = "Global allowlist for build artifacts, dependencies, changelogs, and specs"
 paths = [
     '''(^|/)\.venv/''',
     '''(^|/)node_modules/''',
     '''(^|/)\.next/''',
+    # E2E build output lives in sibling `.next-e2e*` directories, which the
+    # `\.next/` pattern above does not match. These are compiled bundles
+    # containing minified third-party code and were responsible for ~35
+    # findings on their own.
+    '''(^|/)\.next-e2e[^/]*/''',
+    # Compiled bytecode. .pyc files embed string constants from the source
+    # they were compiled from, so any finding in a .py is duplicated here.
+    '''(^|/)__pycache__/''',
+    '''\.pyc$''',
+    '''(^|/)\.mypy_cache/''',
+    '''(^|/)\.pytest_cache/''',
+    '''(^|/)\.ruff_cache/''',
     '''(^|/)graphify-out/''',
     '''(^|/)mykg_sessions/''',
     '''(^|/)\.mempalace/''',
     '''docs/CHANGELOG\.md''',
     '''\.gitleaks\.toml''',
-    '''openspec/.*''',
 ]
+
+# NOTE: `openspec/` is deliberately NOT path-allowlisted. The 17 findings that
+# CI reported on `release/0.8.2` came from exactly one commit -- 7a4887d, the
+# commit that turned `openspec/changes` from a symlink into 834 tracked files,
+# some of which quoted the OpenObserve default password that v0.8.1 removed.
+# Commit `f82f04df` redacted the current text, but a historical commit cannot be
+# redacted, so any scan reaching 7a4887d reports them again.
+#
+# Suppressing that commit is both narrower and more reliable than suppressing
+# the path. `openspec/.*` would permanently exempt the entire specs and change
+# tree, so a real credential pasted into a change proposal would never be
+# reported. A commit allowlist keeps every other commit -- including every future
+# one -- scanned.
+#
+# Why the path form was not simply fixed: the reported run applied this config's
+# custom rules (`iqoqo-openobserve-hardcoded-password` fired) but did not honour
+# its `openspec/.*` path entry, while gitleaks 8.30.1 honours it locally on the
+# identical range. Rather than depend on path-matching semantics that differ
+# between the runner's bundled binary and the local one, this allowlist is keyed
+# on the commit, where matching is exact and version-independent.
+[[allowlists]]
+description = "Commits that quoted the removed OpenObserve password in OpenSpec prose; the current text is redacted, but history is immutable"
+commits = [
+    # `Replace openspec/changes symlink with real directory` -- tracked the
+    # symlink target as 834 new files, including the OpenSpec specs that quote
+    # the removed default password.
+    '''7a4887d8922ff7c1e332041402f1a371f7cf1197''',
+    # `archive and sync openspec` -- wrote the credential-hygiene spec that
+    # names the Base64 Basic-Auth prefixes. Reachable only from release/0.8.1,
+    # so no scan on this branch can hit it today; it is listed because a branch
+    # cut from that release would.
+    '''8d49d21e3bad59b6026a88e5eff432486c9774cc''',
+    # `Release/0.8.1 (#301)` -- the credential remediation itself. Its spec
+    # recorded the literal values it was replacing.
+    '''c5dbe1e81877676f1facf98c06ec72b16ace9b10''',
+]
+
+# Local, git-ignored environment files.
+#
+# These are never committed, so they contribute nothing to a history scan, but a
+# `gitleaks dir` run on a developer machine or a self-hosted runner WILL find
+# them — and, absent this entry, it prints the real values to the terminal and
+# into CI logs. The rule is the opposite of what we want: it would copy live
+# credentials out of the untracked file and into a build log.
+[[allowlists]]
+description = "Untracked local env files — never committed, and must not be echoed into logs"
+paths = [
+    '''(^|/)\.env$''',
+    '''(^|/)\.env\.dev$''',
+    '''(^|/)\.env\.preview$''',
+    '''(^|/)\.env\.prod$''',
+    '''(^|/)\.env\.mykg$''',
+]
+
+# NOTE: there is deliberately no allowlist entry for the secret-shaped fixtures
+# in tests/bash/sync_agy_memory.bats. They are assembled at runtime from
+# string fragments, so no committed line contains a complete credential and no
+# rule can match one. That is stronger than any allowlist, because it also
+# means a genuine key pasted into that file is still reported.

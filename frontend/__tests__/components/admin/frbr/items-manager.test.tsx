@@ -40,7 +40,6 @@ const defaultProps = {
   onItemSubmit: vi.fn().mockResolvedValue(undefined),
   onItemEscalate: vi.fn(),
   onItemDelete: vi.fn(),
-  lastFetched: 0,
 };
 
 describe("ItemsManager", () => {
@@ -193,7 +192,7 @@ describe("ItemsManager", () => {
   });
 
   it("does not pass escalate/delete callbacks when not provided", async () => {
-    render(<ItemsManager items={mockItems} onItemSubmit={vi.fn().mockResolvedValue(undefined)} lastFetched={0} />);
+    render(<ItemsManager items={mockItems} onItemSubmit={vi.fn().mockResolvedValue(undefined)} />);
 
     const expandButton = screen.getByText("Item #10").closest("button")!;
     fireEvent.click(expandButton);

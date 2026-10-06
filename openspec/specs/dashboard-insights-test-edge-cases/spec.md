@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require the profile-insights frontend and its backend endpoints to handle the empty and degraded cases explicitly -- zero-acquisition, zero-distribution, loading and error -- so a collection with no history renders a defined empty state instead of a blank panel.
+
+## Requirements
 
 ### Requirement: CollectionInsights renders during loading and error states
 

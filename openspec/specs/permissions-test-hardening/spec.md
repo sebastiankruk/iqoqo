@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Require permission enforcement on the FRBR edit, tree and search endpoints to be asserted by tests rather than assumed, and to cover the migration that assigns escalation permissions, the `require_permission` decorator, and frontend logout routing.
+
+## Requirements
 
 ### Requirement: Backend tests enforce write:metadata on FRBR edit endpoints
 

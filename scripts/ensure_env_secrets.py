@@ -58,8 +58,12 @@ def update_env_lines(lines: list[str], key: str, value: str) -> list[str]:
     pattern = re.compile(rf"^\s*(?:export\s+)?{re.escape(key)}\s*=")
     updated = False
     new_lines: list[str] = []
-    quote = '"' if any(c in value for c in " #$\"'") else ""
-    formatted = f"{key}={quote}{value}{quote}"
+    # Always double-quote and escape. Selecting double quotes *because* the
+    # value contains a quote or `$` without escaping them is the bug: the file
+    # is later `source`d under `set -o allexport` in run.sh, so an unescaped
+    # backtick or `$(...)` becomes command execution as the deploying user.
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+    formatted = f'{key}="{escaped}"'
 
     for line in lines:
         if pattern.match(line):
@@ -158,6 +162,7 @@ def sync_secrets_to_db(secrets_map: dict[str, str]) -> None:
 
 
 def main() -> None:
+    """Generate any missing secrets in .env, leaving existing values untouched."""
     parser = argparse.ArgumentParser(description="Ensure required secrets exist in environment file.")
     parser.add_argument(
         "env_file_pos",

@@ -60,8 +60,14 @@ CANONICAL_JOBS: list[tuple[str, list[Check]]] = [
             ("Ruff", [tool("ruff"), "check", "app/", "tests/", "scripts/"], ROOT, True),
             ("Black", [tool("black"), "--check", "app/", "tests/", "scripts/"], ROOT, True),
             ("isort", [tool("isort"), "--check-only", "app/", "tests/", "scripts/"], ROOT, True),
-            # This is continue-on-error in the pre-existing CI workflow.
-            ("Mypy (non-blocking, matching CI continue-on-error)", [tool("mypy"), "app/", "tests/", "scripts/"], ROOT, False),
+            # Non-blocking, matching the CI workflow's continue-on-error. Note
+            # that `scripts/` is deliberately absent: `pyproject.toml`'s mypy
+            # `exclude` lists it, so passing the directory produced "There are
+            # no .py[i] files in directory 'scripts'" and a non-zero exit that
+            # looked like a type error rather than an argument that checks
+            # nothing. There is a known, recorded backlog here -- see the
+            # "Type Checking Was Checking Nothing" entry in docs/CHANGELOG.md.
+            ("Mypy (non-blocking, matching CI continue-on-error)", [tool("mypy"), "app/", "tests/"], ROOT, False),
         ],
     ),
     (
@@ -79,31 +85,12 @@ CANONICAL_JOBS: list[tuple[str, list[Check]]] = [
         "lint-markdown",
         [
             ("Install Markdownlint", ["npm", "install", "-g", "markdownlint-cli2"], ROOT, True),
-            (
-                "Markdownlint",
-                [
-                    "markdownlint-cli2",
-                    "**/*.md",
-                    "!node_modules",
-                    "!.venv",
-                    "!frontend/node_modules",
-                    "!frontend/.next",
-                    "!.github",
-                    "!.pytest_cache",
-                    "!.agent",
-                    "!.agents",
-                    "!.gemini",
-                    "!.caim",
-                    "!frontend/playwright-report",
-                    "!frontend/test-results",
-                    "!graphify-out",
-                    "!mykg_sessions",
-                    "!.context",
-                    "!openspec/changes",
-                ],
-                ROOT,
-                True,
-            ),
+            # Exclusions live in .markdownlint-cli2.jsonc, which markdownlint-cli2
+            # reads by itself. Listing them here as well meant a third copy to keep
+            # in sync with the Makefile and CI; this bare glob is what all three now
+            # share. test_ci_executable_lint_steps_match_local_canonical_map asserts
+            # this stays identical to the CI step.
+            ("Markdownlint", ["markdownlint-cli2", "**/*.md"], ROOT, True),
         ],
     ),
     ("lint-license", [("License headers", ["./scripts/check_license.sh"], ROOT, True)]),

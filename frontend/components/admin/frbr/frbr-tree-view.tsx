@@ -47,16 +47,6 @@ interface FRBRTreeViewProps {
 }
 
 /**
- * Badge label for each FRBR entity level.
- */
-const LEVEL_BADGES: Record<FrbrLevel, string> = {
-  work: "F1",
-  expression: "F2",
-  manifestation: "F3",
-  item: "F5",
-};
-
-/**
  * Hierarchical tree navigator for FRBR entities.
  * Renders Work → Expression → Manifestation → Items with selection indicators,
  * format/count badges, and inline action menus.

@@ -26,33 +26,131 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import Config
+from app.core.duplicate_service import DuplicateServiceError
 from app.db import db
 from app.db.models import Expression, Manifestation, Work
 
 # Import scripts (using sys.path hack in scripts requires us to be careful with imports in tests)
 from scripts.archive_orphans import archive_orphaned_covers, schedule_missing_covers
 from scripts.backfill_legacy_covers import DatabaseConnectivityError, database_target, run_backfill
+from scripts.detect_duplicates import main as detect_main
+from scripts.detect_duplicates import run_scan
 from scripts.fetch_covers import run_batch
 from scripts.restore_covers import restore_covers
 
+# ---------------------------------------------------------------------------
+# detect_duplicates.py
+# ---------------------------------------------------------------------------
+
+
+def test_detect_duplicates_defaults_to_the_heuristic_engine():
+    """The default engine must be deterministic, so no model is probed."""
+    from scripts.detect_duplicates import _build_parser
+
+    args = _build_parser().parse_args([])
+
+    assert args.engine == "heuristic"
+    assert args.apply is False, "dry-run is the safe default until --apply is passed"
+
+
+def test_detect_duplicates_engine_choices_are_restricted():
+    """An unrecognized engine must be rejected by argparse, not silently downgraded."""
+    from scripts.detect_duplicates import _build_parser
+
+    assert _build_parser().parse_args(["--engine", "llama"]).engine == "llama"
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args(["--engine", "gpt-9"])
+
+
+def test_detect_duplicates_heuristic_engine_never_probes_ollama(app):
+    """A scan must not demand a running inference service on the default path."""
+    with patch("scripts.detect_duplicates.duplicate_service.check_ollama_health") as health:
+        report = run_scan(app=app, engine="heuristic", progress=None)
+
+    health.assert_not_called()
+    assert report.engine == "heuristic"
+    assert report.llm_evaluations == 0
+
+
+def test_detect_duplicates_llama_engine_requires_healthy_ollama(app):
+    """Opting into inference makes the model a genuine prerequisite."""
+    with (
+        patch(
+            "scripts.detect_duplicates.duplicate_service.check_ollama_health",
+            return_value=(False, "Ollama unreachable at http://x:1 (ConnectionError)."),
+        ),
+        pytest.raises(DuplicateServiceError, match="ollama pull"),
+    ):
+        run_scan(app=app, engine="llama", progress=None)
+
+
+def test_detect_duplicates_skip_health_check_bypasses_the_probe(app):
+    """The triage flag must still work for the llama engine."""
+    with (
+        patch("scripts.detect_duplicates.duplicate_service.check_ollama_health") as health,
+        patch("scripts.detect_duplicates.duplicate_service.run_detection") as detect,
+    ):
+        detect.return_value = MagicMock()
+        run_scan(app=app, engine="llama", skip_health_check=True, progress=None)
+
+    health.assert_not_called()
+    detect.assert_called_once()
+
+
+def test_detect_duplicates_rejects_unknown_engine(app):
+    """An unknown engine must raise rather than silently falling back."""
+    with pytest.raises(DuplicateServiceError, match="Unknown engine"):
+        run_scan(app=app, engine="gpt-9", progress=None)
+
+
+def test_detect_duplicates_reports_the_engine_it_used(capsys, app):
+    """The operator must be able to see which engine produced the summary."""
+    with patch("scripts.detect_duplicates.run_scan") as scan:
+        scan.return_value = MagicMock()
+        scan.return_value.to_dict.return_value = {}
+        scan.return_value.created = 0
+        detect_main(["--quiet"])
+
+    assert "Engine: heuristic" in capsys.readouterr().out
+
+
+def test_detect_duplicates_exits_2_when_a_prerequisite_is_missing(capsys):
+    """A missing prerequisite must be distinguishable from a run failure."""
+    with patch("scripts.detect_duplicates.run_scan", side_effect=DuplicateServiceError("no ollama")):
+        assert detect_main(["--engine", "llama"]) == 2
+
+    assert "Detection not started" in capsys.readouterr().err
+
 
 def test_archive_orphaned_covers(app, tmp_path):
-    """Test that orphaned files are moved to archive."""
+    """Test that orphaned files are moved to archive.
+
+    MOD-OPS-16 replaced ``Manifestation.query.filter(...).all()`` with a
+    streaming ``db.session.execute(db.select(...))``. This test uses a real
+    database row rather than mocking the query object, so it stays valid
+    whichever access pattern the script uses and additionally proves the
+    projection selects the column the script actually reads.
+    """
     archive_dir = tmp_path / "archive"
     covers_dir = tmp_path / "covers"
     covers_dir.mkdir(parents=True, exist_ok=True)
     (covers_dir / "keep.jpg").touch()
     (covers_dir / "orphan.jpg").touch()
 
+    with app.app_context():
+        work = Work(title="Kept Book", meta={})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text", meta={})
+        db.session.add(expression)
+        db.session.flush()
+        db.session.add(Manifestation(expression_id=expression.id, cover_url="/static/covers/keep.jpg", meta={}))
+        db.session.commit()
+
     with (
         patch("scripts.archive_orphans.COVERS_DIR", str(covers_dir)),
         patch.dict(os.environ, {"COVERS_ARCHIVE_DIR": str(archive_dir)}),
-        patch("app.db.models.Manifestation.query") as mock_query,
     ):
-        mock_manif = MagicMock()
-        mock_manif.cover_url = "/static/covers/keep.jpg"
-        mock_query.filter.return_value.all.return_value = [mock_manif]
-
         archive_orphaned_covers(app=app)
 
         assert (covers_dir / "keep.jpg").exists()
@@ -60,25 +158,62 @@ def test_archive_orphaned_covers(app, tmp_path):
         assert (archive_dir / "orphan.jpg").exists()
 
 
-def test_schedule_missing_covers_null_path(app, tmp_path):
-    """Manifestations with cover_url=None are passed to the pipeline."""
-    mock_manif = MagicMock()
-    mock_manif.id = 42
-    mock_manif.isbn13 = "9780000000000"
-    mock_manif.cover_url = None
-    mock_manif.expression.work.title = "Test Book"
-    mock_manif.expression.work.meta = {"authors": ["Test Author"]}
+def test_archive_orphaned_covers_does_not_load_whole_entities(app, tmp_path):
+    """MOD-OPS-16: the candidate scan must project, not materialise, rows.
+
+    A ``.all()`` over Manifestation builds one ORM object per row, which is
+    what made the scan unsafe on a large library. Asserting on the executed
+    statement keeps the projection in place.
+    """
+    covers_dir = tmp_path / "covers"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+
+    executed: list = []
+    original_execute = db.session.execute
+
+    def spy_execute(*args, **kwargs):
+        executed.append(args[0] if args else None)
+        return original_execute(*args, **kwargs)
 
     with (
-        patch("app.db.models.Manifestation.query") as mock_query,
-        patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
+        patch("scripts.archive_orphans.COVERS_DIR", str(covers_dir)),
+        patch.dict(os.environ, {"COVERS_ARCHIVE_DIR": str(tmp_path / "archive")}),
+        patch.object(db.session, "execute", side_effect=spy_execute),
     ):
-        mock_query.all.return_value = [mock_manif]
+        archive_orphaned_covers(app=app)
 
+    selects = [s for s in executed if s is not None and hasattr(s, "selected_columns")]
+    assert selects, "archive_orphaned_covers must issue a SELECT"
+    # Every selected entity must be a single mapped column, never the full model.
+    for stmt in selects:
+        for column in stmt.selected_columns:
+            assert hasattr(column, "name"), "expected a projected column, not an ORM entity"
+
+
+def _make_manifestation(app, *, cover_url, title="Test Book", author="Test Author", isbn13=None):
+    """Create and return the id of a persisted Manifestation behind one Work."""
+    with app.app_context():
+        work = Work(title=title, meta={"authors": [author]})
+        db.session.add(work)
+        db.session.flush()
+        expression = Expression(work_id=work.id, content_type="text", meta={})
+        db.session.add(expression)
+        db.session.flush()
+        manif = Manifestation(expression_id=expression.id, cover_url=cover_url, isbn13=isbn13, meta={})
+        db.session.add(manif)
+        db.session.commit()
+        return manif.id
+
+
+def test_schedule_missing_covers_null_path(app, tmp_path):
+    """Manifestations with cover_url=None are passed to the pipeline."""
+    manif_id = _make_manifestation(app, cover_url=None, isbn13="9780000000000")
+
+    with patch("app.utils.covers.process_cover_pipeline") as mock_pipeline:
         schedule_missing_covers(app=app)
 
         mock_pipeline.assert_called_once_with(
-            42,
+            manif_id,
             "9780000000000",
             "Test Book",
             "Test Author",
@@ -86,30 +221,54 @@ def test_schedule_missing_covers_null_path(app, tmp_path):
         )
 
 
+def test_schedule_missing_covers_falls_back_to_id_when_isbn_is_null(app, tmp_path):
+    """No ISBN means the id is used as the identifier passed to the pipeline."""
+    manif_id = _make_manifestation(app, cover_url=None)
+
+    with patch("app.utils.covers.process_cover_pipeline") as mock_pipeline:
+        schedule_missing_covers(app=app)
+        assert mock_pipeline.call_args[0][1] == str(manif_id)
+
+
 def test_schedule_missing_covers_file_absent(app, tmp_path):
     """Manifestations whose cover file is missing on disk are scheduled."""
-    mock_manif = MagicMock()
-    mock_manif.id = 7
-    mock_manif.isbn13 = "9780000000001"
-    mock_manif.cover_url = "/static/covers/gone.jpg"
-    mock_manif.expression.work.title = "Gone Book"
-    mock_manif.expression.work.meta = {"authors": ["Some Author"]}
+    manif_id = _make_manifestation(
+        app, cover_url="/static/covers/gone.jpg", title="Gone Book", author="Some Author", isbn13="9780000000001"
+    )
 
     with (
         patch("app.config.Config.BASE_DIR", str(tmp_path)),
-        patch("app.db.models.Manifestation.query") as mock_query,
         patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
     ):
-        mock_query.all.return_value = [mock_manif]
         # File deliberately NOT created → pipeline should be called
         schedule_missing_covers(app=app)
         mock_pipeline.assert_called_once_with(
-            7,
+            manif_id,
             "9780000000001",
             "Gone Book",
             "Some Author",
             llm_permissions={"allow_generate_cover": True, "allow_cloud_llm": True},
         )
+
+
+def test_schedule_missing_covers_skips_existing_cover(app, tmp_path):
+    """A manifestation whose cover file is present must not be rescheduled.
+
+    ``cover_url`` is stored as ``/static/covers/<file>`` and resolved against
+    ``BASE_DIR/app``, so the file lives at ``BASE_DIR/app/static/covers/``.
+    """
+    covers_dir = tmp_path / "app" / "static" / "covers"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+    (covers_dir / "present.jpg").touch()
+
+    _make_manifestation(app, cover_url="/static/covers/present.jpg", title="Present Book", author="Some Author")
+
+    with (
+        patch("app.config.Config.BASE_DIR", str(tmp_path)),
+        patch("app.utils.covers.process_cover_pipeline") as mock_pipeline,
+    ):
+        schedule_missing_covers(app=app)
+        mock_pipeline.assert_not_called()
 
 
 def test_legacy_cover_backfill_dry_run_selects_only_allowlisted_sources(app, capsys):
