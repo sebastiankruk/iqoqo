@@ -317,6 +317,19 @@ is checking and the gap stays invisible. If a rule does not match how this
 codebase is actually written, either change the code or narrow the rule to a
 scope where it applies — and say in the config comment which, and why.
 
+Two things to check before believing a lint gate works, both learned the hard
+way in this release:
+
+- **It must be satisfiable.** Enabling a linter that has never run, with a
+  threshold the tree cannot meet, produces a gate that is always red — which
+  trains reviewers to ignore it just as effectively as no gate at all.
+- **It must actually load.** `npm install -g eslint` installs a binary but not
+  a *resolvable package*: a flat config that does
+  `import { defineConfig } from 'eslint/config'` resolves that relative to its
+  own directory, so a global install fails with `ERR_MODULE_NOT_FOUND` before
+  linting anything. Install the toolchain where the config lives
+  (`cd frontend && npm ci`) rather than globally.
+
 ### Database Changes
 
 For schema changes:

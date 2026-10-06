@@ -67,10 +67,19 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
+      # `npm ci` from frontend/, not `npm install -g`. eslint is a devDependency
+      # of the frontend package, and the flat config does
+      # `import { defineConfig, globalIgnores } from 'eslint/config'` -- a
+      # module specifier resolved relative to frontend/eslint.config.mjs, so it
+      # has to resolve inside frontend/node_modules. A global install does not
+      # put it there, and the step dies with ERR_MODULE_NOT_FOUND before linting
+      # a single file. This is also why the pinned eslint 9 is the one that
+      # runs: the lockfile decides, not whatever `latest` is.
       - name: Install Node dependencies
-        run: |
-          npm install -g eslint prettier stylelint stylelint-config-standard
+        run: cd frontend && npm ci
 
       # This job used to install the lint tools and then stop, so eslint had
       # never actually run in CI. The rules in frontend/eslint.config.mjs were
@@ -89,11 +98,10 @@ jobs:
       # exists to prevent. Warnings are reported and left non-blocking; the
       # count is recorded in docs/CHANGELOG.md so it cannot grow unnoticed.
       #
-      # `npm run lint --prefix frontend` rather than `cd frontend && npm run
-      # lint`: the workflow's working directory is the repo root, and npm's
-      # `--prefix` is the documented way to run a script from another package.
+      # stylelint has no configuration in this repository, so there is no CSS
+      # gate to run; it stays out rather than being wired to a no-op.
       - name: Run eslint
-        run: npm run lint --prefix frontend
+        run: cd frontend && npm run lint
 
       # Deliberately NOT wired up. Prettier reports 1306 files needing
       # formatting, so this glob is not a gate anyone has ever satisfied --
@@ -102,17 +110,10 @@ jobs:
       # correctness; Prettier stays a local `npx prettier --write` until the
       # tree is formatted in one dedicated pass. Recorded in docs/CHANGELOG.md.
 
-      # tsc was likewise never run in CI, which is how a type error could sit
-      # in a released frontend. frontend/tsconfig.json already excludes
-      # .next-e2e-*.
-      #
-      # This must `cd frontend` first. `npx tsc --prefix frontend` is not a
-      # valid invocation: npx has no `--prefix` flag, so it forwarded the
-      # argument to tsc as an unknown compiler option and then resolved a
-      # tsconfig from the repo root, failing with TS5081. The step must run
-      # where tsconfig.json actually lives.
-      - name: Run TypeScript type check
-        run: cd frontend && npx tsc --noEmit
+      # NOTE: `tsc --noEmit` is NOT run here. The `test-frontend` job already
+      # runs it via `npm run type-check`, and has done so since well before this
+      # change. An earlier version of this comment claimed the type check was
+      # missing from CI; that was wrong.
 
   lint-markdown:
     runs-on: ubuntu-latest

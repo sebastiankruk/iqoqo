@@ -195,8 +195,22 @@ def test_ci_executable_lint_steps_match_local_canonical_map() -> None:
     # does an assertion without its step.
     javascript_steps = workflow["jobs"]["lint-javascript"]["steps"]
     javascript_commands = [step.get("run", "").strip() for step in javascript_steps if step.get("run")]
-    assert javascript_commands[0] == "npm install -g eslint prettier stylelint stylelint-config-standard"
-    assert "npm run lint --prefix frontend" in javascript_commands, "eslint must actually run in CI, not merely be installed"
+    assert javascript_commands[0] == "cd frontend && npm ci"
+    # eslint must run against the *pinned* frontend toolchain. The flat config
+    # does `import { defineConfig, globalIgnores } from 'eslint/config'`,
+    # resolved relative to frontend/eslint.config.mjs, so eslint has to be
+    # installed inside frontend/node_modules. A global `npm install -g eslint`
+    # does not put it there and the step dies with ERR_MODULE_NOT_FOUND before
+    # linting anything -- while still reporting that the job "ran" eslint.
+    assert (
+        "cd frontend && npm run lint" in javascript_commands
+    ), "eslint must actually run in CI, from frontend/, not merely be installed globally"
+    assert any(
+        command.strip() == "cd frontend && npm ci" for command in javascript_commands
+    ), "lint-javascript must install frontend/ dependencies before running eslint"
+    assert not any(
+        "npm install -g eslint" in command for command in javascript_commands
+    ), "a global eslint cannot satisfy the flat config's own 'eslint/config' import"
     # The eslint gate must be satisfiable. `--max-warnings=0` was tried here and
     # made the job fail on the 31 pre-existing warnings in the tree, so a newly
     # wired gate arrived red; the exact failure mode this job's history is a
@@ -205,23 +219,29 @@ def test_ci_executable_lint_steps_match_local_canonical_map() -> None:
         "eslint is enforcing warnings -- the tree has pre-existing ones, so this "
         "fails on arrival and trains reviewers to ignore the gate"
     )
-    # The type check must run from frontend/, where tsconfig.json lives. A
-    # `--prefix` flag on an `npx tsc` invocation is not valid: npx forwards it
-    # to tsc as an unknown option and then looks for a tsconfig at the repo
-    # root, failing with TS5081.
-    tsc_commands = [command for command in javascript_commands if "tsc" in command]
-    assert len(tsc_commands) == 1, f"expected exactly one tsc step, got {tsc_commands}"
-    assert tsc_commands[0].startswith("cd frontend &&"), f"tsc must cd into frontend/ before running, got {tsc_commands[0]!r}"
+    # tsc belongs to test-frontend, which runs `npm run type-check`. Assert it
+    # is still covered there, so "we removed the duplicate step" cannot quietly
+    # become "the type check is gone" -- it was covered here before, and an
+    # earlier revision of this test asserted the duplicate instead.
+    frontend_commands = [step.get("run", "").strip() for step in workflow["jobs"]["test-frontend"]["steps"] if step.get("run")]
+    assert "cd frontend && npm run type-check" in frontend_commands, "the TypeScript check is not running anywhere -- test-frontend owns it"
     # Prettier is deliberately NOT a gate: the tree is 1306 files away from
     # clean, and a blocking whole-tree reformat carries no defect signal. If it
     # is ever wired up, that decision needs revisiting here.
     assert not any(
         "prettier --check" in command for command in javascript_commands
     ), "Prettier became a gate -- update this test and docs/CHANGELOG.md to say so"
+    # `make lint` is deliberately NOT held to this job's commands. run_lint.py's
+    # lint-javascript job models the old install-only shape, and that is a known
+    # divergence: CI now installs frontend/ deps and runs the real eslint, while
+    # the local baseline does not. Changing run_lint.py to run eslint would make
+    # `make lint` depend on frontend/node_modules being populated, which is a
+    # deliberate decision to revisit separately -- not something to smuggle into
+    # a release-branch fix.
     javascript_local_checks = dict(run_lint.CANONICAL_JOBS)["lint-javascript"]
     assert [shlex.join(check[1]) for check in javascript_local_checks] == [
         "npm install -g eslint prettier stylelint stylelint-config-standard"
-    ]
+    ], ("run_lint.py's lint-javascript shape changed; update the comment above and " "reconcile `make lint` with the CI job")
     assert all("ESLint" not in check[0] for checks in dict(run_lint.CANONICAL_JOBS).values() for check in checks)
 
     markdown_steps = workflow["jobs"]["lint-markdown"]["steps"]
