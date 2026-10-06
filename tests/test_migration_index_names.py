@@ -37,11 +37,19 @@ import pytest
 import sqlalchemy as sa
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-E2E_URL = "postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/"
+
+#: Administrative connection URL for the PostgreSQL instance these tests run
+#: against. Overridable so CI can point at its own service container instead of
+#: requiring the local E2E stack to be up -- which is what left this suite
+#: running on exactly one maintainer's laptop and skipped everywhere else.
+E2E_URL = os.environ.get(
+    "IQOQO_TEST_PG_ADMIN_URL",
+    "postgresql://iqoqo_e2e:e2e_local_only@127.0.0.1:55432/",
+)
 
 
 def _e2e_available() -> bool:
-    """Whether the isolated E2E PostgreSQL service accepts connections."""
+    """Whether the configured PostgreSQL service accepts connections."""
     try:
         engine = sa.create_engine(E2E_URL + "postgres", connect_args={"connect_timeout": 2})
         with engine.connect():
@@ -54,7 +62,7 @@ def _e2e_available() -> bool:
 
 pytestmark = pytest.mark.skipif(
     not _e2e_available(),
-    reason="needs the isolated E2E PostgreSQL service; run `make test-e2e-db-up`",
+    reason=("needs a PostgreSQL instance; run `make test-e2e-db-up` locally, or set " "IQOQO_TEST_PG_ADMIN_URL to point at one"),
 )
 
 

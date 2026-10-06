@@ -744,7 +744,13 @@ test-merge-integrity-pg: .venv/bin/activate
 		ENABLE_FTS_TESTS=true DATABASE_URL="$$probe" \
 			SECRET_KEY="$$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')" \
 			.venv/bin/pytest tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
-				tests/test_duplicate_detection.py -q -p no:randomly
+				tests/test_duplicate_detection.py -q -p no:randomly; \
+		echo "Running the schema-qualified index-name regression suite..."; \
+		echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
+		echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
+		echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
+		IQOQO_TEST_PG_ADMIN_URL="$${E2E_SELECTED_DATABASE_URL%/*}/" \
+			.venv/bin/pytest tests/test_migration_index_names.py -q -p no:randomly
 
 # Internal: verify runtime identity immediately before reset and again before
 # Playwright startup. set -e makes every failed prepare step fail closed.

@@ -161,11 +161,16 @@ def test_ci_executable_lint_steps_match_local_canonical_map() -> None:
         "pip install -r requirements.txt",
     ]
     ci_python_commands = [python_steps[name]["run"] for name in ("Run ruff", "Run black", "Run isort", "Run mypy")]
+    # Ruff, Black and isort cover scripts/; mypy does not, because
+    # pyproject.toml's mypy `exclude` lists it. Passing an excluded directory
+    # made mypy exit non-zero with "There are no .py[i] files in directory
+    # 'scripts'", which reads like a type error rather than an argument that
+    # inspects nothing. Both sides of this comparison must stay in step.
     assert ci_python_commands == [
         "ruff check app/ tests/ scripts/",
         "black --check app/ tests/ scripts/",
         "isort --check-only app/ tests/ scripts/",
-        "mypy app/ tests/ scripts/",
+        "mypy app/ tests/",
     ]
     assert python_steps["Run mypy"]["continue-on-error"] is True
     canonical_python_checks = dict(run_lint.CANONICAL_JOBS)["lint-python"]
@@ -178,15 +183,35 @@ def test_ci_executable_lint_steps_match_local_canonical_map() -> None:
         ["check", "app/", "tests/", "scripts/"],
         ["--check", "app/", "tests/", "scripts/"],
         ["--check-only", "app/", "tests/", "scripts/"],
-        ["app/", "tests/", "scripts/"],
+        ["app/", "tests/"],
     ]
     assert [check[3] for check in canonical_python_checks] == [True, True, True, True, True, True, False]
 
+    # eslint and tsc are asserted individually below. This job used to consist
+    # of the install step alone, so the jsdoc rules in frontend/eslint.config.mjs
+    # had never been enforced anywhere; the install-only shape is what let 95
+    # violations accumulate unnoticed. The shape is now pinned in both
+    # directions -- a step added here without a matching assertion fails, and so
+    # does an assertion without its step.
     javascript_steps = workflow["jobs"]["lint-javascript"]["steps"]
     javascript_commands = [step.get("run", "").strip() for step in javascript_steps if step.get("run")]
-    assert javascript_commands == ["npm install -g eslint prettier stylelint stylelint-config-standard"]
+    assert javascript_commands[0] == "npm install -g eslint prettier stylelint stylelint-config-standard"
+    assert "npm run lint --prefix frontend -- --max-warnings=0" in javascript_commands, (
+        "eslint must actually run in CI, not merely be installed"
+    )
+    assert any("tsc" in command and "--noEmit" in command for command in javascript_commands), (
+        "the TypeScript compiler must run in CI"
+    )
+    # Prettier is deliberately NOT a gate: the tree is 1306 files away from
+    # clean, and a blocking whole-tree reformat carries no defect signal. If it
+    # is ever wired up, that decision needs revisiting here.
+    assert not any("prettier --check" in command for command in javascript_commands), (
+        "Prettier became a gate -- update this test and docs/CHANGELOG.md to say so"
+    )
     javascript_local_checks = dict(run_lint.CANONICAL_JOBS)["lint-javascript"]
-    assert [shlex.join(check[1]) for check in javascript_local_checks] == javascript_commands
+    assert [shlex.join(check[1]) for check in javascript_local_checks] == [
+        "npm install -g eslint prettier stylelint stylelint-config-standard"
+    ]
     assert all("ESLint" not in check[0] for checks in dict(run_lint.CANONICAL_JOBS).values() for check in checks)
 
     markdown_steps = workflow["jobs"]["lint-markdown"]["steps"]

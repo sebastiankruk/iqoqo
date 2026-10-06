@@ -417,7 +417,13 @@ print('FAIL_CLOSED_OK')
 }
 
 @test "Makefile mykg-update preserves agy defaults when AI_AGENT=agy" {
-  run make -n mykg-update
+  # AI_AGENT must be pinned on the command line. The Makefile declares it as
+  # `AI_AGENT ?= agy`, which an ambient environment variable overrides -- so
+  # this test asserted agy's defaults while quietly exercising whatever agent
+  # the developer's shell happened to select. It passed on a clean shell and
+  # failed on a machine with AI_AGENT=opencode exported, for a reason that has
+  # nothing to do with agy. The sibling test above pins the variable correctly.
+  run make -n mykg-update AI_AGENT=agy
   [ "$status" -eq 0 ]
   [[ "$output" == *"gemini-3.8-flash-low"* ]]
   [[ "$output" == *"agent-claude-code"* ]]

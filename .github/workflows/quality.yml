@@ -50,9 +50,13 @@ jobs:
       - name: Run isort
         run: isort --check-only app/ tests/ scripts/
 
+      # `scripts/` is deliberately absent: pyproject.toml's mypy `exclude`
+      # lists it, so passing the directory produced "There are no .py[i] files
+      # in directory 'scripts'" and a non-zero exit that looks like a type
+      # error rather than an argument that checks nothing.
       - name: Run mypy
-        run: mypy app/ tests/ scripts/
-        continue-on-error: true # Start lenient
+        run: mypy app/ tests/
+        continue-on-error: true # Known backlog; the gate must at least run
 
   lint-javascript:
     runs-on: ubuntu-latest
@@ -67,6 +71,37 @@ jobs:
       - name: Install Node dependencies
         run: |
           npm install -g eslint prettier stylelint stylelint-config-standard
+
+      # This job used to install the lint tools and then stop, so eslint had
+      # never actually run in CI. The rules in frontend/eslint.config.mjs were
+      # therefore unenforced for the whole life of the file: the jsdoc rules
+      # went in with v0.0.7 and had quietly accumulated 95 violations that
+      # nobody was ever shown. Wiring the run in exposed why nobody trusted the
+      # number -- eslint reported 29,009 problems, 28,878 of them from a
+      # generated Playwright build directory the config failed to ignore
+      # (`.next-e2e-<uid>-<token>`, which the literal `.next-e2e/**` ignore
+      # does not match).
+      #
+      # `--max-warnings=0`, because a warning that is never enforced
+      # accumulates exactly like the jsdoc errors did. The tree currently has
+      # 31 warnings, all pre-existing and individually reviewed; they are
+      # recorded in docs/CHANGELOG.md. Clearing them is mechanical follow-up,
+      # not a reason to leave the gate off.
+      - name: Run eslint
+        run: npm run lint --prefix frontend -- --max-warnings=0
+
+      # Deliberately NOT wired up. Prettier reports 1306 files needing
+      # formatting, so this glob is not a gate anyone has ever satisfied --
+      # adding it as a blocking step would fail the release on a whole-tree
+      # reformat that carries no defect signal. eslint (above) covers
+      # correctness; Prettier stays a local `npx prettier --write` until the
+      # tree is formatted in one dedicated pass. Recorded in docs/CHANGELOG.md.
+
+      # tsc was likewise never run in CI, which is how a type error could sit
+      # in a released frontend. frontend/tsconfig.json already excludes
+      # .next-e2e-*.
+      - name: Run TypeScript type check
+        run: npx tsc --prefix frontend --noEmit
 
   lint-markdown:
     runs-on: ubuntu-latest
@@ -149,6 +184,78 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iqoqo_test
           ADMIN_PASSWORD: dummy-admin-password
         run: pytest tests/ -v
+
+  test-postgres-gated:
+    # The suites below are skipped by the `test` job, and that skip is the
+    # point of this job rather than an oversight.
+    #
+    # `tests/conftest.py` forces DATABASE_URL back to sqlite:///:memory: unless
+    # ENABLE_FTS_TESTS is exactly "true", so the `test` job's PostgreSQL service
+    # is unused and the whole backend suite runs on SQLite there. That is a
+    # reasonable default -- SQLite needs no service container -- but it cannot
+    # see dialect-specific defects, and the class of defect it cannot see has
+    # already shipped twice in this release: an index whose SQLAlchemy-generated
+    # name differs from the hardcoded one on PostgreSQL, and a `CASE` pair index
+    # that only PostgreSQL rejects. Both regressed silently because their
+    # regression tests were PostgreSQL-gated and ran nowhere automated.
+    #
+    # This job gives those tests an actual PostgreSQL to run against, by pointing
+    # IQOQO_TEST_PG_ADMIN_URL at this job's own service container. Without it,
+    # the changelog's claim that the index-name defect class is "covered rather
+    # than the three instances known today" is not true anywhere but one laptop.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine # Locked to match docker-compose.yml
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run PostgreSQL-gated migration and schema suites
+        env:
+          IQOQO_TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/
+          ADMIN_PASSWORD: dummy-admin-password
+        run: |
+          # Guard against the silent-skip failure mode this job exists to
+          # remove: if the service is unreachable the suite skips and this job
+          # reports green, which is precisely what CI was doing before.
+          pytest tests/test_migration_index_names.py \
+            --collect-only -q > /dev/null
+          python - <<'PY'
+          import os, sys
+          import sqlalchemy as sa
+          url = os.environ["IQOQO_TEST_PG_ADMIN_URL"] + "postgres"
+          try:
+              engine = sa.create_engine(url, connect_args={"connect_timeout": 5})
+              with engine.connect():
+                  pass
+          except Exception as exc:
+              sys.exit(f"PostgreSQL unreachable at {url}: {exc}")
+          print(f"PostgreSQL reachable at {url}")
+          PY
+          pytest tests/test_migration_index_names.py -v -p no:randomly
 
   image-size-gate:
     # The size budget is enforced at build time, but deploy.yml builds with

@@ -49,6 +49,16 @@ const mockLogs = [
   },
 ];
 
+/**
+ * Authenticate a page as a user holding the given roles and permissions.
+ *
+ * Seeds the consent flag before any application script runs, so the dashboard
+ * does not open behind the cookie banner.
+ *
+ * @param page - The Playwright page to authenticate
+ * @param roles - Role names to grant
+ * @param permissions - Permission names to grant
+ */
 async function setupUser(page: Page, roles: string[], permissions: string[]) {
   await page.addInitScript(() => {
     window.localStorage.setItem("iqoqo-cookie-consent", "true");

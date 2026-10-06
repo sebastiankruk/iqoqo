@@ -209,6 +209,60 @@ If the check fails, the ontology needs to be updated to reflect recent schema ch
 
 ---
 
+## Linked Open Data Reconciliation (v0.8.2)
+
+### What it does
+
+`app/core/lod_linking_service.py` links catalog entities to external
+authorities. Linking runs as background ETL in Celery, so a large catalog is
+reconciled without blocking a request. Three authorities ship enabled:
+
+- **DBpedia** — works, people, places
+- **GeoNames** — geographic entities (requires `GEONAMES_USERNAME`, a free account)
+- **WordNet** — lexical and concept links
+
+Results are stored as `SemanticLink` rows and surfaced in two places: a
+**semantic-links panel** on the manifestation detail page, and the
+**LOD Reconciliation** dashboard at `/admin/lod`, which shows linking metrics,
+batch controls and a live audit-log stream. The dashboard entry also appears in
+the Settings and Content admin pages.
+
+### Configuration
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `ENABLE_LOD_LINKING` | `true` | Master switch for entity linking |
+| `GEONAMES_USERNAME` | unset | Enables GeoNames authority lookups |
+
+With `ENABLE_LOD_LINKING=false`, linking is skipped entirely and existing
+`SemanticLink` rows are left untouched — disabling the feature never destroys
+data.
+
+### Permissions
+
+| Action | Permission |
+| ------ | ---------- |
+| View semantic links | Any authenticated user |
+| Trigger a relink, delete a link | `write:metadata` |
+
+The two mutating routes (`POST /api/manifestations/<id>/semantic-links/relink`
+and `DELETE /api/manifestations/<id>/semantic-links/<id>`) require
+`write:metadata`, matching the duplicate-review workflow. Relink triggers
+outbound lookups, so leaving it open to any signed-in account would let one user
+amplify egress against the whole instance.
+
+### Operational notes
+
+- **A relink is safe to repeat.** It is idempotent per entity — re-running
+  refreshes links rather than duplicating them.
+- **Rate limiting is deliberate.** A scan over a large catalog is queued work,
+  not a synchronous request; expect the dashboard to report `pending` rather than
+  completing instantly.
+- **GeoNames silently no-ops** without a username. That is not an error; the
+  other two authorities still link.
+
+---
+
 ## Troubleshooting FRBR Integrity Issues
 
 ### Orphan Works (Works Without Expressions)

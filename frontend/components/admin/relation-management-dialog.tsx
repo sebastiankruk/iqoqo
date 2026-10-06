@@ -43,6 +43,29 @@ import type { FrbrReassignPayload, FrbrMergePayload, FrbrSplitPayload } from "@/
 
 type ActionTab = "reassign" | "merge" | "split";
 
+/** The three concrete FRBR tiers an entity can be re-parented *to*. */
+type ParentTier = "work" | "expression" | "manifestation";
+
+/**
+ * The only tier an entity may be re-parented into is the one directly above it.
+ *
+ * An Expression belongs to a Work, a Manifestation to an Expression, and an
+ * Item to a Manifestation; a Work has no parent at all. Deriving this as a
+ * function of the entity type makes an invalid target unrepresentable, where
+ * storing it in state left a value from the previously-viewed entity on screen
+ * for one render.
+ *
+ * @param entityType - The concrete tier of the entity being reassigned
+ * @returns The tier to search for the new parent in
+ */
+function parentTierFor(entityType: string): ParentTier {
+  if (entityType === "manifestation") return "expression";
+  if (entityType === "item") return "manifestation";
+  // A Work has no parent tier; "work" keeps the search box functional rather
+  // than rendering an empty state for an action the hierarchy forbids.
+  return "work";
+}
+
 interface RelationManagementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,7 +94,6 @@ export function RelationManagementDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reassign state
-  const [reassignParentType, setReassignParentType] = useState<"work" | "expression" | "manifestation">("work");
   const [reassignSearchQuery, setReassignSearchQuery] = useState("");
   const [reassignSearchResults, setReassignSearchResults] = useState<FrbrSearchResult[]>([]);
   const [reassignSelectedParent, setReassignSelectedParent] = useState<FrbrSearchResult | null>(null);
@@ -87,16 +109,13 @@ export function RelationManagementDialog({
   const [splitNewTitle, setSplitNewTitle] = useState("");
   const [splitChildIds, setSplitChildIds] = useState<string>("");
 
-  // Determine which parent type is valid for reassign based on entity type
-  useEffect(() => {
-    if (entityType === "expression") {
-      setReassignParentType("work");
-    } else if (entityType === "manifestation") {
-      setReassignParentType("expression");
-    } else if (entityType === "item") {
-      setReassignParentType("manifestation");
-    }
-  }, [entityType]);
+  // The only valid parent tier for an entity is the tier directly above it in the
+  // FRBR hierarchy, so this is a pure function of `entityType` rather than
+  // state. It was an effect writing to state, which meant every render first
+  // presented the *previous* entity's parent tier: opening the dialog on a
+  // Manifestation showed a Work search box before correcting itself, and a
+  // search fired in that window queried the wrong tier.
+  const reassignParentType = parentTierFor(entityType);
 
   // Search for reassign target
   const handleReassignSearch = useCallback(async () => {
@@ -241,8 +260,20 @@ export function RelationManagementDialog({
     }
   }, [splitNewTitle, splitChildIds, entityType, entityId, manifestationId, qc, onOpenChange]);
 
-  // Reset state when dialog opens/closes
-  useEffect(() => {
+  // Reset the form whenever the dialog transitions from closed to open.
+  //
+  // Adjusting state during render rather than in an effect: the reset used to
+  // run in an effect, so reopening the dialog rendered once with the previous
+  // session's search text, results and selection still on screen. That window
+  // was long enough to be visible, and long enough for a click to hit a stale
+  // selection.
+  //
+  // Keying on the *transition* rather than on `open` matters: resetting
+  // whenever `open` is true would also have discarded the user's in-progress
+  // input on any re-render that changed `open`'s identity.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setReassignSearchQuery("");
       setReassignSearchResults([]);
@@ -253,7 +284,7 @@ export function RelationManagementDialog({
       setSplitNewTitle("");
       setSplitChildIds("");
     }
-  }, [open]);
+  }
 
   const tabs: { id: ActionTab; label: string; icon: React.ReactNode }[] = [
     { id: "reassign", label: "Reassign", icon: <ArrowRightLeft className="h-4 w-4" /> },

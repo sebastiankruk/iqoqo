@@ -24,6 +24,18 @@ function isAllowedHost(hostWithPort: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "iqoqo.cc" || host.endsWith(".iqoqo.cc");
 }
 
+/**
+ * Determine the absolute origin the browser should be sent back to.
+ *
+ * Prefers an explicitly configured frontend URL. Otherwise it reconstructs one
+ * from the request, and that is where the trust boundary sits: forwarding
+ * headers are attacker-controlled unless the Host is allowlisted first, which
+ * `isAllowedHost` does. The allowlist is the security control here, not this
+ * function.
+ *
+ * @param request - The incoming exchange request
+ * @returns An absolute origin string, including scheme
+ */
 function resolveFrontendOrigin(request: Request): string {
   const url = new URL(request.url);
   const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
@@ -52,6 +64,17 @@ function resolveFrontendOrigin(request: Request): string {
   return `${protocol}://${host}`;
 }
 
+/**
+ * Reduce an untrusted callback to a same-origin path.
+ *
+ * This is an open-redirect guard: the value arrives from the browser, so an
+ * absolute or protocol-relative URL would send a freshly-minted session
+ * somewhere an attacker chose. Anything that is not a plain leading-slash path
+ * collapses to `/` rather than being passed through.
+ *
+ * @param value - The untrusted callback value from the request body
+ * @returns A path guaranteed to resolve against the deployment's own origin
+ */
 function safeCallbackPath(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
     return "/";
@@ -66,12 +89,30 @@ function safeCallbackPath(value: unknown): string {
   }
 }
 
+/**
+ * Apply the no-store headers every response on this route must carry.
+ *
+ * The route mints a session cookie, so a cached copy of any response could be
+ * replayed against a different visitor.
+ *
+ * @param response - The response to mark
+ * @returns The same response, for chaining
+ */
 function noStore(response: NextResponse): NextResponse {
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
 
+/**
+ * Redeem a one-time authorization code for a session token.
+ *
+ * The code is single-use and short-lived; it is exchanged server-to-server so
+ * the provider token never reaches the browser.
+ *
+ * @param code - The one-time authorization code from the provider redirect
+ * @returns The exchange result, or null when the backend rejects or errors
+ */
 async function exchangeCode(code: string): Promise<ExchangeResult> {
   const apiBase = (process.env.FLASK_API_URL || "http://127.0.0.1:5000/api").replace(/\/+$/, "");
   const response = await fetch(`${apiBase}/auth/exchange`, {
@@ -91,10 +132,24 @@ async function exchangeCode(code: string): Promise<ExchangeResult> {
   };
 }
 
+/**
+ * Send the browser back to the login page with a non-revealing error.
+ *
+ * @param origin - The validated deployment origin to redirect within
+ * @returns A redirect response to `/login`
+ */
 function redirectToLogin(origin: string): NextResponse {
   return noStore(NextResponse.redirect(new URL("/login?error=oauth_exchange_failed", origin)));
 }
 
+/**
+ * Write the session cookie for the freshly exchanged token.
+ *
+ * @param token - The session token to store
+ * @param isHttps - Whether the deployment is served over TLS, which decides
+ *   the cookie's `Secure` flag
+ * @returns Resolves once the cookie has been written
+ */
 async function setSessionCookie(token: string, isHttps: boolean): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set("iqoqo_session", token, {

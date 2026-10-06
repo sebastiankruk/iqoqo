@@ -462,8 +462,14 @@ def test_get_semantic_links_api(client, app):
     assert data["data"]["grouped"]["dbpedia"][0]["pref_label"] == "Hyperion"
 
 
-def test_trigger_semantic_relink_api(client, normal_user_headers, app):
-    """Test POST /api/manifestations/<id>/semantic-links/relink returns 202 with task_id."""
+def test_trigger_semantic_relink_api(client, custodian_headers, app):
+    """Test POST /api/manifestations/<id>/semantic-links/relink returns 202 with task_id.
+
+    Uses `custodian_headers` rather than `normal_user_headers`: the endpoint is
+    gated on `write:metadata` because the task performs outbound authority
+    lookups. `test_trigger_semantic_relink_rejects_a_standard_user` covers the
+    refusal; this test covers the happy path.
+    """
     with app.app_context():
         work = Work(title="Snow Crash")
         db.session.add(work)
@@ -481,7 +487,7 @@ def test_trigger_semantic_relink_api(client, normal_user_headers, app):
         mock_task.id = "task-lod-12345"
         mock_delay.return_value = mock_task
 
-        resp = client.post(f"/api/manifestations/{manif_id}/semantic-links/relink", headers=normal_user_headers)
+        resp = client.post(f"/api/manifestations/{manif_id}/semantic-links/relink", headers=custodian_headers)
         assert resp.status_code == 202
         data = resp.json
         assert data["success"] is True
@@ -489,7 +495,7 @@ def test_trigger_semantic_relink_api(client, normal_user_headers, app):
         assert data["data"]["task_id"] == "task-lod-12345"
 
 
-def test_delete_semantic_link_api(client, normal_user_headers, app):
+def test_delete_semantic_link_api(client, custodian_headers, app):
     """Test DELETE /api/manifestations/<id>/semantic-links/<link_id> returns 204."""
     with app.app_context():
         work = Work(title="Cryptonomicon")
@@ -514,11 +520,64 @@ def test_delete_semantic_link_api(client, normal_user_headers, app):
         manif_id = manif.id
         link_id = link.id
 
-    resp = client.delete(f"/api/manifestations/{manif_id}/semantic-links/{link_id}", headers=normal_user_headers)
+    resp = client.delete(f"/api/manifestations/{manif_id}/semantic-links/{link_id}", headers=custodian_headers)
     assert resp.status_code == 204
 
     with app.app_context():
         assert db.session.get(SemanticLink, link_id) is None
+
+
+@pytest.mark.parametrize(
+    ("method", "needs_link_id"),
+    [("post", False), ("delete", True)],
+)
+def test_semantic_link_mutation_rejects_a_standard_user(client, normal_user_headers, app, method, needs_link_id):
+    """Both semantic-link mutations are custodian-only.
+
+    `normal_user_headers` holds `write:item` and nothing else, so a 403 here
+    proves the permission is actually enforced rather than merely present in the
+    decorator list. Both routes are covered by one parametrised test because they
+    failed for the same reason: they were declared `@require_auth` with no
+    permission gate at all, so any signed-in user could enqueue outbound
+    authority lookups for any manifestation, or delete links the reconciler had
+    established. Asserting the refusal is what stops a later hardening from
+    reading as a regression.
+    """
+    with app.app_context():
+        work = Work(title="Neuromancer")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+        manif = Manifestation(expression_id=expr.id, isbn13="9780441007462")
+        db.session.add(manif)
+        db.session.flush()
+
+        link = SemanticLink(
+            entity_type="manifestation",
+            entity_id=manif.id,
+            authority="geonames",
+            external_uri="https://sws.geonames.org/999999/",
+            pref_label="Somewhere",
+        )
+        db.session.add(link)
+        db.session.commit()
+        manif_id = manif.id
+        link_id = link.id
+
+    # The relink route takes no link id; the delete route requires one.
+    tail = f"{link_id}" if needs_link_id else "relink"
+    url = f"/api/manifestations/{manif_id}/semantic-links/{tail}"
+    with patch("app.core.tasks.link_manifestation_lod_task.delay") as mock_delay:
+        resp = getattr(client, method)(url, headers=normal_user_headers)
+        mock_delay.assert_not_called()
+
+    assert resp.status_code == 403, f"{method.upper()} {url} should require write:metadata"
+
+    # The refusal must be a refusal, not a partial write.
+    with app.app_context():
+        assert db.session.get(SemanticLink, link_id) is not None
 
 
 def test_dbpedia_silmarillion_lookup_parameters_and_tags(app):

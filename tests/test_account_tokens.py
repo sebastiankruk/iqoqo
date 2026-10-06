@@ -30,6 +30,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app import create_app
 from app.core import account_tokens
 from app.core.account_tokens import AccountTokenPurpose
 from app.db.auth import TOKEN_PURPOSE_LENGTH, AccountActionToken
@@ -346,7 +347,49 @@ def test_a_resend_does_not_disturb_another_accounts_token(app, user) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_concurrent_consumption_has_exactly_one_winner(app, user) -> None:
+@pytest.fixture
+def pooled_app(tmp_path):
+    """An app whose database hands every thread its own connection.
+
+    The suite-wide `app` fixture uses ``sqlite:///:memory:``, and
+    Flask-SQLAlchemy backs that with a ``StaticPool`` -- a *single* connection
+    shared by the whole process. Threads therefore do not get independent
+    transactions, they get four coroutines hammering one SQLite cursor at once.
+    That is not merely slower than the production topology: ``sqlite3`` forbids
+    it, so the attempts fail with ``InterfaceError``/``IndexError`` rather than
+    losing a race, and a "concurrent consumption" test ends up asserting
+    nothing about concurrency at all.
+
+    A file-backed database gets a real pool, so each thread checks out its own
+    connection and the write lock is arbitrated by SQLite the way PostgreSQL
+    arbitrates it in production. ``timeout`` makes a blocked writer wait for
+    the lock instead of failing immediately, which is what a real deployment
+    does; without it the losers would be reported as losses for the wrong
+    reason.
+    """
+    database_path = tmp_path / "concurrency.db"
+    pooled = create_app(
+        config_override={
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                "connect_args": {"timeout": 30},
+                "pool_size": 4,
+                "max_overflow": 4,
+            },
+            "RATELIMIT_ENABLED": False,
+        }
+    )
+
+    with pooled.app_context():
+        db.create_all()
+        yield pooled
+        db.session.remove()
+        db.drop_all()
+        db.session.remove()
+
+
+def test_concurrent_consumption_has_exactly_one_winner(pooled_app) -> None:
     """Two simultaneous confirmations must not both delete an account.
 
     This is the reason `consume_token` deletes conditionally and returns, rather
@@ -354,37 +397,42 @@ def test_concurrent_consumption_has_exactly_one_winner(app, user) -> None:
     requests observe "outstanding" and both proceed. The database decides here,
     and exactly one request wins.
 
-    Threads rather than greenlets on purpose. A single SQLite in-memory database
-    is shared across threads, whereas a greenlet would interleave inside one
-    session and never produce two independent transactions -- which is the whole
-    thing under test. Each attempt pushes its own app context so the scoped
-    session is genuinely separate.
+    Threads rather than greenlets on purpose. A greenlet would interleave inside
+    one session and never produce two independent transactions -- which is the
+    whole thing under test. Each attempt pushes its own app context so the
+    scoped session is genuinely separate, and `pooled_app` guarantees each of
+    those sessions also has a connection of its own to run on.
     """
+    app = pooled_app
     with app.app_context():
-        raw, _row = account_tokens.issue_token(user, AccountTokenPurpose.ACCOUNT_DELETION)
+        holder = User(email="concurrent@iqoqo.local", display_name="Concurrent Tester")
+        holder.set_password("test-password")
+        db.session.add(holder)
+        db.session.commit()
+        raw, _row = account_tokens.issue_token(holder, AccountTokenPurpose.ACCOUNT_DELETION)
 
-        def attempt(_index: int) -> bool:
-            """Try to consume the token from an independent session.
+    def attempt(_index: int) -> bool:
+        """Try to consume the token from an independent session.
 
-            Commits on success, because consumption is a `DELETE` and SQLite
-            serialises writers: without the commit the losing threads would
-            collide on the database lock and be counted as losses for the wrong
-            reason, which would make this test pass for the wrong cause.
-            """
-            won = False
-            with app.app_context():
-                try:
-                    won = account_tokens.consume_token(raw, AccountTokenPurpose.ACCOUNT_DELETION) is not None
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-                    won = False
-            return won
+        Returning ``False`` means *this* request lost the race -- the
+        conditional delete matched no row. An exception means something else
+        went wrong, so it propagates: treating it as a lost race is precisely
+        what let a broken test harness report itself as a passing concurrency
+        test.
+        """
+        with app.app_context():
+            try:
+                claimed = account_tokens.consume_token(raw, AccountTokenPurpose.ACCOUNT_DELETION) is not None
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
+            return claimed
 
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            results = list(pool.map(attempt, range(4)))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(attempt, range(4)))
 
-        assert sum(1 for won in results if won) == 1, f"expected exactly one winner, got {results}"
+    assert sum(1 for won in results if won) == 1, f"expected exactly one winner, got {results}"
 
 
 # ---------------------------------------------------------------------------

@@ -1044,8 +1044,18 @@ def get_manifestation_semantic_links(manifestation_id: int) -> tuple[Response, i
 
 @api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/relink", methods=["POST"])
 @require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Response, int]:
-    """Trigger an on-demand asynchronous background LOD reconciliation task."""
+    """Trigger an on-demand asynchronous background LOD reconciliation task.
+
+    Custodian-scoped, not merely authenticated. The task reaches out to
+    DBpedia, GeoNames and WordNet, so this is an egress trigger: left open to
+    any signed-in user it lets one standard account schedule outbound lookups
+    against every manifestation id in the instance. That is the same
+    amplification the SSRF egress allowlist exists to prevent, reached from the
+    inside instead of the outside. `write:metadata` matches the duplicate-review
+    endpoints, which mutate the same catalog.
+    """
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
@@ -1077,8 +1087,14 @@ def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Respon
 
 @api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
 @require_auth
+@require_permission(PermissionName.WRITE_METADATA)
 def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
-    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work."""
+    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+
+    Requires `write:metadata`: this is a catalog mutation, and a standard user
+    who can reach it can remove links the reconciler established from any
+    manifestation, not only their own.
+    """
     from app.db.core import SemanticLink
 
     manif = db.session.get(Manifestation, manifestation_id)

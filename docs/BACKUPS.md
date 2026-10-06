@@ -6,22 +6,49 @@ Starting in **v0.7.14** and extended in **v0.7.16**, iQoQo supports a multi-tier
 
 ---
 
-## Architecture & Remotes
+## Two Storage Backends
 
-Four separate `rclone` remotes can be configured via environment variables in `.env`:
+Since **v0.8.2** iqoqo has two remote-storage backends, and which one is in use
+is a single variable:
 
-| Environment Variable | Default Remote Name | Purpose | Recommended Storage Class |
-| -------------------- | ------------------- | ------- | ------------------------- |
-| `RCLONE_REMOTE_FAST` | `iqoqo-backup` (or `iqoqo-s3:<bucket>`) | Daily database dumps & asset backups | AWS S3 Standard / S3 Standard-IA / Dropbox |
-| `RCLONE_REMOTE_ARCHIVE` | `iqoqo-glacier:iqoqo-archive` | Long-term cold storage archive | AWS S3 Glacier Flexible Retrieval / Deep Archive |
-| `RCLONE_COVERS_REMOTE` | `iqoqo-s3-cache` | Shared AI cover cache across instances | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
-| `RCLONE_FEEDBACK_REMOTE` | `remote:feedback` | Feedback screenshot attachment persistence | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| Variable | Values | Meaning |
+| -------- | ------ | ------- |
+| `S3_BACKEND` | `auto` (default), `rclone`, `s3` | Which backend the **containers** use. `auto` prefers rclone when a remote is already configured, so existing installs change nothing. |
+
+**This changed for the containers only.** `app/core/s3_service.py` (boto3) lets
+the app reach object storage directly, and the containers **no longer shell out
+to rclone or mount `rclone.conf`** — handing a plaintext credential file to the
+process that parses untrusted input was the risk. Host-side backup and restore
+scripts on your machine still use your existing rclone install, unchanged.
+
+Two names are **deprecated** in favour of the `S3_BUCKET_*` variables, and iqoqo
+warns by name when one is set without a replacement:
+
+- `RCLONE_REMOTE_ARCHIVE` → `S3_BUCKET_BACKUP`
+- `RCLONE_FEEDBACK_REMOTE` → `S3_BUCKET_FEEDBACK`
+
+Leaving every S3 value blank runs fully local; each role degrades to a no-op
+rather than failing. Full variable reference: `.env.example`, and
+`docs/INSTALL.md`.
+
+### Remote storage roles
+
+| Role | rclone variable (host scripts) | Native variable (containers) | Recommended storage class |
+| ---- | ------------------------------ | ---------------------------- | ------------------------- |
+| Daily database dumps & asset backups | `RCLONE_REMOTE_FAST` | `S3_BUCKET_BACKUP` | AWS S3 Standard / Standard-IA / Dropbox |
+| Long-term cold storage archive | `RCLONE_REMOTE_ARCHIVE` | `S3_BUCKET_BACKUP` | AWS S3 Glacier Flexible Retrieval / Deep Archive |
+| Shared AI cover cache across instances | `RCLONE_COVERS_REMOTE` | `S3_BUCKET_COVERS` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+| Feedback screenshot archive | `RCLONE_FEEDBACK_REMOTE` | `S3_BUCKET_FEEDBACK` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
+
+The native backend works against AWS S3, MinIO, Cloudflare R2, Wasabi, Backblaze
+B2 and Oracle Cloud Object Storage. Server-side encryption is available via
+`S3_SSE` (with `S3_SSE_KMS_KEY_ID` for KMS).
 
 ---
 
 ## 1. Fast Daily Backups (`RCLONE_REMOTE_FAST`)
 
-The backup script ([scripts/cloud_backup.sh](file:///home/sebastiankruk/Development/iqoqo/scripts/cloud_backup.sh)) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
+The backup script ([`scripts/cloud_backup.sh`](../scripts/cloud_backup.sh)) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
 
 ### Setup Instructions
 
@@ -184,8 +211,8 @@ Introduced in **v0.7.16**, user feedback submissions with attached screenshot im
 ### How Feedback Screenshot Sync Works
 
 1. When a user submits a bug report or feedback ticket with screenshot attachments, the file is temporarily accepted by the API.
-2. If `RCLONE_FEEDBACK_REMOTE` is configured in `.env`, a background task runs `rclone copyto --` to store the screenshot on the cloud remote.
-3. If `RCLONE_FEEDBACK_REMOTE` is unconfigured, iQoQo gracefully falls back to local volume storage at `./app/static/gallery/`.
+2. If a feedback remote is configured, a background task stores the screenshot there — via `S3_BUCKET_FEEDBACK` on the native backend, or `RCLONE_FEEDBACK_REMOTE` (deprecated) on the rclone backend.
+3. If neither is configured, iqoqo gracefully falls back to local volume storage at `./app/static/gallery/`.
 
 ---
 

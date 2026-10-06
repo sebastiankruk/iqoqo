@@ -268,6 +268,33 @@ describe("PrintQrCodeDialog", () => {
     expect(writtenHtml).toContain("&lt;img src=x");
   });
 
+  it("escapes a hostile expression content_type as well as the title", async () => {
+    // `expression.content_type` is a free-text column with no CHECK
+    // constraint, written verbatim from the request body by a write:metadata
+    // caller -- a permission the contributor role holds. The existing escaping
+    // test hardcoded `content_type: "text"`, so this path was never exercised
+    // and the value went into document.write() raw.
+    const hostileItem: Item = {
+      ...baseItem,
+      expression: {
+        id: 2,
+        content_type: "</div><script>window.__pwned=1</script>",
+        language: "en",
+      },
+    } as unknown as Item;
+
+    const printStub = makePrintWindowStub();
+    vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);
+
+    render(<PrintQrCodeDialog isOpen={true} onOpenChange={vi.fn()} item={hostileItem} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Print Label/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: /Print Label/i }));
+
+    const writtenHtml: string = printStub.document.write.mock.calls[0][0];
+    expect(writtenHtml).not.toContain("<script>window.__pwned");
+    expect(writtenHtml).toContain("&lt;script&gt;");
+  });
+
   it("escapes the authors line too, and leaves ordinary titles untouched", async () => {
     const printStub = makePrintWindowStub();
     vi.spyOn(window, "open").mockReturnValue(printStub as unknown as Window);

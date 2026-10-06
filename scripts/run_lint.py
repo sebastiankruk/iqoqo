@@ -60,8 +60,14 @@ CANONICAL_JOBS: list[tuple[str, list[Check]]] = [
             ("Ruff", [tool("ruff"), "check", "app/", "tests/", "scripts/"], ROOT, True),
             ("Black", [tool("black"), "--check", "app/", "tests/", "scripts/"], ROOT, True),
             ("isort", [tool("isort"), "--check-only", "app/", "tests/", "scripts/"], ROOT, True),
-            # This is continue-on-error in the pre-existing CI workflow.
-            ("Mypy (non-blocking, matching CI continue-on-error)", [tool("mypy"), "app/", "tests/", "scripts/"], ROOT, False),
+            # Non-blocking, matching the CI workflow's continue-on-error. Note
+            # that `scripts/` is deliberately absent: `pyproject.toml`'s mypy
+            # `exclude` lists it, so passing the directory produced "There are
+            # no .py[i] files in directory 'scripts'" and a non-zero exit that
+            # looked like a type error rather than an argument that checks
+            # nothing. There is a known, recorded backlog here -- see the
+            # "Type Checking Was Checking Nothing" entry in docs/CHANGELOG.md.
+            ("Mypy (non-blocking, matching CI continue-on-error)", [tool("mypy"), "app/", "tests/"], ROOT, False),
         ],
     ),
     (

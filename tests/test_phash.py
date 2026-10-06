@@ -33,8 +33,16 @@ import sys
 
 import pytest
 
+# Imported as a top-level module, not `tests.phash_corpus`. `tests/` has no
+# `__init__.py`, so the `tests.`-prefixed spelling made mypy resolve this very
+# file under two module names ("phash_corpus" and "tests.phash_corpus") and
+# abort with "Source file found twice under different module names" -- which
+# stops it before checking anything at all, silently reducing the type gate to
+# zero files. Pytest's rootdir insertion puts tests/ on sys.path, so the plain
+# spelling imports the same file.
+from phash_corpus import build_corpus, tie_corpus
+
 from app.utils.phash import HASH_HEX_WIDTH, parse_hash, perceptual_hash
-from tests.phash_corpus import build_corpus, tie_corpus
 
 # Captured from imagehash.phash() (imagehash 4.3.2) over the corpus built by
 # tests/phash_corpus.py:build_corpus(). Regenerate with the one-off recipe in

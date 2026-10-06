@@ -184,10 +184,32 @@ make start          # Start Colima, PostgreSQL, and Flask server
 make stop           # Stop Flask and database (keeps Colima running)
 
 # Code Quality
-make lint           # Run checks that gate GitHub quality CI
-make lint-all       # Add local-only Pylint, ESLint, TypeScript, Stylelint, YAML
-make format         # Auto-format all code
-make test           # Run all tests (includes linting)
+make lint              # Run checks that gate GitHub quality CI
+make lint-all          # Add local-only Pylint, ESLint, TypeScript, Stylelint, YAML
+npm run lint --prefix frontend  # ESLint directly (CI runs this with --max-warnings=0)
+make lint-python       # Ruff + Black + isort + mypy
+make lint-markdown     # markdownlint-cli2 over all Markdown
+make lint-frontend     # ESLint + TypeScript compiler
+make format            # Auto-format all code
+make validate-yaml     # Validate shared/format_mappings.yaml structure
+make validate-nginx    # Validate deploy/nginx.conf.example with a real nginx
+make validate-openspec # Validate the published OpenSpec capabilities
+make validate-release  # Release invariants: versions, CHANGELOG, image budget
+
+# Release
+make validate-image-size IMAGE=<tag>  # Check an already-built image's byte size
+make test-merge-integrity-pg          # FRBR merge/duplicate/index suites on real PostgreSQL
+
+# Secrets (writes to encrypted DB storage)
+make migrate-secrets
+
+# Tests
+make test               # Run everything, including E2E
+make test-backend       # pytest
+make test-frontend      # Vitest + React Testing Library
+make test-scripts-bash  # bats, for the operational shell scripts
+make test-scripts-python
+make test-backend-pg    # PostgreSQL-only integration tests
 
 # Database
 make db-init        # Initialize database with seed data
@@ -243,7 +265,51 @@ When modifying `DataManager.get_faceted_stats`, facet filter builders, or multi-
 
 - Test across all FRBR tiers (global catalog, Work aggregation, Expression content types, Manifestation formats, and Item statuses).
 - Verify that filtering at the Manifestation level (e.g. format) properly recalculates counts without cross-join record duplication.
-- Use established test patterns from `tests/test_api_status_filters.py` and `tests/test_faceted_catalog.py` as reference models.
+- Use established test patterns from `tests/test_api_status_filters.py` and `tests/test_duplicate_detection.py` as reference models.
+
+#### Tests That Cannot Fail
+
+A test that passes regardless of the code it names is worse than no test: it is
+reported as coverage while the defect it claims to guard gets in. Patterns that
+have shipped real defects in this repository, all worth avoiding:
+
+- **Re-implementing the logic inside the test file.** If the test contains its
+  own copy of the read/write pair rather than importing the real module,
+  sabotaging the real code leaves the suite green. `frontend/__tests__/lib/collection-url.test.ts`
+  exists because the previous version did exactly this.
+- **Assertions that are true of every possible value.** `expect(x.length).toBeGreaterThan(0)`
+  is vacuous if `x` is `[]`; `expect(queryByRole("status")).toBeDefined()` passes for
+  a missing element, because testing-library returns `null` and `null` is not `undefined`.
+- **Guarding an assertion behind `if (elements.length > 0)`.** That skips the test
+  precisely when the thing is absent.
+- **Testing a copy instead of the artefact.** A cover-upload test that posts raw
+  `bytes` never reaches the upload path at all, because Werkzeug parses them as
+  a form field.
+- **Shared-database threads on SQLite.** The suite's in-memory fixture is backed
+  by a single connection, so threads do not get independent transactions; the
+  SQLite driver rejects the concurrent use. Use a file-backed database for any
+  real concurrency test.
+
+For the same reasons, `tests/test_type_gate_and_suite_integrity.py` checks that
+mypy reaches module resolution and that the account-deletion suite declares
+exactly what pytest collects. If you find a gate that cannot fail, fix it or
+delete it — do not leave it reported as coverage.
+
+#### Narrow catch blocks and lint suppressions
+
+`except Exception` needs a written justification, and
+`tests/test_lint_safeguards.py` enforces that: every broad-exception
+suppression must be listed in `JUSTIFIED_BROAD_EXCEPT_SITES` with the reason it
+is correct and what the caller observes instead. Prefer narrowing the handler to
+the exception types it actually expects — `broad-except` (W0703) and
+`broad-exception-caught` (W0718) are the same diagnostic under two names, and
+both are forbidden from suppression.
+
+The same applies to lint rules generally: a rule configured but never enforced
+is worse than no rule, because the codebase drifts away from a standard nobody
+is checking and the gap stays invisible. If a rule does not match how this
+codebase is actually written, either change the code or narrow the rule to a
+scope where it applies — and say in the config comment which, and why.
 
 ### Database Changes
 
@@ -291,10 +357,15 @@ make test
 
 ### 2. Update Documentation
 
+- **Add a `docs/CHANGELOG.md` entry** for anything user-visible. This is required
+  for every change that reaches a `release/*` branch, and it is the artifact a
+  user actually reads. Add it in the *unreleased* section; the date is filled in
+  at tag time.
 - Update README.md if adding user-facing features
 - Add docstrings to new functions/classes
-- Update API documentation for new endpoints
+- Update API documentation for new endpoints (`docs/API.md`)
 - Add comments explaining non-obvious FRBR modeling decisions
+- New environment variables need `.env.example` **and** `docs/INSTALL.md`
 
 ### 3. Create Pull Request
 

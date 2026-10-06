@@ -61,20 +61,27 @@ export default function LodReconciliationPage() {
     return null;
   });
 
-  // Automatically reconnect to active running task on page load/reload
+  // The server is authoritative about which task is running, so its answer is
+  // merged during render rather than copied into state from an effect. Writing
+  // it in an effect is a second render pass that briefly shows a stale id, and
+  // `set-state-in-effect` exists to flag exactly that. The localStorage write
+  // is a genuine side effect, so it stays in an effect -- but it now only
+  // mirrors the id, and it no longer drives what the page displays.
+  const serverActiveTaskId = activeTaskData?.active_task_id ?? null;
+  const effectiveActiveTaskId = activeTaskId ?? serverActiveTaskId;
+
   useEffect(() => {
-    if (activeTaskData?.active_task_id) {
-      setActiveTaskId(activeTaskData.active_task_id);
+    if (serverActiveTaskId) {
       try {
-        localStorage.setItem("iqoqo_active_lod_task_id", activeTaskData.active_task_id);
+        localStorage.setItem("iqoqo_active_lod_task_id", serverActiveTaskId);
       } catch {
         // ignore
       }
     }
-  }, [activeTaskData]);
+  }, [serverActiveTaskId]);
 
   const { data: stats, isLoading: isStatsLoading, isFetching: isFetchingStats, refetch: refetchStats } = useLodStats();
-  const { data: taskStatus } = useLodTaskStatus(activeTaskId);
+  const { data: taskStatus } = useLodTaskStatus(effectiveActiveTaskId);
   const triggerMutation = useTriggerLodReconciliation();
   const cancelMutation = useCancelLodTask();
 
@@ -153,7 +160,7 @@ export default function LodReconciliationPage() {
   };
 
   const handleCancel = async () => {
-    const taskToCancel = activeTaskId;
+    const taskToCancel = effectiveActiveTaskId;
     setActiveTaskId(null);
     try {
       localStorage.removeItem("iqoqo_active_lod_task_id");
