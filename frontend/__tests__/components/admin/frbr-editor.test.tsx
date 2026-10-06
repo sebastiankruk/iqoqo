@@ -19,13 +19,7 @@ import { toast } from "sonner";
 import { FrbrEditor } from "@/components/admin/frbr-editor";
 import * as adminApi from "@/lib/api/admin";
 import { PermissionName } from "@/lib/permissions";
-import {
-  useProfile,
-  useFrbrTree,
-  useUpdateFrbrEntity,
-  useDeleteFrbrEntity,
-  useAddFrbrChild,
-} from "@/lib/api/hooks";
+import { useProfile, useFrbrTree, useUpdateFrbrEntity, useDeleteFrbrEntity, useAddFrbrChild } from "@/lib/api/hooks";
 
 vi.mock("@/lib/api/admin");
 

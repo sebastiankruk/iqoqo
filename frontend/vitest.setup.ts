@@ -79,11 +79,16 @@ vi.mock("next/image", async () => {
     default: ({ src, alt, className, fill, sizes, unoptimized, priority, placeholder, blurDataURL, ...rest }: any) => {
       void fill;
       void sizes;
-      void unoptimized;
       void priority;
       void placeholder;
       void blurDataURL;
-      return createElement("img", { src, alt, className, ...rest });
+      return createElement("img", {
+        src,
+        alt,
+        className,
+        ...(unoptimized ? { "data-unoptimized": "true" } : {}),
+        ...rest,
+      });
     },
   };
 });

@@ -138,7 +138,7 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                               item.type === "manifestation" ? "opacity-60 grayscale" : ""
                             }`}
                           >
-                            <Image src={item.cover_url} alt={item.title} fill className="object-cover" />
+                            <Image src={item.cover_url} alt={item.title} fill unoptimized className="object-cover" />
                           </div>
                         ) : (
                           <div className="h-28 w-20 bg-muted rounded shadow-sm flex items-center justify-center">

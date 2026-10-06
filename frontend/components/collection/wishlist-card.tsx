@@ -23,7 +23,7 @@ import { BookOpen, Disc, Dices, Film, HeartOff, Puzzle } from "lucide-react";
 import type { WishlistItem } from "@/types/frbr";
 import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { resolveMediaBadge } from "@/lib/media-badge";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 
 interface WishlistCardProps {
@@ -57,7 +57,12 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
     }
   };
 
-  const coverUrl = item.cover_url;
+  const timestamp = getCoverTimestamp(item.manifestation_meta);
+  const coverUrl =
+    getCoverUrl(item.cover_url || undefined, timestamp) ||
+    getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ||
+    item.cover_url ||
+    (item.manifestation_meta?.["cover_url"] as string | undefined);
   const title = item.title || "Untitled";
   const authors = item.authors || [];
   const targetHref = item.manifestation_id ? `/manifestation/${item.manifestation_id}` : "/wishlist";
@@ -107,7 +112,7 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
           className={`relative ${aspectClass} w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20`}
         >
           {coverUrl ? (
-            <Image src={coverUrl} alt={title} fill className="object-cover" sizes="5rem" />
+            <Image src={coverUrl} alt={title} fill unoptimized className="object-cover" sizes="5rem" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <MediaIcon className="h-6 w-6 text-muted-foreground/40" />
@@ -144,6 +149,7 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
             src={coverUrl}
             alt={title}
             fill
+            unoptimized
             className="object-cover transition-transform group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, 33vw"
           />
