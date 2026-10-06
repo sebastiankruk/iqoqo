@@ -540,6 +540,7 @@
       "filterWarn": "Warnings & errors",
       "autoScroll": "Auto-scroll",
       "noLogs": "No resolution events yet. Start a scan to observe live entity reconciliation.",
+      "loadingLog": "Waiting for the first resolution event…",
       "linksAdded": "{count} links added",
       "noLinksAdded": "No links matched",
       "manifestationLabel": "Edition #{id}"

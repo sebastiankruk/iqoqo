@@ -58,6 +58,19 @@ const eslintConfig = defineConfig([
       'jsdoc/check-param-names': 'error',
       'jsdoc/require-param-type': 'off', // TypeScript already handles types
       'jsdoc/require-returns-type': 'off', // TypeScript already handles return types
+      // `ignoreRestSiblings` is for the destructure-to-omit idiom:
+      // `rows.map(({ _internalId, ...rest }) => rest)` strips an internal
+      // bookkeeping key on the way out, and the binding is deliberately
+      // unused. Without this the rule reports the idiom as dead code and the
+      // only ways to silence it are deleting working code or an eslint-disable.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          ignoreRestSiblings: true,
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   // Allow `any` in test files for mock return values

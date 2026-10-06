@@ -16,6 +16,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ interface UserProfile {
  * @returns {JSX.Element} The page component
  */
 export default function ProfilePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const { data: config } = useAppConfig();
   const queryClient = useQueryClient();
@@ -177,7 +179,7 @@ export default function ProfilePage() {
     try {
       // Call the Next.js logout route to clear the session cookie
       await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/";
+      router.push("/");
     } catch {
       toast.error("Failed to logout");
     }

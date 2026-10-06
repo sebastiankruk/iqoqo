@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, Plus, MoreVertical, ArrowUpRight, Trash2 } from "lucide-react";
+import { Save, MoreVertical, ArrowUpRight, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,

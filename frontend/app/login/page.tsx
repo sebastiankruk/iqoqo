@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -43,6 +43,7 @@ export default function LoginPage() {
  */
 function LoginPageContent() {
   const t = useTranslations("Login");
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const searchParams = useSearchParams();
@@ -83,9 +84,9 @@ function LoginPageContent() {
       });
       if (exchangeRes?.ok) {
         const result = await exchangeRes.json().catch(() => ({}));
-        window.location.href = result.redirectUrl || callbackUrl || "/";
+        router.push(result.redirectUrl || callbackUrl || "/");
       } else {
-        window.location.href = callbackUrl || "/";
+        router.push(callbackUrl || "/");
       }
     } else {
       alert(t("loginFailed"));
@@ -107,6 +108,8 @@ function LoginPageContent() {
             onClick={() => {
               const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
               const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
+              // OAuth flow requires full page navigation to API endpoint
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
               window.location.href = `/api/auth/login/google${cbQuery}`;
             }}
           >

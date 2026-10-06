@@ -30,7 +30,6 @@ interface ItemsManagerProps {
   onItemSubmit: (data: ItemFormData, itemId: number) => Promise<void>;
   onItemEscalate?: (itemId: number) => void;
   onItemDelete?: (itemId: number) => void;
-  lastFetched?: number;
 }
 
 /**
@@ -42,10 +41,9 @@ interface ItemsManagerProps {
  * @param props.onItemSubmit - Handler for item form submission
  * @param props.onItemEscalate - Optional handler for escalating an item
  * @param props.onItemDelete - Optional handler for deleting an item
- * @param props.lastFetched - Timestamp for key-based re-rendering
  * @returns JSX element
  */
-export function ItemsManager({ items, onItemSubmit, onItemEscalate, onItemDelete, lastFetched }: ItemsManagerProps) {
+export function ItemsManager({ items, onItemSubmit, onItemEscalate, onItemDelete }: ItemsManagerProps) {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [itemFilter, setItemFilter] = useState({ owner: "", status: "", condition: "" });
 

@@ -52,7 +52,7 @@ describe("SPARQL Explorer i18n completeness", () => {
   });
 
   it("has no empty string values in any namespace", () => {
-    const checkEmpty = (messages: Record<string, unknown>, locale: string) => {
+    const checkEmpty = (messages: Record<string, unknown>, _locale: string) => {
       const empty: string[] = [];
 
       const checkObj = (obj: Record<string, unknown>, path: string) => {

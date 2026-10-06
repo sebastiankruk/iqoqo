@@ -156,7 +156,7 @@ test.describe("Data Sovereignty Export Workflow — E2E", () => {
     const downloadBtn = page.getByRole("button", { name: "Export Collection Button" });
 
     // Set up download handler
-    const downloadPromise = page.waitForEvent("download", { timeout: 10000 }).catch(() => null);
+    await page.waitForEvent("download", { timeout: 10000 }).catch(() => null);
     await downloadBtn.click();
 
     // Verify button shows exporting state or download starts
@@ -204,7 +204,8 @@ test.describe("Data Sovereignty Export Workflow — E2E", () => {
     // Mock export endpoint that returns only public items
     await page.route("**/api/v1/items/export**", route => {
       const url = new URL(route.request().url());
-      const format = url.searchParams.get("format") || "json-ld";
+      // format param is validated but not used in the mock response
+      url.searchParams.get("format");
 
       // Return only public items (hidden items excluded by backend)
       const publicItems = [

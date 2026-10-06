@@ -908,6 +908,71 @@ def test_write_error_envelope_counts_attempts_up_to_the_cap(daemon_core_module, 
     assert "Overflow error" not in data["error"]
 
 
+def test_write_error_envelope_never_clobbers_a_spent_envelope(daemon_core_module, tmp_path):
+    """SECURITY: the first *terminal* error is preserved; later ones are refused.
+
+    The protection is the retry budget rather than "first write wins". A single
+    transient failure used to be permanent, which silently dropped that
+    extraction from the graph while the run still reported success -- so
+    overwriting is now allowed while budget remains. What must never happen is
+    the opposite failure: once the budget is spent, a further write replacing
+    the recorded error with fresh text, because that erases the diagnostic for
+    a task that has definitively failed.
+
+    Refusal is also only useful if the existing envelope survives it, so the
+    file is re-read after the refused write rather than trusting the return
+    value alone.
+    """
+    cap = daemon_core_module.MAX_TASK_ATTEMPTS
+
+    for attempt in range(1, cap + 1):
+        assert daemon_core_module.write_error_envelope("task_terminal", f"Terminal {attempt}", tmp_path) is True
+
+    before = (tmp_path / "task_terminal.error").read_text(encoding="utf-8")
+
+    # A permanently broken model must not be able to rewrite history.
+    assert daemon_core_module.write_error_envelope("task_terminal", "Attempt after the cap", tmp_path) is False
+
+    after = json.loads((tmp_path / "task_terminal.error").read_text(encoding="utf-8"))
+    assert after["attempts"] == cap
+    assert f"Terminal {cap}" in after["error"]
+    assert "Attempt after the cap" not in after["error"]
+    # The refused write must not have touched the file at all -- not even the
+    # timestamp, which a rewrite-then-restore implementation would churn.
+    assert (tmp_path / "task_terminal.error").read_text(encoding="utf-8") == before
+
+
+def test_write_error_envelope_treats_a_legacy_envelope_as_one_attempt(daemon_core_module, tmp_path):
+    """Envelopes predating the retry budget must not be stranded.
+
+    `read_error_attempts` maps a record with no `attempts` field to 1, so an
+    envelope written by an earlier version gets the *benefit* of the new budget
+    rather than being treated as already exhausted. Treating the missing field
+    as the cap would permanently freeze every task that failed once before the
+    upgrade -- which is precisely the silent extraction loss the budget exists
+    to fix.
+
+    The three cases are: a well-formed legacy record, a record whose
+    `attempts` is not a usable integer, and an unreadable one.
+    """
+    envelope = tmp_path / "task_legacy.error"
+
+    for name, content in (
+        ("no attempts field", json.dumps({"task_id": "task_legacy", "error": "old failure"})),
+        ("attempts is not an int", json.dumps({"task_id": "task_legacy", "error": "old failure", "attempts": "many"})),
+        ("not JSON at all", "{ truncated"),
+    ):
+        envelope.write_text(content, encoding="utf-8")
+
+        assert daemon_core_module.read_error_attempts(envelope) == 1, name
+
+        # And the budget is therefore still spendable on that record.
+        assert daemon_core_module.write_error_envelope("task_legacy", "retrying after upgrade", tmp_path) is True
+        data = json.loads(envelope.read_text(encoding="utf-8"))
+        assert data["attempts"] == 2, name
+        assert "retrying after upgrade" in data["error"], name
+
+
 def test_sanitize_error_text_redacts_paths(daemon_core_module):
     """SECURITY: Absolute paths are redacted from error messages."""
     result = daemon_core_module.sanitize_error_text("Error at /home/user/secret/credentials.json")

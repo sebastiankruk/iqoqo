@@ -16,6 +16,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -29,6 +30,7 @@ import { useTranslations } from "next-intl";
  */
 export default function RegisterPage() {
   const t = useTranslations("Register");
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -59,9 +61,9 @@ export default function RegisterPage() {
       });
       if (exchangeRes.ok) {
         const result = await exchangeRes.json().catch(() => ({}));
-        window.location.href = result.redirectUrl || "/";
+        router.push(result.redirectUrl || "/");
       } else {
-        window.location.href = "/";
+        router.push("/");
       }
     } else {
       const errData = await res.json();
@@ -82,7 +84,11 @@ export default function RegisterPage() {
           <Button
             className="w-full"
             variant="outline"
-            onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`)}
+            onClick={() => {
+              // OAuth flow requires full page navigation to API endpoint
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+              window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`;
+            }}
           >
             {t("googleSignUp")}
           </Button>

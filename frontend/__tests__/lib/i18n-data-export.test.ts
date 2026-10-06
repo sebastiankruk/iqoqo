@@ -71,12 +71,12 @@ describe("Data Export i18n completeness", () => {
         expect(enExportKeys).toEqual(plExportKeys);
 
         // Verify no empty translations
-        for (const [key, value] of Object.entries(enExportObj)) {
+        for (const [, value] of Object.entries(enExportObj)) {
           if (typeof value === "string") {
             expect(value.trim()).not.toBe("");
           }
         }
-        for (const [key, value] of Object.entries(plExportObj)) {
+        for (const [, value] of Object.entries(plExportObj)) {
           if (typeof value === "string") {
             expect(value.trim()).not.toBe("");
           }

@@ -27,6 +27,7 @@ import {
   BookMarked,
   ArrowDownToLine,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,9 +142,24 @@ export function AuditLogStream({ logs = [], isLoading = false, className }: Audi
           {filteredLogs.length === 0 ? (
             <div
               data-testid="lod-no-logs-message"
-              className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground font-sans"
+              className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground font-sans gap-1"
             >
-              <p className="text-sm">{t("noLogs")}</p>
+              {/* A scan that has not produced its first event yet is not the
+                  same as a scan that has produced none at all. The parent
+                  passes `isProcessing` for exactly this distinction, and the
+                  previous version dropped it -- so a running reconciliation
+                  announced "no resolution events yet" while it was working,
+                  which reads as a completed run that found nothing. */}
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <p className="text-sm" data-testid="lod-log-loading-message">
+                    {t("loadingLog")}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm">{t("noLogs")}</p>
+              )}
             </div>
           ) : (
             filteredLogs.map((entry, index) => {

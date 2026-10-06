@@ -16,6 +16,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Disc, Dices, Film, HeartOff, Puzzle } from "lucide-react";
@@ -106,7 +107,7 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
           className={`relative ${aspectClass} w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20`}
         >
           {coverUrl ? (
-            <img src={coverUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+            <Image src={coverUrl} alt={title} fill className="object-cover" sizes="5rem" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <MediaIcon className="h-6 w-6 text-muted-foreground/40" />
@@ -139,11 +140,12 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
       {/* Cover image */}
       <div className={`relative ${aspectClass} overflow-hidden bg-muted`}>
         {coverUrl ? (
-          <img
+          <Image
             src={coverUrl}
             alt={title}
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-            loading="lazy"
+            fill
+            className="object-cover transition-transform group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, 33vw"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground">

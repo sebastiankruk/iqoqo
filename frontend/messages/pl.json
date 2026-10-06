@@ -540,6 +540,7 @@
       "filterWarn": "Ostrzeżenia i błędy",
       "autoScroll": "Autoprzewijanie",
       "noLogs": "Brak zdarzeń uzgadniania. Uruchom skanowanie, aby obserwować proces na żywo.",
+      "loadingLog": "Oczekiwanie na pierwsze zdarzenie uzgadniania…",
       "linksAdded": "Dodano {count} powiązań",
       "noLinksAdded": "Brak pasujących powiązań",
       "manifestationLabel": "Wydanie #{id}"

@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Loader2, Search, ArrowRightLeft, Merge, SplitSquareVertical } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   reassignFrbrParent,
   mergeFrbrEntities,
