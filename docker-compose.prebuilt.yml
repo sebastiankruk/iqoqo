@@ -57,3 +57,8 @@ services:
   frontend:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-latest}
     build: !reset null
+
+  sparql-runner:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-sparql:${APP_VERSION:-latest}
+    build: !reset null
+

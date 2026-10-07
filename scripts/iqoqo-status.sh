@@ -89,7 +89,7 @@ if [[ "$STACK" == "preview" ]]; then
     PREFIX="iqoqo-preview"
     ENV_FILE="$IQOQO_ROOT/.env.preview"
     DOMAIN="pre.iqoqo.cc"
-    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
+    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
 elif [[ "$STACK" == "dev" ]]; then
     PREFIX="iqoqo"
     ENV_FILE="$IQOQO_ROOT/.env.dev"
@@ -101,8 +101,9 @@ else
     ENV_FILE="$IQOQO_ROOT/.env.prod"
     [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
     DOMAIN="iqoqo.cc"
-    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
+    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
 fi
+
 
 if [[ ! -f "$ENV_FILE" ]]; then
     ENV_FILE="$IQOQO_ROOT/.env"

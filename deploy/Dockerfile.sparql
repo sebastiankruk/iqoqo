@@ -1,0 +1,64 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# ===========================================================================
+# Isolated SPARQL Execution Service Dockerfile
+# Least-privileged, non-root, read-only filesystem, no database secrets.
+# OpenSpec change `sparql-execution-service-v083`.
+# ===========================================================================
+
+# Stage 1: builder
+FROM python:3.14-slim AS builder
+
+WORKDIR /usr/src/app
+
+COPY requirements.txt ./
+RUN sed -i '/# Testing/,$d' requirements.txt && \
+    pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+
+# Stage 2: runtime
+FROM python:3.14-slim
+
+# Dedicated unprivileged system user
+RUN useradd -u 10002 -m -s /bin/sh sparqluser
+
+WORKDIR /usr/src/app
+
+COPY requirements.txt ./
+RUN --mount=type=bind,from=builder,source=/wheels,target=/mnt/wheels \
+    sed -i '/# Testing/,$d' requirements.txt && \
+    pip install --no-cache-dir --no-index --find-links=/mnt/wheels \
+        flask gunicorn rdflib pyparsing opentelemetry-api && \
+    rm -f requirements.txt && \
+    find /usr/local/lib/python3.14 -name '__pycache__' -type d -prune -exec rm -rf {} + && \
+    find /usr/local/lib/python3.14 -name '*.pyc' -delete
+
+# Copy only the application code needed by the service
+COPY --chown=sparqluser:sparqluser app app/
+
+RUN python -m compileall -q app >/dev/null 2>&1 || true
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV HOME=/home/sparqluser
+ENV SPARQL_SERVICE_PORT=5050
+
+USER sparqluser
+
+EXPOSE 5050
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/healthz')"
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--threads", "4", "--timeout", "35", "--access-logfile", "-", "--error-logfile", "-", "app.services.sparql.server:create_service_app()"]
