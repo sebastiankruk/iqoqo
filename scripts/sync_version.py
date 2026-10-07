@@ -52,7 +52,6 @@ PACKAGE_LOCK_JSON_PATHS: list[Path] = [
 ]
 TEST_INFRA_CONFIG_PATH = REPO_ROOT / "tests" / "test_infra_config.py"
 CHANGELOG_PATH = REPO_ROOT / "docs" / "CHANGELOG.md"
-MYKG_SCOPE_PATH = REPO_ROOT / ".iqoqo-mykg-scope.yaml"
 GRAPHIFYIGNORE_PATH = REPO_ROOT / ".graphifyignore"
 
 
@@ -171,34 +170,6 @@ def update_changelog(new_version: str) -> None:
     print(f"  ✓ {rel_path}")
 
 
-def update_mykg_scope(old_version: str, new_version: str) -> None:
-    """Update the ai-memory version path in .iqoqo-mykg-scope.yaml."""
-    if not MYKG_SCOPE_PATH.exists():
-        return
-    text = MYKG_SCOPE_PATH.read_text(encoding="utf-8")
-    old_pattern = f".context/ai-memory/{old_version}"
-    new_pattern = f".context/ai-memory/{new_version}"
-
-    if old_pattern in text:
-        updated = text.replace(old_pattern, new_pattern)
-        MYKG_SCOPE_PATH.write_text(updated, encoding="utf-8")
-        print(f"  ✓ {MYKG_SCOPE_PATH.relative_to(REPO_ROOT)} (ai-memory: {old_version} → {new_version})")
-    elif new_pattern not in text:
-        # If neither old nor new pattern exists, add the new one after the ai-memory comment block
-        lines = text.splitlines()
-        new_lines = []
-        inserted = False
-        for line in lines:
-            new_lines.append(line)
-            if not inserted and "Versioned AI Memory" in line:
-                # Insert after the comment block, before the next scope or blank line
-                new_lines.append(f"  - {new_pattern}")
-                inserted = True
-        if inserted:
-            MYKG_SCOPE_PATH.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-            print(f"  ✓ {MYKG_SCOPE_PATH.relative_to(REPO_ROOT)} (added ai-memory: {new_version})")
-
-
 def update_graphifyignore(old_version: str, new_version: str) -> None:
     """Add the old version to .graphifyignore exclusion list.
 
@@ -281,7 +252,6 @@ def main() -> None:
 
     if new_version != current:
         print("Syncing knowledge graph configs:")
-        update_mykg_scope(current, new_version)
         update_graphifyignore(current, new_version)
 
     print(f"\nDone! Version is now {new_version}.")
@@ -295,7 +265,6 @@ def main() -> None:
             "frontend/package-lock.json",
             "tests/test_infra_config.py",
             "docs/CHANGELOG.md",
-            ".iqoqo-mykg-scope.yaml",
             ".iqoqo-mempalace-scope.yaml",
             ".graphifyignore",
         ]

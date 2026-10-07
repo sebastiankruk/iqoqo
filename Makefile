@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
 
 SHELL := /bin/bash
 
@@ -176,12 +176,9 @@ help:
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
-	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
+	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index"
 	@echo ""
 	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
-	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
-	@echo "  mykg-retry          - Re-queue tasks whose myKG inference failed (ARGS=\"--dry-run\" to inspect)"
-	@echo "  mykg-probe          - Test opencode models in the sandbox, no mykg state touched (ARGS=\"<model>\")"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -213,78 +210,6 @@ codegraph-index:
 codegraph-status:
 	@codegraph status
 
-# myKG targets
-MYKG_DEFAULT_MODEL ?= gemini-3.8-flash-low
-MYKG_DEFAULT_EFFORT ?= low
-AI_AGENT ?= agy
-AGY_DEFAULT_MODEL ?= gemini-3.8-flash-low
-AGY_DEFAULT_EFFORT ?= low
-# Keep this on a model that actually exists in the registry — the previous
-# pin (opencode/mimo-v2.5-free) was retired and made every opencode mykg run
-# fail. The daemon degrades the effort->variant mapping per model.
-OPENCODE_DEFAULT_MODEL ?= opencode-go/space-bunny-free
-OPENCODE_DEFAULT_EFFORT ?= low
-AI_EFFECTIVE_MODEL = $(if $(MODEL),$(MODEL),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_MODEL),$(OPENCODE_DEFAULT_MODEL)))
-AI_EFFECTIVE_EFFORT = $(if $(EFFORT),$(EFFORT),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_EFFORT),$(OPENCODE_DEFAULT_EFFORT)))
-AI_PROFILE = $(if $(filter opencode,$(AI_AGENT)),agent-opencode,agent-claude-code)
-ifeq ($(filter agy opencode,$(AI_AGENT)),)
-$(error Invalid AI_AGENT '$(AI_AGENT)'. Valid options: agy, opencode)
-endif
-
-mykg-scope: .venv/bin/activate
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-
-# MOD-OPS-04: the sandbox lifecycle and agent-daemon wiring used to live inline
-# in these two recipes -- ~45 lines of backslash-continued shell each, duplicated
-# between the targets. A single missing continuation silently split a command in
-# two, and nothing could be shellchecked or unit-tested. Both targets now delegate
-# to scripts/mykg_sync.sh, which owns the cleanup trap and agent selection.
-mykg-update: .venv/bin/activate
-	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@AI_AGENT="$(AI_AGENT)" \
-	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-	MYKG_PROFILE="$(AI_PROFILE)" \
-	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
-	bash scripts/mykg_sync.sh update $(if $(ARGS),$(ARGS),)
-
-mykg-index: .venv/bin/activate
-	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@AI_AGENT="$(AI_AGENT)" \
-	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-	MYKG_PROFILE="$(AI_PROFILE)" \
-	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
-	bash scripts/mykg_sync.sh index $(if $(ARGS),$(ARGS),)
-
-mykg-status: .venv/bin/activate
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
-
-# Re-queue tasks whose inference failed. An .error envelope is treated as
-# terminal by is_task_done() and is never overwritten, so a single failed run
-# permanently drops those extractions from the graph while the run still
-# reports success. This clears the marker (quarantined, not deleted) so the
-# next run retries them. ARGS="--dry-run" to inspect without changing state.
-mykg-retry: .venv/bin/activate
-	$(AI_ECHO) "Re-queueing failed mykg agent tasks (ARGS=$(ARGS))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/retry_failed.py $(ARGS)
-
-# Test opencode model calls inside the AI sandbox WITHOUT touching mykg state.
-# Every failed mykg task writes a terminal .error envelope, so `make
-# mykg-update` is the wrong place to find out whether a model works — it
-# poisons real extraction work. ARGS="opencode-go/glm-5.3" to probe one model.
-# Makes real (billed) API calls that are visible on the opencode.ai side.
-mykg-probe:
-	$(AI_ECHO) "Probing opencode harness in the sandbox (no mykg state touched)..."
-	@bash scripts/probe_opencode_harness.sh $(ARGS)
-
-mykg-ask: .venv/bin/activate
-	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make mykg-ask Q=\"<question>\""; \
-		exit 1; \
-	fi
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/ask.py "$(Q)"
-
 # Graphify targets
 graphify-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous graphify update..."
@@ -299,26 +224,23 @@ graphify-status: .venv/bin/activate
 
 # Session sync: converts agy JSONL transcripts to Markdown before knowledge tools mine them.
 # Single-loop: scans brain dirs, filters to VERSION-matching sessions only, converts to MD.
-# Also auto-patches .iqoqo-mykg-scope.yaml so the ai-memory version pin stays current.
 # No external tools required — script lives in scripts/sync_agy_memory.sh.
 memory-presync:
 	$(AI_ECHO) "Syncing agy session transcripts → .context/ai-memory/$(IQOQO_VERSION)..."
 	@bash scripts/sync_agy_memory.sh $(IQOQO_VERSION)
-	$(AI_ECHO) "Patching .iqoqo-mykg-scope.yaml ai-memory version → $(IQOQO_VERSION)..."
-	@sed -i 's|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/$(IQOQO_VERSION)|g' .iqoqo-mykg-scope.yaml
 
 # Fast knowledge sync: session presync followed by fast local engines only (<45s, 0 LLM tokens).
 # Safe to run automatically during interactive sessions and post-commit hooks.
 knowledge-sync: memory-presync
 	$(AI_ECHO) "Syncing fast knowledge engines in parallel (CodeGraph + Graphify)..."
 	@$(MAKE) -j2 codegraph-sync graphify-update
-	$(AI_ECHO) "Fast knowledge sync complete. (Full MemPalace & myKG sync available via 'make knowledge-sync-full')."
+	$(AI_ECHO) "Fast knowledge sync complete. (Full MemPalace sync available via 'make knowledge-sync-full')."
 
-# Full knowledge sync: fast sync followed by heavy MemPalace (~15 min hallway walk) and myKG LLM daemon.
+# Full knowledge sync: fast sync followed by the heavy MemPalace index (~15 min hallway walk).
 # For scheduled release CI or manual off-peak execution. Strictly prohibited from automated session calls.
 knowledge-sync-full: knowledge-sync
-	$(AI_ECHO) "Running heavy knowledge engines in parallel (MemPalace + myKG)..."
-	@$(MAKE) -j2 mempalace-index mykg-update
+	$(AI_ECHO) "Running the heavy MemPalace knowledge engine..."
+	@$(MAKE) mempalace-index
 	$(AI_ECHO) "All knowledge engines fully synced."
 
 

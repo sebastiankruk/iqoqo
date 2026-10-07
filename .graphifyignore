@@ -6,7 +6,6 @@
 .context/notes/tests/
 .context/notes/bugs/
 .context/notes/review/
-.context/notes/.mykg_sessions/
 .context/notes/marketing/
 .context/notes/screenshots/
 .context/notes/notes/               # nested duplicate notes

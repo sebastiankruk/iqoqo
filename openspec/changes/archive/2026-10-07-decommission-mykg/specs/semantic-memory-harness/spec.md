@@ -1,10 +1,4 @@
-# semantic-memory-harness Specification
-
-## Purpose
-
-Defines operational, retrieval, security, and lifecycle requirements for developer and agent semantic memory services across iQoQo.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Deterministic Environment Path Resolution
 
@@ -14,27 +8,6 @@ The semantic memory harness SHALL resolve all CLI binaries using the repository 
 
 - **WHEN** an agent or developer executes a knowledge query via Makefile target or documented CLI snippet
 - **THEN** the command resolves `.venv/bin/graphify` or `.venv/bin/mempalace` directly without failing with exit code 127 (`command not found`).
-
-### Requirement: MemPalace Query Sanitization and Output Preservation
-The MemPalace retrieval interface SHALL preserve complete query output and diagnostics, and the ingestion pipeline SHALL sanitize credentials and local developer paths before vector storage.
-
-#### Scenario: Searching MemPalace memory
-
-- **WHEN** an agent queries MemPalace for architectural or conversational memory
-- **THEN** query execution preserves all output chunks and diagnostics without truncation via head pipes or suppression of standard error.
-
-#### Scenario: Sanitizing notes and configuration during ingestion
-
-- **WHEN** MemPalace mines project documents, operational notes, and configuration files
-- **THEN** plaintext secrets (e.g. passwords, API tokens) and absolute local host paths are redacted before generating embeddings.
-
-### Requirement: CodeGraph First-Stop Navigation Protocol
-The developer tooling directives SHALL designate CodeGraph as the mandatory AST symbol navigation tool prior to falling back to broad text grep scans.
-
-#### Scenario: Locating code symbol definitions and callers
-
-- **WHEN** an agent investigates a class, function, database model, or route symbol
-- **THEN** the agent executes `codegraph node`, `codegraph callers`, or `codegraph impact` before attempting broad text-based grep scans.
 
 ### Requirement: Decoupled Knowledge Synchronization Lifecycle
 
@@ -59,3 +32,11 @@ The build orchestration system SHALL strictly separate fast, sub-minute local in
 
 - **WHEN** a release build or explicit full knowledge extraction is initiated (`make knowledge-sync-full`)
 - **THEN** the system triggers a MemPalace full index to regenerate the associative hallway graph.
+
+## REMOVED Requirements
+
+### Requirement: Session-Agnostic myKG Query Target
+
+**Reason**: myKG is decommissioned in v0.8.3. The RDF/Turtle knowledge graph it compiled duplicated ontology knowledge already exposed as RDF/JSON-LD by the application and already indexed for navigation by MemPalace and Graphify, at a cost of ~US$4.36 and 15–60 minutes per full run. The `make mykg-ask` target, the `mykg_sessions/` store it read, and the `iqoqo-mykg` skill that wrapped it are all removed.
+
+**Migration**: Use the application's own SPARQL/RDF endpoints or the `openspec/specs/` ontology for formal FRBR domain queries, and `mempalace search` / `graphify query` for developer memory and architecture navigation. There is no replacement batch compiler; no graph is regenerated.

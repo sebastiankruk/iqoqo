@@ -10,8 +10,7 @@
 - [ ] 2.2 Add `useDeleteWorkIntent` mutation hook in `frontend/lib/api/hooks/intents.ts` and ensure it invalidates the correct query keys on success. Verify hook is correctly typed.
 - [ ] 2.3 Refactor `frontend/types/frbr.ts` to replace generic `Record<string, unknown>` for common meta fields with specific interfaces (`WorkMeta`, `ManifestationMeta`). Verify TypeScript compilation succeeds without errors.
 
-## 3. Backend and Scripts (MOD-8, MOD-9, MOD-12)
+## 3. Backend and Scripts (MOD-9, MOD-12)
 
 - [ ] 3.1 Update `frontend/components/admin/relation-management-dialog.tsx:~191` to use strict validation (`Number(s)` and `Number.isInteger()`) for IDs instead of `parseInt`. Verify that invalid strings are caught.
 - [ ] 3.2 Update `app/api/roadmap.py` to add `page` (default 1) and `limit` (default 50) query parameters to `get_roadmaps`, and implement SQL `LIMIT` and `OFFSET`. Verify by hitting the endpoint or checking unit tests for pagination support.
-- [ ] 3.3 Refactor `.agents/skills/iqoqo-mykg/scripts/run_update.py` to replace the string `python -c` execution with native Python imports and direct calls. Verify by running the script locally (or confirming its syntax and import path logic).

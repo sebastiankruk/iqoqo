@@ -22,9 +22,6 @@
     "**/.opencode/**",
     "**/.claude/**",
     "**/.pytest_cache/**",
-    "**/mykg_sessions/**",
-    "**/.mykg_sessions/**",
-    "**/.mykg_work/**",
     "**/graphify-out/**",
     "**/openspec/changes/**"
   ]

@@ -16,9 +16,9 @@
 #
 """Scan project and determine which scopes to index for MemPalace.
 
-Respects .iqoqo-mempalace-scope.yaml (or .iqoqo-mykg-scope.yaml).
+Respects .iqoqo-mempalace-scope.yaml.
 Categorizes scopes into 'projects' (code and notes) and 'convos' (AI session transcripts).
-Strictly excludes .mykg_sessions/, static covers/images, and deprecated versions.
+Strictly excludes static covers/images and deprecated versions.
 """
 
 import fnmatch
@@ -37,11 +37,8 @@ DEFAULT_EXCLUDES = [
     "**/node_modules/**",
     "**/.git/**",
     "**/graphify-out/**",
-    "**/mykg_sessions/**",
-    "**/.mykg_sessions/**",
     "**/.venv/**",
     "**/.iqoqo-mempalace/**",
-    "**/.iqoqo-mykg/**",
     "**/.pytest_cache/**",
     "**/.mypy_cache/**",
     "**/.ruff_cache/**",
@@ -122,8 +119,8 @@ def get_version(project_root: Path) -> str:
 
 
 def load_scope_config(project_root: Path) -> Optional[Dict[str, Any]]:
-    """Load .iqoqo-mempalace-scope.yaml or fallback to .iqoqo-mykg-scope.yaml."""
-    for config_name in [".iqoqo-mempalace-scope.yaml", ".iqoqo-mykg-scope.yaml"]:
+    """Load .iqoqo-mempalace-scope.yaml."""
+    for config_name in [".iqoqo-mempalace-scope.yaml"]:
         config_file = project_root / config_name
         if config_file.exists():
             try:
@@ -198,9 +195,9 @@ def resolve_scopes(
             files = []
             fast_prune_dirs = {
                 "node_modules", ".git", ".venv", ".next", "dist", "build",
-                "__pycache__", "mykg_sessions", ".mykg_sessions", "graphify-out",
+                "__pycache__", "graphify-out",
                 ".pytest_cache", ".mypy_cache", ".ruff_cache", ".iqoqo-mempalace",
-                ".iqoqo-mykg", "instance", "data", "covers", "static/covers", "static/gallery"
+                "instance", "data", "covers", "static/covers", "static/gallery"
             }
             skip_extensions = {
                 ".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".svg",

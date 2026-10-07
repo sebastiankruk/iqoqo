@@ -158,28 +158,6 @@ teardown() {
     rm -rf "$FAKE_HOME" "$WORK_DIR"
 }
 
-@test "sync_agy_memory.sh: automated mykg extraction task prompt is skipped" {
-    FAKE_HOME="$(mktemp -d)"
-    mkdir -p "${FAKE_HOME}/.gemini/antigravity-cli/brain/conv-extract1/.system_generated/logs"
-    printf '%s\n' \
-        '{"step_index":1,"source":"USER","type":"USER_INPUT","created_at":"2026-09-01T00:00:00Z","content":"You are extracting knowledge graph entities and edges for myKG task for version 0.7.17","thinking":null,"tool_calls":null}' \
-        > "${FAKE_HOME}/.gemini/antigravity-cli/brain/conv-extract1/.system_generated/logs/transcript_full.jsonl"
-
-    WORK_DIR="$(mktemp -d)"
-    mkdir -p "${WORK_DIR}/.context/ai-memory/0.7.17"
-    OLDPWD="$(pwd)"
-
-    cd "$WORK_DIR"
-    run env HOME="$FAKE_HOME" bash "${OLDPWD}/scripts/sync_agy_memory.sh" 0.7.17
-    cd "$OLDPWD"
-
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"synced=0"* ]]
-    [ ! -f "${WORK_DIR}/.context/ai-memory/0.7.17/conv-extract1.md" ]
-
-    rm -rf "$FAKE_HOME" "$WORK_DIR"
-}
-
 # ---------------------------------------------------------------------------
 # Makefile target tests
 # ---------------------------------------------------------------------------
@@ -188,12 +166,6 @@ teardown() {
     run make -n memory-presync
     [ "$status" -eq 0 ]
     [[ "$output" == *"sync_agy_memory.sh"* ]]
-}
-
-@test "Makefile memory-presync dry-run patches .iqoqo-mykg-scope.yaml" {
-    run make -n memory-presync
-    [ "$status" -eq 0 ]
-    [[ "$output" == *".iqoqo-mykg-scope.yaml"* ]]
 }
 
 @test "Makefile memory-presync does NOT reference external sync-agy-memory" {
@@ -206,30 +178,4 @@ teardown() {
     run make -n memory-presync
     [ "$status" -eq 0 ]
     [[ "$output" != *"copy-agy-version"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# .iqoqo-mykg-scope.yaml integrity tests
-# ---------------------------------------------------------------------------
-
-@test ".iqoqo-mykg-scope.yaml is tracked in git" {
-    run git ls-files .iqoqo-mykg-scope.yaml
-    [ "$status" -eq 0 ]
-    [[ "$output" == *".iqoqo-mykg-scope.yaml"* ]]
-}
-
-@test ".iqoqo-mykg-scope.yaml contains a versioned ai-memory path" {
-    run grep -E '\.context/ai-memory/[0-9]+\.[0-9]+\.[0-9]+' .iqoqo-mykg-scope.yaml
-    [ "$status" -eq 0 ]
-}
-
-@test "sed patch for .iqoqo-mykg-scope.yaml is idempotent" {
-    VERSION="$(python3 -c "import json; print(json.load(open('package.json'))['version'])")"
-    # Apply the same sed substitution twice — result must still contain exactly one versioned path
-    sed -i "s|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/${VERSION}|g" .iqoqo-mykg-scope.yaml
-    sed -i "s|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/${VERSION}|g" .iqoqo-mykg-scope.yaml
-    run grep "ai-memory/${VERSION}" .iqoqo-mykg-scope.yaml
-    [ "$status" -eq 0 ]
-    # Exactly one match expected
-    [ "$(grep -c "ai-memory/${VERSION}" .iqoqo-mykg-scope.yaml)" -eq 1 ]
 }

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Removed
+
+- **myKG and the AI sandbox harness**: The `mykg` RDF/Turtle knowledge-graph compiler and the Dockerised AI sandbox built to run it are removed. myKG was an offline batch compiler (~US$4.36 and 15–60 minutes per full run) whose ontology duplicated knowledge the application already exposes as RDF/JSON-LD and that MemPalace and Graphify already index for navigation, while requiring a dedicated Compose project, an egress-filtering proxy, two agent daemons, their Python/BATS test suites, seven Makefile targets, an MCP registration, a scope config and a ~90 KB config file. Removed: `.agents/skills/iqoqo-mykg/`, `.agents/workflows/{mykg,iqoqo-mykg}.md`, `.opencode/commands/mykg.md`, `.agents/mcp_config.json`, `scripts/{mykg_sync,probe_opencode_harness}.sh`, `mykg_config.yaml`, `.iqoqo-mykg-scope.yaml`, `docker-compose.ai_sandbox.yml`, `deploy/sandbox_proxy/`, `tests/test_iqoqo_mykg.py`, `tests/bash/mykg_tooling.bats`, and `tests/test_sandbox_proxy.py`. `make knowledge-sync-full` now runs only the MemPalace index, and the six OpenSpec capabilities that described the compiler and the sandbox are retired. The developer knowledge tooling is now a trio — CodeGraph, Graphify and MemPalace. No application route, model, migration or deployment path referenced myKG.
+
 ### Fixed
 
 ## [0.8.2] - 2026-10-06

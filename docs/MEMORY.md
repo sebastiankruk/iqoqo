@@ -275,8 +275,7 @@ iqoqo/
 | `make status` | Check service health and database migrations |
 | `make migrate-secrets` | Migrate API secrets from `.env` into encrypted database settings |
 | `make knowledge-sync` | Fast AST knowledge sync (<45s, CodeGraph + Graphify) |
-| `make knowledge-sync-full` | Full scheduled batch indexing (MemPalace + myKG) |
-| `make mykg-ask Q="..."` | Query knowledge graph via latest session |
+| `make knowledge-sync-full` | Full scheduled batch indexing (MemPalace) |
 | `make docker-build-preview` | Build local container images for preview testing |
 
 ---
@@ -297,7 +296,6 @@ iqoqo/
 - ✅ Multi-tier Rclone cloud backup (Daily fast sync + S3 Glacier cold archiving)
 - ✅ Scanner with multi-candidate title lookup and scan policy isolation
 - ✅ Polymorphic media badges for non-book wishlist items
-- ✅ Sandboxed autonomous myKG AI extraction daemon
 
 ---
 
@@ -329,15 +327,11 @@ iqoqo/
 - Pulls tagged images from GHCR: `iqoqo-backend`, `iqoqo-frontend`, `iqoqo-nginx`.
 - Uses dedicated one-shot `migration` service with isolated volume bindings (`volumes: !reset []`).
 
-### AI Sandbox (`docker-compose.ai_sandbox.yml`)
-
-- Sandboxed autonomous myKG daemon with tmpfs OAuth token bootstrap, `cap_drop: ALL`, and read-only rootfs.
-
 ---
 
 ## 12. Version & Release Context
 
-- **Release Version:** `0.7.18`
-- **Release Branch:** `release/0.7.18`
-- **Release Date:** `2026-09-15`
+- **Release Version:** `0.8.3`
+- **Release Branch:** `release/0.8.3`
+- **Release Date:** `TBD`
 - **Changelog:** Documented in [CHANGELOG.md](CHANGELOG.md)

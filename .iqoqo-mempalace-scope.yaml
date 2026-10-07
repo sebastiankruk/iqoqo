@@ -59,8 +59,6 @@ exclude:
   - "**/data/**"
   - "**/app/static/covers/**"
   - "**/app/static/gallery/**"
-  - "**/mykg_sessions/**"
-  - "**/.mykg_sessions/**"
   - "**/screenshots/**"
   - "**/images/**"
   - "**/graphify-out/**"

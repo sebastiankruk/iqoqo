@@ -149,10 +149,8 @@ for brain_dir in \
             continue
         fi
 
-        # Automated task filter — skip background daemon / mykg extraction tasks
+        # Automated task filter — skip background daemon extraction tasks
         if grep -qF "CRITICAL: Respond ONLY with the requested JSON payload" "$transcript" 2>/dev/null || \
-           grep -qF "You are extracting knowledge graph entities and edges for myKG" "$transcript" 2>/dev/null || \
-           grep -qF "You are normalizing entity names for myKG" "$transcript" 2>/dev/null || \
            grep -qF "Task: Harmonize and merge concepts" "$transcript" 2>/dev/null || \
            grep -qF "Task: Extract concepts, relationships" "$transcript" 2>/dev/null || \
            grep -qF "Task: Extract concepts, properties" "$transcript" 2>/dev/null || \
