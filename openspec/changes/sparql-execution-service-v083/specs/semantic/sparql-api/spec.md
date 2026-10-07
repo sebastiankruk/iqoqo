@@ -32,6 +32,14 @@ The system SHALL enforce strict query execution limits including read-only valid
 - **WHEN** delegated graph preparation, query execution, or result serialization exceeds the configured request deadline
 - **THEN** the service terminates the work and the API returns HTTP status 504 without leaving runaway work
 
+#### Scenario: Enforcing graph and result limits
+- **WHEN** graph items/triples, SELECT bindings, CONSTRUCT/DESCRIBE triples, or serialized output exceeds its configured limit
+- **THEN** the system stops production before unbounded memory accumulation and returns a controlled limit response
+
 #### Scenario: Enforcing endpoint rate limiting
 - **WHEN** a user or the service reaches its configured rolling rate, queue, or active-query limit
 - **THEN** the system rejects subsequent requests with HTTP status 429 or 503 and communicates retry guidance
+
+#### Scenario: Handling isolated execution failure
+- **WHEN** the isolated execution process or service exits without a valid result or IPC reaches its deadline
+- **THEN** the system returns a structured 5xx or 504 JSON error and does not expose a traceback to the client
