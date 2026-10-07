@@ -636,11 +636,12 @@ def apply_manifestation_merge_plan(plan: MergePlan, dry_run: bool = False) -> di
                     ),
                     {"target": plan.canonical_id, "source": plan.duplicate_id},
                 )
-                stats["reparented_contributions"] += operation.record_count
-            elif operation.model_class == "ItemStatusLog":
-                # ItemStatusLog is linked to Item, not Manifestation
-                # Since we already reparented Items, the status logs follow automatically
-                # No explicit update needed
+            elif operation.model_class in ("ItemStatusLog", "ItemTag"):
+                # Implicit relationship handling: ItemStatusLog and ItemTag reference
+                # item_id (linked directly to Item), NOT manifestation_id.
+                # Since Items were already explicitly reparented to canonical_id above,
+                # their child ItemTag and ItemStatusLog records follow transitively and
+                # automatically without requiring separate SQL UPDATE operations.
                 pass
             elif operation.model_class == "SocialFeedback":
                 db.session.execute(

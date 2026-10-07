@@ -72,6 +72,14 @@ MAX_RESULT_ROWS = 1000
 # Maximum number of items to materialize into graph
 MAX_GRAPH_ITEMS = 5000
 
+# Maximum number of Works to materialize into graph to bound memory on large catalogs
+MAX_GRAPH_WORKS = 10000
+"""Maximum number of Work entities to materialize during SPARQL graph construction.
+
+Prevents unbounded memory consumption on large catalog deployments with tens of
+thousands of Works.
+"""
+
 # Maximum number of triples in materialized graph
 MAX_GRAPH_TRIPLES = 200000
 
@@ -609,8 +617,14 @@ def build_graph(
 
         from typing import cast
 
-        work_stmt = select(Work).options(selectinload(cast(Any, Work.expressions)).selectinload(cast(Any, Expression.manifestations)))
+        work_stmt = (
+            select(Work)
+            .options(selectinload(cast(Any, Work.expressions)).selectinload(cast(Any, Expression.manifestations)))
+            .limit(MAX_GRAPH_WORKS)
+        )
         db_works = list(db.session.execute(work_stmt).scalars().all())
+        if len(db_works) >= MAX_GRAPH_WORKS:
+            logger.warning(f"Work count reached limit of {MAX_GRAPH_WORKS}")
         entities_to_serialize: list[Any] = list(db_works) + list(db_items)
     else:
         # Apply item count limit to provided items

@@ -557,6 +557,34 @@ class TestMultiFormatAndStreamingSerialization:
             m = URIRef(f"http://testserver/manifestations/mani-{i}")
             assert (m, RDF.type, SCHEMA.Book) in g
 
+    def test_stream_collection_to_rdf_jsonld_skips_unparseable_chunk(self, sample_items, monkeypatch):
+        """Unparseable JSON-LD chunks must be skipped with a warning, preserving valid JSON-LD."""
+        orig_serialize = Graph.serialize
+        call_count = 0
+
+        def failing_serialize(self, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if kwargs.get("format") == "json-ld" and call_count == 2:
+                # Return malformed JSON for chunk 2
+                return "INVALID_JSON_CHUNK: {unclosed"
+            return orig_serialize(self, *args, **kwargs)
+
+        monkeypatch.setattr(Graph, "serialize", failing_serialize)
+
+        chunks = list(stream_collection_to_rdf(sample_items, "http://testserver", output_format="json-ld", chunk_size=3))
+        combined_jsonld = "".join(chunks)
+
+        # Must parse as valid JSON
+        data = json.loads(combined_jsonld)
+        assert "@graph" in data
+        assert "@context" in data
+
+        # Must parse as valid RDF JSON-LD
+        g = Graph()
+        g.parse(data=combined_jsonld, format="json-ld")
+        assert len(g) > 0
+
 
 class TestQueryOptimizationAndFallback:
     """Test eager loading and elimination of N+1 queries (MOD-FRBR-02)."""

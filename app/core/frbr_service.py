@@ -2895,18 +2895,15 @@ def stream_collection_to_rdf(
                         yield '{\n  "@context": ' + json.dumps(context, indent=2) + ',\n  "@graph": [\n'
                         items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
                         yield items_json
+                        first_chunk = False
                     else:
                         # Subsequent chunks: yield only items with leading comma
                         items_json = ",\n".join(json.dumps(item, indent=2) for item in graph_items)
                         yield ",\n" + items_json
-                except json.JSONDecodeError:
-                    # Fallback: yield as-is if parsing fails
-                    if first_chunk:
-                        yield chunk_jsonld
-                    else:
-                        yield "\n" + chunk_jsonld
-
-        first_chunk = False
+                except json.JSONDecodeError as exc:
+                    _logger_frbr.warning("Skipping unparseable JSON-LD streaming chunk: %s", exc)
+        else:
+            first_chunk = False
 
     # Close the JSON-LD document if we started one
     if output_format == "json-ld" and not first_chunk:

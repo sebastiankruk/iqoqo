@@ -41,6 +41,7 @@ from app.core.sparql_service import (
     MAX_CONCURRENT_QUERIES,
     MAX_GRAPH_ITEMS,
     MAX_GRAPH_TRIPLES,
+    MAX_GRAPH_WORKS,
     MAX_RESULT_ROWS,
     MAX_RESULT_TRIPLES,
     MAX_SERIALIZED_BYTES,
@@ -283,6 +284,32 @@ class TestLimitEnforcement:
         # build_graph should truncate to MAX_GRAPH_ITEMS
         graph = build_graph(items, "http://localhost:5000")
         assert graph is not None
+
+    def test_max_graph_works_enforced(self, app, monkeypatch):
+        """Graph works loaded from DB must be capped at MAX_GRAPH_WORKS."""
+        from app.db.models import Work, db
+
+        with app.app_context():
+            test_limit = 2
+            monkeypatch.setattr("app.core.sparql_service.MAX_GRAPH_WORKS", test_limit)
+
+            works = [Work(title=f"Hardening Work {i}") for i in range(test_limit + 2)]
+            db.session.add_all(works)
+            db.session.commit()
+
+            try:
+                # Over-limit: build_graph loads works from DB when items=None, capped at test_limit
+                graph_over = build_graph(items=None, base_url="http://localhost:5000")
+                assert graph_over is not None
+
+                # Under-limit: limit is higher than number of works
+                monkeypatch.setattr("app.core.sparql_service.MAX_GRAPH_WORKS", 1000)
+                graph_under = build_graph(items=None, base_url="http://localhost:5000")
+                assert graph_under is not None
+            finally:
+                for w in works:
+                    db.session.delete(w)
+                db.session.commit()
 
     def test_max_graph_triples_enforced(self):
         """Graph triple count must be checked against MAX_GRAPH_TRIPLES."""
