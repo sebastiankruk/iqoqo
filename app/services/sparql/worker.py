@@ -19,6 +19,7 @@ import contextlib
 import logging
 import multiprocessing
 import os
+import re
 import resource
 import time
 from typing import Any
@@ -26,12 +27,6 @@ from typing import Any
 from rdflib import BNode, Graph, Literal, URIRef
 from rdflib.plugins.sparql.parser import parseQuery
 
-from app.core.sparql_service import (
-    MAX_RESULT_ROWS,
-    MAX_RESULT_TRIPLES,
-    MAX_SERIALIZED_BYTES,
-    classify_operation,
-)
 from app.services.sparql.protocol import (
     ProtocolErrorCode,
     SPARQLProtocolException,
@@ -41,6 +36,75 @@ logger = logging.getLogger(__name__)
 
 # Child process execution limits (virtual address space ceiling)
 CHILD_MAX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB virtual address space
+
+MAX_RESULT_ROWS = 1000
+MAX_RESULT_TRIPLES = 50000
+MAX_SERIALIZED_BYTES = 50 * 1024 * 1024
+
+_OPERATION_MAP: dict[str, str] = {
+    "SelectQuery": "SELECT",
+    "Select": "SELECT",
+    "AskQuery": "ASK",
+    "Ask": "ASK",
+    "ConstructQuery": "CONSTRUCT",
+    "Construct": "CONSTRUCT",
+    "DescribeQuery": "DESCRIBE",
+    "Describe": "DESCRIBE",
+}
+
+_FORBIDDEN_OPERATIONS = frozenset({"Update", "Insert", "Delete", "Load", "Clear", "Drop", "Create", "Add", "Move", "Copy"})
+
+
+def _fallback_classify(query: str) -> str:
+    query_no_comments = re.sub(r"#[^\n]*", "", query)
+    query_no_literals = re.sub(r'"(?:[^"\\]|\\.)*"', '""', query_no_comments)
+    query_no_literals = re.sub(r"'(?:[^'\\]|\\.)*'", "''", query_no_literals)
+    query_stripped = query_no_literals.strip().upper()
+
+    update_keywords = ["INSERT", "DELETE", "LOAD", "CLEAR", "DROP", "CREATE", "ADD", "MOVE", "COPY", "WITH"]
+    for keyword in update_keywords:
+        if query_stripped.startswith(keyword):
+            raise SPARQLProtocolException(
+                ProtocolErrorCode.WRITE_REJECTED,
+                "Write operations (INSERT, DELETE, etc.) are not permitted",
+                http_status=400,
+            )
+
+    if query_stripped.startswith("SELECT"):
+        return "SELECT"
+    if query_stripped.startswith("ASK"):
+        return "ASK"
+    if query_stripped.startswith("CONSTRUCT"):
+        return "CONSTRUCT"
+    if query_stripped.startswith("DESCRIBE"):
+        return "DESCRIBE"
+    return "SELECT"
+
+
+def classify_operation(query: str) -> str:
+    """Classify SPARQL query into its operation type using parsed algebra."""
+    try:
+        from rdflib.plugins.sparql.algebra import translateQuery
+
+        parsed = parseQuery(query)
+        algebra = translateQuery(parsed)
+        query_type = algebra.algebra.name if hasattr(algebra.algebra, "name") else None
+
+        if query_type in _FORBIDDEN_OPERATIONS:
+            raise SPARQLProtocolException(
+                ProtocolErrorCode.WRITE_REJECTED,
+                "Write operations (INSERT, DELETE, etc.) are not permitted",
+                http_status=400,
+            )
+
+        if query_type in _OPERATION_MAP:
+            return _OPERATION_MAP[query_type]
+
+        return _fallback_classify(query)
+    except SPARQLProtocolException:
+        raise
+    except Exception:
+        return _fallback_classify(query)
 
 
 _MP_CONTEXT = multiprocessing.get_context("fork" if hasattr(os, "fork") else "spawn")
