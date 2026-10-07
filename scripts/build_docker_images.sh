@@ -96,19 +96,23 @@ if [ -z "$TAG" ]; then
     TAG_ARGS=(-t "iqoqo-backend:${TAG}" -t "iqoqo-backend:latest")
     FE_TAG_ARGS=(-t "iqoqo-frontend:${TAG}" -t "iqoqo-frontend:latest")
     NGINX_TAG_ARGS=(-t "iqoqo-nginx:${TAG}" -t "iqoqo-nginx:latest")
+    SPARQL_TAG_ARGS=(-t "iqoqo-sparql:${TAG}" -t "iqoqo-sparql:latest")
     if [ -n "$REG_PREFIX" ]; then
         TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-backend:${TAG}" -t "${REG_PREFIX}iqoqo-backend:latest")
         FE_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-frontend:${TAG}" -t "${REG_PREFIX}iqoqo-frontend:latest")
         NGINX_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-nginx:${TAG}" -t "${REG_PREFIX}iqoqo-nginx:latest")
+        SPARQL_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-sparql:${TAG}" -t "${REG_PREFIX}iqoqo-sparql:latest")
     fi
 else
     TAG_ARGS=(-t "iqoqo-backend:${TAG}")
     FE_TAG_ARGS=(-t "iqoqo-frontend:${TAG}")
     NGINX_TAG_ARGS=(-t "iqoqo-nginx:${TAG}")
+    SPARQL_TAG_ARGS=(-t "iqoqo-sparql:${TAG}")
     if [ -n "$REG_PREFIX" ]; then
         TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-backend:${TAG}")
         FE_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-frontend:${TAG}")
         NGINX_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-nginx:${TAG}")
+        SPARQL_TAG_ARGS+=(-t "${REG_PREFIX}iqoqo-sparql:${TAG}")
     fi
 fi
 
@@ -122,7 +126,7 @@ fi
 echo ""
 
 # 1. Build Backend (web & celery worker)
-echo "🐳 [1/3] Building backend image..."
+echo "🐳 [1/4] Building backend image..."
 docker build \
     --build-arg APP_VERSION="$VERSION" \
     "${TAG_ARGS[@]}" \
@@ -148,7 +152,7 @@ echo "✅ Backend image built successfully!"
 echo ""
 
 # 2. Build Frontend (Next.js standalone production runtime)
-echo "🐳 [2/3] Building frontend image..."
+echo "🐳 [2/4] Building frontend image..."
 docker build \
     --build-arg APP_VERSION="$VERSION" \
     --build-arg NEXT_PUBLIC_APP_VERSION="$VERSION" \
@@ -158,11 +162,19 @@ echo "✅ Frontend image built successfully!"
 echo ""
 
 # 3. Build Nginx (Reverse proxy with embedded OTel module and virtual host routing)
-echo "🐳 [3/3] Building nginx reverse-proxy image..."
+echo "🐳 [3/4] Building nginx reverse-proxy image..."
 docker build \
     "${NGINX_TAG_ARGS[@]}" \
     -f deploy/Dockerfile.nginx .
 echo "✅ Nginx image built successfully!"
+echo ""
+
+# 4. Build SPARQL Runner (Isolated query execution service)
+echo "🐳 [4/4] Building SPARQL execution service image..."
+docker build \
+    "${SPARQL_TAG_ARGS[@]}" \
+    -f deploy/Dockerfile.sparql .
+echo "✅ SPARQL execution service image built successfully!"
 echo ""
 
 echo "🎉 All iqoqo container images built successfully!"

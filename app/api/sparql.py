@@ -47,6 +47,7 @@ from app.core.sparql_service import (
     validate_query,
 )
 from app.db.models import Expression, Item, Manifestation, User, db
+from app.services.sparql.client import execute_via_service
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +125,60 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         graph_build_duration = time.time() - graph_build_start
         phase = "execute"
         execute_start = time.time()
-        result = execute_sparql(graph, query)
-        execute_duration = time.time() - execute_start
-        phase = "format"
+
+        accept = request.headers.get("Accept", "")
+        mode = current_app.config.get("SPARQL_EXECUTION_MODE", "auto")
+        use_service = False
+        if mode == "service":
+            use_service = True
+        elif mode == "auto":
+            if current_app.config.get("SPARQL_SERVICE_TEST_CLIENT") or bool(current_app.config.get("SPARQL_SERVICE_URL")):
+                use_service = True
+
+        if use_service:
+            if operation in ("SELECT", "ASK"):
+                if "application/sparql-results+xml" in accept or "application/xml" in accept or "text/xml" in accept:
+                    out_fmt = "application/sparql-results+xml"
+                elif "text/csv" in accept:
+                    out_fmt = "text/csv"
+                elif "text/tab-separated-values" in accept or "text/tsv" in accept:
+                    out_fmt = "text/tab-separated-values"
+                else:
+                    out_fmt = "application/sparql-results+json"
+            else:
+                if "application/ld+json" in accept:
+                    out_fmt = "application/ld+json"
+                elif "application/rdf+xml" in accept:
+                    out_fmt = "application/rdf+xml"
+                else:
+                    out_fmt = "text/turtle"
+
+            snapshot_nt = graph.serialize(format="nt")
+            service_test_client = current_app.config.get("SPARQL_SERVICE_TEST_CLIENT")
+            corr_id = request.headers.get("X-Correlation-ID") or getattr(g, "correlation_id", None)
+            svc_res = execute_via_service(
+                snapshot_nt=snapshot_nt,
+                query=query,
+                tenant_id=str(user.id) if user and user.id else "anonymous",
+                output_format=out_fmt,
+                deadline_seconds=float(current_app.config.get("SPARQL_QUERY_TIMEOUT", 15.0)),
+                correlation_id=corr_id,
+                service_test_client=service_test_client,
+            )
+            execute_duration = time.time() - execute_start
+            phase = "format"
+            if out_fmt == "application/sparql-results+json":
+                output_payload = jsonify(svc_res.get("data", {})).get_data(as_text=True)
+                mimetype = "application/sparql-results+json"
+            else:
+                output_payload = svc_res.get("data", "")
+                mimetype = out_fmt
+        else:
+            result = execute_sparql(graph, query)
+            execute_duration = time.time() - execute_start
+            phase = "format"
+            formatter = _FORMATTERS.get(result.type, _format_graph)
+            output_payload, mimetype = formatter(result, accept)
     except SPARQLQueryTooLarge as e:
         error_msg = str(e)
         status_code = 413
@@ -194,11 +246,8 @@ def _execute_and_respond(query: str) -> tuple[Response, int] | Response:
         duration,
     )
 
-    accept = request.headers.get("Accept", "")
-    formatter = _FORMATTERS.get(result.type, _format_graph)
-    output_payload, mimetype = formatter(result, accept)
-
     payload_len = len(output_payload.encode("utf-8")) if isinstance(output_payload, str) else len(output_payload)
+
     if payload_len > MAX_SERIALIZED_BYTES:
         return jsonify({"error": f"Result exceeds maximum size of {MAX_SERIALIZED_BYTES} bytes", "code": 413}), 413
 

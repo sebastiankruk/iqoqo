@@ -73,6 +73,16 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
 
+      - name: Extract metadata (tags) for SPARQL Runner
+        id: meta-sparql
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/iqoqo-sparql
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+
       - name: Build and push Backend image
         uses: docker/build-push-action@v7
         with:
@@ -103,6 +113,17 @@ jobs:
           push: true
           tags: ${{ steps.meta-nginx.outputs.tags }}
           labels: ${{ steps.meta-nginx.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push SPARQL Runner image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./deploy/Dockerfile.sparql
+          push: true
+          tags: ${{ steps.meta-sparql.outputs.tags }}
+          labels: ${{ steps.meta-sparql.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
