@@ -57,6 +57,11 @@ EOF
   else
     touch "${TEST_TEMP_DIR}/deploy/Dockerfile.nginx"
   fi
+  if [ -f deploy/Dockerfile.sparql ]; then
+    cp deploy/Dockerfile.sparql "${TEST_TEMP_DIR}/deploy/"
+  else
+    touch "${TEST_TEMP_DIR}/deploy/Dockerfile.sparql"
+  fi
   mkdir -p "${TEST_TEMP_DIR}/frontend"
   touch "${TEST_TEMP_DIR}/frontend/Dockerfile.prod"
 
@@ -79,9 +84,10 @@ teardown() {
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-backend:" ]]
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-frontend:" ]]
   [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-nginx:" ]]
+  [[ "$output" =~ "BUILDING_DOCKER_IMAGE: build -t iqoqo-sparql:" ]]
 }
 
-@test "build_docker_images.sh builds backend, frontend, and nginx with custom tag and dual-tags registry prefix" {
+@test "build_docker_images.sh builds backend, frontend, nginx, and sparql with custom tag and dual-tags registry prefix" {
   cd "${TEST_TEMP_DIR}"
   run bash "${BATS_TEST_DIRNAME}/../../scripts/build_docker_images.sh" --tag preview
   [ "$status" -eq 0 ]
@@ -93,6 +99,8 @@ teardown() {
   [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-frontend:preview" ]]
   [[ "$output" =~ "iqoqo-nginx:preview" ]]
   [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-nginx:preview" ]]
+  [[ "$output" =~ "iqoqo-sparql:preview" ]]
+  [[ "$output" =~ "ghcr.io/sebastiankruk/iqoqo-sparql:preview" ]]
 }
 
 @test "build_docker_images.sh respects explicit empty prefix" {

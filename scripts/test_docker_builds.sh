@@ -68,5 +68,14 @@ docker build \
 echo "✅ Nginx build successful!"
 echo ""
 
+# Build SPARQL Runner
+echo "🐳 Building iqoqo-sparql:v$VERSION..."
+docker build \
+  -t "iqoqo-sparql:v$VERSION" \
+  -t iqoqo-sparql:latest \
+  -f deploy/Dockerfile.sparql .
+echo "✅ SPARQL runner build successful!"
+echo ""
+
 echo "🎉 All local builds completed successfully!"
 echo "You can check your images by running: docker images | grep iqoqo"
