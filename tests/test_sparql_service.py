@@ -176,3 +176,48 @@ def test_adversarial_write_queries_fail_closed(service_test_app):
         res = client.post("/execute", json=req.to_dict())
         assert res.status_code == 400
         assert res.get_json()["error_code"] == ProtocolErrorCode.WRITE_REJECTED
+
+
+def test_sparql_runner_modules_strictly_decoupled_from_application_monolith():
+    """Regression test: SPARQL runner server, worker, and protocol must never import
+
+    app.core, app.api, app.models, or heavyweight database dependencies.
+    This guarantees the standalone container starts without monolith dependencies.
+    """
+    import ast
+    from pathlib import Path
+
+    sparql_dir = Path("app/services/sparql")
+    forbidden_prefixes = ("app.core", "app.api", "app.models", "dotenv", "sqlalchemy")
+
+    for py_file in [sparql_dir / "server.py", sparql_dir / "worker.py", sparql_dir / "protocol.py"]:
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert not any(
+                        alias.name.startswith(p) for p in forbidden_prefixes
+                    ), f"{py_file} illegally imports '{alias.name}', breaking runner isolation"
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                assert not any(
+                    node.module.startswith(p) for p in forbidden_prefixes
+                ), f"{py_file} illegally imports from '{node.module}', breaking runner isolation"
+
+
+def test_dockerfile_sparql_isolated_packaging_contract():
+    """Regression test: deploy/Dockerfile.sparql must package only app/services/sparql,
+
+    touch empty app/__init__.py, and pass --no-control-socket for read-only filesystem.
+    """
+    from pathlib import Path
+
+    dockerfile = Path("deploy/Dockerfile.sparql").read_text(encoding="utf-8")
+
+    assert (
+        "COPY --chown=sparqluser:sparqluser app/services/sparql" in dockerfile
+    ), "Dockerfile.sparql must package app/services/sparql specifically"
+    assert (
+        "COPY --chown=sparqluser:sparqluser app app/" not in dockerfile
+    ), "Dockerfile.sparql must not copy the entire monolithic app package"
+    assert "touch app/__init__.py" in dockerfile, "Dockerfile.sparql must touch empty app/__init__.py to avoid running monolithic init"
+    assert "--no-control-socket" in dockerfile, "Dockerfile.sparql must pass --no-control-socket to support read-only filesystem"

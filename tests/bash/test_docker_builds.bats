@@ -117,6 +117,16 @@ teardown() {
   [ "$status" -ne 0 ]
 }
 
+@test "deploy/Dockerfile.sparql packages only sparql service and disables gunicorn control socket" {
+  local dockerfile="${BATS_TEST_DIRNAME}/../../deploy/Dockerfile.sparql"
+  run grep "COPY --chown=sparqluser:sparqluser app/services/sparql" "${dockerfile}"
+  [ "$status" -eq 0 ]
+  run grep -E "COPY.*app app/" "${dockerfile}"
+  [ "$status" -ne 0 ]
+  run grep "\-\-no-control-socket" "${dockerfile}"
+  [ "$status" -eq 0 ]
+}
+
 @test "deploy/image-size-budget.txt records both enforced figures" {
   local budget="${BATS_TEST_DIRNAME}/../../deploy/image-size-budget.txt"
   # MAX_BYTES is the ceiling; MEASURED_BYTES is the measurement that justifies it.
