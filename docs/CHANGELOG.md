@@ -9,7 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SPARQL Memory Safety Bounding (`MAX_GRAPH_WORKS`)**: Added configurable `MAX_GRAPH_WORKS = 10000` constant in `app/core/sparql_service.py` to prevent memory exhaustion when materializing Works on catalogs with large Work counts. Covered by limit enforcement tests in `tests/test_sparql_hardening.py`.
+- **Public RDF Multi-Chunk E2E Streaming Suite**: New end-to-end test suite in `tests/test_public_rdf_streaming_e2e.py` verifying multi-chunk streaming outputs across JSON-LD (`@graph` container), Turtle (prefix deduplication across chunks), and N-Triples.
+- **SPARQL Chaos & Stress Test Suite**: New stress test suite in `tests/test_sparql_chaos.py` verifying child process resilience under memory pressure, clean termination upon simulated OOM (SIGKILL), repeated concurrent timeout floods with zero zombie processes or semaphore leaks, and continued availability for subsequent queries.
+- **ETL Performance & Memory Scaling Suite**: New scale test suite in `tests/test_etl_frbr_performance.py` verifying safe FRBR reconciliation completes within bounded execution time (<30s) and bounded memory (<150MB peak) on catalogs with 10,000+ manifestations.
+
 ### Changed
+
+- **JSON-LD Streaming Fallback Robustness**: Improved `stream_collection_to_rdf` in `app/core/frbr_service.py` to skip unparseable chunks with a logged warning instead of emitting raw fragments mid-stream, preserving valid JSON-LD document syntax across chunk failures. Unit test added in `tests/test_rdf_serialization.py`.
+- **F3 format_type Validation Policy Documentation**: Added comprehensive documentation to `app/core/f3_validation.py` module and `validate_format_type()` detailing the strict vs. non-strict validation mode tradeoffs, forward compatibility with external metadata imports, and taxonomy pollution risks.
+- **FRBR ETL Implicit Relationship Documentation**: Added clear inline and module-level documentation in `scripts/etl/merge.py`, `scripts/etl/reconcile.py`, and `scripts/etl_frbr_safe.py` explaining that `ItemTag` and `ItemStatusLog` are handled implicitly via Item reparenting (referencing `item_id`), distinguishing explicit vs. implicit relationships in the entity inventory.
 
 ### Removed
 
