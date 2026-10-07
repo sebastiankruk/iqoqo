@@ -86,6 +86,7 @@ class ItemSearchFilters:
     publishers: list[str] | None = None
     lod_authority: str | None = None
     lod_status: str | None = None
+    owner_only: bool = False
 
 
 class SearchService:
@@ -345,6 +346,8 @@ class SearchService:
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
         if borrowed_only:
             extra_filters_sql = " AND i.lent_to_user_id = :user_id"
+        elif filters.owner_only:
+            extra_filters_sql = " AND i.owner_id = :user_id"
         else:
             extra_filters_sql = " AND (i.owner_id = :user_id OR i.lent_to_user_id = :user_id)"
 
@@ -465,6 +468,8 @@ class SearchService:
 
         if borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
+        elif filters.owner_only:
+            query = query.filter(Item.owner_id == user_id)
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 

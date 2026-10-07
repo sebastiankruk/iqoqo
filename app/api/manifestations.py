@@ -1022,8 +1022,21 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         db.session.delete(manif)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": "Manifestation cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
         logger.exception("Failed to delete manifestation")
         return jsonify({"success": False, "data": None, "error": "Unable to delete manifestation"}), 500
 

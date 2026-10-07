@@ -41,6 +41,11 @@ _AUTH: str | None = "auth" if _USE_PG else None
 #: FK prefix — ``"auth."`` in PostgreSQL, ``""`` in SQLite.
 _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 
+#: The PostgreSQL schema name for inventory tables, or ``None`` for SQLite.
+_INVENTORY: str | None = "inventory" if _USE_PG else None
+#: FK prefix — ``"inventory."`` in PostgreSQL, ``""`` in SQLite.
+_INVENTORY_PFX: str = f"{_INVENTORY}." if _INVENTORY else ""
+
 
 class ReadingRoadmap(db.Model):  # type: ignore[name-defined]
     """
@@ -103,7 +108,8 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
             CheckConstraint(
                 "(CASE WHEN work_id IS NOT NULL THEN 1 ELSE 0 END + "
                 "CASE WHEN expression_id IS NOT NULL THEN 1 ELSE 0 END + "
-                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN item_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
                 name="check_roadmap_item_single_frbr_level",
             ),
             {"schema": _CATALOG},
@@ -113,7 +119,8 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
             CheckConstraint(
                 "(CASE WHEN work_id IS NOT NULL THEN 1 ELSE 0 END + "
                 "CASE WHEN expression_id IS NOT NULL THEN 1 ELSE 0 END + "
-                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+                "CASE WHEN manifestation_id IS NOT NULL THEN 1 ELSE 0 END + "
+                "CASE WHEN item_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
                 name="check_roadmap_item_single_frbr_level",
             ),
         )
@@ -127,18 +134,24 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
     )
     work_id = db.Column(
         db.Integer,
-        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="SET NULL"),
+        db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="RESTRICT"),
         nullable=True,
     )
     expression_id = db.Column(
         db.Integer,
-        db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="SET NULL"),
+        db.ForeignKey(f"{_CATALOG_PFX}expressions.id", ondelete="RESTRICT"),
         nullable=True,
     )
     manifestation_id = db.Column(
         db.Integer,
-        db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="SET NULL"),
+        db.ForeignKey(f"{_CATALOG_PFX}manifestations.id", ondelete="RESTRICT"),
         nullable=True,
+    )
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey(f"{_INVENTORY_PFX}items.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     position = db.Column(db.Integer, nullable=False)
     status = db.Column(db.String(50), default="queued", nullable=False)  # queued, in_progress, completed
@@ -150,47 +163,94 @@ class RoadmapItem(db.Model):  # type: ignore[name-defined]
     work = db.relationship("Work", foreign_keys=[work_id], lazy="joined")
     expression = db.relationship("Expression", foreign_keys=[expression_id], lazy="joined")
     manifestation = db.relationship("Manifestation", foreign_keys=[manifestation_id], lazy="joined")
+    item = db.relationship("Item", foreign_keys=[item_id], lazy="joined")
 
     def to_dict(self) -> dict[str, Any]:
         """Converts individual roadmap nodes to dynamic dictionary objects.
 
         Resolves ``title`` and ``creator`` by walking the FRBR hierarchy:
-        manifestation → expression → work (title, meta.authors).
+        item → manifestation → expression → work (title, meta.authors).
         """
         title: str = "Unknown"
         creator: str = "Unknown"
+        summary: str = "Unknown Target"
+        target_type: str = "work"
 
-        # Prefer resolution via the linked manifestation (most specific)
-        if self.manifestation_id is not None and hasattr(self, "manifestation") and self.manifestation is not None:
+        # Resolve via linked physical item (most specific)
+        if self.item_id is not None and hasattr(self, "item") and self.item is not None:
+            target_type = "item"
+            it = self.item
+            edition_label = ""
+            if hasattr(it, "manifestation") and it.manifestation is not None:
+                man = it.manifestation
+                if getattr(man, "edition", None):
+                    edition_label = f" ({man.edition})"
+                elif getattr(man, "publisher", None):
+                    edition_label = f" ({man.publisher})"
+                if hasattr(man, "expression") and man.expression is not None:
+                    expr = man.expression
+                    if hasattr(expr, "work") and expr.work is not None:
+                        work = expr.work
+                        title = work.title or "Unknown"
+                        authors = work.meta.get("authors", []) if work.meta else []
+                        if authors and isinstance(authors, list) and isinstance(authors[0], str):
+                            creator = authors[0]
+            summary = f"Personal copy of {title}{edition_label}"
+        # Prefer resolution via the linked manifestation
+        elif self.manifestation_id is not None and hasattr(self, "manifestation") and self.manifestation is not None:
+            target_type = "manifestation"
             man = self.manifestation
-            if man.expression and man.expression.work:
-                work = man.expression.work
-                title = work.title or "Unknown"
-                authors = work.meta.get("authors", []) if work.meta else []
-                if authors and isinstance(authors, list) and isinstance(authors[0], str):
-                    creator = authors[0]
+            if hasattr(man, "expression") and man.expression is not None:
+                expr = man.expression
+                if hasattr(expr, "work") and expr.work is not None:
+                    work = expr.work
+                    title = work.title or "Unknown"
+                    authors = work.meta.get("authors", []) if work.meta else []
+                    if authors and isinstance(authors, list) and isinstance(authors[0], str):
+                        creator = authors[0]
+            summary = f"Edition: {title}"
         # Fall back to direct expression link
         elif self.expression_id is not None and hasattr(self, "expression") and self.expression is not None:
+            target_type = "expression"
             expr = self.expression
-            if expr.work:
+            if hasattr(expr, "work") and expr.work is not None:
                 work = expr.work
                 title = work.title or "Unknown"
                 authors = work.meta.get("authors", []) if work.meta else []
                 if authors and isinstance(authors, list) and isinstance(authors[0], str):
                     creator = authors[0]
+            summary = f"Realization: {title}"
         # Fall back to direct work link
         elif self.work_id is not None and hasattr(self, "work") and self.work is not None:
+            target_type = "work"
             work = self.work
             title = work.title or "Unknown"
             authors = work.meta.get("authors", []) if work.meta else []
             if authors and isinstance(authors, list) and isinstance(authors[0], str):
                 creator = authors[0]
+            summary = f"Work: {title}"
+        else:
+            if self.item_id is not None:
+                target_type = "item"
+                summary = "Personal copy"
+            elif self.manifestation_id is not None:
+                target_type = "manifestation"
+                summary = "Edition"
+            elif self.expression_id is not None:
+                target_type = "expression"
+                summary = "Realization"
+            else:
+                target_type = "work"
+                summary = "Work"
 
         return {
             "id": self.id,
             "work_id": self.work_id,
             "expression_id": self.expression_id,
             "manifestation_id": self.manifestation_id,
+            "item_id": self.item_id,
+            "target_type": target_type,
+            "summary": summary,
             "title": title,
             "creator": creator,
             "position": self.position,

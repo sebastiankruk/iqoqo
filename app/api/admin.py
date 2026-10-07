@@ -669,6 +669,48 @@ def update_item(item_id):
         return jsonify({"success": False, "error": str(e)}), 404
 
 
+@admin_bp.route("/frbr/<string:entity_type>/<int:entity_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def delete_frbr_entity(entity_type: str, entity_id: int) -> tuple[Response, int]:
+    """Delete a FRBR entity (work, expression, manifestation, item)."""
+    entity_type = entity_type.lower()
+    model_map = {
+        "work": Work,
+        "expression": Expression,
+        "manifestation": Manifestation,
+        "item": Item,
+    }
+    model = model_map.get(entity_type)
+    if not model:
+        return jsonify({"success": False, "error": f"Invalid entity type: {entity_type}", "code": 400}), 400
+
+    entity = db.session.get(model, entity_id)
+    if not entity:
+        return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found", "code": 404}), 404
+
+    try:
+        db.session.delete(entity)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"type": entity_type, "id": entity_id}}), 200
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"{entity_type.capitalize()} cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
+        return jsonify({"success": False, "error": str(e), "code": 500}), 500
+
+
 @admin_bp.route("/frbr/search", methods=["GET"])
 @require_auth
 @require_permission(PermissionName.READ_METADATA)

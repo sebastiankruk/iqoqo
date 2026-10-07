@@ -20,10 +20,24 @@ import { apiClient } from "../client";
 
 /* ── Reading Roadmap ─────────────────────────────────────────────────────── */
 
+export interface RoadmapItemSummary {
+  title?: string;
+  subtitle?: string;
+  creator?: string;
+  format?: string;
+  edition?: string;
+  owner_id?: string;
+  condition?: string;
+}
+
 export interface RoadmapItemData {
   id: number;
   work_id: number | null;
+  expression_id: number | null;
   manifestation_id: number | null;
+  item_id: number | null;
+  target_type?: "work" | "expression" | "manifestation" | "item";
+  summary?: RoadmapItemSummary;
   title: string;
   creator: string;
   position: number;
@@ -118,16 +132,22 @@ export function useAddRoadmapItem() {
       roadmapId,
       manifestationId,
       workId,
+      expressionId,
+      itemId,
       notes,
     }: {
       roadmapId: number;
       manifestationId?: number;
       workId?: number;
+      expressionId?: number;
+      itemId?: number;
       notes?: string;
     }) => {
       const res = await apiClient.post<RoadmapItemData>(`/v1/roadmaps/${roadmapId}/items`, {
         manifestation_id: manifestationId,
         work_id: workId,
+        expression_id: expressionId,
+        item_id: itemId,
         notes,
       });
       return res.data;
@@ -146,6 +166,62 @@ export function useAddRoadmapItem() {
           return r;
         });
       });
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to update target or notes of a roadmap item.
+ *
+ * @returns Mutation result
+ */
+export function useUpdateRoadmapItemTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      workId,
+      expressionId,
+      manifestationId,
+      targetItemId,
+      notes,
+    }: {
+      itemId: number;
+      workId?: number;
+      expressionId?: number;
+      manifestationId?: number;
+      targetItemId?: number;
+      notes?: string;
+    }) => {
+      const res = await apiClient.patch<RoadmapItemData>(`/v1/roadmaps/items/${itemId}/target`, {
+        work_id: workId,
+        expression_id: expressionId,
+        manifestation_id: manifestationId,
+        item_id: targetItemId,
+        notes,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+    },
+  });
+}
+
+/**
+ * Custom hook to delete a roadmap item.
+ *
+ * @returns Mutation result
+ */
+export function useDeleteRoadmapItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: number) => {
+      const res = await apiClient.delete(`/v1/roadmaps/items/${itemId}`);
+      return res.data;
+    },
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["roadmaps"] });
     },
   });

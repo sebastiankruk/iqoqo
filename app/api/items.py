@@ -258,6 +258,7 @@ def get_items():
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
+    owner_only = request.args.get("owner_only", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
     # When include_public=true, also include non-hidden available items from other users.
@@ -300,6 +301,7 @@ def get_items():
             category=category_list,
             format_filter=format_list,
             borrowed_only=borrowed_only,
+            owner_only=owner_only,
             missing_cover=missing_cover,
             missing_id=missing_id,
             tags=tags_list,
@@ -343,6 +345,8 @@ def get_items():
 
         if borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
+        elif owner_only:
+            query = query.filter(Item.owner_id == user_id)
         elif include_public:
             # Social lending catalogue: include own items, borrowed items, AND public
             # available items from other users so borrowers can discover lendable items.
@@ -697,6 +701,19 @@ def delete_item(item_id: int):
         return _delete_physical_item(item_id, user_id)
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": "Item cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
