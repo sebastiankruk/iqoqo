@@ -238,7 +238,7 @@ def test_downgrade_past_the_rename_is_clean() -> None:
     """
     url = _migrated()
     try:
-        _flask_db(url, "downgrade")
+        _flask_db(url, "downgrade", "v0_8_2_fk_indexes_and_quantity")
         _flask_db(url, "downgrade")
 
         assert "ix_inventory_items_manifestation_id" not in _index_names(url, "items", "inventory")
@@ -254,7 +254,7 @@ def test_reupgrade_after_downgrade_converges() -> None:
     """
     url = _migrated()
     try:
-        _flask_db(url, "downgrade")
+        _flask_db(url, "downgrade", "v0_8_2_fk_indexes_and_quantity")
         _flask_db(url, "upgrade")
 
         assert "ix_inventory_items_manifestation_id" in _index_names(url, "items", "inventory")

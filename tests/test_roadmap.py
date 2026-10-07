@@ -602,3 +602,28 @@ def test_items_owner_only_filter(client, normal_user_headers, app) -> None:
     returned_ids = [it["id"] for it in res.get_json()["data"]]
     assert own_id in returned_ids
     assert borrowed_id not in returned_ids
+
+
+def test_get_roadmaps_pagination(client, normal_user_headers, app) -> None:
+    """GET /api/v1/roadmaps supports page and limit pagination."""
+    with app.app_context():
+        user = db.session.execute(select(User).filter_by(email="test_user@iqoqo.local")).scalar_one()
+        roadmaps = [ReadingRoadmap(user_id=user.id, title=f"Track Page {i}") for i in range(1, 6)]
+        db.session.add_all(roadmaps)
+        db.session.commit()
+
+    # Request limit=2, page=1
+    res = client.get("/api/v1/roadmaps?page=1&limit=2", headers=normal_user_headers)
+    assert res.status_code == 200
+    data = res.get_json()
+    assert len(data) == 2
+
+    # Request limit=2, page=2
+    res2 = client.get("/api/v1/roadmaps?page=2&limit=2", headers=normal_user_headers)
+    assert res2.status_code == 200
+    data2 = res2.get_json()
+    assert len(data2) == 2
+    # Ensure disjoint pages
+    page1_ids = {r["id"] for r in data}
+    page2_ids = {r["id"] for r in data2}
+    assert page1_ids.isdisjoint(page2_ids)

@@ -16,6 +16,17 @@
 
 /** TypeScript types for the FRBR data model used by the iqoqo API. */
 
+/** Common metadata fields for a Conceptual Work (F1). */
+export interface WorkMeta {
+  genres?: string[];
+  subjects?: string[];
+  tags?: string[];
+  description?: string;
+  original_publication_year?: number;
+  authors?: string[];
+  [key: string]: unknown;
+}
+
 /**
  * A distinct intellectual or artistic creation.
  * E.g., The abstract concept of "The Lord of the Rings".
@@ -24,7 +35,7 @@ export interface Work {
   id: number;
   title: string;
   authors: string[];
-  meta: Record<string, unknown>;
+  meta: WorkMeta;
   container_work_id?: number | null;
 }
 
@@ -116,6 +127,39 @@ export interface AdditionalImage {
 /** Metadata lookup providers selected according to the manifestation's media category. */
 export type MediaStrategy = "google_books" | "tmdb" | "discogs" | "musicbrainz" | "bgg" | "igdb";
 
+/** Common metadata fields for a Manifestation (F3). */
+export interface ManifestationMeta {
+  additional_images?: AdditionalImage[];
+  format?: MediaFormat | "series" | "Series";
+  content_type?: MediaCategory;
+  media_strategy?: MediaStrategy;
+  catalog_number?: string;
+  pressing_number?: string;
+  matrix_number?: string;
+  label?: string;
+  disc_count?: number;
+  track_list?: Array<{
+    position: string;
+    title: string;
+    duration_seconds: number;
+  }>;
+  // Video-specific
+  resolution?: string;
+  aspect_ratio?: string;
+  video_format?: string;
+  audio_formats?: string[];
+  region_code?: string;
+  run_time_minutes?: number;
+  // Game-specific
+  min_players?: number;
+  max_players?: number;
+  playtime_minutes?: number;
+  min_age?: number;
+  game_mechanics?: string[];
+  designer?: string;
+  [key: string]: unknown;
+}
+
 /**
  * The physical embodiment of an expression of a work.
  * E.g., A specific 2004 paperback edition of "The Lord of the Rings" by a specific publisher.
@@ -134,37 +178,7 @@ export interface Manifestation {
   year?: number;
   cover_url?: string | null;
   owner_count?: number;
-  meta: {
-    additional_images?: AdditionalImage[];
-    format?: MediaFormat | "series" | "Series";
-    content_type?: MediaCategory;
-    media_strategy?: MediaStrategy;
-    catalog_number?: string;
-    pressing_number?: string;
-    matrix_number?: string;
-    label?: string;
-    disc_count?: number;
-    track_list?: Array<{
-      position: string;
-      title: string;
-      duration_seconds: number;
-    }>;
-    // Video-specific
-    resolution?: string;
-    aspect_ratio?: string;
-    video_format?: string;
-    audio_formats?: string[];
-    region_code?: string;
-    run_time_minutes?: number;
-    // Game-specific
-    min_players?: number;
-    max_players?: number;
-    playtime_minutes?: number;
-    min_age?: number;
-    game_mechanics?: string[];
-    designer?: string;
-    [key: string]: unknown;
-  };
+  meta: ManifestationMeta;
 }
 
 /** * Global Catalog Entry DTO (Returned by /manifestations).

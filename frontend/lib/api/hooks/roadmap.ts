@@ -17,6 +17,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
+import { queryKeys } from "./query-keys";
 
 /* ── Reading Roadmap ─────────────────────────────────────────────────────── */
 
@@ -63,7 +64,7 @@ export interface RoadmapData {
  */
 export function useRoadmaps() {
   return useQuery<RoadmapData[]>({
-    queryKey: ["roadmaps"],
+    queryKey: queryKeys.roadmaps,
     queryFn: async () => {
       const res = await apiClient.get<RoadmapData[]>("/v1/roadmaps");
       return res.data ?? [];
@@ -88,12 +89,12 @@ export function useCreateRoadmap() {
       return res.data;
     },
     onSuccess: data => {
-      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+      qc.setQueryData(queryKeys.roadmaps, (old: RoadmapData[] | undefined) => {
         if (!old) return [data];
         if (old.some(r => r.id === data.id)) return old;
         return [data, ...old];
       });
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }
@@ -111,11 +112,11 @@ export function useDeleteRoadmap() {
       return res.data;
     },
     onSuccess: (_, roadmapId) => {
-      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+      qc.setQueryData(queryKeys.roadmaps, (old: RoadmapData[] | undefined) => {
         if (!old) return old;
         return old.filter(r => r.id !== roadmapId);
       });
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }
@@ -153,7 +154,7 @@ export function useAddRoadmapItem() {
       return res.data;
     },
     onSuccess: (newItem, variables) => {
-      qc.setQueryData(["roadmaps"], (old: RoadmapData[] | undefined) => {
+      qc.setQueryData(queryKeys.roadmaps, (old: RoadmapData[] | undefined) => {
         if (!old) return old;
         return old.map(r => {
           if (r.id === variables.roadmapId) {
@@ -166,7 +167,7 @@ export function useAddRoadmapItem() {
           return r;
         });
       });
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }
@@ -204,7 +205,7 @@ export function useUpdateRoadmapItemTarget() {
       return res.data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }
@@ -222,7 +223,7 @@ export function useDeleteRoadmapItem() {
       return res.data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }
@@ -242,7 +243,7 @@ export function useReorderRoadmapItem() {
       return res.data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["roadmaps"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.roadmaps });
     },
   });
 }

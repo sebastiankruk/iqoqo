@@ -96,11 +96,17 @@ def get_roadmaps() -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"error": "Authentication required", "code": 401}), 401
 
+    page = max(1, request.args.get("page", 1, type=int))
+    limit = min(100, max(1, request.args.get("limit", 50, type=int)))
+    offset = (page - 1) * limit
+
     try:
         stmt = (
             select(ReadingRoadmap)
             .filter(ReadingRoadmap.user_id == user_id)
             .order_by(ReadingRoadmap.created_at.desc(), ReadingRoadmap.id.desc())
+            .limit(limit)
+            .offset(offset)
         )
         roadmaps = db.session.scalars(stmt).unique().all()
         return jsonify([r.to_dict() for r in roadmaps]), 200

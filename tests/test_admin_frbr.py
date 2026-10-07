@@ -609,14 +609,18 @@ def test_roadmap_item_single_frbr_level_constraint(client, normal_user_headers, 
     from sqlalchemy import select as sa_select
 
     from app.db.auth import User
+    from app.db.core import Work
     from app.db.roadmap import ReadingRoadmap
 
     with app.app_context():
         user = db.session.execute(sa_select(User).filter_by(email="test_user@iqoqo.local")).scalar_one()
+        work = Work(title="Constraint Test Work")
+        db.session.add(work)
         roadmap = ReadingRoadmap(user_id=user.id, title="Constraint Test")
         db.session.add(roadmap)
         db.session.commit()
         roadmap_id = roadmap.id
+        work_id = work.id
 
     # Test: no FRBR reference should fail
     res = client.post(
@@ -637,7 +641,7 @@ def test_roadmap_item_single_frbr_level_constraint(client, normal_user_headers, 
     # Test: exactly one FRBR reference should succeed
     res = client.post(
         f"/api/v1/roadmaps/{roadmap_id}/items",
-        json={"work_id": 42, "notes": "Valid"},
+        json={"work_id": work_id, "notes": "Valid"},
         headers=normal_user_headers,
     )
     assert res.status_code == 201

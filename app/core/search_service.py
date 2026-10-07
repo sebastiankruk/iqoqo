@@ -442,6 +442,7 @@ class SearchService:
             publishers,
             lod_authority,
             lod_status,
+            owner_only,
         ) = dataclasses.astuple(filters)
         search_term = f"%{q}%"
         # Subquery to get matching item IDs
@@ -468,7 +469,7 @@ class SearchService:
 
         if borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
-        elif filters.owner_only:
+        elif owner_only:
             query = query.filter(Item.owner_id == user_id)
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
