@@ -244,15 +244,27 @@ def test_wordnet_mapper_resolution(app):
         res_local = WordNetMapper.resolve_tag("science fiction")
         assert res_local is not None
         assert res_local["uri"] == "http://wordnet-rdf.princeton.edu/id/06363630-n"
+        assert res_local["authority"] == "wordnet"
         assert res_local["strategy"] == "synset"
         assert res_local["attributes"]["source"] == "local_dictionary"
 
-        # Fallback for novel concept
-        res_fallback = WordNetMapper.resolve_tag("cyberpunk")
-        assert res_fallback is not None
-        assert res_fallback["uri"] == "http://dbpedia.org/resource/Category:Cyberpunk"
-        assert res_fallback["strategy"] == "dbpedia_category"
-        assert res_fallback["confidence"] == 0.70
+        # Fallback for novel concept when DBpedia category is valid
+        mock_valid = MagicMock()
+        mock_valid.status_code = 200
+        with patch("requests.get", return_value=mock_valid):
+            res_fallback = WordNetMapper.resolve_tag("cyberpunk")
+            assert res_fallback is not None
+            assert res_fallback["uri"] == "http://dbpedia.org/resource/Category:Cyberpunk"
+            assert res_fallback["authority"] == "dbpedia"
+            assert res_fallback["strategy"] == "dbpedia_category"
+            assert res_fallback["confidence"] == 0.70
+
+        # Non-existent DBpedia category returns None without persisting fake category
+        mock_invalid = MagicMock()
+        mock_invalid.status_code = 404
+        with patch("requests.get", return_value=mock_invalid):
+            res_invalid = WordNetMapper.resolve_tag("nonexistent_tag_xyz")
+            assert res_invalid is None
 
 
 def test_resolve_manifestation_links_pipeline(app):
@@ -336,6 +348,8 @@ def test_resolve_manifestation_links_pipeline(app):
             assert any(link.authority == "dbpedia" and "Neuromancer" in link.external_uri for link in work_links)
             assert any(link.authority == "dbpedia" and "William_Gibson" in link.external_uri for link in work_links)
             assert any(link.authority == "wordnet" for link in work_links)
+            assert not any(link.authority == "wordnet" and "dbpedia.org" in link.external_uri for link in work_links)
+            assert any(link.authority == "dbpedia" and "Category:Cyberpunk" in link.external_uri for link in work_links)
 
             # Verify Manifestation-level links (GeoNames New York)
             manif_direct = manif.get_semantic_links(include_work=False)

@@ -28,6 +28,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core import duplicate_service as svc
+from app.core import frbr_merge
 from app.db.models import (
     Contributor,
     DuplicateCandidate,
@@ -769,7 +770,7 @@ def test_merge_work_rolls_back_completely_on_failure():
     expression = make_expression(source)
     target_id, source_id = target.id, source.id
 
-    with patch.object(svc, "_repoint_semantic_links", side_effect=RuntimeError("boom")):
+    with patch.object(frbr_merge, "repoint_references", side_effect=RuntimeError("boom")):
         with pytest.raises(RuntimeError):
             svc.merge_work(source, target, user_id=None)
         db.session.rollback()
@@ -844,7 +845,7 @@ def test_merge_manifestation_rolls_back_completely_on_failure():
     item = make_item(source)
     target_id, source_id = target.id, source.id
 
-    with patch.object(svc, "_repoint_semantic_links", side_effect=RuntimeError("boom")):
+    with patch.object(frbr_merge, "repoint_references", side_effect=RuntimeError("boom")):
         with pytest.raises(RuntimeError):
             svc.merge_manifestation(source, target, user_id=None)
         db.session.rollback()
@@ -1129,7 +1130,7 @@ def test_api_merge_executes_and_rolls_back_on_failure(client, admin_headers):
     expression = make_expression(source)
     candidate = svc.record_candidate("work", source.id, target.id, 0.95, "Same work.")
 
-    with patch.object(svc, "_repoint_semantic_links", side_effect=RuntimeError("boom")):
+    with patch.object(frbr_merge, "repoint_references", side_effect=RuntimeError("boom")):
         response = client.post(f"{DUPLICATES_URL}/{candidate.id}/merge", headers=admin_headers, json={"primary_id": target.id})
     assert response.status_code == 500
     assert response.get_json()["error"] == "Merge failed and was rolled back"

@@ -325,6 +325,7 @@ def email_verification_state():
 
 @account_bp.route("/email/verify", methods=["POST"])
 @require_auth
+@limiter.limit("10 per minute", key_func=_rate_limit_key)
 def confirm_email_verification():
     """Consume a verification token and mark the address verified.
 
@@ -460,6 +461,7 @@ def deletion_confirmation_state():
 
 @account_bp.route("/deletion/confirm", methods=["POST"])
 @require_auth
+@limiter.limit("10 per minute", key_func=_rate_limit_key)
 def confirm_account_deletion():
     """Consume the token and permanently delete the account.
 

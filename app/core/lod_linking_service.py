@@ -429,6 +429,7 @@ class WordNetMapper:
                 "uri": entry["uri"],
                 "label": entry["label"],
                 "confidence": entry["confidence"],
+                "authority": "wordnet",
                 "strategy": "synset",
                 "attributes": {
                     "synset_id": entry["synset_id"],
@@ -444,14 +445,34 @@ class WordNetMapper:
         return result
 
     @classmethod
+    def _validate_dbpedia_category(cls, uri: str) -> bool:
+        """Validate that the DBpedia Category exists using HTTP GET."""
+        try:
+            resp = requests.get(
+                uri,
+                headers={"User-Agent": USER_AGENT, "Accept": "application/rdf+xml, text/html"},
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+                allow_redirects=True,
+            )
+            return resp.status_code in (200, 303)
+        except Exception as exc:
+            logger.warning("DBpedia category validation failed for %s: %s", uri, exc)
+            return False
+
+    @classmethod
     def _resolve_dbpedia_category(cls, tag: str) -> dict[str, Any] | None:
         """Query DBpedia for a matching Category / Concept for novel tags."""
         formatted_tag = "_".join(word.capitalize() for word in tag.split())
         uri = f"http://dbpedia.org/resource/Category:{formatted_tag}"
+
+        if not cls._validate_dbpedia_category(uri):
+            return None
+
         return {
             "uri": uri,
             "label": tag,
             "confidence": 0.70,
+            "authority": "dbpedia",
             "strategy": "dbpedia_category",
             "attributes": {"source": "dbpedia_category_fallback"},
         }
@@ -570,11 +591,12 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
         for tag in tags[:5]:  # Reconcile up to 5 topical tags
             wn_match = WordNetMapper.resolve_tag(tag)
             if wn_match:
+                authority = wn_match.get("authority", "wordnet")
                 existing_wn = db.session.execute(
                     select(SemanticLink).where(
                         SemanticLink.entity_type == "work",
                         SemanticLink.entity_id == work.id,
-                        SemanticLink.authority == "wordnet",
+                        SemanticLink.authority == authority,
                         SemanticLink.external_uri == wn_match["uri"],
                     )
                 ).scalar_one_or_none()
@@ -583,7 +605,7 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
                     wn_link = SemanticLink(
                         entity_type="work",
                         entity_id=work.id,
-                        authority="wordnet",
+                        authority=authority,
                         external_uri=wn_match["uri"],
                         pref_label=wn_match["label"],
                         confidence=wn_match["confidence"],

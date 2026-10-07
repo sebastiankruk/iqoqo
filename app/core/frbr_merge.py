@@ -239,7 +239,8 @@ def repoint_unique_child(
 
 
 def repoint_semantic_links(entity_type: str, source_id: int, target_id: int) -> int:
-    """Re-point polymorphic :class:`SemanticLink` rows onto the surviving entity.
+    """Re-point polymorphic :class:`SemanticLink` rows onto the surviving entity,
+    collapsing identical (authority, external_uri) collisions on the target.
 
     Args:
         entity_type: ``"work"``, ``"expression"``, or ``"manifestation"``.
@@ -247,15 +248,36 @@ def repoint_semantic_links(entity_type: str, source_id: int, target_id: int) -> 
         target_id: Entity id being consolidated onto.
 
     Returns:
-        Number of links re-pointed.
+        Number of links re-pointed (duplicate links deleted are not counted).
     """
-    result = db.session.execute(
-        db.update(SemanticLink)
-        .where(SemanticLink.entity_type == entity_type, SemanticLink.entity_id == source_id)
-        .values(entity_id=target_id)
-        .execution_options(synchronize_session=False)
+    moved = 0
+    rows: Sequence[SemanticLink] = (
+        db.session.execute(
+            select(SemanticLink).where(
+                SemanticLink.entity_type == entity_type,
+                SemanticLink.entity_id == source_id,
+            )
+        )
+        .scalars()
+        .all()
     )
-    return int(getattr(result, "rowcount", 0) or 0)
+    for row in rows:
+        existing = db.session.execute(
+            select(literal(1))
+            .where(
+                SemanticLink.entity_type == entity_type,
+                SemanticLink.entity_id == target_id,
+                SemanticLink.authority == row.authority,
+                SemanticLink.external_uri == row.external_uri,
+            )
+            .limit(1)
+        ).first()
+        if existing is not None:
+            db.session.delete(row)
+        else:
+            row.entity_id = target_id
+            moved += 1
+    return moved
 
 
 def repoint_references(tier: str, source_id: int, target_id: int) -> dict[str, int]:

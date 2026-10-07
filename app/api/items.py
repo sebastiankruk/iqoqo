@@ -402,7 +402,7 @@ def get_items():
         elif sort_by == "title-desc":
             query = query.order_by(func.lower(Work.title).desc())
         elif sort_by == "author":
-            query = query.order_by(Work.title.asc())
+            query = query.order_by(func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc())
         elif sort_by == "added":
             query = query.order_by(Item.added_at.desc())
         else:

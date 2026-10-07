@@ -1416,3 +1416,53 @@ class TestTokenTransport:
 
         assert response.status_code == 400
         assert response.get_json()["usable"] is False
+
+    def test_deletion_confirm_is_rate_limited(self, app, client, configured_mail, owner) -> None:
+        """Exceeding 10 attempts per minute must trigger a 429 rate limit."""
+        from app.core.limiter import limiter
+
+        app.config["RATELIMIT_ENABLED"] = True
+        app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+        limiter.enabled = True
+        limiter._enabled = True
+        limiter.init_app(app)
+        limiter.reset()
+        try:
+            token = _session_cookie(client, owner)
+            minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+            headers = {"Authorization": f"Bearer {token}", "X-CSRF-Token": minted}
+
+            statuses = []
+            for _ in range(12):
+                resp = client.post("/api/account/deletion/confirm", headers=headers, json={"token": "invalid-token"})
+                statuses.append(resp.status_code)
+
+            assert 429 in statuses, f"Rate limiter must cap confirmation attempts at 10 per minute, got: {statuses}"
+        finally:
+            limiter.enabled = False
+            limiter._enabled = False
+
+    def test_email_verify_is_rate_limited(self, app, client, configured_mail, owner) -> None:
+        """Exceeding 10 attempts per minute must trigger a 429 rate limit on email verify."""
+        from app.core.limiter import limiter
+
+        app.config["RATELIMIT_ENABLED"] = True
+        app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+        limiter.enabled = True
+        limiter._enabled = True
+        limiter.init_app(app)
+        limiter.reset()
+        try:
+            token = _session_cookie(client, owner)
+            minted = client.get("/api/account/csrf").get_json()["data"]["csrf_token"]
+            headers = {"Authorization": f"Bearer {token}", "X-CSRF-Token": minted}
+
+            statuses = []
+            for _ in range(12):
+                resp = client.post("/api/account/email/verify", headers=headers, json={"token": "invalid-token"})
+                statuses.append(resp.status_code)
+
+            assert 429 in statuses, f"Rate limiter must cap email verification attempts at 10 per minute, got: {statuses}"
+        finally:
+            limiter.enabled = False
+            limiter._enabled = False
