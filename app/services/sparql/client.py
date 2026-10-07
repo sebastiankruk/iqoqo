@@ -110,9 +110,8 @@ def execute_via_service(
             headers={"Content-Type": "application/json"},
         )
         status_code = raw_res.status_code
-        try:
-            resp_data = raw_res.get_json() or {}
-        except Exception:  # pylint: disable=broad-exception-caught
+        resp_data = raw_res.get_json(silent=True)
+        if not resp_data:
             resp_data = {"error": raw_res.get_data(as_text=True)}
     else:
         target_url = f"{conf['url']}/execute"
@@ -134,7 +133,7 @@ def execute_via_service(
             try:
                 body = http_err.read().decode("utf-8")
                 resp_data = json.loads(body) if body else {}
-            except Exception:  # pylint: disable=broad-exception-caught
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
                 resp_data = {"error": str(http_err)}
         except (urllib.error.URLError, TimeoutError, OSError) as net_err:
             logger.error("SPARQL execution service unreachable at %s: %s", target_url, net_err)

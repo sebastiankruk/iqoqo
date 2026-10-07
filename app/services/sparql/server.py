@@ -47,7 +47,7 @@ try:
     _otel_timeouts_total = _meter.create_counter("sparql_service_timeouts_total", description="Total timeouts in SPARQL service")
     _otel_rejections_total = _meter.create_counter("sparql_service_rejections_total", description="Total rejections in SPARQL service")
     _otel_duration_ms = _meter.create_histogram("sparql_service_duration_ms", description="Execution duration in milliseconds")
-except Exception:  # pylint: disable=broad-exception-caught
+except (ImportError, AttributeError):
     _meter = None
     _otel_requests_total = None
     _otel_timeouts_total = None

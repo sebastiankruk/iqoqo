@@ -222,7 +222,7 @@ def _terminate_child(process: Any) -> None:
             if process.is_alive():
                 process.kill()
                 process.join(timeout=0.5)
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (OSError, ValueError):
         pass
 
 

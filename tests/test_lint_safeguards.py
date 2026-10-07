@@ -121,6 +121,9 @@ JUSTIFIED_BROAD_EXCEPT_SITES = frozenset(
         ("scripts/validate_yaml.py", "validate_yaml"),
         # Test asserting a malicious payload raises nothing unexpected.
         ("tests/test_core_fixes.py", "test_search_service_resists_sql_injection"),
+        # SPARQL execution service: isolated child runs arbitrary query; server request handler fails closed with JSON 500.
+        ("app/services/sparql/server.py", "execute_query"),
+        ("app/services/sparql/worker.py", "_execute_in_child"),
     }
 )
 
