@@ -371,36 +371,47 @@ class GeoNamesClient:
             resp = requests.get(cls.SEARCH_URL, params=params, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
             if resp.status_code == 200:
                 data = resp.json()
-                geonames = data.get("geonames", [])
-                if geonames:
-                    g = geonames[0]
-                    gid = g.get("geonameId")
-                    if gid:
-                        uri = f"https://sws.geonames.org/{gid}/"
-                        lat = float(g.get("lat")) if g.get("lat") else None
-                        lng = float(g.get("lng")) if g.get("lng") else None
-                        country_code = g.get("countryCode")
-                        name = g.get("name", normalized)
+                if "status" in data:
+                    logger.warning(
+                        "GeoNames API returned error for %s: %s (code %s)",
+                        location_name,
+                        data["status"].get("message"),
+                        data["status"].get("value"),
+                    )
+                else:
+                    geonames = data.get("geonames", [])
+                    if geonames:
+                        g = geonames[0]
+                        gid = g.get("geonameId")
+                        if gid:
+                            uri = f"https://sws.geonames.org/{gid}/"
+                            lat = float(g.get("lat")) if g.get("lat") else None
+                            lng = float(g.get("lng")) if g.get("lng") else None
+                            country_code = g.get("countryCode")
+                            name = g.get("name", normalized)
 
-                        result = {
-                            "uri": uri,
-                            "label": name,
-                            "confidence": 0.90,
-                            "strategy": "lookup",
-                            "attributes": {
-                                "geoname_id": gid,
-                                "name": name,
-                                "country_code": country_code,
-                                "lat": lat,
-                                "lng": lng,
-                                "fcode": g.get("fcode"),
-                            },
-                        }
+                            result = {
+                                "uri": uri,
+                                "label": name,
+                                "confidence": 0.90,
+                                "strategy": "lookup",
+                                "attributes": {
+                                    "geoname_id": gid,
+                                    "name": name,
+                                    "country_code": country_code,
+                                    "lat": lat,
+                                    "lng": lng,
+                                    "fcode": g.get("fcode"),
+                                },
+                            }
+            else:
+                logger.warning("GeoNames request returned HTTP %d for location %s", resp.status_code, location_name)
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning("GeoNames request failed for location %s: %s", location_name, exc)
             result = None
 
-        cache.set(cache_key, result, timeout=CACHE_TTL_24H)
+        if result:
+            cache.set(cache_key, result, timeout=CACHE_TTL_24H)
         return result
 
 

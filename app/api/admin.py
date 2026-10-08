@@ -1060,9 +1060,17 @@ def get_active_lod_task():
         return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
     task = AsyncResult(active_task_id, app=celery)
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for active LOD task %s: %s", active_task_id, exc)
+        state = "UNKNOWN"
+
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1109,7 +1117,7 @@ def get_active_lod_task():
             200,
         )
 
-    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
+    # State is SUCCESS, FAILURE, REVOKED, or UNKNOWN; clear stale cache & DB key
     cache.delete("lod:active_task_id")
     try:
         InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
@@ -1156,18 +1164,28 @@ def get_lod_reconciliation_task(task_id: str):
 
     task = AsyncResult(task_id, app=celery)
 
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for LOD task %s: %s", task_id, exc)
+        state = "UNKNOWN"
+
     if state == "SUCCESS":
-        result = task.result or {}
+        try:
+            result = task.result if isinstance(task.result, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            result = {}
+        task_status = result.get("status", "completed")
+        default_pct = 100.0 if task_status == "completed" else 0.0
         return (
             jsonify(
                 {
                     "success": True,
                     "data": {
                         "task_id": task_id,
-                        "status": "completed",
+                        "status": task_status,
                         "state": state,
-                        "percentage": 100.0,
+                        "percentage": result.get("percentage", default_pct),
                         "total": result.get("total", 0),
                         "processed": result.get("processed", 0),
                         "total_resolved": result.get("total_resolved", 0),
@@ -1181,7 +1199,10 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1204,6 +1225,11 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state == "FAILURE":
+        err_msg = "Task failed"
+        try:
+            err_msg = str(task.result)
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {
@@ -1222,16 +1248,21 @@ def get_lod_reconciliation_task(task_id: str):
                             "wordnet": 0,
                         },
                         "recent_logs": [],
-                        "error": str(task.result),
+                        "error": err_msg,
                     },
-                    "error": str(task.result),
+                    "error": err_msg,
                 }
             ),
             200,
         )
 
     if state == "REVOKED":
-        meta = task.info if isinstance(task.info, dict) else {}
+        meta = {}
+        try:
+            if isinstance(task.info, dict):
+                meta = task.info
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {

@@ -188,3 +188,45 @@ def test_context_task_auto_app_context():
     assert result_holder["task_result"]["has_context"] is True
     assert result_holder["task_result"]["app_name"] == "app"
     assert result_holder["task_result"]["session_active"] is True
+
+
+def test_batch_link_catalog_lod_task_cancellation_resilience(app):
+    """Test batch_link_catalog_lod_task cancellation logic and verify empty DB settings don't abort."""
+    from unittest.mock import MagicMock
+
+    from app.core.cache import cache
+    from app.core.tasks import batch_link_catalog_lod_task
+    from app.db.models import InstanceSettings
+
+    with app.app_context():
+        manifestation_ids = [101, 102, 103, 104]
+
+        # 1. Verify empty DB setting / cache does NOT falsely trigger cancellation
+        cache.delete("lod:active_task_id")
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
+
+        batch_link_catalog_lod_task.push_request(id="task-safe-123")
+        try:
+            with (
+                patch.object(batch_link_catalog_lod_task, "update_state"),
+                patch("app.core.lod_linking_service.resolve_manifestation_links", return_value=[]),
+            ):
+                res = batch_link_catalog_lod_task(manifestation_ids, chunk_size=2, throttle_delay=0.0)
+                assert res["status"] == "completed"
+                assert res["processed"] == 4
+        finally:
+            batch_link_catalog_lod_task.pop_request()
+
+        # 2. Verify explicit cancellation via lod:cancel_task triggers clean cancellation
+        cache.set("lod:cancel_task:task-cancel-456", True, timeout=60)
+        batch_link_catalog_lod_task.push_request(id="task-cancel-456")
+        try:
+            with (
+                patch.object(batch_link_catalog_lod_task, "update_state"),
+                patch("app.core.lod_linking_service.resolve_manifestation_links", return_value=[]),
+            ):
+                res_cancelled = batch_link_catalog_lod_task(manifestation_ids, chunk_size=2, throttle_delay=0.0)
+                assert res_cancelled["status"] == "cancelled"
+                assert res_cancelled["processed"] == 0
+        finally:
+            batch_link_catalog_lod_task.pop_request()
