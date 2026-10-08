@@ -37,7 +37,7 @@ from app.db.core import Manifestation, SemanticLink, Work
 logger = logging.getLogger(__name__)
 
 USER_AGENT = "iqoqo/0.8.2 (https://iqoqo.org; dev@kruk.me)"
-DEFAULT_REQUEST_TIMEOUT = 5.0
+DEFAULT_REQUEST_TIMEOUT = 3.0
 CACHE_TTL_24H = 86400  # 24 hours in seconds
 
 MEDIA_CATEGORY_DBO_MAP: dict[str, str] = {
@@ -290,16 +290,20 @@ class DBpediaClient:
 
     @classmethod
     def _query_sparql(cls, query: str, dbo_type: str) -> dict[str, Any] | None:
-        """Targeted SPARQL fallback query on DBpedia."""
-        safe_query = query.replace('"', '\\"').replace("'", "\\'")
+        """Targeted SPARQL fallback query on DBpedia using full-text and literal indexing."""
+        clean_words = re.sub(r"[^\w\s]", " ", query).strip().split()
+        if not clean_words:
+            return None
+        fts_clause = " AND ".join(f"'{w}'" for w in clean_words)
+
         sparql_query = f"""
         PREFIX dbo: <http://dbpedia.org/ontology/>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
         SELECT DISTINCT ?res ?label WHERE {{
           ?res a {dbo_type} ;
                rdfs:label ?label .
-          FILTER(lcase(str(?label)) = "{safe_query.lower()}")
-          FILTER(lang(?label) = "en" || lang(?label) = "")
+          ?label bif:contains "{fts_clause}" .
+          FILTER(lang(?label) = "en" || lang(?label) = "pl" || lang(?label) = "")
         }} LIMIT 1
         """
         params = {"query": sparql_query, "format": "json"}
@@ -534,16 +538,26 @@ class WordNetMapper:
 
     @classmethod
     def _validate_dbpedia_category(cls, uri: str) -> bool:
-        """Validate that the DBpedia Category exists using HTTP GET."""
+        """Validate that the DBpedia Category exists using HTTP HEAD/GET."""
         try:
-            resp = requests.get(
+            resp = requests.head(
                 uri,
-                headers={"User-Agent": USER_AGENT, "Accept": "application/rdf+xml, text/html"},
-                timeout=DEFAULT_REQUEST_TIMEOUT,
+                headers={"User-Agent": USER_AGENT},
+                timeout=2.0,
                 allow_redirects=True,
             )
-            return resp.status_code in (200, 303)
-        except Exception as exc:
+            if resp.status_code in (200, 303):
+                return True
+            if resp.status_code == 405:
+                resp = requests.get(
+                    uri,
+                    headers={"User-Agent": USER_AGENT, "Accept": "application/rdf+xml, text/html"},
+                    timeout=2.0,
+                    allow_redirects=True,
+                )
+                return resp.status_code in (200, 303)
+            return False
+        except Exception as exc:  # pylint: disable=broad-except
             logger.warning("DBpedia category validation failed for %s: %s", uri, exc)
             return False
 
