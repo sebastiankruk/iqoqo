@@ -19,6 +19,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type { ApiResponse } from "@/types/frbr";
+import { queryKeys } from "./hooks/query-keys";
 
 export const DEFAULT_INFINITE_PAGE_SIZE = 20;
 
@@ -38,7 +39,7 @@ interface FetchItemsParams {
  */
 export function useInfiniteCollection({ viewMode, filters }: FetchItemsParams) {
   return useInfiniteQuery({
-    queryKey: ["collection-grid", viewMode, filters],
+    queryKey: queryKeys.collectionGrid(viewMode, filters),
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams();
       params.append("limit", DEFAULT_INFINITE_PAGE_SIZE.toString());

@@ -18,6 +18,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "../client";
 import type { ApiResponse, UserProfile } from "@/types/frbr";
+import { queryKeys } from "./query-keys";
 import axios from "axios";
 
 /**
@@ -27,7 +28,7 @@ import axios from "axios";
  */
 export function useProfile() {
   return useQuery({
-    queryKey: ["profile"],
+    queryKey: queryKeys.profile,
     queryFn: async () => {
       try {
         return await apiFetch<UserProfile>("/profile/");
@@ -52,7 +53,7 @@ export function useProfile() {
  */
 export function useUserSearch(query: string, enabled = false) {
   return useQuery({
-    queryKey: ["users", "search", query],
+    queryKey: queryKeys.usersSearch(query),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<UserProfile[]>>("/profile/users/search", { params: { q: query } });
       return res.data?.data ?? [];

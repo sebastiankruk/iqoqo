@@ -456,10 +456,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_3_account_lifecycle"
+    assert heads[0] == "v0_8_3_roadmap_item_target"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_3_roadmap_item_target",
         "v0_8_3_account_lifecycle",
         "v0_8_2_fk_index_names",
         "v0_8_2_fk_indexes_and_quantity",
@@ -1613,3 +1614,76 @@ def test_v0_8_3_upgrade_after_downgrade_converges(account_lifecycle_engine: Any)
     assert inspector.has_table("account_action_tokens")
     users_columns = {col["name"] for col in inspector.get_columns("users")}
     assert "email_verified_at" in users_columns
+
+
+def test_v0_8_3_roadmap_item_target_upgrade_and_downgrade() -> None:
+    """The roadmap_items item_id target migration upgrades cleanly, preflights invalid rows, and refuses downgrade when item_id in use."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_3_roadmap_item_target")
+    engine = sa.create_engine("sqlite://")
+
+    # Set up prerequisite tables
+    with engine.begin() as conn:
+        conn.execute(sa.text("CREATE TABLE items (id INTEGER PRIMARY KEY, manifestation_id INTEGER, owner_id VARCHAR(36));"))
+        conn.execute(
+            sa.text(
+                "CREATE TABLE roadmap_items ("
+                "id INTEGER PRIMARY KEY, "
+                "roadmap_id INTEGER NOT NULL, "
+                "work_id INTEGER, "
+                "expression_id INTEGER, "
+                "manifestation_id INTEGER, "
+                "position INTEGER NOT NULL, "
+                "status VARCHAR(50) NOT NULL"
+                ");"
+            )
+        )
+        # Seed a valid row with work_id
+        conn.execute(sa.text("INSERT INTO roadmap_items (id, roadmap_id, work_id, position, status) VALUES (1, 10, 100, 1, 'queued');"))
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    try:
+        # Upgrade
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        cols = {col["name"] for col in inspector.get_columns("roadmap_items")}
+        assert "item_id" in cols
+
+        # Insert row targeting item_id
+        with engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO roadmap_items (id, roadmap_id, item_id, position, status) VALUES (2, 10, 200, 2, 'queued');"))
+
+        # Downgrade must fail because item_id is in use
+        with pytest.raises(ValueError, match="Cannot downgrade migration while 1 roadmap items target an item_id"):
+            run_migration(migration.downgrade)
+
+        # Clear item_id row
+        with engine.begin() as conn:
+            conn.execute(sa.text("DELETE FROM roadmap_items WHERE id = 2;"))
+
+        # Now downgrade must succeed
+        run_migration(migration.downgrade)
+        inspector = sa.inspect(engine)
+        cols_after = {col["name"] for col in inspector.get_columns("roadmap_items")}
+        assert "item_id" not in cols_after
+
+        # Re-upgrade succeeds
+        run_migration(migration.upgrade)
+        inspector = sa.inspect(engine)
+        assert "item_id" in {col["name"] for col in inspector.get_columns("roadmap_items")}
+    finally:
+        engine.dispose()

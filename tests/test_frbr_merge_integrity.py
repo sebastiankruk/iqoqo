@@ -426,3 +426,64 @@ def test_delete_source_row_does_not_cascade():
     assert db.session.get(Work, source_id) is None
     assert db.session.get(WorkContribution, contribution_id) is not None, "Core-level delete cascaded to the child"
     assert db.session.get(WorkContribution, contribution_id).work_id == target_id
+
+
+def test_repoint_semantic_links_deduplicates_colliding_links():
+    """Identical SemanticLink rows (same authority and external_uri) must collapse on merge."""
+    source = Work(title="Source Work")
+    target = Work(title="Target Work")
+    db.session.add_all([source, target])
+    db.session.commit()
+    source_id, target_id = source.id, target.id
+
+    # Add shared link to both source and target
+    shared_target = SemanticLink(
+        entity_type="work",
+        entity_id=target_id,
+        authority="wikidata",
+        external_uri="http://www.wikidata.org/Q12345",
+        pref_label="Target Label",
+    )
+    shared_source = SemanticLink(
+        entity_type="work",
+        entity_id=source_id,
+        authority="wikidata",
+        external_uri="http://www.wikidata.org/Q12345",
+        pref_label="Source Label",
+    )
+    # Add unique link to source only
+    unique_source = SemanticLink(
+        entity_type="work",
+        entity_id=source_id,
+        authority="dbpedia",
+        external_uri="http://dbpedia.org/resource/Unique_Work",
+        pref_label="Unique Label",
+    )
+    db.session.add_all([shared_target, shared_source, unique_source])
+    db.session.commit()
+
+    repoint_references("work", source_id, target_id)
+    db.session.commit()
+    db.session.expire_all()
+
+    target_links = (
+        db.session.execute(db.select(SemanticLink).where(SemanticLink.entity_type == "work", SemanticLink.entity_id == target_id))
+        .scalars()
+        .all()
+    )
+
+    # There should only be 2 links on target (shared wikidata link and unique dbpedia link), NOT 3
+    assert len(target_links) == 2
+    authorities = {link_item.authority for link_item in target_links}
+    assert authorities == {"wikidata", "dbpedia"}
+    wikidata_links = [link_item for link_item in target_links if link_item.authority == "wikidata"]
+    assert len(wikidata_links) == 1
+    assert wikidata_links[0].external_uri == "http://www.wikidata.org/Q12345"
+
+    # Source should have 0 links
+    source_links = (
+        db.session.execute(db.select(SemanticLink).where(SemanticLink.entity_type == "work", SemanticLink.entity_id == source_id))
+        .scalars()
+        .all()
+    )
+    assert len(source_links) == 0

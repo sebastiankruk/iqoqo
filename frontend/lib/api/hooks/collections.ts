@@ -18,6 +18,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
 import type { ApiResponse, UserCollection } from "@/types/frbr";
+import { queryKeys } from "./query-keys";
 
 /**
  * Custom hook to fetch all user collections.
@@ -26,7 +27,7 @@ import type { ApiResponse, UserCollection } from "@/types/frbr";
  */
 export function useUserCollections() {
   return useQuery({
-    queryKey: ["collections"],
+    queryKey: queryKeys.collections,
     queryFn: async () => {
       const res = await apiClient.get<{ success: boolean; collections: UserCollection[] }>("/collections");
       return res.data.collections;
@@ -43,7 +44,7 @@ export function useUserCollections() {
  */
 export function useItemCollections(itemId: number | null) {
   return useQuery({
-    queryKey: ["itemCollections", itemId],
+    queryKey: queryKeys.itemCollections(itemId),
     queryFn: async () => {
       const res = await apiClient.get<
         ApiResponse<{ collections: { id: number; name: string; parent_id: number | null }[] }>
@@ -67,8 +68,8 @@ export function useAddItemToCollection() {
       return apiClient.post(`/items/${itemId}/collections`, { collection_id: collectionId });
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["itemCollections", variables.itemId] });
-      qc.invalidateQueries({ queryKey: ["taxonomies"] });
+      qc.invalidateQueries({ queryKey: queryKeys.itemCollections(variables.itemId) });
+      qc.invalidateQueries({ queryKey: queryKeys.taxonomies });
     },
   });
 }
@@ -85,8 +86,8 @@ export function useRemoveItemFromCollection() {
       return apiClient.delete(`/items/${itemId}/collections/${collectionId}`);
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["itemCollections", variables.itemId] });
-      qc.invalidateQueries({ queryKey: ["taxonomies"] });
+      qc.invalidateQueries({ queryKey: queryKeys.itemCollections(variables.itemId) });
+      qc.invalidateQueries({ queryKey: queryKeys.taxonomies });
     },
   });
 }
@@ -112,7 +113,7 @@ export interface LoanRequestData {
  */
 export function useLoanRequests() {
   return useQuery<LoanRequestData[]>({
-    queryKey: ["loanRequests"],
+    queryKey: queryKeys.loanRequests,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<LoanRequestData[]>>("/lending/requests");
       return res.data.data ?? [];
@@ -129,7 +130,7 @@ export function useLoanRequests() {
  */
 export function useLoanStatus(itemId: number | null) {
   return useQuery<LoanRequestData | null>({
-    queryKey: ["loanStatus", itemId],
+    queryKey: queryKeys.loanStatus(itemId),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<LoanRequestData | null>>(`/lending/items/${itemId}/loan-status`);
       return res.data.data ?? null;
@@ -154,8 +155,8 @@ export function useRequestLoan() {
       return res.data.data!;
     },
     onSuccess: (_, variables) => {
-      void qc.invalidateQueries({ queryKey: ["loanStatus", variables.itemId] });
-      void qc.invalidateQueries({ queryKey: ["loanRequests"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.loanStatus(variables.itemId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.loanRequests });
     },
   });
 }
@@ -175,8 +176,8 @@ export function useResolveLoan() {
       return res.data.data!;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["loanRequests"] });
-      void qc.invalidateQueries({ queryKey: ["items"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.loanRequests });
+      void qc.invalidateQueries({ queryKey: queryKeys.itemsAll });
     },
   });
 }

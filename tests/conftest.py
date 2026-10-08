@@ -172,6 +172,77 @@ def celery_eager(app):
     celery.conf.task_store_eager_result = old_store
 
 
+@pytest.fixture(autouse=True)
+def hermetic_geonames_database(tmp_path, monkeypatch):
+    """Ensure a deterministic offline GeoNames database is available for tests.
+
+    If the full production gazetteer data/geonames_cities.db is not present
+    (e.g. in fresh checkouts or CI runners), builds a minimal SQLite gazetteer
+    with test cities and points GEONAMES_DB_PATH at it.
+    """
+    import sqlite3
+
+    db_path = os.environ.get("GEONAMES_DB_PATH")
+    if not db_path:
+        default_db = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data",
+            "geonames_cities.db",
+        )
+        if os.path.exists(default_db):
+            yield
+            return
+
+    if db_path and os.path.exists(db_path):
+        yield
+        return
+
+    test_db = str(tmp_path / "test_geonames_cities.db")
+    conn = sqlite3.connect(test_db)
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cities (
+        geoname_id INTEGER PRIMARY KEY,
+        name TEXT,
+        asciiname TEXT,
+        country_code TEXT,
+        lat REAL,
+        lng REAL,
+        fcode TEXT,
+        population INTEGER
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS alt_names (
+        geoname_id INTEGER,
+        name_lower TEXT
+    );
+    """)
+    cities = [
+        (756135, "Warsaw", "Warsaw", "PL", 52.22977, 21.01178, "PPLC", 1702139),
+        (2618425, "Copenhagen", "Copenhagen", "DK", 55.67594, 12.56553, "PPLC", 1153615),
+        (5128581, "New York City", "New York City", "US", 40.71427, -74.00597, "PPL", 8804190),
+        (5327684, "Berkeley", "Berkeley", "US", 37.87159, -122.27275, "PPL", 120972),
+        (1839071, "Pohang", "Pohang", "KR", 36.03222, 129.365, "PPLA", 492041),
+        (3094802, "Kraków", "Krakow", "PL", 50.06143, 19.93658, "PPLA", 816614),
+        (3164603, "Venice", "Venice", "IT", 45.43713, 12.33265, "PPLA", 261905),
+    ]
+    cursor.executemany("INSERT INTO cities VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cities)
+    alt_names = [
+        (756135, "warszawa"),
+        (5128581, "new york"),
+        (2618425, "copenhagen"),
+        (3094802, "krakow"),
+        (3094802, "kraków"),
+    ]
+    cursor.executemany("INSERT INTO alt_names VALUES (?, ?)", alt_names)
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("GEONAMES_DB_PATH", test_db)
+    yield
+
+
 @pytest.fixture
 def client(app):
     """A test client for the app."""

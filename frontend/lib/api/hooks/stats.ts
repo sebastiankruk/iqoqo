@@ -45,7 +45,7 @@ export function useStats(scope: "personal" | "global" = "personal") {
  */
 export function useGlobalStats() {
   return useQuery({
-    queryKey: ["globalStats"],
+    queryKey: queryKeys.globalStats,
     queryFn: () => apiFetch<{ works: number; manifestations: number; items: number; users: number }>("/stats/global"),
     staleTime: 60_000,
   });
@@ -61,7 +61,7 @@ export function useGlobalStats() {
  */
 export function useFacetStats(scope: "global" | "user", filters?: Record<string, string>, enabled = true) {
   return useQuery({
-    queryKey: ["facetStats", scope, filters],
+    queryKey: queryKeys.facetStats(scope, filters),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("scope", scope);
@@ -86,7 +86,7 @@ export function useFacetStats(scope: "global" | "user", filters?: Record<string,
  */
 export function useVelocityInsights(scope: "personal" | "global" = "personal") {
   return useQuery<VelocityPoint[]>({
-    queryKey: ["insights", "velocity", scope],
+    queryKey: queryKeys.velocityInsights(scope),
     queryFn: () => getVelocityInsights(scope),
     staleTime: 5 * 60 * 1000,
   });
@@ -100,7 +100,7 @@ export function useVelocityInsights(scope: "personal" | "global" = "personal") {
  */
 export function useDistributionInsights(scope: "personal" | "global" = "personal") {
   return useQuery<InsightsData>({
-    queryKey: ["insights", "distribution", scope],
+    queryKey: queryKeys.distributionInsights(scope),
     queryFn: () => getDistributionInsights(scope),
     staleTime: 5 * 60 * 1000,
   });

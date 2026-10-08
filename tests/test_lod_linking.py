@@ -220,7 +220,8 @@ def test_geonames_client_resolution_and_caching(app):
             ]
         }
 
-        with patch("requests.get", return_value=mock_resp) as mock_get:
+        # Mock _resolve_local to None to specifically verify remote resolution and caching
+        with patch.object(GeoNamesClient, "_resolve_local", return_value=None), patch("requests.get", return_value=mock_resp) as mock_get:
             result = GeoNamesClient.resolve_location("Oxford")
             assert result is not None
             assert result["uri"] == "https://sws.geonames.org/2640729/"
@@ -237,6 +238,68 @@ def test_geonames_client_resolution_and_caching(app):
             assert mock_get.call_count == 1
 
 
+def test_geonames_client_local_gazetteer_resolution(app):
+    """Test GeoNamesClient resolving places directly from local offline SQLite gazetteer."""
+    with app.app_context():
+        cache.delete("lod:geonames:warsaw")
+        cache.delete("lod:geonames:warszawa")
+        cache.delete("lod:geonames:new york")
+
+        with patch("requests.get") as mock_get:
+            res_warsaw = GeoNamesClient.resolve_location("Warsaw")
+            assert res_warsaw is not None
+            assert res_warsaw["uri"] == "https://sws.geonames.org/756135/"
+            assert res_warsaw["label"] == "Warsaw"
+            assert res_warsaw["confidence"] == 0.95
+            assert res_warsaw["strategy"] == "local_gazetteer"
+            assert res_warsaw["attributes"]["country_code"] == "PL"
+            assert mock_get.call_count == 0  # Zero network calls!
+
+            # Test multilingual alternate name (Warszawa -> Warsaw)
+            res_warszawa = GeoNamesClient.resolve_location("Warszawa")
+            assert res_warszawa is not None
+            assert res_warszawa["uri"] == "https://sws.geonames.org/756135/"
+            assert mock_get.call_count == 0
+
+            # Test NYC / New York
+            res_ny = GeoNamesClient.resolve_location("New York")
+            assert res_ny is not None
+            assert res_ny["uri"] == "https://sws.geonames.org/5128581/"
+            assert mock_get.call_count == 0
+
+
+def test_geonames_client_missing_database_graceful_fallback(app):
+    """Test GeoNamesClient gracefully falls back to remote API when database is absent."""
+    with app.app_context():
+        cache.delete("lod:geonames:remoteville")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"geonames": [{"geonameId": 999999, "name": "Remoteville", "countryCode": "US"}]}
+
+        with (
+            patch.dict("os.environ", {"GEONAMES_DB_PATH": "/tmp/nonexistent_geonames.db"}),
+            patch("requests.get", return_value=mock_resp) as mock_get,
+        ):
+            res = GeoNamesClient.resolve_location("Remoteville")
+            assert res is not None
+            assert res["uri"] == "https://sws.geonames.org/999999/"
+            assert res["strategy"] == "lookup"
+            assert mock_get.call_count == 1
+
+
+def test_geonames_client_remote_auth_error_resilience(app):
+    """Test GeoNamesClient cleanly handles remote HTTP 401 / error 10 without raising exceptions."""
+    with app.app_context():
+        cache.delete("lod:geonames:authfailcity")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401
+        mock_resp.json.return_value = {"status": {"message": "<!DOCTYPE html>", "value": 10}}
+
+        with patch.object(GeoNamesClient, "_resolve_local", return_value=None), patch("requests.get", return_value=mock_resp):
+            res = GeoNamesClient.resolve_location("AuthFailCity")
+            assert res is None
+
+
 def test_wordnet_mapper_resolution(app):
     """Test WordNetMapper local dictionary mapping and fallback."""
     with app.app_context():
@@ -244,15 +307,27 @@ def test_wordnet_mapper_resolution(app):
         res_local = WordNetMapper.resolve_tag("science fiction")
         assert res_local is not None
         assert res_local["uri"] == "http://wordnet-rdf.princeton.edu/id/06363630-n"
+        assert res_local["authority"] == "wordnet"
         assert res_local["strategy"] == "synset"
         assert res_local["attributes"]["source"] == "local_dictionary"
 
-        # Fallback for novel concept
-        res_fallback = WordNetMapper.resolve_tag("cyberpunk")
-        assert res_fallback is not None
-        assert res_fallback["uri"] == "http://dbpedia.org/resource/Category:Cyberpunk"
-        assert res_fallback["strategy"] == "dbpedia_category"
-        assert res_fallback["confidence"] == 0.70
+        # Fallback for novel concept when DBpedia category is valid
+        mock_valid = MagicMock()
+        mock_valid.status_code = 200
+        with patch("requests.get", return_value=mock_valid):
+            res_fallback = WordNetMapper.resolve_tag("cyberpunk")
+            assert res_fallback is not None
+            assert res_fallback["uri"] == "http://dbpedia.org/resource/Category:Cyberpunk"
+            assert res_fallback["authority"] == "dbpedia"
+            assert res_fallback["strategy"] == "dbpedia_category"
+            assert res_fallback["confidence"] == 0.70
+
+        # Non-existent DBpedia category returns None without persisting fake category
+        mock_invalid = MagicMock()
+        mock_invalid.status_code = 404
+        with patch("requests.get", return_value=mock_invalid):
+            res_invalid = WordNetMapper.resolve_tag("nonexistent_tag_xyz")
+            assert res_invalid is None
 
 
 def test_resolve_manifestation_links_pipeline(app):
@@ -336,6 +411,8 @@ def test_resolve_manifestation_links_pipeline(app):
             assert any(link.authority == "dbpedia" and "Neuromancer" in link.external_uri for link in work_links)
             assert any(link.authority == "dbpedia" and "William_Gibson" in link.external_uri for link in work_links)
             assert any(link.authority == "wordnet" for link in work_links)
+            assert not any(link.authority == "wordnet" and "dbpedia.org" in link.external_uri for link in work_links)
+            assert any(link.authority == "dbpedia" and "Category:Cyberpunk" in link.external_uri for link in work_links)
 
             # Verify Manifestation-level links (GeoNames New York)
             manif_direct = manif.get_semantic_links(include_work=False)
@@ -644,3 +721,77 @@ def test_dbpedia_subtitle_fallback_resolution(app):
             # Second call should query main title
             second_call_params = mock_get.call_args_list[1][1]["params"]
             assert second_call_params["query"] == "The Silmarillion"
+
+
+def test_geonames_resolve_location_with_qualifiers(app):
+    """Test that locations with qualifiers (commas, parentheses) resolve correctly."""
+    with app.app_context():
+        res_cph = GeoNamesClient.resolve_location("Copenhagen (denmark)")
+        assert res_cph is not None
+        assert res_cph["label"] == "Copenhagen"
+        assert res_cph["attributes"]["country_code"] == "DK"
+
+        res_berk = GeoNamesClient.resolve_location("Berkeley, Calif")
+        assert res_berk is not None
+        assert res_berk["label"] == "Berkeley"
+        assert res_berk["attributes"]["country_code"] == "US"
+
+        res_pohang = GeoNamesClient.resolve_location("Pohang, Korea")
+        assert res_pohang is not None
+        assert res_pohang["label"] == "Pohang"
+        assert res_pohang["attributes"]["country_code"] == "KR"
+
+
+def test_geonames_extract_locations_from_title_and_publisher(app):
+    """Test high-precision extraction from title and publisher strings."""
+    with app.app_context():
+        hits_cph = GeoNamesClient.extract_locations_from_text("Time Out Copenhagen")
+        assert len(hits_cph) == 1
+        assert hits_cph[0]["label"] == "Copenhagen"
+        assert hits_cph[0]["attributes"]["geoname_id"] == 2618425
+
+        hits_krk = GeoNamesClient.extract_locations_from_text("Wydawnictwo Literackie, Kraków")
+        assert len(hits_krk) == 1
+        assert hits_krk[0]["label"] == "Kraków"
+        assert hits_krk[0]["attributes"]["country_code"] == "PL"
+
+        hits_stopwords = GeoNamesClient.extract_locations_from_text("A Tale of Two Cities")
+        assert len(hits_stopwords) == 0
+
+
+def test_resolve_manifestation_links_copenhagen_and_frbr_scoping(app):
+    """Test full pipeline: manifestation 'Time Out Copenhagen' gets Work-level GeoNames link, and publish_places get Manifestation-level link."""
+    with app.app_context():
+        work = Work(title="Time Out Copenhagen", meta={"authors": ["Michael Booth"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(
+            expression_id=expr.id,
+            isbn13="9780141008394",
+            publisher="Penguin Group USA",
+            meta={
+                "publish_places": [{"name": "Berkeley, Calif"}],
+            },
+        )
+        db.session.add(manif)
+        db.session.flush()
+
+        links = resolve_manifestation_links(manif.id, fast_mode=True)
+        assert len(links) >= 2
+
+        # Verify Work-level GeoNames link for Copenhagen
+        work_geo_links = [link_obj for link_obj in links if link_obj.entity_type == "work" and link_obj.authority == "geonames"]
+        assert len(work_geo_links) == 1
+        assert work_geo_links[0].pref_label == "Copenhagen"
+        assert work_geo_links[0].attributes["role"] == "subject_place"
+
+        # Verify Manifestation-level GeoNames link for Berkeley
+        manif_geo_links = [link_obj for link_obj in links if link_obj.entity_type == "manifestation" and link_obj.authority == "geonames"]
+        assert len(manif_geo_links) == 1
+        assert manif_geo_links[0].pref_label == "Berkeley"
+        assert manif_geo_links[0].attributes["role"] == "publication_place"

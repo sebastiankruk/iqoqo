@@ -329,3 +329,64 @@ def test_lod_cancel_task(app, client):
             assert cache.get("lod:active_task_id") is None
             assert InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") is None
             assert cache.get("lod:cancel_task:task-to-cancel-789") is True
+
+
+def test_get_lod_task_handles_celery_deserialization_error(app, client):
+    """Ensure get_lod_reconciliation_task and get_active_lod_task handle Celery deserialization errors without 500."""
+    with app.app_context():
+        admin_user = _create_user_with_role("admin_resilient@iqoqo.org", "admin")
+        from app.core.cache import cache
+        from app.db.models import InstanceSettings
+
+        cache.set("lod:active_task_id", "task-broken-celery", timeout=86400)
+        InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", "task-broken-celery")
+
+        mock_task = MagicMock()
+        type(mock_task).state = property(
+            lambda self: (_ for _ in ()).throw(ValueError("Exception information must include the exception type"))
+        )
+
+        with (
+            patch("jwt.decode", return_value={"sub": str(admin_user.id), "jti": "jti6", "exp": 9999999999}),
+            patch("app.api.decorators._is_token_revoked", return_value=False),
+            patch("celery.result.AsyncResult", return_value=mock_task),
+        ):
+            # 1. get_active_lod_task returns 200 gracefully, clears broken task
+            resp_active = client.get("/api/v1/admin/lod/tasks/active", headers={"Authorization": "Bearer mock-token"})
+            assert resp_active.status_code == 200
+            assert resp_active.get_json()["data"]["active_task_id"] is None
+
+            # 2. get_lod_reconciliation_task returns 200 gracefully
+            resp_task = client.get("/api/v1/admin/lod/tasks/task-broken-celery", headers={"Authorization": "Bearer mock-token"})
+            assert resp_task.status_code == 200
+            assert resp_task.get_json()["data"]["status"] == "pending"
+
+
+def test_get_lod_task_cancelled_result_on_success(app, client):
+    """Ensure get_lod_reconciliation_task returns status='cancelled' when task returned cancelled dict."""
+    with app.app_context():
+        admin_user = _create_user_with_role("admin_cancelled_res@iqoqo.org", "admin")
+
+        mock_task = MagicMock()
+        mock_task.state = "SUCCESS"
+        mock_task.result = {
+            "status": "cancelled",
+            "total": 100,
+            "processed": 25,
+            "percentage": 25.0,
+            "total_resolved": 3,
+            "counts": {"dbpedia": 3},
+            "recent_logs": [],
+        }
+
+        with (
+            patch("jwt.decode", return_value={"sub": str(admin_user.id), "jti": "jti7", "exp": 9999999999}),
+            patch("app.api.decorators._is_token_revoked", return_value=False),
+            patch("celery.result.AsyncResult", return_value=mock_task),
+        ):
+            resp = client.get("/api/v1/admin/lod/tasks/task-cancelled-123", headers={"Authorization": "Bearer mock-token"})
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            assert data["status"] == "cancelled"
+            assert data["processed"] == 25
+            assert data["percentage"] == 25.0

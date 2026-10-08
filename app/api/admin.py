@@ -669,6 +669,48 @@ def update_item(item_id):
         return jsonify({"success": False, "error": str(e)}), 404
 
 
+@admin_bp.route("/frbr/<string:entity_type>/<int:entity_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def delete_frbr_entity(entity_type: str, entity_id: int) -> tuple[Response, int]:
+    """Delete a FRBR entity (work, expression, manifestation, item)."""
+    entity_type = entity_type.lower()
+    model_map = {
+        "work": Work,
+        "expression": Expression,
+        "manifestation": Manifestation,
+        "item": Item,
+    }
+    model = model_map.get(entity_type)
+    if not model:
+        return jsonify({"success": False, "error": f"Invalid entity type: {entity_type}", "code": 400}), 400
+
+    entity = db.session.get(model, entity_id)
+    if not entity:
+        return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found", "code": 404}), 404
+
+    try:
+        db.session.delete(entity)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"type": entity_type, "id": entity_id}}), 200
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"{entity_type.capitalize()} cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
+        return jsonify({"success": False, "error": str(e), "code": 500}), 500
+
+
 @admin_bp.route("/frbr/search", methods=["GET"])
 @require_auth
 @require_permission(PermissionName.READ_METADATA)
@@ -1018,9 +1060,17 @@ def get_active_lod_task():
         return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
     task = AsyncResult(active_task_id, app=celery)
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for active LOD task %s: %s", active_task_id, exc)
+        state = "UNKNOWN"
+
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1067,7 +1117,7 @@ def get_active_lod_task():
             200,
         )
 
-    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
+    # State is SUCCESS, FAILURE, REVOKED, or UNKNOWN; clear stale cache & DB key
     cache.delete("lod:active_task_id")
     try:
         InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
@@ -1114,18 +1164,28 @@ def get_lod_reconciliation_task(task_id: str):
 
     task = AsyncResult(task_id, app=celery)
 
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for LOD task %s: %s", task_id, exc)
+        state = "UNKNOWN"
+
     if state == "SUCCESS":
-        result = task.result or {}
+        try:
+            result = task.result if isinstance(task.result, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            result = {}
+        task_status = result.get("status", "completed")
+        default_pct = 100.0 if task_status == "completed" else 0.0
         return (
             jsonify(
                 {
                     "success": True,
                     "data": {
                         "task_id": task_id,
-                        "status": "completed",
+                        "status": task_status,
                         "state": state,
-                        "percentage": 100.0,
+                        "percentage": result.get("percentage", default_pct),
                         "total": result.get("total", 0),
                         "processed": result.get("processed", 0),
                         "total_resolved": result.get("total_resolved", 0),
@@ -1139,7 +1199,10 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1162,6 +1225,11 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state == "FAILURE":
+        err_msg = "Task failed"
+        try:
+            err_msg = str(task.result)
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {
@@ -1180,16 +1248,21 @@ def get_lod_reconciliation_task(task_id: str):
                             "wordnet": 0,
                         },
                         "recent_logs": [],
-                        "error": str(task.result),
+                        "error": err_msg,
                     },
-                    "error": str(task.result),
+                    "error": err_msg,
                 }
             ),
             200,
         )
 
     if state == "REVOKED":
-        meta = task.info if isinstance(task.info, dict) else {}
+        meta = {}
+        try:
+            if isinstance(task.info, dict):
+                meta = task.info
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {

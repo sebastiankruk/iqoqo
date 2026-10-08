@@ -443,26 +443,21 @@ def batch_link_catalog_lod_task(
         for i in range(0, total, chunk_size):
             chunk = manifestation_ids[i : i + chunk_size]
             for mid in chunk:
-                if task_id and (
-                    cache.get(f"lod:cancel_task:{task_id}")
-                    or (cache.get("lod:active_task_id") != task_id and InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") != task_id)
-                ):
+                # Check for cancellation: only cancel if explicitly requested for this task
+                # or if another task has been explicitly activated in cache or DB.
+                is_cancelled = False
+                if task_id:
+                    if cache.get(f"lod:cancel_task:{task_id}"):
+                        is_cancelled = True
+                    else:
+                        active_cache = cache.get("lod:active_task_id")
+                        active_db = InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+                        if (active_cache and str(active_cache) != str(task_id)) or (active_db and str(active_db) != str(task_id)):
+                            is_cancelled = True
+
+                if is_cancelled:
                     logger.info("Batch LOD reconciliation task %s cancelled by user request", task_id)
                     percentage = round((processed / total) * 100, 1) if total > 0 else 0.0
-                    try:
-                        self.update_state(
-                            state="REVOKED",
-                            meta={
-                                "total": total,
-                                "processed": processed,
-                                "percentage": percentage,
-                                "total_resolved": total_resolved,
-                                "counts": counts,
-                                "recent_logs": list(recent_logs),
-                            },
-                        )
-                    except (ValueError, AttributeError):
-                        pass
                     return {
                         "status": "cancelled",
                         "total": total,
@@ -482,7 +477,8 @@ def batch_link_catalog_lod_task(
                     pass
 
                 try:
-                    links = resolve_manifestation_links(mid)
+                    is_fast = throttle_delay <= 0.2
+                    links = resolve_manifestation_links(mid, fast_mode=is_fast)
                     total_resolved += len(links)
                     for link in links:
                         auth = (link.authority or "").lower()

@@ -37,3 +37,38 @@ describe("deleteWorkIntent", () => {
     await expect(deleteWorkIntent(42)).rejects.toThrow("Intent could not be deleted");
   });
 });
+
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import React from "react";
+import { useDeleteWorkIntent } from "@/lib/api/hooks/intents";
+import { queryKeys } from "@/lib/api/hooks/query-keys";
+
+describe("useDeleteWorkIntent", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("deletes intent and invalidates related query keys", async () => {
+    vi.spyOn(apiClient, "delete").mockResolvedValueOnce({
+      data: { success: true, data: { status: null }, error: null },
+    } as never);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.mocked(useQueryClient).mockReturnValue(queryClient);
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+    const { result } = renderHook(() => useDeleteWorkIntent(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(42);
+    });
+
+    expect(apiClient.delete).toHaveBeenCalledWith("/works/42/intent");
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: queryKeys.workIntent(42) }));
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: queryKeys.worksShelfAll }));
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: queryKeys.expressionsShelfAll }));
+    });
+  });
+});

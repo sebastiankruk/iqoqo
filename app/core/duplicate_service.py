@@ -43,7 +43,7 @@ import json
 import logging
 import os
 import unicodedata
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -51,18 +51,14 @@ from typing import Any
 from uuid import UUID
 
 import requests
-from sqlalchemy import Select, delete, func, literal, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.core import frbr_merge
 from app.db import db
 from app.db.auth import User
-from app.db.contributions import (
-    ManifestationContribution,
-    WorkContribution,
-    WorkPart,
-)
+from app.db.contributions import WorkContribution
 from app.db.core import (
     DUPLICATE_ENTITY_TIERS,
     DUPLICATE_RESOLUTION_HEURISTIC,
@@ -74,18 +70,9 @@ from app.db.core import (
     DuplicateCandidate,
     EntityAuditLog,
     Expression,
-    ImageScan,
-    Item,
     Manifestation,
-    SemanticLink,
-    UserWorkIntent,
     Work,
-    WorkExpansionLink,
 )
-from app.db.games import ContainerAggregation
-from app.db.roadmap import RoadmapItem
-from app.db.settings import ScanTelemetry
-from app.db.social import EscalationRequest, SocialFeedback, SocialNote
 
 logger = logging.getLogger(__name__)
 
@@ -1387,125 +1374,6 @@ def run_detection(
 # ---------------------------------------------------------------------------
 
 
-def _repoint_simple(
-    model: type,
-    fk_attribute: str,
-    source_id: int,
-    target_id: int,
-    *,
-    where_extra: Any | None = None,
-) -> int:
-    """Re-point every non-unique child FK from one parent to another.
-
-    Used for the plain ``manifestation_id``-style columns where re-pointing
-    cannot create duplicates.
-
-    Args:
-        model: Model class holding the FK column.
-        fk_attribute: Name of the FK column on ``model``.
-        source_id: Parent id being consolidated away.
-        target_id: Parent id being consolidated onto.
-        where_extra: Optional additional SQL filter.
-
-    Returns:
-        Number of rows updated.
-    """
-    conditions = [getattr(model, fk_attribute) == source_id]
-    if where_extra is not None:
-        conditions.append(where_extra)
-    result = db.session.execute(
-        db.update(model).where(*conditions).values({fk_attribute: target_id}).execution_options(synchronize_session=False)
-    )
-    return int(getattr(result, "rowcount", 0) or 0)
-
-
-def _repoint_unique_child(
-    model: type[Any],
-    fk_attribute: str,
-    unique_attributes: tuple[str, ...],
-    source_id: int,
-    target_id: int,
-) -> int:
-    """Re-point a uniquely-constrained child FK, collapsing collisions.
-
-    Rows whose natural key already exists on the target are deleted, since the
-    surviving target row is authoritative.
-
-    This must not assume a surrogate ``id`` column: :class:`WorkPart` declares
-    a composite primary key of ``(container_work_id, part_work_id)`` and has no
-    ``id`` at all, so selecting the primary key would raise ``AttributeError``
-    and fail the whole merge for any Work involved in a box set.
-
-    Args:
-        model: Model class holding the FK column.
-        fk_attribute: Name of the FK column on ``model``.
-        unique_attributes: Additional columns forming the natural key.
-        source_id: Parent id being consolidated away.
-        target_id: Parent id being consolidated onto.
-
-    Returns:
-        Number of rows re-pointed (collisions are not counted).
-    """
-    moved = 0
-    rows: Sequence[Any] = db.session.execute(select(model).where(getattr(model, fk_attribute) == source_id)).scalars().all()
-    for row in rows:
-        collision_filters = [getattr(model, unique_attribute) == getattr(row, unique_attribute) for unique_attribute in unique_attributes]
-        existing = db.session.execute(
-            select(literal(1)).where(getattr(model, fk_attribute) == target_id, *collision_filters).limit(1)
-        ).first()
-        if existing is not None:
-            db.session.delete(row)
-        else:
-            setattr(row, fk_attribute, target_id)
-            moved += 1
-    return moved
-
-
-def _repoint_semantic_links(entity_type: str, source_id: int, target_id: int) -> int:
-    """Re-point polymorphic :class:`SemanticLink` rows onto the surviving entity.
-
-    Args:
-        entity_type: ``"work"`` or ``"manifestation"``.
-        source_id: Entity id being consolidated away.
-        target_id: Entity id being consolidated onto.
-
-    Returns:
-        Number of links re-pointed.
-    """
-    result = db.session.execute(
-        db.update(SemanticLink)
-        .where(SemanticLink.entity_type == entity_type, SemanticLink.entity_id == source_id)
-        .values(entity_id=target_id)
-        .execution_options(synchronize_session=False)
-    )
-    return int(getattr(result, "rowcount", 0) or 0)
-
-
-def _delete_source_row(source: Any) -> None:
-    """Remove the discarded entity's row with a Core-level DELETE.
-
-    ``db.session.delete()`` cannot be used here.  ``Work.expressions`` and
-    ``Manifestation.items`` are declared ``cascade="all, delete-orphan"``, and
-    the in-session collection on ``source`` can still hold the children that
-    were just re-pointed onto the surviving entity -- the ORM would then
-    cascade-delete the very rows the merge exists to preserve, silently
-    destroying Expressions, Manifestations, and physical Items.  A Core DELETE
-    bypasses ORM cascade entirely, which is exactly the intent: every child
-    has already been re-pointed, so only the now-empty parent row is removed.
-
-    The primary key is captured before the statement runs; touching ``source``
-    afterwards would trigger an autoflush and defeat the ordering guarantees
-    the merge relies on.
-
-    Args:
-        source: The discarded Work or Manifestation.
-    """
-    model = type(source)
-    source_id = source.id
-    db.session.execute(delete(model).where(model.id == source_id))
-    db.session.expire_all()
-
-
 def _consolidate_meta(target_meta: Any, source_meta: Any) -> dict[str, Any]:
     """Merge two ``meta`` documents without overwriting curated target values.
 
@@ -1556,54 +1424,12 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
         raise DuplicateServiceError("Cannot merge a Work with itself")
 
     # Row locks hold until commit so a concurrent edit cannot interleave.
-    locked = db.session.execute(select(Work).where(Work.id.in_([source.id, target.id])).order_by(Work.id).with_for_update()).scalars().all()
+    locked = frbr_merge.lock_pair(Work, source.id, target.id)
     if len(locked) != 2:
         raise DuplicateServiceError("One of the Works no longer exists; the merge was aborted")
 
     try:
-        expression_count = _repoint_simple(Expression, "work_id", source.id, target.id)
-
-        contribution_count = _repoint_unique_child(WorkContribution, "work_id", ("contributor_id", "role"), source.id, target.id)
-        part_count = _repoint_unique_child(WorkPart, "container_work_id", ("part_work_id",), source.id, target.id)
-        part_count += _repoint_unique_child(WorkPart, "part_work_id", ("container_work_id",), source.id, target.id)
-
-        # WorkExpansionLink.expansion_work_id is UNIQUE, so both directions can
-        # collide and are reconciled independently.
-        expansion_count = _repoint_unique_child(WorkExpansionLink, "base_work_id", ("expansion_work_id",), source.id, target.id)
-        expansion_count += _repoint_unique_child(WorkExpansionLink, "expansion_work_id", ("base_work_id",), source.id, target.id)
-
-        aggregation_count = _repoint_unique_child(
-            ContainerAggregation,
-            "container_work_id",
-            ("aggregated_type", "aggregated_work_id", "aggregated_item_id", "component_name"),
-            source.id,
-            target.id,
-        )
-        aggregation_count += _repoint_unique_child(
-            ContainerAggregation,
-            "aggregated_work_id",
-            ("container_work_id", "component_name"),
-            source.id,
-            target.id,
-        )
-
-        feedback_count = _repoint_simple(SocialFeedback, "work_id", source.id, target.id)
-        note_count = _repoint_simple(SocialNote, "work_id", source.id, target.id)
-        roadmap_count = _repoint_simple(RoadmapItem, "work_id", source.id, target.id)
-        escalation_count = _repoint_simple(EscalationRequest, "work_id", source.id, target.id)
-        # UserWorkIntent.work_id is ON DELETE CASCADE, so a wishlist entry aimed at
-        # the source Work would be silently destroyed by the delete below instead of
-        # following the survivor.  Re-point it, collapsing onto an identical entry
-        # the user already has for the target.
-        wishlist_count = _repoint_unique_child(
-            UserWorkIntent,
-            "work_id",
-            ("user_id", "expression_id", "manifestation_id"),
-            source.id,
-            target.id,
-        )
-        semantic_count = _repoint_semantic_links(TIER_WORK, source.id, target.id)
-
+        repointed = frbr_merge.repoint_references(TIER_WORK, source.id, target.id)
         target.meta = _consolidate_meta(target.meta, source.meta)
 
         db.session.add(
@@ -1615,22 +1441,14 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
                 diff={
                     "source_id": source.id,
                     "target_id": target.id,
-                    "reparented_expressions": expression_count,
-                    "reparented_contributions": contribution_count,
-                    "reparented_work_parts": part_count,
-                    "reparented_expansion_links": expansion_count,
-                    "reparented_container_aggregations": aggregation_count,
-                    "reparented_feedback": feedback_count,
-                    "reparented_notes": note_count,
-                    "reparented_roadmap_items": roadmap_count,
-                    "reparented_escalations": escalation_count,
-                    "reparented_wishlist_entries": wishlist_count,
-                    "reparented_semantic_links": semantic_count,
+                    "migrated_children": repointed.get("Expression.work_id", 0),
+                    "migrated_contributions": repointed.get("WorkContribution.work_id", 0),
+                    "repointed": repointed,
                 },
             )
         )
 
-        _delete_source_row(source)
+        frbr_merge.delete_source_row(source)
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -1666,44 +1484,13 @@ def merge_manifestation(source: Manifestation, target: Manifestation, user_id: U
     if source.id == target.id:
         raise DuplicateServiceError("Cannot merge a Manifestation with itself")
 
-    locked = (
-        db.session.execute(
-            select(Manifestation).where(Manifestation.id.in_([source.id, target.id])).order_by(Manifestation.id).with_for_update()
-        )
-        .scalars()
-        .all()
-    )
+    locked = frbr_merge.lock_pair(Manifestation, source.id, target.id)
     if len(locked) != 2:
         raise DuplicateServiceError("One of the Manifestations no longer exists; the merge was aborted")
 
     try:
-        item_count = _repoint_simple(Item, "manifestation_id", source.id, target.id)
-        contribution_count = _repoint_unique_child(
-            ManifestationContribution, "manifestation_id", ("contributor_id", "role"), source.id, target.id
-        )
-        scan_count = _repoint_simple(ImageScan, "manifestation_id", source.id, target.id)
-        feedback_count = _repoint_simple(SocialFeedback, "manifestation_id", source.id, target.id)
-        note_count = _repoint_simple(SocialNote, "manifestation_id", source.id, target.id)
-        # UserWorkIntent carries a unique constraint over
-        # (user_id, work_id, expression_id, manifestation_id), so re-pointing
-        # can collide with an identical wishlist entry and must be de-duplicated.
-        intent_count = _repoint_unique_child(
-            UserWorkIntent, "manifestation_id", ("user_id", "work_id", "expression_id"), source.id, target.id
-        )
-        roadmap_count = _repoint_simple(RoadmapItem, "manifestation_id", source.id, target.id)
-        escalation_count = _repoint_simple(EscalationRequest, "manifestation_id", source.id, target.id)
-        telemetry_count = _repoint_simple(ScanTelemetry, "manifestation_id", source.id, target.id)
-        semantic_count = _repoint_semantic_links(TIER_MANIFESTATION, source.id, target.id)
-
-        # FRBRoo F3: identifiers belong to the Manifestation and nowhere else.
-        # The surviving primary is authoritative; a discarded ISBN that the
-        # primary lacks is adopted, and one it already has is preserved as an
-        # alternate on the Manifestation rather than being dropped or promoted
-        # to a Work or Expression.  Shared with the manual merge path so the two
-        # cannot drift.
+        repointed = frbr_merge.repoint_references(TIER_MANIFESTATION, source.id, target.id)
         target.meta = _consolidate_meta(target.meta, source.meta)
-        # Captured first: the helper clears ``source.isbn13`` when it adopts it,
-        # to release the unique index before the survivor takes the value.
         source_isbn13 = source.isbn13
         frbr_merge.consolidate_manifestation_identifiers(target, source)
 
@@ -1716,23 +1503,16 @@ def merge_manifestation(source: Manifestation, target: Manifestation, user_id: U
                 diff={
                     "source_id": source.id,
                     "target_id": target.id,
-                    "reparented_items": item_count,
-                    "reparented_contributions": contribution_count,
-                    "reparented_image_scans": scan_count,
-                    "reparented_feedback": feedback_count,
-                    "reparented_notes": note_count,
-                    "reparented_work_intents": intent_count,
-                    "reparented_roadmap_items": roadmap_count,
-                    "reparented_escalations": escalation_count,
-                    "reparented_scan_telemetry": telemetry_count,
-                    "reparented_semantic_links": semantic_count,
+                    "migrated_children": repointed.get("Item.manifestation_id", 0),
+                    "migrated_contributions": repointed.get("ManifestationContribution.manifestation_id", 0),
+                    "repointed": repointed,
                     "adopted_source_isbn13": source_isbn13,
                     "target_isbn13": target.isbn13,
                 },
             )
         )
 
-        _delete_source_row(source)
+        frbr_merge.delete_source_row(source)
         db.session.commit()
     except Exception:
         db.session.rollback()

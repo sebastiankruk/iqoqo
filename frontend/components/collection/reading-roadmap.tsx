@@ -28,6 +28,7 @@ interface RoadmapItem {
   status: "queued" | "in_progress" | "completed";
   target_date?: string;
   notes?: string;
+  target_type?: "work" | "expression" | "manifestation" | "item";
 }
 
 interface ReadingRoadmapProps {
@@ -96,6 +97,23 @@ export const ReadingRoadmapComponent: React.FC<ReadingRoadmapProps> = ({ initial
                       >
                         <Calendar className="h-3.5 w-3.5" />
                         {item.target_date}
+                      </Badge>
+                    )}
+                    {item.target_type && (
+                      <Badge
+                        variant="secondary"
+                        data-testid="target-level-badge"
+                        className={
+                          item.target_type === "item"
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                            : item.target_type === "manifestation"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              : item.target_type === "expression"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                                : "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300"
+                        }
+                      >
+                        {item.target_type === "item" ? "Physical Copy" : item.target_type.toUpperCase()}
                       </Badge>
                     )}
                     <Badge

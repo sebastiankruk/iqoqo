@@ -328,11 +328,10 @@ def test_optional_foreign_keys_ondelete_set_null() -> None:
     scan_fk = next(fk for fk in ScanTelemetry.__table__.foreign_keys if fk.parent.name == "manifestation_id")
     assert scan_fk.ondelete == "SET NULL"
 
-    # RoadmapItem.work_id & manifestation_id
-    roadmap_work_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == "work_id")
-    assert roadmap_work_fk.ondelete == "SET NULL"
-    roadmap_manif_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == "manifestation_id")
-    assert roadmap_manif_fk.ondelete == "SET NULL"
+    # RoadmapItem target foreign keys must be RESTRICT to preserve roadmap integrity
+    for col_name in ("work_id", "expression_id", "manifestation_id", "item_id"):
+        target_fk = next(fk for fk in RoadmapItem.__table__.foreign_keys if fk.parent.name == col_name)
+        assert target_fk.ondelete == "RESTRICT"
 
 
 # ---------------------------------------------------------------------------

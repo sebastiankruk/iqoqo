@@ -79,7 +79,7 @@ export function useFrbrTree(manifestationId: number) {
     queryKey: queryKeys.frbrTree(manifestationId),
     queryFn: () => getFrbrTree(manifestationId),
     enabled: manifestationId > 0,
-    staleTime: 1_000,
+    staleTime: 30_000,
   });
 }
 

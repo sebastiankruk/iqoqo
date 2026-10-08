@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec
 
 SHELL := /bin/bash
 
@@ -173,6 +173,8 @@ help:
 	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
 	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
 	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
+	@echo "  init-geonames     - Initialize local offline GeoNames cities database (supports ARGS=\"--force\")"
+	@echo "  geonames-sync     - Force redownload and sync local GeoNames database"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -335,6 +337,10 @@ endif
 
 preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local preview images
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@mkdir -p $(PREVIEW_DIR)/data
+	@if [ -f data/geonames_cities.db ] && [ ! -f $(PREVIEW_DIR)/data/geonames_cities.db ]; then \
+		cp -f data/geonames_cities.db $(PREVIEW_DIR)/data/geonames_cities.db 2>/dev/null || true; \
+	fi
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
 		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
 	fi
@@ -920,4 +926,24 @@ sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi
+
+init-geonames: ## Initialize local offline GeoNames cities database (supports GEONAMES_DB_PATH, ARGS="--force", supports preview|prod)
+	@echo "Initializing local GeoNames cities database ($(MODE))..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		cname=$$(docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) ps -q web 2>/dev/null || docker ps -q --filter "name=$(COMPOSE_PROJECT).*web" | head -1); \
+		if [ -n "$$cname" ]; then \
+			docker exec -i "$$cname" python3 - $(ARGS) < scripts/init_geonames_db.py; \
+		else \
+			ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) run --rm -T web python3 - $(ARGS) < scripts/init_geonames_db.py; \
+		fi; \
+	else \
+		$(PYTHON_CMD) scripts/init_geonames_db.py $(ARGS); \
+		if [ -d "$(PREVIEW_DIR)/data" ] && [ -w "$(PREVIEW_DIR)/data" ]; then \
+			cp -f data/geonames_cities.db "$(PREVIEW_DIR)/data/geonames_cities.db" 2>/dev/null || true; \
+		fi; \
+	fi
+
+geonames-sync: ## Force re-download and sync local GeoNames database (supports preview|prod)
+	@$(MAKE) init-geonames ARGS="--force" MODE="$(MODE)" USE_DOCKER="$(USE_DOCKER)"
+
 
