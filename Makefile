@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec
 
 SHELL := /bin/bash
 
@@ -173,6 +173,8 @@ help:
 	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
 	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
 	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
+	@echo "  init-geonames     - Initialize local offline GeoNames cities database (supports ARGS=\"--force\")"
+	@echo "  geonames-sync     - Force redownload and sync local GeoNames database"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
@@ -920,4 +922,16 @@ sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi
+
+init-geonames: ## Initialize local offline GeoNames cities database (supports GEONAMES_DB_PATH, ARGS="--force")
+	@echo "Initializing local GeoNames cities database..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) exec -T web env PYTHONPATH=. python scripts/init_geonames_db.py $(ARGS); \
+	else \
+		$(PYTHON_CMD) scripts/init_geonames_db.py $(ARGS); \
+	fi
+
+geonames-sync: ## Force re-download and sync local GeoNames database
+	@$(MAKE) init-geonames ARGS="--force"
+
 

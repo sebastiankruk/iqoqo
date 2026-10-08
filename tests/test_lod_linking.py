@@ -220,7 +220,8 @@ def test_geonames_client_resolution_and_caching(app):
             ]
         }
 
-        with patch("requests.get", return_value=mock_resp) as mock_get:
+        # Mock _resolve_local to None to specifically verify remote resolution and caching
+        with patch.object(GeoNamesClient, "_resolve_local", return_value=None), patch("requests.get", return_value=mock_resp) as mock_get:
             result = GeoNamesClient.resolve_location("Oxford")
             assert result is not None
             assert result["uri"] == "https://sws.geonames.org/2640729/"
@@ -235,6 +236,68 @@ def test_geonames_client_resolution_and_caching(app):
             cached_result = GeoNamesClient.resolve_location("Oxford")
             assert cached_result == result
             assert mock_get.call_count == 1
+
+
+def test_geonames_client_local_gazetteer_resolution(app):
+    """Test GeoNamesClient resolving places directly from local offline SQLite gazetteer."""
+    with app.app_context():
+        cache.delete("lod:geonames:warsaw")
+        cache.delete("lod:geonames:warszawa")
+        cache.delete("lod:geonames:new york")
+
+        with patch("requests.get") as mock_get:
+            res_warsaw = GeoNamesClient.resolve_location("Warsaw")
+            assert res_warsaw is not None
+            assert res_warsaw["uri"] == "https://sws.geonames.org/756135/"
+            assert res_warsaw["label"] == "Warsaw"
+            assert res_warsaw["confidence"] == 0.95
+            assert res_warsaw["strategy"] == "local_gazetteer"
+            assert res_warsaw["attributes"]["country_code"] == "PL"
+            assert mock_get.call_count == 0  # Zero network calls!
+
+            # Test multilingual alternate name (Warszawa -> Warsaw)
+            res_warszawa = GeoNamesClient.resolve_location("Warszawa")
+            assert res_warszawa is not None
+            assert res_warszawa["uri"] == "https://sws.geonames.org/756135/"
+            assert mock_get.call_count == 0
+
+            # Test NYC / New York
+            res_ny = GeoNamesClient.resolve_location("New York")
+            assert res_ny is not None
+            assert res_ny["uri"] == "https://sws.geonames.org/5128581/"
+            assert mock_get.call_count == 0
+
+
+def test_geonames_client_missing_database_graceful_fallback(app):
+    """Test GeoNamesClient gracefully falls back to remote API when database is absent."""
+    with app.app_context():
+        cache.delete("lod:geonames:remoteville")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"geonames": [{"geonameId": 999999, "name": "Remoteville", "countryCode": "US"}]}
+
+        with (
+            patch.dict("os.environ", {"GEONAMES_DB_PATH": "/tmp/nonexistent_geonames.db"}),
+            patch("requests.get", return_value=mock_resp) as mock_get,
+        ):
+            res = GeoNamesClient.resolve_location("Remoteville")
+            assert res is not None
+            assert res["uri"] == "https://sws.geonames.org/999999/"
+            assert res["strategy"] == "lookup"
+            assert mock_get.call_count == 1
+
+
+def test_geonames_client_remote_auth_error_resilience(app):
+    """Test GeoNamesClient cleanly handles remote HTTP 401 / error 10 without raising exceptions."""
+    with app.app_context():
+        cache.delete("lod:geonames:authfailcity")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401
+        mock_resp.json.return_value = {"status": {"message": "<!DOCTYPE html>", "value": 10}}
+
+        with patch.object(GeoNamesClient, "_resolve_local", return_value=None), patch("requests.get", return_value=mock_resp):
+            res = GeoNamesClient.resolve_location("AuthFailCity")
+            assert res is None
 
 
 def test_wordnet_mapper_resolution(app):

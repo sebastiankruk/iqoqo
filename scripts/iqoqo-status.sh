@@ -778,6 +778,49 @@ else
     fi
 fi
 
+# ─── Linked Open Data & Gazetteer ────────────────────────────────
+header "Linked Open Data & Gazetteer"
+
+geonames_db_path="${GEONAMES_DB_PATH:-$IQOQO_ROOT/data/geonames_cities.db}"
+geonames_count=0
+if [[ "$STACK" == "dev" || -f "$geonames_db_path" ]]; then
+    if [[ -f "$geonames_db_path" ]]; then
+        geonames_count=$(python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('$geonames_db_path')
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM cities;')
+    print(cur.fetchone()[0])
+    conn.close()
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    fi
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        geonames_count=$(docker exec "$web_cname" python3 -c "
+import sqlite3, os
+p = os.environ.get('GEONAMES_DB_PATH', '/usr/src/app/data/geonames_cities.db')
+try:
+    conn = sqlite3.connect(p)
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM cities;')
+    print(cur.fetchone()[0])
+    conn.close()
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    fi
+fi
+
+if [[ "$geonames_count" -gt 0 ]]; then
+    check "GeoNames Gazetteer" pass "local database ready (${geonames_count} cities)"
+else
+    check "GeoNames Gazetteer" warn "missing or empty (run 'make init-geonames')"
+fi
+
 # ─── Environment Configuration ──────────────────────────────────
 header "Environment Configuration"
 

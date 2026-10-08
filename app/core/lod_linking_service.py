@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sqlite3
 from typing import Any, cast
 
 import requests
@@ -336,6 +337,75 @@ class GeoNamesClient:
     """Client for resolving geographic locations and publisher cities against GeoNames."""
 
     SEARCH_URL = "https://secure.geonames.org/searchJSON"
+    DEFAULT_DB_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "geonames_cities.db",
+    )
+
+    @classmethod
+    def _resolve_local(cls, location_name: str) -> dict[str, Any] | None:
+        """Resolve location against local offline SQLite gazetteer."""
+        db_path = os.environ.get("GEONAMES_DB_PATH") or cls.DEFAULT_DB_PATH
+        if not os.path.exists(db_path):
+            return None
+
+        clean_name = location_name.strip().lower()
+        if not clean_name:
+            return None
+
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            cursor = conn.cursor()
+
+            # Attempt 1: Direct match on official name or asciiname
+            query_direct = """
+            SELECT geoname_id, name, country_code, lat, lng, fcode, population
+            FROM cities
+            WHERE LOWER(name) = ? OR LOWER(asciiname) = ?
+            ORDER BY population DESC
+            LIMIT 1;
+            """
+            cursor.execute(query_direct, (clean_name, clean_name))
+            row = cursor.fetchone()
+
+            # Attempt 2: Match via international alternate names table
+            if not row:
+                query_alt = """
+                SELECT c.geoname_id, c.name, c.country_code, c.lat, c.lng, c.fcode, c.population
+                FROM alt_names a
+                JOIN cities c ON a.geoname_id = c.geoname_id
+                WHERE a.name_lower = ?
+                ORDER BY c.population DESC
+                LIMIT 1;
+                """
+                cursor.execute(query_alt, (clean_name,))
+                row = cursor.fetchone()
+
+            conn.close()
+
+            if not row:
+                return None
+
+            gid, name, country_code, lat, lng, fcode, _pop = row
+            uri = f"https://sws.geonames.org/{gid}/"
+            return {
+                "uri": uri,
+                "label": name,
+                "confidence": 0.95,
+                "strategy": "local_gazetteer",
+                "attributes": {
+                    "geoname_id": gid,
+                    "name": name,
+                    "country_code": country_code,
+                    "lat": float(lat) if lat is not None else None,
+                    "lng": float(lng) if lng is not None else None,
+                    "fcode": fcode,
+                },
+            }
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Local GeoNames gazetteer query failed for %s: %s", location_name, exc)
+            return None
 
     @classmethod
     def resolve_location(cls, location_name: str) -> dict[str, Any] | None:
@@ -350,6 +420,13 @@ class GeoNamesClient:
         if cached is not None:
             return cast(dict[str, Any], cached)
 
+        # Priority 1: Check local offline gazetteer (0ms, no network, no auth)
+        local_result = cls._resolve_local(normalized)
+        if local_result:
+            cache.set(cache_key, local_result, timeout=CACHE_TTL_24H)
+            return local_result
+
+        # Priority 2: Fallback to remote GeoNames API if credentials exist
         db_user = None
         try:
             from app.db.settings import InstanceSettings
