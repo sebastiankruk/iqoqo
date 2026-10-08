@@ -37,11 +37,25 @@ logger = logging.getLogger("init_geonames_db")
 
 GEONAMES_DUMP_URL = "https://download.geonames.org/export/dump/cities15000.zip"
 FALLBACK_HTTP_URL = "http://download.geonames.org/export/dump/cities15000.zip"
-DEFAULT_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data",
-    "geonames_cities.db",
-)
+
+
+def _get_default_db_path() -> str:
+    env_path = os.environ.get("GEONAMES_DB_PATH")
+    if env_path:
+        return env_path
+    if os.path.exists("/usr/src/app/data"):
+        return "/usr/src/app/data/geonames_cities.db"
+    cwd_data = os.path.join(os.getcwd(), "data")
+    if os.path.exists(cwd_data):
+        return os.path.join(cwd_data, "geonames_cities.db")
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data",
+        "geonames_cities.db",
+    )
+
+
+DEFAULT_DB_PATH = _get_default_db_path()
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS cities (
