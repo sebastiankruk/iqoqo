@@ -1684,6 +1684,12 @@ def merge_frbr_entities(
     source = _get_entity_or_raise(entity_type, source_id)
     target = _get_entity_or_raise(entity_type, target_id)
 
+    if entity_type == "expression":
+        if source.language != target.language:
+            raise ValueError(f"Cannot merge Expressions with different languages: {source.language!r} vs {target.language!r}")
+        if source.content_type != target.content_type:
+            raise ValueError(f"Cannot merge Expressions with different content types: {source.content_type!r} vs {target.content_type!r}")
+
     entity_cls = _ENTITY_CLASS_MAP[entity_type]
 
     try:

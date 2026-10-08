@@ -659,7 +659,7 @@ export async function cancelLodTask(taskId?: string | null): Promise<{ task_id: 
 // --- Duplicate Detection ---
 
 /** Entity tier a duplicate candidate belongs to. */
-export type DuplicateEntityTier = "work" | "manifestation";
+export type DuplicateEntityTier = "work" | "expression" | "manifestation";
 
 /** Lifecycle status of a duplicate candidate. */
 export type DuplicateCandidateStatus = "pending" | "merged" | "dismissed";
@@ -687,6 +687,20 @@ export interface DuplicateWorkSide {
   expression_count: number;
   genres: string | string[] | null;
   description_present: boolean;
+}
+
+/**
+ * One side of an Expression duplicate, as rendered by the review comparison table.
+ */
+export interface DuplicateExpressionSide {
+  tier: "expression";
+  id: number;
+  label: string | null;
+  language: string | null;
+  content_type: string | null;
+  manifestation_count: number;
+  creators: string[];
+  cover_url?: string | null;
 }
 
 /**
@@ -718,7 +732,7 @@ export interface DuplicateManifestationSide {
 }
 
 /** Either side of a candidate, discriminated by the entity tier it came from. */
-export type DuplicateSide = DuplicateWorkSide | DuplicateManifestationSide;
+export type DuplicateSide = DuplicateWorkSide | DuplicateExpressionSide | DuplicateManifestationSide;
 
 /** A queued duplicate pair awaiting administrative review. */
 export interface DuplicateCandidate {
@@ -753,6 +767,7 @@ export interface DuplicateDetectionReport {
   already_known: number;
   created: number;
   work_candidates: number;
+  expression_candidates: number;
   manifestation_candidates: number;
 }
 

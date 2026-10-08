@@ -51,6 +51,7 @@ _SUMMARY_FIELDS: tuple[str, ...] = (
     "entities_screened",
     "candidate_pairs",
     "work_candidates",
+    "expression_candidates",
     "manifestation_candidates",
     "llm_evaluations",
     "llm_failures",
@@ -164,7 +165,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--tier",
-        choices=sorted((duplicate_service.TIER_WORK, duplicate_service.TIER_MANIFESTATION, TIER_ALL)),
+        choices=sorted(
+            (
+                duplicate_service.TIER_WORK,
+                duplicate_service.TIER_EXPRESSION,
+                duplicate_service.TIER_MANIFESTATION,
+                TIER_ALL,
+            )
+        ),
         default=TIER_ALL,
         help="Entity tier to screen (default: %(default)s)",
     )

@@ -58,7 +58,7 @@ from sqlalchemy.orm import selectinload
 from app.core import frbr_merge
 from app.db import db
 from app.db.auth import User
-from app.db.contributions import WorkContribution
+from app.db.contributions import ExpressionContribution, WorkContribution
 from app.db.core import (
     DUPLICATE_ENTITY_TIERS,
     DUPLICATE_RESOLUTION_HEURISTIC,
@@ -158,6 +158,7 @@ _LEADING_ARTICLES: frozenset[str] = frozenset(
 )
 
 TIER_WORK: str = "work"
+TIER_EXPRESSION: str = "expression"
 TIER_MANIFESTATION: str = "manifestation"
 TIER_ALL: str = "all"
 
@@ -280,6 +281,27 @@ def contribution_creators(contributions: list[Any]) -> set[str]:
     }
 
 
+def _expression_creators(expression: Expression) -> set[str]:
+    """Return the normalized creator set reachable from an Expression.
+
+    Prefers the parent Work's creators and includes expression-level performance
+    contributions (FRBRoo: performers belong to Expression).
+
+    Args:
+        expression: Expression to inspect.
+
+    Returns:
+        Set of normalized creator names.
+    """
+    creators: set[str] = set()
+    work = expression.work
+    if work is not None:
+        creators.update(work_creators(work))
+    if hasattr(expression, "contributions") and expression.contributions:
+        creators.update(contribution_creators(list(expression.contributions)))
+    return creators
+
+
 def title_similarity(left: str | None, right: str | None) -> float:
     """Return a 0.0-1.0 similarity ratio between two titles.
 
@@ -331,6 +353,32 @@ def describe_work(work: Work) -> dict[str, Any]:
         "expression_count": expression_count,
         "genres": meta.get("genres") or meta.get("genre"),
         "description_present": bool(meta.get("description") or meta.get("summary")),
+    }
+
+
+def describe_expression(expression: Expression) -> dict[str, Any]:
+    """Summarize an Expression for LLM prompts and review-queue rendering.
+
+    Args:
+        expression: Expression to describe.
+
+    Returns:
+        JSON-serializable summary including child manifestation count and creators.
+    """
+    manifestation_count = len(expression.manifestations)
+    label = (
+        expression.label
+        if hasattr(expression, "label") and expression.label
+        else ((expression.meta.get("label") or expression.meta.get("title")) if isinstance(expression.meta, dict) else None)
+    )
+    return {
+        "tier": TIER_EXPRESSION,
+        "id": expression.id,
+        "label": label,
+        "language": expression.language,
+        "content_type": expression.content_type,
+        "manifestation_count": manifestation_count,
+        "creators": sorted(_expression_creators(expression)),
     }
 
 
@@ -419,7 +467,7 @@ def check_ollama_health() -> tuple[bool, str]:
 _SYSTEM_PROMPT = (
     "You are a meticulous bibliographic duplicate detector for an FRBR library catalog. "
     "You compare two catalog entities and decide whether they describe the same intellectual "
-    "Work (for the 'work' tier) or the same published edition (for the 'manifestation' tier). "
+    "Work (for the 'work' tier), the same realization (for the 'expression' tier), or the same published edition (for the 'manifestation' tier). "
     "Different editions, different languages, different translations, or sequel volumes are NOT "
     "duplicates. "
     "Respond with a single JSON object and nothing else, using exactly this shape: "
@@ -433,14 +481,19 @@ def _build_prompt(tier: str, left: dict[str, Any], right: dict[str, Any]) -> str
     """Render the pairwise comparison prompt for a candidate pair.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         left: Summary of the first entity.
         right: Summary of the second entity.
 
     Returns:
         The user-turn prompt text.
     """
-    entity = "intellectual Work" if tier == TIER_WORK else "published Manifestation (edition)"
+    if tier == TIER_WORK:
+        entity = "intellectual Work"
+    elif tier == TIER_EXPRESSION:
+        entity = "Expression realization"
+    else:
+        entity = "published Manifestation (edition)"
     return (
         f"Decide whether these two {entity} records are duplicates of each other.\n\n"
         f"Record A:\n{json.dumps(left, ensure_ascii=False, sort_keys=True)}\n\n"
@@ -536,7 +589,7 @@ def evaluate_pair_with_llm(tier: str, left: dict[str, Any], right: dict[str, Any
     """Ask the local LLM whether two entity summaries are duplicates.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         left: Summary of the first entity.
         right: Summary of the second entity.
 
@@ -600,8 +653,8 @@ def _blocking_keys(tier: str, entity: Any) -> list[tuple[str, str]]:
     are ever compared.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
-        entity: Work or Manifestation to derive keys from.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
+        entity: Work, Expression, or Manifestation to derive keys from.
 
     Returns:
         List of ``(key_name, key_value)`` tuples; may be empty.
@@ -622,6 +675,17 @@ def _blocking_keys(tier: str, entity: Any) -> list[tuple[str, str]]:
                     keys.append(("title_suffix", " ".join(tail)))
         if sort_title:
             keys.append(("sort_title", sort_title))
+    elif tier == TIER_EXPRESSION:
+        label = (
+            entity.label
+            if hasattr(entity, "label") and entity.label
+            else ((entity.meta.get("label") or entity.meta.get("title")) if isinstance(entity.meta, dict) else None)
+        )
+        norm_label = normalize_title(label)
+        lang = entity.language or ""
+        ctype = entity.content_type or ""
+        if norm_label:
+            keys.append(("expr_label_lang_type", f"{norm_label}|{lang}|{ctype}"))
     else:
         title = normalize_title(entity.title)
         if title:
@@ -661,6 +725,12 @@ def _iter_entity_pages(model: type[Any], tier: str, start_id: int, page_size: in
             selectinload(Work.contributions).selectinload(WorkContribution.contributor),
             selectinload(Work.expressions),
         )
+    elif tier == TIER_EXPRESSION:
+        stmt = stmt.options(
+            selectinload(Expression.work).selectinload(Work.contributions).selectinload(WorkContribution.contributor),
+            selectinload(Expression.contributions).selectinload(ExpressionContribution.contributor),
+            selectinload(Expression.manifestations),
+        )
     else:
         # ``Manifestation.contributions`` is a ``lazy="dynamic"`` backref and
         # therefore rejects eager loading; it is read on demand by
@@ -685,7 +755,7 @@ def _screen_page(tier: str, entities: list[Any]) -> list[ScreenedPair]:
     """Find heuristically similar pairs within one loaded page.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         entities: Entities from a single keyset page.
 
     Returns:
@@ -730,7 +800,7 @@ def _score_pair(tier: str, left: Any, right: Any, block_key: tuple[str, str]) ->
     """Score one pair from the signals available on the loaded entities.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         left: First entity.
         right: Second entity.
         block_key: The blocking key that put both entities in the same bucket.
@@ -741,6 +811,43 @@ def _score_pair(tier: str, left: Any, right: Any, block_key: tuple[str, str]) ->
     """
     reasons: list[str] = []
     score = 0.0
+
+    if tier == TIER_EXPRESSION:
+        # Cross-language or cross-content_type pairs are discarded before scoring
+        if (left.language or None) != (right.language or None) or (left.content_type or None) != (right.content_type or None):
+            return 0.0, []
+
+        left_label = (
+            left.label
+            if hasattr(left, "label") and left.label
+            else ((left.meta.get("label") or left.meta.get("title")) if isinstance(left.meta, dict) else None)
+        )
+        right_label = (
+            right.label
+            if hasattr(right, "label") and right.label
+            else ((right.meta.get("label") or right.meta.get("title")) if isinstance(right.meta, dict) else None)
+        )
+        norm_left = normalize_title(left_label)
+        norm_right = normalize_title(right_label)
+        if not norm_left or not norm_right:
+            return 0.0, []
+
+        similarity = title_similarity(left_label, right_label)
+        if similarity >= TITLE_SIMILARITY_FLOOR:
+            score = max(score, similarity)
+            reasons.append(f"label similarity {similarity:.2f}")
+
+        left_creators = _expression_creators(left)
+        right_creators = _expression_creators(right)
+        overlap = left_creators & right_creators
+        if overlap:
+            score = max(score, 0.75)
+            reasons.append(f"shared creator(s): {', '.join(sorted(overlap))}")
+
+        if score <= 0.0:
+            return 0.0, []
+        reasons.append(f"blocked on {block_key[0]}")
+        return min(score, 1.0), reasons
 
     if tier == TIER_MANIFESTATION:
         for attribute in ("isbn13", "ean", "upc", "barcode"):
@@ -786,8 +893,9 @@ def classify_pair(tier: str, left: Any, right: Any) -> tuple[str, list[str]]:
 
     Outcomes:
 
-    * ``AUTO_ACCEPT`` -- a shared edition identifier (Manifestation tier) or an
-      identical normalized title corroborated by a shared creator (Work tier).
+    * ``AUTO_ACCEPT`` -- a shared edition identifier (Manifestation tier), an
+      identical normalized label with matching language and content_type (Expression tier),
+      or an identical normalized title corroborated by a shared creator (Work tier).
       Queued without consulting :attr:`DEFAULT_THRESHOLD`, because a categorical
       match should not need a probability gate.
     * ``AUTO_REJECT`` -- a shared creator whose titles fail the similarity floor,
@@ -796,7 +904,7 @@ def classify_pair(tier: str, left: Any, right: Any) -> tuple[str, list[str]]:
       ``llama`` engine.
 
     Args:
-        tier: ``"work"`` or ``"manifestation"``.
+        tier: ``"work"``, ``"expression"``, or ``"manifestation"``.
         left: First entity of the pair.
         right: Second entity of the pair.
 
@@ -805,6 +913,43 @@ def classify_pair(tier: str, left: Any, right: Any) -> tuple[str, list[str]]:
         candidate's rationale when no model was consulted.
     """
     reasons: list[str] = []
+
+    if tier == TIER_EXPRESSION:
+        if (left.language or None) != (right.language or None) or (left.content_type or None) != (right.content_type or None):
+            return CLASSIFICATION_AUTO_REJECT, ["different language or content_type"]
+
+        left_label = (
+            left.label
+            if hasattr(left, "label") and left.label
+            else ((left.meta.get("label") or left.meta.get("title")) if isinstance(left.meta, dict) else None)
+        )
+        right_label = (
+            right.label
+            if hasattr(right, "label") and right.label
+            else ((right.meta.get("label") or right.meta.get("title")) if isinstance(right.meta, dict) else None)
+        )
+        norm_left = normalize_title(left_label)
+        norm_right = normalize_title(right_label)
+
+        if bool(norm_left) and norm_left == norm_right:
+            return CLASSIFICATION_AUTO_ACCEPT, [
+                "identical normalized label",
+                f"matching language ({left.language}) and content_type ({left.content_type})",
+            ]
+
+        similarity = title_similarity(left_label, right_label)
+        creators = _creators_for_tier(tier, left) & _creators_for_tier(tier, right)
+
+        if creators and similarity < TITLE_SIMILARITY_FLOOR:
+            return (
+                CLASSIFICATION_AUTO_REJECT,
+                [f"shared creator(s) {', '.join(sorted(creators))} but label similarity {similarity:.2f} is below the floor"],
+            )
+
+        reasons.append(f"label similarity {similarity:.2f}")
+        if creators:
+            reasons.append(f"shared creator(s): {', '.join(sorted(creators))}")
+        return CLASSIFICATION_NEEDS_LLM, reasons
 
     if tier == TIER_MANIFESTATION:
         for attribute in CONCLUSIVE_EDITION_IDENTIFIERS:
@@ -835,23 +980,27 @@ def classify_pair(tier: str, left: Any, right: Any) -> tuple[str, list[str]]:
 
 
 def _creators_for_tier(tier: str, entity: Any) -> set[str]:
-    """Return the normalized creator set for an entity at either tier.
+    """Return the normalized creator set for an entity at any tier.
 
     Args:
-        tier: ``"work"`` or ``"manifestation"``.
-        entity: Work or Manifestation.
+        tier: ``"work"``, ``"expression"``, or ``"manifestation"``.
+        entity: Work, Expression, or Manifestation.
 
     Returns:
         Normalized creator names, possibly empty.
     """
-    return work_creators(entity) if tier == TIER_WORK else _manifestation_creators(entity)
+    if tier == TIER_WORK:
+        return work_creators(entity)
+    if tier == TIER_EXPRESSION:
+        return _expression_creators(entity)
+    return _manifestation_creators(entity)
 
 
 def classify_pair_by_id(tier: str, left_id: int, right_id: int) -> tuple[str, list[str]]:
     """Load two entities and classify the pair, tolerating a missing row.
 
     Args:
-        tier: ``"work"`` or ``"manifestation"``.
+        tier: ``"work"``, ``"expression"``, or ``"manifestation"``.
         left_id: Primary key of the first entity.
         right_id: Primary key of the second entity.
 
@@ -859,7 +1008,12 @@ def classify_pair_by_id(tier: str, left_id: int, right_id: int) -> tuple[str, li
         Tuple of ``(classification, reasons)``; a pair whose entities have since
         been deleted is reported as needing the model rather than raising.
     """
-    model = Work if tier == TIER_WORK else Manifestation
+    if tier == TIER_WORK:
+        model = Work
+    elif tier == TIER_EXPRESSION:
+        model = Expression
+    else:
+        model = Manifestation
     left = db.session.get(model, left_id)
     right = db.session.get(model, right_id)
     if left is None or right is None:
@@ -925,7 +1079,7 @@ def find_existing_pair(entity_tier: str, left_id: int, right_id: int) -> Duplica
     """Return the candidate registered for an unordered entity pair, if any.
 
     Args:
-        entity_tier: Either ``"work"`` or ``"manifestation"``.
+        entity_tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         left_id: First entity id.
         right_id: Second entity id.
 
@@ -956,7 +1110,7 @@ def record_candidate(
     unique index rejects reverse-order duplicates at the database level.
 
     Args:
-        entity_tier: Either ``"work"`` or ``"manifestation"``.
+        entity_tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         source_id: First entity id.
         target_id: Second entity id.
         confidence: Match probability in ``[0.0, 1.0]``, or ``None`` for a
@@ -1044,7 +1198,7 @@ def list_candidates(
 
     Args:
         status: Lifecycle status filter, or ``None`` for all statuses.
-        entity_tier: ``"work"``, ``"manifestation"``, or ``None`` for both.
+        entity_tier: ``"work"``, ``"expression"``, ``"manifestation"``, or ``None`` for all.
         min_confidence: Inclusive lower bound on confidence, or ``None``.
         page: 1-based page number.
         limit: Page size, clamped to ``1..QUEUE_PAGE_SIZE_LIMIT``.
@@ -1121,6 +1275,7 @@ class DetectionReport:
     #: rows had actually been written.
     would_create: int = 0
     work_candidates: int = 0
+    expression_candidates: int = 0
     manifestation_candidates: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -1132,7 +1287,7 @@ def _resolve_tiers(tier: str) -> tuple[str, ...]:
     """Expand a ``--tier`` argument into concrete tiers to scan.
 
     Args:
-        tier: One of ``"work"``, ``"manifestation"``, or ``"all"``.
+        tier: One of ``"work"``, ``"expression"``, ``"manifestation"``, or ``"all"``.
 
     Returns:
         Tuple of tiers to process.
@@ -1156,7 +1311,12 @@ def _iter_screened_pairs(tier: str, limit: int | None, progress: Callable[[str],
     Yields:
         :class:`ScreenedPair` instances in descending heuristic-score order.
     """
-    model = Work if tier == TIER_WORK else Manifestation
+    if tier == TIER_WORK:
+        model = Work
+    elif tier == TIER_EXPRESSION:
+        model = Expression
+    else:
+        model = Manifestation
     last_id = 0
     loaded = 0
     while limit is None or loaded < limit:
@@ -1177,7 +1337,7 @@ def _describe_for_tier(tier: str, entity_id: int) -> dict[str, Any] | None:
     """Load and summarize an entity for the LLM prompt.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         entity_id: Primary key of the entity.
 
     Returns:
@@ -1188,6 +1348,18 @@ def _describe_for_tier(tier: str, entity_id: int) -> dict[str, Any] | None:
             select(Work).options(selectinload(Work.contributions).selectinload(WorkContribution.contributor)).where(Work.id == entity_id)
         ).scalar_one_or_none()
         return describe_work(work) if work is not None else None
+
+    if tier == TIER_EXPRESSION:
+        expression = db.session.execute(
+            select(Expression)
+            .options(
+                selectinload(Expression.work).selectinload(Work.contributions).selectinload(WorkContribution.contributor),
+                selectinload(Expression.contributions).selectinload(ExpressionContribution.contributor),
+                selectinload(Expression.manifestations),
+            )
+            .where(Expression.id == entity_id)
+        ).scalar_one_or_none()
+        return describe_expression(expression) if expression is not None else None
 
     manifestation = db.session.execute(
         select(Manifestation)
@@ -1217,7 +1389,7 @@ def run_detection(
     temporarily unavailable Ollama never blocks catalog operations.
 
     Args:
-        tier: ``"work"``, ``"manifestation"``, or ``"all"``.
+        tier: ``"work"``, ``"expression"``, ``"manifestation"``, or ``"all"``.
         threshold: Minimum LLM confidence required to queue an undecided pair.
             Not applied to a pair the classifier accepted categorically.
         limit: Maximum number of catalog entities to load per tier, or ``None``.
@@ -1251,6 +1423,8 @@ def run_detection(
             report.candidate_pairs += 1
             if active_tier == TIER_WORK:
                 report.work_candidates += 1
+            elif active_tier == TIER_EXPRESSION:
+                report.expression_candidates += 1
             else:
                 report.manifestation_candidates += 1
 
@@ -1458,6 +1632,75 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
 
 
 # ---------------------------------------------------------------------------
+# Expression merge
+# ---------------------------------------------------------------------------
+
+
+def merge_expression(source: Expression, target: Expression, user_id: UUID | None) -> Expression:
+    """Consolidate a duplicate Expression into a surviving Expression, atomically.
+
+    Re-parents every child Manifestation, reconciles Expression contributions,
+    feedback, notes, semantic links, roadmaps, and escalation requests,
+    preserves user wishlist entries (``UserWorkIntent.expression_id``), then
+    removes the source Expression.  Refuses cross-language or cross-content_type
+    merges before writing, because those attributes define distinct realizations.
+
+    Args:
+        source: Expression to be removed.
+        target: Expression to survive.
+        user_id: UUID of the acting administrator, recorded in the audit log.
+
+    Returns:
+        The surviving :class:`Expression`.
+
+    Raises:
+        DuplicateServiceError: If the two Expressions are the same entity, or
+            if their language or content_type differ.
+    """
+    if source.id == target.id:
+        raise DuplicateServiceError("Cannot merge an Expression with itself")
+
+    if source.language != target.language:
+        raise DuplicateServiceError(f"Cannot merge Expressions with different languages: {source.language!r} vs {target.language!r}")
+    if source.content_type != target.content_type:
+        raise DuplicateServiceError(
+            f"Cannot merge Expressions with different content types: {source.content_type!r} vs {target.content_type!r}"
+        )
+
+    locked = frbr_merge.lock_pair(Expression, source.id, target.id)
+    if len(locked) != 2:
+        raise DuplicateServiceError("One of the Expressions no longer exists; the merge was aborted")
+
+    try:
+        repointed = frbr_merge.repoint_references(TIER_EXPRESSION, source.id, target.id)
+        target.meta = _consolidate_meta(target.meta, source.meta)
+
+        db.session.add(
+            EntityAuditLog(
+                entity_type=TIER_EXPRESSION,
+                entity_id=source.id,
+                actor_id=user_id,
+                change_type="merge_expression",
+                diff={
+                    "source_id": source.id,
+                    "target_id": target.id,
+                    "migrated_children": repointed.get("Manifestation.expression_id", 0),
+                    "migrated_contributions": repointed.get("ExpressionContribution.expression_id", 0),
+                    "repointed": repointed,
+                },
+            )
+        )
+
+        frbr_merge.delete_source_row(source)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    return target
+
+
+# ---------------------------------------------------------------------------
 # Manifestation merge
 # ---------------------------------------------------------------------------
 
@@ -1554,6 +1797,12 @@ def resolve_candidate_merge(candidate: DuplicateCandidate, primary_entity_id: in
         if primary is None or secondary is None:
             raise DuplicateServiceError("One of the Works no longer exists; the merge was aborted")
         surviving = merge_work(secondary, primary, user_id)
+    elif candidate.entity_tier == TIER_EXPRESSION:
+        primary = db.session.get(Expression, primary_entity_id)
+        secondary = db.session.get(Expression, secondary_id)
+        if primary is None or secondary is None:
+            raise DuplicateServiceError("One of the Expressions no longer exists; the merge was aborted")
+        surviving = merge_expression(secondary, primary, user_id)
     elif candidate.entity_tier == TIER_MANIFESTATION:
         primary = db.session.get(Manifestation, primary_entity_id)
         secondary = db.session.get(Manifestation, secondary_id)
@@ -1586,7 +1835,7 @@ def _entity_payload(tier: str, entity_id: int) -> dict[str, Any] | None:
     """Serialize one side of a candidate for the review UI.
 
     Args:
-        tier: Either ``"work"`` or ``"manifestation"``.
+        tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``.
         entity_id: Primary key of the entity.
 
     Returns:

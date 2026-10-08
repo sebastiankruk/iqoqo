@@ -90,10 +90,10 @@ WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
 
 #: Controlled vocabulary for :attr:`DuplicateCandidate.entity_tier`.
 #:
-#: Duplicates are detected at the two abstract FRBR tiers where consolidation is
+#: Duplicates are detected at the three abstract FRBR tiers where consolidation is
 #: meaningful.  ``Item`` is deliberately excluded: two Items are distinct
 #: physical or digital exemplars even when they describe the same edition.
-DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "manifestation")
+DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "expression", "manifestation")
 
 #: Controlled vocabulary for :attr:`DuplicateCandidate.status`.
 #:
@@ -903,7 +903,7 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
 class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
     """
-    Review queue entry for a suspected duplicate pair at the Work or Manifestation tier.
+    Review queue entry for a suspected duplicate pair at the Work, Expression, or Manifestation tier.
 
     Detection is a two-stage pipeline: cheap heuristic screening prunes the
     catalog down to plausible pairs (see :mod:`app.core.duplicate_service`), then
@@ -911,7 +911,7 @@ class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
     detection threshold are persisted here as ``pending`` rows for
     administrative review in ``/admin/duplicates``.
 
-    :attr entity_tier: Either ``"work"`` or ``"manifestation"``
+    :attr entity_tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``
         (see :data:`DUPLICATE_ENTITY_TIERS`).
     :attr source_id: Primary key of the first entity of the pair.  The reference
         is intentionally *not* a real foreign key: ``entity_tier`` is
