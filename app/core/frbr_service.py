@@ -19,6 +19,7 @@
 #
 import dataclasses
 import itertools
+import json
 import logging
 import re
 from collections.abc import Generator, Iterable
@@ -215,6 +216,99 @@ def normalize_contributor_name(name: str) -> str:
     return " ".join(capitalized)
 
 
+def normalize_authors_list(raw_authors: Any) -> list[str]:
+    """Convert heterogeneous author representations into a sanitized list of strings.
+
+    Accepts:
+      * A list or tuple of strings (or stringifiable items).
+      * A JSON-serialized list string (e.g. ``'["Remigiusz Mr\\u00f3z"]'`` or ``'[]'``).
+      * A single author string (e.g. ``"Remigiusz Mróz"``).
+      * A comma- or semicolon-separated string of authors (e.g. ``"Author A, Author B"``).
+      * ``None`` or empty containers/strings -> ``[]``.
+
+    Returns:
+        A list of non-empty, stripped author names.
+    """
+    if raw_authors is None:
+        return []
+
+    if isinstance(raw_authors, str):
+        val = raw_authors.strip()
+        if not val:
+            return []
+
+        # Attempt to decode stringified JSON (e.g. '["Remigiusz Mróz"]')
+        if (val.startswith("[") and val.endswith("]")) or (val.startswith('"') and val.endswith('"')):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    return normalize_authors_list(parsed)
+                if isinstance(parsed, str):
+                    val = parsed.strip()
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Handle raw unicode escape sequences (e.g. r"\u00f3")
+        if r"\u" in val:
+            try:
+                val = val.encode("utf-8").decode("unicode_escape")
+            except Exception:
+                pass
+
+        if val.startswith("[") and val.endswith("]"):
+            val = val[1:-1].strip()
+
+        # Split on semicolon or comma if multiple authors
+        if ";" in val or "," in val:
+            parts = re.split(r"[;,]", val)
+            return [p.strip().strip("'\"") for p in parts if p.strip().strip("'\"")]
+
+        clean_val = val.strip("'\"")
+        return [clean_val] if clean_val else []
+
+    if isinstance(raw_authors, (list, tuple, set)):
+        result: list[str] = []
+        for item in raw_authors:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                item_str = item.strip()
+                if not item_str:
+                    continue
+                if item_str.startswith("[") and item_str.endswith("]"):
+                    result.extend(normalize_authors_list(item_str))
+                else:
+                    if r"\u" in item_str:
+                        try:
+                            item_str = item_str.encode("utf-8").decode("unicode_escape")
+                        except Exception:
+                            pass
+                    clean_item = item_str.strip("'\"")
+                    if clean_item:
+                        result.append(clean_item)
+            elif isinstance(item, dict):
+                name = item.get("name") or item.get("display_name") or item.get("title")
+                if name and str(name).strip():
+                    result.append(str(name).strip())
+            else:
+                s = str(item).strip()
+                if s:
+                    result.append(s)
+        return result
+
+    if isinstance(raw_authors, dict):
+        name = raw_authors.get("name") or raw_authors.get("display_name") or raw_authors.get("title")
+        if name and str(name).strip():
+            return [str(name).strip()]
+        authors_inner = raw_authors.get("authors") or raw_authors.get("Authors")
+        if authors_inner is not None:
+            return normalize_authors_list(authors_inner)
+        return []
+
+    s = str(raw_authors).strip()
+    return [s] if s else []
+
+
 def parse_agent_input(
     raw_agents: Any,
     default_role: str = "author",
@@ -242,9 +336,9 @@ def parse_agent_input(
     items: list[dict[str, Any]] = []
 
     if isinstance(raw_agents, str):
-        # Legacy comma/semicolon separated string.
-        parts = [p.strip() for p in re.split(r"[;,]", raw_agents) if p.strip()]
-        for seq, part in enumerate(parts):
+        # Parse through normalize_authors_list to handle JSON strings, unicode escapes, etc.
+        names = normalize_authors_list(raw_agents)
+        for seq, part in enumerate(names):
             name = normalize_contributor_name(part)
             if name:
                 items.append({"name": name, "role": default_role, "sequence": seq})
@@ -1025,13 +1119,34 @@ def update_work(
         work.sort_title = sort_title
     if raw_payload is not None:
         work.raw_payload = raw_payload
+    current_meta = dict(work.meta or {})
     if meta is not None:
-        current_meta = dict(work.meta or {})
         current_meta.update(meta)
-        work.meta = current_meta
+
+    if "authors" in current_meta:
+        current_meta["authors"] = normalize_authors_list(current_meta["authors"])
+
+    work.meta = current_meta
     db.session.commit()
+
     if contributions is not None:
         sync_entity_contributions(work, contributions)
+        author_names = [
+            c["name"]
+            for c in sorted(contributions, key=lambda x: int(x.get("sequence", 0)))
+            if str(c.get("role", "author")).lower() in ("author", "creator", "writer", "contributor") and c.get("name")
+        ]
+        if not author_names:
+            author_names = [c["name"] for c in sorted(contributions, key=lambda x: int(x.get("sequence", 0))) if c.get("name")]
+        current_meta = dict(work.meta or {})
+        current_meta["authors"] = author_names
+        work.meta = current_meta
+        db.session.commit()
+    elif meta is not None and "authors" in meta:
+        desired_contributions = [
+            {"name": author_name, "role": "author", "sequence": idx} for idx, author_name in enumerate(current_meta.get("authors", []))
+        ]
+        sync_entity_contributions(work, desired_contributions)
     return work
 
 

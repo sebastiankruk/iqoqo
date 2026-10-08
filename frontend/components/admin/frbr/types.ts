@@ -59,6 +59,16 @@ export function normalizeMetaValue(key: string, value: string): string | string[
   if (!trimmed) {
     return [];
   }
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => String(item).trim()).filter(part => part.length > 0);
+      }
+    } catch {
+      // Fall through to standard delimiter split
+    }
+  }
   return trimmed
     .split(/[,;]/)
     .map(part => part.trim())
@@ -78,7 +88,18 @@ export function ensureArray(value: unknown): string[] {
     return value.filter((item): item is string => typeof item === "string");
   }
   if (typeof value === "string") {
-    return value
+    const trimmed = value.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(item => String(item).trim()).filter(part => part.length > 0);
+        }
+      } catch {
+        // Fall through
+      }
+    }
+    return trimmed
       .split(/[,;]/)
       .map(part => part.trim())
       .filter(part => part.length > 0);
