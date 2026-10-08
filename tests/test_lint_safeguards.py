@@ -100,6 +100,7 @@ JUSTIFIED_BROAD_EXCEPT_SITES = frozenset(
         # Outbound authority / provider lookups: any failure means "no links".
         ("app/api/admin.py", "trigger_lod_reconciliation"),
         ("app/api/admin.py", "get_active_lod_task"),
+        ("app/api/admin.py", "get_lod_reconciliation_task"),
         ("app/api/admin.py", "cancel_lod_reconciliation_task"),
         ("app/api/manifestations.py", "trigger_manifestation_semantic_relink"),
         ("app/core/lod_linking_service.py", "_query_lookup"),

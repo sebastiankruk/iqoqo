@@ -81,7 +81,7 @@ def test_batch_link_catalog_lod_task_metrics_and_logs(app):
         link_dbpedia = MagicMock(spec=SemanticLink, authority="dbpedia")
         link_geonames = MagicMock(spec=SemanticLink, authority="geonames")
 
-        def mock_resolve(mid):
+        def mock_resolve(mid, *args, **kwargs):
             if mid == 101:
                 return [link_dbpedia, link_geonames]
             return []
@@ -151,7 +151,7 @@ def test_batch_link_catalog_lod_task_unlinked_only(app):
 
             assert res["total"] == 1
             assert res["processed"] == 1
-            mock_resolve.assert_called_once_with(m2.id)
+            mock_resolve.assert_called_once_with(m2.id, fast_mode=True)
 
 
 def test_context_task_auto_app_context():

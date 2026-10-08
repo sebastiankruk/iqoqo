@@ -822,7 +822,7 @@ class GeoNamesClient:
                     "fcode": fcode,
                 },
             }
-        except Exception as exc:  # pylint: disable=broad-except
+        except (sqlite3.Error, OSError) as exc:
             logger.warning("Local GeoNames gazetteer query failed for %s: %s", location_name, exc)
             return None
 
@@ -911,7 +911,7 @@ class GeoNamesClient:
                         )
 
             conn.close()
-        except Exception as exc:  # pylint: disable=broad-except
+        except (sqlite3.Error, OSError) as exc:
             logger.warning("Local GeoNames extraction failed for text '%s': %s", text, exc)
 
         return found
@@ -1063,7 +1063,7 @@ class WordNetMapper:
                 )
                 return resp.status_code in (200, 303)
             return False
-        except Exception as exc:  # pylint: disable=broad-except
+        except requests.RequestException as exc:
             logger.warning("DBpedia category validation failed for %s: %s", uri, exc)
             return False
 
