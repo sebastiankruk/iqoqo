@@ -721,3 +721,77 @@ def test_dbpedia_subtitle_fallback_resolution(app):
             # Second call should query main title
             second_call_params = mock_get.call_args_list[1][1]["params"]
             assert second_call_params["query"] == "The Silmarillion"
+
+
+def test_geonames_resolve_location_with_qualifiers(app):
+    """Test that locations with qualifiers (commas, parentheses) resolve correctly."""
+    with app.app_context():
+        res_cph = GeoNamesClient.resolve_location("Copenhagen (denmark)")
+        assert res_cph is not None
+        assert res_cph["label"] == "Copenhagen"
+        assert res_cph["attributes"]["country_code"] == "DK"
+
+        res_berk = GeoNamesClient.resolve_location("Berkeley, Calif")
+        assert res_berk is not None
+        assert res_berk["label"] == "Berkeley"
+        assert res_berk["attributes"]["country_code"] == "US"
+
+        res_pohang = GeoNamesClient.resolve_location("Pohang, Korea")
+        assert res_pohang is not None
+        assert res_pohang["label"] == "Pohang"
+        assert res_pohang["attributes"]["country_code"] == "KR"
+
+
+def test_geonames_extract_locations_from_title_and_publisher(app):
+    """Test high-precision extraction from title and publisher strings."""
+    with app.app_context():
+        hits_cph = GeoNamesClient.extract_locations_from_text("Time Out Copenhagen")
+        assert len(hits_cph) == 1
+        assert hits_cph[0]["label"] == "Copenhagen"
+        assert hits_cph[0]["attributes"]["geoname_id"] == 2618425
+
+        hits_krk = GeoNamesClient.extract_locations_from_text("Wydawnictwo Literackie, Kraków")
+        assert len(hits_krk) == 1
+        assert hits_krk[0]["label"] == "Kraków"
+        assert hits_krk[0]["attributes"]["country_code"] == "PL"
+
+        hits_stopwords = GeoNamesClient.extract_locations_from_text("A Tale of Two Cities")
+        assert len(hits_stopwords) == 0
+
+
+def test_resolve_manifestation_links_copenhagen_and_frbr_scoping(app):
+    """Test full pipeline: manifestation 'Time Out Copenhagen' gets Work-level GeoNames link, and publish_places get Manifestation-level link."""
+    with app.app_context():
+        work = Work(title="Time Out Copenhagen", meta={"authors": ["Michael Booth"]})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(
+            expression_id=expr.id,
+            isbn13="9780141008394",
+            publisher="Penguin Group USA",
+            meta={
+                "publish_places": [{"name": "Berkeley, Calif"}],
+            },
+        )
+        db.session.add(manif)
+        db.session.flush()
+
+        links = resolve_manifestation_links(manif.id, fast_mode=True)
+        assert len(links) >= 2
+
+        # Verify Work-level GeoNames link for Copenhagen
+        work_geo_links = [link_obj for link_obj in links if link_obj.entity_type == "work" and link_obj.authority == "geonames"]
+        assert len(work_geo_links) == 1
+        assert work_geo_links[0].pref_label == "Copenhagen"
+        assert work_geo_links[0].attributes["role"] == "subject_place"
+
+        # Verify Manifestation-level GeoNames link for Berkeley
+        manif_geo_links = [link_obj for link_obj in links if link_obj.entity_type == "manifestation" and link_obj.authority == "geonames"]
+        assert len(manif_geo_links) == 1
+        assert manif_geo_links[0].pref_label == "Berkeley"
+        assert manif_geo_links[0].attributes["role"] == "publication_place"
