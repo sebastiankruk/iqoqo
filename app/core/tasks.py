@@ -477,7 +477,8 @@ def batch_link_catalog_lod_task(
                     pass
 
                 try:
-                    links = resolve_manifestation_links(mid)
+                    is_fast = throttle_delay <= 0.2
+                    links = resolve_manifestation_links(mid, fast_mode=is_fast)
                     total_resolved += len(links)
                     for link in links:
                         auth = (link.authority or "").lower()

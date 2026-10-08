@@ -179,6 +179,7 @@ class DBpediaClient:
         title: str,
         media_category: str | None = None,
         author: str | None = None,
+        fast_mode: bool = False,
     ) -> dict[str, Any] | None:
         """Resolve a creative work by title, media category class, and author context."""
         if not title:
@@ -205,8 +206,8 @@ class DBpediaClient:
             if clean_title and clean_title != normalized_title:
                 result = cls._query_lookup(clean_title, type_name=dbo_type)
 
-        # Step 2: Fallback to SPARQL if lookup yields nothing
-        if not result and dbo_type:
+        # Step 2: Fallback to SPARQL if lookup yields nothing (skipped in fast mode)
+        if not result and dbo_type and not fast_mode:
             result = cls._query_sparql(normalized_title, dbo_type=dbo_type)
 
         # Cache result (including None to prevent repeated failed queries)
@@ -214,7 +215,7 @@ class DBpediaClient:
         return result
 
     @classmethod
-    def resolve_person(cls, name: str) -> dict[str, Any] | None:
+    def resolve_person(cls, name: str, fast_mode: bool = False) -> dict[str, Any] | None:
         """Resolve a person (author, artist, contributor) on DBpedia."""
         if not name:
             return None
@@ -227,7 +228,7 @@ class DBpediaClient:
             return cast(dict[str, Any], cached)
 
         result = cls._query_lookup(normalized_name, type_name="Person")
-        if not result:
+        if not result and not fast_mode:
             result = cls._query_sparql(normalized_name, dbo_type="dbo:Person")
 
         cache.set(cache_key, result, timeout=CACHE_TTL_24H)
@@ -310,7 +311,7 @@ class DBpediaClient:
         headers = {"Accept": "application/sparql-results+json", "User-Agent": USER_AGENT}
 
         try:
-            resp = requests.get(cls.SPARQL_URL, params=params, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+            resp = requests.get(cls.SPARQL_URL, params=params, headers=headers, timeout=1.5)
             if resp.status_code != 200:
                 return None
 
@@ -500,7 +501,7 @@ class WordNetMapper:
     """Maps subject, genre, and topical tags to canonical WordNet synset URIs."""
 
     @classmethod
-    def resolve_tag(cls, tag: str) -> dict[str, Any] | None:
+    def resolve_tag(cls, tag: str, fast_mode: bool = False) -> dict[str, Any] | None:
         """Resolve a tag to a WordNet synset URI via local dictionary or DBpedia category fallback."""
         if not tag:
             return None
@@ -531,8 +532,9 @@ class WordNetMapper:
             cache.set(cache_key, result, timeout=CACHE_TTL_24H)
             return result
 
-        # 2. Fallback to DBpedia category / synset concept
-        result = cls._resolve_dbpedia_category(tag.strip())
+        # 2. Fallback to DBpedia category / synset concept (skipped in fast mode)
+        if not fast_mode:
+            result = cls._resolve_dbpedia_category(tag.strip())
         cache.set(cache_key, result, timeout=CACHE_TTL_24H)
         return result
 
@@ -580,7 +582,7 @@ class WordNetMapper:
         }
 
 
-def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
+def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) -> list[SemanticLink]:
     """
     Resolve and persist Linked Open Data links for a Manifestation and its parent Work.
 
@@ -620,6 +622,7 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
             title=work.title,
             media_category=media_cat,
             author=manifestation.author,
+            fast_mode=fast_mode,
         )
         if work_match:
             existing = db.session.execute(
@@ -654,7 +657,7 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
             authors.append(manifestation.author)
 
         for author_name in authors[:3]:  # Resolve up to 3 authors to respect rate limits
-            author_match = DBpediaClient.resolve_person(author_name)
+            author_match = DBpediaClient.resolve_person(author_name, fast_mode=fast_mode)
             if author_match:
                 existing_author = db.session.execute(
                     select(SemanticLink).where(
@@ -691,7 +694,7 @@ def resolve_manifestation_links(manifestation_id: int) -> list[SemanticLink]:
                     tags.append(val)
 
         for tag in tags[:5]:  # Reconcile up to 5 topical tags
-            wn_match = WordNetMapper.resolve_tag(tag)
+            wn_match = WordNetMapper.resolve_tag(tag, fast_mode=fast_mode)
             if wn_match:
                 authority = wn_match.get("authority", "wordnet")
                 existing_wn = db.session.execute(
