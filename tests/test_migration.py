@@ -456,10 +456,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_3_duplicate_expression_tier"
+    assert heads[0] == "v0_8_3_semantic_links_status"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_3_semantic_links_status",
         "v0_8_3_duplicate_expression_tier",
         "v0_8_3_roadmap_item_target",
         "v0_8_3_account_lifecycle",
@@ -1819,3 +1820,66 @@ def test_v0_8_3_duplicate_expression_tier_never_bakes_the_schema_into_the_table_
         if name == "batch_alter_table":
             assert args[0] == "duplicate_candidates", f"batch_alter_table got {args[0]!r}"
             assert kwargs.get("schema") == "inventory"
+
+
+def test_v0_8_3_semantic_links_status_upgrade_and_downgrade() -> None:
+    """Test upgrade adds status column and index, downgrade removes them."""
+    from importlib import import_module
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_3_semantic_links_status")
+    assert migration.revision == "v0_8_3_semantic_links_status"
+    assert migration.down_revision == "v0_8_3_duplicate_expression_tier"
+    assert len(migration.revision) <= 32
+
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "CREATE TABLE semantic_links ("
+                "id INTEGER PRIMARY KEY, "
+                "entity_type VARCHAR(50) NOT NULL, "
+                "entity_id INTEGER NOT NULL, "
+                "authority VARCHAR(50) NOT NULL, "
+                "external_uri VARCHAR(500) NOT NULL"
+                ")"
+            )
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO semantic_links (id, entity_type, entity_id, authority, external_uri) "
+                "VALUES (1, 'work', 10, 'dbpedia', 'http://dbpedia.org/resource/Test')"
+            )
+        )
+
+    try:
+        run_migration(migration.upgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("semantic_links")}
+            assert "status" in cols
+            row = connection.execute(sa.text("SELECT id, status FROM semantic_links WHERE id = 1")).one()
+            assert row[1] == "accepted"
+
+        run_migration(migration.downgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("semantic_links")}
+            assert "status" not in cols
+    finally:
+        engine.dispose()
