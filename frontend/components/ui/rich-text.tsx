@@ -48,6 +48,8 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_ATTR = ["href", "target", "rel", "title"];
 
+let hookConfigured = false;
+
 /**
  * Obtain DOMPurify instance configured with safe attribute hooks.
  *

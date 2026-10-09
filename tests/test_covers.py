@@ -31,6 +31,7 @@ from app.utils.covers import (
     fetch_external_api_cover,
     generate_fallback_cover,
     process_cover_pipeline,
+    start_cover_processing,
 )
 from app.utils.images import is_valid_cover, optimize_and_save_image
 from app.utils.llm_covers import apply_corner_watermark, generate_cover_cloud
@@ -930,3 +931,83 @@ def test_server_side_llm_switch_overrides_user_consent(app, monkeypatch):
     @returns: Nothing; an LLM call fails the test.
     """
     _run_pipeline(app, monkeypatch, {"allow_generate_cover": True}, allow_llm=False).assert_not_called()
+
+
+def test_start_cover_processing_payload_is_json_serializable():
+    """Verify arguments passed to Celery background task queue are JSON-serializable.
+
+    Celery config enforces task_serializer='json'. If non-serializable objects (like dataclasses)
+    are passed in args or kwargs, Celery throws KombuError EncodeError and drops the task.
+    """
+    import json
+
+    with patch("app.utils.covers.submit_task") as mock_submit:
+        mock_submit.return_value = "fake-task-id-123"
+
+        task_id = start_cover_processing(
+            manifestation_id=42,
+            identifier="test-isbn-123",
+            title="Doors - L.A. Woman",
+            author="The Doors",
+            user_id="user_test_1",
+            llm_permissions={"allow_generate_cover": False},
+            user_image_path="/tmp/uploads/test.jpg",
+            description="Classic rock album",
+            genre="Rock",
+        )
+
+        assert task_id == "fake-task-id-123"
+        mock_submit.assert_called_once()
+        args, kwargs = mock_submit.call_args
+
+        # Verify function target
+        assert args[0] == process_cover_pipeline
+        # Verify positional arguments to pipeline
+        assert args[1] == 42
+        assert args[2] == "test-isbn-123"
+        assert args[3] == "Doors - L.A. Woman"
+        assert args[4] == "The Doors"
+
+        # Crucial check: verify all args and kwargs can be JSON serialized without error
+        serialized_args = json.dumps(args[1:])
+        serialized_kwargs = json.dumps(kwargs)
+        assert serialized_args is not None
+        assert serialized_kwargs is not None
+
+        # Ensure job in kwargs is a pure dict, not a raw dataclass instance
+        assert isinstance(kwargs["job"], dict)
+        assert kwargs["job"]["user_image_path"] == "/tmp/uploads/test.jpg"
+        assert kwargs["job"]["user_id"] == "user_test_1"
+
+
+def test_process_cover_pipeline_accepts_dict_job(app, monkeypatch):
+    """Verify process_cover_pipeline handles deserialized dict jobs from Celery workers."""
+    with (
+        patch("app.utils.covers.db.session.get") as mock_get_manif,
+        patch("app.utils.covers.download_direct_url", return_value=None),
+        patch("app.utils.covers.fetch_external_api_cover", return_value=None),
+        patch("app.utils.covers.generate_fallback_cover", return_value=("/static/covers/test_gen.jpg", "fallback_pil")),
+    ):
+        fake_manif = make_manifestation(id=10, meta={})
+        mock_get_manif.return_value = fake_manif
+
+        with app.app_context():
+            process_cover_pipeline(
+                manifestation_id=10,
+                identifier="test-isbn",
+                title="Test Book",
+                author="Test Author",
+                job={
+                    "user_id": "test_user",
+                    "llm_permissions": {"allow_generate_cover": False},
+                    "description": "Some description",
+                    "genre": "Fiction",
+                    "legacy_source_only": False,
+                },
+            )
+
+        assert fake_manif.cover_url == "/static/covers/test_gen.jpg"
+        fake_manif.update_meta.assert_called_once()
+        _, kwargs = fake_manif.update_meta.call_args
+        assert kwargs["cover_source"] == "fallback_pil"
+        assert kwargs["cover_status"] == "ready"
