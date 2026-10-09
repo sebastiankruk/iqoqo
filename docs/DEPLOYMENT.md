@@ -47,6 +47,8 @@ A deployment directory is an isolated host directory that contains runtime confi
 | `scripts/` | Directory | Operational CLI scripts & migrations | Synced by `deploy-sync` |
 | `shared/` | Directory | Permissions YAML, taxonomies, mappings | Synced by `deploy-sync` |
 | `deploy/nginx.conf` | File | Nginx reverse proxy configuration | Synced by `deploy-sync` |
+| `deploy/otel-collector-local.yaml` | File | OTel Collector dev/preview configuration | Synced by `deploy-sync` |
+| `deploy/otel-collector-prod.yaml` | File | OTel Collector production configuration | Synced by `deploy-sync` |
 | `docs/ontology/` | Directory | Canonical OWL ontology & SHACL shapes | Synced by `deploy-sync` |
 | `data/` | Directory | SQLite DBs (e.g. GeoNames gazetteer) | **Application Data** (Preserved) |
 | `exports/` | Directory | Data dumps & exported records | **Application Data** (Preserved) |

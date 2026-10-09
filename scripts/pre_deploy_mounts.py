@@ -92,10 +92,15 @@ def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
         except OSError as exc:
             errors.append(f"Cannot create required token file '{allegro_token}': {exc}")
 
-    # 3. File-target mount: deploy/nginx.conf
+    # 3. File-target mount: deploy/nginx.conf and otel-collector configs
     nginx_conf = deploy_dir / "deploy" / "nginx.conf"
     if nginx_conf.exists() and nginx_conf.is_dir():
         errors.append(f"File-target mount source '{nginx_conf}' is a directory instead of a regular file.")
+
+    for otel_file_name in ("otel-collector-local.yaml", "otel-collector-prod.yaml"):
+        otel_file = deploy_dir / "deploy" / otel_file_name
+        if otel_file.exists() and otel_file.is_dir():
+            errors.append(f"File-target mount source '{otel_file}' is a directory instead of a regular file.")
 
     # 4. Directory-target mounts: create with app user ownership and 0755 mode if absent
     for rel_dir in DIRECTORY_MOUNTS:

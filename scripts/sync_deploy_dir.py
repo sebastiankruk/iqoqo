@@ -44,6 +44,8 @@ SYNC_ITEMS = [
     "scripts",
     "shared",
     "deploy/nginx.conf",
+    "deploy/otel-collector-local.yaml",
+    "deploy/otel-collector-prod.yaml",
     "docs/ontology",
 ]
 
