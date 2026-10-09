@@ -826,12 +826,16 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         (
             db.Index("ix_item_custody_events_item_id", "item_id"),
             db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+            db.Index("ix_item_custody_events_from_owner_id", "from_owner_id"),
+            db.Index("ix_item_custody_events_to_owner_id", "to_owner_id"),
             {"schema": _INVENTORY},
         )
         if _INVENTORY
         else (
             db.Index("ix_item_custody_events_item_id", "item_id"),
             db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+            db.Index("ix_item_custody_events_from_owner_id", "from_owner_id"),
+            db.Index("ix_item_custody_events_to_owner_id", "to_owner_id"),
         )
     )
 
@@ -842,6 +846,16 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         nullable=False,
     )
     actor_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    from_owner_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    to_owner_id = db.Column(
         UUID(as_uuid=True),
         db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
         nullable=True,
@@ -860,7 +874,21 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         "Item",
         backref=db.backref("custody_events", cascade="all, delete", lazy="dynamic"),
     )
-    actor = db.relationship("User", backref="custody_events_as_actor")
+    actor = db.relationship(
+        "User",
+        foreign_keys=[actor_id],
+        backref="custody_events_as_actor",
+    )
+    from_owner = db.relationship(
+        "User",
+        foreign_keys=[from_owner_id],
+        backref="custody_events_as_from_owner",
+    )
+    to_owner = db.relationship(
+        "User",
+        foreign_keys=[to_owner_id],
+        backref="custody_events_as_to_owner",
+    )
 
 
 class EntityAuditLog(db.Model):  # type: ignore[name-defined]

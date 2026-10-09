@@ -469,6 +469,15 @@
       "lookupTimedOut": "Lookup timed out. Switching to manual entry.",
       "lookupFailed": "Could not look up this item. Please try again.",
       "cameraUnavailable": "Camera unavailable"
+    },
+    "manualEntry": {
+      "title": "Manual Item Entry",
+      "chooseFromPhotos": "Choose from Photos",
+      "takePhoto": "Take Photo",
+      "changeImage": "Change",
+      "removeImage": "Remove",
+      "manualCoverUpload": "Manual Cover Upload",
+      "coverPreview": "Cover preview"
     }
   },
   "SemanticLinks": {

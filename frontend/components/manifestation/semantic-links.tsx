@@ -120,7 +120,7 @@ export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLink
 
   return (
     <Card className="rounded-xl shadow-sm border border-border mt-6">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -133,13 +133,13 @@ export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLink
           size="sm"
           onClick={handleRelink}
           disabled={relinkMutation.isPending}
-          className="text-xs h-8 gap-1.5"
+          className="text-xs h-8 gap-1.5 shrink-0 self-start sm:self-auto whitespace-nowrap"
           title={t("scanButton")}
         >
           {relinkMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
           )}
           <span>{relinkMutation.isPending ? t("scanning") : t("scanButton")}</span>
         </Button>

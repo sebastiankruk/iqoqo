@@ -314,7 +314,7 @@ def test_wordnet_mapper_resolution(app):
         # Fallback for novel concept when DBpedia category is valid
         mock_valid = MagicMock()
         mock_valid.status_code = 200
-        with patch("requests.get", return_value=mock_valid):
+        with patch("requests.head", return_value=mock_valid), patch("requests.get", return_value=mock_valid):
             res_fallback = WordNetMapper.resolve_tag("cyberpunk")
             assert res_fallback is not None
             assert res_fallback["uri"] == "http://dbpedia.org/resource/Category:Cyberpunk"
@@ -325,7 +325,7 @@ def test_wordnet_mapper_resolution(app):
         # Non-existent DBpedia category returns None without persisting fake category
         mock_invalid = MagicMock()
         mock_invalid.status_code = 404
-        with patch("requests.get", return_value=mock_invalid):
+        with patch("requests.head", return_value=mock_invalid), patch("requests.get", return_value=mock_invalid):
             res_invalid = WordNetMapper.resolve_tag("nonexistent_tag_xyz")
             assert res_invalid is None
 
@@ -406,7 +406,7 @@ def test_resolve_manifestation_links_pipeline(app):
                 }
             return resp
 
-        with patch("requests.get", side_effect=mock_requests_get):
+        with patch("requests.head", side_effect=mock_requests_get), patch("requests.get", side_effect=mock_requests_get):
             created = resolve_manifestation_links(manif.id)
             assert len(created) > 0
 

@@ -287,6 +287,7 @@ export default function ScanPage() {
               initialAuthors={author}
               initialFormat={activeFormat}
               initialIdentifier={initialIdentifier}
+              initialCoverFile={snappedCover}
             />
           </div>
         )}

@@ -97,6 +97,8 @@ describe("SemanticLinks Component", () => {
 
     render(<SemanticLinks manifestationId={1} />);
     const scanBtn = screen.getByRole("button", { name: /scan external lod/i });
+    expect(scanBtn).toHaveClass("whitespace-nowrap");
+    expect(scanBtn).toHaveAttribute("title", "Scan External LOD");
     fireEvent.click(scanBtn);
     expect(mockRelinkMutate).toHaveBeenCalledTimes(1);
   });
