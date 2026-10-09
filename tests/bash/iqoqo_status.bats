@@ -61,7 +61,7 @@ teardown() {
   echo "ENV_FILE=.env.dev" > "$env_file"
   echo "ALLEGRO_CLIENT_ID=" >> "$env_file"
   echo "ALLEGRO_CLIENT_SECRET=" >> "$env_file"
-  run env IQOQO_AI_MODE=1 ENV_FILE="$env_file" bash scripts/iqoqo-status.sh
+  run env -u IQOQO_AI_MODE ENV_FILE="$env_file" bash scripts/iqoqo-status.sh
   [[ "$output" =~ "not configured" || "$output" =~ "Instance Settings" ]]
 }
 
