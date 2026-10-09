@@ -456,10 +456,12 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_3_roadmap_item_target"
+    assert heads[0] == "v0_8_3_semantic_links_status"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_8_3_semantic_links_status",
+        "v0_8_3_duplicate_expression_tier",
         "v0_8_3_roadmap_item_target",
         "v0_8_3_account_lifecycle",
         "v0_8_2_fk_index_names",
@@ -1685,5 +1687,199 @@ def test_v0_8_3_roadmap_item_target_upgrade_and_downgrade() -> None:
         run_migration(migration.upgrade)
         inspector = sa.inspect(engine)
         assert "item_id" in {col["name"] for col in inspector.get_columns("roadmap_items")}
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_3_duplicate_expression_tier_upgrade_and_downgrade() -> None:
+    """The duplicate_candidates entity_tier constraint widens to 'expression' and restores with refusal on downgrade."""
+    from importlib import import_module
+    from typing import Any
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_3_duplicate_expression_tier")
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "CREATE TABLE duplicate_candidates ("
+                "id INTEGER PRIMARY KEY, "
+                "entity_tier VARCHAR(20) NOT NULL, "
+                "source_id INTEGER NOT NULL, "
+                "target_id INTEGER NOT NULL, "
+                "confidence FLOAT, "
+                "llm_reasoning TEXT, "
+                "status VARCHAR(20) NOT NULL, "
+                "CONSTRAINT ck_duplicate_candidates_entity_tier CHECK (entity_tier IN ('work', 'manifestation'))"
+                ")"
+            )
+        )
+        connection.execute(
+            sa.text("INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, status) " "VALUES ('work', 1, 2, 'pending')")
+        )
+
+    try:
+        # Before upgrade, inserting 'expression' must fail the check constraint
+        with pytest.raises(sa.exc.IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, status) "
+                        "VALUES ('expression', 10, 20, 'pending')"
+                    )
+                )
+
+        # Upgrade widens the constraint
+        run_migration(migration.upgrade)
+
+        # Inserting 'expression' must now succeed
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO duplicate_candidates (id, entity_tier, source_id, target_id, status) "
+                    "VALUES (99, 'expression', 10, 20, 'pending')"
+                )
+            )
+
+        # Downgrade must fail and name the blocking row ID [99]
+        with pytest.raises(
+            RuntimeError, match=r"Cannot downgrade migration while 1 expression-tier candidate\(s\) exist: candidate ID\(s\) \[99\]"
+        ):
+            run_migration(migration.downgrade)
+
+        # Remove the expression candidate
+        with engine.begin() as connection:
+            connection.execute(sa.text("DELETE FROM duplicate_candidates WHERE id = 99"))
+
+        # Downgrade now succeeds
+        run_migration(migration.downgrade)
+
+        # After downgrade, inserting 'expression' must fail again
+        with pytest.raises(sa.exc.IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO duplicate_candidates (entity_tier, source_id, target_id, status) "
+                        "VALUES ('expression', 30, 40, 'pending')"
+                    )
+                )
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_3_duplicate_expression_tier_never_bakes_the_schema_into_the_table_name() -> None:
+    """Schema must be passed as a separate identifier, not baked into table name."""
+    from importlib import import_module
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    migration = import_module("migrations.versions.v0_8_3_duplicate_expression_tier")
+
+    class _PostgresBind:
+        dialect = SimpleNamespace(name="postgresql")
+
+        def execute(self, statement):
+            mock_res = MagicMock()
+            mock_res.scalars.return_value.all.return_value = []
+            return mock_res
+
+    recorded: list[tuple[str, tuple, dict]] = []
+
+    def _record(name):
+        def _inner(*args, **kwargs):
+            recorded.append((name, args, kwargs))
+            return MagicMock(__enter__=lambda self: self, __exit__=lambda self, *a: False)
+
+        return _inner
+
+    original_get_bind = migration.op.get_bind
+    original_batch = migration.op.batch_alter_table
+    try:
+        migration.op.get_bind = lambda: _PostgresBind()
+        migration.op.batch_alter_table = _record("batch_alter_table")
+        migration.upgrade()
+        migration.downgrade()
+    finally:
+        migration.op.get_bind = original_get_bind
+        migration.op.batch_alter_table = original_batch
+
+    for name, args, kwargs in recorded:
+        if name == "batch_alter_table":
+            assert args[0] == "duplicate_candidates", f"batch_alter_table got {args[0]!r}"
+            assert kwargs.get("schema") == "inventory"
+
+
+def test_v0_8_3_semantic_links_status_upgrade_and_downgrade() -> None:
+    """Test upgrade adds status column and index, downgrade removes them."""
+    from importlib import import_module
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_3_semantic_links_status")
+    assert migration.revision == "v0_8_3_semantic_links_status"
+    assert migration.down_revision == "v0_8_3_duplicate_expression_tier"
+    assert len(migration.revision) <= 32
+
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "CREATE TABLE semantic_links ("
+                "id INTEGER PRIMARY KEY, "
+                "entity_type VARCHAR(50) NOT NULL, "
+                "entity_id INTEGER NOT NULL, "
+                "authority VARCHAR(50) NOT NULL, "
+                "external_uri VARCHAR(500) NOT NULL"
+                ")"
+            )
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO semantic_links (id, entity_type, entity_id, authority, external_uri) "
+                "VALUES (1, 'work', 10, 'dbpedia', 'http://dbpedia.org/resource/Test')"
+            )
+        )
+
+    try:
+        run_migration(migration.upgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("semantic_links")}
+            assert "status" in cols
+            row = connection.execute(sa.text("SELECT id, status FROM semantic_links WHERE id = 1")).one()
+            assert row[1] == "accepted"
+
+        run_migration(migration.downgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("semantic_links")}
+            assert "status" not in cols
     finally:
         engine.dispose()

@@ -147,7 +147,7 @@ def test_dbpedia_client_lookup_and_sparql_fallback(app):
             result = DBpediaClient.resolve_work("Dune", media_category="book")
             assert result is not None
             assert result["uri"] == "http://dbpedia.org/resource/Dune_(novel)"
-            assert result["confidence"] == 0.95
+            assert result["confidence"] == 0.85
             assert result["strategy"] == "lookup"
             assert mock_get.call_count == 1
 
@@ -373,6 +373,8 @@ def test_resolve_manifestation_links_pipeline(app):
                                 "resource": ["http://dbpedia.org/resource/Neuromancer"],
                                 "label": ["Neuromancer"],
                                 "score": [97.0],
+                                "comment": ["Neuromancer is a 1984 science fiction novel by William Gibson."],
+                                "typeName": ["dbo:Book", "dbo:Work"],
                             }
                         ]
                     }
@@ -383,6 +385,8 @@ def test_resolve_manifestation_links_pipeline(app):
                                 "resource": ["http://dbpedia.org/resource/William_Gibson"],
                                 "label": ["William Gibson"],
                                 "score": [95.0],
+                                "comment": ["William Ford Gibson is an American-Canadian speculative fiction writer."],
+                                "typeName": ["dbo:Person", "dbo:Writer"],
                             }
                         ]
                     }
@@ -407,7 +411,7 @@ def test_resolve_manifestation_links_pipeline(app):
             assert len(created) > 0
 
             # Verify Work-level links (DBpedia Work, DBpedia Author, WordNet genres/tags)
-            work_links = work.get_semantic_links()
+            work_links = work.get_semantic_links(status=None)
             assert any(link.authority == "dbpedia" and "Neuromancer" in link.external_uri for link in work_links)
             assert any(link.authority == "dbpedia" and "William_Gibson" in link.external_uri for link in work_links)
             assert any(link.authority == "wordnet" for link in work_links)
@@ -415,13 +419,13 @@ def test_resolve_manifestation_links_pipeline(app):
             assert any(link.authority == "dbpedia" and "Category:Cyberpunk" in link.external_uri for link in work_links)
 
             # Verify Manifestation-level links (GeoNames New York)
-            manif_direct = manif.get_semantic_links(include_work=False)
+            manif_direct = manif.get_semantic_links(include_work=False, status=None)
             assert len(manif_direct) == 1
             assert manif_direct[0].authority == "geonames"
             assert "5128581" in manif_direct[0].external_uri
 
             # Verify scoped retrieval
-            all_links = manif.get_semantic_links(include_work=True)
+            all_links = manif.get_semantic_links(include_work=True, status=None)
             assert len(all_links) >= 4
 
             # Verify dictionary grouping
@@ -683,7 +687,7 @@ def test_dbpedia_silmarillion_lookup_parameters_and_tags(app):
             assert result["label"] == "The Silmarillion"
             assert "<B>" not in result["label"]
             assert "<B>" not in result["attributes"]["comment"]
-            assert result["confidence"] == 0.95
+            assert result["confidence"] == 0.85
 
             # Assert request params
             call_kwargs = mock_get.call_args[1]
@@ -795,3 +799,154 @@ def test_resolve_manifestation_links_copenhagen_and_frbr_scoping(app):
         assert len(manif_geo_links) == 1
         assert manif_geo_links[0].pref_label == "Berkeley"
         assert manif_geo_links[0].attributes["role"] == "publication_place"
+        assert manif_geo_links[0].status == "accepted"
+
+
+def test_compute_composite_score_precision():
+    """Verify composite scoring incorporating label similarity, author corroboration, year proximity, and rank margin."""
+    from app.core.lod_linking_service import compute_composite_score
+
+    # Perfect match with corroboration
+    score_full = compute_composite_score(
+        candidate_label="Dune (novel)",
+        target_title="Dune",
+        author="Frank Herbert",
+        candidate_comment="Dune is a 1965 sci-fi novel by Frank Herbert.",
+        year=1965,
+        rank_margin=0.8,
+        has_class_match=True,
+    )
+    assert score_full >= 0.85
+
+    # Disambiguation page rejected
+    score_disambig = compute_composite_score(
+        candidate_label="Dune (disambiguation)",
+        target_title="Dune",
+        author="Frank Herbert",
+        candidate_comment="Dune may refer to:",
+        year=1965,
+        rank_margin=0.8,
+        has_class_match=True,
+    )
+    assert score_disambig == 0.0
+
+    # Wrong class rejected
+    score_wrong_class = compute_composite_score(
+        candidate_label="Dune",
+        target_title="Dune",
+        has_class_match=False,
+    )
+    assert score_wrong_class == 0.0
+
+    # False positive candidate (different work, wrong author) rejected below suggestion threshold
+    score_rejected = compute_composite_score(
+        candidate_label="Dune: Part Two",
+        target_title="Dune",
+        author="Frank Herbert",
+        candidate_comment="Dune: Part Two is a film directed by Denis Villeneuve.",
+        year=1965,
+        rank_margin=0.1,
+        has_class_match=True,
+    )
+    assert score_rejected < 0.55
+
+    # Title match without author corroboration produces suggestion score in [0.55, 0.82)
+    score_suggested = compute_composite_score(
+        candidate_label="Dune",
+        target_title="Dune",
+        author="Uncorroborated Author",
+        candidate_comment="Dune is an epic science fiction universe.",
+        year=None,
+        rank_margin=0.5,
+        has_class_match=True,
+    )
+    assert 0.55 <= score_suggested < 0.82
+
+
+def test_dbpedia_client_class_and_disambiguation_filtering(app):
+    """Verify DBpediaClient filters out disambiguation pages and incompatible ontology classes."""
+    with app.app_context():
+        cache.delete("lod:dbpedia:work:dune:dbo:Book::")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "docs": [
+                {
+                    "resource": ["http://dbpedia.org/resource/Dune_(disambiguation)"],
+                    "label": ["Dune (disambiguation)"],
+                    "score": [120.0],
+                    "comment": ["Dune may refer to:"],
+                    "typeName": ["Work"],
+                },
+                {
+                    "resource": ["http://dbpedia.org/resource/Dune_Band"],
+                    "label": ["Dune"],
+                    "score": [110.0],
+                    "comment": ["Dune is a German electronic music group."],
+                    "typeName": ["Band", "MusicalArtist"],
+                },
+                {
+                    "resource": ["http://dbpedia.org/resource/Dune_(novel)"],
+                    "label": ["Dune (novel)"],
+                    "score": [95.0],
+                    "comment": ["Dune is a 1965 sci-fi novel by Frank Herbert."],
+                    "typeName": ["dbo:Book", "dbo:Work"],
+                },
+            ]
+        }
+
+        with patch("requests.get", return_value=mock_resp):
+            result = DBpediaClient.resolve_work("Dune", media_category="book")
+            assert result is not None
+            assert result["uri"] == "http://dbpedia.org/resource/Dune_(novel)"
+            assert result["confidence"] >= 0.80
+
+
+def test_dual_threshold_status_tagging(app):
+    """Verify dual thresholds tag links as accepted (>=0.82) or suggested (>=0.55)."""
+    with app.app_context():
+        work = Work(title="Test Work")
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9780000000001", meta={"publication_place": "Warsaw"})
+        db.session.add(manif)
+        db.session.flush()
+
+        # Mock resolve_work to return 0.70 (suggested)
+        mock_work_match = {
+            "uri": "http://dbpedia.org/resource/Test_Work",
+            "label": "Test Work",
+            "confidence": 0.70,
+            "strategy": "lookup",
+            "attributes": {"dbo_type": "dbo:Book"},
+        }
+
+        with (
+            patch.object(DBpediaClient, "resolve_work", return_value=mock_work_match),
+            patch.object(
+                GeoNamesClient,
+                "resolve_location",
+                return_value={
+                    "uri": "https://sws.geonames.org/756135/",
+                    "label": "Warsaw",
+                    "confidence": 0.95,
+                    "strategy": "local_gazetteer",
+                    "attributes": {"role": "publication_place"},
+                },
+            ),
+        ):
+            links = resolve_manifestation_links(manif.id, fast_mode=True)
+            work_links = [lnk for lnk in links if lnk.entity_type == "work"]
+            manif_links = [lnk for lnk in links if lnk.entity_type == "manifestation"]
+
+            assert len(work_links) == 1
+            assert work_links[0].status == "suggested"
+
+            assert len(manif_links) == 1
+            assert manif_links[0].status == "accepted"

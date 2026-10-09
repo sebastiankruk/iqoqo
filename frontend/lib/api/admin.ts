@@ -620,6 +620,31 @@ export async function getLodStats(): Promise<LODStats> {
   return res.data.data;
 }
 
+export interface LODCleanupResult {
+  dry_run: boolean;
+  total_evaluated: number;
+  demoted: number;
+  rejected: number;
+  unchanged: number;
+  sample_demotions?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Trigger dry-run or applied cleanup of low-confidence LOD links.
+ *
+ * @param dryRun - Whether to evaluate without committing changes (default true)
+ * @returns Result summary of evaluated, demoted, and unchanged links
+ */
+export async function triggerLodCleanup(dryRun = true): Promise<LODCleanupResult> {
+  const res = await apiClient.post<ApiResponse<LODCleanupResult>>("/v1/admin/lod/cleanup", {
+    dry_run: dryRun,
+  });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to trigger LOD cleanup");
+  }
+  return res.data.data;
+}
+
 /**
  * Retrieve the currently executing batch LOD reconciliation task, or null.
  *
@@ -659,7 +684,7 @@ export async function cancelLodTask(taskId?: string | null): Promise<{ task_id: 
 // --- Duplicate Detection ---
 
 /** Entity tier a duplicate candidate belongs to. */
-export type DuplicateEntityTier = "work" | "manifestation";
+export type DuplicateEntityTier = "work" | "expression" | "manifestation";
 
 /** Lifecycle status of a duplicate candidate. */
 export type DuplicateCandidateStatus = "pending" | "merged" | "dismissed";
@@ -687,6 +712,20 @@ export interface DuplicateWorkSide {
   expression_count: number;
   genres: string | string[] | null;
   description_present: boolean;
+}
+
+/**
+ * One side of an Expression duplicate, as rendered by the review comparison table.
+ */
+export interface DuplicateExpressionSide {
+  tier: "expression";
+  id: number;
+  label: string | null;
+  language: string | null;
+  content_type: string | null;
+  manifestation_count: number;
+  creators: string[];
+  cover_url?: string | null;
 }
 
 /**
@@ -718,7 +757,7 @@ export interface DuplicateManifestationSide {
 }
 
 /** Either side of a candidate, discriminated by the entity tier it came from. */
-export type DuplicateSide = DuplicateWorkSide | DuplicateManifestationSide;
+export type DuplicateSide = DuplicateWorkSide | DuplicateExpressionSide | DuplicateManifestationSide;
 
 /** A queued duplicate pair awaiting administrative review. */
 export interface DuplicateCandidate {
@@ -753,6 +792,7 @@ export interface DuplicateDetectionReport {
   already_known: number;
   created: number;
   work_candidates: number;
+  expression_candidates: number;
   manifestation_candidates: number;
 }
 

@@ -241,6 +241,38 @@ export function ItemCard({
     );
   };
 
+  const workId = isCatalog
+    ? catalogObj?.work_id
+    : (itemObj?.work?.id ?? (itemObj as unknown as { work_id?: number })?.work_id);
+
+  const expressionId = isCatalog
+    ? catalogObj?.expression_id
+    : (itemObj?.expression?.id ?? (itemObj as unknown as { expression_id?: number })?.expression_id);
+
+  const workTitle = isCatalog ? undefined : itemObj?.work?.title;
+  const workLabel = workTitle ? `Work: ${workTitle}` : "Work";
+
+  const expLang = isCatalog ? undefined : itemObj?.expression?.language;
+  const expType = isCatalog ? catalogObj?.content_type : (itemObj?.expression?.content_type ?? itemObj?.content_type);
+  const expressionDetails = expLang && expType ? `${expLang} (${expType})` : expLang || expType || undefined;
+  const expressionLabel = expressionDetails ? `Exp: ${expressionDetails}` : "Expression";
+
+  const handleWorkClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (workId) {
+      router.push(`/work/${workId}`);
+    }
+  };
+
+  const handleExpressionClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (expressionId) {
+      router.push(`/expression/${expressionId}`);
+    }
+  };
+
   const isWishlist = !isCatalog && collectionStatus === "wish_list";
 
   const quantityBadge = quantity > 1 && (
@@ -383,6 +415,34 @@ export function ItemCard({
                   </span>
                 )}
               </div>
+              {(workId || expressionId) && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 relative z-20">
+                  {workId && (
+                    <button
+                      type="button"
+                      data-testid="work-pill"
+                      onClick={handleWorkClick}
+                      title={workTitle ? `Work: ${workTitle}` : "View Work"}
+                      aria-label={workTitle ? `View Work: ${workTitle}` : "View Work"}
+                      className="inline-flex items-center rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground px-2 py-0.5 text-[10px] font-medium max-w-[150px] truncate transition-colors cursor-pointer border border-border/40"
+                    >
+                      <span className="truncate">{workLabel}</span>
+                    </button>
+                  )}
+                  {expressionId && (
+                    <button
+                      type="button"
+                      data-testid="expression-pill"
+                      onClick={handleExpressionClick}
+                      title={expressionDetails ? `Expression: ${expressionDetails}` : "View Expression"}
+                      aria-label={expressionDetails ? `View Expression: ${expressionDetails}` : "View Expression"}
+                      className="inline-flex items-center rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground px-2 py-0.5 text-[10px] font-medium max-w-[150px] truncate transition-colors cursor-pointer border border-border/40"
+                    >
+                      <span className="truncate">{expressionLabel}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -442,6 +502,34 @@ export function ItemCard({
             <div className="mt-1 truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               {mediaLabel}
             </div>
+            {(workId || expressionId) && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1 relative z-20">
+                {workId && (
+                  <button
+                    type="button"
+                    data-testid="work-pill"
+                    onClick={handleWorkClick}
+                    title={workTitle ? `Work: ${workTitle}` : "View Work"}
+                    aria-label={workTitle ? `View Work: ${workTitle}` : "View Work"}
+                    className="inline-flex items-center rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground px-1.5 py-0.5 text-[9px] font-medium max-w-[120px] truncate transition-colors cursor-pointer border border-border/40"
+                  >
+                    <span className="truncate">{workLabel}</span>
+                  </button>
+                )}
+                {expressionId && (
+                  <button
+                    type="button"
+                    data-testid="expression-pill"
+                    onClick={handleExpressionClick}
+                    title={expressionDetails ? `Expression: ${expressionDetails}` : "View Expression"}
+                    aria-label={expressionDetails ? `View Expression: ${expressionDetails}` : "View Expression"}
+                    className="inline-flex items-center rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground px-1.5 py-0.5 text-[9px] font-medium max-w-[120px] truncate transition-colors cursor-pointer border border-border/40"
+                  >
+                    <span className="truncate">{expressionLabel}</span>
+                  </button>
+                )}
+              </div>
+            )}
             {isCatalog && userOwns && userItemId && (
               <button
                 type="button"

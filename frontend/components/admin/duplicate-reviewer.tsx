@@ -125,7 +125,9 @@ function SidePanel({
         {isPrimary && <Badge>Primary</Badge>}
       </div>
 
-      <h3 className="mb-1 font-medium">{side.title || "Untitled"}</h3>
+      <h3 className="mb-1 font-medium">
+        {side.tier === "expression" ? side.label || "Untitled" : side.title || "Untitled"}
+      </h3>
       <p className="mb-3 text-xs text-muted-foreground">ID {side.id}</p>
 
       <dl className="space-y-2 text-sm">
@@ -158,6 +160,29 @@ function SidePanel({
             {side.cover_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={side.cover_url} alt={`Cover for ${side.title}`} className="mt-2 h-24 w-auto rounded" />
+            )}
+          </>
+        ) : side.tier === "expression" ? (
+          <>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Language</dt>
+              <dd>{side.language ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Content type</dt>
+              <dd>{side.content_type ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Manifestations</dt>
+              <dd>{side.manifestation_count}</dd>
+            </div>
+            {side.cover_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={side.cover_url}
+                alt={`Cover for ${side.label || "expression"}`}
+                className="mt-2 h-24 w-auto rounded"
+              />
             )}
           </>
         ) : (

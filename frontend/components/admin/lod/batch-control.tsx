@@ -39,6 +39,8 @@ export interface BatchControlProps {
   isTriggering?: boolean;
   onTrigger: (params: { unlinked_only: boolean; throttle_delay: number }) => void;
   onCancel?: () => void;
+  onDryRunCleanup?: () => void;
+  isCleaningUp?: boolean;
 }
 
 /**
@@ -46,13 +48,20 @@ export interface BatchControlProps {
  *
  * Strictly adheres to the UX auditor <= 4 buttons heuristic:
  * 1. Primary CTA: "Start Full Scan" / "Reconciling..."
- * 2. Secondary Action: "Cancel Scan" (visible only during active job execution)
+ * 2. Secondary Action: "Cancel Scan" (visible only during active job execution) OR "Dry-run cleanup"
  * 3. Tertiary Action: "Scan Options" Dropdown
  *
  * @param props - Component properties containing task status and trigger callbacks.
  * @returns React component with batch execution controls and live progress tracking.
  */
-export function BatchControl({ status, isTriggering = false, onTrigger, onCancel }: BatchControlProps) {
+export function BatchControl({
+  status,
+  isTriggering = false,
+  onTrigger,
+  onCancel,
+  onDryRunCleanup,
+  isCleaningUp = false,
+}: BatchControlProps) {
   const t = useTranslations("LodReconciliation.batchControl");
 
   const [unlinkedOnly, setUnlinkedOnly] = useState(true);
@@ -82,7 +91,7 @@ export function BatchControl({ status, isTriggering = false, onTrigger, onCancel
           <Button
             data-testid="lod-start-scan-button"
             onClick={handleStart}
-            disabled={isRunning}
+            disabled={isRunning || isCleaningUp}
             className="gap-2 min-w-[140px]"
           >
             {isRunning ? (
@@ -98,8 +107,8 @@ export function BatchControl({ status, isTriggering = false, onTrigger, onCancel
             )}
           </Button>
 
-          {/* Button 2: Cancel (Visible only during active task execution) */}
-          {isRunning && onCancel && (
+          {/* Button 2: Cancel (during active run) or Dry-run cleanup (when idle) */}
+          {isRunning && onCancel ? (
             <Button
               data-testid="lod-cancel-scan-button"
               variant="outline"
@@ -109,6 +118,23 @@ export function BatchControl({ status, isTriggering = false, onTrigger, onCancel
               <XCircle className="h-4 w-4" />
               <span>{t("cancelScan")}</span>
             </Button>
+          ) : (
+            onDryRunCleanup && (
+              <Button
+                data-testid="lod-dry-run-cleanup-button"
+                variant="outline"
+                onClick={onDryRunCleanup}
+                disabled={isRunning || isCleaningUp}
+                className="gap-2"
+              >
+                {isCleaningUp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SlidersHorizontal className="h-4 w-4" />
+                )}
+                <span>Dry-run cleanup</span>
+              </Button>
+            )
           )}
 
           {/* Button 3: Tertiary Options Dropdown */}

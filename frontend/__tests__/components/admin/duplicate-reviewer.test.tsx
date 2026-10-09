@@ -126,6 +126,37 @@ const MANIFESTATION_CANDIDATE: DuplicateCandidate = {
   },
 };
 
+const EXPRESSION_CANDIDATE: DuplicateCandidate = {
+  ...WORK_CANDIDATE,
+  id: 5,
+  entity_tier: "expression",
+  source_id: 30,
+  target_id: 31,
+  confidence: null,
+  resolution_source: "heuristic",
+  llm_reasoning: "heuristic: identical normalized label; identical language; identical content_type",
+  source: {
+    tier: "expression",
+    id: 30,
+    label: "The Dispossessed (English text)",
+    language: "en",
+    content_type: "text",
+    manifestation_count: 2,
+    creators: ["le guin ursula k"],
+    cover_url: null,
+  },
+  target: {
+    tier: "expression",
+    id: 31,
+    label: "The Dispossessed (English text)",
+    language: "en",
+    content_type: "text",
+    manifestation_count: 1,
+    creators: ["le guin ursula k"],
+    cover_url: null,
+  },
+};
+
 /**
  * Stub the candidate queue with the given rows.
  *
@@ -173,6 +204,18 @@ describe("DuplicateReviewer Component", () => {
       expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("9780060512750");
       expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("Harper & Row");
       expect(screen.getByTestId("duplicate-side-B")).toHaveTextContent("HAR-1975");
+    });
+
+    it("renders both sides of an Expression pair with language, content type, and manifestation count", async () => {
+      mockQueue([EXPRESSION_CANDIDATE]);
+      render(<DuplicateReviewer canEdit />);
+
+      expect(await screen.findByTestId("duplicate-candidate-5")).toBeInTheDocument();
+      expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("The Dispossessed (English text)");
+      expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("en");
+      expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("text");
+      expect(screen.getByTestId("duplicate-side-A")).toHaveTextContent("2");
+      expect(screen.getByTestId("duplicate-side-B")).toHaveTextContent("1");
     });
 
     it("labels a model verdict as an LLM confidence percentage", async () => {
@@ -316,6 +359,7 @@ describe("DuplicateReviewer Component", () => {
         already_known: 0,
         created: 2,
         work_candidates: 3,
+        expression_candidates: 0,
         manifestation_candidates: 1,
       });
       render(<DuplicateReviewer canEdit />);
@@ -356,7 +400,7 @@ describe("DuplicateReviewer Component", () => {
     // viewer keeps the two primary toggles, which only change which side is
     // highlighted; the destructive controls are gone.
     it("keeps the read-only card's control count unchanged", async () => {
-      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE]);
+      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE, EXPRESSION_CANDIDATE]);
       render(<DuplicateReviewer canEdit={false} />);
 
       await screen.findByTestId("duplicate-candidate-1");
@@ -364,6 +408,11 @@ describe("DuplicateReviewer Component", () => {
         .getAllByRole("button")
         .map(b => b.textContent?.trim());
       expect(labels).toEqual(["Primary selected", "Keep this one"]);
+
+      const exprLabels = within(screen.getByTestId("duplicate-candidate-5"))
+        .getAllByRole("button")
+        .map(b => b.textContent?.trim());
+      expect(exprLabels).toEqual(["Primary selected", "Keep this one"]);
 
       // The only view-level action left is Refresh.
       const viewButtons = screen.getAllByRole("button").map(b => b.textContent?.trim());
@@ -373,11 +422,13 @@ describe("DuplicateReviewer Component", () => {
         "Keep this one",
         "Primary selected",
         "Keep this one",
+        "Primary selected",
+        "Keep this one",
       ]);
     });
 
     it("keeps the editable card's control count fixed as tiers are added", async () => {
-      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE]);
+      mockQueue([WORK_CANDIDATE, MANIFESTATION_CANDIDATE, EXPRESSION_CANDIDATE]);
       render(<DuplicateReviewer canEdit />);
 
       await screen.findByTestId("duplicate-candidate-1");
@@ -399,6 +450,12 @@ describe("DuplicateReviewer Component", () => {
         "Primary selected",
         "Keep this one",
         "Merge keeping entity 20",
+      ]);
+      expect(labels("duplicate-candidate-5")).toEqual([
+        "Not duplicates",
+        "Primary selected",
+        "Keep this one",
+        "Merge keeping entity 30",
       ]);
     });
   });

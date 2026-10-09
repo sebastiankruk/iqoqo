@@ -27,6 +27,7 @@ import {
   getLodTaskStatus,
   getActiveLodTask,
   triggerLodReconciliation,
+  triggerLodCleanup,
   cancelLodTask,
 } from "../admin";
 import type { LODReconciliationTriggerParams } from "@/types/admin";
@@ -347,6 +348,21 @@ export function useCancelLodTask() {
       if (data?.task_id) {
         qc.invalidateQueries({ queryKey: queryKeys.lodTaskStatus(data.task_id) });
       }
+    },
+  });
+}
+
+/**
+ * Custom hook to trigger dry-run or applied cleanup of low-confidence LOD links.
+ *
+ * @returns Mutation result for triggering LOD cleanup
+ */
+export function useTriggerLodCleanup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dryRun: boolean = true) => triggerLodCleanup(dryRun),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.lodStats });
     },
   });
 }

@@ -77,8 +77,8 @@ export default function DuplicatesPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Duplicate Review</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Compare flagged Works and Manifestations side by side, then keep the richer record or dismiss the false
-                positive. Merging is permanent and re-parents every child onto the surviving entity.
+                Compare flagged Works, Expressions, and Manifestations side by side, then keep the richer record or
+                dismiss the false positive. Merging is permanent and re-parents every child onto the surviving entity.
               </p>
             </div>
             <DuplicateReviewer canEdit={canViewMetadata} />

@@ -43,6 +43,7 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
   const totalManifestations = stats?.total_manifestations ?? 0;
   const linkedManifestations = stats?.linked_manifestations ?? 0;
   const unlinkedManifestations = stats?.unlinked_manifestations ?? 0;
+  const suggestedLinks = stats?.suggested_links ?? 0;
 
   const dbpediaCount = stats?.by_authority?.dbpedia ?? 0;
   const geonamesCount = stats?.by_authority?.geonames ?? 0;
@@ -76,6 +77,18 @@ export function MetricCards({ stats, taskCounts, totalProcessed, isProcessing = 
                 <span>
                   <span className="text-foreground font-medium">{linkedManifestations.toLocaleString()} linked</span> ·{" "}
                   {unlinkedManifestations.toLocaleString()} unlinked
+                  {suggestedLinks > 0 && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <span
+                        className="text-amber-600 dark:text-amber-400 font-medium"
+                        data-testid="suggested-links-count"
+                      >
+                        {suggestedLinks.toLocaleString()} suggested
+                      </span>
+                    </>
+                  )}
                 </span>
               )}
             </p>

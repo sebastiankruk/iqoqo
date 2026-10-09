@@ -180,6 +180,13 @@ describe("normalizeMetaValue", () => {
   it("normalizes genres field", () => {
     expect(normalizeMetaValue("genres", "Thriller, Mystery")).toEqual(["Thriller", "Mystery"]);
   });
+
+  it("handles stringified JSON arrays", () => {
+    expect(normalizeMetaValue("authors", '["Remigiusz Mróz", "Stephen King"]')).toEqual([
+      "Remigiusz Mróz",
+      "Stephen King",
+    ]);
+  });
 });
 
 describe("ensureArray", () => {

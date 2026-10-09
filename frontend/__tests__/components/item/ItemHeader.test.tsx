@@ -107,3 +107,64 @@ describe("ItemHeader identifier fallback", () => {
     expect(screen.queryByText("CAPITAL")).not.toBeInTheDocument();
   });
 });
+
+describe("ItemHeader FRBR Hierarchy breadcrumbs", () => {
+  it("renders Work, Expression, Manifestation, and Item breadcrumb links", () => {
+    const item: Item = {
+      ...mockItem,
+      id: 5,
+      manifestation_id: 15,
+      work: {
+        id: 25,
+        title: "Dune Work",
+        authors: ["Frank Herbert"],
+        meta: {},
+        container_work_id: null,
+      },
+      expression: {
+        id: 35,
+        language: "English",
+        content_type: "text",
+        kind: "novel",
+      },
+    };
+
+    render(<ItemHeader item={item} />);
+
+    const nav = screen.getByRole("navigation", { name: "FRBR Hierarchy" });
+    expect(nav).toBeInTheDocument();
+
+    const workLink = screen.getByRole("link", { name: /Work: Dune Work/i });
+    expect(workLink).toHaveAttribute("href", "/work/25");
+
+    const expressionLink = screen.getByRole("link", { name: /Expression: English - text/i });
+    expect(expressionLink).toHaveAttribute("href", "/expression/35");
+
+    const manifestationLink = screen.getByRole("link", { name: "Manifestation" });
+    expect(manifestationLink).toHaveAttribute("href", "/manifestation/15");
+
+    expect(screen.getByText("Item")).toBeInTheDocument();
+  });
+
+  it("handles missing work and expression gracefully", () => {
+    const item: Item = {
+      ...mockItem,
+      id: 7,
+      manifestation_id: 17,
+      work: undefined,
+      expression: undefined,
+    };
+
+    render(<ItemHeader item={item} />);
+
+    const nav = screen.getByRole("navigation", { name: "FRBR Hierarchy" });
+    expect(nav).toBeInTheDocument();
+
+    expect(screen.queryByText(/Work/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Expression/i)).not.toBeInTheDocument();
+
+    const manifestationLink = screen.getByRole("link", { name: "Manifestation" });
+    expect(manifestationLink).toHaveAttribute("href", "/manifestation/17");
+    expect(screen.getByText("Item")).toBeInTheDocument();
+  });
+});

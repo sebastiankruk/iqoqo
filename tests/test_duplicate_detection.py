@@ -104,18 +104,30 @@ def make_work(title: str, *, authors: list[str] | None = None, year: int | None 
     return work
 
 
-def make_expression(work: Work, *, language: str = "en", content_type: str = "text") -> Expression:
+def make_expression(
+    work: Work,
+    *,
+    language: str = "en",
+    content_type: str = "text",
+    label: str | None = None,
+    meta: dict | None = None,
+) -> Expression:
     """Create and persist an Expression belonging to a Work.
 
     Args:
         work: Parent Work.
         language: Expression language code.
         content_type: Expression content type.
+        label: Optional Expression label/title stored in meta.
+        meta: Optional additional metadata dict.
 
     Returns:
         The persisted Expression.
     """
-    expression = Expression(work_id=work.id, language=language, content_type=content_type, meta={})
+    expr_meta = dict(meta or {})
+    if label is not None:
+        expr_meta["label"] = label
+    expression = Expression(work_id=work.id, language=language, content_type=content_type, meta=expr_meta)
     db.session.add(expression)
     db.session.commit()
     return expression
@@ -240,7 +252,7 @@ def test_candidate_is_re_exported_from_models_module():
     from app.db import core, models
 
     assert models.DuplicateCandidate is core.DuplicateCandidate
-    assert models.DUPLICATE_ENTITY_TIERS == ("work", "manifestation")
+    assert models.DUPLICATE_ENTITY_TIERS == ("work", "expression", "manifestation")
     assert models.DUPLICATE_CANDIDATE_STATUSES == ("pending", "merged", "dismissed")
 
 
@@ -475,6 +487,70 @@ def test_below_threshold_is_not_queued():
     assert report.below_threshold == 1
     assert report.created == 0
     assert DuplicateCandidate.query.count() == 0
+
+
+def test_expression_screening_no_parent_work_fallback_different_languages():
+    """Two Expressions of one Work in different languages must not produce candidate pairs.
+
+    Expression blocking keys derive strictly from normalize_title(expression.label)
+    plus (language, content_type) without falling back to the parent Work title.
+    """
+    work = make_work("The Hobbit", authors=["J. R. R. Tolkien"])
+    make_expression(work, language="en", content_type="text")
+    make_expression(work, language="pl", content_type="text")
+
+    report = svc.run_detection(tier="expression")
+    assert report.candidate_pairs == 0
+    assert report.created == 0
+
+
+def test_expression_screening_cross_content_type_discarded():
+    """Expressions differing in language or content_type must be discarded before scoring."""
+    work = make_work("The Lord of the Rings", authors=["J. R. R. Tolkien"])
+    e1 = Expression(work_id=work.id, language="en", content_type="text", meta={"label": "Fellowship"})
+    e2 = Expression(work_id=work.id, language="en", content_type="sound", meta={"label": "Fellowship"})
+    db.session.add_all([e1, e2])
+    db.session.commit()
+
+    report = svc.run_detection(tier="expression")
+    assert report.candidate_pairs == 0
+    assert report.created == 0
+
+
+def test_expression_screening_positive_auto_accept():
+    """Two Expressions sharing language, content_type, and normalized label are auto accepted."""
+    work = make_work("The Hobbit", authors=["J. R. R. Tolkien"])
+    e1 = Expression(work_id=work.id, language="en", content_type="text", meta={"label": "Original Text"})
+    e2 = Expression(work_id=work.id, language="en", content_type="text", meta={"label": "Original Text"})
+    db.session.add_all([e1, e2])
+    db.session.commit()
+
+    with patch.object(svc, "evaluate_pair_with_llm") as mock_llm:
+        report = svc.run_detection(tier="expression")
+
+    assert report.candidate_pairs == 1
+    assert report.auto_accepted == 1
+    assert report.created == 1
+    assert mock_llm.call_count == 0
+
+
+def test_describe_expression_payload_shape():
+    """_describe_expression returns discriminated payload with required fields."""
+    work = make_work("1984", authors=["George Orwell"])
+    expr = Expression(work_id=work.id, language="en", content_type="text", meta={"label": "English Novel"})
+    db.session.add(expr)
+    db.session.commit()
+    make_manifestation(expr)
+
+    payload = svc._describe_for_tier("expression", expr.id)
+    assert payload is not None
+    assert payload["tier"] == "expression"
+    assert payload["id"] == expr.id
+    assert payload["label"] == "English Novel"
+    assert payload["language"] == "en"
+    assert payload["content_type"] == "text"
+    assert payload["manifestation_count"] == 1
+    assert "george orwell" in payload["creators"]
 
 
 def test_dismissed_pairs_are_never_requeued():
@@ -1361,3 +1437,163 @@ def test_merge_adopting_isbn_respects_the_unique_index():
 
     assert db.session.get(Manifestation, target.id).isbn13 == "9780441013593"
     assert Manifestation.query.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Expression merge & candidate lifecycle
+# ---------------------------------------------------------------------------
+
+
+def test_merge_expression_reparents_manifestations_and_preserves_intent():
+    """Child Manifestations and user wishlist rows follow the surviving Expression."""
+    from app.db.core import UserWorkIntent
+
+    work = make_work("Dune")
+    target = make_expression(work, language="en", content_type="text", label="Original Text")
+    source = make_expression(work, language="en", content_type="text", label="Duplicate Text")
+    manif = make_manifestation(source)
+
+    user = User(email="test_uwi_expr@iqoqo.local", password_hash="fake", visibility="private")
+    db.session.add(user)
+    db.session.commit()
+
+    uwi = UserWorkIntent(user_id=user.id, work_id=work.id, expression_id=source.id, status="want_to_read")
+    db.session.add(uwi)
+    db.session.commit()
+
+    target_id, source_id, manif_id, uwi_id = target.id, source.id, manif.id, uwi.id
+
+    svc.merge_expression(source, target, user_id=None)
+    db.session.expire_all()
+
+    assert db.session.get(Expression, source_id) is None
+    assert db.session.get(Manifestation, manif_id).expression_id == target_id
+    assert db.session.get(UserWorkIntent, uwi_id).expression_id == target_id
+
+    audit = EntityAuditLog.query.filter_by(entity_type="expression", change_type="merge_expression").first()
+    assert audit is not None
+    assert audit.diff["source_id"] == source_id
+    assert audit.diff["target_id"] == target_id
+    assert audit.diff["migrated_children"] == 1
+
+
+def test_merge_expression_refuses_different_languages():
+    """Distinct languages represent distinct intellectual realizations and must never merge."""
+    work = make_work("Dune")
+    target = make_expression(work, language="en", content_type="text")
+    source = make_expression(work, language="pl", content_type="text")
+
+    with pytest.raises(svc.DuplicateServiceError, match="different languages"):
+        svc.merge_expression(source, target, user_id=None)
+
+
+def test_merge_expression_refuses_different_content_types():
+    """Distinct content types (e.g. text vs audio) must never merge."""
+    work = make_work("Dune")
+    target = make_expression(work, language="en", content_type="text")
+    source = make_expression(work, language="en", content_type="sound")
+
+    with pytest.raises(svc.DuplicateServiceError, match="different content types"):
+        svc.merge_expression(source, target, user_id=None)
+
+
+def test_merge_expression_rejects_self_merge():
+    """Merging an Expression into itself is a caller error."""
+    work = make_work("Dune")
+    expr = make_expression(work, language="en", content_type="text")
+
+    with pytest.raises(svc.DuplicateServiceError, match="Cannot merge an Expression with itself"):
+        svc.merge_expression(expr, expr, user_id=None)
+
+
+def test_resolve_candidate_merge_expression_tier():
+    """Resolving an Expression candidate consolidates the pair and updates queue status."""
+    work = make_work("Dune")
+    target = make_expression(work, language="en", content_type="text", label="Dune Text")
+    source = make_expression(work, language="en", content_type="text", label="Dune Text Duplicate")
+    manif = make_manifestation(source)
+    candidate = svc.record_candidate(
+        "expression", source.id, target.id, 0.95, "Same expression.", resolution_source=svc.DUPLICATE_RESOLUTION_HEURISTIC
+    )
+    assert candidate is not None
+
+    result = svc.resolve_candidate_merge(candidate, primary_entity_id=target.id, user_id=None)
+
+    assert result["primary_id"] == target.id
+    assert result["merged_id"] == source.id
+    assert result["entity_tier"] == "expression"
+
+    db.session.expire_all()
+    assert db.session.get(Expression, source.id) is None
+    assert db.session.get(Manifestation, manif.id).expression_id == target.id
+
+    db.session.refresh(candidate)
+    assert candidate.status == "merged"
+
+
+def test_api_list_candidates_filters_by_entity_tier_expression(client, custodian_headers):
+    """GET /duplicates?entity_tier=expression filters candidate queue to Expression tier."""
+    w1, w2 = make_work("Work A"), make_work("Work B")
+    c_work = svc.record_candidate("work", w1.id, w2.id, 0.9, "Work match")
+    e1 = make_expression(w1, language="en", content_type="text")
+    e2 = make_expression(w1, language="en", content_type="text")
+    c_expr = svc.record_candidate("expression", e1.id, e2.id, 0.9, "Expr match")
+    assert c_work is not None
+    assert c_expr is not None
+
+    response = client.get(f"{DUPLICATES_URL}?entity_tier=expression", headers=custodian_headers)
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert len(data) == 1
+    assert data[0]["id"] == c_expr.id
+    assert data[0]["entity_tier"] == "expression"
+
+
+def test_api_scan_supports_expression_tier(client, custodian_headers):
+    """POST /duplicates/scan admits tier='expression' without error."""
+    work = make_work("Test Work for Expression Scan")
+    make_expression(work, language="en", content_type="text", label="Shared Label")
+    make_expression(work, language="en", content_type="text", label="Shared Label")
+
+    response = client.post(f"{DUPLICATES_URL}/scan", headers=custodian_headers, json={"tier": "expression"})
+
+    assert response.status_code == 200
+    report_data = response.get_json()["data"]
+    assert report_data["expression_candidates"] >= 1
+
+
+def test_api_merge_expression_candidate_end_to_end(client, custodian_headers):
+    """POST /duplicates/<id>/merge resolves an Expression candidate end-to-end."""
+    work = make_work("The Hobbit")
+    target = make_expression(work, language="en", content_type="text", label="The Hobbit (English)")
+    source = make_expression(work, language="en", content_type="text", label="The Hobbit (English Duplicate)")
+    manif = make_manifestation(source)
+    candidate = svc.record_candidate("expression", source.id, target.id, 0.95, "Duplicate expression.")
+    assert candidate is not None
+
+    response = client.post(f"{DUPLICATES_URL}/{candidate.id}/merge", headers=custodian_headers, json={"primary_id": target.id})
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["data"]["entity_tier"] == "expression"
+    assert body["data"]["primary_id"] == target.id
+    assert body["data"]["merged_id"] == source.id
+
+    db.session.expire_all()
+    assert db.session.get(Expression, source.id) is None
+    assert db.session.get(Manifestation, manif.id).expression_id == target.id
+
+
+def test_api_merge_expression_refuses_cross_language_with_400(client, custodian_headers):
+    """POST /duplicates/<id>/merge returns 400 when attempting a cross-language Expression merge."""
+    work = make_work("The Hobbit")
+    target = make_expression(work, language="en", content_type="text")
+    source = make_expression(work, language="pl", content_type="text")
+    candidate = svc.record_candidate("expression", source.id, target.id, 0.95, "Forced candidate.")
+    assert candidate is not None
+
+    response = client.post(f"{DUPLICATES_URL}/{candidate.id}/merge", headers=custodian_headers, json={"primary_id": target.id})
+
+    assert response.status_code == 400
+    assert "different languages" in response.get_json()["error"]

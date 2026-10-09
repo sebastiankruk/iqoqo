@@ -15,6 +15,7 @@
 //
 "use client";
 
+import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import type { Item } from "@/types/frbr";
@@ -22,7 +23,7 @@ import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, Tag } from "lucide-react";
+import { Disc, BookOpen, Calendar, Tag, ChevronRight } from "lucide-react";
 
 import { DiscoveryPivot } from "./discovery-pivot";
 
@@ -128,6 +129,55 @@ export function ItemHeader({ item }: ItemHeaderProps) {
       </div>
 
       <div className="flex flex-col flex-1 w-full">
+        {/* FRBR Hierarchy Breadcrumbs */}
+        <nav
+          aria-label="FRBR Hierarchy"
+          className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mb-3"
+        >
+          {item.work?.id && (
+            <>
+              <Link
+                href={`/work/${item.work.id}`}
+                className="hover:text-primary hover:underline transition-colors font-medium"
+              >
+                Work{item.work.title ? `: ${item.work.title}` : ""}
+              </Link>
+              <ChevronRight className="h-3 w-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+            </>
+          )}
+
+          {item.expression?.id && (
+            <>
+              <Link
+                href={`/expression/${item.expression.id}`}
+                className="hover:text-primary hover:underline transition-colors font-medium"
+              >
+                Expression
+                {item.expression.language || item.expression.content_type
+                  ? `: ${[item.expression.language, item.expression.content_type].filter(Boolean).join(" - ")}`
+                  : ""}
+              </Link>
+              <ChevronRight className="h-3 w-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+            </>
+          )}
+
+          {item.manifestation_id && (
+            <>
+              <Link
+                href={`/manifestation/${item.manifestation_id}`}
+                className="hover:text-primary hover:underline transition-colors font-medium"
+              >
+                Manifestation
+              </Link>
+              <ChevronRight className="h-3 w-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
+            </>
+          )}
+
+          <span className="text-foreground font-semibold" aria-current="page">
+            Item
+          </span>
+        </nav>
+
         {/* Media type Badge */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <Badge
