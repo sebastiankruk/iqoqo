@@ -108,11 +108,17 @@ SPARQL_SERVICE_SECRET="your-generated-secret-key"
 # SPARQL service URL inside Docker network
 SPARQL_SERVICE_URL="http://sparql-runner:5050"
 
-# Execution mode: service | in_process | auto
-SPARQL_EXECUTION_MODE="service"
+# Execution mode: service | in_process | auto (default: auto)
+SPARQL_EXECUTION_MODE="auto"
 
 # Master kill-switch (true = enabled; false = controlled 503)
 SPARQL_SERVICE_ENABLED=true
+
+# Execution timeout in seconds for SPARQL queries (default: 15.0)
+SPARQL_QUERY_TIMEOUT=15.0
+
+# Listening port for internal SPARQL execution microservice (default: 5050)
+SPARQL_SERVICE_PORT=5050
 ```
 
 ### Canary Verification
