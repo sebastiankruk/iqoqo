@@ -25,22 +25,24 @@ The system SHALL provide an asynchronous background pipeline that matches catalo
 - **THEN** the system logs the failure, leaves existing links intact, and marks the task for subsequent retry without corrupting catalog entity data.
 
 ### Requirement: DBpedia Entity Linking for Works and Contributors
-The system SHALL reconcile Work titles and Contributor names against DBpedia resources to establish canonical Linked Open Data URIs.
+The system SHALL reconcile Work titles and Contributor names against DBpedia resources using class-constrained candidate ranking and confidence scoring to prevent false-positive links.
 
 #### Scenario: Resolving a Work to its canonical DBpedia creative work entity
 
 - **WHEN** the linking pipeline processes a Work with title and author metadata matching a DBpedia resource
-- **THEN** the system associates the canonical DBpedia URI (e.g. `http://dbpedia.org/resource/...`) with the Work and records a confidence score.
+- **THEN** the system matches against candidate resources restricted to creative work ontology classes compatible with the expression content type
+- **AND** the system calculates a composite confidence score incorporating label similarity, contributor corroboration, and candidate rank margin
+- **AND** if the score meets or exceeds the auto-apply threshold, the link is created with status `accepted`, otherwise if meeting the suggestion threshold it is created with status `suggested`.
 
 #### Scenario: Resolving a Contributor to a DBpedia Person or Organization
 
 - **WHEN** the linking pipeline resolves an author, artist, or publisher contributor
-- **THEN** the system matches the entity against DBpedia foaf:Person or schema:Organization resources and stores the external URI.
+- **THEN** the system restricts matches to DBpedia `foaf:Person` or `schema:Organization` resources and rejects non-agent entities.
 
 #### Scenario: Disambiguating entities using catalog media context
 
 - **WHEN** multiple candidate DBpedia resources match an entity title
-- **THEN** the system uses media category (book, music album, board game) and publication year to filter and select the highest-confidence candidate.
+- **THEN** the system uses media category (book, music album, board game), creator corroboration, and publication year to filter and rank candidates, rejecting disambiguation pages and list resources.
 
 ### Requirement: WordNet Lexical Concept Linking
 The system SHALL map genre, subject, and topical tags associated with catalog Works to formal WordNet synsets and lexical concepts.
@@ -56,12 +58,12 @@ The system SHALL map genre, subject, and topical tags associated with catalog Wo
 - **THEN** the system skips link creation for that tag and completes reconciliation for all other metadata attributes.
 
 ### Requirement: GeoNames Resolution for Publication Places
-The system SHALL reconcile publication places and publisher locations associated with Manifestations against GeoNames geographic entities, prioritizing an offline-first local gazetteer database and gracefully falling back to remote services.
+The system SHALL reconcile publication places and publisher locations associated with Manifestations against GeoNames geographic entities with feature-class restrictions to prevent non-place matches, prioritizing an offline-first local gazetteer database and gracefully falling back to remote services.
 
 #### Scenario: Resolving publisher place of publication to a canonical GeoNames URI
 
 - **WHEN** a Manifestation contains a publication place string (e.g., "London", "Warszawa", "New York")
-- **THEN** the system queries the geographic authority (prioritizing the local offline GeoNames gazetteer database and falling back to remote web services when configured), selects the primary administrative place, and links the canonical GeoNames URI (e.g. `https://sws.geonames.org/{geonameId}/`).
+- **THEN** the system queries GeoNames filtering by populated place feature classes (`P`), selects the canonical place matching country and admin bounds, and links the GeoNames URI.
 
 #### Scenario: Fallback to remote GeoNames API when place is missing locally
 
@@ -97,12 +99,12 @@ The system MUST associate external semantic links strictly with their correspond
 - **THEN** physical or digital Item copies (F4) remain separate from abstract LOD links, inheriting catalog semantics via their parent Manifestation.
 
 ### Requirement: Semantic Links Retrieval and Management API
-The system SHALL expose REST API endpoints allowing authenticated clients to query, trigger, and curate semantic links for catalog entities.
+The system SHALL expose REST API endpoints allowing authenticated clients to query, trigger, and curate semantic links for catalog entities, including link review status.
 
 #### Scenario: Fetching semantic links for a manifestation
 
 - **WHEN** an authenticated client issues a GET request to `/api/manifestations/<id>/semantic-links`
-- **THEN** the system returns all associated external links categorized by authority (DBpedia, WordNet, GeoNames), target FRBR entity level, confidence score, and verification status with HTTP status 200.
+- **THEN** the system returns all associated external links categorized by authority (DBpedia, WordNet, GeoNames), target FRBR entity level, confidence score, verification status, and review status (`accepted`, `suggested`, `rejected`) with HTTP status 200.
 
 #### Scenario: Triggering an on-demand re-linking task
 
@@ -112,7 +114,12 @@ The system SHALL expose REST API endpoints allowing authenticated clients to que
 #### Scenario: Deleting or overriding an incorrect semantic link
 
 - **WHEN** an authorized user issues a DELETE request to `/api/manifestations/<id>/semantic-links/<link_id>`
-- **THEN** the system removes the semantic link and returns HTTP status 204 No Content.
+- **THEN** the system marks the link as rejected or removes it, recording the decision in EntityAuditLog, and returns HTTP status 204 No Content.
+
+#### Scenario: Accepting or rejecting a suggested semantic link
+
+- **WHEN** an authorized user issues a PATCH request to `/api/manifestations/<id>/semantic-links/<link_id>` with `status="accepted"` or `status="rejected"`
+- **THEN** the system updates the link status, records an audit event, and returns HTTP status 200 OK.
 
 ### Requirement: Manifestation Semantic Links UI
 The system SHALL display an interactive Linked Open Data panel on manifestation detail pages presenting resolved external entities with visual indicators and direct outbound links.

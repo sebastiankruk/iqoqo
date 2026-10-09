@@ -106,25 +106,6 @@ The system MUST provide authenticated REST endpoints under `/api/v1/admin/duplic
 - **WHEN** a client requests a tier outside `work`, `expression`, `manifestation`, and `all`
 - **THEN** the system responds with a validation error and creates nothing.
 
-### Requirement: FRBR-Compliant Work Merging
-
-The system MUST provide an atomic administrative merge action for duplicate Works at `/api/v1/admin/duplicates/<id>/merge` that transfers all child Expressions from the secondary Work to the primary Work, re-links associated Work contributions and expansion links, re-points every table that references the Work tier — including wishlist entries, box-set memberships, work expansions, container aggregations, social feedback, social notes, and escalation requests — onto the survivor, removes the secondary Work, records an entry in `EntityAuditLog`, and transitions the candidate status to `merged`. Merging MUST NEVER bypass the FRBR hierarchy, orphan Expressions, or destroy a row that references the merged Work. The source row MUST be removed with a row-level delete that does not trigger ORM `delete-orphan` processing.
-
-#### Scenario: Merging duplicate Works re-parents child Expressions
-- **WHEN** an administrator confirms the merge of secondary Work B into primary Work A
-- **THEN** all Expressions previously associated with Work B are updated to reference Work A as their parent `work_id`, Work B is removed from active catalog queries, and an audit log records the merge event.
-
-#### Scenario: Transaction rollback upon merge failure
-- **WHEN** a database error occurs during Expression re-parenting or relationship updating
-- **THEN** the entire merge transaction rolls back cleanly, leaving all Works and Expressions in their original state.
-
-#### Scenario: Referencing rows follow the survivor
-- **WHEN** a Work is merged while it is referenced by a wishlist entry, a box-set membership, a work expansion, a container aggregation, social feedback, a social note, or an escalation request
-- **THEN** every such row is re-pointed to the survivor, and the audit entry records the per-table counts.
-
-#### Scenario: A contributor unique to the source follows the survivor
-- **WHEN** the source Work has a contributor that the target Work does not
-- **THEN** that contribution is re-pointed to the survivor rather than removed, and the survivor ends up with the union of both contributor sets.
 
 ### Requirement: Admin Duplicate Review Interface
 

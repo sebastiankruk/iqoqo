@@ -21,12 +21,22 @@ The system SHALL reconcile Work titles and Contributor names against DBpedia res
 - **THEN** the system uses media category (book, music album, board game), creator corroboration, and publication year to filter and rank candidates, rejecting disambiguation pages and list resources.
 
 ### Requirement: GeoNames Resolution for Publication Places
-The system SHALL reconcile publication places and publisher locations associated with Manifestations against GeoNames geographic entities with feature-class restrictions to prevent non-place matches.
+The system SHALL reconcile publication places and publisher locations associated with Manifestations against GeoNames geographic entities with feature-class restrictions to prevent non-place matches, prioritizing an offline-first local gazetteer database and gracefully falling back to remote services.
 
 #### Scenario: Resolving publisher place of publication to a canonical GeoNames URI
 
 - **WHEN** a Manifestation contains a publication place string (e.g., "London", "Warszawa", "New York")
 - **THEN** the system queries GeoNames filtering by populated place feature classes (`P`), selects the canonical place matching country and admin bounds, and links the GeoNames URI.
+
+#### Scenario: Fallback to remote GeoNames API when place is missing locally
+
+- **WHEN** a publication place is not found in the local offline gazetteer and a valid GeoNames username is configured
+- **THEN** the system queries the remote GeoNames web service API to resolve the canonical location and records the match.
+
+#### Scenario: Graceful handling of unconfigured or failing remote GeoNames API
+
+- **WHEN** a publication place is not in the local gazetteer and the remote GeoNames API returns an authorization error (HTTP 401 / code 10), times out, or lacks credentials
+- **THEN** the system logs a diagnostic warning and continues reconciliation without raising an unhandled exception or corrupting catalog state.
 
 #### Scenario: Preserving geographic metadata in external link attributes
 
