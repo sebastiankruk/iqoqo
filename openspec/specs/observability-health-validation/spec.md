@@ -8,12 +8,29 @@ Specify system health check endpoints, deploy token authentication for analytica
 
 ### Requirement: Automated Observability Stack Health Verification
 
-The system SHALL validate the health, connectivity, and data flow of the OpenObserve monitoring stack during `make status` and environment startup.
+The system SHALL validate the health, connectivity, and data flow of the OpenObserve monitoring stack during `make status` and environment startup. A diagnostic command SHALL resolve configuration from the deployment it is inspecting, and SHALL report probes against the host and port it actually queried.
 
 #### Scenario: OpenObserve status verification during make status execution
 
 - **WHEN** developer runs `make status` or `make status STACK=prod`
 - **THEN** system checks if OpenObserve and OTel Collector containers are running, validates API health/auth endpoints, and reports telemetry ingestion readiness.
+
+#### Scenario: Status is run against a deployment directory
+
+- **WHEN** a status command is given a deployment directory that contains only compose files, an env file and data
+- **THEN** it SHALL read that directory's own env file for credentials, host ports and origins
+- **THEN** it SHALL NOT read an env file from the shell's working directory or from a different deployment
+
+#### Scenario: A stack is described by two different env files
+
+- **WHEN** the deploy path and the status path would resolve different env files for the same stack
+- **THEN** the diagnostic MUST derive both from one deployment-directory variable, so they cannot disagree
+
+#### Scenario: A health probe does not answer
+
+- **WHEN** a container is running but its health endpoint does not answer
+- **THEN** the diagnostic MUST report the unreachable probe without aborting on an unset variable
+- **THEN** the diagnostic MUST name the host and port it actually probed, so a report cannot be mistaken for a deployment listening on a different port
 
 ### Requirement: Trace Authorization Header Sanitization
 
@@ -70,6 +87,12 @@ The system documentation in `docs/MONITORING.md` SHALL accurately describe all 8
 
 - **WHEN** an operator checks OpenObserve health using the documented path
 - **THEN** the documented path SHALL be the path the repository's own diagnostic script queries.
+
+#### Scenario: Diagnosing a deployment in a source-free directory
+
+- **WHEN** an operator runs a status or diagnostic command against a deployment directory that is not a source checkout
+- **THEN** the command SHALL resolve that deployment's own env file and report values the deployment actually started with
+- **THEN** it MUST NOT silently fall back to an env file belonging to a different directory or stack
 
 ### Requirement: API Health Check Security and Performance
 
