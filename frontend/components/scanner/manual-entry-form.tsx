@@ -93,6 +93,7 @@ export function ManualEntryForm({
   React.useEffect(() => {
     if (formData.coverFile) {
       const url = URL.createObjectURL(formData.coverFile);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreviewUrl(url);
       return () => {
         URL.revokeObjectURL(url);

@@ -32,7 +32,6 @@ def upgrade():
     bind = op.get_bind()
     is_pg = bind.dialect.name == "postgresql"
     s_inv = "inventory" if is_pg else None
-    s_auth_pfx = "auth." if is_pg else ""
 
     op.add_column(
         "item_custody_events",

@@ -30,9 +30,7 @@ import {
   AlertCircle,
   ArrowRight,
   ShieldAlert,
-  CheckCircle2,
   Lock,
-  Layers,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -90,6 +88,7 @@ export function OwnershipManagement() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAccounts();
   }, [fetchAccounts]);
 
@@ -117,6 +116,7 @@ export function OwnershipManagement() {
   }, [sourceUserId, page]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchItems();
   }, [fetchItems]);
 

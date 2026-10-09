@@ -397,7 +397,7 @@ def sanitize_metadata_description(meta: dict[str, Any] | None) -> dict[str, Any]
     """
     Sanitize incoming metadata description fields using bleach.
 
-    Strips prohibited HTML markup (e.g. <script>, <iframe>) while preserving
+    Strips prohibited HTML markup (such as script or iframe elements) while preserving
     safe formatting tags. Operates in-place on the dictionary.
     """
     if not meta or not isinstance(meta, dict):

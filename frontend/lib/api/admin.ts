@@ -937,6 +937,11 @@ export interface OwnershipReassignResult {
   mode: string;
 }
 
+/**
+ * Fetch candidate user accounts for ownership reassignment.
+ *
+ * @returns List of active and inactive user accounts.
+ */
 export async function getOwnershipAccounts(): Promise<OwnershipAccount[]> {
   const res = await apiClient.get<ApiResponse<OwnershipAccount[]>>("/v1/admin/ownership/accounts");
   if (!res.data.success || !res.data.data) {
@@ -945,6 +950,14 @@ export async function getOwnershipAccounts(): Promise<OwnershipAccount[]> {
   return res.data.data;
 }
 
+/**
+ * Fetch paginated physical items owned by a source account.
+ *
+ * @param sourceUserId - UUID of current owner.
+ * @param page - Target page index (1-based).
+ * @param limit - Page size.
+ * @returns Paginated source items.
+ */
 export async function getOwnershipItems(
   sourceUserId: string,
   page: number = 1,
@@ -966,12 +979,31 @@ export async function getOwnershipItems(
   };
 }
 
-export async function previewOwnershipReassignment(payload: {
+export interface OwnershipPreviewPayload {
   source_user_id: string;
   target_user_id: string;
   mode: "single" | "selected" | "all";
   item_ids?: number[];
-}): Promise<OwnershipPreviewResponse> {
+}
+
+export interface OwnershipReassignPayload {
+  source_user_id: string;
+  target_user_id: string;
+  mode: "single" | "selected" | "all";
+  expected_fingerprint: string;
+  expected_count: number;
+  item_ids?: number[];
+}
+
+/**
+ * Request server-side calculation of ownership reassignment preview and fingerprint.
+ *
+ * @param payload - Transfer scope parameters.
+ * @returns Reassignment preview and deterministic cryptographic fingerprint.
+ */
+export async function previewOwnershipReassignment(
+  payload: OwnershipPreviewPayload
+): Promise<OwnershipPreviewResponse> {
   const res = await apiClient.post<ApiResponse<OwnershipPreviewResponse>>("/v1/admin/ownership/preview", payload);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to preview reassignment");
@@ -979,14 +1011,15 @@ export async function previewOwnershipReassignment(payload: {
   return res.data.data;
 }
 
-export async function executeOwnershipReassignment(payload: {
-  source_user_id: string;
-  target_user_id: string;
-  mode: "single" | "selected" | "all";
-  expected_fingerprint: string;
-  expected_count: number;
-  item_ids?: number[];
-}): Promise<OwnershipReassignResult> {
+/**
+ * Execute atomic ownership reassignment against an expected preview fingerprint.
+ *
+ * @param payload - Execution parameters with fingerprint and count guards.
+ * @returns Execution result summary.
+ */
+export async function executeOwnershipReassignment(
+  payload: OwnershipReassignPayload
+): Promise<OwnershipReassignResult> {
   const res = await apiClient.post<ApiResponse<OwnershipReassignResult>>("/v1/admin/ownership/reassign", payload);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to execute reassignment");

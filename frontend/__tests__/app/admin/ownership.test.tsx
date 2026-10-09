@@ -40,6 +40,12 @@ vi.mock("@/components/dashboard/footer", () => ({
   Footer: () => <footer data-testid="footer" />,
 }));
 
+/**
+ * Helper to mock useProfile hook return value.
+ *
+ * @param roles - User role list.
+ * @param permissions - User permission list.
+ */
 function mockProfile(roles: string[], permissions: string[]) {
   vi.mocked(useProfile).mockReturnValue({
     data: {
