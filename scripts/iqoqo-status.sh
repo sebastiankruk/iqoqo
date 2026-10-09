@@ -762,14 +762,6 @@ try:
     sys.path.insert(0, '$IQOQO_ROOT')
     from app import create_app
     app = create_app()
-    if '$client_id' != '':
-        os.environ['ALLEGRO_CLIENT_ID'] = '$client_id'
-    else:
-        os.environ.pop('ALLEGRO_CLIENT_ID', None)
-    if '$client_secret' != '':
-        os.environ['ALLEGRO_CLIENT_SECRET'] = '$client_secret'
-    else:
-        os.environ.pop('ALLEGRO_CLIENT_SECRET', None)
     with app.app_context():
         from app.utils.allegro import get_allegro_token_status
         print(json.dumps(get_allegro_token_status()))
