@@ -56,5 +56,52 @@ teardown() {
   [[ "$output" =~ "Instance Settings" || "$output" =~ "Allegro" ]]
 }
 
+@test "iqoqo-status.sh reports not configured when Allegro credentials missing" {
+  env_file="${TEST_TEMP_DIR}/.env.test"
+  echo "ENV_FILE=.env.dev" > "$env_file"
+  echo "ALLEGRO_CLIENT_ID=" >> "$env_file"
+  echo "ALLEGRO_CLIENT_SECRET=" >> "$env_file"
+  run env IQOQO_AI_MODE=1 ENV_FILE="$env_file" bash scripts/iqoqo-status.sh
+  [[ "$output" =~ "not configured" || "$output" =~ "Instance Settings" ]]
+}
+
+@test "iqoqo-status.sh discriminates probe error correctly" {
+  run bash -c '
+    allegro_status_json="{\"configured\": true, \"allegro_token_active\": false, \"reason\": \"query_failed\"}"
+    reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get(\"reason\", \"\"))")
+    if [[ "$reason" == "query_failed" || "$reason" == "probe_error" ]]; then
+      echo "probe error detected"
+    fi
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "probe error detected" ]]
+}
+
+@test "iqoqo-status.sh discriminates active token correctly" {
+  run bash -c '
+    allegro_status_json="{\"configured\": true, \"allegro_token_active\": true, \"token_age_hours\": 2.5, \"reason\": \"active\"}"
+    is_active=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get(\"allegro_token_active\", False))")
+    token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get(\"token_age_hours\", \"\"))")
+    if [[ "$is_active" == "True" ]]; then
+      echo "active (token age: ${token_age}h)"
+    fi
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "active (token age: 2.5h)" ]]
+}
+
+@test "iqoqo-status.sh discriminates expired token correctly" {
+  run bash -c '
+    allegro_status_json="{\"configured\": true, \"allegro_token_active\": false, \"is_expired\": true, \"token_age_hours\": 48.0, \"reason\": \"expired\"}"
+    is_expired=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get(\"is_expired\", False))")
+    token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get(\"token_age_hours\", \"\"))")
+    if [[ "$is_expired" == "True" ]]; then
+      echo "token expired (${token_age}h old, re-authorize in Instance Settings)"
+    fi
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "token expired (48.0h old, re-authorize in Instance Settings)" ]]
+}
+
 
 

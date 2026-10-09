@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -62,8 +62,10 @@ ifeq ($(MODE),prod)
   USE_DOCKER ?= true
 endif
 
-PREVIEW_DIR      ?= /opt/pre.iqoqo
-PREVIEW_ENV_FILE ?= $(PREVIEW_DIR)/.env
+DEPLOY_DIR       ?= /opt/pre.iqoqo
+PREVIEW_DIR      ?= $(DEPLOY_DIR)
+DEPLOY_ENV_FILE  ?= $(DEPLOY_DIR)/.env
+PREVIEW_ENV_FILE ?= $(DEPLOY_ENV_FILE)
 
 
 # When adding a Make target that writes files inside a Docker container, ensure
@@ -335,20 +337,27 @@ start:
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 endif
 
-preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local preview images
+preview-up: ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
-	@mkdir -p $(PREVIEW_DIR)/data
-	@if [ -f data/geonames_cities.db ] && [ ! -f $(PREVIEW_DIR)/data/geonames_cities.db ]; then \
-		cp -f data/geonames_cities.db $(PREVIEW_DIR)/data/geonames_cities.db 2>/dev/null || true; \
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/sync_deploy_dir.py ]; then \
+		python3 scripts/sync_deploy_dir.py $(CURDIR) $(DEPLOY_DIR); \
+	fi
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/pre_deploy_mounts.py ]; then \
+		python3 scripts/pre_deploy_mounts.py $(DEPLOY_DIR); \
+	fi
+	@mkdir -p $(DEPLOY_DIR)/data
+	@if [ -f data/geonames_cities.db ] && [ ! -f $(DEPLOY_DIR)/data/geonames_cities.db ]; then \
+		cp -f data/geonames_cities.db $(DEPLOY_DIR)/data/geonames_cities.db 2>/dev/null || true; \
 	fi
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
-		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
+		python3 scripts/ensure_env_secrets.py --env-file $(DEPLOY_ENV_FILE); \
 	fi
-	@set -a; . $(PREVIEW_ENV_FILE); set +a; \
+	@if [ -f $(DEPLOY_ENV_FILE) ]; then chmod 0600 $(DEPLOY_ENV_FILE) 2>/dev/null || true; fi
+	@set -a; . $(DEPLOY_ENV_FILE); set +a; \
 	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
-		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
 	 fi; \
-	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(PREVIEW_ENV_FILE))"; \
+	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(DEPLOY_ENV_FILE))"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
 	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
 	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
@@ -359,10 +368,10 @@ preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local p
 	 else \
 		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
 	 fi; \
-	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml up -d
 
-preview-down: ## Stop preview stack in PREVIEW_DIR (/opt/pre.iqoqo) cleanly
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml down
+preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
+	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml down
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -405,14 +414,30 @@ validate-release: ## Validate release invariants (versions, CHANGELOG, image siz
 
 STATUS_STACK = $(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(filter dev,$(MAKECMDGOALS)),dev,$(if $(STACK),$(STACK),$(if $(STAGE),$(STAGE),$(MODE))))))
 STATUS_PROJECT = $(if $(filter preview,$(STATUS_STACK)),iqoqo-preview,$(COMPOSE_PROJECT))
-STATUS_ENV_FILE = $(if $(filter preview,$(STATUS_STACK)),.env.preview,$(if $(filter prod,$(STATUS_STACK)),$(if $(wildcard .env.prod),.env.prod,.env),$(COMPOSE_ENV_FILE)))
+STATUS_ENV_FILE = $(if $(filter preview,$(STATUS_STACK)),$(DEPLOY_ENV_FILE),$(if $(filter prod,$(STATUS_STACK)),$(if $(wildcard .env.prod),.env.prod,.env),$(COMPOSE_ENV_FILE)))
+
+deploy-validate: ## Validate deployment directory against contract (usage: make deploy-validate [DIR=/opt/pre.iqoqo])
+	@python3 scripts/validate_deploy_dir.py $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-sync: ## Synchronize runtime files into deployment directory (usage: make deploy-sync [DIR=/opt/pre.iqoqo])
+	@python3 scripts/sync_deploy_dir.py $(CURDIR) $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-verify: ## Verify deployment directory against manifest (usage: make deploy-verify [DIR=/opt/pre.iqoqo])
+	@python3 scripts/sync_deploy_dir.py --verify $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-maintain: ## Inspect debris and secret snapshots in deployment directory (usage: make deploy-maintain [DIR=/opt/pre.iqoqo] [ARGS="--prune"])
+	@python3 scripts/maintain_deploy_dir.py $(or $(DIR),$(DEPLOY_DIR)) $(ARGS)
 
 status: ## Show health status of all iQoQo services
 	@set -euo pipefail; \
 		status_root="$(CURDIR)"; \
 		status_stack="$(STATUS_STACK)"; \
+		deploy_arg=""; \
+		if [[ "$$status_stack" == "preview" ]]; then \
+			deploy_arg="--deploy-dir $(DEPLOY_DIR)"; \
+		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack"; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg; \
 		else \
 			tmpdir=$$(mktemp -d); \
 			tmp_container=""; \

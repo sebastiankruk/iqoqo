@@ -30,12 +30,6 @@ from sqlalchemy import select
 
 from app.core.celery_app import celery
 from app.core.mail_service import MailDeliveryError
-from app.core.s3_service import (
-    BUCKET_FEEDBACK,
-    S3UploadError,
-    get_s3_service,
-    warn_if_legacy_rclone_configured,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -164,33 +158,6 @@ def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
 def shutdown_executor() -> None:
     """No-op for Celery migration."""
     pass
-
-
-@celery.task(bind=True)
-def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: object) -> None:
-    """Uploads a feedback screenshot to the configured feedback bucket.
-
-    Args:
-        local_path: Absolute path to the screenshot on local storage.
-        filename: Base name to store the object under. Validated as a single
-            safe key component, so a caller-supplied value cannot place the
-            object outside the ``feedback/`` prefix.
-
-    Raises:
-        RuntimeError: if the upload failed. The local file is left in place.
-    """
-    service = get_s3_service(BUCKET_FEEDBACK)
-    if service is None:
-        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
-        logger.info("Feedback object storage not configured, skipping remote upload.")
-        return
-
-    try:
-        service.upload_file(local_path, service.key_for(filename), content_type="image/jpeg")
-        logger.info("Successfully uploaded feedback screenshot %s to remote storage.", filename)
-    except (ValueError, S3UploadError) as exc:
-        logger.error("Failed to upload feedback screenshot %s: %s", filename, type(exc).__name__)
-        raise RuntimeError("Feedback screenshot upload failed") from exc
 
 
 @celery.task(name="app.core.tasks.refresh_taxonomies_cache")

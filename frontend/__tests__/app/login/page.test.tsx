@@ -18,8 +18,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "@/app/login/page";
+import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { useSearchParams } from "next/navigation";
 
-// Rely on global mock from vitest.setup.ts
+vi.mock("@/hooks/use-auth-providers", () => ({
+  useAuthProviders: vi.fn(),
+}));
 
 /**
  * Creates a test query client with retries disabled.
@@ -52,6 +56,11 @@ describe("LoginPage", () => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
     process.env.NEXT_PUBLIC_API_URL = "/api";
+    vi.mocked(useAuthProviders).mockReturnValue({
+      data: { google: true },
+      isLoading: false,
+      isSuccess: true,
+    } as any);
 
     Object.defineProperty(window, "location", {
       value: { href: "" },
@@ -63,12 +72,31 @@ describe("LoginPage", () => {
     window.alert = alertMock;
   });
 
-  it("renders login form and Google SSO button", () => {
+  it("renders login form and Google SSO button when Google is enabled", () => {
     renderWithQueryClient(<LoginPage />);
     expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Sign In$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Sign in with Google/i })).toBeInTheDocument();
+  });
+
+  it("suppresses Google SSO button when Google is disabled", () => {
+    vi.mocked(useAuthProviders).mockReturnValue({
+      data: { google: false },
+      isLoading: false,
+      isSuccess: true,
+    } as any);
+    renderWithQueryClient(<LoginPage />);
+    expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sign In$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign in with Google/i })).not.toBeInTheDocument();
+  });
+
+  it("displays oauth_not_configured message when error query parameter is present", () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("error=oauth_not_configured") as any);
+    renderWithQueryClient(<LoginPage />);
+    expect(screen.getByText(/Google sign-in is not configured on this instance/i)).toBeInTheDocument();
   });
 
   it("redirects to Google SSO when button is clicked", () => {

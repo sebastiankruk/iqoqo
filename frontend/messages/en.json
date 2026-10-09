@@ -108,7 +108,8 @@
     "no_email": "Google account has no email address associated with it.",
     "user_setup_failed": "Failed to create your account. Please try again or contact support.",
     "jwt_generation_failed": "Session creation failed. Please try again.",
-    "MissingToken": "Authentication token was missing. Please try signing in again."
+    "MissingToken": "Authentication token was missing. Please try signing in again.",
+    "oauth_not_configured": "Google sign-in is not configured on this instance. Please use email and password."
   },
   "Register": {
     "title": "Create an account",

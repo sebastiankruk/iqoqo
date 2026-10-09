@@ -31,13 +31,6 @@ from app.api.decorators import require_auth
 from app.api.schemas import FeedbackUpdateSchema
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
-from app.core.s3_service import (
-    BUCKET_FEEDBACK,
-    S3DownloadError,
-    get_s3_service,
-    warn_if_legacy_rclone_configured,
-)
-from app.core.tasks import upload_feedback_screenshot
 from app.db.models import FeedbackComment, FeedbackItem, User, db
 from app.utils.covers import GALLERY_DIR
 from app.utils.images import save_upload_image, validate_upload_file
@@ -98,10 +91,6 @@ def submit_feedback() -> tuple[Response, int] | Response:
             # save_upload_image returns /static/gallery/...
             _ = save_upload_image(upload, subfolder="gallery", filename=filename)
             attachments.append(filename)
-
-            # Trigger Celery task
-            local_path = os.path.join(GALLERY_DIR, filename)
-            upload_feedback_screenshot.apply_async(args=[local_path, filename])
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -142,41 +131,10 @@ def _validate_screenshot_access(filename: str) -> tuple[Response, int] | None:
     return None
 
 
-def _fetch_remote_screenshot(safe_name: str) -> tuple[Response, int] | Response:
-    """Fetch a screenshot from remote object storage.
-
-    Args:
-        safe_name: Already validated by ``secure_filename`` and confirmed equal
-            to the requested filename by the caller.
-
-    Returns:
-        The image bytes, or a 404 when the object is absent, or a 502 when
-        remote storage is reachable-but-failing. A transport-level failure is
-        deliberately distinct from a missing object so an operator can tell a
-        bucket-permission problem from a genuinely absent screenshot.
-    """
-    service = get_s3_service(BUCKET_FEEDBACK)
-    if service is None:
-        return jsonify({"success": False, "error": "Screenshot not found and no remote storage configured"}), 404
-
-    try:
-        key = service.key_for(safe_name)
-    except ValueError:
-        return jsonify({"success": False, "error": "Invalid filename"}), 400
-
-    try:
-        return Response(service.get_bytes(key), mimetype="image/jpeg")
-    except S3DownloadError as exc:
-        if exc.code in {"NoSuchKey", "404", "NotFound"}:
-            return jsonify({"success": False, "error": "Screenshot not found"}), 404
-        logger.error("Failed to fetch screenshot %s from remote storage: %s", safe_name, exc.code)
-        return jsonify({"success": False, "error": "Remote storage unavailable"}), 502
-
-
 @api_bp.route("/feedback/screenshots/<path:filename>", methods=["GET"])
 @require_auth
 def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
-    """Retrieve a feedback screenshot from local storage, or from remote object storage."""
+    """Retrieve a feedback screenshot from local storage."""
     safe_name = secure_filename(os.path.basename(filename))
     if not safe_name or safe_name != filename:
         return jsonify({"success": False, "error": "Invalid filename"}), 400
@@ -189,11 +147,7 @@ def get_feedback_screenshot(filename: str) -> tuple[Response, int] | Response:
     if os.path.exists(local_path):
         return send_from_directory(GALLERY_DIR, safe_name)
 
-    if get_s3_service(BUCKET_FEEDBACK) is None:
-        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
-        return jsonify({"success": False, "error": "Screenshot not found locally and no remote configured"}), 404
-
-    return _fetch_remote_screenshot(safe_name)
+    return jsonify({"success": False, "error": "Screenshot not found"}), 404
 
 
 @api_bp.route("/feedback", methods=["GET"])

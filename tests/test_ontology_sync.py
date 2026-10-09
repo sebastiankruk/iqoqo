@@ -404,3 +404,28 @@ class TestSyncOntologyScript:
 
         assert result.returncode != 0, result.stdout + result.stderr
         assert "changed_property_ranges" in result.stderr
+
+    def test_missing_source_distinguished_from_drift_and_syntax(self, tmp_path: Path) -> None:
+        """A missing file reports source_available=False, not drift or syntax error."""
+        nonexistent = tmp_path / "nonexistent.ttl"
+        report = check_drift(ontology_path=nonexistent)
+        assert report["source_available"] is False
+        assert any("nonexistent.ttl" in err for err in report["source_errors"])
+        assert report["in_sync"] is False
+
+    def test_cli_missing_source_fails_without_ack(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Missing ontology source exits 1 unless explicitly acknowledged."""
+        nonexistent = tmp_path / "missing.ttl"
+        exit_code = sync_ontology.main(["--ontology-path", str(nonexistent)])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "source_unavailable" in captured.err
+        assert "This is NOT drift" in captured.err
+
+    def test_cli_missing_source_succeeds_with_ack(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Missing ontology source exits 0 when explicitly acknowledged."""
+        nonexistent = tmp_path / "missing.ttl"
+        exit_code = sync_ontology.main(["--ontology-path", str(nonexistent), "--allow-missing-source"])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "acknowledged" in captured.err

@@ -96,23 +96,42 @@ def get_allegro_token_status() -> dict[str, Any]:
     """Check Allegro configuration and token freshness."""
     from app.db.models import InstanceSettings
 
-    client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
-    client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+    try:
+        client_id = os.getenv("ALLEGRO_CLIENT_ID") or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
+        client_secret = os.getenv("ALLEGRO_CLIENT_SECRET") or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+    except Exception as e:
+        return {
+            "configured": False,
+            "allegro_token_active": False,
+            "reason": "probe_error",
+            "token_age_hours": None,
+            "error": str(e),
+        }
 
     if not client_id or not client_secret:
         return {
             "configured": False,
             "allegro_token_active": False,
-            "reason": "missing_credentials",
+            "reason": "not_configured",
             "token_age_hours": None,
         }
 
-    tokens = load_allegro_token()
+    try:
+        tokens = load_allegro_token()
+    except Exception as e:
+        return {
+            "configured": True,
+            "allegro_token_active": False,
+            "reason": "probe_error",
+            "token_age_hours": None,
+            "error": str(e),
+        }
+
     if not tokens or not isinstance(tokens, dict) or not tokens.get("access_token"):
         return {
             "configured": True,
             "allegro_token_active": False,
-            "reason": "oauth_handshake_pending",
+            "reason": "handshake_pending",
             "token_age_hours": None,
         }
 
@@ -134,7 +153,7 @@ def get_allegro_token_status() -> dict[str, Any]:
         "is_expired": is_expired,
         "token_age_hours": age_hours,
         "has_refresh_token": bool(tokens.get("refresh_token")),
-        "reason": "active" if is_active else "token_expired",
+        "reason": "active" if is_active else "expired",
     }
 
 

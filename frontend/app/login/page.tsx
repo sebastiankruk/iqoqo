@@ -22,6 +22,7 @@ import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
+import { useAuthProviders } from "@/hooks/use-auth-providers";
 
 /**
  * Login page component.
@@ -44,6 +45,8 @@ export default function LoginPage() {
 function LoginPageContent() {
   const t = useTranslations("Login");
   const router = useRouter();
+  const { data: providers } = useAuthProviders();
+  const isGoogleEnabled = providers?.google ?? false;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const searchParams = useSearchParams();
@@ -102,22 +105,26 @@ function LoginPageContent() {
           {errorMessage && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{errorMessage}</div>
           )}
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => {
-              const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-              const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
-              // OAuth flow requires full page navigation to API endpoint
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-              window.location.href = `/api/auth/login/google${cbQuery}`;
-            }}
-          >
-            {t("googleSignIn")}
-          </Button>
-          <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-            <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
-          </div>
+          {isGoogleEnabled && (
+            <>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => {
+                  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+                  const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
+                  // OAuth flow requires full page navigation to API endpoint
+                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                  window.location.href = `/api/auth/login/google${cbQuery}`;
+                }}
+              >
+                {t("googleSignIn")}
+              </Button>
+              <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
+                <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
+              </div>
+            </>
+          )}
           <form onSubmit={handleLocalLogin} className="space-y-4">
             <input
               type="email"
