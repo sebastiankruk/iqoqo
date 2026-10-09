@@ -439,7 +439,7 @@ EOF
   (
     exec 8>"${lock_file}"
     flock 8
-    sleep 30
+    sleep 5
   ) &
   local bg_pid=$!
   sleep 0.2
@@ -462,7 +462,7 @@ EOF
   cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
 #!/bin/bash
 if [[ "$*" == *"pg_dumpall"* ]]; then
-  sleep 10
+  sleep 3
   echo "CREATE TABLE test;"
   exit 0
 fi
@@ -579,7 +579,7 @@ EOF
   chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
 
   export BACKUP_RETRY_ATTEMPTS=3
-  export BACKUP_RETRY_DELAY_BASE=5
+  export BACKUP_RETRY_DELAY_BASE=1
 
   run bash scripts/cloud_backup.sh
   [ "$status" -eq 1 ]
@@ -590,8 +590,8 @@ EOF
 
   [ -f "${TEST_TEMP_DIR}/sleep_calls.log" ]
   run cat "${TEST_TEMP_DIR}/sleep_calls.log"
-  [[ "$output" =~ "SLEEP: 5" ]]
-  [[ "$output" =~ "SLEEP: 10" ]]
+  [[ "$output" =~ "SLEEP: 1" ]]
+  [[ "$output" =~ "SLEEP: 2" ]]
 }
 
 @test "cloud_backup.sh empty dump is not retried" {
