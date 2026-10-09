@@ -122,7 +122,7 @@ The system SHALL expose REST API endpoints allowing authenticated clients to que
 - **THEN** the system updates the link status, records an audit event, and returns HTTP status 200 OK.
 
 ### Requirement: Manifestation Semantic Links UI
-The system SHALL display an interactive Linked Open Data panel on manifestation detail pages presenting resolved external entities with visual indicators and direct outbound links.
+The system SHALL display an interactive Linked Open Data panel on manifestation detail pages and item detail views presenting resolved external entities with visual indicators, responsive action controls, and direct outbound links.
 
 #### Scenario: Viewing resolved semantic links on manifestation detail page
 
@@ -138,3 +138,14 @@ The system SHALL display an interactive Linked Open Data panel on manifestation 
 
 - **WHEN** a manifestation has no resolved external links and a background task is not active
 - **THEN** the semantic links section displays a subtle empty state with an option to trigger background reconciliation.
+
+#### Scenario: Responsive scan button containment across screen sizes
+
+- **WHEN** a user views the Linked Open Data card on a mobile or narrow display, or under languages with long localized scan button labels
+- **THEN** the card header uses a responsive wrapping layout preventing button bounds from overflowing or breaking out of the container card frame
+- **AND** the button label truncates safely while preserving full tooltip title information.
+
+#### Scenario: Inspecting inherited semantic links on item detail views
+
+- **WHEN** a user navigates to an Item holding detail page whose parent Manifestation has resolved or pending semantic links
+- **THEN** the item view renders the Linked Open Data card displaying inherited links and providing an accessible trigger to run LOD reconciliation directly.
