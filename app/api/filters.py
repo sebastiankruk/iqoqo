@@ -369,10 +369,12 @@ class CatalogFilterBuilder:
             manif_auth_subq = db.select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "manifestation",
                 db.func.lower(SemanticLink.authority) == authority,
+                SemanticLink.status == "accepted",
             )
             work_auth_subq = db.select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "work",
                 db.func.lower(SemanticLink.authority) == authority,
+                SemanticLink.status == "accepted",
             )
             self.query = self.query.filter(
                 db.or_(
@@ -382,8 +384,14 @@ class CatalogFilterBuilder:
             )
 
         if lod_status == "linked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            manif_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                SemanticLink.status == "accepted",
+            )
+            work_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                SemanticLink.status == "accepted",
+            )
             self.query = self.query.filter(
                 db.or_(
                     Manifestation.id.in_(manif_subq),
@@ -391,8 +399,14 @@ class CatalogFilterBuilder:
                 )
             )
         elif lod_status == "unlinked":
-            manif_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = db.select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            manif_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                SemanticLink.status == "accepted",
+            )
+            work_subq = db.select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                SemanticLink.status == "accepted",
+            )
             self.query = self.query.filter(
                 db.and_(
                     ~Manifestation.id.in_(manif_subq),

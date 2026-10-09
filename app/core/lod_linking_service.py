@@ -25,12 +25,14 @@ import logging
 import os
 import re
 import sqlite3
+from difflib import SequenceMatcher
 from typing import Any, cast
 
 import requests
 from sqlalchemy import select
 
 from app.core.cache import cache
+from app.core.config_service import ConfigService
 from app.db import db
 from app.db.core import Manifestation, SemanticLink, Work
 
@@ -548,6 +550,152 @@ GEONAMES_TITLE_STOPWORDS: set[str] = {
 }
 
 
+CREATIVE_WORK_CLASSES: set[str] = {
+    "dbo:Work",
+    "dbo:CreativeWork",
+    "dbo:Book",
+    "dbo:WrittenWork",
+    "dbo:MusicalWork",
+    "dbo:Game",
+    "dbo:VideoGame",
+    "dbo:Film",
+    "dbo:Artwork",
+    "Work",
+    "CreativeWork",
+    "Book",
+    "WrittenWork",
+    "MusicalWork",
+    "Game",
+    "VideoGame",
+    "Film",
+    "Artwork",
+}
+
+AGENT_CLASSES: set[str] = {
+    "dbo:Person",
+    "dbo:Organisation",
+    "dbo:Organization",
+    "dbo:Agent",
+    "Person",
+    "Organisation",
+    "Organization",
+    "Agent",
+    "foaf:Person",
+    "schema:Person",
+    "schema:Organization",
+}
+
+DISAMBIGUATION_MARKERS: tuple[str, ...] = (
+    "(disambiguation)",
+    "may refer to",
+    "can refer to",
+    "refers to:",
+    "frequently refers to",
+    "commonly refers to",
+    "is a disambiguation page",
+    "disambiguation page",
+)
+
+
+def is_disambiguation(uri: str, label: str, comment: str = "") -> bool:
+    """Check if a DBpedia resource is a disambiguation or list page."""
+    uri_lower = uri.lower()
+    label_lower = label.lower()
+    comment_lower = comment.lower()
+
+    if "(disambiguation)" in uri_lower or "(disambiguation)" in label_lower:
+        return True
+    if label_lower.startswith("list of "):
+        return True
+    for marker in DISAMBIGUATION_MARKERS:
+        if marker in comment_lower:
+            return True
+    return False
+
+
+def normalize_title_for_comparison(text: str) -> str:
+    """Normalize text by stripping parentheticals, punctuation, and lowercase."""
+    cleaned = re.sub(r"\(.*?\)", "", text).strip()
+    cleaned = re.sub(r"[^\w\s]", "", cleaned)
+    return " ".join(cleaned.lower().split())
+
+
+def compute_composite_score(
+    candidate_label: str,
+    target_title: str,
+    author: str | None = None,
+    candidate_comment: str | None = None,
+    year: int | None = None,
+    rank_margin: float = 0.0,
+    has_class_match: bool = True,
+) -> float:
+    """Compute multi-signal composite confidence score for an entity candidate.
+
+    Signals:
+    - Label similarity (0.50 max) via SequenceMatcher
+    - Author / Contributor corroboration (0.25 max)
+    - Publication year proximity (0.15 max)
+    - Candidate rank margin from lookup search (0.10 max)
+    """
+    if not has_class_match:
+        return 0.0
+
+    comm = candidate_comment or ""
+    if is_disambiguation("", candidate_label, comm):
+        return 0.0
+
+    # 1. Label similarity (0.50 max)
+    norm_target = normalize_title_for_comparison(target_title)
+    norm_cand = normalize_title_for_comparison(candidate_label)
+    if not norm_target or not norm_cand:
+        sim = 0.0
+    elif norm_target == norm_cand:
+        sim = 1.0
+    else:
+        sim = SequenceMatcher(None, norm_target, norm_cand).ratio()
+    label_score = sim * 0.50
+
+    # 2. Author / contributor corroboration (0.25 max)
+    if author and author.strip():
+        norm_author = author.strip().lower()
+        comm_lower = comm.lower()
+        if norm_author in comm_lower:
+            author_score = 0.25
+        else:
+            tokens = [t for t in re.split(r"\s+", norm_author) if len(t) >= 3]
+            if tokens and any(t in comm_lower for t in tokens):
+                author_score = 0.20
+            else:
+                author_score = 0.0
+    else:
+        author_score = 0.15
+
+    # 3. Year proximity (0.15 max)
+    if year:
+        found_years = [int(y) for y in re.findall(r"\b(1[789]\d\d|20\d\d)\b", comm)]
+        if found_years:
+            min_diff = min(abs(y - year) for y in found_years)
+            if min_diff == 0:
+                year_score = 0.15
+            elif min_diff <= 2:
+                year_score = 0.12
+            elif min_diff <= 5:
+                year_score = 0.08
+            else:
+                year_score = 0.0
+        else:
+            year_score = 0.08
+    else:
+        year_score = 0.10
+
+    # 4. Lookup rank margin (0.10 max)
+    margin_clamped = max(0.0, min(1.0, float(rank_margin)))
+    margin_score = margin_clamped * 0.10
+
+    total = label_score + author_score + year_score + margin_score
+    return round(max(0.0, min(1.0, total)), 2)
+
+
 def is_lod_linking_enabled() -> bool:
     """Check if LOD linking is enabled via configuration or environment."""
     env_val = os.environ.get("ENABLE_LOD_LINKING", "true").lower()
@@ -566,22 +714,23 @@ class DBpediaClient:
         title: str,
         media_category: str | None = None,
         author: str | None = None,
+        year: int | None = None,
         fast_mode: bool = False,
     ) -> dict[str, Any] | None:
-        """Resolve a creative work by title, media category class, and author context."""
+        """Resolve a creative work by title, media category class, author, and year context."""
         if not title:
             return None
 
         normalized_title = title.strip()
-        dbo_type = MEDIA_CATEGORY_DBO_MAP.get((media_category or "").lower())
-        cache_key = f"lod:dbpedia:work:{normalized_title.lower()}:{dbo_type or 'all'}"
+        dbo_type = MEDIA_CATEGORY_DBO_MAP.get((media_category or "").lower()) or "dbo:Work"
+        cache_key = f"lod:dbpedia:work:{normalized_title.lower()}:{dbo_type}:{author or ''}:{year or ''}"
 
         cached = cache.get(cache_key)
         if cached is not None:
             return cast(dict[str, Any], cached)
 
         # Step 1: Query DBpedia Lookup API
-        result = cls._query_lookup(normalized_title, type_name=dbo_type)
+        result = cls._query_lookup(normalized_title, type_name=dbo_type, author=author, year=year)
 
         # Fallback 1b: If title has subtitle or parenthetical comment, retry with main title
         if not result:
@@ -591,11 +740,11 @@ class DBpediaClient:
             elif " - " in clean_title:
                 clean_title = clean_title.split(" - ", 1)[0].strip()
             if clean_title and clean_title != normalized_title:
-                result = cls._query_lookup(clean_title, type_name=dbo_type)
+                result = cls._query_lookup(clean_title, type_name=dbo_type, author=author, year=year)
 
         # Step 2: Fallback to SPARQL if lookup yields nothing (skipped in fast mode)
         if not result and dbo_type and not fast_mode:
-            result = cls._query_sparql(normalized_title, dbo_type=dbo_type)
+            result = cls._query_sparql(normalized_title, dbo_type=dbo_type, author=author, year=year)
 
         # Cache result (including None to prevent repeated failed queries)
         cache.set(cache_key, result, timeout=CACHE_TTL_24H)
@@ -622,12 +771,20 @@ class DBpediaClient:
         return result
 
     @classmethod
-    def _query_lookup(cls, query: str, type_name: str | None = None) -> dict[str, Any] | None:
-        """Execute query against DBpedia Lookup API."""
+    def _query_lookup(
+        cls,
+        query: str,
+        type_name: str | None = None,
+        author: str | None = None,
+        year: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Execute query against DBpedia Lookup API and rank candidate resources."""
         lookup_type = type_name.split(":")[-1] if type_name else None
         params: dict[str, Any] = {"query": query, "maxResults": 5, "format": "json"}
         if lookup_type:
             params["typeName"] = lookup_type
+        else:
+            params["typeName"] = "Work"
 
         headers = {
             "Accept": "application/json",
@@ -645,31 +802,90 @@ class DBpediaClient:
             if not docs:
                 return None
 
-            first = docs[0]
-            # Handle list vs scalar values from DBpedia Lookup JSON schema
-            res_val = first.get("resource")
-            uri = res_val[0] if isinstance(res_val, list) and res_val else res_val
-            label_val = first.get("label")
-            label = label_val[0] if isinstance(label_val, list) and label_val else (label_val or query)
+            is_agent_query = lookup_type in ("Person", "Organisation", "Organization", "Agent")
+            allowed_classes = AGENT_CLASSES if is_agent_query else CREATIVE_WORK_CLASSES
 
-            if not uri:
+            candidates: list[dict[str, Any]] = []
+            for doc in docs:
+                res_val = doc.get("resource")
+                uri = res_val[0] if isinstance(res_val, list) and res_val else res_val
+                if not uri:
+                    continue
+
+                label_val = doc.get("label")
+                label = label_val[0] if isinstance(label_val, list) and label_val else (label_val or query)
+                clean_label = re.sub(r"<[^>]+>", "", str(label))
+
+                comment_val = doc.get("comment", [""])[0] if isinstance(doc.get("comment"), list) else (doc.get("comment") or "")
+                clean_comment = re.sub(r"<[^>]+>", "", str(comment_val))
+
+                if is_disambiguation(uri, clean_label, clean_comment):
+                    continue
+
+                # Ontology class validation
+                doc_types = doc.get("typeName", [])
+                if isinstance(doc_types, str):
+                    doc_types = [doc_types]
+                doc_uris = doc.get("type", [])
+                if isinstance(doc_uris, str):
+                    doc_uris = [doc_uris]
+
+                all_type_strings = set(doc_types) | {u.split("/")[-1] for u in doc_uris}
+                has_class_match = True
+                if all_type_strings and not (all_type_strings & allowed_classes):
+                    has_class_match = False
+
+                if not has_class_match:
+                    continue
+
+                raw_score_val = doc.get("score")
+                raw_score = raw_score_val[0] if isinstance(raw_score_val, list) and raw_score_val else raw_score_val
+                try:
+                    score_num = float(raw_score) if raw_score is not None else 0.0
+                except (ValueError, TypeError):
+                    score_num = 0.0
+
+                candidates.append(
+                    {
+                        "uri": uri,
+                        "label": clean_label,
+                        "comment": clean_comment,
+                        "raw_score": score_num,
+                        "has_class_match": has_class_match,
+                    }
+                )
+
+            if not candidates:
                 return None
 
-            # Calculate confidence score
-            score_val = first.get("score")
-            score_num = score_val[0] if isinstance(score_val, list) and score_val else score_val
-            confidence = min(0.95, max(0.60, float(score_num) / 100.0)) if score_num else 0.85
+            first_raw = candidates[0]["raw_score"]
+            second_raw = candidates[1]["raw_score"] if len(candidates) > 1 else 0.0
+            rank_margin = (first_raw - second_raw) / (first_raw + 1e-6) if first_raw > 0 else 1.0
 
-            comment_val = first.get("comment", [""])[0] if isinstance(first.get("comment"), list) else (first.get("comment") or "")
+            scored_candidates: list[tuple[float, dict[str, Any]]] = []
+            for cand in candidates:
+                conf = compute_composite_score(
+                    candidate_label=cand["label"],
+                    target_title=query,
+                    author=author,
+                    candidate_comment=cand["comment"],
+                    year=year,
+                    rank_margin=rank_margin if cand == candidates[0] else 0.0,
+                    has_class_match=cand["has_class_match"],
+                )
+                scored_candidates.append((conf, cand))
+
+            scored_candidates.sort(key=lambda x: x[0], reverse=True)
+            best_score, best_cand = scored_candidates[0]
 
             return {
-                "uri": uri,
-                "label": re.sub(r"<[^>]+>", "", str(label)),
-                "confidence": round(confidence, 2),
+                "uri": best_cand["uri"],
+                "label": best_cand["label"],
+                "confidence": best_score,
                 "strategy": "lookup",
                 "attributes": {
-                    "dbo_type": type_name,
-                    "comment": re.sub(r"<[^>]+>", "", str(comment_val)),
+                    "dbo_type": type_name or "dbo:Work",
+                    "comment": best_cand["comment"],
                 },
             }
         except Exception as exc:  # pylint: disable=broad-except
@@ -677,7 +893,13 @@ class DBpediaClient:
             return None
 
     @classmethod
-    def _query_sparql(cls, query: str, dbo_type: str) -> dict[str, Any] | None:
+    def _query_sparql(
+        cls,
+        query: str,
+        dbo_type: str,
+        author: str | None = None,
+        year: int | None = None,
+    ) -> dict[str, Any] | None:
         """Targeted SPARQL fallback query on DBpedia using full-text and literal indexing."""
         clean_words = re.sub(r"[^\w\s]", " ", query).strip().split()
         if not clean_words:
@@ -713,10 +935,21 @@ class DBpediaClient:
             if not uri:
                 return None
 
+            conf = compute_composite_score(
+                candidate_label=label,
+                target_title=query,
+                author=author,
+                year=year,
+                rank_margin=1.0,
+                has_class_match=True,
+            )
+            if conf < 0.80 and normalize_title_for_comparison(label) == normalize_title_for_comparison(query):
+                conf = 0.80
+
             return {
                 "uri": uri,
                 "label": label,
-                "confidence": 0.80,
+                "confidence": conf,
                 "strategy": "sparql",
                 "attributes": {"dbo_type": dbo_type},
             }
@@ -949,6 +1182,7 @@ class GeoNamesClient:
             "maxRows": 1,
             "username": username,
             "style": "FULL",
+            "featureClass": "P",
         }
         headers = {"User-Agent": USER_AGENT}
 
@@ -1106,6 +1340,20 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
 
     created_links: list[SemanticLink] = []
 
+    auto_threshold = ConfigService.get_float("LOD_AUTO_APPLY_THRESHOLD", 0.82)
+    suggestion_threshold = ConfigService.get_float("LOD_SUGGESTION_THRESHOLD", 0.55)
+
+    pub_year: int | None = None
+    if manifestation.publication_date:
+        pub_year = manifestation.publication_date.year
+    elif manifestation.meta:
+        py_val = manifestation.meta.get("publication_year") or manifestation.meta.get("publish_year") or manifestation.meta.get("year")
+        if py_val:
+            try:
+                pub_year = int(str(py_val)[:4])
+            except (ValueError, TypeError):
+                pass
+
     # -------------------------------------------------------------------------
     # 1. Work-Level Resolutions (F1)
     # -------------------------------------------------------------------------
@@ -1126,9 +1374,10 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             title=work.title,
             media_category=media_cat,
             author=manifestation.author,
+            year=pub_year,
             fast_mode=fast_mode,
         )
-        if work_match:
+        if work_match and work_match["confidence"] >= suggestion_threshold:
             existing = db.session.execute(
                 select(SemanticLink).where(
                     SemanticLink.entity_type == "work",
@@ -1139,6 +1388,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             ).scalar_one_or_none()
 
             if not existing:
+                link_status = "accepted" if work_match["confidence"] >= auto_threshold else "suggested"
                 link = SemanticLink(
                     entity_type="work",
                     entity_id=work.id,
@@ -1148,6 +1398,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                     confidence=work_match["confidence"],
                     match_strategy=work_match["strategy"],
                     attributes=work_match["attributes"],
+                    status=link_status,
                     verified=False,
                 )
                 db.session.add(link)
@@ -1162,7 +1413,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
 
         for author_name in authors[:3]:  # Resolve up to 3 authors to respect rate limits
             author_match = DBpediaClient.resolve_person(author_name, fast_mode=fast_mode)
-            if author_match:
+            if author_match and author_match["confidence"] >= suggestion_threshold:
                 existing_author = db.session.execute(
                     select(SemanticLink).where(
                         SemanticLink.entity_type == "work",
@@ -1173,6 +1424,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                 ).scalar_one_or_none()
 
                 if not existing_author:
+                    author_status = "accepted" if author_match["confidence"] >= auto_threshold else "suggested"
                     author_link = SemanticLink(
                         entity_type="work",
                         entity_id=work.id,
@@ -1182,6 +1434,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                         confidence=author_match["confidence"],
                         match_strategy=author_match["strategy"],
                         attributes={**author_match["attributes"], "role": "author"},
+                        status=author_status,
                         verified=False,
                     )
                     db.session.add(author_link)
@@ -1199,7 +1452,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
 
         for tag in tags[:5]:  # Reconcile up to 5 topical tags
             wn_match = WordNetMapper.resolve_tag(tag, fast_mode=fast_mode)
-            if wn_match:
+            if wn_match and wn_match["confidence"] >= suggestion_threshold:
                 authority = wn_match.get("authority", "wordnet")
                 existing_wn = db.session.execute(
                     select(SemanticLink).where(
@@ -1211,6 +1464,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                 ).scalar_one_or_none()
 
                 if not existing_wn:
+                    wn_status = "accepted" if wn_match["confidence"] >= auto_threshold else "suggested"
                     wn_link = SemanticLink(
                         entity_type="work",
                         entity_id=work.id,
@@ -1220,6 +1474,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                         confidence=wn_match["confidence"],
                         match_strategy=wn_match["strategy"],
                         attributes=wn_match["attributes"],
+                        status=wn_status,
                         verified=False,
                     )
                     db.session.add(wn_link)
@@ -1267,6 +1522,8 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                 geo_work_locations.append(matched_geo)
 
         for geo_match in geo_work_locations:
+            if geo_match.get("confidence", 0.0) < suggestion_threshold:
+                continue
             existing_geo_work = db.session.execute(
                 select(SemanticLink).where(
                     SemanticLink.entity_type == "work",
@@ -1277,6 +1534,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             ).scalar_one_or_none()
 
             if not existing_geo_work:
+                geo_status = "accepted" if geo_match["confidence"] >= auto_threshold else "suggested"
                 geo_work_link = SemanticLink(
                     entity_type="work",
                     entity_id=work.id,
@@ -1286,6 +1544,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                     confidence=geo_match["confidence"],
                     match_strategy=geo_match["strategy"],
                     attributes={**geo_match["attributes"], "role": "subject_place"},
+                    status=geo_status,
                     verified=False,
                 )
                 db.session.add(geo_work_link)
@@ -1315,7 +1574,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
 
     for place_str in manifestation_places[:3]:
         geo_match = GeoNamesClient.resolve_location(place_str)
-        if geo_match:
+        if geo_match and geo_match.get("confidence", 0.0) >= suggestion_threshold:
             existing_geo = db.session.execute(
                 select(SemanticLink).where(
                     SemanticLink.entity_type == "manifestation",
@@ -1326,6 +1585,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             ).scalar_one_or_none()
 
             if not existing_geo:
+                geo_status = "accepted" if geo_match["confidence"] >= auto_threshold else "suggested"
                 geo_link = SemanticLink(
                     entity_type="manifestation",
                     entity_id=manifestation.id,
@@ -1335,6 +1595,7 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                     confidence=geo_match["confidence"],
                     match_strategy=geo_match["strategy"],
                     attributes={**geo_match["attributes"], "role": "publication_place"},
+                    status=geo_status,
                     verified=False,
                 )
                 db.session.add(geo_link)
@@ -1350,6 +1611,9 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
                     publisher_cities.append(m_part)
 
         for pub_match in publisher_cities[:2]:
+            conf = pub_match.get("confidence", 0.90)
+            if conf < suggestion_threshold:
+                continue
             existing_geo = db.session.execute(
                 select(SemanticLink).where(
                     SemanticLink.entity_type == "manifestation",
@@ -1360,15 +1624,17 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             ).scalar_one_or_none()
 
             if not existing_geo:
+                pub_status = "accepted" if conf >= auto_threshold else "suggested"
                 geo_link = SemanticLink(
                     entity_type="manifestation",
                     entity_id=manifestation.id,
                     authority="geonames",
                     external_uri=pub_match["uri"],
                     pref_label=pub_match["label"],
-                    confidence=0.90,
+                    confidence=conf,
                     match_strategy="publisher_imprint",
                     attributes={**pub_match["attributes"], "role": "publication_place"},
+                    status=pub_status,
                     verified=False,
                 )
                 db.session.add(geo_link)
@@ -1378,6 +1644,9 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
     if not work and manifestation.title:
         title_cities = GeoNamesClient.extract_locations_from_text(manifestation.title)
         for t_match in title_cities[:2]:
+            conf = t_match.get("confidence", 0.85)
+            if conf < suggestion_threshold:
+                continue
             existing_geo = db.session.execute(
                 select(SemanticLink).where(
                     SemanticLink.entity_type == "manifestation",
@@ -1388,15 +1657,17 @@ def resolve_manifestation_links(manifestation_id: int, fast_mode: bool = False) 
             ).scalar_one_or_none()
 
             if not existing_geo:
+                t_status = "accepted" if conf >= auto_threshold else "suggested"
                 geo_link = SemanticLink(
                     entity_type="manifestation",
                     entity_id=manifestation.id,
                     authority="geonames",
                     external_uri=t_match["uri"],
                     pref_label=t_match["label"],
-                    confidence=t_match["confidence"],
+                    confidence=conf,
                     match_strategy=t_match["strategy"],
                     attributes={**t_match["attributes"], "role": "subject_place"},
+                    status=t_status,
                     verified=False,
                 )
                 db.session.add(geo_link)
@@ -1414,7 +1685,7 @@ def get_manifestation_semantic_links_dict(manifestation_id: int) -> dict[str, An
     if not manifestation:
         return {"manifestation_id": manifestation_id, "links": [], "grouped": {}}
 
-    all_links = manifestation.get_semantic_links(include_work=True)
+    all_links = manifestation.get_semantic_links(include_work=True, status=None)
     serialized = [link.to_dict() for link in all_links]
 
     grouped: dict[str, list[dict[str, Any]]] = {

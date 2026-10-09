@@ -28,6 +28,7 @@ import {
   useLodStats,
   useLodTaskStatus,
   useTriggerLodReconciliation,
+  useTriggerLodCleanup,
   useActiveLodTask,
   useCancelLodTask,
 } from "@/lib/api/hooks/admin";
@@ -84,6 +85,7 @@ export default function LodReconciliationPage() {
   const { data: taskStatus } = useLodTaskStatus(effectiveActiveTaskId);
   const triggerMutation = useTriggerLodReconciliation();
   const cancelMutation = useCancelLodTask();
+  const cleanupMutation = useTriggerLodCleanup();
 
   // If activeTaskData has task snapshot from /active endpoint, use it before or alongside taskStatus
   const effectiveTaskStatus = taskStatus ?? activeTaskData?.task ?? undefined;
@@ -173,6 +175,16 @@ export default function LodReconciliationPage() {
       await refetchStats();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to cancel scan";
+      toast.error(msg);
+    }
+  };
+
+  const handleDryRunCleanup = async () => {
+    try {
+      const result = await cleanupMutation.mutateAsync(true);
+      toast.info(`Dry-run cleanup complete: ${result.demoted} candidate links identified for demotion.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to run LOD cleanup dry-run";
       toast.error(msg);
     }
   };
@@ -275,6 +287,8 @@ export default function LodReconciliationPage() {
             isTriggering={triggerMutation.isPending}
             onTrigger={handleTrigger}
             onCancel={handleCancel}
+            onDryRunCleanup={handleDryRunCleanup}
+            isCleaningUp={cleanupMutation.isPending}
           />
         </section>
 

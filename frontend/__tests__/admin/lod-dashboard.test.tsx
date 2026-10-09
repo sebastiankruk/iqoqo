@@ -94,6 +94,7 @@ vi.mock("@/lib/api/hooks/admin", () => ({
   useTriggerLodReconciliation: vi.fn(),
   useActiveLodTask: vi.fn(),
   useCancelLodTask: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useTriggerLodCleanup: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/components/dashboard/navbar-wrapper", () => ({
@@ -110,6 +111,7 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
     linked_manifestations: 120,
     unlinked_manifestations: 30,
     total_links: 310,
+    suggested_links: 15,
     by_authority: {
       dbpedia: 140,
       geonames: 95,
@@ -180,7 +182,8 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
       expect(manifCard).toBeInTheDocument();
       expect(manifCard.closest("a")).toHaveAttribute("href", "/collection?view=manifestations");
       expect(manifCard).toHaveTextContent("150");
-      expect(manifCard).toHaveTextContent("120 linked · 30 unlinked");
+      expect(manifCard).toHaveTextContent("120 linked · 30 unlinked · 15 suggested");
+      expect(screen.getByTestId("suggested-links-count")).toHaveTextContent("15 suggested");
 
       const dbpediaCard = screen.getByTestId("metric-card-dbpedia");
       expect(dbpediaCard).toBeInTheDocument();
@@ -233,6 +236,17 @@ describe("LOD Reconciliation Dashboard Component Suite", () => {
         unlinked_only: true,
         throttle_delay: 0.5,
       });
+    });
+
+    it("triggers dry-run cleanup when clicking cleanup button", () => {
+      const mockTrigger = vi.fn();
+      const mockCleanup = vi.fn();
+      render(<BatchControl onTrigger={mockTrigger} onDryRunCleanup={mockCleanup} isTriggering={false} />);
+
+      const cleanupButton = screen.getByTestId("lod-dry-run-cleanup-button");
+      fireEvent.click(cleanupButton);
+
+      expect(mockCleanup).toHaveBeenCalledTimes(1);
     });
 
     it("renders progress bar, percentage, and cancel button when active", () => {

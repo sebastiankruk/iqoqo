@@ -119,3 +119,20 @@ class ConfigService:
         if isinstance(val, str):
             return val.lower() in ("true", "1", "yes", "on")
         return default
+
+    @staticmethod
+    def get_float(key: str, default: float = 0.0) -> float:
+        """Get a float config value.
+
+        Args:
+            key: Configuration key to retrieve
+            default: Default value if key not found
+
+        Returns:
+            Float value from configuration
+        """
+        val = ConfigService.get(key, default)
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default

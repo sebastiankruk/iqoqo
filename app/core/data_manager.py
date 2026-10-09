@@ -1052,10 +1052,12 @@ class DataManager:
             manif_auth_subq = select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "manifestation",
                 func.lower(SemanticLink.authority) == lod_authority.lower(),
+                SemanticLink.status == "accepted",
             )
             work_auth_subq = select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "work",
                 func.lower(SemanticLink.authority) == lod_authority.lower(),
+                SemanticLink.status == "accepted",
             )
             base_query = base_query.where(
                 or_(
@@ -1065,8 +1067,14 @@ class DataManager:
             )
 
         if lod_status == "linked":
-            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            manif_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                SemanticLink.status == "accepted",
+            )
+            work_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                SemanticLink.status == "accepted",
+            )
             base_query = base_query.where(
                 or_(
                     Manifestation.id.in_(manif_subq),
@@ -1074,8 +1082,14 @@ class DataManager:
                 )
             )
         elif lod_status == "unlinked":
-            manif_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-            work_subq = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+            manif_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "manifestation",
+                SemanticLink.status == "accepted",
+            )
+            work_subq = select(SemanticLink.entity_id).where(
+                SemanticLink.entity_type == "work",
+                SemanticLink.status == "accepted",
+            )
             base_query = base_query.where(
                 and_(
                     ~Manifestation.id.in_(manif_subq),
@@ -1581,8 +1595,14 @@ class DataManager:
         )
         total_lod_count = db.session.execute(total_lod_q).scalar() or 0
 
-        all_manif_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-        all_work_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+        all_manif_links = select(SemanticLink.entity_id).where(
+            SemanticLink.entity_type == "manifestation",
+            SemanticLink.status == "accepted",
+        )
+        all_work_links = select(SemanticLink.entity_id).where(
+            SemanticLink.entity_type == "work",
+            SemanticLink.status == "accepted",
+        )
 
         linked_lod_q = (
             select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
@@ -1604,10 +1624,12 @@ class DataManager:
             auth_manif_links = select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "manifestation",
                 func.lower(SemanticLink.authority) == auth,
+                SemanticLink.status == "accepted",
             )
             auth_work_links = select(SemanticLink.entity_id).where(
                 SemanticLink.entity_type == "work",
                 func.lower(SemanticLink.authority) == auth,
+                SemanticLink.status == "accepted",
             )
             auth_lod_q = (
                 select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
@@ -1642,7 +1664,10 @@ class DataManager:
                     sem_clauses.append(and_(SemanticLink.entity_type == "manifestation", SemanticLink.entity_id.in_(all_m_ids)))
                 if sem_clauses:
                     sem_rows = db.session.execute(
-                        select(SemanticLink.entity_type, SemanticLink.entity_id, SemanticLink.authority).where(or_(*sem_clauses))
+                        select(SemanticLink.entity_type, SemanticLink.entity_id, SemanticLink.authority).where(
+                            or_(*sem_clauses),
+                            SemanticLink.status == "accepted",
+                        )
                     ).all()
                     for ent_type, ent_id, auth in sem_rows:
                         auth_lower = auth.lower() if auth else ""

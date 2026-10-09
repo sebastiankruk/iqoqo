@@ -1111,17 +1111,15 @@ def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Respon
     )
 
 
-@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
-def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
-    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response, int]:
+    """Accept or reject a suggested semantic link associated with a manifestation or its work.
 
-    Requires `write:metadata`: this is a catalog mutation, and a standard user
-    who can reach it can remove links the reconciler established from any
-    manifestation, not only their own.
+    Requires `write:metadata`. Payload must specify `status: 'accepted' | 'rejected'`.
     """
-    from app.db.core import SemanticLink
+    from app.db.core import EntityAuditLog, SemanticLink
 
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:
@@ -1139,6 +1137,79 @@ def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not is_valid_assoc:
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
+    payload = request.get_json(silent=True) or {}
+    new_status = payload.get("status")
+    if new_status not in ("accepted", "rejected"):
+        return jsonify({"success": False, "data": None, "error": "Invalid status. Must be 'accepted' or 'rejected'"}), 400
+
+    old_status = link.status
+    link.status = new_status
+    if new_status == "accepted":
+        link.verified = True
+
+    actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None
+    audit_entry = EntityAuditLog(
+        entity_type=link.entity_type,
+        entity_id=link.entity_id,
+        actor_id=actor_id,
+        change_type=f"semantic_link_{new_status}",
+        diff={
+            "link_id": link.id,
+            "authority": link.authority,
+            "external_uri": link.external_uri,
+            "old_status": old_status,
+            "new_status": new_status,
+        },
+    )
+    db.session.add(audit_entry)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": link.to_dict(), "error": None}), 200
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
+    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+
+    Requires `write:metadata`: this is a catalog mutation, and a standard user
+    who can reach it can remove links the reconciler established from any
+    manifestation, not only their own.
+    """
+    from app.db.core import EntityAuditLog, SemanticLink
+
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    link = db.session.get(SemanticLink, link_id)
+    if not link:
+        return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
+
+    work_id = manif.expression.work_id if manif.expression else None
+    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
+        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
+    )
+
+    if not is_valid_assoc:
+        return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
+
+    actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None
+    audit_entry = EntityAuditLog(
+        entity_type=link.entity_type,
+        entity_id=link.entity_id,
+        actor_id=actor_id,
+        change_type="semantic_link_deleted",
+        diff={
+            "link_id": link.id,
+            "authority": link.authority,
+            "external_uri": link.external_uri,
+            "old_status": link.status,
+            "new_status": "deleted",
+        },
+    )
+    db.session.add(audit_entry)
     db.session.delete(link)
     db.session.commit()
     return "", 204

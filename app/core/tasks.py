@@ -26,6 +26,7 @@ from typing import Any
 import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
+from sqlalchemy import select
 
 from app.core.celery_app import celery
 from app.core.mail_service import MailDeliveryError
@@ -354,6 +355,7 @@ def batch_link_catalog_lod_task(
                 manif_subq = select(1).where(
                     SemanticLink.entity_type == "manifestation",
                     SemanticLink.entity_id == Manifestation.id,
+                    SemanticLink.status == "accepted",
                 )
                 work_subq = (
                     select(1)
@@ -362,6 +364,7 @@ def batch_link_catalog_lod_task(
                         Expression.id == Manifestation.expression_id,
                         SemanticLink.entity_type == "work",
                         SemanticLink.entity_id == Expression.work_id,
+                        SemanticLink.status == "accepted",
                     )
                 )
                 query = query.where(~manif_subq.exists()).where(~work_subq.exists())
@@ -372,6 +375,7 @@ def batch_link_catalog_lod_task(
                     select(SemanticLink.entity_id).where(
                         SemanticLink.entity_type == "manifestation",
                         SemanticLink.entity_id.in_(manifestation_ids),
+                        SemanticLink.status == "accepted",
                     )
                 )
                 .scalars()
@@ -395,6 +399,7 @@ def batch_link_catalog_lod_task(
                         select(SemanticLink.entity_id).where(
                             SemanticLink.entity_type == "work",
                             SemanticLink.entity_id.in_(work_ids),
+                            SemanticLink.status == "accepted",
                         )
                     )
                     .scalars()
@@ -547,3 +552,149 @@ def batch_link_catalog_lod_task(
                     InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
             except Exception:  # pylint: disable=broad-except
                 pass
+
+
+@celery.task(
+    name="app.core.tasks.cleanup_lod_links_task",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[str, Any]:
+    """Re-score existing accepted SemanticLinks and demote sub-threshold links to suggested.
+
+    In dry-run mode, calculates potential demotions without mutating database rows.
+    In apply mode (dry_run=False), updates link.status to 'suggested' and writes to EntityAuditLog.
+    """
+    from flask import has_app_context
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return cleanup_lod_links_task(dry_run=dry_run, batch_size=batch_size)
+
+    from app.core.config_service import ConfigService
+    from app.core.lod_linking_service import compute_composite_score, is_disambiguation
+    from app.db import db
+    from app.db.core import EntityAuditLog, Manifestation, SemanticLink, Work
+
+    auto_threshold = ConfigService.get_float("LOD_AUTO_APPLY_THRESHOLD", 0.82)
+    suggestion_threshold = ConfigService.get_float("LOD_SUGGESTION_THRESHOLD", 0.55)
+
+    links = db.session.execute(select(SemanticLink).where(SemanticLink.status == "accepted")).scalars().all()
+
+    total_evaluated = len(links)
+    demoted_count = 0
+    rejected_count = 0
+    unchanged_count = 0
+    demotions: list[dict[str, Any]] = []
+
+    for link in links:
+        target_title = ""
+        author: str | None = None
+        year: int | None = None
+
+        if link.entity_type == "work":
+            work = db.session.get(Work, link.entity_id)
+            if work:
+                target_title = work.title or ""
+                if work.meta and isinstance(work.meta.get("authors"), list):
+                    authors = [a for a in work.meta["authors"] if isinstance(a, str)]
+                    if authors:
+                        author = authors[0]
+        elif link.entity_type == "manifestation":
+            manif = db.session.get(Manifestation, link.entity_id)
+            if manif:
+                target_title = manif.title or ""
+                author = manif.author
+                if manif.publication_date:
+                    year = manif.publication_date.year
+
+        cand_comment = (link.attributes or {}).get("comment", "")
+        cand_label = link.pref_label or ""
+
+        new_score = compute_composite_score(
+            candidate_label=cand_label,
+            target_title=target_title or cand_label,
+            author=author,
+            candidate_comment=cand_comment,
+            year=year,
+            rank_margin=0.5,
+            has_class_match=True,
+        )
+
+        effective_score = max(new_score, link.confidence if link.confidence is not None else 0.0)
+
+        if effective_score < suggestion_threshold or is_disambiguation(link.external_uri, cand_label, cand_comment):
+            rejected_count += 1
+            demoted_count += 1
+            demotions.append(
+                {
+                    "link_id": link.id,
+                    "authority": link.authority,
+                    "external_uri": link.external_uri,
+                    "old_score": link.confidence,
+                    "new_score": effective_score,
+                    "new_status": "suggested",
+                }
+            )
+            if not dry_run:
+                link.status = "suggested"
+                audit = EntityAuditLog(
+                    entity_type=link.entity_type,
+                    entity_id=link.entity_id,
+                    actor_id=None,
+                    change_type="semantic_link_demoted",
+                    diff={
+                        "link_id": link.id,
+                        "authority": link.authority,
+                        "external_uri": link.external_uri,
+                        "old_status": "accepted",
+                        "new_status": "suggested",
+                        "score": effective_score,
+                    },
+                )
+                db.session.add(audit)
+        elif effective_score < auto_threshold:
+            demoted_count += 1
+            demotions.append(
+                {
+                    "link_id": link.id,
+                    "authority": link.authority,
+                    "external_uri": link.external_uri,
+                    "old_score": link.confidence,
+                    "new_score": effective_score,
+                    "new_status": "suggested",
+                }
+            )
+            if not dry_run:
+                link.status = "suggested"
+                audit = EntityAuditLog(
+                    entity_type=link.entity_type,
+                    entity_id=link.entity_id,
+                    actor_id=None,
+                    change_type="semantic_link_demoted",
+                    diff={
+                        "link_id": link.id,
+                        "authority": link.authority,
+                        "external_uri": link.external_uri,
+                        "old_status": "accepted",
+                        "new_status": "suggested",
+                        "score": effective_score,
+                    },
+                )
+                db.session.add(audit)
+        else:
+            unchanged_count += 1
+
+    if not dry_run and demoted_count > 0:
+        db.session.commit()
+
+    return {
+        "dry_run": dry_run,
+        "total_evaluated": total_evaluated,
+        "demoted": demoted_count,
+        "rejected": rejected_count,
+        "unchanged": unchanged_count,
+        "sample_demotions": demotions[:20],
+    }

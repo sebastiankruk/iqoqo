@@ -620,6 +620,31 @@ export async function getLodStats(): Promise<LODStats> {
   return res.data.data;
 }
 
+export interface LODCleanupResult {
+  dry_run: boolean;
+  total_evaluated: number;
+  demoted: number;
+  rejected: number;
+  unchanged: number;
+  sample_demotions?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Trigger dry-run or applied cleanup of low-confidence LOD links.
+ *
+ * @param dryRun - Whether to evaluate without committing changes (default true)
+ * @returns Result summary of evaluated, demoted, and unchanged links
+ */
+export async function triggerLodCleanup(dryRun = true): Promise<LODCleanupResult> {
+  const res = await apiClient.post<ApiResponse<LODCleanupResult>>("/v1/admin/lod/cleanup", {
+    dry_run: dryRun,
+  });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to trigger LOD cleanup");
+  }
+  return res.data.data;
+}
+
 /**
  * Retrieve the currently executing batch LOD reconciliation task, or null.
  *

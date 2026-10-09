@@ -1315,9 +1315,15 @@ def get_lod_stats():
     """Query lifetime database statistics of Linked Open Data links across the catalog."""
     total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
 
-    # Count distinct manifestations with direct semantic links OR whose work has semantic links
-    manif_with_direct_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-    works_with_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+    # Count distinct manifestations with direct accepted semantic links OR whose work has accepted semantic links
+    manif_with_direct_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "manifestation",
+        SemanticLink.status == "accepted",
+    )
+    works_with_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "work",
+        SemanticLink.status == "accepted",
+    )
     manifs_with_linked_works = (
         select(Manifestation.id)
         .join(Expression, Manifestation.expression_id == Expression.id)
@@ -1336,10 +1342,17 @@ def get_lod_stats():
     )
 
     authority_rows = db.session.execute(
-        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
-    ).all()  # pylint: disable=not-callable
+        select(SemanticLink.authority, func.count(SemanticLink.id))  # pylint: disable=not-callable
+        .where(SemanticLink.status == "accepted")
+        .group_by(SemanticLink.authority)
+    ).all()
     by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
     total_links = sum(by_authority.values())
+
+    suggested_links = (
+        db.session.scalar(select(func.count(SemanticLink.id)).where(SemanticLink.status == "suggested"))  # pylint: disable=not-callable
+        or 0
+    )
 
     return (
         jsonify(
@@ -1350,6 +1363,7 @@ def get_lod_stats():
                     "linked_manifestations": linked_manifestations,
                     "unlinked_manifestations": max(0, total_manifestations - linked_manifestations),
                     "total_links": total_links,
+                    "suggested_links": suggested_links,
                     "by_authority": {
                         "dbpedia": by_authority.get("dbpedia", 0),
                         "geonames": by_authority.get("geonames", 0),
@@ -1361,6 +1375,22 @@ def get_lod_stats():
         ),
         200,
     )
+
+
+@admin_bp.route("/lod/cleanup", methods=["POST"])
+@api_bp.route("/admin/lod/cleanup", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_lod_cleanup():
+    """Trigger dry-run or applied cleanup of low-confidence or disambiguation LOD links."""
+    from app.core.tasks import cleanup_lod_links_task
+
+    body = request.get_json(silent=True) or {}
+    dry_run = bool(body.get("dry_run", True))
+    batch_size = int(body.get("batch_size", 100))
+
+    result = cleanup_lod_links_task(dry_run=dry_run, batch_size=batch_size)
+    return jsonify({"success": True, "data": result, "error": None}), 200
 
 
 # --- DUPLICATE DETECTION ROUTES ---
