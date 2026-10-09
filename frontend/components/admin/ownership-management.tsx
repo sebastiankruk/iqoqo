@@ -25,15 +25,7 @@ import {
   OwnershipSourceItem,
   OwnershipPreviewResponse,
 } from "@/lib/api/admin";
-import {
-  Loader2,
-  AlertCircle,
-  ArrowRight,
-  ShieldAlert,
-  Lock,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Loader2, AlertCircle, ArrowRight, ShieldAlert, Lock, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,

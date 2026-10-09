@@ -133,15 +133,15 @@ export function SemanticLinks({ manifestationId, canEdit = false }: SemanticLink
           size="sm"
           onClick={handleRelink}
           disabled={relinkMutation.isPending}
-          className="text-xs h-8 gap-1.5"
+          className="text-xs h-8 gap-1.5 shrink-0 whitespace-nowrap max-w-full"
           title={t("scanButton")}
         >
           {relinkMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
           )}
-          <span>{relinkMutation.isPending ? t("scanning") : t("scanButton")}</span>
+          <span className="truncate">{relinkMutation.isPending ? t("scanning") : t("scanButton")}</span>
         </Button>
       </CardHeader>
 
