@@ -26,6 +26,7 @@ import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
 import { FRBRFeedback } from "../social/frbr-feedback";
+import { SemanticLinks } from "../manifestation/semantic-links";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -50,6 +51,8 @@ function DetailsTab({ item }: { item: Item }) {
   const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
   const { data: partsResponse } = useWorkParts(item.work?.container_work_id ?? item.work?.id ?? 0);
   const parts = partsResponse?.data ?? [];
+  const { data: profile } = useProfile();
+  const canEdit = !!profile;
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,6 +142,13 @@ function DetailsTab({ item }: { item: Item }) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Linked Open Data */}
+      {Boolean(item.manifestation_id) && (
+        <div className="border-t pt-2">
+          <SemanticLinks manifestationId={item.manifestation_id!} canEdit={canEdit} />
         </div>
       )}
     </div>
