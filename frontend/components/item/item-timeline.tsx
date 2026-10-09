@@ -16,6 +16,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { RichText } from "@/components/ui/rich-text";
 import { apiClient } from "@/lib/api/client";
 import {
   Clock,
@@ -157,9 +158,11 @@ function TimelineItem({ log }: { log: StatusLog }) {
           </span>
         </div>
 
-        <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{description}</p>
-
-        {/* Transition details */}
+        {description && (
+          <div className="mt-2 text-xs text-muted-foreground leading-relaxed">
+            <RichText content={description} className="text-xs text-muted-foreground" />
+          </div>
+        )}
         {oldStatus && (
           <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
             <span className="font-mono line-through bg-muted/65 px-1.5 py-0.5 rounded text-muted-foreground/60">

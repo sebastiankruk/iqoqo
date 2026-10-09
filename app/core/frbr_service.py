@@ -2,6 +2,16 @@
 
 # pylint: disable=too-many-lines
 
+import dataclasses
+import itertools
+import json
+import logging
+import re
+from collections.abc import Generator, Iterable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote, urlsplit, urlunsplit
+
 # Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,16 +27,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-import dataclasses
-import itertools
-import json
-import logging
-import re
-from collections.abc import Generator, Iterable
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import quote, urlsplit, urlunsplit
-
+import bleach
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF
 from sqlalchemy import inspect as sa_inspect
@@ -364,6 +365,57 @@ def parse_agent_input(
     return []
 
 
+ALLOWED_DESCRIPTION_TAGS: list[str] = [
+    "a",
+    "b",
+    "blockquote",
+    "br",
+    "code",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "i",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "strong",
+    "u",
+    "ul",
+]
+
+ALLOWED_DESCRIPTION_ATTRIBUTES: dict[str, list[str]] = {
+    "a": ["href", "title", "target", "rel"],
+}
+
+ALLOWED_DESCRIPTION_PROTOCOLS: list[str] = ["http", "https", "mailto"]
+
+
+def sanitize_metadata_description(meta: dict[str, Any] | None) -> dict[str, Any] | None:
+    """
+    Sanitize incoming metadata description fields using bleach.
+
+    Strips prohibited HTML markup (e.g. <script>, <iframe>) while preserving
+    safe formatting tags. Operates in-place on the dictionary.
+    """
+    if not meta or not isinstance(meta, dict):
+        return meta
+    for key in list(meta.keys()):
+        if isinstance(key, str) and key.lower() == "description":
+            val = meta[key]
+            if isinstance(val, str):
+                meta[key] = bleach.clean(
+                    val,
+                    tags=ALLOWED_DESCRIPTION_TAGS,
+                    attributes=ALLOWED_DESCRIPTION_ATTRIBUTES,
+                    protocols=ALLOWED_DESCRIPTION_PROTOCOLS,
+                    strip=True,
+                )
+    return meta
+
+
 def create_work(
     title: str,
     meta: dict[str, Any] | None = None,
@@ -384,6 +436,7 @@ def create_work(
     """
     if meta is None:
         meta = {}
+    sanitize_metadata_description(meta)
     if sort_title is None and title:
         sort_title = derive_sort_title(title)
     work = Work(title=title, sort_title=sort_title, meta=meta, raw_payload=raw_payload)
@@ -421,6 +474,7 @@ def create_expression(
     """
     if meta is None:
         meta = {}
+    sanitize_metadata_description(meta)
     if kind is not None and kind not in EXPRESSION_KINDS:
         raise ValueError(f"Invalid expression kind {kind!r}; must be one of {EXPRESSION_KINDS}")
     expression = Expression(
@@ -476,6 +530,7 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         meta = {}
     else:
         meta = dict(meta)
+    sanitize_metadata_description(meta)
 
     # Import shared validation utilities
     from app.core.f3_validation import (
@@ -1121,6 +1176,7 @@ def update_work(
         work.raw_payload = raw_payload
     current_meta = dict(work.meta or {})
     if meta is not None:
+        sanitize_metadata_description(meta)
         current_meta.update(meta)
 
     if "authors" in current_meta:
@@ -1247,6 +1303,7 @@ def update_expression(
     if raw_payload is not None:
         expr.raw_payload = raw_payload
     if meta is not None:
+        sanitize_metadata_description(meta)
         current_meta = dict(expr.meta or {})
         current_meta.update(meta)
         expr.meta = current_meta
@@ -1505,6 +1562,7 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     if raw_payload is not None:
         manif.raw_payload = raw_payload
     if meta is not None:
+        sanitize_metadata_description(meta)
         current_meta = dict(manif.meta or {})
         current_meta.update(meta)
         new_type = meta.get("type") or meta.get("format") or meta.get("Format")
@@ -1686,6 +1744,8 @@ def _merge_metadata(target_meta: dict[str, Any] | None, source_meta: dict[str, A
     """Merge source metadata into target, preserving target keys and deduping lists."""
     result = dict(target_meta or {})
     source = dict(source_meta or {})
+    sanitize_metadata_description(result)
+    sanitize_metadata_description(source)
     for key, value in source.items():
         if key not in result:
             result[key] = value

@@ -22,8 +22,7 @@ import { cn, isAudioMedia } from "@/lib/utils";
 import { hasMetaChain, readMeta, readMetaChain } from "@/lib/meta";
 import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
-import DOMPurify from "dompurify";
-import ReactMarkdown from "react-markdown";
+import { RichText } from "@/components/ui/rich-text";
 
 /**
  * Look up a human-readable label for a format ID from the media hierarchy.
@@ -44,42 +43,6 @@ import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 import { DiscoveryPivot } from "./discovery-pivot";
-
-/**
- * Safely sanitizes HTML content using DOMPurify across browser, happy-dom, and SSR environments.
- *
- * @param dirty - Raw string possibly containing HTML markup
- * @returns Sanitized HTML string safe for rendering
- */
-function sanitizeHtml(dirty: string): string {
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const purify = typeof DOMPurify.sanitize === "function" ? DOMPurify : (DOMPurify as any)(window);
-    return purify.sanitize(dirty, {
-      ALLOWED_TAGS: [
-        "b",
-        "i",
-        "em",
-        "strong",
-        "p",
-        "br",
-        "ul",
-        "ol",
-        "li",
-        "a",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "blockquote",
-        "code",
-        "pre",
-      ],
-      ALLOWED_ATTR: ["href", "target", "rel"],
-    });
-  }
-  return dirty.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
-}
 
 /**
  * The two components disagree on which of `label` / `publisher` wins, and that
@@ -236,16 +199,8 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
       )}
 
       {description && (
-        <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground bg-muted/20 p-4 rounded-xl border border-border/40">
-          {/<[a-z][\s\S]*>/i.test(description) ? (
-            <div
-              dangerouslySetInnerHTML={{
-                __html: sanitizeHtml(description),
-              }}
-            />
-          ) : (
-            <ReactMarkdown>{description}</ReactMarkdown>
-          )}
+        <div className="bg-muted/20 p-4 rounded-xl border border-border/40 text-muted-foreground">
+          <RichText content={description} />
         </div>
       )}
 

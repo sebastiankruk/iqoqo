@@ -21,7 +21,8 @@
 "use client";
 
 import React from "react";
-import { Save, X, ImagePlus, Loader2, Search } from "lucide-react";
+import { Save, X, ImagePlus, Loader2, Search, Camera, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api/client";
@@ -39,13 +40,14 @@ export interface ManualEntryData {
   coverFile?: File | null;
 }
 
-interface ManualEntryFormProps {
+export interface ManualEntryFormProps {
   onSubmit: (data: ManualEntryData) => Promise<void>;
   onCancel: () => void;
   initialIdentifier?: string;
   initialFormat?: ScanFormat;
   initialTitle?: string;
   initialAuthors?: string;
+  initialCoverFile?: File | null;
 }
 
 /**
@@ -67,7 +69,9 @@ export function ManualEntryForm({
   initialFormat = "book",
   initialTitle = "",
   initialAuthors = "",
+  initialCoverFile = null,
 }: ManualEntryFormProps) {
+  const t = useTranslations("scanner");
   const [formData, setFormData] = React.useState<ManualEntryData>({
     title: initialTitle,
     authors: initialAuthors,
@@ -75,11 +79,28 @@ export function ManualEntryForm({
     publisher: "",
     year: "",
     format: initialFormat,
-    coverFile: null,
+    coverFile: initialCoverFile,
   });
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   /** Phase 4 UX Polish: tracks in-flight metadata lookup to prevent double-click */
   const [isLookingUp, setIsLookingUp] = React.useState(false);
+
+  // Manage preview object URL lifecycle
+  React.useEffect(() => {
+    if (formData.coverFile) {
+      const url = URL.createObjectURL(formData.coverFile);
+      setPreviewUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [formData.coverFile]);
 
   // Sync state with props if they change (e.g. from a new scan or extraction)
   React.useEffect(() => {
@@ -90,8 +111,9 @@ export function ManualEntryForm({
       authors: initialAuthors,
       identifier: initialIdentifier,
       format: initialFormat,
+      ...(initialCoverFile !== undefined ? { coverFile: initialCoverFile } : {}),
     }));
-  }, [initialTitle, initialAuthors, initialIdentifier, initialFormat]);
+  }, [initialTitle, initialAuthors, initialIdentifier, initialFormat, initialCoverFile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -140,7 +162,15 @@ export function ManualEntryForm({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
-    setFormData(prev => ({ ...prev, coverFile: file }));
+    if (file) {
+      setFormData(prev => ({ ...prev, coverFile: file }));
+    }
+  };
+
+  const handleRemoveCover = () => {
+    setFormData(prev => ({ ...prev, coverFile: null }));
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -279,29 +309,86 @@ export function ManualEntryForm({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="manual-cover-upload" className="text-sm font-medium text-foreground">
-            Manual Cover Upload
+        <div className="flex flex-col gap-2">
+          <label htmlFor="manual-cover-gallery" className="text-sm font-medium text-foreground">
+            {t("manualEntry.manualCoverUpload")}
           </label>
-          <div className="flex items-center gap-3">
-            <Button asChild type="button" variant="outline" size="sm" className="relative flex h-9 gap-2">
-              <label htmlFor="manual-cover-upload" className="cursor-pointer">
-                <ImagePlus className="h-4 w-4 text-primary" />
-                {formData.coverFile ? "Change Image" : "Choose Cover"}
-              </label>
-            </Button>
+          <div className="flex flex-col gap-2">
+            {formData.coverFile && previewUrl ? (
+              <div className="flex items-center gap-3 rounded-lg border border-border p-2.5 bg-muted/20">
+                <div className="relative h-16 w-16 overflow-hidden rounded-md border border-border bg-muted shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={previewUrl} alt={t("manualEntry.coverPreview")} className="h-full w-full object-cover" />
+                </div>
+                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                  <span className="truncate text-xs font-medium text-foreground">{formData.coverFile.name}</span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="h-7 text-xs"
+                    >
+                      <ImagePlus className="mr-1 h-3.5 w-3.5 text-primary" />
+                      {t("manualEntry.changeImage")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveCover}
+                      className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                      {t("manualEntry.removeImage")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex h-9 items-center gap-2"
+                >
+                  <ImagePlus className="h-4 w-4 text-primary" />
+                  {t("manualEntry.chooseFromPhotos")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex h-9 items-center gap-2"
+                >
+                  <Camera className="h-4 w-4 text-primary" />
+                  {t("manualEntry.takePhoto")}
+                </Button>
+              </div>
+            )}
             <input
-              id="manual-cover-upload"
+              ref={galleryInputRef}
+              id="manual-cover-gallery"
               type="file"
               accept="image/*"
+              aria-label={t("manualEntry.chooseFromPhotos")}
               onChange={handleFileChange}
               className="sr-only"
             />
-            {formData.coverFile && (
-              <span className="max-w-[150px] truncate text-[11px] text-muted-foreground">
-                {formData.coverFile.name}
-              </span>
-            )}
+            <input
+              ref={cameraInputRef}
+              id="manual-cover-camera"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              aria-label={t("manualEntry.takePhoto")}
+              onChange={handleFileChange}
+              className="sr-only"
+            />
           </div>
         </div>
 

@@ -157,4 +157,67 @@ describe("ManualEntryForm", () => {
     });
     expect(screen.getByRole("button", { name: /Look up metadata for identifier/i })).not.toBeDisabled();
   });
+
+  it("renders thumbnail preview upon gallery file selection and supports removal", async () => {
+    const mockSubmit = vi.fn().mockResolvedValue(undefined);
+    const mockCancel = vi.fn();
+
+    render(<ManualEntryForm onSubmit={mockSubmit} onCancel={mockCancel} />);
+
+    // Check gallery and camera buttons are rendered when no file
+    expect(screen.getByRole("button", { name: /Choose from Photos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Take Photo/i })).toBeInTheDocument();
+
+    const file = new File(["dummy cover data"], "custom-cover.jpg", { type: "image/jpeg" });
+    const galleryInput = screen.getByLabelText(/Manual Cover Upload/i) as HTMLInputElement;
+
+    fireEvent.change(galleryInput, { target: { files: [file] } });
+
+    // Thumbnail preview rendered
+    await waitFor(() => {
+      expect(screen.getByAltText(/Cover preview/i)).toBeInTheDocument();
+      expect(screen.getByText("custom-cover.jpg")).toBeInTheDocument();
+    });
+
+    // Remove cover
+    const removeBtn = screen.getByRole("button", { name: /Remove/i });
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByAltText(/Cover preview/i)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Choose from Photos/i })).toBeInTheDocument();
+    });
+  });
+
+  it("submits staged cover file in form submission payload", async () => {
+    const mockSubmit = vi.fn().mockResolvedValue(undefined);
+    const mockCancel = vi.fn();
+
+    const initialCover = new File(["test image"], "initial-photo.png", { type: "image/png" });
+
+    render(
+      <ManualEntryForm
+        onSubmit={mockSubmit}
+        onCancel={mockCancel}
+        initialTitle="Cover Test Book"
+        initialCoverFile={initialCover}
+      />
+    );
+
+    // Initial cover preview is immediately rendered
+    expect(screen.getByAltText(/Cover preview/i)).toBeInTheDocument();
+    expect(screen.getByText("initial-photo.png")).toBeInTheDocument();
+
+    const submitBtn = screen.getByRole("button", { name: /Save Manual Entry/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Cover Test Book",
+          coverFile: initialCover,
+        })
+      );
+    });
+  });
 });

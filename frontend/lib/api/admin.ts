@@ -892,3 +892,104 @@ export async function runDuplicateScan(params?: {
   }
   return res.data.data;
 }
+
+export interface OwnershipAccount {
+  id: string;
+  email: string;
+  username?: string;
+  display_name?: string;
+  is_active: boolean;
+}
+
+export interface OwnershipSourceItem {
+  id: number;
+  title: string;
+  format?: string | null;
+  is_hidden: boolean;
+  collection_status?: string | null;
+  cover_url?: string | null;
+}
+
+export interface OwnershipPreviewResponse {
+  source: {
+    id: string;
+    username: string;
+    display_name: string;
+  };
+  target: {
+    id: string;
+    username: string;
+    display_name: string;
+  };
+  mode: "single" | "selected" | "all";
+  item_ids: number[];
+  total_count: number;
+  hidden_count: number;
+  lent_count: number;
+  fingerprint: string;
+}
+
+export interface OwnershipReassignResult {
+  success: boolean;
+  transferred_count: number;
+  source_id: string;
+  target_id: string;
+  mode: string;
+}
+
+export async function getOwnershipAccounts(): Promise<OwnershipAccount[]> {
+  const res = await apiClient.get<ApiResponse<OwnershipAccount[]>>("/v1/admin/ownership/accounts");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch accounts");
+  }
+  return res.data.data;
+}
+
+export async function getOwnershipItems(
+  sourceUserId: string,
+  page: number = 1,
+  limit: number = 20
+): Promise<{ items: OwnershipSourceItem[]; total: number; pages: number }> {
+  const res = await apiClient.get<{
+    success: boolean;
+    data: OwnershipSourceItem[];
+    pagination: { total: number; page: number; limit: number; pages: number };
+    error?: string;
+  }>(`/v1/admin/ownership/items?source_user_id=${encodeURIComponent(sourceUserId)}&page=${page}&limit=${limit}`);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to fetch source items");
+  }
+  return {
+    items: res.data.data,
+    total: res.data.pagination.total,
+    pages: res.data.pagination.pages,
+  };
+}
+
+export async function previewOwnershipReassignment(payload: {
+  source_user_id: string;
+  target_user_id: string;
+  mode: "single" | "selected" | "all";
+  item_ids?: number[];
+}): Promise<OwnershipPreviewResponse> {
+  const res = await apiClient.post<ApiResponse<OwnershipPreviewResponse>>("/v1/admin/ownership/preview", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to preview reassignment");
+  }
+  return res.data.data;
+}
+
+export async function executeOwnershipReassignment(payload: {
+  source_user_id: string;
+  target_user_id: string;
+  mode: "single" | "selected" | "all";
+  expected_fingerprint: string;
+  expected_count: number;
+  item_ids?: number[];
+}): Promise<OwnershipReassignResult> {
+  const res = await apiClient.post<ApiResponse<OwnershipReassignResult>>("/v1/admin/ownership/reassign", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to execute reassignment");
+  }
+  return res.data.data;
+}

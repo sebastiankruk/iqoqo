@@ -21,6 +21,7 @@ split, reassign) live here rather than in the public blueprint because each one
 rewrites references across entity types."""
 
 import os
+import uuid
 from datetime import date
 from functools import wraps
 from typing import Any
@@ -50,6 +51,12 @@ from app.db.core import (
     Work,
 )
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
+from app.services.item_reassignment import (
+    ReassignmentConflictError,
+    ReassignmentValidationError,
+    execute_reassignment,
+    preview_reassignment,
+)
 from app.utils.json_utils import parse_meta, sanitize_meta
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
@@ -1572,3 +1579,170 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
         return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
 
     return jsonify({"success": True, "data": result})
+
+
+@admin_bp.route("/ownership/accounts", methods=["GET"])
+@require_auth
+@admin_required
+def get_ownership_accounts():
+    """Discover accounts for ownership transfer source and target selection."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS) or not _has_permission(user, PermissionName.READ_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users and read:users required"}), 403
+
+    users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
+    return jsonify(
+        {
+            "success": True,
+            "data": [
+                {
+                    "id": str(u.id),
+                    "email": u.email,
+                    "username": getattr(u, "username", None) or u.email,
+                    "display_name": u.display_name or u.email,
+                    "is_active": u.is_active,
+                }
+                for u in users
+            ],
+        }
+    )
+
+
+@admin_bp.route("/ownership/items", methods=["GET"])
+@require_auth
+@admin_required
+def get_ownership_source_items():
+    """Get paginated physical items belonging to a specified source account."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    source_id_raw = request.args.get("source_user_id")
+    if not source_id_raw:
+        return jsonify({"success": False, "error": "source_user_id query parameter is required"}), 400
+
+    try:
+        source_uuid = uuid.UUID(str(source_id_raw))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid source_user_id format"}), 400
+
+    source_user = db.session.get(User, source_uuid)
+    if not source_user:
+        return jsonify({"success": False, "error": "Source user account not found"}), 404
+
+    page = max(1, request.args.get("page", 1, type=int))
+    limit = min(100, max(1, request.args.get("limit", 20, type=int)))
+    offset = (page - 1) * limit
+
+    total = (
+        db.session.execute(select(func.count(Item.id)).where(Item.owner_id == source_uuid)).scalar() or 0  # pylint: disable=not-callable
+    )
+
+    items = (
+        db.session.execute(select(Item).where(Item.owner_id == source_uuid).order_by(Item.id.asc()).offset(offset).limit(limit))
+        .scalars()
+        .all()
+    )
+
+    items_data = []
+    for it in items:
+        manif = it.manifestation
+        expr = manif.expression if manif else None
+        work = expr.work if expr else None
+        title = (work.title if work else None) or (manif.meta or {}).get("Title") if manif else None
+        items_data.append(
+            {
+                "id": it.id,
+                "title": title or "Untitled",
+                "format": manif.format if manif else None,
+                "is_hidden": bool(it.is_hidden),
+                "collection_status": it.collection_status,
+                "cover_url": manif.cover_url if manif else None,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "data": items_data,
+            "pagination": {
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            },
+        }
+    )
+
+
+@admin_bp.route("/ownership/preview", methods=["POST"])
+@require_auth
+@admin_required
+def preview_item_reassignment():
+    """Preview an item ownership reassignment operation and return a deterministic scope digest."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    source_user_id = payload.get("source_user_id")
+    target_user_id = payload.get("target_user_id")
+    mode = payload.get("mode")
+    item_ids = payload.get("item_ids")
+
+    try:
+        preview_data = preview_reassignment(
+            source_user_id=source_user_id,
+            target_user_id=target_user_id,
+            mode=mode,
+            item_ids=item_ids,
+        )
+        return jsonify({"success": True, "data": preview_data})
+    except ReassignmentValidationError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Ownership preview error: %s", exc)
+        return jsonify({"success": False, "error": "Failed to generate preview"}), 500
+
+
+@admin_bp.route("/ownership/reassign", methods=["POST"])
+@require_auth
+@admin_required
+def execute_item_reassignment():
+    """Confirm and execute an item ownership reassignment operation with atomic rollback."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    source_user_id = payload.get("source_user_id")
+    target_user_id = payload.get("target_user_id")
+    mode = payload.get("mode")
+    expected_fingerprint = payload.get("expected_fingerprint")
+    expected_count = payload.get("expected_count")
+    item_ids = payload.get("item_ids")
+
+    if not expected_fingerprint or expected_count is None:
+        return jsonify({"success": False, "error": "expected_fingerprint and expected_count are required"}), 400
+
+    try:
+        result = execute_reassignment(
+            source_user_id=source_user_id,
+            target_user_id=target_user_id,
+            mode=mode,
+            expected_fingerprint=str(expected_fingerprint),
+            expected_count=int(expected_count),
+            item_ids=item_ids,
+            actor_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": result})
+    except ReassignmentConflictError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    except ReassignmentValidationError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Ownership reassignment failed and was rolled back: %s", exc)
+        return jsonify({"success": False, "error": "Reassignment failed and all changes were rolled back"}), 500

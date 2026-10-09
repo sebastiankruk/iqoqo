@@ -469,6 +469,15 @@
       "lookupTimedOut": "Upłynął limit czasu wyszukiwania. Przejście do ręcznego wprowadzania.",
       "lookupFailed": "Nie udało się znaleźć tej pozycji. Spróbuj ponownie.",
       "cameraUnavailable": "Aparat jest niedostępny"
+    },
+    "manualEntry": {
+      "title": "Ręczne dodawanie pozycji",
+      "chooseFromPhotos": "Wybierz ze zdjęć",
+      "takePhoto": "Zrób zdjęcie",
+      "changeImage": "Zmień",
+      "removeImage": "Usuń",
+      "manualCoverUpload": "Ręczne dodawanie okładki",
+      "coverPreview": "Podgląd okładki"
     }
   },
   "SemanticLinks": {
