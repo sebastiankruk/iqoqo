@@ -35,7 +35,7 @@ docker compose exec web python scripts/init_auth.py
 # http://localhost:5000 (or your configured WEB_PORT)
 ```
 
-For detailed configuration and development setup, continue reading below.
+For detailed configuration and development setup, continue reading below. For deploying iQoQo into an isolated, source-free host directory, see the [Deployment Directory Guide](DEPLOYMENT.md).
 
 ## Prerequisites
 
@@ -305,10 +305,9 @@ Full annotated reference: `.env.example`.
 
 `S3_BACKEND` selects `auto` (default), `rclone` or `s3`. The containers stopped
 shelling out to rclone and no longer mount `rclone.conf`; host-side backup
-scripts still use your existing rclone install. `RCLONE_REMOTE_ARCHIVE` and
-`RCLONE_FEEDBACK_REMOTE` are deprecated in favour of `S3_BUCKET_BACKUP` and
-`S3_BUCKET_FEEDBACK`. Full variable list and provider support:
-`docs/BACKUPS.md`.
+scripts still use your existing rclone install. `RCLONE_REMOTE_ARCHIVE` is
+deprecated in favour of `S3_BUCKET_BACKUP`. Full variable list and provider
+support: `docs/BACKUPS.md`.
 
 ## Database Setup
 

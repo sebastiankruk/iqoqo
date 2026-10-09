@@ -1007,12 +1007,13 @@ except Exception:
         BUILD_FLAG="--build"
     fi
 
-    # Ensure .allegro_token.json is a regular file.
-    # Docker creates missing bind-mount source paths as directories,
-    # which breaks container restarts for file-target mounts.
-    if [ ! -f ".allegro_token.json" ]; then
+    # Execute shared pre-deploy mount & permission guards
+    if [ -f "scripts/pre_deploy_mounts.py" ]; then
+        python3 scripts/pre_deploy_mounts.py . || exit 1
+    elif [ ! -f ".allegro_token.json" ]; then
         rm -rf ".allegro_token.json"
         printf '{}\n' > ".allegro_token.json"
+        chmod 0600 ".allegro_token.json" 2>/dev/null || true
     fi
 
     # No rclone.conf is created here. The containers no longer use rclone:

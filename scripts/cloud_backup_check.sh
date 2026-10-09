@@ -125,6 +125,7 @@ esac
 echo ""
 
 # 1. Cron job
+cron_entries_count=0
 if [ -f "${CRON_FILE}" ]; then
   check ok "Cron job: ${CRON_FILE} exists"
   if grep -q "cloud_backup.sh" "${CRON_FILE}" 2>/dev/null; then
@@ -132,8 +133,19 @@ if [ -f "${CRON_FILE}" ]; then
   else
     check fail "Cron job: unexpected content"
   fi
+  cron_entries_count=$(grep -c "cloud_backup.sh" "${CRON_FILE}" 2>/dev/null || echo 0)
 else
   check fail "Cron job: not installed"
+fi
+
+user_crontab_count=0
+if crontab -l 2>/dev/null | grep -q "cloud_backup.sh"; then
+  user_crontab_count=$(crontab -l 2>/dev/null | grep -c "cloud_backup.sh" || echo 0)
+fi
+
+total_cron_entries=$(( cron_entries_count + user_crontab_count ))
+if [ "${total_cron_entries}" -gt 1 ]; then
+  check warn "Cron job: duplicate entries detected (${total_cron_entries} references to cloud_backup.sh)"
 fi
 
 # 2. Destination reachability
@@ -304,6 +316,35 @@ if bash -n "${SCRIPT_DIR}/cloud_backup.sh" 2>/dev/null; then
   check ok "Backup script: syntax OK"
 else
   check fail "Backup script: syntax error"
+fi
+
+# 6. Lock file
+LOCK_FILE="${BACKUP_LOCK_FILE:-/tmp/iqoqo_backup.lock}"
+if [ -e "${LOCK_FILE}" ]; then
+  lock_mode=$(stat -c '%a' "${LOCK_FILE}" 2>/dev/null || stat -f '%p' "${LOCK_FILE}" 2>/dev/null || echo "unknown")
+  if ( flock -n 9 ) 9>"${LOCK_FILE}"; then
+    check ok "Lock file: ${LOCK_FILE} (mode: ${lock_mode}, status: free)"
+  else
+    check warn "Lock file: ${LOCK_FILE} (mode: ${lock_mode}, status: held by active backup)"
+  fi
+else
+  check ok "Lock file: ${LOCK_FILE} (status: free, not yet created)"
+fi
+
+# 7. Lock & Retry configuration
+LOCK_TIMEOUT="${BACKUP_LOCK_TIMEOUT:-1800}"
+RETRY_ATTEMPTS="${BACKUP_RETRY_ATTEMPTS:-3}"
+
+if [[ "${LOCK_TIMEOUT}" =~ ^[1-9][0-9]*$ ]]; then
+  check ok "Config: BACKUP_LOCK_TIMEOUT=${LOCK_TIMEOUT}s"
+else
+  check fail "Config: BACKUP_LOCK_TIMEOUT must be a positive integer (got '${LOCK_TIMEOUT}')"
+fi
+
+if [[ "${RETRY_ATTEMPTS}" =~ ^[1-9][0-9]*$ ]]; then
+  check ok "Config: BACKUP_RETRY_ATTEMPTS=${RETRY_ATTEMPTS}"
+else
+  check fail "Config: BACKUP_RETRY_ATTEMPTS must be a positive integer (got '${RETRY_ATTEMPTS}')"
 fi
 
 echo ""

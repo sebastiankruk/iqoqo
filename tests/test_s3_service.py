@@ -34,7 +34,6 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from app.core.s3_service import (
     BUCKET_BACKUP,
     BUCKET_COVERS,
-    BUCKET_FEEDBACK,
     S3ConfigurationError,
     S3DownloadError,
     S3NotConfiguredError,
@@ -58,11 +57,9 @@ def _clean_s3_env(monkeypatch):
         "S3_ADDRESSING_STYLE",
         "S3_BUCKET_BACKUP",
         "S3_BUCKET_COVERS",
-        "S3_BUCKET_FEEDBACK",
         "S3_SSE",
         "S3_SSE_KMS_KEY_ID",
         "RCLONE_COVERS_REMOTE",
-        "RCLONE_FEEDBACK_REMOTE",
         "RCLONE_REMOTE_ARCHIVE",
         "RCLONE_REMOTE_FAST",
     ):
@@ -155,16 +152,22 @@ def test_each_role_uses_a_distinct_prefix() -> None:
     service = _configured(BUCKET_COVERS)
     assert service.key_for("x.jpg") == "covers/x.jpg"
 
-    feedback = _configured(BUCKET_FEEDBACK)
-    assert feedback.key_for("x.jpg") == "feedback/x.jpg"
-
     backup = _configured(BUCKET_BACKUP)
     assert backup.key_for("x.tar.gz") == "archives/x.tar.gz"
 
 
+def test_bucket_backup_and_covers_remain_valid_roles() -> None:
+    """BUCKET_BACKUP (host scripts) and BUCKET_COVERS (cover cache) must remain valid roles."""
+    from app.core.s3_service import _VALID_BUCKETS
+
+    assert BUCKET_BACKUP in _VALID_BUCKETS
+    assert BUCKET_COVERS in _VALID_BUCKETS
+    assert len(_VALID_BUCKETS) == 2
+
+
 def test_key_for_rejects_traversal_for_every_role() -> None:
     """The guard is applied by the role helpers, not only by build_key."""
-    for role in (BUCKET_COVERS, BUCKET_FEEDBACK, BUCKET_BACKUP):
+    for role in (BUCKET_COVERS, BUCKET_BACKUP):
         with pytest.raises(ValueError):
             _configured(role).key_for("../../escape.jpg")
 
@@ -202,7 +205,7 @@ def test_download_error_carries_the_code_for_the_caller(caplog) -> None:
         def get_object(self, *_args, **_kwargs):
             raise ClientError({"Error": {"Code": "AccessDenied", "Message": "s3cr3t-value"}}, "GetObject")
 
-    service = _configured(BUCKET_FEEDBACK)
+    service = _configured(BUCKET_COVERS)
     service._client = ExplodingClient()  # pylint: disable=protected-access
 
     with caplog.at_level(logging.WARNING), pytest.raises(S3DownloadError) as excinfo:
@@ -222,7 +225,7 @@ def test_transport_failure_is_not_reported_as_a_service_code() -> None:
         def get_object(self, *_args, **_kwargs):
             raise EndpointConnectionError(endpoint_url="https://s3.example")
 
-    service = _configured(BUCKET_FEEDBACK)
+    service = _configured(BUCKET_COVERS)
     service._client = OfflineClient()  # pylint: disable=protected-access
 
     with pytest.raises(S3DownloadError) as excinfo:
@@ -375,9 +378,9 @@ def test_delete_of_missing_object_is_not_an_error() -> None:
         def delete_object(self, *_a, **_k):
             raise ClientError({"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "DeleteObject")
 
-    service = _configured(BUCKET_FEEDBACK)
+    service = _configured(BUCKET_COVERS)
     service._client = MissingClient()  # pylint: disable=protected-access
-    service.delete_object("feedback/x.jpg")  # must not raise
+    service.delete_object("covers/x.jpg")  # must not raise
 
 
 def test_list_keys_paginates(monkeypatch) -> None:

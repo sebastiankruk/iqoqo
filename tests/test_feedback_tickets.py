@@ -310,107 +310,39 @@ def test_concurrent_comment_addition(client, feedback_setup, app):
     assert len(resp.json["data"]["comments"]) == 10
 
 
-def test_s3_screenshot_upload(client, feedback_setup, app, monkeypatch):
-    """Screenshots are pushed to object storage and read back when local storage misses."""
-    import os
-    from io import BytesIO
-    from unittest.mock import MagicMock, patch
-
-    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = _sample_png()
-
-    # Override Celery task to run synchronously
-    from app.core.tasks import upload_feedback_screenshot
-
-    def mock_apply_async(*args, **kwargs):
-        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
-
-    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
-
-    service = MagicMock()
-    service.key_for.side_effect = lambda name: f"feedback/{name}"
-    service.get_bytes.return_value = b"fakeimage"
-
-    with patch("app.core.tasks.get_s3_service", return_value=service), patch("app.api.feedback.get_s3_service", return_value=service):
-        resp = client.post(
-            "/api/feedback",
-            data={
-                "type": "bug",
-                "description": "S3 test",
-                "screenshots": (BytesIO(png_bytes), "test.png"),
-            },
-            headers=u1_headers,
-            content_type="multipart/form-data",
-        )
-        assert resp.status_code == 201, resp.json
-
-        # The upload went to the feedback bucket under a validated key.
-        service.upload_file.assert_called_once()
-        assert service.upload_file.call_args[0][1].startswith("feedback/")
-
-        # Test retrieval from remote: remove the local file to force the remote path.
-        filename = resp.json["data"]["attachments"][0].split("/")[-1]
-
-        from app.utils.covers import GALLERY_DIR
-
-        local_path = os.path.join(GALLERY_DIR, filename)
-        if os.path.exists(local_path):
-            os.remove(local_path)
-
-        img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
-        assert img_resp.status_code == 200
-        assert img_resp.data == b"fakeimage"
-        service.get_bytes.assert_called_once()
-        assert service.get_bytes.call_args[0][0].startswith("feedback/")
-
-
-def test_s3_graceful_fallback(client, feedback_setup, app, monkeypatch):
-    """Without a configured bucket, submission still succeeds and retrieval 404s."""
+def test_absent_screenshot_returns_404_with_no_remote_call(client, feedback_setup, app):
+    """When a screenshot is absent from local gallery, retrieval returns 404."""
     import os
     from io import BytesIO
     from unittest.mock import patch
 
-    monkeypatch.delenv("RCLONE_FEEDBACK_REMOTE", raising=False)
-    monkeypatch.delenv("S3_BUCKET_FEEDBACK", raising=False)
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-
-    # Override Celery task to run synchronously
-    from app.core.tasks import upload_feedback_screenshot
-
-    def mock_apply_async(*args, **kwargs):
-        upload_feedback_screenshot(*kwargs.get("args", []), **kwargs.get("kwargs", {}))
-
-    monkeypatch.setattr(upload_feedback_screenshot, "apply_async", mock_apply_async)
+    from app.utils.covers import GALLERY_DIR
 
     u1_headers = _auth_headers(app, feedback_setup["user1_id"])
     png_bytes = _sample_png()
 
+    resp = client.post(
+        "/api/feedback",
+        data={
+            "type": "bug",
+            "description": "Local test",
+            "screenshots": (BytesIO(png_bytes), "test.png"),
+        },
+        headers=u1_headers,
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+
+    filename = resp.json["data"]["attachments"][0].split("/")[-1]
+    local_path = os.path.join(GALLERY_DIR, filename)
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+    # With local file removed, retrieving it returns 404 with no S3 or network activity
     with patch("app.core.s3_service.boto3.client") as mock_boto:
-        resp = client.post(
-            "/api/feedback",
-            data={
-                "type": "bug",
-                "description": "Fallback test",
-                "screenshots": (BytesIO(png_bytes), "test2.png"),
-            },
-            headers=u1_headers,
-            content_type="multipart/form-data",
-        )
-        assert resp.status_code == 201
-
-        # No bucket is configured, so no S3 client is ever built.
-        mock_boto.assert_not_called()
-
-        filename = resp.json["data"]["attachments"][0].split("/")[-1]
-
-        from app.utils.covers import GALLERY_DIR
-
-        local_path = os.path.join(GALLERY_DIR, filename)
-        if os.path.exists(local_path):
-            os.remove(local_path)
-
         img_resp = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
         assert img_resp.status_code == 404
+        mock_boto.assert_not_called()
 
 
 def test_feedback_schema_migration(app):
@@ -772,45 +704,3 @@ def test_feedback_screenshot_exact_collision_idor_blocked(client, feedback_setup
     admin_headers = _auth_headers(app, feedback_setup["admin_id"])
     resp_admin = client.get(f"/api/feedback/screenshots/{victim_file}", headers=admin_headers)
     assert resp_admin.status_code == 200
-
-
-def test_feedback_screenshot_remote_failure_returns_502(client, feedback_setup, app, monkeypatch):
-    """A remote storage outage must be a 502, distinct from a genuinely absent screenshot."""
-    import io
-    import os
-    from unittest.mock import MagicMock, patch
-
-    from app.utils.covers import GALLERY_DIR
-
-    u1_headers = _auth_headers(app, feedback_setup["user1_id"])
-    png_bytes = _sample_png()
-
-    resp = client.post(
-        "/api/feedback",
-        headers=u1_headers,
-        data={
-            "description": "Ticket for remote failure test",
-            "type": "bug",
-            "screenshots": (io.BytesIO(png_bytes), "remote_fail.png"),
-        },
-        content_type="multipart/form-data",
-    )
-    assert resp.status_code == 201
-    filename = resp.json["data"]["attachments"][0].split("/")[-1]
-
-    # Delete local file so retrieval falls through to remote storage
-    local_path = os.path.join(GALLERY_DIR, filename)
-    assert os.path.exists(local_path), f"local screenshot missing, cannot test the remote path: {local_path}"
-    os.remove(local_path)
-
-    from app.core.s3_service import S3DownloadError
-
-    service = MagicMock()
-    service.key_for.side_effect = lambda name: f"feedback/{name}"
-    service.get_bytes.side_effect = S3DownloadError("failed", code="AccessDenied")
-
-    with patch("app.api.feedback.get_s3_service", return_value=service):
-        resp_fail = client.get(f"/api/feedback/screenshots/{filename}", headers=u1_headers)
-
-    assert resp_fail.status_code == 502
-    assert "Remote storage unavailable" in resp_fail.json["error"]

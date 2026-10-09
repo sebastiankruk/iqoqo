@@ -192,6 +192,27 @@ def _issue_oauth_exchange_code(user: User, callback_url: str | None) -> str:
     return code
 
 
+@auth_bp.route("/providers", methods=["GET"])
+def get_auth_providers():
+    """Return active authentication providers and capabilities.
+
+    Unauthenticated public endpoint allowing clients to adapt login/registration surfaces dynamically.
+    """
+    try:
+        google_active = bool(_ensure_google_oauth())
+    except (
+        SQLAlchemyError,
+        ValueError,
+        AttributeError,
+        KeyError,
+        RuntimeError,
+    ) as exc:
+        logger.warning("Error checking Google OAuth provider status: %s", exc)
+        google_active = False
+
+    return jsonify({"google": google_active}), 200
+
+
 @auth_bp.route("/login/google")
 def google_login():
     """Start the Google OAuth flow.

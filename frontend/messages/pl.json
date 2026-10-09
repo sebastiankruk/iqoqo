@@ -108,7 +108,8 @@
     "no_email": "Konto Google nie ma przypisanego adresu e-mail.",
     "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
     "jwt_generation_failed": "Tworzenie sesji nie powiodło się. Spróbuj ponownie.",
-    "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie."
+    "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie.",
+    "oauth_not_configured": "Logowanie przez Google nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło."
   },
   "Register": {
     "title": "Utwórz konto",

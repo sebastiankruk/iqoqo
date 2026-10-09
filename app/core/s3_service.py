@@ -45,7 +45,6 @@ B2, and Oracle Cloud Object Storage without code changes:
                             self-hosted gateways require ``path``
     S3_BUCKET_BACKUP        backups / archive rotation
     S3_BUCKET_COVERS        shared cover cache
-    S3_BUCKET_FEEDBACK      feedback screenshots
     S3_SSE                  server-side encryption algorithm
     S3_SSE_KMS_KEY_ID       KMS key id, when S3_SSE is aws:kms
 
@@ -74,9 +73,8 @@ logger = logging.getLogger(__name__)
 # incident waiting to happen.
 BUCKET_BACKUP = "backup"
 BUCKET_COVERS = "covers"
-BUCKET_FEEDBACK = "feedback"
 
-_VALID_BUCKETS = frozenset({BUCKET_BACKUP, BUCKET_COVERS, BUCKET_FEEDBACK})
+_VALID_BUCKETS = frozenset({BUCKET_BACKUP, BUCKET_COVERS})
 
 # Object key prefixes, kept separate from the bucket so a single bucket can be
 # used for several roles without collisions, and so clearing one role's objects
@@ -89,7 +87,6 @@ _VALID_BUCKETS = frozenset({BUCKET_BACKUP, BUCKET_COVERS, BUCKET_FEEDBACK})
 # overrides this prefix entirely.
 _PREFIXES = {
     BUCKET_COVERS: "covers",
-    BUCKET_FEEDBACK: "feedback",
     BUCKET_BACKUP: "archives",
 }
 
@@ -539,7 +536,6 @@ def get_s3_service(bucket_role: str) -> S3Service | None:
 # warning can name what the operator actually has to set.
 _LEGACY_RCLONE_ENV = {
     "RCLONE_COVERS_REMOTE": (BUCKET_COVERS, "S3_BUCKET_COVERS"),
-    "RCLONE_FEEDBACK_REMOTE": (BUCKET_FEEDBACK, "S3_BUCKET_FEEDBACK"),
     "RCLONE_REMOTE_ARCHIVE": (BUCKET_BACKUP, "S3_BUCKET_BACKUP"),
     "RCLONE_REMOTE_FAST": (BUCKET_BACKUP, "S3_BUCKET_BACKUP"),
 }

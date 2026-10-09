@@ -33,6 +33,7 @@ Options:
 """
 
 import argparse
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -228,6 +229,34 @@ def check_drift(
     shapes_path: Path = SHAPES_PATH,
 ) -> dict[str, Any]:
     """Compare mapped DB classes and the explicit OWL/SHACL contract."""
+    source_errors: list[str] = []
+    if not ontology_path.exists():
+        source_errors.append(f"Ontology source file not found: {ontology_path}")
+    if not shapes_path.exists():
+        source_errors.append(f"Shapes source file not found: {shapes_path}")
+
+    if source_errors:
+        return {
+            "source_available": False,
+            "source_errors": source_errors,
+            "syntax_valid": False,
+            "syntax_errors": [],
+            "db_models": [],
+            "ontology_classes": [],
+            "missing_in_ontology": [],
+            "extra_in_ontology": [],
+            "missing_properties": [],
+            "changed_property_types": [],
+            "missing_property_domains": [],
+            "changed_property_domains": [],
+            "missing_property_ranges": [],
+            "changed_property_ranges": [],
+            "missing_shapes": [],
+            "changed_shape_targets": [],
+            "diagnostics": [{"key": "source_unavailable", "message": error} for error in source_errors],
+            "in_sync": False,
+        }
+
     syntax_errors: list[str] = []
     ontology_graph, ont_err = _parse_turtle(ontology_path)
     shapes_graph, shapes_err = _parse_turtle(shapes_path)
@@ -238,6 +267,8 @@ def check_drift(
 
     if ontology_graph is None or shapes_graph is None:
         return {
+            "source_available": True,
+            "source_errors": [],
             "syntax_valid": False,
             "syntax_errors": syntax_errors,
             "db_models": [],
@@ -360,6 +391,8 @@ def check_drift(
     )
 
     return {
+        "source_available": True,
+        "source_errors": [],
         "syntax_valid": True,
         "syntax_errors": syntax_errors,
         "db_models": sorted(db_models),
@@ -463,6 +496,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to SHACL shapes Turtle file (default: docs/ontology/iqoqo-shapes.ttl).",
     )
 
+    parser.add_argument(
+        "--allow-missing-source",
+        action="store_true",
+        help="Acknowledge missing ontology source files without failing.",
+    )
+
     args = parser.parse_args(argv)
 
     report = check_drift(ontology_path=args.ontology_path, shapes_path=args.shapes_path)
@@ -471,6 +510,18 @@ def main(argv: list[str] | None = None) -> int:
     print("ONTOLOGY SYNC REPORT")
     print("=" * 60)
     print()
+
+    if not report.get("source_available", True):
+        for err in report["source_errors"]:
+            print(f"ERROR [source_unavailable]: {err}", file=sys.stderr)
+        print()
+        print("✗ Ontology source unavailable. This is NOT drift, but ontology contracts cannot be validated.", file=sys.stderr)
+        ack = args.allow_missing_source or os.environ.get("ALLOW_MISSING_ONTOLOGY") in ("1", "true")
+        if ack:
+            print("⚠️  Warning: Missing ontology source explicitly acknowledged (--allow-missing-source).", file=sys.stderr)
+            return 0
+        print("To acknowledge missing ontology source, pass --allow-missing-source or set ALLOW_MISSING_ONTOLOGY=1.", file=sys.stderr)
+        return 1
 
     if not report["syntax_valid"]:
         for err in report["syntax_errors"]:

@@ -209,7 +209,7 @@ def test_get_allegro_token_status(mock_load):
             st = get_allegro_token_status()
             assert st["configured"] is False
             assert st["allegro_token_active"] is False
-            assert st["reason"] == "missing_credentials"
+            assert st["reason"] == "not_configured"
 
     # 2. Configured but pending handshake
     with patch.dict("os.environ", {"ALLEGRO_CLIENT_ID": "cid", "ALLEGRO_CLIENT_SECRET": "csec"}):
@@ -217,7 +217,7 @@ def test_get_allegro_token_status(mock_load):
         st = get_allegro_token_status()
         assert st["configured"] is True
         assert st["allegro_token_active"] is False
-        assert st["reason"] == "oauth_handshake_pending"
+        assert st["reason"] == "handshake_pending"
 
     # 3. Active token
     with patch.dict("os.environ", {"ALLEGRO_CLIENT_ID": "cid", "ALLEGRO_CLIENT_SECRET": "csec"}):
