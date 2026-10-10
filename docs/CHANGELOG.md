@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **ItemSidebar Component Decomposition**: Decomposed the monolithic 838-line `ItemSidebar` component into 6 focused presentational components (`SidebarCover`, `SidebarStatusBadges`, `SidebarLendingInfo`, `SidebarIdentifiers`, `SidebarActions`, `SidebarFrbrInfo`) and a dedicated custom hook (`useItemSidebarActions`) in `frontend/components/item/sidebar/`. Preserves byte-identical presentation and contract with no dynamic import splits and zero provider wrappers. Added full unit and baseline test suites in `frontend/__tests__/components/item/sidebar/`.
+
 ### Fixed
 
 ## [0.8.3] - 2026-10-10
