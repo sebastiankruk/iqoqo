@@ -12,9 +12,7 @@ Talk like caveman
 - **Query Discipline**: Use focused 2-4 keyword phrases (MiniLM cosine similarity degrades on multi-sentence queries). NEVER pipe to `head` (truncates results) and NEVER redirect stderr to `/dev/null` (swallows diagnostic errors).
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
-- **Post-Task Ingestion Trigger (CLI)**: During interactive sessions, only run surgical single-file mining against specifically modified domain documentation or notes:
-  `.venv/bin/mempalace mine <specific_file> --wing iqoqo`
-  Do NOT run full `make mempalace-index` or un-scoped `mempalace mine .context/notes/` during sessions as hallway graph recalculation takes ~15 minutes.
+- **Session End Ingestion Prohibition**: Do NOT run automatic MemPalace updates or mining at the end of sessions. MemPalace ingestion is strictly manual or reserved for scheduled/release maintenance (`make mempalace-index` or `make knowledge-sync-full`).
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
@@ -74,9 +72,8 @@ Talk like caveman
   - No inline hand-written CSS. Use the Tailwind theme tokens in `app/globals.css`.
 
 ### 🔄 Post-Session Knowledge Sync
-- **Fast Knowledge Sync**: After committing and pushing code changes, RECOMMEND running `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
-- **Mempalace**: If specific domain documentation or notes were modified, RECOMMEND running surgical single-file mining: `mempalace mine <file> --wing iqoqo` (~1-2s). Strictly avoid running full `make mempalace-index` during interactive sessions.
-- **Automated Full Sync Prohibition**: NEVER automatically invoke `make knowledge-sync-full` or `make mempalace-index` during interactive sessions or in automated agent hooks. Full sync is reserved for scheduled release CI or manual execution.
+- **Fast Knowledge Sync Only**: After committing and pushing code changes, post-session sync is limited strictly to `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
+- **No Automatic MemPalace End-of-Session Updates**: Never run automatic MemPalace updates or mining (`mempalace mine`, `mempalace-index`, `knowledge-sync-full`) at the end of interactive sessions or in automated agent hooks. Full MemPalace sync is reserved for scheduled release CI or manual execution.
 - **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
@@ -86,7 +83,7 @@ Talk like caveman
 
 - **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
 - **Zero-Polling Background Execution:** NEVER poll `manage_task(Action='status')` or schedule repetitive short timers in a tight loop to check running tests, builds, or commands. The agent runtime is fully reactive and automatically delivers completion notifications. After launching an asynchronous command or task, stop calling tools and wait for the reactive system wakeup.
-- **Mempalace Updates:** During interactive sessions, if specific domain documentation or notes were edited, run targeted single-file mining: `mempalace mine <file> --wing iqoqo`. Do NOT run `make mempalace-index` or `make knowledge-sync-full` during interactive sessions.
+- **Mempalace Updates:** Do NOT perform automatic MemPalace updates or mining at the end of interactive sessions. Knowledge synchronization at session close is limited strictly to `make knowledge-sync`.
 - **Prohibit Heredoc / `cat << EOF` File Editing:** NEVER use `cat << EOF`, `cat << 'EOF'`, or shell heredoc redirection inside `run_command` to create or edit project files. Always use designated agent file tools (`replace_file_content` or dedicated file editing tools) to modify or create files. Authoring files via shell heredocs bypasses diff inspections, escapes syntax checks, risks quote corruption, and is strictly prohibited.
 
 ## Python Backend (Flask)
