@@ -73,9 +73,9 @@ Trigger this skill when the user types `/iqoqo-mempalace <command>` or when you 
 .venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py
 ```
 
-## Workflow: Targeted Mining (Fast Single-File Ingestion, ~1-2s)
+## Workflow: Targeted Mining (Manual Single-File Ingestion, ~1-2s)
 
-To mine a specific file or directory after making changes during interactive sessions:
+Targeted mining is **manual-only** when explicitly requested by the developer, and is **never** executed automatically at the end of sessions (post-session sync is limited to `make knowledge-sync`):
 ```bash
 .venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py <path>
 ```
