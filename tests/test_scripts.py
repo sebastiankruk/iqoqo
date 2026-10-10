@@ -62,6 +62,19 @@ def test_detect_duplicates_engine_choices_are_restricted():
         _build_parser().parse_args(["--engine", "gpt-9"])
 
 
+def test_detect_duplicates_tier_choices():
+    """Argparse must accept work, expression, manifestation, and all, and reject unknown tiers."""
+    from scripts.detect_duplicates import _build_parser
+
+    parser = _build_parser()
+    assert parser.parse_args(["--tier", "expression"]).tier == "expression"
+    assert parser.parse_args(["--tier", "work"]).tier == "work"
+    assert parser.parse_args(["--tier", "manifestation"]).tier == "manifestation"
+    assert parser.parse_args(["--tier", "all"]).tier == "all"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--tier", "item"])
+
+
 def test_detect_duplicates_heuristic_engine_never_probes_ollama(app):
     """A scan must not demand a running inference service on the default path."""
     with patch("scripts.detect_duplicates.duplicate_service.check_ollama_health") as health:

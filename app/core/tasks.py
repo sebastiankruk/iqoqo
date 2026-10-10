@@ -26,15 +26,10 @@ from typing import Any
 import requests
 from celery.result import AsyncResult
 from kombu.exceptions import KombuError
+from sqlalchemy import select
 
 from app.core.celery_app import celery
 from app.core.mail_service import MailDeliveryError
-from app.core.s3_service import (
-    BUCKET_FEEDBACK,
-    S3UploadError,
-    get_s3_service,
-    warn_if_legacy_rclone_configured,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -163,33 +158,6 @@ def get_task_result(task_id: str, user_id: str | None = None) -> dict | None:
 def shutdown_executor() -> None:
     """No-op for Celery migration."""
     pass
-
-
-@celery.task(bind=True)
-def upload_feedback_screenshot(self, local_path: str, filename: str, **kwargs: object) -> None:
-    """Uploads a feedback screenshot to the configured feedback bucket.
-
-    Args:
-        local_path: Absolute path to the screenshot on local storage.
-        filename: Base name to store the object under. Validated as a single
-            safe key component, so a caller-supplied value cannot place the
-            object outside the ``feedback/`` prefix.
-
-    Raises:
-        RuntimeError: if the upload failed. The local file is left in place.
-    """
-    service = get_s3_service(BUCKET_FEEDBACK)
-    if service is None:
-        warn_if_legacy_rclone_configured(BUCKET_FEEDBACK)
-        logger.info("Feedback object storage not configured, skipping remote upload.")
-        return
-
-    try:
-        service.upload_file(local_path, service.key_for(filename), content_type="image/jpeg")
-        logger.info("Successfully uploaded feedback screenshot %s to remote storage.", filename)
-    except (ValueError, S3UploadError) as exc:
-        logger.error("Failed to upload feedback screenshot %s: %s", filename, type(exc).__name__)
-        raise RuntimeError("Feedback screenshot upload failed") from exc
 
 
 @celery.task(name="app.core.tasks.refresh_taxonomies_cache")
@@ -354,6 +322,7 @@ def batch_link_catalog_lod_task(
                 manif_subq = select(1).where(
                     SemanticLink.entity_type == "manifestation",
                     SemanticLink.entity_id == Manifestation.id,
+                    SemanticLink.status == "accepted",
                 )
                 work_subq = (
                     select(1)
@@ -362,6 +331,7 @@ def batch_link_catalog_lod_task(
                         Expression.id == Manifestation.expression_id,
                         SemanticLink.entity_type == "work",
                         SemanticLink.entity_id == Expression.work_id,
+                        SemanticLink.status == "accepted",
                     )
                 )
                 query = query.where(~manif_subq.exists()).where(~work_subq.exists())
@@ -372,6 +342,7 @@ def batch_link_catalog_lod_task(
                     select(SemanticLink.entity_id).where(
                         SemanticLink.entity_type == "manifestation",
                         SemanticLink.entity_id.in_(manifestation_ids),
+                        SemanticLink.status == "accepted",
                     )
                 )
                 .scalars()
@@ -395,6 +366,7 @@ def batch_link_catalog_lod_task(
                         select(SemanticLink.entity_id).where(
                             SemanticLink.entity_type == "work",
                             SemanticLink.entity_id.in_(work_ids),
+                            SemanticLink.status == "accepted",
                         )
                     )
                     .scalars()
@@ -443,26 +415,21 @@ def batch_link_catalog_lod_task(
         for i in range(0, total, chunk_size):
             chunk = manifestation_ids[i : i + chunk_size]
             for mid in chunk:
-                if task_id and (
-                    cache.get(f"lod:cancel_task:{task_id}")
-                    or (cache.get("lod:active_task_id") != task_id and InstanceSettings.get_value("ACTIVE_LOD_TASK_ID") != task_id)
-                ):
+                # Check for cancellation: only cancel if explicitly requested for this task
+                # or if another task has been explicitly activated in cache or DB.
+                is_cancelled = False
+                if task_id:
+                    if cache.get(f"lod:cancel_task:{task_id}"):
+                        is_cancelled = True
+                    else:
+                        active_cache = cache.get("lod:active_task_id")
+                        active_db = InstanceSettings.get_value("ACTIVE_LOD_TASK_ID")
+                        if (active_cache and str(active_cache) != str(task_id)) or (active_db and str(active_db) != str(task_id)):
+                            is_cancelled = True
+
+                if is_cancelled:
                     logger.info("Batch LOD reconciliation task %s cancelled by user request", task_id)
                     percentage = round((processed / total) * 100, 1) if total > 0 else 0.0
-                    try:
-                        self.update_state(
-                            state="REVOKED",
-                            meta={
-                                "total": total,
-                                "processed": processed,
-                                "percentage": percentage,
-                                "total_resolved": total_resolved,
-                                "counts": counts,
-                                "recent_logs": list(recent_logs),
-                            },
-                        )
-                    except (ValueError, AttributeError):
-                        pass
                     return {
                         "status": "cancelled",
                         "total": total,
@@ -482,7 +449,8 @@ def batch_link_catalog_lod_task(
                     pass
 
                 try:
-                    links = resolve_manifestation_links(mid)
+                    is_fast = throttle_delay <= 0.2
+                    links = resolve_manifestation_links(mid, fast_mode=is_fast)
                     total_resolved += len(links)
                     for link in links:
                         auth = (link.authority or "").lower()
@@ -551,3 +519,149 @@ def batch_link_catalog_lod_task(
                     InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
             except Exception:  # pylint: disable=broad-except
                 pass
+
+
+@celery.task(
+    name="app.core.tasks.cleanup_lod_links_task",
+    soft_time_limit=300,
+    time_limit=360,
+)
+def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[str, Any]:
+    """Re-score existing accepted SemanticLinks and demote sub-threshold links to suggested.
+
+    In dry-run mode, calculates potential demotions without mutating database rows.
+    In apply mode (dry_run=False), updates link.status to 'suggested' and writes to EntityAuditLog.
+    """
+    from flask import has_app_context
+
+    if not has_app_context():
+        from app.core.celery_app import ContextTask
+
+        with ContextTask.get_app().app_context():
+            return cleanup_lod_links_task(dry_run=dry_run, batch_size=batch_size)
+
+    from app.core.config_service import ConfigService
+    from app.core.lod_linking_service import compute_composite_score, is_disambiguation
+    from app.db import db
+    from app.db.core import EntityAuditLog, Manifestation, SemanticLink, Work
+
+    auto_threshold = ConfigService.get_float("LOD_AUTO_APPLY_THRESHOLD", 0.82)
+    suggestion_threshold = ConfigService.get_float("LOD_SUGGESTION_THRESHOLD", 0.55)
+
+    links = db.session.execute(select(SemanticLink).where(SemanticLink.status == "accepted")).scalars().all()
+
+    total_evaluated = len(links)
+    demoted_count = 0
+    rejected_count = 0
+    unchanged_count = 0
+    demotions: list[dict[str, Any]] = []
+
+    for link in links:
+        target_title = ""
+        author: str | None = None
+        year: int | None = None
+
+        if link.entity_type == "work":
+            work = db.session.get(Work, link.entity_id)
+            if work:
+                target_title = work.title or ""
+                if work.meta and isinstance(work.meta.get("authors"), list):
+                    authors = [a for a in work.meta["authors"] if isinstance(a, str)]
+                    if authors:
+                        author = authors[0]
+        elif link.entity_type == "manifestation":
+            manif = db.session.get(Manifestation, link.entity_id)
+            if manif:
+                target_title = manif.title or ""
+                author = manif.author
+                if manif.publication_date:
+                    year = manif.publication_date.year
+
+        cand_comment = (link.attributes or {}).get("comment", "")
+        cand_label = link.pref_label or ""
+
+        new_score = compute_composite_score(
+            candidate_label=cand_label,
+            target_title=target_title or cand_label,
+            author=author,
+            candidate_comment=cand_comment,
+            year=year,
+            rank_margin=0.5,
+            has_class_match=True,
+        )
+
+        effective_score = max(new_score, link.confidence if link.confidence is not None else 0.0)
+
+        if effective_score < suggestion_threshold or is_disambiguation(link.external_uri, cand_label, cand_comment):
+            rejected_count += 1
+            demoted_count += 1
+            demotions.append(
+                {
+                    "link_id": link.id,
+                    "authority": link.authority,
+                    "external_uri": link.external_uri,
+                    "old_score": link.confidence,
+                    "new_score": effective_score,
+                    "new_status": "suggested",
+                }
+            )
+            if not dry_run:
+                link.status = "suggested"
+                audit = EntityAuditLog(
+                    entity_type=link.entity_type,
+                    entity_id=link.entity_id,
+                    actor_id=None,
+                    change_type="semantic_link_demoted",
+                    diff={
+                        "link_id": link.id,
+                        "authority": link.authority,
+                        "external_uri": link.external_uri,
+                        "old_status": "accepted",
+                        "new_status": "suggested",
+                        "score": effective_score,
+                    },
+                )
+                db.session.add(audit)
+        elif effective_score < auto_threshold:
+            demoted_count += 1
+            demotions.append(
+                {
+                    "link_id": link.id,
+                    "authority": link.authority,
+                    "external_uri": link.external_uri,
+                    "old_score": link.confidence,
+                    "new_score": effective_score,
+                    "new_status": "suggested",
+                }
+            )
+            if not dry_run:
+                link.status = "suggested"
+                audit = EntityAuditLog(
+                    entity_type=link.entity_type,
+                    entity_id=link.entity_id,
+                    actor_id=None,
+                    change_type="semantic_link_demoted",
+                    diff={
+                        "link_id": link.id,
+                        "authority": link.authority,
+                        "external_uri": link.external_uri,
+                        "old_status": "accepted",
+                        "new_status": "suggested",
+                        "score": effective_score,
+                    },
+                )
+                db.session.add(audit)
+        else:
+            unchanged_count += 1
+
+    if not dry_run and demoted_count > 0:
+        db.session.commit()
+
+    return {
+        "dry_run": dry_run,
+        "total_evaluated": total_evaluated,
+        "demoted": demoted_count,
+        "rejected": rejected_count,
+        "unchanged": unchanged_count,
+        "sample_demotions": demotions[:20],
+    }

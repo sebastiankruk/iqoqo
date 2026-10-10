@@ -90,10 +90,10 @@ WORK_LINK_TYPE_IS_EXPANSION_OF: str = "is_expansion_of"
 
 #: Controlled vocabulary for :attr:`DuplicateCandidate.entity_tier`.
 #:
-#: Duplicates are detected at the two abstract FRBR tiers where consolidation is
+#: Duplicates are detected at the three abstract FRBR tiers where consolidation is
 #: meaningful.  ``Item`` is deliberately excluded: two Items are distinct
 #: physical or digital exemplars even when they describe the same edition.
-DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "manifestation")
+DUPLICATE_ENTITY_TIERS: tuple[str, ...] = ("work", "expression", "manifestation")
 
 #: Controlled vocabulary for :attr:`DuplicateCandidate.status`.
 #:
@@ -134,12 +134,14 @@ class SemanticLink(db.Model):  # type: ignore[name-defined]
         (
             db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
             db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+            db.Index("ix_semantic_links_status", "status"),
             {"schema": _CATALOG},
         )
         if _CATALOG
         else (
             db.Index("ix_semantic_links_entity", "entity_type", "entity_id"),
             db.Index("ix_semantic_links_authority_uri", "authority", "external_uri"),
+            db.Index("ix_semantic_links_status", "status"),
         )
     )
 
@@ -153,6 +155,7 @@ class SemanticLink(db.Model):  # type: ignore[name-defined]
     match_strategy = db.Column(db.String(50), nullable=True)
     attributes = db.Column(db.JSON, nullable=True)
     verified = db.Column(db.Boolean, default=False, nullable=False)
+    status = db.Column(db.String(20), default="accepted", nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -174,6 +177,7 @@ class SemanticLink(db.Model):  # type: ignore[name-defined]
             "match_strategy": self.match_strategy,
             "attributes": self.attributes or {},
             "verified": self.verified,
+            "status": self.status or "accepted",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -272,11 +276,17 @@ class Work(db.Model):  # type: ignore[name-defined]
         cascade="all, delete-orphan",
     )
 
-    def get_semantic_links(self, authority: str | None = None) -> list[SemanticLink]:
-        """Retrieve Work-scoped semantic links, optionally filtered by authority."""
+    def get_semantic_links(
+        self,
+        authority: str | None = None,
+        status: str | None = "accepted",
+    ) -> list[SemanticLink]:
+        """Retrieve Work-scoped semantic links, optionally filtered by authority and status."""
         links = list(self.semantic_links)
         if authority:
             links = [link for link in links if link.authority == authority]
+        if status:
+            links = [link for link in links if link.status == status]
         return links
 
     @property
@@ -530,6 +540,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         self,
         include_work: bool = True,
         authority: str | None = None,
+        status: str | None = "accepted",
     ) -> list[SemanticLink]:
         """Retrieve semantic links adhering strictly to FRBR scoping rules.
 
@@ -542,6 +553,8 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
             links.extend(self.expression.work.semantic_links)
         if authority:
             links = [link for link in links if link.authority == authority]
+        if status:
+            links = [link for link in links if link.status == status]
         return links
 
     @property
@@ -813,12 +826,16 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         (
             db.Index("ix_item_custody_events_item_id", "item_id"),
             db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+            db.Index("ix_item_custody_events_from_owner_id", "from_owner_id"),
+            db.Index("ix_item_custody_events_to_owner_id", "to_owner_id"),
             {"schema": _INVENTORY},
         )
         if _INVENTORY
         else (
             db.Index("ix_item_custody_events_item_id", "item_id"),
             db.Index("ix_item_custody_events_recorded_at", "recorded_at"),
+            db.Index("ix_item_custody_events_from_owner_id", "from_owner_id"),
+            db.Index("ix_item_custody_events_to_owner_id", "to_owner_id"),
         )
     )
 
@@ -829,6 +846,16 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         nullable=False,
     )
     actor_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    from_owner_id = db.Column(
+        UUID(as_uuid=True),
+        db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    to_owner_id = db.Column(
         UUID(as_uuid=True),
         db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="SET NULL"),
         nullable=True,
@@ -847,7 +874,21 @@ class ItemCustodyEvent(db.Model):  # type: ignore[name-defined]
         "Item",
         backref=db.backref("custody_events", cascade="all, delete", lazy="dynamic"),
     )
-    actor = db.relationship("User", backref="custody_events_as_actor")
+    actor = db.relationship(
+        "User",
+        foreign_keys=[actor_id],
+        backref="custody_events_as_actor",
+    )
+    from_owner = db.relationship(
+        "User",
+        foreign_keys=[from_owner_id],
+        backref="custody_events_as_from_owner",
+    )
+    to_owner = db.relationship(
+        "User",
+        foreign_keys=[to_owner_id],
+        backref="custody_events_as_to_owner",
+    )
 
 
 class EntityAuditLog(db.Model):  # type: ignore[name-defined]
@@ -903,7 +944,7 @@ class EntityAuditLog(db.Model):  # type: ignore[name-defined]
 
 class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
     """
-    Review queue entry for a suspected duplicate pair at the Work or Manifestation tier.
+    Review queue entry for a suspected duplicate pair at the Work, Expression, or Manifestation tier.
 
     Detection is a two-stage pipeline: cheap heuristic screening prunes the
     catalog down to plausible pairs (see :mod:`app.core.duplicate_service`), then
@@ -911,7 +952,7 @@ class DuplicateCandidate(db.Model):  # type: ignore[name-defined]
     detection threshold are persisted here as ``pending`` rows for
     administrative review in ``/admin/duplicates``.
 
-    :attr entity_tier: Either ``"work"`` or ``"manifestation"``
+    :attr entity_tier: One of ``"work"``, ``"expression"``, or ``"manifestation"``
         (see :data:`DUPLICATE_ENTITY_TIERS`).
     :attr source_id: Primary key of the first entity of the pair.  The reference
         is intentionally *not* a real foreign key: ``entity_tier`` is

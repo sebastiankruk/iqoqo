@@ -116,4 +116,26 @@ describe("ReadingRoadmapComponent", () => {
     expect(headingsAfter[0].textContent).toBe("Designing Data-Intensive Applications");
     expect(headingsAfter[1].textContent).toBe("Domain-Driven Design");
   });
+
+  it("renders FRBR target level badge when target_type is specified", () => {
+    const itemsWithTargets = [
+      {
+        id: 1,
+        title: "Dune",
+        creator: "Frank Herbert",
+        status: "in_progress" as const,
+        target_type: "item" as const,
+      },
+      {
+        id: 2,
+        title: "Foundation",
+        creator: "Isaac Asimov",
+        status: "queued" as const,
+        target_type: "work" as const,
+      },
+    ];
+    render(<ReadingRoadmapComponent initialItems={itemsWithTargets} roadmapTitle="Target Test" />);
+    expect(screen.getByText("Physical Copy")).toBeInTheDocument();
+    expect(screen.getByText("WORK")).toBeInTheDocument();
+  });
 });

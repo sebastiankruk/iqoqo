@@ -21,6 +21,7 @@ split, reassign) live here rather than in the public blueprint because each one
 rewrites references across entity types."""
 
 import os
+import uuid
 from datetime import date
 from functools import wraps
 from typing import Any
@@ -50,6 +51,12 @@ from app.db.core import (
     Work,
 )
 from app.db.models import InstanceSettings, Permission, Role, User, db, user_roles
+from app.services.item_reassignment import (
+    ReassignmentConflictError,
+    ReassignmentValidationError,
+    execute_reassignment,
+    preview_reassignment,
+)
 from app.utils.json_utils import parse_meta, sanitize_meta
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
@@ -669,6 +676,48 @@ def update_item(item_id):
         return jsonify({"success": False, "error": str(e)}), 404
 
 
+@admin_bp.route("/frbr/<string:entity_type>/<int:entity_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def delete_frbr_entity(entity_type: str, entity_id: int) -> tuple[Response, int]:
+    """Delete a FRBR entity (work, expression, manifestation, item)."""
+    entity_type = entity_type.lower()
+    model_map = {
+        "work": Work,
+        "expression": Expression,
+        "manifestation": Manifestation,
+        "item": Item,
+    }
+    model = model_map.get(entity_type)
+    if not model:
+        return jsonify({"success": False, "error": f"Invalid entity type: {entity_type}", "code": 400}), 400
+
+    entity = db.session.get(model, entity_id)
+    if not entity:
+        return jsonify({"success": False, "error": f"{entity_type.capitalize()} not found", "code": 404}), 404
+
+    try:
+        db.session.delete(entity)
+        db.session.commit()
+        return jsonify({"success": True, "data": {"type": entity_type, "id": entity_id}}), 200
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
+        db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"{entity_type.capitalize()} cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
+        return jsonify({"success": False, "error": str(e), "code": 500}), 500
+
+
 @admin_bp.route("/frbr/search", methods=["GET"])
 @require_auth
 @require_permission(PermissionName.READ_METADATA)
@@ -1018,9 +1067,17 @@ def get_active_lod_task():
         return jsonify({"success": True, "data": {"active_task_id": None, "task": None}}), 200
 
     task = AsyncResult(active_task_id, app=celery)
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for active LOD task %s: %s", active_task_id, exc)
+        state = "UNKNOWN"
+
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1067,7 +1124,7 @@ def get_active_lod_task():
             200,
         )
 
-    # State is SUCCESS, FAILURE, or revoked; clear stale cache & DB key
+    # State is SUCCESS, FAILURE, REVOKED, or UNKNOWN; clear stale cache & DB key
     cache.delete("lod:active_task_id")
     try:
         InstanceSettings.set_value("ACTIVE_LOD_TASK_ID", None)
@@ -1114,18 +1171,28 @@ def get_lod_reconciliation_task(task_id: str):
 
     task = AsyncResult(task_id, app=celery)
 
-    state = task.state
+    try:
+        state = task.state
+    except Exception as exc:  # pylint: disable=broad-except
+        current_app.logger.warning("Failed to retrieve state for LOD task %s: %s", task_id, exc)
+        state = "UNKNOWN"
+
     if state == "SUCCESS":
-        result = task.result or {}
+        try:
+            result = task.result if isinstance(task.result, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            result = {}
+        task_status = result.get("status", "completed")
+        default_pct = 100.0 if task_status == "completed" else 0.0
         return (
             jsonify(
                 {
                     "success": True,
                     "data": {
                         "task_id": task_id,
-                        "status": "completed",
+                        "status": task_status,
                         "state": state,
-                        "percentage": 100.0,
+                        "percentage": result.get("percentage", default_pct),
                         "total": result.get("total", 0),
                         "processed": result.get("processed", 0),
                         "total_resolved": result.get("total_resolved", 0),
@@ -1139,7 +1206,10 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state in ("STARTED", "PROGRESS"):
-        meta = task.info or {}
+        try:
+            meta = task.info if isinstance(task.info, dict) else {}
+        except Exception:  # pylint: disable=broad-except
+            meta = {}
         return (
             jsonify(
                 {
@@ -1162,6 +1232,11 @@ def get_lod_reconciliation_task(task_id: str):
         )
 
     if state == "FAILURE":
+        err_msg = "Task failed"
+        try:
+            err_msg = str(task.result)
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {
@@ -1180,16 +1255,21 @@ def get_lod_reconciliation_task(task_id: str):
                             "wordnet": 0,
                         },
                         "recent_logs": [],
-                        "error": str(task.result),
+                        "error": err_msg,
                     },
-                    "error": str(task.result),
+                    "error": err_msg,
                 }
             ),
             200,
         )
 
     if state == "REVOKED":
-        meta = task.info if isinstance(task.info, dict) else {}
+        meta = {}
+        try:
+            if isinstance(task.info, dict):
+                meta = task.info
+        except Exception:  # pylint: disable=broad-except
+            pass
         return (
             jsonify(
                 {
@@ -1242,9 +1322,15 @@ def get_lod_stats():
     """Query lifetime database statistics of Linked Open Data links across the catalog."""
     total_manifestations = db.session.scalar(select(func.count(Manifestation.id))) or 0  # pylint: disable=not-callable
 
-    # Count distinct manifestations with direct semantic links OR whose work has semantic links
-    manif_with_direct_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "manifestation")
-    works_with_links = select(SemanticLink.entity_id).where(SemanticLink.entity_type == "work")
+    # Count distinct manifestations with direct accepted semantic links OR whose work has accepted semantic links
+    manif_with_direct_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "manifestation",
+        SemanticLink.status == "accepted",
+    )
+    works_with_links = select(SemanticLink.entity_id).where(
+        SemanticLink.entity_type == "work",
+        SemanticLink.status == "accepted",
+    )
     manifs_with_linked_works = (
         select(Manifestation.id)
         .join(Expression, Manifestation.expression_id == Expression.id)
@@ -1263,10 +1349,17 @@ def get_lod_stats():
     )
 
     authority_rows = db.session.execute(
-        select(SemanticLink.authority, func.count(SemanticLink.id)).group_by(SemanticLink.authority)
-    ).all()  # pylint: disable=not-callable
+        select(SemanticLink.authority, func.count(SemanticLink.id))  # pylint: disable=not-callable
+        .where(SemanticLink.status == "accepted")
+        .group_by(SemanticLink.authority)
+    ).all()
     by_authority = {str(row[0]).lower(): int(row[1]) for row in authority_rows if row[0]}
     total_links = sum(by_authority.values())
+
+    suggested_links = (
+        db.session.scalar(select(func.count(SemanticLink.id)).where(SemanticLink.status == "suggested"))  # pylint: disable=not-callable
+        or 0
+    )
 
     return (
         jsonify(
@@ -1277,6 +1370,7 @@ def get_lod_stats():
                     "linked_manifestations": linked_manifestations,
                     "unlinked_manifestations": max(0, total_manifestations - linked_manifestations),
                     "total_links": total_links,
+                    "suggested_links": suggested_links,
                     "by_authority": {
                         "dbpedia": by_authority.get("dbpedia", 0),
                         "geonames": by_authority.get("geonames", 0),
@@ -1288,6 +1382,22 @@ def get_lod_stats():
         ),
         200,
     )
+
+
+@admin_bp.route("/lod/cleanup", methods=["POST"])
+@api_bp.route("/admin/lod/cleanup", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_lod_cleanup():
+    """Trigger dry-run or applied cleanup of low-confidence or disambiguation LOD links."""
+    from app.core.tasks import cleanup_lod_links_task
+
+    body = request.get_json(silent=True) or {}
+    dry_run = bool(body.get("dry_run", True))
+    batch_size = int(body.get("batch_size", 100))
+
+    result = cleanup_lod_links_task(dry_run=dry_run, batch_size=batch_size)
+    return jsonify({"success": True, "data": result, "error": None}), 200
 
 
 # --- DUPLICATE DETECTION ROUTES ---
@@ -1469,3 +1579,170 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
         return jsonify({"success": False, "error": "Merge failed and was rolled back"}), 500
 
     return jsonify({"success": True, "data": result})
+
+
+@admin_bp.route("/ownership/accounts", methods=["GET"])
+@require_auth
+@admin_required
+def get_ownership_accounts():
+    """Discover accounts for ownership transfer source and target selection."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS) or not _has_permission(user, PermissionName.READ_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users and read:users required"}), 403
+
+    users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
+    return jsonify(
+        {
+            "success": True,
+            "data": [
+                {
+                    "id": str(u.id),
+                    "email": u.email,
+                    "username": getattr(u, "username", None) or u.email,
+                    "display_name": u.display_name or u.email,
+                    "is_active": u.is_active,
+                }
+                for u in users
+            ],
+        }
+    )
+
+
+@admin_bp.route("/ownership/items", methods=["GET"])
+@require_auth
+@admin_required
+def get_ownership_source_items():
+    """Get paginated physical items belonging to a specified source account."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    source_id_raw = request.args.get("source_user_id")
+    if not source_id_raw:
+        return jsonify({"success": False, "error": "source_user_id query parameter is required"}), 400
+
+    try:
+        source_uuid = uuid.UUID(str(source_id_raw))
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid source_user_id format"}), 400
+
+    source_user = db.session.get(User, source_uuid)
+    if not source_user:
+        return jsonify({"success": False, "error": "Source user account not found"}), 404
+
+    page = max(1, request.args.get("page", 1, type=int))
+    limit = min(100, max(1, request.args.get("limit", 20, type=int)))
+    offset = (page - 1) * limit
+
+    total = (
+        db.session.execute(select(func.count(Item.id)).where(Item.owner_id == source_uuid)).scalar() or 0  # pylint: disable=not-callable
+    )
+
+    items = (
+        db.session.execute(select(Item).where(Item.owner_id == source_uuid).order_by(Item.id.asc()).offset(offset).limit(limit))
+        .scalars()
+        .all()
+    )
+
+    items_data = []
+    for it in items:
+        manif = it.manifestation
+        expr = manif.expression if manif else None
+        work = expr.work if expr else None
+        title = (work.title if work else None) or (manif.meta or {}).get("Title") if manif else None
+        items_data.append(
+            {
+                "id": it.id,
+                "title": title or "Untitled",
+                "format": manif.format if manif else None,
+                "is_hidden": bool(it.is_hidden),
+                "collection_status": it.collection_status,
+                "cover_url": manif.cover_url if manif else None,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "data": items_data,
+            "pagination": {
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            },
+        }
+    )
+
+
+@admin_bp.route("/ownership/preview", methods=["POST"])
+@require_auth
+@admin_required
+def preview_item_reassignment():
+    """Preview an item ownership reassignment operation and return a deterministic scope digest."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    source_user_id = payload.get("source_user_id")
+    target_user_id = payload.get("target_user_id")
+    mode = payload.get("mode")
+    item_ids = payload.get("item_ids")
+
+    try:
+        preview_data = preview_reassignment(
+            source_user_id=source_user_id,
+            target_user_id=target_user_id,
+            mode=mode,
+            item_ids=item_ids,
+        )
+        return jsonify({"success": True, "data": preview_data})
+    except ReassignmentValidationError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception("Ownership preview error: %s", exc)
+        return jsonify({"success": False, "error": "Failed to generate preview"}), 500
+
+
+@admin_bp.route("/ownership/reassign", methods=["POST"])
+@require_auth
+@admin_required
+def execute_item_reassignment():
+    """Confirm and execute an item ownership reassignment operation with atomic rollback."""
+    user = _get_current_user()
+    if not _has_permission(user, PermissionName.WRITE_USERS):
+        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    source_user_id = payload.get("source_user_id")
+    target_user_id = payload.get("target_user_id")
+    mode = payload.get("mode")
+    expected_fingerprint = payload.get("expected_fingerprint")
+    expected_count = payload.get("expected_count")
+    item_ids = payload.get("item_ids")
+
+    if not expected_fingerprint or expected_count is None:
+        return jsonify({"success": False, "error": "expected_fingerprint and expected_count are required"}), 400
+
+    try:
+        result = execute_reassignment(
+            source_user_id=source_user_id,
+            target_user_id=target_user_id,
+            mode=mode,
+            expected_fingerprint=str(expected_fingerprint),
+            expected_count=int(expected_count),
+            item_ids=item_ids,
+            actor_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": result})
+    except ReassignmentConflictError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 409
+    except ReassignmentValidationError as exc:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Ownership reassignment failed and was rolled back: %s", exc)
+        return jsonify({"success": False, "error": "Reassignment failed and all changes were rolled back"}), 500

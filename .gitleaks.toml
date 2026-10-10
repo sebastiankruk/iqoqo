@@ -79,7 +79,6 @@ paths = [
     '''(^|/)\.pytest_cache/''',
     '''(^|/)\.ruff_cache/''',
     '''(^|/)graphify-out/''',
-    '''(^|/)mykg_sessions/''',
     '''(^|/)\.mempalace/''',
     '''docs/CHANGELOG\.md''',
     '''\.gitleaks\.toml''',
@@ -135,7 +134,6 @@ paths = [
     '''(^|/)\.env\.dev$''',
     '''(^|/)\.env\.preview$''',
     '''(^|/)\.env\.prod$''',
-    '''(^|/)\.env\.mykg$''',
 ]
 
 # NOTE: there is deliberately no allowlist entry for the secret-shaped fixtures

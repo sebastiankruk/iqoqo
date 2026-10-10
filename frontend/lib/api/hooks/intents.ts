@@ -16,7 +16,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getWorkIntent, setWorkIntent } from "../intents";
+import { getWorkIntent, setWorkIntent, deleteWorkIntent } from "../intents";
 import { queryKeys } from "./query-keys";
 
 /**
@@ -27,7 +27,7 @@ import { queryKeys } from "./query-keys";
  */
 export function useWorkIntent(workId: number) {
   return useQuery({
-    queryKey: ["workIntent", workId],
+    queryKey: queryKeys.workIntent(workId),
     queryFn: () => getWorkIntent(workId),
     enabled: !!workId && workId > 0,
     staleTime: 0,
@@ -46,11 +46,32 @@ export function useSetWorkIntent() {
       return setWorkIntent(workId, status);
     },
     onSuccess: (_, variables) => {
-      void qc.invalidateQueries({ queryKey: ["workIntent", variables.workId] });
+      void qc.invalidateQueries({ queryKey: queryKeys.workIntent(variables.workId) });
       void qc.invalidateQueries({ queryKey: queryKeys.stats() });
-      void qc.invalidateQueries({ queryKey: ["items"] });
-      void qc.invalidateQueries({ queryKey: ["works", "shelf"] });
-      void qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.itemsAll });
+      void qc.invalidateQueries({ queryKey: queryKeys.worksShelfAll });
+      void qc.invalidateQueries({ queryKey: queryKeys.expressionsShelfAll });
+    },
+  });
+}
+
+/**
+ * Custom hook to delete a user's intent for a given Conceptual Work (F1).
+ *
+ * @returns React Query mutation hook
+ */
+export function useDeleteWorkIntent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (workId: number) => {
+      return deleteWorkIntent(workId);
+    },
+    onSuccess: (_, workId) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.workIntent(workId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.stats() });
+      void qc.invalidateQueries({ queryKey: queryKeys.itemsAll });
+      void qc.invalidateQueries({ queryKey: queryKeys.worksShelfAll });
+      void qc.invalidateQueries({ queryKey: queryKeys.expressionsShelfAll });
     },
   });
 }

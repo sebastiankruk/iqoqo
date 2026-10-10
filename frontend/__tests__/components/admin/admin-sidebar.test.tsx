@@ -46,6 +46,7 @@ const ADMIN_PERMISSIONS = [
   "edit:cover",
   "escalate:resolve",
   "read:users",
+  "write:users",
   "read:roles",
   "config:external_apis",
   "config:federation",
@@ -66,6 +67,7 @@ const ALL_ITEMS = [
   "Monetization",
   "API Integrations",
   "Users",
+  "Item Ownership",
   "Roles",
   "Security",
 ];

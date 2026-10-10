@@ -2,66 +2,92 @@
 
 ## Purpose
 
-This specification defines remote cloud backup storage and retrieval for feedback
-ticket screenshot attachments, and the authorisation containment that protects
-them.
+This specification defines storage and retrieval for feedback ticket screenshot
+attachments, and the authorisation containment that protects them.
 
-Updated by `devops-infrastructure-updates` to use boto3
-(`S3_BUCKET_FEEDBACK` via `app/core/s3_service.py`) instead of an `rclone` remote,
-so the containers no longer need a mounted credential file. The capability name
+Updated by `feedback-screenshot-storage-retirement` to store screenshots on the
+local filesystem under `app/static/gallery/` without remote object storage,
+relying on the nightly host backup for off-site durability. The capability name
 retains "rclone" for continuity with the existing requirement identifier;
-`infrastructure/devops-v082` carries the current description.
+`infrastructure/devops-v082` carries the current backend description.
 
 ## Requirements
 
 ### Requirement: Feedback screenshots stored via rclone
 
-The system SHALL upload feedback screenshots to a remote S3-compatible bucket
-instead of keeping them only in container-local `./app/static/gallery/`, ensuring
-persistence across container restarts and horizontal scaling.
+The system SHALL store feedback ticket screenshots on the local filesystem under `app/static/gallery/`, and SHALL NOT copy them to remote object storage at runtime. The screenshot serving path is local-only.
 
-Configuration comes from environment variables (`S3_BUCKET_FEEDBACK`,
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) rather than a mounted credential
-file. The upload is performed by the `upload_feedback_screenshot` Celery task via
-`app/core/s3_service.py`, which does not fork a `rclone` process.
+The directory is a host bind mount, mounted into `web` and `worker` by the Compose stack and read-only into nginx, so it survives container replacement and `docker compose down`. It is not container-local storage and requires no remote copy for durability. Off-site durability is provided by the nightly host backup, whose `ASSET_PATHS` already includes `app/static/gallery`.
 
-#### Scenario: Uploading a feedback screenshot
+Configuration comes from no storage variable: there is no bucket to configure, and no environment variable selects a remote destination for screenshots.
+
+> The capability name retains "rclone" for requirement-identifier continuity, as `devops-infrastructure-updates` also did when it replaced rclone with boto3. The requirement no longer concerns remote storage; `infrastructure/devops-v082` carries the current backend description.
+
+#### Scenario: Attaching a screenshot to a feedback ticket
 
 - **WHEN** a user attaches a screenshot to a feedback item
-- **AND** `S3_BUCKET_FEEDBACK` and AWS credentials are configured
-- **THEN** the system SHALL upload the screenshot to that bucket in a Celery background task
-- **AND** the object key SHALL be `feedback/<filename>`, where `<filename>` is a single validated path component
-- **AND** a filename that is not a single safe component SHALL be rejected before any upload is attempted
+- **THEN** the system SHALL save the file to the local gallery directory
+- **AND** a filename that is not a single safe path component SHALL be rejected before the file is saved
+- **THEN** ticket creation SHALL succeed
+- **AND** the system SHALL NOT enqueue any background upload task
+- **AND** the system SHALL NOT require any object-storage configuration to be present
 
 #### Scenario: Retrieving a feedback screenshot
 
 - **WHEN** the API serves a feedback item with an attached screenshot
-- **AND** the screenshot is not present in the local gallery directory
-- **THEN** the system SHALL read it from the feedback bucket
+- **THEN** the system SHALL read the file from the local gallery directory
 - **AND** it SHALL return a URL that resolves to the screenshot
+- **AND** the system SHALL NOT attempt a remote read on any code path
+
+#### Scenario: Uploading a feedback screenshot
+
+- **WHEN** a user attaches a screenshot to a feedback item
+- **THEN** the system SHALL store the screenshot in the local gallery directory
+- **AND** a filename that is not a single safe path component SHALL be rejected before the file is stored
+- **AND** the system SHALL NOT upload the screenshot to any remote bucket
+- **AND** the system SHALL NOT enqueue a background upload task, and SHALL NOT require AWS credentials or a bucket name to be configured
 
 #### Scenario: rclone remote not configured — graceful fallback
 
 - **WHEN** a user attaches a screenshot to a feedback item
-- **AND** no feedback bucket is configured
-- **THEN** the system SHALL fall back to local storage at `./app/static/gallery/`
-- **AND** the system SHALL log that remote upload was skipped
-- **AND** ticket creation SHALL still succeed, because the local file was already saved
+- **AND** no remote storage is configured
+- **THEN** the system SHALL store the screenshot locally and serve it successfully
+- **AND** the system SHALL NOT log a warning about a skipped remote upload, since no remote path exists to skip
+- **AND** ticket creation SHALL succeed
 
 #### Scenario: Missing object and unreachable storage are distinguished
 
-- **WHEN** reading a screenshot from the remote bucket fails
-- **THEN** an absent object SHALL return 404
-- **AND** a permission, network or service failure SHALL return 502
-- **AND** the distinction SHALL be derived from the S3 error code rather than from a log line
+- **WHEN** a screenshot cannot be served
+- **THEN** the system SHALL return 404 for an absent file
+- **AND** the system SHALL NOT return a 502, because there is no remote backend whose unavailability could produce one
+- **AND** a caller SHALL NOT be able to infer any storage-backend state from the response
+
+#### Scenario: No storage configuration required
+
+- **WHEN** a user attaches a screenshot to a feedback item
+- **AND** no object-storage configuration of any kind is present
+- **THEN** the system SHALL save and serve the screenshot from local storage
+- **AND** ticket creation and retrieval SHALL both succeed
+- **AND** the system SHALL NOT emit a warning about skipped remote storage, because there is no remote storage to skip
+
+#### Scenario: Screenshot missing from local storage
+
+- **WHEN** the API is asked to serve a screenshot that is not present in the local gallery directory
+- **THEN** the system SHALL return 404
+- **AND** the system SHALL NOT attempt a remote fallback
+- **AND** the absence SHALL NOT be reported as a storage-service failure
+- **AND** a failure to reach any storage backend SHALL NOT be distinguishable from an absent object, because there is no remote backend to reach
+
+#### Scenario: Screenshots are already covered off-site
+
+- **WHEN** a screenshot has been saved to the local gallery directory
+- **THEN** the nightly backup SHALL include it in the archive without any application-level upload
 
 ### Requirement: Feedback screenshot access authorization containment
 
 The API SHALL enforce that access to an attachment screenshot is granted only if the authenticated user has read authorization for every ticket that references that attachment filename, preventing unauthorized access via cross-ticket collision.
 
-Unchanged in behaviour, and re-verified against the new transport: the check runs
-before the local read and before the remote read, so an unauthorized caller
-cannot distinguish a local screenshot from a remote one.
+The check runs before any file read, so an unauthorized caller cannot learn whether a screenshot exists.
 
 #### Scenario: Authorized user reads own screenshot
 
@@ -72,4 +98,10 @@ cannot distinguish a local screenshot from a remote one.
 
 - **WHEN** an authenticated user requests a screenshot referenced in a ticket they can read, but the same screenshot filename is also referenced in another ticket they are not authorized to read
 - **THEN** the API SHALL deny access with status 403 Forbidden
-- **AND** it SHALL NOT attempt either the local or the remote read
+- **AND** it SHALL NOT read the file
+
+#### Scenario: Unauthorized caller cannot distinguish present from absent
+
+- **WHEN** an unauthorized user requests a screenshot filename
+- **THEN** the response SHALL be identical whether or not the file exists on disk
+- **AND** the authorization decision SHALL NOT depend on a storage lookup

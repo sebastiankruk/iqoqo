@@ -19,6 +19,13 @@
 This module is a backward-compatibility wrapper around the scripts.etl package.
 For direct programmatic use, import from scripts.etl.
 
+Relationship Coverage Note:
+    - Explicitly reparented: Item, ImageScan, ManifestationContribution,
+      SocialFeedback, SocialNote, EscalationRequest (direct manifestation_id FK).
+    - Implicitly handled: ItemTag and ItemStatusLog reference item_id (Item),
+      so they are preserved and reparented transitively when Item rows are
+      reparented to canonical Manifestations.
+
 Usage:
     python scripts/etl_frbr_safe.py [--dry-run] [--backup-dir DIR] [--verbose]
 """

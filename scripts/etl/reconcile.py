@@ -171,6 +171,9 @@ def build_manifestation_relationship_inventory() -> RelationshipInventory:
         notes="Items are reparented to canonical Manifestation",
     )
 
+    # Explicitly reparented catalog relationships (carry direct manifestation_id FK):
+    # - Item, ImageScan, ManifestationContribution
+
     # Image scan relationships
     inventory.add_relationship(
         model_class="ImageScan",
@@ -187,12 +190,16 @@ def build_manifestation_relationship_inventory() -> RelationshipInventory:
         notes="Contributions are reparented to canonical Manifestation",
     )
 
+    # Implicitly handled relationships (linked via Item, not Manifestation):
+    # - ItemStatusLog and ItemTag reference item_id, not manifestation_id.
+    #   When Items are reparented above, these records follow transitively and
+    #   are preserved without needing direct manifestation_id SQL mutations.
     # Item status log relationships
     inventory.add_relationship(
         model_class="ItemStatusLog",
         fk_column="manifestation_id",
         policy=ReparentPolicy.REPARENT,
-        notes="Status logs are reparented",
+        notes="Status logs follow Item reparenting implicitly",
     )
 
     # Item tag relationships (via Item)
@@ -200,7 +207,7 @@ def build_manifestation_relationship_inventory() -> RelationshipInventory:
         model_class="ItemTag",
         fk_column="item_id",
         policy=ReparentPolicy.REPARENT,
-        notes="Item tags follow Item reparenting",
+        notes="Item tags follow Item reparenting implicitly",
     )
 
     # Social feedback relationships

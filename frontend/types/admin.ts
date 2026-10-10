@@ -61,6 +61,7 @@ export interface LODStats {
   linked_manifestations: number;
   unlinked_manifestations: number;
   total_links: number;
+  suggested_links?: number;
   by_authority: Record<string, number>;
 }
 

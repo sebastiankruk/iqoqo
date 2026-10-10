@@ -27,6 +27,7 @@
 
 import Link from "next/link";
 import {
+  ArrowRightLeft,
   BadgeCheck,
   Building2,
   Code2,
@@ -240,6 +241,15 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
             )}
             {canViewUsers && (
               <NavItem label="Users" icon={Users} isActive={activeTab === "users"} onClick={() => selectTab("users")} />
+            )}
+            {hasPermission(PermissionName.WRITE_USERS) && (
+              <NavItem
+                label="Item Ownership"
+                icon={ArrowRightLeft}
+                isActive={activeTab === "ownership"}
+                onClick={noop}
+                href="/admin/ownership"
+              />
             )}
             {canViewRoles && (
               <NavItem

@@ -36,19 +36,11 @@ Talk like caveman
 - **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `make graphify-index` to update the scope.
 - **Index Update**: RECOMMEND running `make graphify-update` after code changes.
 
-### 🦉 myKG Ontological Graph & TTL Directive
-- **Ontological Ground Truth**: myKG maintains the canonical W3C RDF Turtle ontology (`output/knowledge_graph.ttl`) and RDFS TBox schema (`intermediate/schema.ttl`) covering FRBR hierarchies, ABox/TBox mappings, and entity domain relationships.
-- **Pre-Flight Domain Querying**: Before running broad multi-directory greps for FRBR domain semantics, classifications, or entity schemas, query the latest compiled knowledge graph:
-  `make mykg-ask Q="<concept>"`
-- **Direct TTL Inspection**: When formal RDF triples, OWL/RDFS class axioms, or predicate ranges are required, inspect `mykg_sessions/*/output/knowledge_graph.ttl` directly. Note that `obsidian_vault` is disabled and should not be sought.
-- **Release CI Only Execution**: myKG is an offline batch compiler (~15–60 min, ~$4.36 per full run). NEVER execute `make mykg-update` or `make mykg-index` during interactive development sessions. It is strictly reserved for Release CI and manual scheduled maintenance.
-
-### 🧩 Memory Tools Integration Quartet
-- **Integration**: Each of the 4 memory tools serves a distinct, non-overlapping question:
+### 🧩 Memory Tools Integration Trio
+- **Integration**: Each of the 3 memory tools serves a distinct, non-overlapping question:
   - **CodeGraph**: *"Where is symbol X defined, who calls it, and what will break if I change it?"*
   - **Graphify**: *"What are the high-level architecture layers and how do modules connect?"*
   - **MemPalace**: *"Why did we decide this, and what architectural decisions were made in past releases?"*
-  - **myKG**: *"How do FRBR entities, ABox/TBox schemas, and domain concepts relate in formal RDF?"*
 
 ### 🤖 AiOps Environment Mode Directive
 - **Universal Standard for AI**: ALWAYS set `IQOQO_AI_MODE=1` in your environment before running any commands (e.g. `IQOQO_AI_MODE=1 make lint`, `IQOQO_AI_MODE=1 make test`, `IQOQO_AI_MODE=1 make status`, `IQOQO_AI_MODE=1 pytest`, `IQOQO_AI_MODE=1 make codegraph-sync`).
@@ -84,7 +76,7 @@ Talk like caveman
 ### 🔄 Post-Session Knowledge Sync
 - **Fast Knowledge Sync**: After committing and pushing code changes, RECOMMEND running `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
 - **Mempalace**: If specific domain documentation or notes were modified, RECOMMEND running surgical single-file mining: `mempalace mine <file> --wing iqoqo` (~1-2s). Strictly avoid running full `make mempalace-index` during interactive sessions.
-- **Automated Full Sync Prohibition**: NEVER automatically invoke `make knowledge-sync-full`, `make mempalace-index`, or `make mykg-update` during interactive sessions or in automated agent hooks. Full sync is reserved for scheduled release CI or manual execution.
+- **Automated Full Sync Prohibition**: NEVER automatically invoke `make knowledge-sync-full` or `make mempalace-index` during interactive sessions or in automated agent hooks. Full sync is reserved for scheduled release CI or manual execution.
 - **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).

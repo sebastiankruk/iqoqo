@@ -50,6 +50,7 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 ## 📖 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Self-contained deployment directory contract and commands
 - **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
 - **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** - SPARQL, Linked Data, exports, and Schema.org
 - **[API Reference](docs/API.md)** - Complete REST API documentation

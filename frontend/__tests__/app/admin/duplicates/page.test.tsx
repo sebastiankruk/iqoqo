@@ -150,4 +150,44 @@ describe("DuplicatesPage", () => {
 
     expect(screen.getByRole("link", { name: "Duplicate Review" })).toHaveAttribute("href", "/admin/duplicates");
   });
+
+  it("verifies Expression tier is reachable via /admin/duplicates and AdminSidebar link set is unchanged", () => {
+    mockProfile(
+      profile(
+        ["admin", "contributor"],
+        [
+          "read:metadata",
+          "write:metadata",
+          "edit:cover",
+          "escalate:resolve",
+          "read:users",
+          "read:roles",
+          "config:external_apis",
+          "config:federation",
+          "config:affiliate",
+          "config:internal",
+        ]
+      )
+    );
+
+    render(<DuplicatesPage />);
+
+    expect(
+      screen.getByText(/Compare flagged Works, Expressions, and Manifestations side by side/i)
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("duplicate-reviewer")).toBeInTheDocument();
+
+    const links = screen.getAllByRole("link");
+    const linkHrefs = links.map(link => link.getAttribute("href"));
+    expect(linkHrefs).toContain("/admin/duplicates");
+    expect(linkHrefs).toEqual([
+      "/admin/content?tab=metadata",
+      "/admin/duplicates",
+      "/admin/content?tab=cover-art",
+      "/admin/content?tab=escalations",
+      "/admin/sparql",
+      "/admin/lod",
+      "/admin/groups",
+    ]);
+  });
 });

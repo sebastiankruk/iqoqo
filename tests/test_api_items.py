@@ -479,3 +479,32 @@ def test_taxonomies_narrowed_by_category(client, admin_headers, app):
     assert "Blue Note" not in narrowed["publishers"]
     assert "fantasy" in narrowed["genres"]
     assert "jazz" not in narrowed["genres"]
+
+
+def test_get_items_sort_by_author(client, normal_user_headers, app):
+    """Ensure sort=author sorts by Work author metadata rather than falling back to title."""
+    with app.app_context():
+        user = db.session.execute(db.select(User).filter_by(email="test_user@iqoqo.local")).scalar_one()
+
+        # Work 1: Title "Zebra", Author "Asimov, Isaac"
+        w1 = Work(title="Zebra", meta={"authors": ["Asimov, Isaac"]})
+        e1 = Expression(work_id=w1.id, content_type="text")
+        w1.expressions.append(e1)
+        m1 = Manifestation(expression=e1)
+        i1 = Item(manifestation=m1, owner_id=user.id, status="available")
+
+        # Work 2: Title "Apple", Author "Zelazny, Roger"
+        w2 = Work(title="Apple", meta={"authors": ["Zelazny, Roger"]})
+        e2 = Expression(work_id=w2.id, content_type="text")
+        w2.expressions.append(e2)
+        m2 = Manifestation(expression=e2)
+        i2 = Item(manifestation=m2, owner_id=user.id, status="available")
+
+        db.session.add_all([w1, w2, i1, i2])
+        db.session.commit()
+
+    resp = client.get("/api/items?sort=author", headers=normal_user_headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    titles = [item["title"] for item in data if item["title"] in ("Zebra", "Apple")]
+    assert titles == ["Zebra", "Apple"]

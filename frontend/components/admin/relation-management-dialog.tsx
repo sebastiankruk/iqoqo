@@ -218,14 +218,19 @@ export function RelationManagementDialog({
       toast.error("Please provide a title for the new entity");
       return;
     }
-    const childIds = splitChildIds
+    const rawTokens = splitChildIds
       .split(",")
-      .map(s => parseInt(s.trim(), 10))
-      .filter(n => !isNaN(n) && n > 0);
-    if (childIds.length === 0) {
-      toast.error("Please provide at least one valid child ID");
+      .map(s => s.trim())
+      .filter(Boolean);
+    const hasInvalid = rawTokens.some(token => {
+      const num = Number(token);
+      return !Number.isInteger(num) || num <= 0;
+    });
+    if (rawTokens.length === 0 || hasInvalid) {
+      toast.error("Please provide valid, positive integer child IDs separated by commas");
       return;
     }
+    const childIds = rawTokens.map(s => Number(s));
     setIsSubmitting(true);
     try {
       const payload: FrbrSplitPayload = {

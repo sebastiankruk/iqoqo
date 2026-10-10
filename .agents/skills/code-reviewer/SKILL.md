@@ -162,7 +162,7 @@ When the human asks questions about code (via agy, opencode, or Gemini App):
 
 ## Knowledge Tool Integration
 
-The iqoqo project maintains four knowledge graphs and review artifacts that provide different lenses for code review:
+The iqoqo project maintains three knowledge graphs and review artifacts that provide different lenses for code review:
 
 | Tool | Command / Source | Use Case |
 |---|---|---|
@@ -173,8 +173,6 @@ The iqoqo project maintains four knowledge graphs and review artifacts that prov
 | **Graphify** | `graphify query "<question>"` | Natural language codebase exploration |
 | | `graphify path A B` | Shortest path between two concepts |
 | | `graphify explain <node>` | Plain-language explanation of a node |
-| **mykg** | MCP tools: `search_nodes`, `get_node`, `get_neighbors` | Domain ontology entities (Work, Expression, Manifestation) |
-| | `query_graph` | BFS from natural language (weaker than CodeGraph) |
 | **MemPalace** | `mempalace search "<keywords>" --wing iqoqo` | Conversation history, architectural decisions, past bugs |
 
 ### Pre-Review Checklist (per chunk)
@@ -182,8 +180,7 @@ The iqoqo project maintains four knowledge graphs and review artifacts that prov
 1. **Gemini Gem review check** — Check for `.context/notes/review/$current-version/chunk-$X-gem-review.md`. Ingest findings, concerns, and flagged files if present
 2. **CodeGraph impact** — For each major symbol in the chunk, run `codegraph impact <Symbol>` to understand blast radius
 3. **Graphify query** — Run `graphify query "<chunk topic>"` to find related nodes across the codebase
-4. **mykg search** — Search for domain entities: `search_nodes` with type filters (e.g., `SecurityVulnerability`, `PlatformLayer`)
-5. **MemPalace search** — Check conversation history for past decisions: `mempalace search "<topic>" --wing iqoqo`
+4. **MemPalace search** — Check conversation history for past decisions: `mempalace search "<topic>" --wing iqoqo`
 
 ### During Review
 
@@ -191,7 +188,6 @@ The iqoqo project maintains four knowledge graphs and review artifacts that prov
 - **Find affected tests:** Use `codegraph affected <file>` to identify which tests to verify
 - **Cross-reference architecture:** Use `graphify query "<concept>"` to find related files
 - **Check historical context:** Use `mempalace search` for past discussions about similar issues
-- **Verify domain model:** Use mykg `get_neighbors` on FRBR entities to understand relationships
 
 ### Example Workflow
 

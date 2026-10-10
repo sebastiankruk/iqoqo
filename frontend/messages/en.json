@@ -108,7 +108,8 @@
     "no_email": "Google account has no email address associated with it.",
     "user_setup_failed": "Failed to create your account. Please try again or contact support.",
     "jwt_generation_failed": "Session creation failed. Please try again.",
-    "MissingToken": "Authentication token was missing. Please try signing in again."
+    "MissingToken": "Authentication token was missing. Please try signing in again.",
+    "oauth_not_configured": "Google sign-in is not configured on this instance. Please use email and password."
   },
   "Register": {
     "title": "Create an account",
@@ -468,6 +469,15 @@
       "lookupTimedOut": "Lookup timed out. Switching to manual entry.",
       "lookupFailed": "Could not look up this item. Please try again.",
       "cameraUnavailable": "Camera unavailable"
+    },
+    "manualEntry": {
+      "title": "Manual Item Entry",
+      "chooseFromPhotos": "Choose from Photos",
+      "takePhoto": "Take Photo",
+      "changeImage": "Change",
+      "removeImage": "Remove",
+      "manualCoverUpload": "Manual Cover Upload",
+      "coverPreview": "Cover preview"
     }
   },
   "SemanticLinks": {

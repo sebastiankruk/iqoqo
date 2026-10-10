@@ -382,3 +382,236 @@ EOF
   [[ "$output" =~ "rclone config not found" ]]
   [[ "$output" =~ "rclone config" ]]
 }
+
+# ── Execution Locking & Crash Recovery ──────────────────────────────────────
+
+@test "cloud_backup.sh acquires and releases lock on success" {
+  local lock_file="${TEST_TEMP_DIR}/test_backup.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 0 ]
+  [ -f "${lock_file}" ]
+  run flock -n "${lock_file}" true
+  [ "$status" -eq 0 ]
+}
+
+@test "cloud_backup.sh exits 2 on lock contention without deleting lock" {
+  local lock_file="${TEST_TEMP_DIR}/test_backup.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+  export BACKUP_LOCK_TIMEOUT=1
+
+  exec 8>"${lock_file}"
+  flock 8
+
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "Another backup is currently running" ]]
+  [ -f "${lock_file}" ]
+
+  exec 8>&-
+}
+
+@test "cloud_backup.sh concurrent invocations: exactly one succeeds and one exits 2" {
+  local lock_file="${TEST_TEMP_DIR}/test_backup.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+  export BACKUP_LOCK_TIMEOUT=1
+
+  (
+    exec 8>"${lock_file}"
+    flock 8
+    sleep 2
+    exec 8>&-
+  ) &
+  local bg_pid=$!
+  sleep 0.2
+
+  run bash scripts/cloud_backup.sh
+  wait "${bg_pid}" || true
+
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "Another backup is currently running" ]]
+}
+
+@test "cloud_backup.sh crash recovery: SIGKILL holder releases lock automatically" {
+  local lock_file="${TEST_TEMP_DIR}/test_backup.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+
+  (
+    exec 8>"${lock_file}"
+    flock 8
+    sleep 5
+  ) &
+  local bg_pid=$!
+  sleep 0.2
+
+  run flock -n "${lock_file}" true
+  [ "$status" -ne 0 ]
+
+  kill -9 "${bg_pid}" 2>/dev/null || true
+  wait "${bg_pid}" 2>/dev/null || true
+
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Execution summary: SUCCESS" ]]
+}
+
+@test "cloud_backup.sh cleans up temporary files on SIGTERM" {
+  local lock_file="${TEST_TEMP_DIR}/test_backup.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "$*" == *"pg_dumpall"* ]]; then
+  sleep 3
+  echo "CREATE TABLE test;"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  bash scripts/cloud_backup.sh &
+  local backup_pid=$!
+  sleep 0.5
+  kill -TERM "${backup_pid}" 2>/dev/null || true
+  wait "${backup_pid}" 2>/dev/null || true
+
+  run flock -n "${lock_file}" true
+  [ "$status" -eq 0 ]
+}
+
+# ── Pre-flight Checks and Retry Logic ───────────────────────────────────────
+
+@test "cloud_backup.sh preflight fails if database container is down" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+exit 1
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  export BACKUP_RETRY_ATTEMPTS=1
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Database pre-flight connectivity checks failed" ]]
+}
+
+@test "cloud_backup.sh preflight fails permanently on missing role without retry" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "$*" == *"SELECT 1"* ]]; then
+  echo "FATAL: role \"iqoqo\" does not exist" >&2
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  export BACKUP_RETRY_ATTEMPTS=3
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Permanent error" ]]
+  [[ "$output" =~ "attempt 1/3" ]]
+  [[ ! "$output" =~ "attempt 2/3" ]]
+}
+
+@test "cloud_backup.sh preflight fails permanently on auth failure without retry" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "$*" == *"SELECT 1"* ]]; then
+  echo "FATAL: password authentication failed for user \"iqoqo\"" >&2
+  exit 1
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  export BACKUP_RETRY_ATTEMPTS=3
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Permanent error" ]]
+  [[ ! "$output" =~ "attempt 2/3" ]]
+}
+
+@test "cloud_backup.sh preflight verifies custom POSTGRES_USER role" {
+  export POSTGRES_USER="custom_admin"
+
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+echo "DOCKER_CMD: $*" >> "${TEST_TEMP_DIR}/docker_calls.log"
+if [[ "$*" == *"pg_roles"* ]]; then
+  if [[ "$*" == *"custom_admin"* ]]; then
+    echo "1"
+    exit 0
+  else
+    echo "0"
+    exit 0
+  fi
+fi
+if [[ "$*" == *"pg_dumpall"* ]]; then
+  echo "CREATE TABLE test;"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 0 ]
+  grep -q "custom_admin" "${TEST_TEMP_DIR}/docker_calls.log"
+}
+
+@test "cloud_backup.sh retries transient failures with exponential backoff schedule" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/sleep"
+#!/bin/bash
+echo "SLEEP: $1" >> "${TEST_TEMP_DIR}/sleep_calls.log"
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/sleep"
+
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "$*" == *"SELECT 1"* ]]; then
+  echo "psql: error: could not connect to server: Connection refused" >&2
+  exit 2
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  export BACKUP_RETRY_ATTEMPTS=3
+  export BACKUP_RETRY_DELAY_BASE=1
+
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "attempt 1/3" ]]
+  [[ "$output" =~ "attempt 2/3" ]]
+  [[ "$output" =~ "attempt 3/3" ]]
+  [[ "$output" =~ "Database pre-flight connectivity checks failed after 3 attempts" ]]
+
+  [ -f "${TEST_TEMP_DIR}/sleep_calls.log" ]
+  run cat "${TEST_TEMP_DIR}/sleep_calls.log"
+  [[ "$output" =~ "SLEEP: 1" ]]
+  [[ "$output" =~ "SLEEP: 2" ]]
+}
+
+@test "cloud_backup.sh empty dump is not retried" {
+  cat << 'EOF' > "${TEST_TEMP_DIR}/stub-bin/docker"
+#!/bin/bash
+if [[ "$*" == *"pg_dumpall"* ]]; then
+  exit 0
+fi
+if [[ "$*" == *"pg_roles"* ]]; then
+  echo "1"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${TEST_TEMP_DIR}/stub-bin/docker"
+
+  export BACKUP_RETRY_ATTEMPTS=3
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "PostgreSQL dump is empty" ]]
+  [[ ! "$output" =~ "attempt 2/3" ]]
+}
+

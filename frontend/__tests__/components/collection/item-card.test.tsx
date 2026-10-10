@@ -27,10 +27,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 
+const mockPush = vi.fn();
+
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn().mockReturnValue("/"),
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
   }),
 }));
 
@@ -348,5 +350,160 @@ describe("ItemCard", () => {
       />
     );
     expect(screen.getByLabelText("Remove from wishlist")).toBeInTheDocument();
+  });
+
+  describe("FRBR Hierarchy navigation pills", () => {
+    it("renders Work and Expression pills in vertical variant and navigates on click without card link navigation", () => {
+      const item = makeItem({
+        id: 42,
+        work: {
+          id: 10,
+          title: "Dune Work",
+          authors: ["Frank Herbert"],
+          meta: {},
+          container_work_id: null,
+        },
+        expression: {
+          id: 20,
+          language: "English",
+          content_type: "text",
+          kind: "novel",
+        },
+      });
+
+      renderWithQuery(<ItemCard item={item} />);
+
+      const workPill = screen.getByTestId("work-pill");
+      const expressionPill = screen.getByTestId("expression-pill");
+
+      expect(workPill).toBeInTheDocument();
+      expect(workPill).toHaveTextContent("Work: Dune Work");
+      expect(expressionPill).toBeInTheDocument();
+      expect(expressionPill).toHaveTextContent("Exp: English (text)");
+
+      // Click Work pill
+      fireEvent.click(workPill);
+      expect(mockPush).toHaveBeenCalledWith("/work/10");
+      expect(mockPush).not.toHaveBeenCalledWith("/item/42");
+
+      mockPush.mockClear();
+
+      // Click Expression pill
+      fireEvent.click(expressionPill);
+      expect(mockPush).toHaveBeenCalledWith("/expression/20");
+      expect(mockPush).not.toHaveBeenCalledWith("/item/42");
+    });
+
+    it("renders Work and Expression pills in horizontal variant and navigates on click", () => {
+      const item = makeItem({
+        id: 43,
+        work: {
+          id: 11,
+          title: "The Hobbit Work",
+          authors: ["J.R.R. Tolkien"],
+          meta: {},
+          container_work_id: null,
+        },
+        expression: {
+          id: 21,
+          language: "Polish",
+          content_type: "text",
+          kind: "novel",
+        },
+      });
+
+      renderWithQuery(<ItemCard item={item} variant="horizontal" />);
+
+      const workPill = screen.getByTestId("work-pill");
+      const expressionPill = screen.getByTestId("expression-pill");
+
+      expect(workPill).toBeInTheDocument();
+      expect(workPill).toHaveTextContent("Work: The Hobbit Work");
+      expect(expressionPill).toBeInTheDocument();
+      expect(expressionPill).toHaveTextContent("Exp: Polish (text)");
+
+      fireEvent.click(workPill);
+      expect(mockPush).toHaveBeenCalledWith("/work/11");
+
+      mockPush.mockClear();
+
+      fireEvent.click(expressionPill);
+      expect(mockPush).toHaveBeenCalledWith("/expression/21");
+    });
+
+    it("renders Work and Expression pills in catalog manifestation view", () => {
+      const catalogEntry = makeCatalogEntry({
+        id: 99,
+        work_id: 15,
+        expression_id: 25,
+        content_type: "book",
+      });
+
+      renderWithQuery(<ItemCard item={catalogEntry} isManifestationView={true} />);
+
+      const workPill = screen.getByTestId("work-pill");
+      const expressionPill = screen.getByTestId("expression-pill");
+
+      expect(workPill).toBeInTheDocument();
+      expect(workPill).toHaveTextContent("Work");
+      expect(expressionPill).toBeInTheDocument();
+      expect(expressionPill).toHaveTextContent("Exp: book");
+
+      fireEvent.click(workPill);
+      expect(mockPush).toHaveBeenCalledWith("/work/15");
+
+      mockPush.mockClear();
+
+      fireEvent.click(expressionPill);
+      expect(mockPush).toHaveBeenCalledWith("/expression/25");
+    });
+
+    it("does not render pills when work and expression data are absent", () => {
+      const item = makeItem({
+        id: 50,
+        work: undefined,
+        expression: undefined,
+      });
+
+      renderWithQuery(<ItemCard item={item} />);
+
+      expect(screen.queryByTestId("work-pill")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("expression-pill")).not.toBeInTheDocument();
+    });
+
+    it("verifies DOM tree contains zero nested anchor tags (a a) across collection variants", () => {
+      const item = makeItem({
+        id: 42,
+        work: {
+          id: 10,
+          title: "Dune Work",
+          authors: ["Frank Herbert"],
+          meta: {},
+          container_work_id: null,
+        },
+        expression: {
+          id: 20,
+          language: "English",
+          content_type: "text",
+          kind: "novel",
+        },
+      });
+
+      const { container: verticalContainer } = renderWithQuery(<ItemCard item={item} />);
+      expect(verticalContainer.querySelectorAll("a a").length).toBe(0);
+
+      const { container: horizontalContainer } = renderWithQuery(<ItemCard item={item} variant="horizontal" />);
+      expect(horizontalContainer.querySelectorAll("a a").length).toBe(0);
+
+      const catalogEntry = makeCatalogEntry({
+        id: 99,
+        work_id: 15,
+        expression_id: 25,
+      });
+      const { container: catalogContainer } = renderWithQuery(
+        <ItemCard item={catalogEntry} isManifestationView={true} />
+      );
+      expect(catalogContainer.querySelectorAll("a a").length).toBe(0);
+    });
   });
 });

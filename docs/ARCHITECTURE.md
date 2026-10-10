@@ -1103,4 +1103,4 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 - **Dedicated Social Schema**: Feedback models (`FeedbackItem`, `FeedbackComment`) reside in PostgreSQL `social` schema with relational normalization for thread comments.
 - **FRBR Target Entity Linkage**: `FeedbackItem.target_entity` (JSONB) links user bug reports directly to specific FRBR entities (`{"entity_type": "manifestation", "entity_id": 123}`), bridging user feedback with custodian escalation queues.
-- **Cloud Attachment Sync**: Feedback attachments support asynchronous upload via `rclone copyto --` using the `RCLONE_FEEDBACK_REMOTE` environment variable with seamless local storage fallback.
+- **Attachment Storage**: Feedback attachments are stored locally under `app/static/gallery/` on a host bind mount and included in nightly off-site backups (`scripts/cloud_backup.sh`).

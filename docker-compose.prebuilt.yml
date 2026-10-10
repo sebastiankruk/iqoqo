@@ -37,6 +37,8 @@ services:
       - ./app/static/covers:/usr/src/app/app/static/covers
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ./data:/usr/src/app/data
+      - ./docs/ontology:/usr/src/app/docs/ontology:ro
 
   worker:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
@@ -46,6 +48,7 @@ services:
       - ./app/static/covers:/usr/src/app/app/static/covers
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
+      - ./data:/usr/src/app/data
 
   nginx:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-nginx:${APP_VERSION:-latest}
@@ -57,3 +60,8 @@ services:
   frontend:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-latest}
     build: !reset null
+
+  sparql-runner:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-sparql:${APP_VERSION:-latest}
+    build: !reset null
+

@@ -21,6 +21,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -176,9 +177,21 @@ def verify_running(database_url: str, project: str, compose_file: Path) -> None:
         raise UnsafeE2EDatabaseError("Running E2E database does not use its dedicated project-scoped volume.")
 
     query = "SELECT current_database() || '|' || current_user || '|' || inet_server_port()"
-    psql = _run(["psql", database_url, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", query]).stdout.strip()
-    if psql != f"{EXPECTED_DATABASE}|{EXPECTED_USER}|5432":
-        raise UnsafeE2EDatabaseError("Database identity query did not match the dedicated E2E database and role.")
+    psql = ""
+    last_error: Exception | None = None
+    for _attempt in range(10):
+        try:
+            psql = _run(["psql", database_url, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", query]).stdout.strip()
+            if psql == f"{EXPECTED_DATABASE}|{EXPECTED_USER}|5432":
+                break
+        except UnsafeE2EDatabaseError as exc:
+            last_error = exc
+        time.sleep(1)
+    else:
+        if psql != f"{EXPECTED_DATABASE}|{EXPECTED_USER}|5432":
+            if last_error:
+                raise last_error
+            raise UnsafeE2EDatabaseError("Database identity query did not match the dedicated E2E database and role.")
 
 
 def main() -> int:

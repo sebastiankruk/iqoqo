@@ -34,7 +34,6 @@ import pytest
 
 from app.core.s3_service import (
     BUCKET_COVERS,
-    BUCKET_FEEDBACK,
     S3Service,
     S3UploadError,
 )
@@ -48,9 +47,7 @@ def _clean_s3_env(monkeypatch):
         "AWS_SECRET_ACCESS_KEY",
         "S3_BUCKET_BACKUP",
         "S3_BUCKET_COVERS",
-        "S3_BUCKET_FEEDBACK",
         "RCLONE_COVERS_REMOTE",
-        "RCLONE_FEEDBACK_REMOTE",
         "RCLONE_REMOTE_ARCHIVE",
     ):
         monkeypatch.delenv(name, raising=False)
@@ -221,111 +218,3 @@ def test_llm_cover_skips_cache_when_returning_bytes(tmp_path) -> None:
 
     assert local_gen.called
     assert _client(service).downloads == []
-
-
-# ── Feedback screenshots (3.5) ──────────────────────────────────────────────
-
-
-def test_feedback_upload_uses_s3(tmp_path) -> None:
-    """Feedback screenshots are written to the feedback bucket via S3."""
-    from app.core.tasks import upload_feedback_screenshot
-
-    local = tmp_path / "shot.jpg"
-    local.write_bytes(b"jpeg-bytes")
-    service = _service(BUCKET_FEEDBACK)
-
-    with patch("app.core.tasks.get_s3_service", return_value=service), patch("subprocess.run") as mock_run:
-        upload_feedback_screenshot(str(local), "shot.jpg")
-
-    assert not mock_run.called
-    uploads = _client(service).uploads
-    assert [u[2] for u in uploads] == ["feedback/shot.jpg"]
-    assert uploads[0][3] == {"ContentType": "image/jpeg"}
-
-
-def test_feedback_upload_skipped_when_unconfigured(tmp_path, caplog) -> None:
-    """No bucket is a normal state for a self-hosted instance, not an error."""
-    from app.core.tasks import upload_feedback_screenshot
-
-    local = tmp_path / "shot.jpg"
-    local.write_bytes(b"jpeg-bytes")
-
-    with caplog.at_level(logging.INFO), patch("app.core.tasks.get_s3_service", return_value=None):
-        upload_feedback_screenshot(str(local), "shot.jpg")
-
-    assert "not configured" in caplog.text
-
-
-def test_feedback_upload_rejects_traversing_filename(tmp_path) -> None:
-    """A filename cannot escape the feedback/ prefix."""
-    from app.core.tasks import upload_feedback_screenshot
-
-    local = tmp_path / "shot.jpg"
-    local.write_bytes(b"jpeg-bytes")
-    service = _service(BUCKET_FEEDBACK)
-
-    with (
-        patch("app.core.tasks.get_s3_service", return_value=service),
-        pytest.raises(RuntimeError, match="upload failed"),
-    ):
-        upload_feedback_screenshot(str(local), "../../escape.jpg")
-
-    assert _client(service).uploads == []
-
-
-def test_feedback_screenshot_fetch_does_not_fork() -> None:
-    """The read path uses S3, never a rclone cat subprocess."""
-    from app.api import feedback as feedback_api
-
-    service = _service(BUCKET_FEEDBACK)
-
-    with (
-        patch.object(feedback_api, "get_s3_service", return_value=service),
-        patch("subprocess.run") as mock_run,
-    ):
-        response = feedback_api._fetch_remote_screenshot("shot.jpg")  # pylint: disable=protected-access
-
-    assert not mock_run.called
-    assert response.get_data() == b"jpeg-bytes"
-
-
-def test_feedback_fetch_reports_404_for_missing_object() -> None:
-    """An absent object is a 404, not a 5xx."""
-    from botocore.exceptions import ClientError
-
-    from app.api import feedback as feedback_api
-
-    service = _service(BUCKET_FEEDBACK)
-    _client(service).get_bytes_error = ClientError({"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "GetObject")
-
-    with patch.object(feedback_api, "get_s3_service", return_value=service):
-        _body, status = feedback_api._fetch_remote_screenshot("shot.jpg")  # pylint: disable=protected-access
-
-    assert status == 404
-
-
-def test_feedback_fetch_reports_502_when_storage_fails() -> None:
-    """A permission or outage failure must be distinguishable from a miss."""
-    from botocore.exceptions import ClientError
-
-    from app.api import feedback as feedback_api
-
-    service = _service(BUCKET_FEEDBACK)
-    _client(service).get_bytes_error = ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "GetObject")
-
-    with patch.object(feedback_api, "get_s3_service", return_value=service):
-        _body, status = feedback_api._fetch_remote_screenshot("shot.jpg")  # pylint: disable=protected-access
-
-    assert status == 502
-
-
-def test_feedback_fetch_rejects_an_unsafe_name_before_any_network_call() -> None:
-    """A traversing name is refused by the key guard, not sanitised."""
-    from app.api import feedback as feedback_api
-
-    service = _service(BUCKET_FEEDBACK)
-
-    with patch.object(feedback_api, "get_s3_service", return_value=service):
-        _body, status = feedback_api._fetch_remote_screenshot("../../escape.jpg")  # pylint: disable=protected-access
-
-    assert status == 400

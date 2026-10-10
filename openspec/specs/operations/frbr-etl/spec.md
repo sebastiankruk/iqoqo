@@ -39,7 +39,7 @@ The system SHALL create a verified point-in-time database backup before executin
 
 ### Requirement: Idempotent Entity Reconciliation and Normalization
 
-The system SHALL reconcile duplicate FRBR entities, merge child relationships to canonical records, and normalize ISBN values to standard 13-digit format idempotently.
+The system SHALL reconcile duplicate FRBR entities, merge child relationships to canonical records, and normalize ISBN values to standard 13-digit format idempotently. All dependent relationships (including ItemTag and ItemStatusLog, which follow Item reparenting transitively) SHALL be documented in the relationship inventory and either explicitly reparented or documented as implicitly handled.
 
 #### Scenario: Merging duplicate manifestations
 
@@ -61,6 +61,11 @@ The system SHALL reconcile duplicate FRBR entities, merge child relationships to
 - **WHEN** the ETL tool is executed consecutively on a catalog that has already been reconciled
 - **THEN** the system SHALL make zero database modifications and report zero pending anomalies
 
+#### Scenario: Implicit relationship handling documentation
+
+- **WHEN** the ETL apply function processes Manifestation merges
+- **THEN** inline comments SHALL document that ItemTag and ItemStatusLog are handled implicitly via Item reparenting (they reference item_id, not manifestation_id)
+
 ### Requirement: Operational Tooling Execution Interface
 
 The system SHALL provide standardized operational commands for catalog integrity auditing, ETL reconciliation, and ontology synchronization.
@@ -79,3 +84,12 @@ The system SHALL provide standardized operational commands for catalog integrity
 
 - **WHEN** an operator invokes the ontology synchronization command
 - **THEN** the system SHALL verify semantic constraints and ontology alignment against the current catalog schema
+
+### Requirement: ETL Performance Validation at Scale
+
+The system SHALL provide performance tests that verify the safe ETL script performs acceptably on production-scale data (10K+ rows) without excessive memory usage or timeout.
+
+#### Scenario: ETL performance with large dataset
+
+- **WHEN** the ETL tool processes a catalog with 10,000+ manifestations
+- **THEN** the reconciliation completes within acceptable time bounds (documented in test) and memory usage remains bounded

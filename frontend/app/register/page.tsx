@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
+import { useAuthProviders } from "@/hooks/use-auth-providers";
 
 /**
  * Register page component.
@@ -31,6 +32,8 @@ import { useTranslations } from "next-intl";
 export default function RegisterPage() {
   const t = useTranslations("Register");
   const router = useRouter();
+  const { data: providers } = useAuthProviders();
+  const isGoogleEnabled = providers?.google ?? false;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -81,21 +84,25 @@ export default function RegisterPage() {
             <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
 
-          <Button
-            className="w-full"
-            variant="outline"
-            onClick={() => {
-              // OAuth flow requires full page navigation to API endpoint
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-              window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`;
-            }}
-          >
-            {t("googleSignUp")}
-          </Button>
+          {isGoogleEnabled && (
+            <>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => {
+                  // OAuth flow requires full page navigation to API endpoint
+                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`;
+                }}
+              >
+                {t("googleSignUp")}
+              </Button>
 
-          <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-            <span className="relative z-10 px-2 text-muted-foreground">{t("orEmail")}</span>
-          </div>
+              <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
+                <span className="relative z-10 px-2 text-muted-foreground">{t("orEmail")}</span>
+              </div>
+            </>
+          )}
 
           {error && <div className="text-sm text-red-500 text-center">{error}</div>}
 

@@ -23,6 +23,17 @@ Key features:
 - ISBN-10 to ISBN-13 conversion with checksum validation
 - Publisher length validation
 - Format type validation against shared taxonomy
+
+Validation Policy:
+- format_type validation supports strict and non-strict modes.
+- Non-strict mode (default) accepts unknown format types to ensure forward
+  compatibility with third-party catalog imports and emerging media types.
+  This prevents ingestion failures but carries a risk of taxonomy pollution
+  (e.g., misspelled formats like "hard-cover" vs "hardcover").
+- Strict mode (recommended for new deployments and greenfield instances) rejects
+  any format type not enumerated in `MediaFormat`, enforcing ontological purity.
+- Production operators should transition to strict mode once legacy catalogs
+  have been reconciled and custom media formats are registered in the taxonomy.
 """
 
 import re
@@ -211,21 +222,35 @@ def validate_publisher(publisher: str | None, strict: bool = False) -> str | Non
 def validate_format_type(format_type: str | None, strict: bool = False) -> str | None:
     """Validate and normalize a format type against the shared taxonomy.
 
+    Tradeoff & Forward Compatibility:
+        - Non-strict mode (`strict=False`, default): Accepts unknown format strings
+          and normalizes them (whitespace stripped, lowercased). This prioritizes
+          forward compatibility with new physical media formats (e.g. emerging formats
+          or niche hardware) and external catalog imports without breaking or
+          requiring immediate code updates. The downside is potential taxonomy pollution,
+          where near-duplicate or misspelled formats (e.g. "paper-back" vs "paperback")
+          can enter the database unflagged.
+        - Strict mode (`strict=True`): Enforces that format_type exists in `MediaFormat`.
+          Raises `FormatTypeValidationError` if the format is not recognized. Recommended
+          for greenfield installations or after taxonomy stabilization (v0.9.0+).
+
     Args:
-        format_type: Format type to validate
-        strict: If True, raise error on invalid values; if False, return None
+        format_type: Format type string to validate and normalize.
+        strict: If True, raise FormatTypeValidationError on unrecognized formats.
+            If False, accept and return cleaned format string for forward compatibility.
 
     Returns:
-        Normalized format type or None
+        Normalized format type (lowercase, stripped) or None if input was empty/invalid.
 
     Raises:
-        FormatTypeValidationError: If strict=True and format_type is invalid
+        FormatTypeValidationError: If format_type exceeds MAX_FORMAT_TYPE_LENGTH, or
+            if strict=True and format_type is not in MediaFormat taxonomy.
 
     Examples:
         >>> validate_format_type("  HARDCOVER  ")
         'hardcover'
-        >>> validate_format_type("invalid_format", strict=False)
-        None
+        >>> validate_format_type("unknown_custom_format", strict=False)
+        'unknown_custom_format'
     """
     if not format_type or not isinstance(format_type, str):
         return None
@@ -250,8 +275,10 @@ def validate_format_type(format_type: str | None, strict: bool = False) -> str |
     if cleaned not in known_formats:
         if strict:
             raise FormatTypeValidationError(f"Unknown format type: {format_type}. " f"Known formats: {sorted(known_formats)}")
-        # In non-strict mode, accept the value but log a warning
-        # This allows forward compatibility with new formats
+        # In non-strict mode, accept unknown formats to ensure forward compatibility with
+        # external metadata imports and newly emerging physical media formats.
+        # Tradeoff: Accepts risk of taxonomy pollution (misspellings, near-duplicates).
+        # Switch to strict=True for new deployments or when catalog taxonomy has stabilized.
         return cleaned
 
     return cleaned

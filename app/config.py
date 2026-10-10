@@ -179,6 +179,13 @@ class Config:
     DISCOGS_CONSUMER_SECRET = os.environ.get("DISCOGS_CONSUMER_SECRET")
     # DISCOGS_USER_TOKEN is read directly in discogs.py as a legacy fallback
 
+    # Isolated SPARQL Execution Service (v0.8.3)
+    SPARQL_SERVICE_URL = os.environ.get("SPARQL_SERVICE_URL")
+    SPARQL_SERVICE_SECRET = os.environ.get("SPARQL_SERVICE_SECRET", os.environ.get("SECRET_KEY", "dev-sparql-service-secret"))
+    SPARQL_EXECUTION_MODE = os.environ.get("SPARQL_EXECUTION_MODE", "auto")
+    SPARQL_SERVICE_ENABLED = os.environ.get("SPARQL_SERVICE_ENABLED", "true").lower() in {"true", "1", "yes"}
+    SPARQL_QUERY_TIMEOUT = float(os.environ.get("SPARQL_QUERY_TIMEOUT", 15.0))
+
     @staticmethod
     def _get_version():
         """Resolve application version from environment or pyproject.toml.

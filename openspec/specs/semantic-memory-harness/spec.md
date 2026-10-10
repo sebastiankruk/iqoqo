@@ -7,25 +7,13 @@ Defines operational, retrieval, security, and lifecycle requirements for develop
 ## Requirements
 
 ### Requirement: Deterministic Environment Path Resolution
+
 The semantic memory harness SHALL resolve all CLI binaries using the repository virtual environment (`.venv/bin/`) or wrapper scripts rather than relying on ambient host PATH executables.
 
 #### Scenario: Tool query execution in subshell
 
 - **WHEN** an agent or developer executes a knowledge query via Makefile target or documented CLI snippet
-- **THEN** the command resolves `.venv/bin/graphify`, `.venv/bin/mempalace`, or `.venv/bin/mykg` directly without failing with exit code 127 (`command not found`).
-
-### Requirement: Session-Agnostic myKG Query Target
-The myKG interface SHALL provide a unified query mechanism that automatically identifies and queries the latest session directory without requiring manual discovery of timestamped directories.
-
-#### Scenario: Querying myKG knowledge graph
-
-- **WHEN** an agent or developer executes `make mykg-ask Q="<question>"`
-- **THEN** the harness automatically resolves the most recent session directory in `mykg_sessions/` and runs the query against it.
-
-#### Scenario: Querying when no session exists
-
-- **WHEN** a query is executed and no valid session directory is found in `mykg_sessions/`
-- **THEN** the system reports a clear diagnostic message directing the user to run an index build first.
+- **THEN** the command resolves `.venv/bin/graphify` or `.venv/bin/mempalace` directly without failing with exit code 127 (`command not found`).
 
 ### Requirement: MemPalace Query Sanitization and Output Preservation
 The MemPalace retrieval interface SHALL preserve complete query output and diagnostics, and the ingestion pipeline SHALL sanitize credentials and local developer paths before vector storage.
@@ -49,12 +37,13 @@ The developer tooling directives SHALL designate CodeGraph as the mandatory AST 
 - **THEN** the agent executes `codegraph node`, `codegraph callers`, or `codegraph impact` before attempting broad text-based grep scans.
 
 ### Requirement: Decoupled Knowledge Synchronization Lifecycle
-The build orchestration system SHALL strictly separate fast, sub-minute local indexing from multi-minute or token-consuming batch operations.
+
+The build orchestration system SHALL strictly separate fast, sub-minute local indexing from multi-minute batch operations.
 
 #### Scenario: Routine developer or agent sync
 
 - **WHEN** a developer or agent runs routine knowledge synchronization (`make knowledge-sync`)
-- **THEN** the system updates only CodeGraph and Graphify in parallel, completing in under 60 seconds without executing MemPalace full hallway indexing or launching the myKG Docker daemon.
+- **THEN** the system updates only CodeGraph and Graphify in parallel, completing in under 60 seconds without executing MemPalace full hallway indexing.
 
 #### Scenario: Prohibition on automated full sync during interactive sessions
 
@@ -69,4 +58,4 @@ The build orchestration system SHALL strictly separate fast, sub-minute local in
 #### Scenario: Scheduled or release synchronization
 
 - **WHEN** a release build or explicit full knowledge extraction is initiated (`make knowledge-sync-full`)
-- **THEN** the system triggers MemPalace full index and myKG update to regenerate the complete ontological ABox/TBox vault and associative hallway graph.
+- **THEN** the system triggers a MemPalace full index to regenerate the associative hallway graph.

@@ -31,12 +31,12 @@ set -e
 # silently no-ops, and the first symptom is a missing backup archive or a cover
 # cache that never populates. Failing loudly at container start is the only
 # point where the operator is guaranteed to be watching.
-if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$S3_BUCKET_BACKUP" ] || [ -n "$S3_BUCKET_COVERS" ] || [ -n "$S3_BUCKET_FEEDBACK" ]; then
+if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$S3_BUCKET_BACKUP" ] || [ -n "$S3_BUCKET_COVERS" ]; then
   if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
     echo "WARNING: S3 storage appears configured but AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is empty." >&2
     echo "         Remote backups and shared cover cache will be skipped. Check your .env." >&2
   fi
-  if [ -z "$S3_BUCKET_BACKUP" ] && [ -z "$S3_BUCKET_COVERS" ] && [ -z "$S3_BUCKET_FEEDBACK" ]; then
+  if [ -z "$S3_BUCKET_BACKUP" ] && [ -z "$S3_BUCKET_COVERS" ]; then
     echo "WARNING: AWS credentials are present but no S3_BUCKET_* variable is set." >&2
     echo "         Remote storage is disabled; set S3_BUCKET_BACKUP to enable backup archiving." >&2
   fi

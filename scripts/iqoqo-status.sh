@@ -38,13 +38,14 @@ WARNINGS=0
 
 usage() {
     cat <<EOF
-Usage: $0 [--stack dev|preview|prod] [--help]
+Usage: $0 [--stack dev|preview|prod] [--deploy-dir DIR] [--help]
 
 Check health status of all iQoQo services.
 
 Options:
-  --stack STACK   Stack to check: dev, preview, or prod (default: auto-detect from .env / mode)
-  --help          Show this help
+  --stack STACK     Stack to check: dev, preview, or prod (default: auto-detect from .env / mode)
+  --deploy-dir DIR  Read deployment environment strictly from DIR/.env (no fallback)
+  --help            Show this help
 
 Exit codes:
   0   All services healthy
@@ -54,9 +55,11 @@ EOF
     exit 0
 }
 
+DEPLOY_DIR=""
 STACK=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --deploy-dir) DEPLOY_DIR="$2"; shift 2 ;;
         --stack) STACK="$2"; shift 2 ;;
         dev|preview|prod) STACK="$1"; shift ;;
         --help) usage ;;
@@ -64,48 +67,76 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$STACK" ]]; then
-    if [[ -n "${MODE:-}" ]]; then
-        STACK="$MODE"
-    elif [[ -f "$IQOQO_ROOT/.env" ]]; then
-        ENV_FILE_VAL=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
-        if [[ "$ENV_FILE_VAL" == *".preview"* ]]; then
+if [[ -n "${DEPLOY_DIR:-}" ]]; then
+    ENV_FILE="${DEPLOY_DIR}/.env"
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "❌ Error: Deployment env file not found at $ENV_FILE" >&2
+        exit 2
+    fi
+    if [[ -z "$STACK" ]]; then
+        if [[ "$DEPLOY_DIR" == *"pre"* ]] || grep -qE "iqoqo-preview|pre\.iqoqo" "$ENV_FILE" 2>/dev/null; then
             STACK="preview"
-        elif [[ "$ENV_FILE_VAL" == *".prod"* ]]; then
+        else
             STACK="prod"
-        elif [[ "$ENV_FILE_VAL" == *".dev"* ]]; then
-            STACK="dev"
-        elif [[ -d "$IQOQO_ROOT/.pids" ]]; then
-            STACK="dev"
+        fi
+    fi
+    if [[ "$STACK" == "preview" ]]; then
+        PREFIX="iqoqo-preview"
+        DOMAIN="pre.iqoqo.cc"
+        SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
+    elif [[ "$STACK" == "dev" ]]; then
+        PREFIX="iqoqo"
+        DOMAIN="localhost:3000"
+        SERVICES=("db" "redis")
+    else
+        PREFIX="iqoqo"
+        DOMAIN="iqoqo.cc"
+        SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
+    fi
+else
+    if [[ -z "$STACK" ]]; then
+        if [[ -n "${MODE:-}" ]]; then
+            STACK="$MODE"
+        elif [[ -f "$IQOQO_ROOT/.env" ]]; then
+            ENV_FILE_VAL=$(sed -n "s/^[[:space:]]*ENV_FILE=\(.*\)/\1/p" "$IQOQO_ROOT/.env" 2>/dev/null || echo "")
+            if [[ "$ENV_FILE_VAL" == *".preview"* ]]; then
+                STACK="preview"
+            elif [[ "$ENV_FILE_VAL" == *".prod"* ]]; then
+                STACK="prod"
+            elif [[ "$ENV_FILE_VAL" == *".dev"* ]]; then
+                STACK="dev"
+            elif [[ -d "$IQOQO_ROOT/.pids" ]]; then
+                STACK="dev"
+            else
+                STACK="dev"
+            fi
         else
             STACK="dev"
         fi
-    else
-        STACK="dev"
     fi
-fi
 
-if [[ "$STACK" == "preview" ]]; then
-    PREFIX="iqoqo-preview"
-    ENV_FILE="$IQOQO_ROOT/.env.preview"
-    DOMAIN="pre.iqoqo.cc"
-    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
-elif [[ "$STACK" == "dev" ]]; then
-    PREFIX="iqoqo"
-    ENV_FILE="$IQOQO_ROOT/.env.dev"
-    [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
-    DOMAIN="localhost:3000"
-    SERVICES=("db" "redis")
-else
-    PREFIX="iqoqo"
-    ENV_FILE="$IQOQO_ROOT/.env.prod"
-    [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
-    DOMAIN="iqoqo.cc"
-    SERVICES=("nginx" "web" "frontend" "db" "redis" "worker")
-fi
+    if [[ "$STACK" == "preview" ]]; then
+        PREFIX="iqoqo-preview"
+        ENV_FILE="$IQOQO_ROOT/.env.preview"
+        DOMAIN="pre.iqoqo.cc"
+        SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
+    elif [[ "$STACK" == "dev" ]]; then
+        PREFIX="iqoqo"
+        ENV_FILE="$IQOQO_ROOT/.env.dev"
+        [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
+        DOMAIN="localhost:3000"
+        SERVICES=("db" "redis")
+    else
+        PREFIX="iqoqo"
+        ENV_FILE="$IQOQO_ROOT/.env.prod"
+        [[ ! -f "$ENV_FILE" ]] && ENV_FILE="$IQOQO_ROOT/.env"
+        DOMAIN="iqoqo.cc"
+        SERVICES=("nginx" "web" "frontend" "db" "redis" "worker" "sparql-runner")
+    fi
 
-if [[ ! -f "$ENV_FILE" ]]; then
-    ENV_FILE="$IQOQO_ROOT/.env"
+    if [[ ! -f "$ENV_FILE" ]]; then
+        ENV_FILE="$IQOQO_ROOT/.env"
+    fi
 fi
 
 load_env() {
@@ -138,6 +169,14 @@ else
     NGINX_PORT="${NGINX_PORT:-8000}"
     DB_PORT="${DB_PORT:-5432}"
     REDIS_PORT="${REDIS_PORT:-6379}"
+fi
+
+if [[ -n "${FRONTEND_URL:-}" ]]; then
+    domain_cand=$(echo "$FRONTEND_URL" | sed -E 's~https?://~~; s~/.*~~')
+    [[ -n "$domain_cand" ]] && DOMAIN="$domain_cand"
+elif [[ -n "${API_URL:-}" ]]; then
+    domain_cand=$(echo "$API_URL" | sed -E 's~https?://~~; s~/.*~~')
+    [[ -n "$domain_cand" ]] && DOMAIN="$domain_cand"
 fi
 
 find_container() {
@@ -700,7 +739,13 @@ client_secret=$(load_env "ALLEGRO_CLIENT_SECRET")
 
 allegro_status_json=""
 if [[ "$STACK" == "dev" ]]; then
-    allegro_status_json=$(python3 -c "
+    python_bin="python3"
+    if [[ -x "$IQOQO_ROOT/.venv/bin/python3" ]]; then
+        python_bin="$IQOQO_ROOT/.venv/bin/python3"
+    elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
+        python_bin="$IQOQO_ROOT/.venv/bin/python"
+    fi
+    allegro_status_json=$($python_bin -c "
 import urllib.request, json, os, sys
 for p in [${WEB_PORT}, 5000, 5001]:
     try:
@@ -715,11 +760,14 @@ for p in [${WEB_PORT}, 5000, 5001]:
 
 try:
     sys.path.insert(0, '$IQOQO_ROOT')
-    from app.utils.allegro import get_allegro_token_status
-    print(json.dumps(get_allegro_token_status()))
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.allegro import get_allegro_token_status
+        print(json.dumps(get_allegro_token_status()))
 except Exception as e:
     cid = bool('$client_id')
-    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
 else
     web_cname=$(find_container "web")
@@ -738,11 +786,14 @@ except Exception:
 
 try:
     sys.path.insert(0, '/app')
-    from app.utils.allegro import get_allegro_token_status
-    print(json.dumps(get_allegro_token_status()))
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.allegro import get_allegro_token_status
+        print(json.dumps(get_allegro_token_status()))
 except Exception as e:
     cid = bool('$client_id')
-    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed'}))
+    print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
     fi
 fi
@@ -751,7 +802,7 @@ if [[ -z "$allegro_status_json" ]]; then
     if [[ -z "$client_id" || -z "$client_secret" ]]; then
         check "Status" info "not configured (missing credentials in .env)"
     else
-        check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
+        check "Status" warn "probe error (container unreachable or probe failed)"
     fi
 else
     is_configured=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('configured', False))" 2>/dev/null || echo "False")
@@ -760,7 +811,9 @@ else
     token_age=$(echo "$allegro_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('token_age_hours') if d.get('token_age_hours') is not None else '')" 2>/dev/null || echo "")
     reason=$(echo "$allegro_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('reason', ''))" 2>/dev/null || echo "")
 
-    if [[ "$is_configured" != "True" ]]; then
+    if [[ "$reason" == "query_failed" || "$reason" == "probe_error" ]]; then
+        check "Status" warn "probe error (failed to inspect Allegro status)"
+    elif [[ "$is_configured" != "True" || "$reason" == "not_configured" || "$reason" == "missing_credentials" ]]; then
         check "Status" info "not configured (missing credentials in .env or Instance Settings)"
     elif [[ "$is_active" == "True" ]]; then
         if [[ -n "$token_age" ]]; then
@@ -768,13 +821,68 @@ else
         else
             check "Status" pass "active"
         fi
-    elif [[ "$is_expired" == "True" ]]; then
+    elif [[ "$is_expired" == "True" || "$reason" == "expired" || "$reason" == "token_expired" ]]; then
         check "Status" warn "token expired (${token_age:-?}h old, re-authorize in Instance Settings)"
-    elif [[ "$reason" == "oauth_handshake_pending" ]]; then
+    elif [[ "$reason" == "oauth_handshake_pending" || "$reason" == "handshake_pending" ]]; then
         check "Status" warn "configured but not active (OAuth handshake pending in Instance Settings)"
     else
         check "Status" warn "not active (OAuth handshake pending in Instance Settings)"
     fi
+fi
+
+# ─── Linked Open Data & Gazetteer ────────────────────────────────
+header "Linked Open Data & Gazetteer"
+
+geonames_db_path="${GEONAMES_DB_PATH:-$IQOQO_ROOT/data/geonames_cities.db}"
+geonames_count=0
+if [[ "$STACK" == "dev" ]]; then
+    if [[ -f "$geonames_db_path" ]]; then
+        geonames_count=$(python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('$geonames_db_path')
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM cities;')
+    print(cur.fetchone()[0])
+    conn.close()
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    fi
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        geonames_count=$(docker exec "$web_cname" python3 -c "
+import sqlite3, os
+p = os.environ.get('GEONAMES_DB_PATH', '/usr/src/app/data/geonames_cities.db')
+try:
+    conn = sqlite3.connect(p)
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM cities;')
+    print(cur.fetchone()[0])
+    conn.close()
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    elif [[ -f "$geonames_db_path" ]]; then
+        geonames_count=$(python3 -c "
+import sqlite3
+try:
+    conn = sqlite3.connect('$geonames_db_path')
+    cur = conn.cursor()
+    cur.execute('SELECT COUNT(*) FROM cities;')
+    print(cur.fetchone()[0])
+    conn.close()
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+    fi
+fi
+
+if [[ "$geonames_count" -gt 0 ]]; then
+    check "GeoNames Gazetteer" pass "local database ready (${geonames_count} cities)"
+else
+    check "GeoNames Gazetteer" warn "missing or empty (run 'make init-geonames')"
 fi
 
 # ─── Environment Configuration ──────────────────────────────────

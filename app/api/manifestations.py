@@ -29,6 +29,7 @@ import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.core.frbr_service import normalize_authors_list
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -212,7 +213,7 @@ def get_manifestations() -> tuple[Response, int]:
         if m.expression and m.expression.work:
             work = m.expression.work
             work_title = work.title or ""
-            authors = work.meta.get("authors", []) if work.meta else []
+            authors = normalize_authors_list(work.meta.get("authors")) if work.meta else []
 
         user_owns = False
         item_id = None
@@ -297,7 +298,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     if m.expression and m.expression.work:
         work = m.expression.work
         work_title = work.title or ""
-        authors = work.meta.get("authors", []) if work.meta else []
+        authors = normalize_authors_list(work.meta.get("authors")) if work.meta else []
 
     user_owns = False
     item_id: int | None = None
@@ -402,7 +403,8 @@ def get_recent_manifestations() -> tuple[Response, int]:
         for m in recent:
             work = m.expression.work if (m.expression and m.expression.work) else None
             title = work.title if work else (m.meta.get("Title") if m.meta else None)
-            authors: list[str] = work.meta.get("authors", []) if (work and work.meta) else (m.meta.get("Authors", []) if m.meta else [])
+            raw_authors = work.meta.get("authors") if (work and work.meta) else (m.meta.get("Authors") if m.meta else None)
+            authors: list[str] = normalize_authors_list(raw_authors)
             author = authors[0] if authors else None
 
             result.append(
@@ -446,7 +448,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
         work = manifestation.expression.work
         work_metadata = {
             "Title": work.title or "",
-            "Authors": work.meta.get("authors", []) if work.meta else [],
+            "Authors": normalize_authors_list(work.meta.get("authors")) if work.meta else [],
         }
         if work_metadata["Title"]:
             # Read straight from the FRBR hierarchy; do not persist the
@@ -473,7 +475,14 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
         if not work.title:
             metadata = {**metadata, "Title": work.title or metadata.get("Title", "")}
         if not work.meta or not work.meta.get("authors"):
-            metadata = {**metadata, "Authors": work.meta.get("authors", metadata.get("Authors", []))}
+            metadata = {
+                **metadata,
+                "Authors": (
+                    normalize_authors_list(work.meta.get("authors"))
+                    if (work.meta and work.meta.get("authors"))
+                    else metadata.get("Authors", [])
+                ),
+            }
 
     return jsonify(**metadata), 200
 
@@ -502,14 +511,14 @@ def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) ->
             manifestation.expression.work.title = metadata["Title"]
             if not manifestation.expression.work.meta:
                 manifestation.expression.work.meta = {}
-            manifestation.expression.work.meta["authors"] = metadata["Authors"]
+            manifestation.expression.work.meta["authors"] = normalize_authors_list(metadata.get("Authors"))
         db.session.commit()
         return manifestation
 
     from app.core.ingest import _extract_genres
 
     work_genres = _extract_genres(metadata)
-    work_meta: dict[str, object] = {"authors": metadata.get("Authors", [])}
+    work_meta: dict[str, object] = {"authors": normalize_authors_list(metadata.get("Authors"))}
     if work_genres:
         work_meta["genres"] = work_genres
 
@@ -529,7 +538,8 @@ def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) ->
     if not found_cover:
         manifestation.update_meta(cover_status="pending")
         title = work.title or "Unknown"
-        author = work.meta.get("authors", ["Unknown"])[0] if work.meta else "Unknown"
+        work_authors = normalize_authors_list(work.meta.get("authors")) if work.meta else []
+        author = work_authors[0] if work_authors else "Unknown"
         user_id = getattr(g, "user_id", None)
         user_id_str = str(user_id) if user_id else "anonymous"
         user = db.session.get(User, user_id) if user_id else None
@@ -700,7 +710,8 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
 
     work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
     title = work.title if work else "Unknown Title"
-    author = work.meta.get("authors", ["Unknown Author"])[0] if (work and work.meta and work.meta.get("authors")) else "Unknown Author"
+    work_authors = normalize_authors_list(work.meta.get("authors")) if (work and work.meta) else []
+    author = work_authors[0] if work_authors else "Unknown Author"
 
     user_id = getattr(g, "user_id", None)
     user_id_str = str(user_id) if user_id else "anonymous"
@@ -839,7 +850,8 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
 
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
-    author = (work.meta.get("authors") or ["Unknown"])[0] if work and work.meta else "Unknown"
+    work_authors = normalize_authors_list(work.meta.get("authors")) if (work and work.meta) else []
+    author = work_authors[0] if work_authors else "Unknown"
     identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
@@ -892,7 +904,8 @@ def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
 
     work = manif.expression.work if manif.expression else None
     title = work.title if work else "Unknown"
-    author = (work.meta.get("authors") or ["Unknown"])[0] if work and work.meta else "Unknown"
+    work_authors = normalize_authors_list(work.meta.get("authors")) if (work and work.meta) else []
+    author = work_authors[0] if work_authors else "Unknown"
     identifier = manif.resolved_identifier
 
     meta = manif.meta or {}
@@ -1022,8 +1035,21 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
         db.session.delete(manif)
         db.session.commit()
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
-    except (db.exc.SQLAlchemyError, db.exc.DBAPIError):
+    except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
+        err_msg = str(e).lower()
+        if "roadmap_items" in err_msg or "fk_roadmap_items" in err_msg or "foreign key" in err_msg:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": "Manifestation cannot be deleted because it is referenced by a reading roadmap. Remove the roadmap entry first.",
+                        "code": 409,
+                    }
+                ),
+                409,
+            )
         logger.exception("Failed to delete manifestation")
         return jsonify({"success": False, "data": None, "error": "Unable to delete manifestation"}), 500
 
@@ -1085,17 +1111,15 @@ def trigger_manifestation_semantic_relink(manifestation_id: int) -> tuple[Respon
     )
 
 
-@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["PATCH"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
-def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
-    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+def update_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response, int]:
+    """Accept or reject a suggested semantic link associated with a manifestation or its work.
 
-    Requires `write:metadata`: this is a catalog mutation, and a standard user
-    who can reach it can remove links the reconciler established from any
-    manifestation, not only their own.
+    Requires `write:metadata`. Payload must specify `status: 'accepted' | 'rejected'`.
     """
-    from app.db.core import SemanticLink
+    from app.db.core import EntityAuditLog, SemanticLink
 
     manif = db.session.get(Manifestation, manifestation_id)
     if not manif:
@@ -1113,6 +1137,79 @@ def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> t
     if not is_valid_assoc:
         return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
 
+    payload = request.get_json(silent=True) or {}
+    new_status = payload.get("status")
+    if new_status not in ("accepted", "rejected"):
+        return jsonify({"success": False, "data": None, "error": "Invalid status. Must be 'accepted' or 'rejected'"}), 400
+
+    old_status = link.status
+    link.status = new_status
+    if new_status == "accepted":
+        link.verified = True
+
+    actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None
+    audit_entry = EntityAuditLog(
+        entity_type=link.entity_type,
+        entity_id=link.entity_id,
+        actor_id=actor_id,
+        change_type=f"semantic_link_{new_status}",
+        diff={
+            "link_id": link.id,
+            "authority": link.authority,
+            "external_uri": link.external_uri,
+            "old_status": old_status,
+            "new_status": new_status,
+        },
+    )
+    db.session.add(audit_entry)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": link.to_dict(), "error": None}), 200
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/semantic-links/<int:link_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def delete_manifestation_semantic_link(manifestation_id: int, link_id: int) -> tuple[Response | str, int]:
+    """Dismiss or delete an incorrect semantic link associated with a manifestation or its work.
+
+    Requires `write:metadata`: this is a catalog mutation, and a standard user
+    who can reach it can remove links the reconciler established from any
+    manifestation, not only their own.
+    """
+    from app.db.core import EntityAuditLog, SemanticLink
+
+    manif = db.session.get(Manifestation, manifestation_id)
+    if not manif:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    link = db.session.get(SemanticLink, link_id)
+    if not link:
+        return jsonify({"success": False, "data": None, "error": "Semantic link not found"}), 404
+
+    work_id = manif.expression.work_id if manif.expression else None
+    is_valid_assoc = (link.entity_type == "manifestation" and link.entity_id == manifestation_id) or (
+        link.entity_type == "work" and work_id is not None and link.entity_id == work_id
+    )
+
+    if not is_valid_assoc:
+        return jsonify({"success": False, "data": None, "error": "Link does not belong to this entity"}), 400
+
+    actor_id = getattr(g, "current_user", None).id if hasattr(g, "current_user") and g.current_user else None
+    audit_entry = EntityAuditLog(
+        entity_type=link.entity_type,
+        entity_id=link.entity_id,
+        actor_id=actor_id,
+        change_type="semantic_link_deleted",
+        diff={
+            "link_id": link.id,
+            "authority": link.authority,
+            "external_uri": link.external_uri,
+            "old_status": link.status,
+            "new_status": "deleted",
+        },
+    )
+    db.session.add(audit_entry)
     db.session.delete(link)
     db.session.commit()
     return "", 204

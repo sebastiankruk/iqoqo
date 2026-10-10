@@ -45,6 +45,42 @@
 # because they were unreachable (no beat-schedule entry, and `/data/backups` was
 # never mounted), so off-site archiving runs here and only here.
 #
+# Retention is deliberately not handled on the host: nothing here prunes old
+# archives. Retention is delegated to S3-side lifecycle rules after migration.
+#
+# ── Execution Locking & Retry Configuration ───────────────────────────────
+#
+#   BACKUP_LOCK_FILE        Lock file path (default: /tmp/iqoqo_backup.lock)
+#   BACKUP_LOCK_TIMEOUT     Wait ceiling in seconds before giving up with exit 2
+#                           (default: 1800). This is a wait ceiling, NOT a
+#                           stale-lock age. The kernel frees flock on exit.
+#   BACKUP_RETRY_ATTEMPTS   Database pre-flight connection attempts (default: 3)
+#   BACKUP_RETRY_DELAY_BASE Base delay for exponential backoff in seconds (default: 5)
+#
+# Exit codes:
+#   0   Success
+#   1   General error (pre-flight failure, upload error, empty dump, config)
+#   2   Lock contention (acquisition timed out while another backup was running)
+#
+# ── Troubleshooting ────────────────────────────────────────────────────────
+#
+#   Exit code 2 (Lock Contention):
+#     Another backup process is actively executing and holds the file lock.
+#     The wait ceiling (`BACKUP_LOCK_TIMEOUT`) expired. Never delete or unlink
+#     the lock file — flock is released automatically by the kernel when the
+#     holder process terminates or dies (even on SIGKILL).
+#
+#   Exit code 1 (Permanent vs Transient Failures):
+#     - Permanent failures (e.g. PostgreSQL user/role does not exist in pg_roles,
+#       password authentication failure): Fail immediately with no retries.
+#       Check `POSTGRES_USER` in `.env`.
+#     - Transient failures (e.g. database container starting up, connection refused):
+#       Retried up to `BACKUP_RETRY_ATTEMPTS` times with exponential backoff
+#       (5s, 10s, 20s by default).
+#     - Empty dump guard: An empty pg_dumpall output fails immediately without
+#       retry to avoid uploading empty archives.
+#
+#
 # The asymmetry with the container is deliberate, not an oversight. In-container
 # code reads S3 credentials from the environment via app/core/s3_service.py,
 # because a plaintext rclone.conf bind-mounted next to a process that parses
@@ -52,6 +88,21 @@
 # the operator created the config and administers it.
 
 set -euo pipefail
+
+START_TIME=$(date +%s)
+
+# Helper function for ISO 8601 timestamped logging
+log() {
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "[${ts}] $*"
+}
+
+log_err() {
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "[${ts}] $*" >&2
+}
 
 # MOD-OPS-11: backups contain a full pg_dumpall of the instance database, which
 # includes user rows, password hashes and API tokens. Restrict every file this
@@ -61,16 +112,68 @@ set -euo pipefail
 # directory, so it must be set here at initialisation.
 umask 077
 
+ORIG_POSTGRES_USER="${POSTGRES_USER:-}"
 if [ -f "$(dirname "$0")/../.env" ]; then
     set -a
     # shellcheck disable=SC1091
     source "$(dirname "$0")/../.env"
     set +a
 fi
+if [ -n "${ORIG_POSTGRES_USER}" ]; then
+    POSTGRES_USER="${ORIG_POSTGRES_USER}"
+fi
+
+BACKUP_LOCK_FILE="${BACKUP_LOCK_FILE:-/tmp/iqoqo_backup.lock}"
+BACKUP_LOCK_TIMEOUT="${BACKUP_LOCK_TIMEOUT:-1800}"
+BACKUP_RETRY_ATTEMPTS="${BACKUP_RETRY_ATTEMPTS:-3}"
+BACKUP_RETRY_DELAY_BASE="${BACKUP_RETRY_DELAY_BASE:-5}"
+EFFECTIVE_PG_USER="${POSTGRES_USER:-iqoqo}"
+
+# Acquire execution lock using bounded blocking flock
+mkdir -p "$(dirname "${BACKUP_LOCK_FILE}")"
+exec 9>"${BACKUP_LOCK_FILE}"
+chmod 0600 "${BACKUP_LOCK_FILE}" 2>/dev/null || true
+
+if command -v flock >/dev/null 2>&1; then
+    if ! flock -w "${BACKUP_LOCK_TIMEOUT}" 9; then
+        log_err "❌ Error: Could not acquire backup lock on ${BACKUP_LOCK_FILE} within ${BACKUP_LOCK_TIMEOUT}s. Another backup is currently running."
+        exit 2
+    fi
+fi
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/tmp/iqoqo_backup_${TIMESTAMP}"
 ARCHIVE="${BACKUP_DIR}.tar.gz"
+DEST_DESC=""
+upload_ok=false
+
+cleanup() {
+    local exit_code=$?
+    exec 9>&- 2>/dev/null || true
+    if [ "${upload_ok:-false}" = true ]; then
+        rm -rf "${BACKUP_DIR:-}" "${ARCHIVE:-}" 2>/dev/null || true
+    else
+        rm -rf "${BACKUP_DIR:-}" 2>/dev/null || true
+    fi
+    if [ -n "${START_TIME:-}" ]; then
+        local end_time duration
+        end_time=$(date +%s)
+        duration=$(( end_time - START_TIME ))
+        if [ "${exit_code}" -eq 0 ]; then
+            local archive_size="unknown"
+            if [ -n "${ARCHIVE:-}" ] && [ -f "${ARCHIVE}" ]; then
+                archive_size=$(du -h "${ARCHIVE}" 2>/dev/null | cut -f1 || echo "unknown")
+            fi
+            log "📋 Execution summary: SUCCESS | Destination: ${DEST_DESC:-${BACKEND:-unknown}} | Duration: ${duration}s | Archive size: ${archive_size}"
+        elif [ "${exit_code}" -eq 2 ]; then
+            log "📋 Execution summary: LOCK_CONTENTION | Duration: ${duration}s"
+        else
+            log_err "📋 Execution summary: FAILED (exit ${exit_code}) | Destination: ${DEST_DESC:-${BACKEND:-unknown}} | Duration: ${duration}s"
+        fi
+    fi
+    exit "${exit_code}"
+}
+trap cleanup EXIT INT TERM
 
 # ── Backend selection ───────────────────────────────────────────────────────
 #
@@ -196,9 +299,84 @@ case "${BACKEND}" in
 esac
 
 case "${BACKEND}" in
-    rclone) echo "🗄️  Starting iQoQo backup (backend: rclone, target: ${RCLONE_TARGET})..." ;;
-    s3)     echo "🗄️  Starting iQoQo backup (backend: s3, bucket: ${S3_BUCKET_BACKUP}, prefix: ${S3_KEY_PREFIX:-<root>})..." ;;
+    rclone)
+        DEST_DESC="${RCLONE_TARGET}"
+        log "Resolved backend: rclone (remote: ${RCLONE_TARGET})"
+        echo "🗄️  Starting iQoQo backup (backend: rclone, target: ${RCLONE_TARGET})..."
+        ;;
+    s3)
+        DEST_DESC="${S3_BUCKET_BACKUP}/${S3_KEY_PREFIX}"
+        log "Resolved backend: s3 (bucket: ${S3_BUCKET_BACKUP}, prefix: ${S3_KEY_PREFIX:-<root>})"
+        echo "🗄️  Starting iQoQo backup (backend: s3, bucket: ${S3_BUCKET_BACKUP}, prefix: ${S3_KEY_PREFIX:-<root>})..."
+        ;;
 esac
+
+# ── Database Pre-flight Checks & Resilience ────────────────────────────────
+resolve_db_cmd() {
+    local cname
+    cname=$(docker ps --filter "name=iqoqo-db" --filter "status=running" --format "{{.Names}}" 2>/dev/null | head -1)
+    if [ -n "${cname}" ]; then
+        DB_EXEC="docker exec -i ${cname} sh -c"
+    else
+        local compose_spec="${COMPOSE_FILE:-docker-compose.yml}"
+        DB_EXEC="docker compose -f ${compose_spec} exec -T db sh -c"
+    fi
+}
+
+perform_db_preflight() {
+    local attempt=1
+    local delay="${BACKUP_RETRY_DELAY_BASE}"
+    local max_attempts="${BACKUP_RETRY_ATTEMPTS}"
+
+    while [ "${attempt}" -le "${max_attempts}" ]; do
+        resolve_db_cmd
+        log "🔍 Verifying database connectivity and role '${EFFECTIVE_PG_USER}' (attempt ${attempt}/${max_attempts})..."
+
+        local conn_output
+        local conn_status=0
+        conn_output=$(${DB_EXEC} "PGHOST=/var/run/postgresql psql -U '${EFFECTIVE_PG_USER}' -d postgres -t -A -c 'SELECT 1;'" 2>&1) || conn_status=$?
+
+        # Check for permanent errors (auth failure or role missing from error string)
+        if [[ "${conn_output}" =~ (role.*does\ not\ exist|password\ authentication\ failed|FATAL:.*authentication\ failed) ]]; then
+            log_err "❌ Permanent error: Database authentication or role failure for user '${EFFECTIVE_PG_USER}': ${conn_output}"
+            log_err "   (Effective POSTGRES_USER='${EFFECTIVE_PG_USER}')"
+            return 1
+        fi
+
+        if [ "${conn_status}" -eq 0 ]; then
+            local role_count
+            role_count=$(${DB_EXEC} "PGHOST=/var/run/postgresql psql -U '${EFFECTIVE_PG_USER}' -d postgres -t -A -c \"SELECT count(*) FROM pg_roles WHERE rolname = '${EFFECTIVE_PG_USER}';\"" 2>&1 || true)
+            role_count=$(echo "${role_count}" | tr -d '[:space:]')
+            if [ "${role_count}" = "0" ]; then
+                log_err "❌ Permanent error: PostgreSQL role '${EFFECTIVE_PG_USER}' does not exist in pg_roles."
+                log_err "   (Effective POSTGRES_USER='${EFFECTIVE_PG_USER}')"
+                return 1
+            fi
+
+            log "✅ Database pre-flight check passed (role '${EFFECTIVE_PG_USER}' verified)"
+            return 0
+        fi
+
+        # Transient failure: retry if attempts remain
+        if [ "${attempt}" -lt "${max_attempts}" ]; then
+            log "⚠️  Database connection attempt ${attempt}/${max_attempts} failed: ${conn_output}"
+            log "⏳ Retrying in ${delay}s..."
+            sleep "${delay}"
+            delay=$(( delay * 2 ))
+            attempt=$(( attempt + 1 ))
+        else
+            log_err "❌ Error: Database pre-flight connectivity checks failed after ${max_attempts} attempts: ${conn_output}"
+            return 1
+        fi
+    done
+
+    return 1
+}
+
+if ! perform_db_preflight; then
+    exit 1
+fi
+
 mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump PostgreSQL
@@ -208,12 +386,12 @@ DB_CONTAINER=$(docker ps --filter "name=iqoqo-db" --filter "status=running" --fo
 if [ -n "${DB_CONTAINER}" ]; then
     echo "📊 Using database container: ${DB_CONTAINER}"
     # Explicitly set PGHOST to ensure connection inside container, not to host PostgreSQL
-    docker exec -i "${DB_CONTAINER}" sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${POSTGRES_USER:-iqoqo}'" > "${DB_DUMP_FILE}"
+    docker exec -i "${DB_CONTAINER}" sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${EFFECTIVE_PG_USER}'" > "${DB_DUMP_FILE}"
 else
     echo "⚠️  No running iqoqo-db container found, falling back to docker compose"
     COMPOSE_SPEC="${COMPOSE_FILE:-docker-compose.yml}"
     docker compose -f "${COMPOSE_SPEC}" exec -T db \
-        sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${POSTGRES_USER:-iqoqo}'" \
+        sh -c "PGHOST=/var/run/postgresql pg_dumpall -c -U '${EFFECTIVE_PG_USER}'" \
         > "${DB_DUMP_FILE}"
 fi
 

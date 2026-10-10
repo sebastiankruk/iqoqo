@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status mykg-scope mykg-update mykg-index mykg-status mykg-retry mykg-probe mykg-ask graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology lint-shell validate-nginx validate-openspec
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -62,8 +62,10 @@ ifeq ($(MODE),prod)
   USE_DOCKER ?= true
 endif
 
-PREVIEW_DIR      ?= /opt/pre.iqoqo
-PREVIEW_ENV_FILE ?= $(PREVIEW_DIR)/.env
+DEPLOY_DIR       ?= /opt/pre.iqoqo
+PREVIEW_DIR      ?= $(DEPLOY_DIR)
+DEPLOY_ENV_FILE  ?= $(DEPLOY_DIR)/.env
+PREVIEW_ENV_FILE ?= $(DEPLOY_ENV_FILE)
 
 
 # When adding a Make target that writes files inside a Docker container, ensure
@@ -173,15 +175,14 @@ help:
 	@echo "  audit-frbr        - Run FRBR database integrity audit (USE_DOCKER=true for production, supports ARGS=\"--json --verbose\")"
 	@echo "  etl-frbr          - Run FRBR ETL strict cleanup (USE_DOCKER=true for production, supports ARGS=\"--dry-run --verbose\")"
 	@echo "  sync-ontology     - Check ontology sync with DB models (USE_DOCKER=true for production)"
+	@echo "  init-geonames     - Initialize local offline GeoNames cities database (supports ARGS=\"--force\")"
+	@echo "  geonames-sync     - Force redownload and sync local GeoNames database"
 	@echo ""
 	@echo "Knowledge Sync:"
 	@echo "  knowledge-sync      - Fast memory sync: session + graphify/codegraph (parallel, <45s)"
-	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index + mykg-update"
+	@echo "  knowledge-sync-full - Full memory sync: fast sync + mempalace-index"
 	@echo ""
 	@echo "  memory-presync      - Sync agy session transcripts to .context/ai-memory/ (jsonl->md)"
-	@echo "  mykg-ask            - Query latest myKG knowledge graph: make mykg-ask Q=\"...\""
-	@echo "  mykg-retry          - Re-queue tasks whose myKG inference failed (ARGS=\"--dry-run\" to inspect)"
-	@echo "  mykg-probe          - Test opencode models in the sandbox, no mykg state touched (ARGS=\"<model>\")"
 
 # Versioning targets
 sync-version: .venv/bin/activate
@@ -213,78 +214,6 @@ codegraph-index:
 codegraph-status:
 	@codegraph status
 
-# myKG targets
-MYKG_DEFAULT_MODEL ?= gemini-3.8-flash-low
-MYKG_DEFAULT_EFFORT ?= low
-AI_AGENT ?= agy
-AGY_DEFAULT_MODEL ?= gemini-3.8-flash-low
-AGY_DEFAULT_EFFORT ?= low
-# Keep this on a model that actually exists in the registry — the previous
-# pin (opencode/mimo-v2.5-free) was retired and made every opencode mykg run
-# fail. The daemon degrades the effort->variant mapping per model.
-OPENCODE_DEFAULT_MODEL ?= opencode-go/space-bunny-free
-OPENCODE_DEFAULT_EFFORT ?= low
-AI_EFFECTIVE_MODEL = $(if $(MODEL),$(MODEL),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_MODEL),$(OPENCODE_DEFAULT_MODEL)))
-AI_EFFECTIVE_EFFORT = $(if $(EFFORT),$(EFFORT),$(if $(filter agy,$(AI_AGENT)),$(AGY_DEFAULT_EFFORT),$(OPENCODE_DEFAULT_EFFORT)))
-AI_PROFILE = $(if $(filter opencode,$(AI_AGENT)),agent-opencode,agent-claude-code)
-ifeq ($(filter agy opencode,$(AI_AGENT)),)
-$(error Invalid AI_AGENT '$(AI_AGENT)'. Valid options: agy, opencode)
-endif
-
-mykg-scope: .venv/bin/activate
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/scan_scope.py
-
-# MOD-OPS-04: the sandbox lifecycle and agent-daemon wiring used to live inline
-# in these two recipes -- ~45 lines of backslash-continued shell each, duplicated
-# between the targets. A single missing continuation silently split a command in
-# two, and nothing could be shellchecked or unit-tested. Both targets now delegate
-# to scripts/mykg_sync.sh, which owns the cleanup trap and agent selection.
-mykg-update: .venv/bin/activate
-	$(AI_ECHO) "Running autonomous mykg update with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@AI_AGENT="$(AI_AGENT)" \
-	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-	MYKG_PROFILE="$(AI_PROFILE)" \
-	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
-	bash scripts/mykg_sync.sh update $(if $(ARGS),$(ARGS),)
-
-mykg-index: .venv/bin/activate
-	$(AI_ECHO) "Running full mykg index with Docker sandbox (AI_AGENT=$(AI_AGENT), MODEL=$(AI_EFFECTIVE_MODEL), EFFORT=$(AI_EFFECTIVE_EFFORT))..."
-	@AI_AGENT="$(AI_AGENT)" \
-	MYKG_MODEL="$(AI_EFFECTIVE_MODEL)" \
-	MYKG_EFFORT="$(AI_EFFECTIVE_EFFORT)" \
-	MYKG_PROFILE="$(AI_PROFILE)" \
-	VENV_PYTHON="$(CURDIR)/.venv/bin/python" \
-	bash scripts/mykg_sync.sh index $(if $(ARGS),$(ARGS),)
-
-mykg-status: .venv/bin/activate
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/get_status.py
-
-# Re-queue tasks whose inference failed. An .error envelope is treated as
-# terminal by is_task_done() and is never overwritten, so a single failed run
-# permanently drops those extractions from the graph while the run still
-# reports success. This clears the marker (quarantined, not deleted) so the
-# next run retries them. ARGS="--dry-run" to inspect without changing state.
-mykg-retry: .venv/bin/activate
-	$(AI_ECHO) "Re-queueing failed mykg agent tasks (ARGS=$(ARGS))..."
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/retry_failed.py $(ARGS)
-
-# Test opencode model calls inside the AI sandbox WITHOUT touching mykg state.
-# Every failed mykg task writes a terminal .error envelope, so `make
-# mykg-update` is the wrong place to find out whether a model works — it
-# poisons real extraction work. ARGS="opencode-go/glm-5.3" to probe one model.
-# Makes real (billed) API calls that are visible on the opencode.ai side.
-mykg-probe:
-	$(AI_ECHO) "Probing opencode harness in the sandbox (no mykg state touched)..."
-	@bash scripts/probe_opencode_harness.sh $(ARGS)
-
-mykg-ask: .venv/bin/activate
-	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make mykg-ask Q=\"<question>\""; \
-		exit 1; \
-	fi
-	@.venv/bin/python .agents/skills/iqoqo-mykg/scripts/ask.py "$(Q)"
-
 # Graphify targets
 graphify-update: .venv/bin/activate
 	$(AI_ECHO) "Running autonomous graphify update..."
@@ -299,26 +228,23 @@ graphify-status: .venv/bin/activate
 
 # Session sync: converts agy JSONL transcripts to Markdown before knowledge tools mine them.
 # Single-loop: scans brain dirs, filters to VERSION-matching sessions only, converts to MD.
-# Also auto-patches .iqoqo-mykg-scope.yaml so the ai-memory version pin stays current.
 # No external tools required — script lives in scripts/sync_agy_memory.sh.
 memory-presync:
 	$(AI_ECHO) "Syncing agy session transcripts → .context/ai-memory/$(IQOQO_VERSION)..."
 	@bash scripts/sync_agy_memory.sh $(IQOQO_VERSION)
-	$(AI_ECHO) "Patching .iqoqo-mykg-scope.yaml ai-memory version → $(IQOQO_VERSION)..."
-	@sed -i 's|\.context/ai-memory/[0-9][0-9.]*|.context/ai-memory/$(IQOQO_VERSION)|g' .iqoqo-mykg-scope.yaml
 
 # Fast knowledge sync: session presync followed by fast local engines only (<45s, 0 LLM tokens).
 # Safe to run automatically during interactive sessions and post-commit hooks.
 knowledge-sync: memory-presync
 	$(AI_ECHO) "Syncing fast knowledge engines in parallel (CodeGraph + Graphify)..."
 	@$(MAKE) -j2 codegraph-sync graphify-update
-	$(AI_ECHO) "Fast knowledge sync complete. (Full MemPalace & myKG sync available via 'make knowledge-sync-full')."
+	$(AI_ECHO) "Fast knowledge sync complete. (Full MemPalace sync available via 'make knowledge-sync-full')."
 
-# Full knowledge sync: fast sync followed by heavy MemPalace (~15 min hallway walk) and myKG LLM daemon.
+# Full knowledge sync: fast sync followed by the heavy MemPalace index (~15 min hallway walk).
 # For scheduled release CI or manual off-peak execution. Strictly prohibited from automated session calls.
 knowledge-sync-full: knowledge-sync
-	$(AI_ECHO) "Running heavy knowledge engines in parallel (MemPalace + myKG)..."
-	@$(MAKE) -j2 mempalace-index mykg-update
+	$(AI_ECHO) "Running the heavy MemPalace knowledge engine..."
+	@$(MAKE) mempalace-index
 	$(AI_ECHO) "All knowledge engines fully synced."
 
 
@@ -411,16 +337,27 @@ start:
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 endif
 
-preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local preview images
+preview-up: ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
-	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
-		python3 scripts/ensure_env_secrets.py --env-file $(PREVIEW_ENV_FILE); \
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/sync_deploy_dir.py ]; then \
+		python3 scripts/sync_deploy_dir.py $(CURDIR) $(DEPLOY_DIR); \
 	fi
-	@set -a; . $(PREVIEW_ENV_FILE); set +a; \
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/pre_deploy_mounts.py ]; then \
+		python3 scripts/pre_deploy_mounts.py $(DEPLOY_DIR); \
+	fi
+	@mkdir -p $(DEPLOY_DIR)/data
+	@if [ -f data/geonames_cities.db ] && [ ! -f $(DEPLOY_DIR)/data/geonames_cities.db ]; then \
+		cp -f data/geonames_cities.db $(DEPLOY_DIR)/data/geonames_cities.db 2>/dev/null || true; \
+	fi
+	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file $(DEPLOY_ENV_FILE); \
+	fi
+	@if [ -f $(DEPLOY_ENV_FILE) ]; then chmod 0600 $(DEPLOY_ENV_FILE) 2>/dev/null || true; fi
+	@set -a; . $(DEPLOY_ENV_FILE); set +a; \
 	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
-		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
 	 fi; \
-	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(PREVIEW_ENV_FILE))"; \
+	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(DEPLOY_ENV_FILE))"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
 	 rum_site="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_SITE=//p')"; \
 	 rum_insecure="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_INSECURE_HTTP=//p')"; \
@@ -431,10 +368,10 @@ preview-up: ## Start preview stack in PREVIEW_DIR (/opt/pre.iqoqo) using local p
 	 else \
 		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
 	 fi; \
-	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml up -d
 
-preview-down: ## Stop preview stack in PREVIEW_DIR (/opt/pre.iqoqo) cleanly
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(PREVIEW_DIR) --env-file $(PREVIEW_ENV_FILE) -f docker-compose.prebuilt.yml down
+preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
+	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml down
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -477,14 +414,30 @@ validate-release: ## Validate release invariants (versions, CHANGELOG, image siz
 
 STATUS_STACK = $(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(filter dev,$(MAKECMDGOALS)),dev,$(if $(STACK),$(STACK),$(if $(STAGE),$(STAGE),$(MODE))))))
 STATUS_PROJECT = $(if $(filter preview,$(STATUS_STACK)),iqoqo-preview,$(COMPOSE_PROJECT))
-STATUS_ENV_FILE = $(if $(filter preview,$(STATUS_STACK)),.env.preview,$(if $(filter prod,$(STATUS_STACK)),$(if $(wildcard .env.prod),.env.prod,.env),$(COMPOSE_ENV_FILE)))
+STATUS_ENV_FILE = $(if $(filter preview,$(STATUS_STACK)),$(DEPLOY_ENV_FILE),$(if $(filter prod,$(STATUS_STACK)),$(if $(wildcard .env.prod),.env.prod,.env),$(COMPOSE_ENV_FILE)))
+
+deploy-validate: ## Validate deployment directory against contract (usage: make deploy-validate [DIR=/opt/pre.iqoqo])
+	@python3 scripts/validate_deploy_dir.py $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-sync: ## Synchronize runtime files into deployment directory (usage: make deploy-sync [DIR=/opt/pre.iqoqo])
+	@python3 scripts/sync_deploy_dir.py $(CURDIR) $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-verify: ## Verify deployment directory against manifest (usage: make deploy-verify [DIR=/opt/pre.iqoqo])
+	@python3 scripts/sync_deploy_dir.py --verify $(or $(DIR),$(DEPLOY_DIR))
+
+deploy-maintain: ## Inspect debris and secret snapshots in deployment directory (usage: make deploy-maintain [DIR=/opt/pre.iqoqo] [ARGS="--prune"])
+	@python3 scripts/maintain_deploy_dir.py $(or $(DIR),$(DEPLOY_DIR)) $(ARGS)
 
 status: ## Show health status of all iQoQo services
 	@set -euo pipefail; \
 		status_root="$(CURDIR)"; \
 		status_stack="$(STATUS_STACK)"; \
+		deploy_arg=""; \
+		if [[ "$$status_stack" == "preview" ]]; then \
+			deploy_arg="--deploy-dir $(DEPLOY_DIR)"; \
+		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack"; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg; \
 		else \
 			tmpdir=$$(mktemp -d); \
 			tmp_container=""; \
@@ -998,4 +951,24 @@ sync-ontology: ## Strict ontology contract check (USE_DOCKER=true for production
 		export REDIS_URL=$$(echo "$$REDIS_URL" | sed "s/:\/\/redis:6379/:\/\/localhost:$${REDIS_PORT:-6379}/" | sed "s/:\/\/redis/:\/\/localhost/"); \
 		$(PYTHON_CMD) scripts/sync_ontology.py --check $(ARGS); \
 	fi
+
+init-geonames: ## Initialize local offline GeoNames cities database (supports GEONAMES_DB_PATH, ARGS="--force", supports preview|prod)
+	@echo "Initializing local GeoNames cities database ($(MODE))..."
+	@if [ "$(USE_DOCKER)" = "true" ]; then \
+		cname=$$(docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) ps -q web 2>/dev/null || docker ps -q --filter "name=$(COMPOSE_PROJECT).*web" | head -1); \
+		if [ -n "$$cname" ]; then \
+			docker exec -i "$$cname" python3 - $(ARGS) < scripts/init_geonames_db.py; \
+		else \
+			ENV_FILE=$(COMPOSE_ENV_FILE) docker compose -p $(COMPOSE_PROJECT) -f $(COMPOSE_FILE) --env-file $(COMPOSE_ENV_FILE) run --rm -T web python3 - $(ARGS) < scripts/init_geonames_db.py; \
+		fi; \
+	else \
+		$(PYTHON_CMD) scripts/init_geonames_db.py $(ARGS); \
+		if [ -d "$(PREVIEW_DIR)/data" ] && [ -w "$(PREVIEW_DIR)/data" ]; then \
+			cp -f data/geonames_cities.db "$(PREVIEW_DIR)/data/geonames_cities.db" 2>/dev/null || true; \
+		fi; \
+	fi
+
+geonames-sync: ## Force re-download and sync local GeoNames database (supports preview|prod)
+	@$(MAKE) init-geonames ARGS="--force" MODE="$(MODE)" USE_DOCKER="$(USE_DOCKER)"
+
 

@@ -496,21 +496,24 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg">
-        <Select
-          value={activeTab}
-          onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
-        >
-          <SelectTrigger className="w-[200px] bg-background">
-            <SelectValue placeholder="Select level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="work">Work (F1)</SelectItem>
-            <SelectItem value="expression">Expression (F2)</SelectItem>
-            <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
-            <SelectItem value="items">Items (F5)</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex w-full items-center justify-between border-b border-border bg-card pb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Entity Level:</span>
+          <Select
+            value={activeTab}
+            onValueChange={(value: "work" | "expression" | "manifestation" | "items") => setActiveTab(value)}
+          >
+            <SelectTrigger className="w-[200px] bg-background">
+              <SelectValue placeholder="Select level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="work">Work (F1)</SelectItem>
+              <SelectItem value="expression">Expression (F2)</SelectItem>
+              <SelectItem value="manifestation">Manifestation (F3)</SelectItem>
+              <SelectItem value="items">Items (F5)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {onClose && (
           <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />

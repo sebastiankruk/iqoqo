@@ -108,7 +108,8 @@
     "no_email": "Konto Google nie ma przypisanego adresu e-mail.",
     "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
     "jwt_generation_failed": "Tworzenie sesji nie powiodło się. Spróbuj ponownie.",
-    "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie."
+    "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie.",
+    "oauth_not_configured": "Logowanie przez Google nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło."
   },
   "Register": {
     "title": "Utwórz konto",
@@ -468,6 +469,15 @@
       "lookupTimedOut": "Upłynął limit czasu wyszukiwania. Przejście do ręcznego wprowadzania.",
       "lookupFailed": "Nie udało się znaleźć tej pozycji. Spróbuj ponownie.",
       "cameraUnavailable": "Aparat jest niedostępny"
+    },
+    "manualEntry": {
+      "title": "Ręczne dodawanie pozycji",
+      "chooseFromPhotos": "Wybierz ze zdjęć",
+      "takePhoto": "Zrób zdjęcie",
+      "changeImage": "Zmień",
+      "removeImage": "Usuń",
+      "manualCoverUpload": "Ręczne dodawanie okładki",
+      "coverPreview": "Podgląd okładki"
     }
   },
   "SemanticLinks": {

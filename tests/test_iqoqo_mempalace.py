@@ -49,9 +49,8 @@ def mempalace_mine_module():
     return _load_module("iqoqo_mempalace_run_mine", script_path)
 
 
-def test_should_exclude_ignores_sessions_and_covers(mempalace_scan_module):
-    """Test should_exclude filters session caches and static image covers."""
-    assert mempalace_scan_module.should_exclude("/path/to/.mykg_sessions/file.json")
+def test_should_exclude_ignores_covers_and_caches(mempalace_scan_module):
+    """Test should_exclude filters static image covers and dependency caches."""
     assert mempalace_scan_module.should_exclude("app/static/covers/cover_123.jpg")
     assert mempalace_scan_module.should_exclude("frontend/node_modules/react/index.js")
     assert mempalace_scan_module.should_exclude(".venv/lib/python3.14/site-packages/flask")
@@ -71,10 +70,9 @@ def test_resolve_scopes_identifies_codebase(mempalace_scan_module):
     assert any(f.startswith("frontend/") for f in all_files)
     assert any(f.startswith("openspec/specs/") or f.startswith("openspec/") for f in all_files)
 
-    # Verify no .mykg_sessions or static/covers in project scope file lists
+    # Verify no static/covers in project scope file lists
     for scope in project_scopes:
         for f in scope.get("files", []):
-            assert ".mykg_sessions" not in f
             assert "app/static/covers" not in f
 
 

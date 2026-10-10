@@ -17,8 +17,11 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import RegisterPage from "@/app/register/page";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useAuthProviders } from "@/hooks/use-auth-providers";
 
-// Rely on global mock from vitest.setup.ts
+vi.mock("@/hooks/use-auth-providers", () => ({
+  useAuthProviders: vi.fn(),
+}));
 
 /**
  * Creates a test query client with retries disabled.
@@ -48,6 +51,26 @@ describe("RegisterPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
+    vi.mocked(useAuthProviders).mockReturnValue({
+      data: { google: true },
+      isLoading: false,
+      isSuccess: true,
+    } as any);
+  });
+
+  it("renders Google sign up button when Google is enabled", () => {
+    renderWithQueryClient(<RegisterPage />);
+    expect(screen.getByRole("button", { name: /Sign up with Google/i })).toBeInTheDocument();
+  });
+
+  it("suppresses Google sign up button when Google is disabled", () => {
+    vi.mocked(useAuthProviders).mockReturnValue({
+      data: { google: false },
+      isLoading: false,
+      isSuccess: true,
+    } as any);
+    renderWithQueryClient(<RegisterPage />);
+    expect(screen.queryByRole("button", { name: /Sign up with Google/i })).not.toBeInTheDocument();
   });
 
   it("disables submit button until terms are accepted", () => {

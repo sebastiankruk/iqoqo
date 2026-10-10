@@ -620,6 +620,31 @@ export async function getLodStats(): Promise<LODStats> {
   return res.data.data;
 }
 
+export interface LODCleanupResult {
+  dry_run: boolean;
+  total_evaluated: number;
+  demoted: number;
+  rejected: number;
+  unchanged: number;
+  sample_demotions?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Trigger dry-run or applied cleanup of low-confidence LOD links.
+ *
+ * @param dryRun - Whether to evaluate without committing changes (default true)
+ * @returns Result summary of evaluated, demoted, and unchanged links
+ */
+export async function triggerLodCleanup(dryRun = true): Promise<LODCleanupResult> {
+  const res = await apiClient.post<ApiResponse<LODCleanupResult>>("/v1/admin/lod/cleanup", {
+    dry_run: dryRun,
+  });
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to trigger LOD cleanup");
+  }
+  return res.data.data;
+}
+
 /**
  * Retrieve the currently executing batch LOD reconciliation task, or null.
  *
@@ -659,7 +684,7 @@ export async function cancelLodTask(taskId?: string | null): Promise<{ task_id: 
 // --- Duplicate Detection ---
 
 /** Entity tier a duplicate candidate belongs to. */
-export type DuplicateEntityTier = "work" | "manifestation";
+export type DuplicateEntityTier = "work" | "expression" | "manifestation";
 
 /** Lifecycle status of a duplicate candidate. */
 export type DuplicateCandidateStatus = "pending" | "merged" | "dismissed";
@@ -687,6 +712,20 @@ export interface DuplicateWorkSide {
   expression_count: number;
   genres: string | string[] | null;
   description_present: boolean;
+}
+
+/**
+ * One side of an Expression duplicate, as rendered by the review comparison table.
+ */
+export interface DuplicateExpressionSide {
+  tier: "expression";
+  id: number;
+  label: string | null;
+  language: string | null;
+  content_type: string | null;
+  manifestation_count: number;
+  creators: string[];
+  cover_url?: string | null;
 }
 
 /**
@@ -718,7 +757,7 @@ export interface DuplicateManifestationSide {
 }
 
 /** Either side of a candidate, discriminated by the entity tier it came from. */
-export type DuplicateSide = DuplicateWorkSide | DuplicateManifestationSide;
+export type DuplicateSide = DuplicateWorkSide | DuplicateExpressionSide | DuplicateManifestationSide;
 
 /** A queued duplicate pair awaiting administrative review. */
 export interface DuplicateCandidate {
@@ -753,6 +792,7 @@ export interface DuplicateDetectionReport {
   already_known: number;
   created: number;
   work_candidates: number;
+  expression_candidates: number;
   manifestation_candidates: number;
 }
 
@@ -849,6 +889,140 @@ export async function runDuplicateScan(params?: {
   const res = await apiClient.post<ApiResponse<DuplicateDetectionReport>>("/v1/admin/duplicates/scan", params ?? {});
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to run duplicate scan");
+  }
+  return res.data.data;
+}
+
+export interface OwnershipAccount {
+  id: string;
+  email: string;
+  username?: string;
+  display_name?: string;
+  is_active: boolean;
+}
+
+export interface OwnershipSourceItem {
+  id: number;
+  title: string;
+  format?: string | null;
+  is_hidden: boolean;
+  collection_status?: string | null;
+  cover_url?: string | null;
+}
+
+export interface OwnershipPreviewResponse {
+  source: {
+    id: string;
+    username: string;
+    display_name: string;
+  };
+  target: {
+    id: string;
+    username: string;
+    display_name: string;
+  };
+  mode: "single" | "selected" | "all";
+  item_ids: number[];
+  total_count: number;
+  hidden_count: number;
+  lent_count: number;
+  fingerprint: string;
+}
+
+export interface OwnershipReassignResult {
+  success: boolean;
+  transferred_count: number;
+  source_id: string;
+  target_id: string;
+  mode: string;
+}
+
+/**
+ * Fetch candidate user accounts for ownership reassignment.
+ *
+ * @returns List of active and inactive user accounts.
+ */
+export async function getOwnershipAccounts(): Promise<OwnershipAccount[]> {
+  const res = await apiClient.get<ApiResponse<OwnershipAccount[]>>("/v1/admin/ownership/accounts");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch accounts");
+  }
+  return res.data.data;
+}
+
+/**
+ * Fetch paginated physical items owned by a source account.
+ *
+ * @param sourceUserId - UUID of current owner.
+ * @param page - Target page index (1-based).
+ * @param limit - Page size.
+ * @returns Paginated source items.
+ */
+export async function getOwnershipItems(
+  sourceUserId: string,
+  page: number = 1,
+  limit: number = 20
+): Promise<{ items: OwnershipSourceItem[]; total: number; pages: number }> {
+  const res = await apiClient.get<{
+    success: boolean;
+    data: OwnershipSourceItem[];
+    pagination: { total: number; page: number; limit: number; pages: number };
+    error?: string;
+  }>(`/v1/admin/ownership/items?source_user_id=${encodeURIComponent(sourceUserId)}&page=${page}&limit=${limit}`);
+  if (!res.data.success) {
+    throw new Error(res.data.error ?? "Failed to fetch source items");
+  }
+  return {
+    items: res.data.data,
+    total: res.data.pagination.total,
+    pages: res.data.pagination.pages,
+  };
+}
+
+export interface OwnershipPreviewPayload {
+  source_user_id: string;
+  target_user_id: string;
+  mode: "single" | "selected" | "all";
+  item_ids?: number[];
+}
+
+export interface OwnershipReassignPayload {
+  source_user_id: string;
+  target_user_id: string;
+  mode: "single" | "selected" | "all";
+  expected_fingerprint: string;
+  expected_count: number;
+  item_ids?: number[];
+}
+
+/**
+ * Request server-side calculation of ownership reassignment preview and fingerprint.
+ *
+ * @param payload - Transfer scope parameters.
+ * @returns Reassignment preview and deterministic cryptographic fingerprint.
+ */
+export async function previewOwnershipReassignment(
+  payload: OwnershipPreviewPayload
+): Promise<OwnershipPreviewResponse> {
+  const res = await apiClient.post<ApiResponse<OwnershipPreviewResponse>>("/v1/admin/ownership/preview", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to preview reassignment");
+  }
+  return res.data.data;
+}
+
+/**
+ * Execute atomic ownership reassignment against an expected preview fingerprint.
+ *
+ * @param payload - Execution parameters with fingerprint and count guards.
+ * @returns Execution result summary.
+ */
+export async function executeOwnershipReassignment(
+  payload: OwnershipReassignPayload
+): Promise<OwnershipReassignResult> {
+  const res = await apiClient.post<ApiResponse<OwnershipReassignResult>>("/v1/admin/ownership/reassign", payload);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to execute reassignment");
   }
   return res.data.data;
 }

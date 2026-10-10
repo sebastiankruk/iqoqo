@@ -60,6 +60,7 @@ export function useAppConfig() {
  * @param borrowed - Filter by borrowed status
  * @param missingCover - Filter items missing a cover
  * @param missingId - Filter items missing an external identifier
+ * @param ownerOnly - Filter to only items owned by requester
  * @returns {import('@tanstack/react-query').UseQueryResult<ApiResponse<Item[]>>} Query result
  */
 export function useItems(
@@ -73,7 +74,8 @@ export function useItems(
   formatFilter?: string,
   borrowed?: boolean,
   missingCover?: boolean,
-  missingId?: boolean
+  missingId?: boolean,
+  ownerOnly?: boolean
 ) {
   return useQuery({
     queryKey: [
@@ -81,6 +83,7 @@ export function useItems(
       borrowed,
       missingCover,
       missingId,
+      ownerOnly,
     ],
     queryFn: async () => {
       const params: Record<string, string | number | boolean> = { page, limit };
@@ -107,6 +110,9 @@ export function useItems(
       }
       if (missingId) {
         params.missing_id = true;
+      }
+      if (ownerOnly) {
+        params.owner_only = true;
       }
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;

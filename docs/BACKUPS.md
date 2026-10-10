@@ -21,11 +21,10 @@ to rclone or mount `rclone.conf`** — handing a plaintext credential file to th
 process that parses untrusted input was the risk. Host-side backup and restore
 scripts on your machine still use your existing rclone install, unchanged.
 
-Two names are **deprecated** in favour of the `S3_BUCKET_*` variables, and iqoqo
-warns by name when one is set without a replacement:
+One name is **deprecated** in favour of the `S3_BUCKET_*` variables, and iqoqo
+warns by name when set without a replacement:
 
 - `RCLONE_REMOTE_ARCHIVE` → `S3_BUCKET_BACKUP`
-- `RCLONE_FEEDBACK_REMOTE` → `S3_BUCKET_FEEDBACK`
 
 Leaving every S3 value blank runs fully local; each role degrades to a no-op
 rather than failing. Full variable reference: `.env.example`, and
@@ -38,7 +37,6 @@ rather than failing. Full variable reference: `.env.example`, and
 | Daily database dumps & asset backups | `RCLONE_REMOTE_FAST` | `S3_BUCKET_BACKUP` | AWS S3 Standard / Standard-IA / Dropbox |
 | Long-term cold storage archive | `RCLONE_REMOTE_ARCHIVE` | `S3_BUCKET_BACKUP` | AWS S3 Glacier Flexible Retrieval / Deep Archive |
 | Shared AI cover cache across instances | `RCLONE_COVERS_REMOTE` | `S3_BUCKET_COVERS` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
-| Feedback screenshot archive | `RCLONE_FEEDBACK_REMOTE` | `S3_BUCKET_FEEDBACK` | AWS S3 Standard / Backblaze B2 / Cloudflare R2 |
 
 The native backend works against AWS S3, MinIO, Cloudflare R2, Wasabi, Backblaze
 B2 and Oracle Cloud Object Storage. Server-side encryption is available via
@@ -50,6 +48,16 @@ B2 and Oracle Cloud Object Storage. Server-side encryption is available via
 
 The backup script ([`scripts/cloud_backup.sh`](../scripts/cloud_backup.sh)) dumps PostgreSQL (`pg_dumpall`), compresses uploaded asset volumes, and syncs them to your primary cloud remote.
 
+### Resilience, Locking & Retries
+
+Starting in **v0.8.3**, `cloud_backup.sh` includes robust execution safeguards:
+
+- **Kernel-level flock Execution Locking**: Backups acquire an exclusive file lock (`BACKUP_LOCK_FILE`, default `/tmp/iqoqo_backup.lock`) with a bounded wait timeout (`BACKUP_LOCK_TIMEOUT`, default `1800` seconds). The lock timeout is a wait ceiling before exiting with code 2, **not** a stale-lock age. Locks are released automatically by the Linux kernel when the holding process exits or crashes (including `SIGKILL`); the lock file must never be unlinked manually.
+- **Database Pre-flight & Retries**: Before executing a multi-gigabyte dump, the script tests database connectivity (`SELECT 1`) and verifies the PostgreSQL user role against `pg_roles` using `${POSTGRES_USER:-iqoqo}`.
+  - **Transient errors** (e.g. database container starting up) retry up to `BACKUP_RETRY_ATTEMPTS` times (default `3`) using exponential backoff (`BACKUP_RETRY_DELAY_BASE`, default `5`s: 5s, 10s, 20s).
+  - **Permanent errors** (e.g. role missing, authentication failure) fail immediately without retry.
+  - **Empty dump protection**: Dumps that produce 0 bytes fail immediately outside the retry loop to prevent corrupting backups.
+
 ### Setup Instructions
 
 1. Install [rclone](https://rclone.org/install/) on your host machine.
@@ -60,6 +68,12 @@ The backup script ([`scripts/cloud_backup.sh`](../scripts/cloud_backup.sh)) dump
    RCLONE_REMOTE_FAST=iqoqo-backup
    # Optional: explicitly set path if rclone is configured under a non-root user
    RCLONE_CONFIG=/home/username/.config/rclone/rclone.conf
+
+   # Optional: Execution lock and retry tuning
+   # BACKUP_LOCK_FILE=/tmp/iqoqo_backup.lock
+   # BACKUP_LOCK_TIMEOUT=1800
+   # BACKUP_RETRY_ATTEMPTS=3
+   # BACKUP_RETRY_DELAY_BASE=5
    ```
 
 4. Test immediately:
@@ -204,15 +218,15 @@ Introduced in **v0.7.14**, AI cover generation scripts (`generate_ai_covers.py` 
 
 ---
 
-## 4. Feedback Screenshot Remote (`RCLONE_FEEDBACK_REMOTE`)
+## 4. Feedback Screenshot Storage
 
-Introduced in **v0.7.16**, user feedback submissions with attached screenshot images can be uploaded to a dedicated rclone storage remote (`RCLONE_FEEDBACK_REMOTE`) via asynchronous Celery background tasks (`upload_feedback_screenshot_task`).
+Feedback ticket screenshots are stored locally on the host bind mount at `./app/static/gallery/`. No remote object-storage bucket or rclone remote needs to be provisioned for feedback screenshots.
 
-### How Feedback Screenshot Sync Works
+### How Feedback Screenshot Durability Works
 
-1. When a user submits a bug report or feedback ticket with screenshot attachments, the file is temporarily accepted by the API.
-2. If a feedback remote is configured, a background task stores the screenshot there — via `S3_BUCKET_FEEDBACK` on the native backend, or `RCLONE_FEEDBACK_REMOTE` (deprecated) on the rclone backend.
-3. If neither is configured, iqoqo gracefully falls back to local volume storage at `./app/static/gallery/`.
+1. When a user submits a bug report or feedback ticket with screenshot attachments, the file is saved directly to local storage at `./app/static/gallery/`.
+2. The directory is mounted into the `web` and `worker` containers, surviving container restarts and recreations.
+3. Off-site disaster-recovery durability is provided by the nightly host backup (`scripts/cloud_backup.sh`), whose asset archive includes `app/static/gallery/`. No runtime cloud upload task or bucket credentials are required.
 
 ---
 

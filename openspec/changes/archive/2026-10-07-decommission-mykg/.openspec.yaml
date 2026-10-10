@@ -1,0 +1,8 @@
+schema: spec-driven
+created: 2026-10-07
+# Five of the six delta specs remove every requirement of their capability
+# (ai-sandbox-egress-filtering, mykg-daemon-shared-core, mykg-opencode-agent-harness,
+# mykg-agent-queue-management, operations/mykg-sandbox-reliability). OpenSpec refuses
+# to empty a published spec unless retirement is explicitly opted in, so this flag is
+# required for `openspec archive decommission-mykg` to remove those spec files.
+retire_capabilities: true

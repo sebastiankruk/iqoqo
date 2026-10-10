@@ -471,6 +471,19 @@ See [BACKUPS.md](BACKUPS.md) for multi-tier backup configuration (daily sync + S
 
 ---
 
+## Next.js Runtime & Proxy Architecture
+
+### Node.js Runtime vs Deprecated Edge Runtime
+
+In Next.js 16+, the Edge Runtime is deprecated for middleware and route execution in favor of the standard Node.js runtime.
+
+- **Routing Proxy (`frontend/proxy.ts`):** iqoqo uses the Next.js 16 `proxy.ts` convention for page-level authentication routing and redirects. Per Next.js 16 specifications, `proxy.ts` automatically executes within the Node.js runtime, and explicit `runtime = 'nodejs'` segment declarations are disallowed by the compiler.
+- **Route Handlers and Metadata:** All route handlers, API routes, and dynamic image generators execute under the Node.js runtime without deprecated `export const runtime = 'edge'` declarations.
+- **Proxy Timeout:** Extended proxy timeouts (`proxyTimeout: 120_000` and `proxyClientMaxBodySize: "60mb"` in `frontend/next.config.ts`) remain active for SPARQL queries and batch uploads.
+- **Build Verification:** Running `npm run build` in `frontend/` produces a clean build with zero Edge Runtime deprecation warnings.
+
+---
+
 ## 📚 Further Reading
 
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries and Linked Data endpoints

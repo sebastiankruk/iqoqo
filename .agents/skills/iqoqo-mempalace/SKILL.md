@@ -16,7 +16,7 @@ metadata:
 This skill extends the standard `mempalace` pipeline with iqoqo-specific knowledge indexing:
 - **Auto-scope discovery**: Automatically determines which folders to index based on project structure and `.iqoqo-mempalace-scope.yaml`
 - **Dual-mode indexing**: Mines codebase and selected notes as projects (`--mode projects --wing iqoqo`) and current AI session transcripts as conversations (`--mode convos --wing iqoqo`)
-- **Safe cache exclusion**: Explicitly skips `.mykg_sessions/` (23k+ files), cover images, and obsolete version archives
+- **Safe cache exclusion**: Explicitly skips cover images and obsolete version archives
 - **Unified Wing**: Ensures all drawers and entities are consistently filed under `--wing iqoqo`
 
 ## When to Use
@@ -59,7 +59,7 @@ Trigger this skill when the user types `/iqoqo-mempalace <command>` or when you 
 - Resolves codebase directories (`app`, `frontend`, `migrations`, `deploy`, `scripts`, `shared`, `tests`, `docs`, `openspec/specs`)
 - Resolves selected Obsidian notes (`.context/notes/{sre,bugs,code,design,dev,marketing,plan,review,security,tests,tools,notes}`)
 - Auto-detects current version from `package.json` for `.context/ai-memory/<version>`
-- Strictly excludes `.mykg_sessions/`, `app/static/covers/`, `screenshots/`, and non-current versions
+- Strictly excludes `app/static/covers/`, `screenshots/`, and non-current versions
 
 ### Step 2 — Run mining
 ```bash
@@ -128,8 +128,6 @@ exclude:
   - "**/.venv/**"
   - "**/app/static/covers/**"
   - "**/app/static/gallery/**"
-  - "**/mykg_sessions/**"
-  - "**/.mykg_sessions/**"
   - "**/screenshots/**"
   - "**/images/**"
 ```

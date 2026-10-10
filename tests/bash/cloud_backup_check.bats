@@ -406,3 +406,51 @@ teardown() {
   [[ "$output" =~ "Checking iQoQo archive configuration" ]]
   [[ "$output" =~ "Cron job: ${TEMP_ARCHIVE_CRON} exists" ]]
 }
+
+# ── Duplicate cron, lock status, and configuration validation ───────────────
+
+@test "cloud_backup_check.sh warns on duplicate cron entries" {
+  echo "* * * * * root /usr/src/app/scripts/cloud_backup.sh" >> "${TEMP_CRON_FILE}"
+  run bash "${CHECK_SCRIPT}"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "[WARN] Cron job: duplicate entries detected" ]]
+}
+
+@test "cloud_backup_check.sh reports lock file free status when lock is unheld" {
+  local lock_file="${TEST_TEMP_DIR}/check_test.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+  touch "${lock_file}"
+  chmod 0600 "${lock_file}"
+  run bash "${CHECK_SCRIPT}"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Lock file: ${lock_file}" ]]
+  [[ "$output" =~ "status: free" ]]
+}
+
+@test "cloud_backup_check.sh warns when lock file is held by active backup" {
+  local lock_file="${TEST_TEMP_DIR}/check_test.lock"
+  export BACKUP_LOCK_FILE="${lock_file}"
+  exec 8>"${lock_file}"
+  flock 8
+
+  run bash "${CHECK_SCRIPT}"
+  exec 8>&-
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "[WARN] Lock file: ${lock_file}" ]]
+  [[ "$output" =~ "status: held by active backup" ]]
+}
+
+@test "cloud_backup_check.sh fails when BACKUP_LOCK_TIMEOUT is invalid" {
+  export BACKUP_LOCK_TIMEOUT="invalid"
+  run bash "${CHECK_SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "[FAIL] Config: BACKUP_LOCK_TIMEOUT must be a positive integer" ]]
+}
+
+@test "cloud_backup_check.sh fails when BACKUP_RETRY_ATTEMPTS is invalid" {
+  export BACKUP_RETRY_ATTEMPTS="0"
+  run bash "${CHECK_SCRIPT}"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "[FAIL] Config: BACKUP_RETRY_ATTEMPTS must be a positive integer" ]]
+}
+

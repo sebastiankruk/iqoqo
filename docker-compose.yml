@@ -53,6 +53,8 @@ services:
     volumes:
       - ./scripts:/usr/src/app/scripts
       - ./shared:/usr/src/app/shared
+      - ./data:/usr/src/app/data
+      - ./docs/ontology:/usr/src/app/docs/ontology:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
   web:
@@ -70,6 +72,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - SPARQL_SERVICE_URL=http://sparql-runner:5050
+      - SPARQL_SERVICE_SECRET=${SPARQL_SERVICE_SECRET:-dev-sparql-service-secret}
       - OTEL_SERVICE_NAME=iqoqo-api
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
@@ -82,6 +86,8 @@ services:
         condition: service_healthy
       migration:
         condition: service_completed_successfully
+      sparql-runner:
+        condition: service_started
     volumes:
       - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers
@@ -89,6 +95,8 @@ services:
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
       - ./scripts:/usr/src/app/scripts
       - ./shared:/usr/src/app/shared
+      - ./data:/usr/src/app/data
+      - ./docs/ontology:/usr/src/app/docs/ontology:ro
     ports:
       - "127.0.0.1:${WEB_PORT:-5000}:5000"
     extra_hosts:
@@ -102,6 +110,45 @@ services:
         reservations:
           cpus: "0.5"
           memory: "512m"
+
+  sparql-runner:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.sparql
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      - SPARQL_SERVICE_SECRET=${SPARQL_SERVICE_SECRET:-dev-sparql-service-secret}
+      - SPARQL_SERVICE_PORT=5050
+      - OTEL_SERVICE_NAME=iqoqo-sparql-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-none}
+      - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-none}
+      - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-none}
+    deploy:
+      resources:
+        limits:
+          cpus: "${SPARQL_CPU_LIMIT:-1.0}"
+          memory: "${SPARQL_MEMORY_LIMIT:-512m}"
+          pids: 64
+        reservations:
+          cpus: "0.2"
+          memory: "128m"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:5050/healthz\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   frontend:
     build:
       context: ./frontend
@@ -200,6 +247,7 @@ services:
       - ./app/static/gallery:/usr/src/app/app/static/gallery
       - ./app/static/uploads/raw_covers:/usr/src/app/app/static/uploads/raw_covers
       - ./shared:/usr/src/app/shared
+      - ./data:/usr/src/app/data
     depends_on:
       db:
         condition: service_healthy

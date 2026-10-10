@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "mykg": {
-      "command": ".venv/bin/mykg",
-      "args": ["mcp-serve"]
-    }
-  }
-}

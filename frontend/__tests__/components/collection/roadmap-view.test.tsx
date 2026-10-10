@@ -20,12 +20,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `vi.mock` factories are hoisted above module-level declarations, so every
 // handle they close over has to come from `vi.hoisted`.
-const { mockRoadmaps, mockCreateRoadmap, mockAddRoadmapItem, mockReorderRoadmapItem, mockToast } = vi.hoisted(() => ({
+const {
+  mockRoadmaps,
+  mockCreateRoadmap,
+  mockAddRoadmapItem,
+  mockUpdateRoadmapItemTarget,
+  mockDeleteRoadmapItem,
+  mockReorderRoadmapItem,
+  mockToast,
+  mockManifestations,
+  mockWorksShelf,
+  mockExpressionsShelf,
+  mockItems,
+} = vi.hoisted(() => ({
   mockRoadmaps: vi.fn(),
   mockCreateRoadmap: vi.fn(),
   mockAddRoadmapItem: vi.fn(),
+  mockUpdateRoadmapItemTarget: vi.fn(),
+  mockDeleteRoadmapItem: vi.fn(),
   mockReorderRoadmapItem: vi.fn(),
   mockToast: { error: vi.fn(), success: vi.fn() },
+  mockManifestations: vi.fn(),
+  mockWorksShelf: vi.fn(),
+  mockExpressionsShelf: vi.fn(),
+  mockItems: vi.fn(),
 }));
 
 // The component imports these from the hooks barrel, not the roadmap module.
@@ -36,7 +54,13 @@ vi.mock("@/lib/api/hooks", async () => {
     useRoadmaps: () => mockRoadmaps(),
     useCreateRoadmap: () => ({ mutateAsync: mockCreateRoadmap }),
     useAddRoadmapItem: () => ({ mutateAsync: mockAddRoadmapItem }),
+    useUpdateRoadmapItemTarget: () => ({ mutateAsync: mockUpdateRoadmapItemTarget }),
+    useDeleteRoadmapItem: () => ({ mutateAsync: mockDeleteRoadmapItem }),
     useReorderRoadmapItem: () => ({ mutateAsync: mockReorderRoadmapItem }),
+    useManifestations: (...args: unknown[]) => mockManifestations(...args),
+    useWorksShelf: (...args: unknown[]) => mockWorksShelf(...args),
+    useExpressionsShelf: (...args: unknown[]) => mockExpressionsShelf(...args),
+    useItems: (...args: unknown[]) => mockItems(...args),
   };
 });
 
@@ -84,15 +108,13 @@ describe("RoadmapView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRoadmaps.mockReturnValue(roadmapsState());
+    mockManifestations.mockReturnValue({ data: { data: [] } });
+    mockWorksShelf.mockReturnValue({ data: { data: [] } });
+    mockExpressionsShelf.mockReturnValue({ data: { data: [] } });
+    mockItems.mockReturnValue({ data: { data: [] } });
   });
 
   it("does not present a failed request as an empty collection", async () => {
-    // The defect: `useRoadmaps()` was destructured for `data` and `isLoading`
-    // only, so a rejected query left `data` undefined, `roadmaps` defaulted to
-    // `[]`, and the component rendered "No Reading Roadmaps Yet" -- telling the
-    // user they have none when in fact the list could not be fetched. The empty
-    // state also invites them to create their first roadmap, which cannot
-    // succeed while the request is failing.
     mockRoadmaps.mockReturnValue(roadmapsState({ isError: true }));
 
     renderView();
@@ -102,8 +124,6 @@ describe("RoadmapView", () => {
   });
 
   it("still shows the genuine empty state when the request succeeded", async () => {
-    // The control for the test above: the fix must not turn an ordinary empty
-    // collection into an error.
     renderView();
 
     expect(await screen.findByText("No Reading Roadmaps Yet")).toBeInTheDocument();
@@ -123,16 +143,11 @@ describe("RoadmapView", () => {
   });
 
   it("tells the user when creating a roadmap fails", async () => {
-    // All three mutation handlers caught, logged to the console, and returned.
-    // The user clicked, nothing happened, and there was no way to tell a failed
-    // save from a click that did not register.
     mockCreateRoadmap.mockRejectedValue(new Error("boom"));
 
     const user = userEvent.setup();
     renderView();
 
-    // The add-item dialog also renders a textbox, so the title field is targeted
-    // by its own placeholder rather than by role alone.
     await user.click(await screen.findByRole("button", { name: /create roadmap/i }));
     const title = await screen.findByPlaceholderText("e.g. Distributed Systems Mastery 2026");
     await user.type(title, "Sci-fi backlog");
@@ -141,5 +156,168 @@ describe("RoadmapView", () => {
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith("Could not create the roadmap. Please try again.");
     });
+  });
+
+  it("renders target level badges for all FRBR entities including Item", async () => {
+    const roadmapWithItems = {
+      id: 1,
+      title: "FRBR Hierarchy Track",
+      description: "Testing all 4 levels",
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+      items: [
+        {
+          id: 101,
+          work_id: 1,
+          expression_id: null,
+          manifestation_id: null,
+          item_id: null,
+          target_type: "work" as const,
+          title: "Abstract Work Alpha",
+          creator: "Author A",
+          position: 1,
+          status: "queued",
+          target_date: null,
+          notes: null,
+          completed_at: null,
+        },
+        {
+          id: 102,
+          work_id: null,
+          expression_id: 2,
+          manifestation_id: null,
+          item_id: null,
+          target_type: "expression" as const,
+          title: "English Translation Beta",
+          creator: "Translator B",
+          position: 2,
+          status: "queued",
+          target_date: null,
+          notes: null,
+          completed_at: null,
+        },
+        {
+          id: 103,
+          work_id: null,
+          expression_id: null,
+          manifestation_id: 3,
+          item_id: null,
+          target_type: "manifestation" as const,
+          title: "Hardcover Edition Gamma",
+          creator: "Publisher C",
+          position: 3,
+          status: "queued",
+          target_date: null,
+          notes: null,
+          completed_at: null,
+          summary: { edition: "First Edition" },
+        },
+        {
+          id: 104,
+          work_id: null,
+          expression_id: null,
+          manifestation_id: null,
+          item_id: 4,
+          target_type: "item" as const,
+          title: "Signed Physical Copy Delta",
+          creator: "Author A",
+          position: 4,
+          status: "in_progress",
+          target_date: null,
+          notes: "My personal copy on shelf 2",
+          completed_at: null,
+          summary: { condition: "Like New" },
+        },
+      ],
+    };
+
+    mockRoadmaps.mockReturnValue(roadmapsState({ data: [roadmapWithItems] }));
+
+    renderView();
+
+    expect(await screen.findByRole("heading", { name: "FRBR Hierarchy Track" })).toBeInTheDocument();
+    expect(screen.getByText("Abstract Work Alpha")).toBeInTheDocument();
+    expect(screen.getByText("WORK")).toBeInTheDocument();
+    expect(screen.getByText("English Translation Beta")).toBeInTheDocument();
+    expect(screen.getByText("EXPRESSION")).toBeInTheDocument();
+    expect(screen.getByText("Hardcover Edition Gamma")).toBeInTheDocument();
+    expect(screen.getByText("MANIFESTATION")).toBeInTheDocument();
+    expect(screen.getByText("First Edition")).toBeInTheDocument();
+    expect(screen.getByText("Signed Physical Copy Delta")).toBeInTheDocument();
+    expect(screen.getByText("Physical Copy")).toBeInTheDocument();
+    expect(screen.getByText("Condition: Like New")).toBeInTheDocument();
+  });
+
+  it("allows switching target level to Copy (Item) and adding an owned item", async () => {
+    const roadmap = {
+      id: 1,
+      title: "Reading Track",
+      items: [],
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    };
+    mockRoadmaps.mockReturnValue(roadmapsState({ data: [roadmap] }));
+    mockItems.mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 99,
+            title: "Physical Book Copy 99",
+            publisher: "O'Reilly",
+            collection_status: "owned",
+          },
+        ],
+      },
+    });
+
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(await screen.findByTestId("add-to-roadmap-btn"));
+    // Switch to Copy target level
+    await user.click(screen.getByTestId("target-level-item"));
+
+    // Candidate should be shown
+    expect(await screen.findByText("Physical Book Copy 99")).toBeInTheDocument();
+
+    // Select candidate
+    await user.click(screen.getByTestId("select-item-0"));
+
+    // Confirm Add
+    await user.click(screen.getByTestId("confirm-add-item"));
+
+    expect(mockAddRoadmapItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roadmapId: 1,
+        itemId: 99,
+      })
+    );
+  });
+
+  it("allows deleting an item from the roadmap", async () => {
+    const roadmap = {
+      id: 1,
+      title: "Reading Track",
+      items: [
+        {
+          id: 42,
+          work_id: 1,
+          title: "Book to Remove",
+          creator: "Author",
+          position: 1,
+          status: "queued",
+        },
+      ],
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    };
+    mockRoadmaps.mockReturnValue(roadmapsState({ data: [roadmap] }));
+
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(await screen.findByTestId("delete-item-btn"));
+
+    expect(mockDeleteRoadmapItem).toHaveBeenCalledWith(42);
   });
 });

@@ -476,15 +476,22 @@ class CoverJob:
     legacy_source_only: bool = False
 
 
-def _cover_job(job: "CoverJob | None", kwargs: dict[str, Any]) -> CoverJob:
-    """Build a :class:`CoverJob` from an explicit value or legacy kwargs.
+def _cover_job(job: "CoverJob | dict[str, Any] | None", kwargs: dict[str, Any]) -> CoverJob:
+    """Build a :class:`CoverJob` from an explicit value, dictionary, or legacy kwargs.
 
     A typo'd field raises rather than being ignored. Silently dropping
     ``legacy_source_only`` would look like a successful run while taking the
     opposite code path.
     """
-    if job is not None:
+    if isinstance(job, CoverJob):
         return job
+    if isinstance(job, dict):
+        unknown = set(job) - {f.name for f in dataclasses.fields(CoverJob)}
+        if unknown:
+            raise TypeError(f"unexpected cover job fields: {sorted(unknown)}")
+        return CoverJob(**job)
+    if job is not None:
+        raise TypeError(f"expected CoverJob, dict, or None; got {type(job)}")
     if not kwargs:
         return CoverJob()
     unknown = set(kwargs) - {f.name for f in dataclasses.fields(CoverJob)}
@@ -499,7 +506,7 @@ def process_cover_pipeline(
     title: str,
     author: str,
     llm_permissions: dict[str, bool] | None = None,
-    job: CoverJob | None = None,
+    job: CoverJob | dict[str, Any] | None = None,
     **kwargs: Any,
 ):
     """
@@ -697,6 +704,7 @@ def start_cover_processing(
     if user_id != "system":
         job = dataclasses.replace(job, user_id=user_id)
 
+    job_payload = dataclasses.asdict(job)
     return submit_task(
         process_cover_pipeline,
         manifestation_id,
@@ -704,7 +712,8 @@ def start_cover_processing(
         title,
         author,
         job.llm_permissions or {},
-        job=job,
+        user_id=job.user_id,
+        job=job_payload,
     )
 
 
