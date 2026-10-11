@@ -1026,3 +1026,38 @@ export async function executeOwnershipReassignment(
   }
   return res.data.data;
 }
+
+export interface CustodianProviderMergeSelections {
+  work?: Record<string, { value: unknown; provider?: string } | unknown>;
+  expression?: Record<string, { value: unknown; provider?: string } | unknown>;
+  manifestation?: Record<string, { value: unknown; provider?: string } | unknown>;
+  _provenance?: Record<string, string>;
+}
+
+export interface CustodianProviderMergeResult {
+  manifestation_id: number;
+  expression_id: number | null;
+  work_id: number | null;
+  diff: Record<string, Record<string, { before: unknown; after: unknown }>>;
+}
+
+/**
+ * Submit custodian-selected provider fragments to atomically merge across FRBR tiers.
+ *
+ * @param manifestationId - Manifestation ID.
+ * @param selections - Per-tier attribute selections.
+ * @returns Merge outcome summary.
+ */
+export async function mergeCustodianProviderMetadata(
+  manifestationId: number,
+  selections: CustodianProviderMergeSelections
+): Promise<CustodianProviderMergeResult> {
+  const res = await apiClient.post<ApiResponse<CustodianProviderMergeResult>>(
+    `/v1/admin/frbr/manifestation/${manifestationId}/provider-merge`,
+    { selections }
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to merge provider metadata");
+  }
+  return res.data.data;
+}

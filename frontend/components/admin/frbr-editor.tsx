@@ -50,6 +50,7 @@ import {
   type ItemFormData,
 } from "./frbr/types";
 import { RelationManagementDialog } from "./relation-management-dialog";
+import { ProviderMergeDialog } from "./provider-merge-dialog";
 
 // ---------------------------------------------------------------------------
 // Name normalization — must match backend ``normalize_contributor_name`` rules
@@ -210,6 +211,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     entityId: number;
     entityTitle: string;
   }>({ open: false, entityType: "work", entityId: 0, entityTitle: "" });
+
+  // Provider merge dialog state
+  const [providerMergeDialogOpen, setProviderMergeDialogOpen] = useState(false);
 
   const handleWorkSubmit = useCallback(
     async (data: WorkFormData) => {
@@ -529,6 +533,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         onEscalate={handleEscalate}
         onDelete={handleDelete}
         onRelationManagement={hasWriteMetadata ? handleRelationManagement : undefined}
+        onProviderMerge={hasWriteMetadata ? () => setProviderMergeDialogOpen(true) : undefined}
       />
 
       {activeTab === "work" && (
@@ -701,6 +706,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         entityId={relationDialog.entityId}
         entityTitle={relationDialog.entityTitle}
         manifestationId={manifestationId}
+      />
+
+      {/* Provider Merge Dialog */}
+      <ProviderMergeDialog
+        open={providerMergeDialogOpen}
+        onOpenChange={setProviderMergeDialogOpen}
+        manifestationId={manifestationId}
+        tree={tree}
       />
     </div>
   );

@@ -1613,6 +1613,183 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     return manif
 
 
+def apply_custodian_provider_merge(
+    manifestation_id: int,
+    selections: dict[str, dict[str, Any]],
+    user_id: Any = None,
+) -> dict[str, Any]:
+    """Atomically apply custodian-selected provider fragments across FRBR tiers.
+
+    Acquires row-level locks on Work, Expression, and Manifestation in ascending ID
+    order to prevent deadlocks, updates chosen attributes, maintains field-level
+    provenance in meta["_provenance"], and records an EntityAuditLog entry.
+
+    Args:
+        manifestation_id: ID of the manifestation to update.
+        selections: Dictionary keyed by tier ('work', 'expression', 'manifestation'),
+            containing field names and their selected value dict:
+            e.g. {"work": {"title": {"value": "Dune", "provider": "google_books"}}}
+            or direct values with separate provenance:
+            {"work": {"title": "Dune"}, "_provenance": {"title": "google_books"}}
+        user_id: ID of the acting custodian/administrator.
+
+    Returns:
+        Dict summarizing updated entities and changes.
+    """
+    manif = db.session.get(Manifestation, manifestation_id)
+    if manif is None:
+        raise ValueError(f"Manifestation with id {manifestation_id} not found")
+
+    expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
+    work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
+
+    # Deterministic lock ordering across entities: collect present IDs and lock
+    entities_to_lock: list[tuple[type, int]] = []
+    if work:
+        entities_to_lock.append((Work, work.id))
+    if expr:
+        entities_to_lock.append((Expression, expr.id))
+    entities_to_lock.append((Manifestation, manif.id))
+
+    # Sort deterministically by (model_name, id) or id
+    entities_to_lock.sort(key=lambda item: item[1])
+    for model_cls, ent_id in entities_to_lock:
+        db.session.execute(select(model_cls).where(model_cls.id == ent_id).with_for_update()).scalar_one_or_none()
+
+    diff_log: dict[str, Any] = {"work": {}, "expression": {}, "manifestation": {}}
+
+    # Handle Work tier
+    work_sel = selections.get("work") or {}
+    if work and work_sel:
+        work_meta = dict(work.meta or {})
+        work_prov = dict(work_meta.get("_provenance") or {})
+        for field, item in work_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field == "title" and val is not None:
+                old_val = work.title
+                work.title = str(val).strip()
+                work.sort_title = derive_sort_title(work.title)
+                diff_log["work"]["title"] = {"before": old_val, "after": work.title}
+            elif field in ("authors", "Authors") and val is not None:
+                old_val = work_meta.get("authors")
+                clean_authors = normalize_authors_list(val)
+                work_meta["authors"] = clean_authors
+                desired_contribs = [{"name": a, "role": "author", "sequence": idx} for idx, a in enumerate(clean_authors)]
+                sync_entity_contributions(work, desired_contribs)
+                diff_log["work"]["authors"] = {"before": old_val, "after": clean_authors}
+            elif val is not None:
+                old_val = work_meta.get(field)
+                work_meta[field] = val
+                diff_log["work"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                work_prov[field] = str(prov)
+
+        if work_prov:
+            work_meta["_provenance"] = work_prov
+        sanitize_metadata_description(work_meta)
+        work.meta = work_meta
+
+    # Handle Expression tier
+    expr_sel = selections.get("expression") or {}
+    if expr and expr_sel:
+        expr_meta = dict(expr.meta or {})
+        expr_prov = dict(expr_meta.get("_provenance") or {})
+        for field, item in expr_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field == "language" and val is not None:
+                old_val = expr.language
+                expr.language = str(val).strip()
+                diff_log["expression"]["language"] = {"before": old_val, "after": expr.language}
+            elif field in ("content_type", "type") and val is not None:
+                old_val = expr.content_type
+                expr.content_type = str(val).strip()
+                diff_log["expression"]["content_type"] = {"before": old_val, "after": expr.content_type}
+            elif field == "kind" and val is not None:
+                old_val = expr.kind
+                expr.kind = str(val).strip()
+                diff_log["expression"]["kind"] = {"before": old_val, "after": expr.kind}
+            elif val is not None:
+                old_val = expr_meta.get(field)
+                expr_meta[field] = val
+                diff_log["expression"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                expr_prov[field] = str(prov)
+
+        if expr_prov:
+            expr_meta["_provenance"] = expr_prov
+        sanitize_metadata_description(expr_meta)
+        expr.meta = expr_meta
+
+    # Handle Manifestation tier
+    manif_sel = selections.get("manifestation") or {}
+    if manif_sel:
+        manif_meta = dict(manif.meta or {})
+        manif_prov = dict(manif_meta.get("_provenance") or {})
+        for field, item in manif_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field in ("publisher", "Publisher") and val is not None:
+                old_val = manif.publisher
+                manif.publisher = str(val).strip()[:255]
+                diff_log["manifestation"]["publisher"] = {"before": old_val, "after": manif.publisher}
+            elif field in ("publication_date", "PublicationDate", "date") and val is not None:
+                old_val = str(manif.publication_date) if manif.publication_date else None
+                manif.publication_date = str(val).strip()
+                diff_log["manifestation"]["publication_date"] = {"before": old_val, "after": manif.publication_date}
+            elif field in ("isbn13", "isbn") and val is not None:
+                old_val = manif.isbn13
+                clean_isbn = str(val).replace("-", "").replace(" ", "").strip()
+                manif.isbn13 = clean_isbn
+                diff_log["manifestation"]["isbn13"] = {"before": old_val, "after": clean_isbn}
+            elif field in ("cover_url", "cover") and val is not None:
+                old_val = manif_meta.get("cover_url")
+                manif_meta["cover_url"] = str(val).strip()
+                diff_log["manifestation"]["cover_url"] = {"before": old_val, "after": manif_meta["cover_url"]}
+            elif val is not None:
+                old_val = manif_meta.get(field)
+                manif_meta[field] = val
+                diff_log["manifestation"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                manif_prov[field] = str(prov)
+
+        if manif_prov:
+            manif_meta["_provenance"] = manif_prov
+        sanitize_metadata_description(manif_meta)
+        manif.meta = manif_meta
+
+    # Write EntityAuditLog
+    audit = EntityAuditLog(
+        entity_type="manifestation",
+        entity_id=manif.id,
+        actor_id=user_id,
+        change_type="provider_merge",
+        diff=diff_log,
+    )
+    db.session.add(audit)
+    db.session.commit()
+
+    return {
+        "manifestation_id": manif.id,
+        "expression_id": expr.id if expr else None,
+        "work_id": work.id if work else None,
+        "diff": diff_log,
+    }
+
+
 def update_item(
     item_id: int,
     manifestation_id: int | None = None,
