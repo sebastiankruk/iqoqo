@@ -103,5 +103,21 @@ teardown() {
   [[ "$output" =~ "token expired (48.0h old, re-authorize in Instance Settings)" ]]
 }
 
+@test "iqoqo-status.sh flags default SPARQL_SERVICE_SECRET in production" {
+  env_file="${TEST_TEMP_DIR}/.env"
+  echo "FLASK_ENV=production" > "$env_file"
+  echo "SPARQL_SERVICE_SECRET=dev-sparql-service-secret" >> "$env_file"
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh --deploy-dir "${TEST_TEMP_DIR}"
+  [[ "$output" =~ "using default development secret in production" ]]
+}
+
+@test "iqoqo-status.sh validates non-default SPARQL_SERVICE_SECRET in production" {
+  env_file="${TEST_TEMP_DIR}/.env"
+  echo "FLASK_ENV=production" > "$env_file"
+  echo "SPARQL_SERVICE_SECRET=super-secure-prod-secret-9999" >> "$env_file"
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh --deploy-dir "${TEST_TEMP_DIR}"
+  [[ "$output" =~ "SPARQL_SERVICE_SECRET is configured with non-default value" ]]
+}
+
 
 

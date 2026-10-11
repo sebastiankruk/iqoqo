@@ -7,7 +7,7 @@ Talk like caveman
 
 ### 🏰 MemPalace CLI Memory & Entity Alignment Directive
 - **Context Awareness**: Long-term episodic memory and architectural decisions are indexed locally via `.venv/bin/mempalace` CLI utility. Do NOT look for MCP memory tools.
-- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt or implementing new domain features, you RECOMMEND executing a shell query in your terminal to retrieve historical engineering decisions:
+- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt, implementing new domain features, or searching history/rationale, you MUST execute a shell query in your terminal before running grep:
   `.venv/bin/mempalace search "<keyword phrase>" --wing iqoqo`
 - **Query Discipline**: Use focused 2-4 keyword phrases (MiniLM cosine similarity degrades on multi-sentence queries). NEVER pipe to `head` (truncates results) and NEVER redirect stderr to `/dev/null` (swallows diagnostic errors).
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
@@ -17,7 +17,7 @@ Talk like caveman
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
 - **Scope & Coverage**: CodeGraph indexes the **entire repository** including backend (`app/**`, `tests/**`) and frontend (`frontend/**` TypeScript/React/TSX).
-- **Mandatory First-Stop Navigation**: Before running `grep_search`, `find_by_name`, or ripgrep for any code symbol (class, function, method, SQLAlchemy model, Flask route, or React hook), you MUST first execute CodeGraph:
+- **Mandatory First-Stop Navigation (STRICT NO-GREP FIRST)**: NEVER run `grep`, `grep_search`, `find_by_name`, or ripgrep for any code symbol, route, hook, or model before querying CodeGraph first:
   - Search routes & partial symbols: `codegraph query "<pattern>"` (e.g. `codegraph query "items/bulk"`, `codegraph query "useManifestation"`)
   - Inspect symbol / definition: `codegraph node <SymbolName>` (for exact symbol declarations)
   - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`)
@@ -29,13 +29,13 @@ Talk like caveman
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 ### 🕸️ Graphify Knowledge Graph Directive
-- **Primary Navigation Tool**: Consult `graphify-out/graph.json` for codebase questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused architecture questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives.
+- **Primary Architecture Navigation (STRICT NO-GREP FIRST)**: Consult `graphify-out/graph.json` for architecture and cross-module questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused architecture questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives. Grepping codebase for high-level structure without querying Graphify is strictly forbidden.
 - **Scoped Over Broad**: Prefer graphify query results (scoped subgraph) over reading `GRAPH_REPORT.md` (broad architecture review) or raw grep output.
 - **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `make graphify-index` to update the scope.
 - **Index Update**: RECOMMEND running `make graphify-update` after code changes.
 
 ### 🧩 Memory Tools Integration Trio
-- **Integration**: Each of the 3 memory tools serves a distinct, non-overlapping question:
+- **Integration**: Each of the 3 memory tools serves a distinct, non-overlapping question — ALWAYS consult before raw grep:
   - **CodeGraph**: *"Where is symbol X defined, who calls it, and what will break if I change it?"*
   - **Graphify**: *"What are the high-level architecture layers and how do modules connect?"*
   - **MemPalace**: *"Why did we decide this, and what architectural decisions were made in past releases?"*
