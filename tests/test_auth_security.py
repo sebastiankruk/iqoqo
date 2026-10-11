@@ -417,3 +417,41 @@ def test_login_still_rejects_a_wrong_password_and_accepts_the_right_one(client):
     right = client.post("/api/auth/login", json={"email": "timing@iqoqo.local", "password": "correct-horse-battery"})
     assert right.status_code == 200
     assert right.get_json()["user"]["email"] == "timing@iqoqo.local"
+
+
+def test_login_suspended_account_status_matches_unregistered_and_wrong_password(app, client):
+    """The status code for a suspended account must match wrong credentials (401).
+
+    Asserts the three-way status equality from design D4:
+    1. Unknown email -> 401
+    2. Registered email + wrong password -> 401
+    3. Registered email + correct password + suspended -> 401
+    And verifies the active account with correct password returns 200.
+    """
+    password = "secret-password-123"
+    with app.app_context():
+        active_user = User(email="active-check@iqoqo.local", display_name="Active")
+        active_user.set_password(password)
+        active_user.is_active = True
+
+        suspended_user = User(email="suspended-check@iqoqo.local", display_name="Suspended")
+        suspended_user.set_password(password)
+        suspended_user.is_active = False
+
+        db.session.add_all([active_user, suspended_user])
+        db.session.commit()
+
+    resp_unknown = client.post("/api/auth/login", json={"email": "nonexistent@iqoqo.local", "password": password})
+    resp_wrong_pw = client.post("/api/auth/login", json={"email": "active-check@iqoqo.local", "password": "wrong"})
+    resp_suspended = client.post("/api/auth/login", json={"email": "suspended-check@iqoqo.local", "password": password})
+    resp_active_correct = client.post("/api/auth/login", json={"email": "active-check@iqoqo.local", "password": password})
+
+    assert resp_unknown.status_code == 401
+    assert resp_wrong_pw.status_code == 401
+    assert resp_suspended.status_code == 401
+    assert resp_unknown.status_code == resp_wrong_pw.status_code == resp_suspended.status_code
+
+    assert resp_suspended.get_json() == {"error": "Account suspended", "suspended": True}
+
+    assert resp_active_correct.status_code == 200
+    assert "token" in resp_active_correct.get_json()

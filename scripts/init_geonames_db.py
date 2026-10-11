@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import logging
 import os
@@ -36,7 +37,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("init_geonames_db")
 
 GEONAMES_DUMP_URL = "https://download.geonames.org/export/dump/cities15000.zip"
-FALLBACK_HTTP_URL = "http://download.geonames.org/export/dump/cities15000.zip"
 
 
 def _get_default_db_path() -> str:
@@ -78,11 +78,11 @@ CREATE INDEX IF NOT EXISTS idx_alt_names_lower ON alt_names(name_lower);
 """
 
 
-def download_dump(url: str = GEONAMES_DUMP_URL) -> bytes:
-    """Download cities15000.zip into memory with SSRF protection and retry."""
-    # Ensure URL strictly targets official GeoNames download host
-    if not (url.startswith("https://download.geonames.org/") or url.startswith("http://download.geonames.org/")):
-        raise ValueError(f"Untrusted download URL: {url}")
+def download_dump(url: str = GEONAMES_DUMP_URL, expected_sha256: str | None = None) -> bytes:
+    """Download cities15000.zip into memory with SSRF protection, HTTPS enforcement, and integrity check."""
+    # Ensure URL strictly targets official GeoNames HTTPS download host
+    if not url.startswith("https://download.geonames.org/"):
+        raise ValueError(f"Untrusted download URL (HTTPS strictly required): {url}")
 
     logger.info("Downloading GeoNames cities gazetteer from %s ...", url)
     headers = {"User-Agent": "iqoqo-geonames-sync/1.0"}
@@ -90,14 +90,18 @@ def download_dump(url: str = GEONAMES_DUMP_URL) -> bytes:
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            content = resp.read()
+            content: bytes = resp.read()
             logger.info("Downloaded %d bytes successfully.", len(content))
-            return content
     except Exception as exc:
-        if url == GEONAMES_DUMP_URL:
-            logger.warning("HTTPS download failed (%s), retrying with HTTP fallback...", exc)
-            return download_dump(FALLBACK_HTTP_URL)
         raise RuntimeError(f"Failed to download GeoNames dump from {url}: {exc}") from exc
+
+    if expected_sha256:
+        calculated_sha256 = hashlib.sha256(content).hexdigest()
+        if calculated_sha256.lower() != expected_sha256.strip().lower():
+            raise ValueError(f"SHA-256 integrity mismatch: expected {expected_sha256}, got {calculated_sha256}")
+        logger.info("SHA-256 integrity verified (%s).", calculated_sha256)
+
+    return content
 
 
 def build_database(zip_bytes: bytes, db_path: str) -> int:
@@ -236,6 +240,11 @@ def main() -> int:
         action="store_true",
         help="Only verify existing database row count without downloading",
     )
+    parser.add_argument(
+        "--sha256",
+        default=os.environ.get("GEONAMES_DUMP_SHA256"),
+        help="Expected SHA-256 integrity checksum for the downloaded zip dump",
+    )
     args = parser.parse_args()
 
     db_path = os.path.abspath(args.dest)
@@ -259,7 +268,7 @@ def main() -> int:
             return 0
 
     try:
-        zip_bytes = download_dump()
+        zip_bytes = download_dump(expected_sha256=args.sha256)
         count = build_database(zip_bytes, db_path)
         if count < 20000:
             logger.error("Database populated with fewer records than expected (%d < 20000).", count)

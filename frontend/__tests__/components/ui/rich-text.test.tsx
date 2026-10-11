@@ -42,6 +42,22 @@ describe("RichText helper functions", () => {
     expect(clean).not.toContain("<script>");
     expect(clean).not.toContain("onerror");
   });
+
+  it("safely strips tags and script payloads during SSR when window is undefined", () => {
+    const originalWindow = global.window;
+    try {
+      // @ts-expect-error simulating SSR
+      delete global.window;
+      const dirty = '<p>Hello <b>World</b></p><script>alert("ssr-xss")</script><img src="x" onerror="alert(1)">';
+      const ssrClean = sanitizeRichHtml(dirty);
+      expect(ssrClean).toBe('Hello Worldalert("ssr-xss")');
+      expect(ssrClean).not.toContain("<script>");
+      expect(ssrClean).not.toContain("<p>");
+      expect(ssrClean).not.toContain("<img>");
+    } finally {
+      global.window = originalWindow;
+    }
+  });
 });
 
 describe("RichText component", () => {

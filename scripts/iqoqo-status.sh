@@ -961,6 +961,19 @@ if [[ ${#otel_disabled[@]} -gt 0 ]]; then
     check "Observability" warn "OTel exporters set to 'none' for: ${otel_disabled[*]}"
 fi
 
+# Production security: SPARQL runner secret audit
+flask_env=$(load_env "FLASK_ENV")
+sparql_secret=$(load_env "SPARQL_SERVICE_SECRET")
+if [[ "$STACK" == "prod" || "$STACK" == "preview" || "$flask_env" == "production" || -n "${DEPLOY_DIR:-}" ]]; then
+    if [[ -z "$sparql_secret" ]]; then
+        check "SPARQL Security" fail "SPARQL_SERVICE_SECRET is unset in production"
+    elif [[ "$sparql_secret" == "dev-sparql-service-secret" ]]; then
+        check "SPARQL Security" fail "SPARQL_SERVICE_SECRET is using default development secret in production"
+    else
+        check "SPARQL Security" pass "SPARQL_SERVICE_SECRET is configured with non-default value"
+    fi
+fi
+
 # ─── Disk Usage ─────────────────────────────────────────────────
 header "Disk"
 docker_root=$(docker info 2>/dev/null | grep "Docker Root Dir" | awk -F: '{print $2}' | tr -d ' ' || echo "/var/lib/docker")

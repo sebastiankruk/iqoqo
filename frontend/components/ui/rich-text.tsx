@@ -106,11 +106,14 @@ export function decodeHtmlEntities(raw: string): string {
 
 /**
  * Sanitizes an HTML string using DOMPurify with strict tag and attribute whitelists.
+ * When window or DOMPurify context is unavailable (SSR), strips all HTML tags to prevent XSS.
  */
 export function sanitizeRichHtml(dirty: string): string {
   const purify = getPurifier();
   if (!purify) {
-    return dirty;
+    // During SSR or when window/DOMPurify context is unavailable, strip HTML tags
+    // to prevent emitting raw, un-sanitized HTML in the server-rendered stream.
+    return dirty.replace(/<[^>]*>/g, "");
   }
 
   return purify.sanitize(dirty, {
