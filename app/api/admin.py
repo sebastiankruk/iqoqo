@@ -657,6 +657,33 @@ def update_manifestation(manif_id):
         return jsonify({"success": False, "error": str(e)}), 404
 
 
+@admin_bp.route("/frbr/manifestation/<int:manif_id>/provider-merge", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def custodian_provider_merge(manif_id: int):
+    """Atomically merge custodian-selected provider fragments across FRBR tiers."""
+    user = _get_current_user()
+    payload = request.get_json(silent=True) or {}
+    selections = payload.get("selections") if "selections" in payload else payload
+
+    if not isinstance(selections, dict):
+        return jsonify({"success": False, "error": "Invalid payload format; object expected"}), 400
+
+    try:
+        result = frbr_service.apply_custodian_provider_merge(
+            manifestation_id=manif_id,
+            selections=selections,
+            user_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": result})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 404
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Provider merge failed: %s", exc)
+        return jsonify({"success": False, "error": "Provider merge failed"}), 500
+
+
 @admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)

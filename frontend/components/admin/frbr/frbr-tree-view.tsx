@@ -17,7 +17,16 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, MoreVertical, Plus, ArrowUpRight, Trash2, ArrowRightLeft } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  MoreVertical,
+  Plus,
+  ArrowUpRight,
+  Trash2,
+  ArrowRightLeft,
+  GitMerge,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +53,7 @@ interface FRBRTreeViewProps {
   onEscalate?: (level: FrbrLevel, id: number) => void;
   onDelete?: (level: FrbrLevel, id: number) => void;
   onRelationManagement?: (level: FrbrLevel, id: number, title: string) => void;
+  onProviderMerge?: (manifestationId: number) => void;
 }
 
 /**
@@ -70,6 +80,7 @@ export function FRBRTreeView({
   onEscalate,
   onDelete,
   onRelationManagement,
+  onProviderMerge,
 }: FRBRTreeViewProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["work", "expression", "manifestation", "items"])
@@ -116,6 +127,12 @@ export function FRBRTreeView({
             <DropdownMenuItem onClick={() => onAddChild(level)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Child
+            </DropdownMenuItem>
+          )}
+          {onProviderMerge && level === "manifestation" && (
+            <DropdownMenuItem onClick={() => onProviderMerge(id)}>
+              <GitMerge className="w-4 h-4 mr-2" />
+              Merge Provider Metadata
             </DropdownMenuItem>
           )}
           {onRelationManagement && (

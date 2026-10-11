@@ -645,3 +645,80 @@ def test_roadmap_item_single_frbr_level_constraint(client, normal_user_headers, 
         headers=normal_user_headers,
     )
     assert res.status_code == 201
+
+
+def test_custodian_provider_merge_unauthorized(client):
+    """Ensure unauthenticated users cannot call provider-merge."""
+    res = client.post("/api/v1/admin/frbr/manifestation/1/provider-merge", json={})
+    assert res.status_code in (401, 403)
+
+
+def test_custodian_provider_merge_forbidden(client, normal_user_headers):
+    """Ensure users without WRITE_METADATA get 403 Forbidden."""
+    res = client.post("/api/v1/admin/frbr/manifestation/1/provider-merge", json={}, headers=normal_user_headers)
+    assert res.status_code == 403
+
+
+def test_custodian_provider_merge_success(client, admin_headers, app):
+    """Test custodian selective merge across Work and Manifestation tiers."""
+    from app.db.core import EntityAuditLog
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Old Title", meta={"authors": ["Old Author"]})
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text", language="en")
+        manif = frbr_service.create_manifestation(
+            expression_id=expr.id,
+            publisher="Old Publisher",
+            isbn13="9780000000001",
+            meta={"cover_url": "https://example.com/old.jpg"},
+        )
+        manif_id = manif.id
+        work_id = work.id
+        expr_id = expr.id
+
+    payload = {
+        "work": {
+            "title": {"value": "Merged Canonical Title", "provider": "google_books"},
+            "authors": {"value": ["Frank Herbert", "Brian Herbert"], "provider": "open_library"},
+        },
+        "expression": {
+            "language": {"value": "pl", "provider": "allegro"},
+        },
+        "manifestation": {
+            "publisher": {"value": "Chilton Books", "provider": "google_books"},
+            "cover_url": {"value": "https://covers.openlibrary.org/b/id/999-L.jpg", "provider": "open_library"},
+        },
+    }
+
+    res = client.post(
+        f"/api/v1/admin/frbr/manifestation/{manif_id}/provider-merge",
+        json=payload,
+        headers=admin_headers,
+    )
+    assert res.status_code == 200
+    assert res.json["success"] is True
+
+    with app.app_context():
+        updated_work = db.session.get(Work, work_id)
+        assert updated_work.title == "Merged Canonical Title"
+        assert updated_work.meta["authors"] == ["Frank Herbert", "Brian Herbert"]
+        assert updated_work.meta["_provenance"]["title"] == "google_books"
+        assert updated_work.meta["_provenance"]["authors"] == "open_library"
+
+        updated_expr = db.session.get(Expression, expr_id)
+        assert updated_expr.language == "pl"
+        assert updated_expr.meta["_provenance"]["language"] == "allegro"
+
+        updated_manif = db.session.get(Manifestation, manif_id)
+        assert updated_manif.publisher == "Chilton Books"
+        assert updated_manif.meta["cover_url"] == "https://covers.openlibrary.org/b/id/999-L.jpg"
+        assert updated_manif.meta["_provenance"]["publisher"] == "google_books"
+        assert updated_manif.meta["_provenance"]["cover_url"] == "open_library"
+
+        # Check EntityAuditLog
+        audit = db.session.execute(
+            db.select(EntityAuditLog).filter_by(entity_type="manifestation", entity_id=manif_id, change_type="provider_merge")
+        ).scalar_one_or_none()
+        assert audit is not None
+        assert audit.diff["work"]["title"]["after"] == "Merged Canonical Title"
+        assert audit.diff["manifestation"]["publisher"]["after"] == "Chilton Books"
