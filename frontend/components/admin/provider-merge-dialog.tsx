@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Loader2, GitMerge } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -60,6 +60,9 @@ export interface ProviderMergeDialogProps {
 
 /**
  * Formats heterogeneous values into readable display strings.
+ *
+ * @param val - The raw value.
+ * @returns Human-readable string representation.
  */
 function formatValueDisplay(val: unknown): string {
   if (val === null || val === undefined || val === "") return "—";
@@ -68,23 +71,32 @@ function formatValueDisplay(val: unknown): string {
 }
 
 /**
+ * Filter out empty candidates and duplicate provider keys.
+ *
+ * @param candidates - List of candidate provider fragments.
+ * @returns Deduplicated list of candidates.
+ */
+function deduplicateCandidates(candidates: ProviderCandidate[]): ProviderCandidate[] {
+  const seen = new Set<string>();
+  const res: ProviderCandidate[] = [];
+  for (const c of candidates) {
+    if (!c.value || (Array.isArray(c.value) && c.value.length === 0)) continue;
+    if (!seen.has(c.provider)) {
+      seen.add(c.provider);
+      res.push(c);
+    }
+  }
+  return res;
+}
+
+/**
  * Builds standard comparison fields from FRBR tree and metadata provenance.
+ *
+ * @param tree - The FRBR hierarchy tree.
+ * @returns Array of field comparisons across tiers.
  */
 export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[] {
   const fields: FieldComparison[] = [];
-
-  function deduplicateCandidates(candidates: ProviderCandidate[]): ProviderCandidate[] {
-    const seen = new Set<string>();
-    const res: ProviderCandidate[] = [];
-    for (const c of candidates) {
-      if (!c.value || (Array.isArray(c.value) && c.value.length === 0)) continue;
-      if (!seen.has(c.provider)) {
-        seen.add(c.provider);
-        res.push(c);
-      }
-    }
-    return res;
-  }
 
   // 1. Work Tier (F1)
   const work = tree.work;
@@ -231,7 +243,9 @@ export function ProviderMergeDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Derive field comparisons
-  const comparisons: FieldComparison[] = customFields ?? (tree ? buildFieldComparisonsFromTree(tree) : []);
+  const comparisons: FieldComparison[] = useMemo(() => {
+    return customFields ?? (tree ? buildFieldComparisonsFromTree(tree) : []);
+  }, [customFields, tree]);
 
   // Per-field selected provider key: fieldKey -> provider name
   const [selectedProviders, setSelectedProviders] = useState<Record<string, string>>(() => {

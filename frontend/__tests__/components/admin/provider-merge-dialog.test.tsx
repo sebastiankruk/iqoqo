@@ -105,6 +105,12 @@ const customComparisons: FieldComparison[] = [
   },
 ];
 
+/**
+ * Helper to render components wrapped with QueryClientProvider.
+ *
+ * @param ui - The React element to render.
+ * @returns Render result.
+ */
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
