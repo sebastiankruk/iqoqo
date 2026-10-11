@@ -262,9 +262,14 @@ def test_item_level_metadata_is_not_propagated(app):
         assert manifest.meta["type"] == "music"
         assert manifest.meta["format"] == "unknown_audio"
 
-        # The Item's denormalised copy is not, which is the defect.
-        assert physical.meta == {"type": "text", "format": "book", "Format": "book"}
+        # The Item's denormalised copy is updated to match Manifestation carrier
+        assert physical.meta["format"] == "unknown_audio"
+        assert physical.meta["Format"] == "unknown_audio"
+        assert physical.meta["type"] == "music"
+        assert physical.meta["format"] == manifest.meta["format"]
 
-        # And the copy genuinely disagrees with its parent, which is what makes
-        # it a defect rather than a harmless duplicate.
-        assert physical.meta["format"] != manifest.meta["format"]
+        # Export boundary serializes updated metadata consistently
+        from app.core.data_manager import _export_item_row
+
+        exported = _export_item_row(physical)
+        assert exported["meta"]["format"] == "unknown_audio"

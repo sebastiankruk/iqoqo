@@ -60,7 +60,7 @@ describe("ExtendedMetadata", () => {
 
   it("renders additional details in a collapsible section", () => {
     const meta = {
-      Publisher: "Test Publisher",
+      Country: "Test Country",
       Language: "English",
       // These keys should be hidden by default logic in the component
       Title: "Hidden Title",
@@ -71,14 +71,14 @@ describe("ExtendedMetadata", () => {
     render(<ExtendedMetadata meta={meta} />);
 
     // Initially hidden
-    expect(screen.queryByText("Test Publisher")).not.toBeInTheDocument();
+    expect(screen.queryByText("Test Country")).not.toBeInTheDocument();
 
     // Expand
     const button = screen.getByText("Additional Details");
     fireEvent.click(button);
 
     // Now visible
-    expect(screen.getByText("Test Publisher")).toBeInTheDocument();
+    expect(screen.getByText("Test Country")).toBeInTheDocument();
     expect(screen.getByText("Language")).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
 
@@ -88,12 +88,12 @@ describe("ExtendedMetadata", () => {
 
   it("renders primitives through expandable section", () => {
     const meta = {
-      Publisher: "Test Publisher", // Hidden key, so must expand
+      Country: "Test Country",
     };
     render(<ExtendedMetadata meta={meta} />);
     const button = screen.getByText("Additional Details");
     fireEvent.click(button);
-    expect(screen.getByText("Test Publisher")).toBeInTheDocument();
+    expect(screen.getByText("Test Country")).toBeInTheDocument();
   });
 
   it("renders Discogs attribution badge when data_source is discogs", () => {

@@ -59,6 +59,7 @@ function DetailsTab({ item }: { item: Item }) {
       {/* Rich metadata including audio tracklists */}
       <ExtendedMetadata
         meta={meta}
+        display={item.display}
         workMeta={item.work?.meta as Record<string, unknown> | undefined}
         owner_name={item.owner_name}
         owner_count={item.owner_count}

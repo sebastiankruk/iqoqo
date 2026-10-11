@@ -233,11 +233,25 @@ export interface Item {
   genres?: string[];
   publisher?: string;
   manifestation_meta?: Record<string, unknown>;
+  display?: DisplayProjection;
   content_type?: string | null;
   work_type?: string | null;
   medium_type?: string | null;
   expression?: Pick<Expression, "id" | "content_type" | "language" | "kind">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id">;
+}
+
+/**
+ * Display projection of manifestation metadata returned by the item detail API.
+ */
+export interface DisplayProjection {
+  sections?: Record<string, unknown>;
+  fields?: Record<string, unknown>;
+  additional_details?: Array<{
+    key: string;
+    label: string;
+    value: unknown;
+  }>;
 }
 
 /** Backward compatible alias for ProgressStatus */

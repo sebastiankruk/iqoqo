@@ -2057,6 +2057,17 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
     return carrier
 
 
+def _sync_manifestation_items_type(manifestation_id: int, carrier: str, new_type: str) -> None:
+    """Propagate type and carrier format updates down to child Items' metadata."""
+    child_items = db.session.execute(select(Item).where(Item.manifestation_id == manifestation_id)).scalars().all()
+    for item in child_items:
+        if item.meta:
+            i_meta = dict(item.meta)
+            if any(k in i_meta for k in ("format", "Format", "type")):
+                _sync_type_meta(i_meta, carrier, new_type)
+                item.meta = i_meta
+
+
 def update_frbr_entity_type(
     entity_class: Any,
     entity_id: int,
@@ -2065,8 +2076,8 @@ def update_frbr_entity_type(
     """
     Update the type of a FRBR entity and adapt parent/child entities to maintain consistency.
 
-    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations are preserved
-    when they stay valid for the new type; only invalid or type-like format
+    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations and child Items
+    are preserved when they stay valid for the new type; only invalid or type-like format
     values degrade to the category's ``unknown_*`` placeholder.
     """
     entity = db.session.get(entity_class, entity_id)
@@ -2085,6 +2096,7 @@ def update_frbr_entity_type(
             entity.format = carrier
 
     if entity_class == Manifestation:
+        _sync_manifestation_items_type(entity.id, carrier, new_type)
         if entity.expression:
             entity.expression.content_type = new_type
             if entity.expression.work:
@@ -2108,6 +2120,7 @@ def update_frbr_entity_type(
             m.meta = m_meta
             if hasattr(m, "format"):
                 m.format = carrier
+            _sync_manifestation_items_type(m.id, carrier, new_type)
     elif entity_class == Work:
         w_meta = dict(entity.meta or {})
         w_meta["type"] = new_type
@@ -2124,6 +2137,7 @@ def update_frbr_entity_type(
                 m.meta = m_meta
                 if hasattr(m, "format"):
                     m.format = carrier
+                _sync_manifestation_items_type(m.id, carrier, new_type)
 
     db.session.commit()
     return entity
@@ -2176,46 +2190,66 @@ def _add_provenance_triples(
             g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
         return
 
-    source = meta.get("data_source") or meta.get("source") or meta.get("provider")
-    if not source and raw_payload:
-        source = raw_payload.get("source") or raw_payload.get("data_source")
+    # Check for multi-provider field provenance in meta["_provenance"] or meta["provenance"]
+    provenance_map = meta.get("_provenance")
+    if not isinstance(provenance_map, dict):
+        provenance_map = meta.get("provenance")
 
-    if not source:
+    sources_to_add: set[str] = set()
+    if isinstance(provenance_map, dict):
+        for prov_val in provenance_map.values():
+            if prov_val and isinstance(prov_val, str):
+                sources_to_add.add(prov_val)
+
+    if not sources_to_add:
+        source = meta.get("data_source") or meta.get("source") or meta.get("provider")
+        if not source and raw_payload:
+            source = raw_payload.get("source") or raw_payload.get("data_source")
+        if source:
+            sources_to_add.add(str(source))
+
+    if not sources_to_add:
         return
 
-    source_str = str(source).lower()
-    if source_str.startswith(("http://", "https://")):
-        safe_prov = _safe_iri(str(source))
-        if safe_prov is not None:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
-    elif "openlibrary" in source_str or "open_library" in source_str:
-        olid = meta.get("openlibrary_id") or meta.get("olid")
-        if olid:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/books/{olid}")))
-        elif isbn:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/isbn/{isbn}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://openlibrary.org")))
-    elif "musicbrainz" in source_str:
-        mbid = meta.get("musicbrainz_id") or meta.get("mbid")
-        if mbid:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://musicbrainz.org/release/{mbid}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org")))
-    elif "bgg" in source_str or "boardgamegeek" in source_str:
-        bgg_id = meta.get("bgg_id") or meta.get("boardgamegeek_id")
-        if bgg_id:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://boardgamegeek.com/boardgame/{bgg_id}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://boardgamegeek.com")))
-    elif "allegro" in source_str:
-        allegro_url = meta.get("allegro_url")
-        if allegro_url:
-            safe_allegro = _safe_iri(str(allegro_url))
-            if safe_allegro is not None:
-                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
+    for source_entry in sorted(sources_to_add):
+        source_str = source_entry.lower()
+        if source_str.startswith(("http://", "https://")):
+            safe_prov = _safe_iri(source_entry)
+            if safe_prov is not None:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
+        elif "google" in source_str:
+            if isbn:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://books.google.com")))
+        elif "openlibrary" in source_str or "open_library" in source_str:
+            olid = meta.get("openlibrary_id") or meta.get("olid")
+            if olid:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/books/{olid}")))
+            elif isbn:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/isbn/{isbn}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://openlibrary.org")))
+        elif "musicbrainz" in source_str:
+            mbid = meta.get("musicbrainz_id") or meta.get("mbid")
+            if mbid:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://musicbrainz.org/release/{mbid}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org")))
+        elif "bgg" in source_str or "boardgamegeek" in source_str:
+            bgg_id = meta.get("bgg_id") or meta.get("boardgamegeek_id")
+            if bgg_id:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://boardgamegeek.com/boardgame/{bgg_id}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://boardgamegeek.com")))
+        elif "allegro" in source_str:
+            allegro_url = meta.get("allegro_url")
+            if allegro_url:
+                safe_allegro = _safe_iri(str(allegro_url))
+                if safe_allegro is not None:
+                    g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
 
 
 def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
