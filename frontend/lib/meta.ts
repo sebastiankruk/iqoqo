@@ -29,7 +29,7 @@
 type KeyChain = readonly string[];
 
 /** Fields this project reads, with every spelling known to occur. */
-const FIELD_CHAINS = {
+export const FIELD_CHAINS = {
   format: ["format", "Format"],
   year: ["year", "Year"],
   title: ["title", "Title"],
@@ -43,6 +43,22 @@ const FIELD_CHAINS = {
 
   subtitle: ["subtitle", "Subtitle"],
 } as const satisfies Record<string, KeyChain>;
+
+/**
+ * Check if a raw key matches any known spelling of a field declared in FIELD_CHAINS.
+ * Derived dynamically from FIELD_CHAINS so adding a spelling immediately updates suppression.
+ *
+ * @param key - The raw metadata key
+ * @returns True if the key is a known spelling of a declared field
+ */
+export function isKnownMetaSpelling(key: string): boolean {
+  for (const spellings of Object.values(FIELD_CHAINS)) {
+    if ((spellings as readonly string[]).includes(key)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** A logical metadata field this module knows how to read. */
 export type MetaField = keyof typeof FIELD_CHAINS;

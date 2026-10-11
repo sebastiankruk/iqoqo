@@ -40,6 +40,7 @@ from app.core.export_service import ExportService
 from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
+from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
 from app.db.models import (
     Expression,
@@ -522,6 +523,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["display"] = build_display_projection(manifestation.meta)
         item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None

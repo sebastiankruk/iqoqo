@@ -19,7 +19,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
-import { hasMetaChain, readMeta, readMetaChain } from "@/lib/meta";
+import { hasMetaChain, isKnownMetaSpelling, readMeta, readMetaChain } from "@/lib/meta";
 import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 import { RichText } from "@/components/ui/rich-text";
@@ -57,6 +57,8 @@ const LABEL_PUBLISHER_KEYS = ["label", "publisher", "Label", "Publisher"] as con
 /** Discogs writes the catalogue number with a space; other sources use an underscore. */
 const CATALOG_NUMBER_KEYS = ["catalog_number", "Catalog Number"] as const;
 
+import type { DisplayProjection } from "@/types/frbr";
+
 /** The runout identifier carries a slash, so its spelling varies more than most fields. */
 const MATRIX_NUMBER_KEYS = ["matrix_number", "Matrix / Runout"] as const;
 
@@ -65,6 +67,7 @@ interface ExtendedMetadataProps {
   workMeta?: Record<string, unknown>;
   owner_name?: string | null;
   owner_count?: number;
+  display?: DisplayProjection | null;
 }
 
 /**
@@ -75,9 +78,10 @@ interface ExtendedMetadataProps {
  * @param root0.workMeta - The work-level metadata
  * @param root0.owner_name - The owner name to display
  * @param root0.owner_count - The number of owners for this manifestation
+ * @param root0.display - Optional server-derived display projection
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: ExtendedMetadataProps) {
+export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, display }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
@@ -100,78 +104,25 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
     | Array<{ position: string; title: string; duration_seconds: number }>
     | undefined;
 
-  const hiddenKeys = new Set([
-    "title",
-    "Title",
-    "author",
-    "authors",
-    "Authors",
-    "description",
-    "Description",
-    "categories",
-    "Categories",
-    "cover_status",
-    "cover_source",
-    "cover_url",
-    "cover_status_updated_at",
-    "local_cover",
-    "tags",
-    "year",
-    "Year",
-    "pages",
-    "Pages",
-    "subtitle",
-    "Subtitle",
-    "track_list",
-    "tracks",
-    "Tracks",
-    "additional_images",
-    "imageLinks",
-    "format",
-    "publisher",
-    "label",
-    "barcode",
-    "isbn",
-    "catalog_number",
-    "matrix_number",
-    "pressing_number",
-    "disc_count",
-    "min_players",
-    "max_players",
-    "playing_time",
-    "playtime",
-    "min_playtime",
-    "max_playtime",
-    "mechanics",
-    "cast",
-    "directors",
-    "runtime",
-    "MinPlayers",
-    "MaxPlayers",
-    "PlayTime",
-    "Mechanics",
-    "Cast",
-    "Director",
-    "Runtime",
-    "piece_count",
-    "dimensions",
-    "artist",
-    "manufacturer",
-    "puzzle_type",
-    "data_source",
-  ]);
-
-  const extraKeys = Object.entries(meta)
+  // Fallback extra entries using stage-1 filter when no server display projection is present
+  const fallbackEntries = Object.entries(meta)
     .filter(([key, value]) => {
       const excludedKeys = ["id", "manifestation_id", "cover_url", "image", "cover_status", "cover"];
-      if (excludedKeys.includes(key.toLowerCase()) || hiddenKeys.has(key)) return false;
+      if (excludedKeys.includes(key.toLowerCase()) || isKnownMetaSpelling(key)) return false;
 
       const val = String(value).toLowerCase();
       if (!value || val === "unknown" || val === "n/a" || val === "none" || val === "") return false;
 
       return typeof value !== "object";
     })
-    .map(([key]) => key);
+    .map(([key, value]) => ({
+      key,
+      label: key.replace(/_/g, " "),
+      value,
+    }));
+
+  const additionalDetails =
+    display && Array.isArray(display.additional_details) ? display.additional_details : fallbackEntries;
 
   if (
     !description &&
@@ -181,7 +132,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
     !isBoardGame &&
     !isPuzzle &&
     !trackList &&
-    extraKeys.length === 0 &&
+    additionalDetails.length === 0 &&
     !owner_name &&
     !owner_count &&
     !meta["data_source"]
@@ -284,7 +235,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
         </div>
       )}
 
-      {(extraKeys.length > 0 || owner_name) && (
+      {(additionalDetails.length > 0 || owner_name) && (
         <div className="border rounded-xl p-2 bg-muted/10">
           <Button
             variant="ghost"
@@ -313,8 +264,9 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
                   </dd>
                 </div>
               )}
-              {extraKeys.map(key => {
-                const value = meta[key];
+              {additionalDetails.map(detail => {
+                const key = detail.key;
+                const value = detail.value;
                 let displayValue: React.ReactNode;
 
                 if (value === null || value === undefined) {
@@ -359,7 +311,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count }: Ex
                 return (
                   <div key={key} className="flex flex-col gap-1 pb-2 border-b border-border/20 last:border-0">
                     <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                      {key.replace(/_/g, " ")}
+                      {detail.label || key.replace(/_/g, " ")}
                     </dt>
                     <dd className="font-medium text-foreground break-words">{displayValue}</dd>
                   </div>

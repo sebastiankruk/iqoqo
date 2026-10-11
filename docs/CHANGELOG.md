@@ -9,11 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-Provider Gap Fill Ingestion**: Enriched manifestation and expression metadata during ingestion by consulting secondary providers (such as Google Books, OpenLibrary, and Allegro) for missing identifiers, publication year, descriptions, and contributors when the primary provider returns incomplete records (`multi-provider-gap-fill-v084`).
+
 ### Changed
 
 - **ItemSidebar Component Decomposition**: Decomposed the monolithic 838-line `ItemSidebar` component into 6 focused presentational components (`SidebarCover`, `SidebarStatusBadges`, `SidebarLendingInfo`, `SidebarIdentifiers`, `SidebarActions`, `SidebarFrbrInfo`) and a dedicated custom hook (`useItemSidebarActions`) in `frontend/components/item/sidebar/`. Preserves byte-identical presentation and contract with no dynamic import splits and zero provider wrappers. Added full unit and baseline test suites in `frontend/__tests__/components/item/sidebar/`.
+- **Item Metadata Type & Carrier Synchronization**: When `update_frbr_entity_type` updates the carrier and entity type of a Work, Expression, or Manifestation, the update now descends into child Items holding carrier or format metadata (`format`, `Format`, or `type`) in `Item.meta`. The keys are updated in lockstep via `_sync_type_meta` while user-annotated metadata is preserved, resolving staleness across active entities and ensuring JSON data export parity without adding N+1 queries (`item-metadata-staleness-v084`, Direction D2). Note: historical rows modified prior to this update are not backfilled until their parent entity type is updated.
 
 ### Fixed
+
+- **Metadata Display Duplication on Item Detail**: Fixed duplicate rendering of metadata fields (such as "Media Format", "Author", and "Publisher") when the "Additional Details" section is expanded on item detail pages. The duplication occurred on records using capitalized keys (such as `Format`, `Author`, or `Publisher` produced by OCR imports) because suppression against primary display sections was matched case-sensitively, causing values to appear twice across dedicated sections and the additional details panel (`metadata-display-projection-v084`).
 
 ## [0.8.3] - 2026-10-10
 

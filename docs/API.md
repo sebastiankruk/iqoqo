@@ -333,6 +333,58 @@ Access-Control-Allow-Headers: Content-Type, Accept, Authorization
 
 ---
 
+## Physical Item Endpoints
+
+### `GET /api/items/<id>`
+
+Retrieve single physical item details including its manifestation, expression, and work.
+
+**Authentication:** Optional (authenticated caller sees ownership and lending details; unauthenticated sees public item details unless hidden).
+
+**Response:**
+
+The response includes both the untouched, authoritative raw metadata in `manifestation_meta` and an additive `display` projection:
+
+- `manifestation_meta`: Complete, unconstrained provider and OCR metadata. **Authoritative for editing and storage.** Consumers and the item editor must continue to read `manifestation_meta` for write operations.
+- `display`: An additive display projection pre-computed on the server to prevent presentation duplication across UI sections:
+  - `sections`: Extracted canonical sections (`format`, `description`, `categories`, `label_publisher`).
+  - `fields`: Normalized field map for standard bibliographic attributes.
+  - `additional_details`: Array of primitive `{ key, label, value }` entries that are not rendered in primary UI sections and pass display filters (omits empty, unknown, and structural keys).
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "manifestation_meta": {
+      "Format": "Vinyl",
+      "Publisher": "Blue Note",
+      "Year": "1964",
+      "CustomAttribute": "Sample"
+    },
+    "display": {
+      "sections": {
+        "format": "Vinyl",
+        "label_publisher": "Blue Note"
+      },
+      "fields": {
+        "format": "Vinyl",
+        "publisher": "Blue Note"
+      },
+      "additional_details": [
+        {
+          "key": "CustomAttribute",
+          "label": "CustomAttribute",
+          "value": "Sample"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
 ## Data Export Endpoint
 
 ### `GET /api/items/export`
@@ -343,8 +395,8 @@ Stream export of the authenticated user's library in Linked Data or JSON format.
 
 **Parameters:**
 
-| Parameter | Type   | Required | Description                                       |
-| --------- | ------ | -------- | ------------------------------------------------- |
+| Parameter | Type   | Required | Description                                          |
+| --------- | ------ | -------- | ---------------------------------------------------- |
 | `format`  | string | No       | Export format: `json-ld` (default), `turtle`, `json` |
 
 **Example:**

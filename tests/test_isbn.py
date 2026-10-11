@@ -259,7 +259,13 @@ class TestFetchIsbnMetadata:
     """Integration-style tests for :func:`app.utils.isbn.fetch_isbn_metadata`."""
 
     def test_google_books_hit_is_returned_directly(self):
-        expected = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        expected = {
+            "Title": "The Hobbit",
+            "Authors": ["J.R.R. Tolkien"],
+            "cover_url": "https://example.com/cover.jpg",
+            "publisher": "George Allen & Unwin",
+            "publication_date": "1937-09-21",
+        }
         gb_success = ISBNProviderOutcome(
             status=ISBNProviderOutcomeStatus.SUCCESS,
             metadata=expected,
