@@ -42,6 +42,7 @@ import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
+import { TagCloud } from "@/components/ui/tag-cloud";
 import { DiscoveryPivot } from "./discovery-pivot";
 
 /**
@@ -142,10 +143,8 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
   return (
     <div className="space-y-4 py-4">
       {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {categories.map(cat => (
-            <DiscoveryPivot key={cat} type="genres" value={cat} />
-          ))}
+        <div>
+          <TagCloud tags={categories} maxInitial={10} />
         </div>
       )}
 

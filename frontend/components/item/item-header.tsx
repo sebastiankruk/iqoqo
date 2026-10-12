@@ -23,7 +23,7 @@ import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, Tag, ChevronRight } from "lucide-react";
+import { Disc, BookOpen, Calendar, ChevronRight } from "lucide-react";
 import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
