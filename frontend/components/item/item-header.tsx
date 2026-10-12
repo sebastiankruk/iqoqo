@@ -24,6 +24,7 @@ import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
 import { Disc, BookOpen, Calendar, Tag, ChevronRight } from "lucide-react";
+import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
 
@@ -191,18 +192,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {tags.map(tag => (
-              <DiscoveryPivot
-                key={tag}
-                type="tags"
-                value={tag}
-                className="rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium border border-transparent hover:border-border"
-              >
-                <Tag className="h-2.5 w-2.5" />
-                {tag}
-              </DiscoveryPivot>
-            ))}
+          <div className="mb-3">
+            <TagCloud tags={tags} maxInitial={10} />
           </div>
         )}
 
