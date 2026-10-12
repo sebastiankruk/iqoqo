@@ -577,25 +577,14 @@ def search_works():
     """Search works for series selection (autocomplete)."""
     q = (request.args.get("q") or "").strip()
     limit = min(int(request.args.get("limit", 20)), 50)
-    
+
     if not q:
         return jsonify({"success": True, "data": []})
-    
+
     # Search by title or ID
-    works = Work.query.filter(
-        db.or_(
-            Work.title.ilike(f"%{q}%"),
-            Work.id == int(q) if q.isdigit() else False
-        )
-    ).limit(limit).all()
-    
-    return jsonify({
-        "success": True,
-        "data": [
-            {"id": w.id, "title": w.title}
-            for w in works
-        ]
-    })
+    works = Work.query.filter(db.or_(Work.title.ilike(f"%{q}%"), Work.id == int(q) if q.isdigit() else False)).limit(limit).all()
+
+    return jsonify({"success": True, "data": [{"id": w.id, "title": w.title} for w in works]})
 
 
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])

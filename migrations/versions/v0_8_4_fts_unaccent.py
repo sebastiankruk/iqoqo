@@ -33,12 +33,8 @@ depends_on = None
 
 def upgrade():
     """Update FTS columns to use unaccent for diacritic-insensitive search."""
-    # Drop indexes first (required before dropping columns)
-    op.execute("DROP INDEX IF EXISTS catalog.ix_works_fts")
-    op.execute("DROP INDEX IF EXISTS catalog.ix_manifestations_fts")
-    
     # Update works.fts_simple to use unaccent
-    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple")
+    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.works
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -51,7 +47,7 @@ def upgrade():
     op.execute("CREATE INDEX ix_works_fts ON catalog.works USING gin(fts_simple)")
 
     # Update manifestations.fts_simple to use unaccent
-    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple")
+    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.manifestations
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -67,12 +63,8 @@ def upgrade():
 
 def downgrade():
     """Revert FTS columns to original definitions without unaccent."""
-    # Drop indexes first (required before dropping columns)
-    op.execute("DROP INDEX IF EXISTS catalog.ix_works_fts")
-    op.execute("DROP INDEX IF EXISTS catalog.ix_manifestations_fts")
-    
     # Revert works.fts_simple
-    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple")
+    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.works
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -85,7 +77,7 @@ def downgrade():
     op.execute("CREATE INDEX ix_works_fts ON catalog.works USING gin(fts_simple)")
 
     # Revert manifestations.fts_simple
-    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple")
+    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.manifestations
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
