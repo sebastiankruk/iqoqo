@@ -134,26 +134,26 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           aria-label="FRBR Hierarchy"
           className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mb-3"
         >
-          {item.work?.id && (
+          {(item.work?.id || item.work_id) && (
             <>
               <Link
-                href={`/work/${item.work.id}`}
+                href={`/work/${item.work?.id || item.work_id}`}
                 className="hover:text-primary hover:underline transition-colors font-medium"
               >
-                Work{item.work.title ? `: ${item.work.title}` : ""}
+                Work{item.work?.title || item.work_title ? `: ${item.work?.title || item.work_title}` : ""}
               </Link>
               <ChevronRight className="h-3 w-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
             </>
           )}
 
-          {item.expression?.id && (
+          {(item.expression?.id || item.expression_id) && (
             <>
               <Link
-                href={`/expression/${item.expression.id}`}
+                href={`/expression/${item.expression?.id || item.expression_id}`}
                 className="hover:text-primary hover:underline transition-colors font-medium"
               >
                 Expression
-                {item.expression.language || item.expression.content_type
+                {item.expression?.language || item.expression?.content_type
                   ? `: ${[item.expression.language, item.expression.content_type].filter(Boolean).join(" - ")}`
                   : ""}
               </Link>

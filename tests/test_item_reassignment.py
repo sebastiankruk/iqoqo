@@ -31,6 +31,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import select
 
 from app.core.permissions import PermissionName
 from app.db.core import (
@@ -397,6 +398,64 @@ class TestAuthorizedReassignmentApi:
         assert res_exec.status_code == 200
         assert res_exec.json["success"] is True
         assert res_exec.json["data"]["transferred_count"] == 1
+
+    def test_custodian_ownership_endpoints_flow(self, app: Any, client: Any, transfer_fixture: dict[str, Any]) -> None:
+        """Verify user with custodian role and write:users permission can perform ownership reassignment."""
+        from app.api.auth import generate_internal_jwt
+
+        with app.app_context():
+            custodian_role = db.session.scalar(select(Role).where(Role.name == "custodian"))
+            if not custodian_role:
+                custodian_role = Role(name="custodian")
+                db.session.add(custodian_role)
+            write_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.WRITE_USERS.value))
+            if not write_perm:
+                write_perm = Permission(name=PermissionName.WRITE_USERS.value, description="Write Users")
+                db.session.add(write_perm)
+            if write_perm not in custodian_role.permissions:
+                custodian_role.permissions.append(write_perm)
+
+            read_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.READ_USERS.value))
+            if not read_perm:
+                read_perm = Permission(name=PermissionName.READ_USERS.value, description="Read Users")
+                db.session.add(read_perm)
+            if read_perm not in custodian_role.permissions:
+                custodian_role.permissions.append(read_perm)
+
+            custodian_user = User(
+                email=f"custodian_{uuid.uuid4().hex[:6]}@example.com",
+                display_name="Custodian User",
+                is_active=True,
+            )
+            custodian_user.set_password("Cust0dianPass!")
+            custodian_user.roles.append(custodian_role)
+            db.session.add(custodian_user)
+            db.session.commit()
+
+            token = generate_internal_jwt(custodian_user)
+            custodian_headers = {"Authorization": f"Bearer {token}"}
+
+        source_id = str(transfer_fixture["source_id"])
+        target_id = str(transfer_fixture["target_id"])
+
+        # Custodian can access accounts
+        res_acc = client.get("/api/v1/admin/ownership/accounts", headers=custodian_headers)
+        assert res_acc.status_code == 200
+        assert res_acc.json["success"] is True
+
+        # Custodian can preview
+        res_prev = client.post(
+            "/api/v1/admin/ownership/preview",
+            json={
+                "source_user_id": source_id,
+                "target_user_id": target_id,
+                "mode": "single",
+                "item_ids": [transfer_fixture["item2_id"]],
+            },
+            headers=custodian_headers,
+        )
+        assert res_prev.status_code == 200
+        assert res_prev.json["success"] is True
 
     def test_ordinary_put_item_rejects_owner_id_change(
         self, client: Any, normal_user_headers: Any, transfer_fixture: dict[str, Any]

@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, Plus, MoreVertical, ArrowUpRight, Trash2 } from "lucide-react";
+import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +96,28 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
   );
   const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.work?.contributions ?? []);
+  const [seriesMemberships, setSeriesMemberships] = useState<Array<{ series_work_id: number; sequence: number }>>(() =>
+    (tree.work?.series_memberships ?? []).map(sm => ({
+      series_work_id: sm.series_work_id,
+      sequence: sm.sequence,
+    }))
+  );
+  const [newSeriesId, setNewSeriesId] = useState("");
+  const [newSeriesSeq, setNewSeriesSeq] = useState("1");
+
+  const handleAddSeries = () => {
+    const sId = parseInt(newSeriesId, 10);
+    const seq = parseInt(newSeriesSeq, 10) || 0;
+    if (!sId || isNaN(sId)) return;
+    if (seriesMemberships.some(sm => sm.series_work_id === sId)) return;
+    setSeriesMemberships(prev => [...prev, { series_work_id: sId, sequence: seq }]);
+    setNewSeriesId("");
+    setNewSeriesSeq("1");
+  };
+
+  const handleRemoveSeries = (sId: number) => {
+    setSeriesMemberships(prev => prev.filter(sm => sm.series_work_id !== sId));
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,6 +126,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
       title: formData.get("title") as string,
       metaFields,
       contributions,
+      series_memberships: seriesMemberships,
     };
     await onSubmit(data);
   };
@@ -114,6 +137,62 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
         <label className="text-sm font-medium">Title</label>
         <InputField name="title" defaultValue={tree.work?.title ?? ""} required />
       </div>
+
+      {/* Multi-series containers */}
+      <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-primary" />
+            Series Memberships
+          </label>
+          <span className="text-xs text-muted-foreground">Multi-Series Support</span>
+        </div>
+
+        {seriesMemberships.length > 0 ? (
+          <div className="space-y-2">
+            {seriesMemberships.map(sm => (
+              <div
+                key={sm.series_work_id}
+                className="flex items-center gap-2 bg-background p-2 rounded-md border text-xs"
+              >
+                <span className="font-medium text-foreground">Series Work #{sm.series_work_id}</span>
+                <span className="text-muted-foreground">Seq: #{sm.sequence}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSeries(sm.series_work_id)}
+                  className="ml-auto text-muted-foreground hover:text-destructive p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No series memberships attached.</p>
+        )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            type="number"
+            placeholder="Series Work ID"
+            value={newSeriesId}
+            onChange={e => setNewSeriesId(e.target.value)}
+            className="flex h-8 w-32 rounded-md border border-input bg-background px-2 text-xs"
+          />
+          <input
+            type="number"
+            placeholder="Sequence #"
+            value={newSeriesSeq}
+            onChange={e => setNewSeriesSeq(e.target.value)}
+            className="flex h-8 w-24 rounded-md border border-input bg-background px-2 text-xs"
+          />
+          <Button type="button" size="sm" variant="outline" onClick={handleAddSeries} className="h-8 text-xs">
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add Series
+          </Button>
+        </div>
+      </div>
+
       <MetaFieldsEditor fields={metaFields} onChange={setMetaFields} />
       <ContributorRowsEditor roles={WORK_ROLES} contributions={contributions} onChange={setContributions} />
       <div className="flex items-center gap-2">

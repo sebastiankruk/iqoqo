@@ -250,6 +250,7 @@ export interface FrbrWork {
   title: string;
   meta: Record<string, unknown>;
   contributions?: FrbrContribution[];
+  series_memberships?: Array<{ id?: number; series_work_id: number; title?: string; sequence: number }>;
 }
 
 export interface FrbrExpression {

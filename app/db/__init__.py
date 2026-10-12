@@ -40,7 +40,18 @@ def import_models() -> None:
     ``create_app``).  ``db.create_all()`` and Alembic autogenerate both need
     every model class to have been imported before they inspect the metadata.
     """
-    # Order matters: auth / settings have no cross-module FKs, so they can be
-    # imported first.  core.py references auth (users.id FK on Item), and
-    # audio.py references core (works.id / expressions.id FKs).
     from app.db import auth, settings, core, audio, video, games, social, roadmap, lending  # noqa: F401, I001 # isort: skip
+
+
+import sqlite3
+
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+
+@event.listens_for(Engine, "connect")
+def _register_sqlite_unaccent(dbapi_connection, _connection_record) -> None:
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        from app.core.search_service import normalize_diacritics
+
+        dbapi_connection.create_function("unaccent", 1, normalize_diacritics)

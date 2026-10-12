@@ -214,4 +214,13 @@ describe("AdminSidebar", () => {
     expect(() => render(<AdminSidebar activeTab="roles" />)).not.toThrow();
     expect(isActive(item("Roles"))).toBe(true);
   });
+
+  it("shows Item Ownership in Custodians section for custodian with write:users", () => {
+    mockProfile(profile(["custodian"], ["write:users"]));
+
+    render(<AdminSidebar />);
+
+    expect(screen.getByText("Custodians")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Item Ownership" })).toBeInTheDocument();
+  });
 });

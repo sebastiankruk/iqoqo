@@ -43,10 +43,10 @@ export default function OwnershipPage() {
 
   const permissions = profile.permissions ?? [];
   const roles = profile.roles ?? [];
-  const isAdmin = roles.includes("admin");
+  const isAdminOrCustodian = roles.includes("admin") || roles.includes("custodian");
   const canWriteUsers = permissions.includes(PermissionName.WRITE_USERS);
 
-  if (!isAdmin || !canWriteUsers) {
+  if (!isAdminOrCustodian || !canWriteUsers) {
     return (
       <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
         <Navbar />
@@ -56,7 +56,8 @@ export default function OwnershipPage() {
             <ShieldAlert className="h-12 w-12 text-destructive mb-4" />
             <h1 className="text-xl font-semibold">Access Restricted</h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md">
-              Item ownership reassignment requires administrator privileges with user management permissions.
+              Item ownership reassignment requires administrator or custodian privileges with user management
+              permissions.
             </p>
           </div>
         </main>

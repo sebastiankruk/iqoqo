@@ -116,6 +116,7 @@ export interface WorkFormData {
   mechanics?: string[];
   metaFields: MetaField[];
   contributions?: FrbrContribution[];
+  series_memberships?: Array<{ series_work_id: number; sequence: number }>;
 }
 
 /**

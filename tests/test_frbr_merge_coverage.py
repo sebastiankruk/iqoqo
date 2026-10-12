@@ -150,7 +150,7 @@ def test_map_counts_match_the_documented_totals():
     per tier, each plus one polymorphic ``SemanticLink`` entry; this fails if a
     column is added without the documentation being updated.
     """
-    documented = {"work": 13, "expression": 7, "manifestation": 9}
+    documented = {"work": 15, "expression": 7, "manifestation": 9}
     actual = {tier: len([r for r in refpoints if not r.polymorphic]) for tier, refpoints in REFPOINTS_BY_TIER.items()}
     assert actual == documented, f"frbr_merge module docstring counts are stale: {actual} != {documented}"
 

@@ -21,6 +21,7 @@ Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 import dataclasses
 import logging
 import os
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,6 +29,7 @@ from sqlalchemy import bindparam, text
 
 from app.api.filters import CatalogFilterBuilder
 from app.db import db
+from app.db.contributions import Contributor, ExpressionContribution, WorkContribution
 from app.db.models import Expression, Item, Manifestation, Work
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,29 @@ def _validated_schema_prefixes() -> tuple[str, str]:
     if prefixes not in _ALLOWED_SCHEMA_PREFIXES:
         raise ValueError("Unexpected database schema prefix configuration")
     return prefixes
+
+
+def normalize_diacritics(s: str) -> str:
+    """Normalize text by folding diacritics / accents (e.g. 'miłość' -> 'milosc')."""
+    if not s:
+        return ""
+    table = str.maketrans(
+        {
+            "ł": "l",
+            "Ł": "L",
+            "ø": "o",
+            "Ø": "O",
+            "đ": "d",
+            "Đ": "D",
+            "ß": "ss",
+            "æ": "ae",
+            "Æ": "AE",
+            "œ": "oe",
+            "Œ": "OE",
+        }
+    )
+    translated = s.translate(table)
+    return "".join(c for c in unicodedata.normalize("NFD", translated) if unicodedata.category(c) != "Mn")
 
 
 def sanitize_search_query(q: str) -> str:
@@ -213,7 +238,7 @@ class SearchService:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
         w_search_vector_expr = "w.search_vector"
-        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+        tsquery_expr = "websearch_to_tsquery('simple', immutable_unaccent(:q))"
         params = {"q": q, "limit": limit, "offset": offset}
 
         extra_filters_sql = ""
@@ -341,7 +366,7 @@ class SearchService:
         w_tsvector_expr = "w.fts_simple"
         m_tsvector_expr = "m.fts_simple"
         w_search_vector_expr = "w.search_vector"
-        tsquery_expr = "websearch_to_tsquery('simple', :q)"
+        tsquery_expr = "websearch_to_tsquery('simple', immutable_unaccent(:q))"
 
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
         if borrowed_only:
@@ -391,6 +416,7 @@ class SearchService:
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                m.publisher,
                w.meta as work_meta, i.added_at, i.updated_at, e.content_type,
+               w.id as work_id, e.id as expression_id,
                 ts_rank({w_tsvector_expr} || {m_tsvector_expr} || coalesce({w_search_vector_expr}, ''::tsvector), {tsquery_expr}) as rank
         FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
@@ -445,17 +471,63 @@ class SearchService:
             owner_only,
         ) = dataclasses.astuple(filters)
         search_term = f"%{q}%"
+        norm_q = normalize_diacritics(q)
+        norm_term = f"%{norm_q}%"
+
+        unaccent_func = db.func.unaccent
+
+        search_conditions = [
+            Work.title.ilike(search_term),
+            db.cast(Work.meta, db.String).ilike(search_term),
+            Manifestation.meta.cast(db.String).ilike(search_term),
+            Manifestation.isbn13.ilike(search_term),
+            unaccent_func(Work.title).ilike(norm_term),
+            unaccent_func(db.cast(Work.meta, db.String)).ilike(norm_term),
+            unaccent_func(Manifestation.meta.cast(db.String)).ilike(norm_term),
+        ]
+
+        # Also token-wise match for multi-word diacritic-insensitive searches (e.g. 'Garcia Marquez' -> '%Garcia%Marquez%')
+        words = q.split()
+        if len(words) > 1:
+            token_pattern = "%" + "%".join(words) + "%"
+            norm_token_pattern = "%" + "%".join(normalize_diacritics(w) for w in words) + "%"
+            search_conditions.extend(
+                [
+                    Work.title.ilike(token_pattern),
+                    db.cast(Work.meta, db.String).ilike(token_pattern),
+                    unaccent_func(Work.title).ilike(norm_token_pattern),
+                    unaccent_func(db.cast(Work.meta, db.String)).ilike(norm_token_pattern),
+                ]
+            )
+
+        work_contrib = db.aliased(Contributor, name="work_contributor")
+        expr_contrib = db.aliased(Contributor, name="expr_contributor")
+
         # Subquery to get matching item IDs
         matching_items_sub = (
             db.session.query(Item.id)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
             .join(Work, Expression.work_id == Work.id)
+            .outerjoin(WorkContribution, Work.id == WorkContribution.work_id)
+            .outerjoin(work_contrib, WorkContribution.contributor_id == work_contrib.id)
+            .outerjoin(ExpressionContribution, Expression.id == ExpressionContribution.expression_id)
+            .outerjoin(expr_contrib, ExpressionContribution.contributor_id == expr_contrib.id)
             .filter(
                 db.or_(
-                    Work.title.ilike(search_term),
-                    db.cast(Work.meta["authors"], db.String).ilike(search_term),
-                    Manifestation.isbn13.ilike(search_term),
+                    *search_conditions,
+                    work_contrib.name.ilike(search_term),
+                    expr_contrib.name.ilike(search_term),
+                    unaccent_func(work_contrib.name).ilike(norm_term),
+                    unaccent_func(expr_contrib.name).ilike(norm_term),
+                    *(
+                        [
+                            unaccent_func(work_contrib.name).ilike(norm_token_pattern),
+                            unaccent_func(expr_contrib.name).ilike(norm_token_pattern),
+                        ]
+                        if len(words) > 1
+                        else []
+                    ),
                 )
             )
         )
@@ -547,6 +619,8 @@ class SearchService:
                     "publisher": manifestation.publisher,
                     "work_meta": work.meta,
                     "content_type": expression.content_type,
+                    "work_id": work.id if work else None,
+                    "expression_id": expression.id if expression else None,
                     "added_at": item.added_at,
                     "updated_at": item.updated_at,
                 }

@@ -117,6 +117,19 @@ describe("OwnershipPage and OwnershipManagement UI", () => {
     });
   });
 
+  it("renders full ownership UI when authorized with custodian role and write:users", async () => {
+    mockProfile(["custodian"], ["read:users", "write:users"]);
+    vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);
+
+    render(<OwnershipPage />);
+
+    expect(screen.getByText("Item Ownership Reassignment")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Source Account/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Target Account/i)).toBeInTheDocument();
+    });
+  });
+
   it("loads source items when source account selected and supports single transfer preview", async () => {
     mockProfile(["admin"], ["read:users", "write:users"]);
     vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);

@@ -33,7 +33,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
-from app.api.decorators import admin_required, require_auth, require_permission
+from app.api.decorators import admin_or_custodian_required, admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
@@ -579,11 +579,13 @@ def update_work(work_id):
     try:
         raw_contributions = data.get("contributions")
         contributions = frbr_service.parse_agent_input(raw_contributions, default_role="author") if raw_contributions is not None else None
+        raw_series = data.get("series_memberships")
         work = frbr_service.update_work(
             work_id,
             title=data.get("title"),
             meta=parse_meta(data.get("meta")),
             contributions=contributions,
+            series_memberships=raw_series if raw_series is not None else None,
         )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
@@ -1610,7 +1612,7 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
 
 @admin_bp.route("/ownership/accounts", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_accounts():
     """Discover accounts for ownership transfer source and target selection."""
     user = _get_current_user()
@@ -1637,7 +1639,7 @@ def get_ownership_accounts():
 
 @admin_bp.route("/ownership/items", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_source_items():
     """Get paginated physical items belonging to a specified source account."""
     user = _get_current_user()
@@ -1704,7 +1706,7 @@ def get_ownership_source_items():
 
 @admin_bp.route("/ownership/preview", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def preview_item_reassignment():
     """Preview an item ownership reassignment operation and return a deterministic scope digest."""
     user = _get_current_user()
@@ -1734,7 +1736,7 @@ def preview_item_reassignment():
 
 @admin_bp.route("/ownership/reassign", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def execute_item_reassignment():
     """Confirm and execute an item ownership reassignment operation with atomic rollback."""
     user = _get_current_user()

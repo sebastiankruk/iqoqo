@@ -16,17 +16,19 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe, History, Images, BookOpen, MessageSquare } from "lucide-react";
+import { FileText, Globe, History, Images, BookOpen, MessageSquare, Layers } from "lucide-react";
 import type { Item } from "@/types/frbr";
 import { useAppConfig, useWorkParts, useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import Link from "next/link";
 import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
 import { ExtendedMetadata } from "./extended-metadata";
 import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
 import { FRBRFeedback } from "../social/frbr-feedback";
 import { SemanticLinks } from "../manifestation/semantic-links";
+import { TagCloud } from "../ui/tag-cloud";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -64,6 +66,35 @@ function DetailsTab({ item }: { item: Item }) {
         owner_name={item.owner_name}
         owner_count={item.owner_count}
       />
+
+      {/* Indexed Tags */}
+      {Array.isArray(meta.tags || meta.genres) && (meta.tags || meta.genres).length > 0 && (
+        <div className="border-t pt-4 space-y-2">
+          <h4 className="font-serif text-sm font-bold text-foreground">Tags</h4>
+          <TagCloud tags={(meta.tags || meta.genres) as string[]} maxInitial={10} />
+        </div>
+      )}
+
+      {/* Multi-series badges */}
+      {item.work?.series_memberships && item.work.series_memberships.length > 0 && (
+        <div className="border-t pt-4 space-y-2">
+          <h4 className="font-serif text-sm font-bold text-foreground">Series Memberships</h4>
+          <div className="flex flex-wrap gap-2">
+            {item.work.series_memberships.map(sm => (
+              <Link key={sm.series_work_id} href={`/work/${sm.series_work_id}`}>
+                <Badge
+                  variant="outline"
+                  className="bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 transition-colors cursor-pointer gap-1.5 py-1 px-2.5 text-xs font-medium"
+                >
+                  <Layers className="h-3 w-3" />
+                  <span>{sm.title || `Series #${sm.series_work_id}`}</span>
+                  <span className="text-muted-foreground font-normal">#{sm.sequence}</span>
+                </Badge>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Series parts info */}
       {item.work && parts.length > 0 && (

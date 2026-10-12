@@ -97,3 +97,81 @@ def test_search_items_by_title(app, client, normal_user_headers):
     assert no_match_data["success"] is True
     assert isinstance(no_match_data["data"], list)
     assert len(no_match_data["data"]) == 0
+
+
+def test_search_items_by_contributor_and_diacritics(app, client, normal_user_headers):
+    """Verify search matches author/contributor names and folds diacritics."""
+    from app.db.contributions import Contributor, WorkContribution
+    from app.db.models import Expression, Item, Manifestation, User, Work, db
+
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").one_or_none()
+        assert user is not None
+
+        # Seed work with author containing diacritics
+        work = Work(title="Cien anos de soledad", meta={"authors": ["Gabriel García Márquez"]})
+        db.session.add(work)
+        db.session.flush()
+
+        contributor = Contributor(name="Gabriel García Márquez", type="person")
+        db.session.add(contributor)
+        db.session.flush()
+
+        work_contrib = WorkContribution(work_id=work.id, contributor_id=contributor.id, role="author")
+        db.session.add(work_contrib)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="es", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9780307474728", meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        item = Item(manifestation_id=manif.id, owner_id=user.id, status="available", meta={})
+        db.session.add(item)
+
+        # Seed another work with Polish diacritics
+        work2 = Work(title="Miłość w czasach zarazy", meta={"authors": ["Gabriel García Márquez"]})
+        db.session.add(work2)
+        db.session.flush()
+
+        work_contrib2 = WorkContribution(work_id=work2.id, contributor_id=contributor.id, role="author")
+        db.session.add(work_contrib2)
+        db.session.flush()
+
+        expr2 = Expression(work_id=work2.id, content_type="text", language="pl", meta={})
+        db.session.add(expr2)
+        db.session.flush()
+
+        manif2 = Manifestation(expression_id=expr2.id, isbn13="9788377583648", meta={})
+        db.session.add(manif2)
+        db.session.flush()
+
+        item2 = Item(manifestation_id=manif2.id, owner_id=user.id, status="available", meta={})
+        db.session.add(item2)
+        db.session.commit()
+
+        item_id1 = item.id
+        item_id2 = item2.id
+
+    # 1. Author search with accented characters
+    res = client.get("/api/items?q=García+Márquez", headers=normal_user_headers)
+    assert res.status_code == 200
+    ids = [it["id"] for it in res.get_json()["data"]]
+    assert item_id1 in ids
+    assert item_id2 in ids
+
+    # 2. Author search with unaccented characters (Garcia Marquez)
+    res_unaccent = client.get("/api/items?q=Garcia+Marquez", headers=normal_user_headers)
+    assert res_unaccent.status_code == 200
+    ids_unaccent = [it["id"] for it in res_unaccent.get_json()["data"]]
+    assert item_id1 in ids_unaccent
+    assert item_id2 in ids_unaccent
+
+    # 3. Title search with unaccented characters (milosc -> Miłość)
+    res_title_unaccent = client.get("/api/items?q=milosc", headers=normal_user_headers)
+    assert res_title_unaccent.status_code == 200
+    ids_title = [it["id"] for it in res_title_unaccent.get_json()["data"]]
+    assert item_id2 in ids_title
