@@ -1207,6 +1207,14 @@ def update_work(
     if series_memberships is not None:
         from app.db.models import WorkPart, WorkSeriesMembership
 
+        # Validate all series_work_ids exist before creating memberships
+        for sm_dict in series_memberships:
+            s_id = sm_dict.get("series_work_id") or sm_dict.get("id")
+            if s_id and int(s_id) != work.id:
+                series_work = db.session.get(Work, int(s_id))
+                if not series_work:
+                    raise ValueError(f"Series Work with id {s_id} does not exist")
+
         # Delete existing memberships not in desired list or replace
         desired_series_ids = set()
         for sm_dict in series_memberships:

@@ -570,6 +570,34 @@ def get_frbr_tree(manif_id):
     )
 
 
+@admin_bp.route("/works/search", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.READ_METADATA)
+def search_works():
+    """Search works for series selection (autocomplete)."""
+    q = (request.args.get("q") or "").strip()
+    limit = min(int(request.args.get("limit", 20)), 50)
+    
+    if not q:
+        return jsonify({"success": True, "data": []})
+    
+    # Search by title or ID
+    works = Work.query.filter(
+        db.or_(
+            Work.title.ilike(f"%{q}%"),
+            Work.id == int(q) if q.isdigit() else False
+        )
+    ).limit(limit).all()
+    
+    return jsonify({
+        "success": True,
+        "data": [
+            {"id": w.id, "title": w.title}
+            for w in works
+        ]
+    })
+
+
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
@@ -589,7 +617,7 @@ def update_work(work_id):
         )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 404
+        return jsonify({"success": False, "error": str(e)}), 400
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])

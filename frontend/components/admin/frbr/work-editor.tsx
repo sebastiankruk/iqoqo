@@ -15,9 +15,9 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X } from "lucide-react";
+import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +28,12 @@ import { transformMetaToFields, type WorkFormData, type MetaField } from "./type
 import { MetaFieldsEditor } from "./meta-fields-editor";
 import { ContributorRowsEditor } from "./contributor-rows-editor";
 import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
+import { useDebounce } from "@/lib/hooks/use-debounce";
+
+interface WorkSearchResult {
+  id: number;
+  title: string;
+}
 
 /**
  * Props for the WorkEditor component.
@@ -96,22 +102,62 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
   );
   const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.work?.contributions ?? []);
-  const [seriesMemberships, setSeriesMemberships] = useState<Array<{ series_work_id: number; sequence: number }>>(() =>
+  const [seriesMemberships, setSeriesMemberships] = useState<Array<{ 
+    series_work_id: number; 
+    sequence: number;
+    title?: string;
+  }>>(() =>
     (tree.work?.series_memberships ?? []).map(sm => ({
       series_work_id: sm.series_work_id,
       sequence: sm.sequence,
+      title: sm.title,
     }))
   );
-  const [newSeriesId, setNewSeriesId] = useState("");
+  
+  // Series search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<WorkSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [newSeriesSeq, setNewSeriesSeq] = useState("1");
+  const [showResults, setShowResults] = useState(false);
+  
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
-  const handleAddSeries = () => {
-    const sId = parseInt(newSeriesId, 10);
-    const seq = parseInt(newSeriesSeq, 10) || 0;
-    if (!sId || isNaN(sId)) return;
-    if (seriesMemberships.some(sm => sm.series_work_id === sId)) return;
-    setSeriesMemberships(prev => [...prev, { series_work_id: sId, sequence: seq }]);
-    setNewSeriesId("");
+  // Search works when query changes
+  useEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const searchWorks = async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.data || []);
+        }
+      } catch (error) {
+        console.error("Search failed:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    searchWorks();
+  }, [debouncedSearch]);
+
+  const handleSelectSeries = (work: WorkSearchResult) => {
+    if (seriesMemberships.some(sm => sm.series_work_id === work.id)) return;
+    setSeriesMemberships(prev => [...prev, { 
+      series_work_id: work.id, 
+      sequence: parseInt(newSeriesSeq, 10) || 0,
+      title: work.title,
+    }]);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowResults(false);
     setNewSeriesSeq("1");
   };
 
@@ -171,25 +217,54 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
           <p className="text-xs text-muted-foreground">No series memberships attached.</p>
         )}
 
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            type="number"
-            placeholder="Series Work ID"
-            value={newSeriesId}
-            onChange={e => setNewSeriesId(e.target.value)}
-            className="flex h-8 w-32 rounded-md border border-input bg-background px-2 text-xs"
-          />
-          <input
-            type="number"
-            placeholder="Sequence #"
-            value={newSeriesSeq}
-            onChange={e => setNewSeriesSeq(e.target.value)}
-            className="flex h-8 w-24 rounded-md border border-input bg-background px-2 text-xs"
-          />
-          <Button type="button" size="sm" variant="outline" onClick={handleAddSeries} className="h-8 text-xs">
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Add Series
-          </Button>
+        <div className="space-y-2 pt-1">
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search for a series Work by title or ID..."
+                  value={searchQuery}
+                  onChange={e => {
+                    setSearchQuery(e.target.value);
+                    setShowResults(true);
+                  }}
+                  onFocus={() => setShowResults(true)}
+                  className="flex h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs"
+                />
+              </div>
+              <input
+                type="number"
+                placeholder="Seq #"
+                value={newSeriesSeq}
+                onChange={e => setNewSeriesSeq(e.target.value)}
+                className="flex h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
+              />
+            </div>
+            
+            {showResults && (searchQuery.length >= 2 || searchResults.length > 0) && (
+              <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-background border border-input rounded-md shadow-lg z-50">
+                {isSearching ? (
+                  <div className="p-2 text-xs text-muted-foreground text-center">Searching...</div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map(result => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => handleSelectSeries(result)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted/50 border-b border-border/50 last:border-b-0"
+                    >
+                      <span className="font-medium">#{result.id}</span>
+                      <span className="ml-2 text-muted-foreground">{result.title}</span>
+                    </button>
+                  ))
+                ) : searchQuery.length >= 2 ? (
+                  <div className="p-2 text-xs text-muted-foreground text-center">No works found</div>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

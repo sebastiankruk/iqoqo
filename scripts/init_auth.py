@@ -91,6 +91,11 @@ def run_init_auth(app: Flask | None = None) -> None:
             admin_role = Role(name="admin")
             db.session.add(admin_role)
 
+        custodian_role = db.session.execute(db.select(Role).filter_by(name="custodian")).scalar_one_or_none()
+        if not custodian_role:
+            custodian_role = Role(name="custodian")
+            db.session.add(custodian_role)
+
         user_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
         if not user_role:
             user_role = Role(name="user")
@@ -106,8 +111,20 @@ def run_init_auth(app: Flask | None = None) -> None:
         # Admin gets everything
         admin_role.permissions = db.session.execute(db.select(Permission)).scalars().all()
 
-        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
+        # Custodian gets metadata curation, user management, and escalation permissions
         all_perms = db.session.execute(db.select(Permission)).scalars().all()
+        custodian_perm_names = {
+            PermissionName.WRITE_USERS.value,
+            PermissionName.READ_USERS.value,
+            PermissionName.WRITE_METADATA.value,
+            PermissionName.READ_METADATA.value,
+            PermissionName.EDIT_COVER.value,
+            PermissionName.ESCALATE_RESOLVE.value,
+        }
+        custodian_perms = [p for p in all_perms if p.name in custodian_perm_names]
+        custodian_role.permissions = custodian_perms
+
+        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
         contributor_perms = [
             p
             for p in all_perms
