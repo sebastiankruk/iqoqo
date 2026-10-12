@@ -47,3 +47,4 @@ export enum PermissionName {
   WRITE_ROLES = "write:roles",
   WRITE_USERS = "write:users",
 }
+

@@ -102,6 +102,17 @@ roles:
       - "delete:item"
       - "escalate:resolve"
 
+  - name: "custodian"
+    description: "Collection steward who can curate metadata, covers, escalations, and reassign item ownership."
+    protected: true
+    permissions:
+      - "write:users"
+      - "read:users"
+      - "write:metadata"
+      - "read:metadata"
+      - "edit:cover"
+      - "escalate:resolve"
+
   - name: "user"
     description: "Standard member who curates their own collection."
     protected: true

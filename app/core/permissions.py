@@ -62,6 +62,7 @@ class RoleName(StrEnum):
 
     ADMIN = "admin"
     CONTRIBUTOR = "contributor"
+    CUSTODIAN = "custodian"
     USER = "user"
 
 
@@ -73,6 +74,7 @@ class RoleName(StrEnum):
 ROLE_PERMISSION_PATTERNS: dict[str, tuple[str, ...]] = {
     RoleName.ADMIN: ("*",),
     RoleName.CONTRIBUTOR: ("*:metadata", "llm_generate:*", "edit:cover", "delete:item", "escalate:resolve"),
+    RoleName.CUSTODIAN: ("write:users", "read:users", "write:metadata", "read:metadata", "edit:cover", "escalate:resolve"),
     RoleName.USER: (
         "write:item",
         "update:item",
@@ -88,7 +90,7 @@ ROLE_PERMISSION_PATTERNS: dict[str, tuple[str, ...]] = {
 }
 
 # Roles that must never be deleted through the admin API.
-PROTECTED_ROLE_NAMES: frozenset[str] = frozenset({"admin", "contributor", "user"})
+PROTECTED_ROLE_NAMES: frozenset[str] = frozenset({"admin", "contributor", "custodian", "user"})
 
 
 def resolve_role_permissions(role: str, permission_names: Iterable[str]) -> set[str]:
