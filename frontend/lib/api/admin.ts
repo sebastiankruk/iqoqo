@@ -319,6 +319,7 @@ export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
  * @param data.title - Optional new title
  * @param data.meta - Optional new metadata
  * @param data.contributions - Optional structured contributions
+ * @param data.series_memberships - Optional series memberships (array of series_work_id and sequence)
  * @returns The updated work ID
  */
 export async function updateFrbrWork(
