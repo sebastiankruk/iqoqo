@@ -136,7 +136,7 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
     hasPermission(PermissionName.CONFIG_AFFILIATE) ||
     hasPermission(PermissionName.CONFIG_INTERNAL);
 
-  const canReassignOwnership = hasPermission(PermissionName.WRITE_USERS);
+  const canReassignOwnership = hasPermission(PermissionName.TRANSFER_ITEM);
 
   const hasCustodianAccess =
     canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql || canReassignOwnership;
@@ -204,7 +204,7 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
               onClick={noop}
               href="/admin/lod"
             />
-            {hasPermission(PermissionName.WRITE_USERS) && (
+            {canReassignOwnership && (
               <NavItem
                 label="Item Ownership"
                 icon={ArrowRightLeft}

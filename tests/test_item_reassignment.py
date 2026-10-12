@@ -17,7 +17,7 @@
 Verifies:
 - Custody provenance with structured from/to owner references and account-deletion SET NULL.
 - Transactional reassignment service with preview fingerprinting and atomic rollback.
-- Admin-only API security boundaries (admin + write:users required).
+- API security boundaries (admin or contributor with transfer:item required).
 - Non-admin and ordinary owner self-service override prohibition.
 - Stale preview conflict rejection (HTTP 409).
 - Preservation of FRBR hierarchy, item status, lending status, and tags.
@@ -399,51 +399,44 @@ class TestAuthorizedReassignmentApi:
         assert res_exec.json["success"] is True
         assert res_exec.json["data"]["transferred_count"] == 1
 
-    def test_custodian_ownership_endpoints_flow(self, app: Any, client: Any, transfer_fixture: dict[str, Any]) -> None:
-        """Verify user with custodian role and write:users permission can perform ownership reassignment."""
+    def test_contributor_ownership_endpoints_flow(self, app: Any, client: Any, transfer_fixture: dict[str, Any]) -> None:
+        """Verify user with contributor role and transfer:item permission can perform ownership reassignment."""
         from app.api.auth import generate_internal_jwt
 
         with app.app_context():
-            custodian_role = db.session.scalar(select(Role).where(Role.name == "custodian"))
-            if not custodian_role:
-                custodian_role = Role(name="custodian")
-                db.session.add(custodian_role)
-            write_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.WRITE_USERS.value))
-            if not write_perm:
-                write_perm = Permission(name=PermissionName.WRITE_USERS.value, description="Write Users")
-                db.session.add(write_perm)
-            if write_perm not in custodian_role.permissions:
-                custodian_role.permissions.append(write_perm)
+            contributor_role = db.session.scalar(select(Role).where(Role.name == "contributor"))
+            if not contributor_role:
+                contributor_role = Role(name="contributor")
+                db.session.add(contributor_role)
+            transfer_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.TRANSFER_ITEM.value))
+            if not transfer_perm:
+                transfer_perm = Permission(name=PermissionName.TRANSFER_ITEM.value, description="Transfer Item Ownership")
+                db.session.add(transfer_perm)
+            if transfer_perm not in contributor_role.permissions:
+                contributor_role.permissions.append(transfer_perm)
 
-            read_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.READ_USERS.value))
-            if not read_perm:
-                read_perm = Permission(name=PermissionName.READ_USERS.value, description="Read Users")
-                db.session.add(read_perm)
-            if read_perm not in custodian_role.permissions:
-                custodian_role.permissions.append(read_perm)
-
-            custodian_user = User(
-                email=f"custodian_{uuid.uuid4().hex[:6]}@example.com",
-                display_name="Custodian User",
+            contributor_user = User(
+                email=f"contributor_{uuid.uuid4().hex[:6]}@example.com",
+                display_name="Contributor User",
                 is_active=True,
             )
-            custodian_user.set_password("Cust0dianPass!")
-            custodian_user.roles.append(custodian_role)
-            db.session.add(custodian_user)
+            contributor_user.set_password("ContributorPass!")
+            contributor_user.roles.append(contributor_role)
+            db.session.add(contributor_user)
             db.session.commit()
 
-            token = generate_internal_jwt(custodian_user)
-            custodian_headers = {"Authorization": f"Bearer {token}"}
+            token = generate_internal_jwt(contributor_user)
+            contributor_headers = {"Authorization": f"Bearer {token}"}
 
         source_id = str(transfer_fixture["source_id"])
         target_id = str(transfer_fixture["target_id"])
 
-        # Custodian can access accounts
-        res_acc = client.get("/api/v1/admin/ownership/accounts", headers=custodian_headers)
+        # Contributor can access accounts
+        res_acc = client.get("/api/v1/admin/ownership/accounts", headers=contributor_headers)
         assert res_acc.status_code == 200
         assert res_acc.json["success"] is True
 
-        # Custodian can preview
+        # Contributor can preview
         res_prev = client.post(
             "/api/v1/admin/ownership/preview",
             json={
@@ -452,7 +445,7 @@ class TestAuthorizedReassignmentApi:
                 "mode": "single",
                 "item_ids": [transfer_fixture["item2_id"]],
             },
-            headers=custodian_headers,
+            headers=contributor_headers,
         )
         assert res_prev.status_code == 200
         assert res_prev.json["success"] is True

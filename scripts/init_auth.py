@@ -91,10 +91,10 @@ def run_init_auth(app: Flask | None = None) -> None:
             admin_role = Role(name="admin")
             db.session.add(admin_role)
 
-        custodian_role = db.session.execute(db.select(Role).filter_by(name="custodian")).scalar_one_or_none()
-        if not custodian_role:
-            custodian_role = Role(name="custodian")
-            db.session.add(custodian_role)
+        contributor_role = db.session.execute(db.select(Role).filter_by(name="contributor")).scalar_one_or_none()
+        if not contributor_role:
+            contributor_role = Role(name="contributor")
+            db.session.add(contributor_role)
 
         user_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
         if not user_role:
@@ -111,28 +111,18 @@ def run_init_auth(app: Flask | None = None) -> None:
         # Admin gets everything
         admin_role.permissions = db.session.execute(db.select(Permission)).scalars().all()
 
-        # Custodian gets metadata curation, user management, and escalation permissions
+        # Contributor gets metadata curation, LLM generation, cover editing, item deletion,
+        # escalation resolution, and item ownership transfer.
         all_perms = db.session.execute(db.select(Permission)).scalars().all()
-        custodian_perm_names = {
-            PermissionName.WRITE_USERS.value,
-            PermissionName.READ_USERS.value,
-            PermissionName.WRITE_METADATA.value,
-            PermissionName.READ_METADATA.value,
-            PermissionName.EDIT_COVER.value,
-            PermissionName.ESCALATE_RESOLVE.value,
-        }
-        custodian_perms = [p for p in all_perms if p.name in custodian_perm_names]
-        custodian_role.permissions = custodian_perms
-
-        # Contributor gets metadata, llm_generate, delete item, edit:cover, and escalate:resolve
         contributor_perms = [
             p
             for p in all_perms
             if p.name.endswith(":metadata")
-            or p.name == PermissionName.EDIT_COVER.value
             or p.name.startswith("llm_generate:")
+            or p.name == PermissionName.EDIT_COVER.value
             or p.name == PermissionName.DELETE_ITEM.value
             or p.name == PermissionName.ESCALATE_RESOLVE.value
+            or p.name == PermissionName.TRANSFER_ITEM.value
         ]
         contributor_role.permissions = contributor_perms
 

@@ -52,6 +52,7 @@ const ADMIN_PERMISSIONS = [
   "config:federation",
   "config:affiliate",
   "config:internal",
+  "transfer:item",
 ];
 
 /** Every link the sidebar can render, in display order. */
@@ -165,7 +166,7 @@ describe("AdminSidebar", () => {
     expect(isActive(item("Cover Art"))).toBe(false);
   });
 
-  it("hides both sections from a user with no custodian or settings permission", () => {
+  it("hides both sections from a user with no contributor or settings permission", () => {
     mockProfile(profile(["user"], ["read:item", "write:item"]));
 
     render(<AdminSidebar />);
@@ -215,8 +216,8 @@ describe("AdminSidebar", () => {
     expect(isActive(item("Roles"))).toBe(true);
   });
 
-  it("shows Item Ownership in Custodians section for custodian with write:users", () => {
-    mockProfile(profile(["custodian"], ["write:users"]));
+  it("shows Item Ownership in Custodians section for contributor with transfer:item", () => {
+    mockProfile(profile(["contributor"], ["transfer:item"]));
 
     render(<AdminSidebar />);
 

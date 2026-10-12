@@ -56,6 +56,8 @@ permissions:
     description: "Manage, review, and change status of all feedback and support tickets."
   - name: "tickets:creator"
     description: "Submit feedback, view personal tickets, and close own tickets."
+  - name: "transfer:item"
+    description: "Reassign ownership of a physical item to another user account."
   - name: "update:item"
     description: "Modify status, condition, or local metadata of items."
   - name: "upload:cover"
@@ -93,7 +95,7 @@ roles:
       - "*"
 
   - name: "contributor"
-    description: "Trusted curator who may improve shared metadata and covers."
+    description: "Trusted curator who may improve shared metadata, covers, and reassign physical item ownership."
     protected: true
     permissions:
       - "*:metadata"
@@ -101,17 +103,7 @@ roles:
       - "edit:cover"
       - "delete:item"
       - "escalate:resolve"
-
-  - name: "custodian"
-    description: "Collection steward who can curate metadata, covers, escalations, and reassign item ownership."
-    protected: true
-    permissions:
-      - "write:users"
-      - "read:users"
-      - "write:metadata"
-      - "read:metadata"
-      - "edit:cover"
-      - "escalate:resolve"
+      - "transfer:item"
 
   - name: "user"
     description: "Standard member who curates their own collection."

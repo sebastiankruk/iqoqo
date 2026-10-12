@@ -539,9 +539,9 @@ def admin_required(f):
 
 
 def admin_or_custodian_required(f):
-    """Requires either the admin role or the custodian role.
+    """Requires either the admin role or a curator role (contributor or legacy custodian).
 
-    Use when a route allows administrative or custodian-level curation."""
+    Use when a route allows administrative or curator-level curation."""
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -550,9 +550,9 @@ def admin_or_custodian_required(f):
             return jsonify({"success": False, "error": "Authentication required"}), 401
 
         user = db.session.get(User, user_id)
-        is_authorized = any(role.name in {"admin", "custodian"} for role in getattr(user, "roles", [])) if user else False
+        is_authorized = any(role.name in {"admin", "contributor", "custodian"} for role in getattr(user, "roles", [])) if user else False
         if not is_authorized:
-            return jsonify({"success": False, "error": "Admin or custodian privileges required"}), 403
+            return jsonify({"success": False, "error": "Admin or curator privileges required"}), 403
 
         return f(*args, **kwargs)
 

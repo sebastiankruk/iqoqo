@@ -1001,7 +1001,7 @@ def upload_cover():
 
 
 def curator_or_admin_required(f):
-    """Require user to have admin or custodian role, or metadata curation permissions."""
+    """Require user to have admin or curator role, or metadata curation permissions."""
 
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -1015,12 +1015,13 @@ def curator_or_admin_required(f):
         user_roles_list = [r.name for r in getattr(user, "roles", [])]
         is_curator_or_admin = (
             "admin" in user_roles_list
+            or "contributor" in user_roles_list
             or "custodian" in user_roles_list
             or user.has_permission(PermissionName.REFETCH_METADATA)
             or user.has_permission(PermissionName.WRITE_METADATA)
         )
         if not is_curator_or_admin:
-            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+            return jsonify({"success": False, "error": "Admin or curator privileges required", "code": 403}), 403
         return f(*args, **kwargs)
 
     return decorated
@@ -1633,8 +1634,8 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
 def get_ownership_accounts():
     """Discover accounts for ownership transfer source and target selection."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS) or not _has_permission(user, PermissionName.READ_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users and read:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
     return jsonify(
@@ -1660,8 +1661,8 @@ def get_ownership_accounts():
 def get_ownership_source_items():
     """Get paginated physical items belonging to a specified source account."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     source_id_raw = request.args.get("source_user_id")
     if not source_id_raw:
@@ -1727,8 +1728,8 @@ def get_ownership_source_items():
 def preview_item_reassignment():
     """Preview an item ownership reassignment operation and return a deterministic scope digest."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")
@@ -1757,8 +1758,8 @@ def preview_item_reassignment():
 def execute_item_reassignment():
     """Confirm and execute an item ownership reassignment operation with atomic rollback."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")
