@@ -126,7 +126,11 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
   // Search works when query changes
   useEffect(() => {
     if (!debouncedSearch || debouncedSearch.length < 2) {
-      setSearchResults([]);
+      // Clear results asynchronously to avoid synchronous setState in effect
+      const clearResults = async () => {
+        setSearchResults([]);
+      };
+      clearResults();
       return;
     }
 
