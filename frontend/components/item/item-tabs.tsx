@@ -68,12 +68,15 @@ function DetailsTab({ item }: { item: Item }) {
       />
 
       {/* Indexed Tags */}
-      {Array.isArray(meta.tags || meta.genres) && (meta.tags || meta.genres).length > 0 && (
+      {(() => {
+        const tags = (Array.isArray(meta.tags) ? meta.tags : Array.isArray(meta.genres) ? meta.genres : []) as string[];
+        return tags.length > 0 ? (
         <div className="border-t pt-4 space-y-2">
           <h4 className="font-serif text-sm font-bold text-foreground">Tags</h4>
-          <TagCloud tags={(meta.tags || meta.genres) as string[]} maxInitial={10} />
+          <TagCloud tags={tags} maxInitial={10} />
         </div>
-      )}
+        ) : null;
+      })()}
 
       {/* Multi-series badges */}
       {item.work?.series_memberships && item.work.series_memberships.length > 0 && (
