@@ -241,6 +241,21 @@ class SearchService:
         tsquery_expr = "websearch_to_tsquery('simple', immutable_unaccent(:q))"
         params = {"q": q, "limit": limit, "offset": offset}
 
+        contributor_search_sql = f"""
+            EXISTS (
+                SELECT 1 FROM {catalog_prefix}work_contributions wc
+                JOIN {catalog_prefix}contributors c ON c.id = wc.contributor_id
+                WHERE wc.work_id = w.id
+                AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
+            )
+            OR EXISTS (
+                SELECT 1 FROM {catalog_prefix}expression_contributions ec
+                JOIN {catalog_prefix}contributors c ON c.id = ec.contributor_id
+                WHERE ec.expression_id = e.id
+                AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
+            )
+        """
+
         extra_filters_sql = ""
         if category:
             params["category"] = tuple(category)
@@ -265,7 +280,7 @@ class SearchService:
         SELECT count(*) FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
         JOIN {catalog_prefix}works w ON w.id = e.work_id
-        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
+        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
         """
         rows_sql = f"""
@@ -273,7 +288,7 @@ class SearchService:
         FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
         JOIN {catalog_prefix}works w ON w.id = e.work_id
-        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
+        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
         ORDER BY rank DESC
         LIMIT :limit OFFSET :offset
@@ -368,6 +383,21 @@ class SearchService:
         w_search_vector_expr = "w.search_vector"
         tsquery_expr = "websearch_to_tsquery('simple', immutable_unaccent(:q))"
 
+        contributor_search_sql = f"""
+            EXISTS (
+                SELECT 1 FROM {catalog_prefix}work_contributions wc
+                JOIN {catalog_prefix}contributors c ON c.id = wc.contributor_id
+                WHERE wc.work_id = w.id
+                AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
+            )
+            OR EXISTS (
+                SELECT 1 FROM {catalog_prefix}expression_contributions ec
+                JOIN {catalog_prefix}contributors c ON c.id = ec.contributor_id
+                WHERE ec.expression_id = e.id
+                AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
+            )
+        """
+
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
         if borrowed_only:
             extra_filters_sql = " AND i.lent_to_user_id = :user_id"
@@ -407,7 +437,7 @@ class SearchService:
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
         JOIN {catalog_prefix}works w ON w.id = e.work_id
         JOIN {inventory_prefix}items i ON i.manifestation_id = m.id
-        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
+        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
         """
         rows_sql = f"""
@@ -422,7 +452,7 @@ class SearchService:
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
         JOIN {catalog_prefix}works w ON w.id = e.work_id
         JOIN {inventory_prefix}items i ON i.manifestation_id = m.id
-        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr})
+        WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
         ORDER BY rank DESC
         LIMIT :limit OFFSET :offset

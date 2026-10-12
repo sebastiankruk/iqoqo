@@ -38,6 +38,71 @@ def test_search_schema_prefix_allowlist_accepts_supported_pairs(monkeypatch):
     assert search_service._validated_schema_prefixes() == ("", "")
 
 
+def test_pg_manifestation_fts_includes_contributor_search(monkeypatch):
+    """The PostgreSQL FTS path must also match Work/Expression contributor names."""
+    import app.core.search_service as search_service
+
+    monkeypatch.setattr(search_service, "_USE_PG", True)
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog.")
+    monkeypatch.setattr(search_service, "_INVENTORY", "inventory.")
+
+    captured = {}
+
+    def fake_execute(stmt, params=None):
+        captured["sql"] = str(stmt)
+        # Return a value that lets count() succeed and rows() return empty
+        if "count" in captured["sql"]:
+            return type("R", (), {"scalar": lambda self: 0})()
+        return type("R", (), {"all": lambda self: []})()
+
+    monkeypatch.setattr(search_service.db.session, "execute", fake_execute)
+
+    search_service.SearchService._pg_manifestation_fts("Garcia", limit=10, offset=0)
+
+    sql = captured.get("sql", "")
+    assert "work_contributions" in sql
+    assert "expression_contributions" in sql
+    assert "contributors" in sql
+    assert "immutable_unaccent(c.name)" in sql
+
+
+def test_pg_item_fts_includes_contributor_search(monkeypatch):
+    """The PostgreSQL item FTS path must also match Work/Expression contributor names."""
+    import app.core.search_service as search_service
+    from app.core.search_service import ItemSearchFilters
+
+    monkeypatch.setattr(search_service, "_USE_PG", True)
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog.")
+    monkeypatch.setattr(search_service, "_INVENTORY", "inventory.")
+
+    captured = {}
+
+    def fake_execute(stmt, params=None):
+        captured["sql"] = str(stmt)
+        if "count" in captured["sql"]:
+            return type("R", (), {"scalar": lambda self: 0})()
+        return type(
+            "R",
+            (),
+            {
+                "mappings": lambda self: type("M", (), {"all": lambda self: []})(),
+                "all": lambda self: [],
+            },
+        )()
+
+    monkeypatch.setattr(search_service.db.session, "execute", fake_execute)
+
+    search_service.SearchService._pg_item_fts(
+        "Garcia", user_id="00000000-0000-4000-a000-000000000000", limit=10, offset=0, filters=ItemSearchFilters()
+    )
+
+    sql = captured.get("sql", "")
+    assert "work_contributions" in sql
+    assert "expression_contributions" in sql
+    assert "contributors" in sql
+    assert "immutable_unaccent(c.name)" in sql
+
+
 def test_search_items_by_title(app, client, normal_user_headers):
     """Ensure full-text search endpoint responds and that `q` filters results."""
     from app.db.models import Expression, Item, Manifestation, User, Work, db
