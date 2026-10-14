@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Frontend RichText SSR Sanitization**: Updated `sanitizeRichHtml` in `frontend/components/ui/rich-text.tsx` to safely strip HTML tags and script payloads when the DOMPurify `window` context is unavailable during SSR passes, preventing un-sanitized raw HTML emission during Next.js server-side rendering passes (`v084-release-review-findings`).
 - **Metadata Display Duplication on Item Detail**: Fixed duplicate rendering of metadata fields (such as "Media Format", "Author", and "Publisher") when the "Additional Details" section is expanded on item detail pages. The duplication occurred on records using capitalized keys (such as `Format`, `Author`, or `Publisher` produced by OCR imports) because suppression against primary display sections was matched case-sensitively, causing values to appear twice across dedicated sections and the additional details panel (`metadata-display-projection-v084`).
+- **Search With National Characters**: Front-page catalog search (`/api/manifestations?q=`) and item search now fold diacritics (`milosc` finds `miłość`, `Mroz` finds `Mróz`) across title, work/manifestation metadata, tags and contributors through one shared ILIKE clause. JSON `\uXXXX` escapes are decoded, PostgreSQL full-text search also covers authors, tags and genres, the `unaccent` extension is pinned to the `public` schema, `v0_8_4_fts_unaccent` is guarded to PostgreSQL, and admin `/works/search` and `/frbr/search` are accent-insensitive.
 
 ## [0.8.3] - 2026-10-10
 
