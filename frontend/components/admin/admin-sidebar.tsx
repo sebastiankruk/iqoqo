@@ -136,7 +136,10 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
     hasPermission(PermissionName.CONFIG_AFFILIATE) ||
     hasPermission(PermissionName.CONFIG_INTERNAL);
 
-  const hasCustodianAccess = canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql;
+  const canReassignOwnership = hasPermission(PermissionName.TRANSFER_ITEM);
+
+  const hasCustodianAccess =
+    canViewMetadata || canEditCover || canViewEscalationQueue || canAccessSparql || canReassignOwnership;
 
   const selectTab = (tab: string) => onTabChange?.(tab);
   // Link items carry a real href, so the browser navigates; the click handler
@@ -201,6 +204,15 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
               onClick={noop}
               href="/admin/lod"
             />
+            {canReassignOwnership && (
+              <NavItem
+                label="Item Ownership"
+                icon={ArrowRightLeft}
+                isActive={activeTab === "ownership"}
+                onClick={noop}
+                href="/admin/ownership"
+              />
+            )}
           </nav>
         </div>
       )}
@@ -241,15 +253,6 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
             )}
             {canViewUsers && (
               <NavItem label="Users" icon={Users} isActive={activeTab === "users"} onClick={() => selectTab("users")} />
-            )}
-            {hasPermission(PermissionName.WRITE_USERS) && (
-              <NavItem
-                label="Item Ownership"
-                icon={ArrowRightLeft}
-                isActive={activeTab === "ownership"}
-                onClick={noop}
-                href="/admin/ownership"
-              />
             )}
             {canViewRoles && (
               <NavItem

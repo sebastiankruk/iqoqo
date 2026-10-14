@@ -23,7 +23,8 @@ import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, Tag, ChevronRight } from "lucide-react";
+import { Disc, BookOpen, Calendar, ChevronRight } from "lucide-react";
+import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
 
@@ -134,26 +135,26 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           aria-label="FRBR Hierarchy"
           className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mb-3"
         >
-          {item.work?.id && (
+          {(item.work?.id || item.work_id) && (
             <>
               <Link
-                href={`/work/${item.work.id}`}
+                href={`/work/${item.work?.id || item.work_id}`}
                 className="hover:text-primary hover:underline transition-colors font-medium"
               >
-                Work{item.work.title ? `: ${item.work.title}` : ""}
+                Work{item.work?.title || item.work_title ? `: ${item.work?.title || item.work_title}` : ""}
               </Link>
               <ChevronRight className="h-3 w-3 text-muted-foreground/60 shrink-0" aria-hidden="true" />
             </>
           )}
 
-          {item.expression?.id && (
+          {(item.expression?.id || item.expression_id) && (
             <>
               <Link
-                href={`/expression/${item.expression.id}`}
+                href={`/expression/${item.expression?.id || item.expression_id}`}
                 className="hover:text-primary hover:underline transition-colors font-medium"
               >
                 Expression
-                {item.expression.language || item.expression.content_type
+                {item.expression?.language || item.expression?.content_type
                   ? `: ${[item.expression.language, item.expression.content_type].filter(Boolean).join(" - ")}`
                   : ""}
               </Link>
@@ -191,18 +192,8 @@ export function ItemHeader({ item }: ItemHeaderProps) {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {tags.map(tag => (
-              <DiscoveryPivot
-                key={tag}
-                type="tags"
-                value={tag}
-                className="rounded-full bg-secondary/50 px-2 py-0.5 text-[10px] font-medium border border-transparent hover:border-border"
-              >
-                <Tag className="h-2.5 w-2.5" />
-                {tag}
-              </DiscoveryPivot>
-            ))}
+          <div className="mb-3">
+            <TagCloud tags={tags} maxInitial={10} />
           </div>
         )}
 

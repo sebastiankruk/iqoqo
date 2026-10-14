@@ -33,7 +33,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
-from app.api.decorators import admin_required, require_auth, require_permission
+from app.api.decorators import admin_or_custodian_required, admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
@@ -570,6 +570,36 @@ def get_frbr_tree(manif_id):
     )
 
 
+@admin_bp.route("/works/search", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.READ_METADATA)
+def search_works():
+    """Search works for series selection (autocomplete)."""
+    q = (request.args.get("q") or "").strip()
+    limit = min(int(request.args.get("limit", 20)), 50)
+
+    if not q:
+        return jsonify({"success": True, "data": []})
+
+    # Search by title (diacritic-insensitive) or ID
+    from app.core.search_service import normalize_diacritics
+
+    norm_q = normalize_diacritics(q)
+    works = (
+        Work.query.filter(
+            db.or_(
+                Work.title.ilike(f"%{q}%"),
+                db.func.immutable_unaccent(Work.title).ilike(f"%{norm_q}%"),
+                Work.id == int(q) if q.isdigit() else False,
+            )
+        )
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify({"success": True, "data": [{"id": w.id, "title": w.title} for w in works]})
+
+
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
@@ -579,15 +609,18 @@ def update_work(work_id):
     try:
         raw_contributions = data.get("contributions")
         contributions = frbr_service.parse_agent_input(raw_contributions, default_role="author") if raw_contributions is not None else None
+        raw_series = data.get("series_memberships")
         work = frbr_service.update_work(
             work_id,
             title=data.get("title"),
             meta=parse_meta(data.get("meta")),
             contributions=contributions,
+            series_memberships=raw_series if raw_series is not None else None,
         )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 404
+        status = 404 if f"Work with id {work_id} not found" in str(e) else 400
+        return jsonify({"success": False, "error": str(e)}), status
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
@@ -759,8 +792,13 @@ def search_frbr_entities():
 
     results = []
 
+    from app.core.search_service import normalize_diacritics
+
+    norm_query = normalize_diacritics(query)
+    title_match = db.or_(Work.title.ilike(f"%{query}%"), db.func.immutable_unaccent(Work.title).ilike(f"%{norm_query}%"))
+
     if entity_type == "work":
-        works = db.session.execute(db.select(Work).filter(Work.title.ilike(f"%{query}%")).limit(limit)).scalars().all()
+        works = db.session.execute(db.select(Work).filter(title_match).limit(limit)).scalars().all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
@@ -768,7 +806,7 @@ def search_frbr_entities():
             db.session.execute(
                 db.select(Expression)
                 .join(Work, Expression.work_id == Work.id)
-                .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+                .filter(db.or_(title_match, Expression.content_type.ilike(f"%{query}%")))
                 .limit(limit)
             )
             .scalars()
@@ -787,7 +825,7 @@ def search_frbr_entities():
     else:  # manifestation
         # Search by ISBN/UPC/EAN OR by work title/author in meta
         work_filter = db.or_(
-            Work.title.ilike(f"%{query}%"),
+            title_match,
             db.or_(
                 Work.meta["authors"].cast(db.String).ilike(f"%{query}%"),
                 Work.meta["author"].cast(db.String).ilike(f"%{query}%"),
@@ -982,7 +1020,7 @@ def upload_cover():
 
 
 def curator_or_admin_required(f):
-    """Require user to have admin or custodian role, or metadata curation permissions."""
+    """Require user to have admin or curator role, or metadata curation permissions."""
 
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -996,12 +1034,13 @@ def curator_or_admin_required(f):
         user_roles_list = [r.name for r in getattr(user, "roles", [])]
         is_curator_or_admin = (
             "admin" in user_roles_list
+            or "contributor" in user_roles_list
             or "custodian" in user_roles_list
             or user.has_permission(PermissionName.REFETCH_METADATA)
             or user.has_permission(PermissionName.WRITE_METADATA)
         )
         if not is_curator_or_admin:
-            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+            return jsonify({"success": False, "error": "Admin or curator privileges required", "code": 403}), 403
         return f(*args, **kwargs)
 
     return decorated
@@ -1610,12 +1649,12 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
 
 @admin_bp.route("/ownership/accounts", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_accounts():
     """Discover accounts for ownership transfer source and target selection."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS) or not _has_permission(user, PermissionName.READ_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users and read:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
     return jsonify(
@@ -1637,12 +1676,12 @@ def get_ownership_accounts():
 
 @admin_bp.route("/ownership/items", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_source_items():
     """Get paginated physical items belonging to a specified source account."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     source_id_raw = request.args.get("source_user_id")
     if not source_id_raw:
@@ -1704,12 +1743,12 @@ def get_ownership_source_items():
 
 @admin_bp.route("/ownership/preview", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def preview_item_reassignment():
     """Preview an item ownership reassignment operation and return a deterministic scope digest."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")
@@ -1734,12 +1773,12 @@ def preview_item_reassignment():
 
 @admin_bp.route("/ownership/reassign", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def execute_item_reassignment():
     """Confirm and execute an item ownership reassignment operation with atomic rollback."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")

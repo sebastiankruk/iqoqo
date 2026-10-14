@@ -211,7 +211,7 @@ class Work(db.Model):  # type: ignore[name-defined]
         SearchVector(),
         (
             db.Computed(
-                "to_tsvector('simple'::regconfig, (((COALESCE(title, ''::character varying))::text"
+                "to_tsvector('simple'::regconfig, immutable_unaccent(((COALESCE(title, ''::character varying))::text"
                 " || ' '::text) || COALESCE((meta ->> 'authors'::text), ''::text)))",
                 persisted=True,
             )
@@ -437,7 +437,7 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
         SearchVector(),
         (
             db.Computed(
-                "to_tsvector('simple'::regconfig, (((((COALESCE(isbn13, ''::character varying))::text"
+                "to_tsvector('simple'::regconfig, immutable_unaccent(((((COALESCE(isbn13, ''::character varying))::text"
                 " || ' '::text) || COALESCE((meta ->> 'publisher'::text), ''::text))"
                 " || ' '::text) || COALESCE((meta ->> 'alt_title'::text), ''::text)))",
                 persisted=True,

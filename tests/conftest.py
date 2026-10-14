@@ -292,6 +292,7 @@ def admin_headers(app):
             "edit:cover",
             "escalate:request",
             "escalate:resolve",
+            "transfer:item",
         ]
         perms = [get_or_create_perm(n) for n in perm_names]
         db.session.flush()

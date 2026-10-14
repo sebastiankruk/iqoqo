@@ -111,6 +111,18 @@ def init_database(seed_file: Path | None = None, reset: bool = False, force: boo
 
             for schema_name in ("auth", "catalog", "inventory", "social", "config"):
                 db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
+            db.session.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+            db.session.execute(text("""
+                    CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+                    RETURNS text AS $$
+                        SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                    $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+
+                    CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+                    RETURNS text AS $$
+                        SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                    $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+                    """))
             db.session.commit()
 
         # Create all tables

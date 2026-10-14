@@ -224,7 +224,12 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           manifestationId,
           type: "work",
           id: tree.work.id,
-          data: { title: data.title, meta, contributions: data.contributions },
+          data: {
+            title: data.title,
+            meta,
+            contributions: data.contributions,
+            series_memberships: data.series_memberships,
+          },
         });
         toast.success("Work updated successfully");
       } catch (err) {

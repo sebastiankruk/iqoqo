@@ -1147,6 +1147,7 @@ def update_work(
     meta: dict[str, Any] | None = None,
     raw_payload: dict[str, Any] | None = None,
     contributions: list[dict[str, Any]] | None = None,
+    series_memberships: list[dict[str, Any]] | None = None,
 ) -> Work:
     """
     Update an existing Work.
@@ -1203,6 +1204,50 @@ def update_work(
             {"name": author_name, "role": "author", "sequence": idx} for idx, author_name in enumerate(current_meta.get("authors", []))
         ]
         sync_entity_contributions(work, desired_contributions)
+    if series_memberships is not None:
+        from app.db.models import WorkPart, WorkSeriesMembership
+
+        # Validate all series_work_ids exist before creating memberships
+        for sm_dict in series_memberships:
+            s_id = sm_dict.get("series_work_id") or sm_dict.get("id")
+            if s_id and int(s_id) != work.id:
+                series_work = db.session.get(Work, int(s_id))
+                if not series_work:
+                    raise ValueError(f"Series Work with id {s_id} does not exist")
+
+        # Delete existing memberships not in desired list or replace
+        desired_series_ids = set()
+        for sm_dict in series_memberships:
+            s_id = sm_dict.get("series_work_id") or sm_dict.get("id")
+            if s_id and s_id != work.id:
+                desired_series_ids.add(int(s_id))
+                seq = int(sm_dict.get("sequence", 0))
+                existing = WorkSeriesMembership.query.filter_by(work_id=work.id, series_work_id=int(s_id)).first()
+                if not existing:
+                    db.session.add(WorkSeriesMembership(work_id=work.id, series_work_id=int(s_id), sequence=seq))
+                else:
+                    existing.sequence = seq
+
+                # sync legacy WorkPart
+                legacy_wp = WorkPart.query.filter_by(container_work_id=int(s_id), part_work_id=work.id).first()
+                if not legacy_wp:
+                    db.session.add(WorkPart(container_work_id=int(s_id), part_work_id=work.id, sequence=seq))
+                else:
+                    legacy_wp.sequence = seq
+
+        # Remove memberships that are no longer present
+        to_remove = WorkSeriesMembership.query.filter(
+            WorkSeriesMembership.work_id == work.id,
+            ~WorkSeriesMembership.series_work_id.in_(desired_series_ids) if desired_series_ids else True,
+        ).all()
+        for rem in to_remove:
+            rem_legacy = WorkPart.query.filter_by(container_work_id=rem.series_work_id, part_work_id=work.id).first()
+            if rem_legacy:
+                db.session.delete(rem_legacy)
+            db.session.delete(rem)
+
+        db.session.commit()
+
     return work
 
 

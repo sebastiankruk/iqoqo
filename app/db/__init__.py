@@ -40,7 +40,38 @@ def import_models() -> None:
     ``create_app``).  ``db.create_all()`` and Alembic autogenerate both need
     every model class to have been imported before they inspect the metadata.
     """
-    # Order matters: auth / settings have no cross-module FKs, so they can be
-    # imported first.  core.py references auth (users.id FK on Item), and
-    # audio.py references core (works.id / expressions.id FKs).
     from app.db import auth, settings, core, audio, video, games, social, roadmap, lending  # noqa: F401, I001 # isort: skip
+
+
+import sqlite3
+
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+
+@event.listens_for(Engine, "connect")
+def _register_sqlite_unaccent(dbapi_connection, _connection_record) -> None:
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        from app.core.search_service import normalize_diacritics
+
+        dbapi_connection.create_function("unaccent", 1, normalize_diacritics)
+        dbapi_connection.create_function("immutable_unaccent", 1, normalize_diacritics)
+
+
+@event.listens_for(db.metadata, "before_create")
+def _ensure_pg_unaccent_functions(_target, connection, **_kw) -> None:
+    if connection.dialect.name == "postgresql":
+        from sqlalchemy import text
+
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+        connection.execute(text("""
+                CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+                RETURNS text AS $$
+                    SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+
+                CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+                RETURNS text AS $$
+                    SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+                """))

@@ -509,6 +509,69 @@ def test_remove_work_part(client, series_data, app):
     assert verify_response.json["data"][0]["title"] == "The Two Towers"
 
 
+def test_multi_series_membership_crud(client, series_data, app):
+    """Test multi-series membership GET, POST, DELETE and WorkDetail serialization."""
+    part1_id = series_data["part1_id"]
+    container_id = series_data["container_id"]
+    user_id = series_data["user_id"]
+
+    from app.api.auth import generate_internal_jwt
+    from app.db.models import WorkSeriesMembership
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        token = generate_internal_jwt(user)
+
+        # Create second series container
+        second_series = Work(title="Tolkien Legendarium")
+        db.session.add(second_series)
+        db.session.commit()
+        second_series_id = second_series.id
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Attach part1 to second series as sequence 10
+    res = client.post(
+        f"/api/works/{part1_id}/series",
+        json={"series_work_id": second_series_id, "sequence": 10},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json["success"] is True
+
+    # Also attach part1 to first container as sequence 1
+    res = client.post(
+        f"/api/works/{part1_id}/series",
+        json={"series_work_id": container_id, "sequence": 1},
+        headers=headers,
+    )
+    assert res.status_code == 200
+
+    # Query GET /api/works/<id>/series
+    get_res = client.get(f"/api/works/{part1_id}/series")
+    assert get_res.status_code == 200
+    series_list = get_res.json["data"]
+    assert len(series_list) == 2
+    titles = [s["title"] for s in series_list]
+    assert "The Lord of the Rings Series" in titles
+    assert "Tolkien Legendarium" in titles
+
+    # Query GET /api/works/<id> detail view
+    detail_res = client.get(f"/api/works/{part1_id}")
+    assert detail_res.status_code == 200
+    detail_series = detail_res.json["data"]["series_memberships"]
+    assert len(detail_series) == 2
+
+    # Remove second series membership
+    del_res = client.delete(f"/api/works/{part1_id}/series/{second_series_id}", headers=headers)
+    assert del_res.status_code == 200
+
+    # Verify only container_id remains
+    get_res_after = client.get(f"/api/works/{part1_id}/series")
+    assert len(get_res_after.json["data"]) == 1
+    assert get_res_after.json["data"][0]["series_work_id"] == container_id
+
+
 def test_taxonomy_filtering_across_endpoints(client: FlaskClient, app: Flask) -> None:
     """Test filtering by tags, collections, genres, and publishers across all collection endpoints."""
     from app.api.auth import generate_internal_jwt

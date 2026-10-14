@@ -24,7 +24,7 @@ The reference maps below are exhaustive by construction and are checked against
 the database schema by ``tests/test_frbr_merge_coverage.py``.  Counts as of this
 writing:
 
-* Work: 13 foreign keys across 10 tables, plus ``SemanticLink``
+* Work: 15 foreign keys across 11 tables, plus ``SemanticLink``
 * Expression: 7 foreign keys across 7 tables, plus ``SemanticLink``
 * Manifestation: 9 foreign keys across 9 tables, plus ``SemanticLink``
 
@@ -47,6 +47,7 @@ from app.db.contributions import (
     ManifestationContribution,
     WorkContribution,
     WorkPart,
+    WorkSeriesMembership,
 )
 from app.db.core import (
     Expression,
@@ -104,6 +105,8 @@ _WORK_REFPOINTS: tuple[RefPoint, ...] = (
     RefPoint(WorkContribution, "work_id", ("contributor_id", "role")),
     RefPoint(WorkPart, "container_work_id", ("part_work_id",)),
     RefPoint(WorkPart, "part_work_id", ("container_work_id",)),
+    RefPoint(WorkSeriesMembership, "work_id", ("series_work_id",)),
+    RefPoint(WorkSeriesMembership, "series_work_id", ("work_id",)),
     RefPoint(WorkExpansionLink, "base_work_id", ("expansion_work_id",)),
     RefPoint(WorkExpansionLink, "expansion_work_id", ("base_work_id",)),
     RefPoint(ContainerAggregation, "container_work_id", ("aggregated_type", "aggregated_work_id", "aggregated_item_id", "component_name")),

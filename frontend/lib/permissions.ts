@@ -40,6 +40,7 @@ export enum PermissionName {
   REGENERATE_COVER = "regenerate:cover",
   TICKETS_ADMIN = "tickets:admin",
   TICKETS_CREATOR = "tickets:creator",
+  TRANSFER_ITEM = "transfer:item",
   UPDATE_ITEM = "update:item",
   UPLOAD_COVER = "upload:cover",
   WRITE_ITEM = "write:item",

@@ -33,6 +33,7 @@ code should import from this module (or from :mod:`app.db.models`).
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 
 from . import db
 
@@ -211,3 +212,32 @@ class WorkPart(db.Model):  # type: ignore[name-defined]
     container_work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), primary_key=True)
     part_work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), primary_key=True)
     sequence = db.Column(db.Integer, default=0)
+
+
+class WorkSeriesMembership(db.Model):  # type: ignore[name-defined]
+    """
+    FRBR Multi-Series membership join model.
+
+    Allows a Work to belong to multiple series containers with distinct ordinal sequences.
+    """
+
+    __tablename__ = "work_series_memberships"
+    __table_args__ = (
+        db.UniqueConstraint("work_id", "series_work_id", name="uq_work_series_membership"),
+        db.Index("ix_work_series_memberships_work_id", "work_id"),
+        db.Index("ix_work_series_memberships_series_work_id", "series_work_id"),
+        *(({"schema": _CATALOG},) if _CATALOG else ()),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False)
+    series_work_id = db.Column(db.Integer, db.ForeignKey(f"{_CATALOG_PFX}works.id", ondelete="CASCADE"), nullable=False)
+    sequence = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    work = db.relationship(
+        "Work", foreign_keys=[work_id], backref=db.backref("series_memberships", lazy="selectin", cascade="all, delete-orphan")
+    )
+    series = db.relationship(
+        "Work", foreign_keys=[series_work_id], backref=db.backref("series_items", lazy="selectin", cascade="all, delete-orphan")
+    )

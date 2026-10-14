@@ -37,6 +37,7 @@ import { FRBRFeedback } from "@/components/social/frbr-feedback";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
 import { SemanticLinks } from "@/components/manifestation/semantic-links";
+import { TagCloud } from "@/components/ui/tag-cloud";
 import { useTranslations } from "next-intl";
 
 /** Props for the client manifestation detail view. */
@@ -131,7 +132,10 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
     (manifestation.meta?.ean as string | undefined) ||
     (manifestation.meta?.barcode as string | undefined);
   const resolvedUpc = (manifestation.upc || "").trim() || (manifestation.meta?.upc as string | undefined);
-  const tags = (manifestation.meta?.tags || manifestation.meta?.genres || []) as string[];
+  const tags = ((manifestation as unknown as { tags?: (string | { name: string; source?: string })[] }).tags ||
+    manifestation.meta?.tags ||
+    manifestation.meta?.genres ||
+    []) as (string | { name: string; source?: string })[];
 
   const schemaType = resolveSchemaType(
     manifestation.content_type,
@@ -363,18 +367,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             {tags.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
                 <h2 className="text-lg font-semibold">{t("indexedTags")}</h2>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag: string) => (
-                    <span
-                      key={tag}
-                      property="sioc:topic"
-                      content={tag}
-                      className="inline-flex items-center rounded-md bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 ring-1 ring-inset ring-orange-600/10 dark:bg-orange-400/10 dark:text-orange-400 dark:ring-orange-400/20"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                <TagCloud tags={tags} maxInitial={10} />
               </div>
             )}
 

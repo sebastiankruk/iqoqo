@@ -380,6 +380,15 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "is_live_performance": is_live_performance(expression),
         "contributions": contributions,
         "container_aggregation": container_aggregation,
+        "tags": [
+            (
+                t
+                if isinstance(t, dict)
+                else {"name": t, "source": (m.meta or {}).get("tag_sources", {}).get(t, (m.meta or {}).get("data_source") or "catalog")}
+            )
+            for t in ((m.meta or {}).get("tags") or (m.meta or {}).get("genres") or [])
+            if isinstance(t, (str, dict))
+        ],
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

@@ -145,6 +145,7 @@ def test_contributor_grants_match_the_original_predicate() -> None:
         or p.startswith("llm_generate:")
         or p == PermissionName.DELETE_ITEM.value
         or p == PermissionName.ESCALATE_RESOLVE.value
+        or p == PermissionName.TRANSFER_ITEM.value
     }
     assert resolve_role_permissions(RoleName.CONTRIBUTOR, names) == expected
 

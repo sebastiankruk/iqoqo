@@ -95,6 +95,7 @@ export default function LodReconciliationPage() {
 
   const canAccess =
     roles.includes("admin") ||
+    roles.includes("contributor") ||
     roles.includes("custodian") ||
     permissions.includes(PermissionName.REFETCH_METADATA) ||
     permissions.includes(PermissionName.WRITE_METADATA);

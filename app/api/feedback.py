@@ -58,7 +58,7 @@ def _can_read_ticket(user: User | None, item: FeedbackItem) -> bool:
         return False
     if _can_admin_tickets(user):
         return True
-    if any(role.name == "custodian" for role in user.roles):
+    if any(role.name in {"contributor", "custodian"} for role in user.roles):
         return True
     return bool(item.user_id == user.id)
 

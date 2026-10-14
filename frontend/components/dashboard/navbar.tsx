@@ -258,6 +258,7 @@ export function Navbar() {
                       </Link>
                     </DropdownMenuItem>
                     {(profile.roles?.includes("admin") ||
+                      profile.roles?.includes("contributor") ||
                       profile.roles?.includes("custodian") ||
                       profile.permissions?.some(p =>
                         ["write:metadata", "edit:cover", "escalate:resolve", "read:metadata"].includes(p)

@@ -40,7 +40,8 @@ def test_init_auth_roles_permissions(app):
         contributor_perms = {p.name for p in contributor_role.permissions}
 
         # Determine expected contributor permissions dynamically based on the wildcard rules
-        # Contributor gets: all :metadata, edit:cover (full editor + upload), llm_generate:*, delete:item, escalate:resolve
+        # Contributor gets: all :metadata, edit:cover (full editor + upload), llm_generate:*, delete:item,
+        # escalate:resolve, and transfer:item (ownership reassignment).
         expected_perms = {
             p
             for p in all_perms
@@ -50,6 +51,7 @@ def test_init_auth_roles_permissions(app):
                 or p.startswith("llm_generate:")
                 or p == "delete:item"
                 or p == "escalate:resolve"
+                or p == "transfer:item"
             )
         }
 

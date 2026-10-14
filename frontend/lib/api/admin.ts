@@ -250,6 +250,7 @@ export interface FrbrWork {
   title: string;
   meta: Record<string, unknown>;
   contributions?: FrbrContribution[];
+  series_memberships?: Array<{ id?: number; series_work_id: number; title?: string; sequence: number }>;
 }
 
 export interface FrbrExpression {
@@ -318,11 +319,17 @@ export async function getFrbrTree(manifestationId: number): Promise<FrbrTree> {
  * @param data.title - Optional new title
  * @param data.meta - Optional new metadata
  * @param data.contributions - Optional structured contributions
+ * @param data.series_memberships - Optional series memberships (array of series_work_id and sequence)
  * @returns The updated work ID
  */
 export async function updateFrbrWork(
   workId: number,
-  data: { title?: string; meta?: Record<string, unknown>; contributions?: FrbrContribution[] }
+  data: {
+    title?: string;
+    meta?: Record<string, unknown>;
+    contributions?: FrbrContribution[];
+    series_memberships?: Array<{ series_work_id: number; sequence: number }>;
+  }
 ): Promise<{ id: number }> {
   const res = await apiClient.put<ApiResponse<{ id: number }>>(`/v1/admin/frbr/work/${workId}`, data);
   if (!res.data.success || !res.data.data) {
