@@ -1,3 +1,14 @@
+---
+name: dependabot-updater
+description: "Workflow for addressing Dependabot alerts correctly by fetching the latest security events from the repository before planning or making any changes."
+license: AGPL
+compatibility:
+  - opencode
+  - antigravity
+metadata:
+  audience: developers
+---
+
 # Dependabot Alerts Updater Workflow
 
 ## Description

@@ -1,0 +1,1 @@
+../../workflows/dependabot-updater.md
