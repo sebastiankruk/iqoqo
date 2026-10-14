@@ -619,7 +619,8 @@ def update_work(work_id):
         )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+        status = 404 if f"Work with id {work_id} not found" in str(e) else 400
+        return jsonify({"success": False, "error": str(e)}), status
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
