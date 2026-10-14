@@ -21,11 +21,13 @@ Routes queries to PostgreSQL FTS when available, with ILIKE fallback for SQLite.
 import dataclasses
 import logging
 import os
+import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, exists, select, text
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.api.filters import CatalogFilterBuilder
 from app.db import db
@@ -52,10 +54,20 @@ def _validated_schema_prefixes() -> tuple[str, str]:
     return prefixes
 
 
+_UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
+
+
 def normalize_diacritics(s: str) -> str:
-    """Normalize text by folding diacritics / accents (e.g. 'miłość' -> 'milosc')."""
+    """Normalize text by folding diacritics / accents (e.g. 'miłość' -> 'milosc').
+
+    JSON columns serialise non-ASCII characters as ``\\uXXXX`` escapes, so a
+    ``CAST(meta AS TEXT)`` holds ``Mr\\u00f3z`` rather than ``Mróz``. Such escapes
+    are decoded first so the folded text matches an unaccented query.
+    """
     if not s:
         return ""
+    if "\\u" in s:
+        s = _UNICODE_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), s)
     table = str.maketrans(
         {
             "ł": "l",
@@ -80,6 +92,67 @@ def sanitize_search_query(q: str) -> str:
     if not q:
         return ""
     return q.translate(str.maketrans("’‘ʼ", "'''")).strip()
+
+
+def _meta_text(column: Any) -> Any:
+    """Return *column* (a JSON meta column) as searchable text.
+
+    ``json`` columns keep the ``\\uXXXX`` escapes SQLAlchemy wrote, which no
+    server-side unaccent can fold. On PostgreSQL the column is routed through
+    ``jsonb`` whose text output holds the real characters; SQLite relies on the
+    registered ``unaccent`` function decoding the escapes instead.
+    """
+    if db.engine.dialect.name == "postgresql":
+        return db.cast(db.cast(column, JSONB), db.String)
+    return db.cast(column, db.String)
+
+
+def build_ilike_search_clause(q: str) -> Any:
+    """Diacritic-insensitive ILIKE filter over Work, Manifestation and Contributors.
+
+    Requires ``Work`` and ``Manifestation`` in the enclosing query's FROM list.
+    Contributors are matched through correlated ``EXISTS`` subqueries so a work
+    with several contributors cannot multiply result rows or inflate totals.
+    Shared by the item and manifestation ILIKE backends so they cannot drift.
+    """
+    search_term = f"%{q}%"
+    norm_term = f"%{normalize_diacritics(q)}%"
+    raw_patterns = [search_term]
+    norm_patterns = [norm_term]
+    words = q.split()
+    if len(words) > 1:
+        # 'Garcia Marquez' -> '%Garcia%Marquez%'
+        raw_patterns.append("%" + "%".join(words) + "%")
+        norm_patterns.append("%" + "%".join(normalize_diacritics(w) for w in words) + "%")
+
+    unaccent_func = db.func.immutable_unaccent
+
+    def match(expr: Any) -> Any:
+        return db.or_(
+            *[expr.ilike(p) for p in raw_patterns],
+            *[unaccent_func(expr).ilike(p) for p in norm_patterns],
+        )
+
+    work_contributor = exists(
+        select(1)
+        .select_from(WorkContribution)
+        .join(Contributor, Contributor.id == WorkContribution.contributor_id)
+        .where(WorkContribution.work_id == Work.id, match(Contributor.name))
+    )
+    expression_contributor = exists(
+        select(1)
+        .select_from(ExpressionContribution)
+        .join(Contributor, Contributor.id == ExpressionContribution.contributor_id)
+        .where(ExpressionContribution.expression_id == Expression.id, match(Contributor.name))
+    )
+    return db.or_(
+        match(Work.title),
+        match(_meta_text(Work.meta)),
+        match(_meta_text(Manifestation.meta)),
+        Manifestation.isbn13.ilike(search_term),
+        work_contributor,
+        expression_contributor,
+    )
 
 
 @dataclass(frozen=True)
@@ -254,6 +327,14 @@ class SearchService:
                 WHERE ec.expression_id = e.id
                 AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
             )
+            OR to_tsvector('simple', immutable_unaccent(
+                coalesce((w.meta::jsonb) ->> 'authors', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'author', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'tags', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'genres', '') || ' ' ||
+                coalesce((m.meta::jsonb) ->> 'tags', '') || ' ' ||
+                coalesce((m.meta::jsonb) ->> 'genres', '')
+            )) @@ {tsquery_expr}
         """
 
         extra_filters_sql = ""
@@ -325,12 +406,11 @@ class SearchService:
         lod_authority: str | None = None,
         lod_status: str | None = None,
     ) -> tuple[int, list[int]]:
-        pattern = f"%{q}%"
         base_query = (
             db.session.query(Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
             .join(Work, Expression.work_id == Work.id)
-            .filter(db.or_(Work.title.ilike(pattern), Manifestation.isbn13.ilike(pattern)))
+            .filter(build_ilike_search_clause(q))
         )
         # The ILIKE path historically applied the narrower ``Item.status IN
         # (...)`` predicate rather than the full taxonomy semantics, hence
@@ -351,7 +431,7 @@ class SearchService:
         )
 
         total = base_query.count()
-        result_ids = [row[0] for row in base_query.limit(limit).offset(offset).all()]
+        result_ids = [row[0] for row in base_query.order_by(Manifestation.id.desc()).limit(limit).offset(offset).all()]
         return total, result_ids
 
     @staticmethod
@@ -396,6 +476,14 @@ class SearchService:
                 WHERE ec.expression_id = e.id
                 AND to_tsvector('simple', immutable_unaccent(c.name)) @@ {tsquery_expr}
             )
+            OR to_tsvector('simple', immutable_unaccent(
+                coalesce((w.meta::jsonb) ->> 'authors', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'author', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'tags', '') || ' ' ||
+                coalesce((w.meta::jsonb) ->> 'genres', '') || ' ' ||
+                coalesce((m.meta::jsonb) ->> 'tags', '') || ' ' ||
+                coalesce((m.meta::jsonb) ->> 'genres', '')
+            )) @@ {tsquery_expr}
         """
 
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
@@ -500,66 +588,15 @@ class SearchService:
             lod_status,
             owner_only,
         ) = dataclasses.astuple(filters)
-        search_term = f"%{q}%"
-        norm_q = normalize_diacritics(q)
-        norm_term = f"%{norm_q}%"
 
-        unaccent_func = db.func.unaccent
-
-        search_conditions = [
-            Work.title.ilike(search_term),
-            db.cast(Work.meta, db.String).ilike(search_term),
-            Manifestation.meta.cast(db.String).ilike(search_term),
-            Manifestation.isbn13.ilike(search_term),
-            unaccent_func(Work.title).ilike(norm_term),
-            unaccent_func(db.cast(Work.meta, db.String)).ilike(norm_term),
-            unaccent_func(Manifestation.meta.cast(db.String)).ilike(norm_term),
-        ]
-
-        # Also token-wise match for multi-word diacritic-insensitive searches (e.g. 'Garcia Marquez' -> '%Garcia%Marquez%')
-        words = q.split()
-        if len(words) > 1:
-            token_pattern = "%" + "%".join(words) + "%"
-            norm_token_pattern = "%" + "%".join(normalize_diacritics(w) for w in words) + "%"
-            search_conditions.extend(
-                [
-                    Work.title.ilike(token_pattern),
-                    db.cast(Work.meta, db.String).ilike(token_pattern),
-                    unaccent_func(Work.title).ilike(norm_token_pattern),
-                    unaccent_func(db.cast(Work.meta, db.String)).ilike(norm_token_pattern),
-                ]
-            )
-
-        work_contrib = db.aliased(Contributor, name="work_contributor")
-        expr_contrib = db.aliased(Contributor, name="expr_contributor")
-
-        # Subquery to get matching item IDs
+        # Subquery to get matching item IDs. Contributor matching lives inside the
+        # shared clause as EXISTS subqueries, so no contributor joins fan out rows.
         matching_items_sub = (
             db.session.query(Item.id)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
             .join(Work, Expression.work_id == Work.id)
-            .outerjoin(WorkContribution, Work.id == WorkContribution.work_id)
-            .outerjoin(work_contrib, WorkContribution.contributor_id == work_contrib.id)
-            .outerjoin(ExpressionContribution, Expression.id == ExpressionContribution.expression_id)
-            .outerjoin(expr_contrib, ExpressionContribution.contributor_id == expr_contrib.id)
-            .filter(
-                db.or_(
-                    *search_conditions,
-                    work_contrib.name.ilike(search_term),
-                    expr_contrib.name.ilike(search_term),
-                    unaccent_func(work_contrib.name).ilike(norm_term),
-                    unaccent_func(expr_contrib.name).ilike(norm_term),
-                    *(
-                        [
-                            unaccent_func(work_contrib.name).ilike(norm_token_pattern),
-                            unaccent_func(expr_contrib.name).ilike(norm_token_pattern),
-                        ]
-                        if len(words) > 1
-                        else []
-                    ),
-                )
-            )
+            .filter(build_ilike_search_clause(q))
         )
 
         query = (

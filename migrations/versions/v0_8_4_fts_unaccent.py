@@ -33,8 +33,11 @@ depends_on = None
 
 def upgrade():
     """Update FTS columns to use unaccent for diacritic-insensitive search."""
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     # Update works.fts_simple to use unaccent
-    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple CASCADE")
+    op.execute("ALTER TABLE catalog.works DROP COLUMN IF EXISTS fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.works
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -44,10 +47,10 @@ def upgrade():
             )
         ) STORED
     """)
-    op.execute("CREATE INDEX ix_works_fts ON catalog.works USING gin(fts_simple)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_works_fts ON catalog.works USING gin(fts_simple)")
 
     # Update manifestations.fts_simple to use unaccent
-    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple CASCADE")
+    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN IF EXISTS fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.manifestations
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -58,13 +61,16 @@ def upgrade():
             )
         ) STORED
     """)
-    op.execute("CREATE INDEX ix_manifestations_fts ON catalog.manifestations USING gin(fts_simple)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON catalog.manifestations USING gin(fts_simple)")
 
 
 def downgrade():
     """Revert FTS columns to original definitions without unaccent."""
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     # Revert works.fts_simple
-    op.execute("ALTER TABLE catalog.works DROP COLUMN fts_simple CASCADE")
+    op.execute("ALTER TABLE catalog.works DROP COLUMN IF EXISTS fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.works
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -74,10 +80,10 @@ def downgrade():
             )
         ) STORED
     """)
-    op.execute("CREATE INDEX ix_works_fts ON catalog.works USING gin(fts_simple)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_works_fts ON catalog.works USING gin(fts_simple)")
 
     # Revert manifestations.fts_simple
-    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN fts_simple CASCADE")
+    op.execute("ALTER TABLE catalog.manifestations DROP COLUMN IF EXISTS fts_simple CASCADE")
     op.execute("""
         ALTER TABLE catalog.manifestations
         ADD COLUMN fts_simple tsvector GENERATED ALWAYS AS (
@@ -88,4 +94,4 @@ def downgrade():
             )
         ) STORED
     """)
-    op.execute("CREATE INDEX ix_manifestations_fts ON catalog.manifestations USING gin(fts_simple)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_manifestations_fts ON catalog.manifestations USING gin(fts_simple)")

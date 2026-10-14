@@ -581,8 +581,21 @@ def search_works():
     if not q:
         return jsonify({"success": True, "data": []})
 
-    # Search by title or ID
-    works = Work.query.filter(db.or_(Work.title.ilike(f"%{q}%"), Work.id == int(q) if q.isdigit() else False)).limit(limit).all()
+    # Search by title (diacritic-insensitive) or ID
+    from app.core.search_service import normalize_diacritics
+
+    norm_q = normalize_diacritics(q)
+    works = (
+        Work.query.filter(
+            db.or_(
+                Work.title.ilike(f"%{q}%"),
+                db.func.immutable_unaccent(Work.title).ilike(f"%{norm_q}%"),
+                Work.id == int(q) if q.isdigit() else False,
+            )
+        )
+        .limit(limit)
+        .all()
+    )
 
     return jsonify({"success": True, "data": [{"id": w.id, "title": w.title} for w in works]})
 
@@ -778,8 +791,13 @@ def search_frbr_entities():
 
     results = []
 
+    from app.core.search_service import normalize_diacritics
+
+    norm_query = normalize_diacritics(query)
+    title_match = db.or_(Work.title.ilike(f"%{query}%"), db.func.immutable_unaccent(Work.title).ilike(f"%{norm_query}%"))
+
     if entity_type == "work":
-        works = db.session.execute(db.select(Work).filter(Work.title.ilike(f"%{query}%")).limit(limit)).scalars().all()
+        works = db.session.execute(db.select(Work).filter(title_match).limit(limit)).scalars().all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
@@ -787,7 +805,7 @@ def search_frbr_entities():
             db.session.execute(
                 db.select(Expression)
                 .join(Work, Expression.work_id == Work.id)
-                .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+                .filter(db.or_(title_match, Expression.content_type.ilike(f"%{query}%")))
                 .limit(limit)
             )
             .scalars()
@@ -806,7 +824,7 @@ def search_frbr_entities():
     else:  # manifestation
         # Search by ISBN/UPC/EAN OR by work title/author in meta
         work_filter = db.or_(
-            Work.title.ilike(f"%{query}%"),
+            title_match,
             db.or_(
                 Work.meta["authors"].cast(db.String).ilike(f"%{query}%"),
                 Work.meta["author"].cast(db.String).ilike(f"%{query}%"),

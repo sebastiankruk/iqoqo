@@ -55,3 +55,4 @@ def _register_sqlite_unaccent(dbapi_connection, _connection_record) -> None:
         from app.core.search_service import normalize_diacritics
 
         dbapi_connection.create_function("unaccent", 1, normalize_diacritics)
+        dbapi_connection.create_function("immutable_unaccent", 1, normalize_diacritics)

@@ -34,7 +34,7 @@ def upgrade():
     is_pg = bind.dialect.name == "postgresql"
 
     if is_pg:
-        op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
+        op.execute("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public")
         op.execute(
             """
             CREATE OR REPLACE FUNCTION immutable_unaccent(text)
