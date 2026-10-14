@@ -131,9 +131,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
     (manifestation.ean || "").trim() ||
     (manifestation.meta?.ean as string | undefined) ||
     (manifestation.meta?.barcode as string | undefined);
-  const resolvedUpc =
-    (manifestation.upc || "").trim() ||
-    (manifestation.meta?.upc as string | undefined);
+  const resolvedUpc = (manifestation.upc || "").trim() || (manifestation.meta?.upc as string | undefined);
   const tags = ((manifestation as unknown as { tags?: (string | { name: string; source?: string })[] }).tags ||
     manifestation.meta?.tags ||
     manifestation.meta?.genres ||

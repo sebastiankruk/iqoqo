@@ -71,10 +71,10 @@ function DetailsTab({ item }: { item: Item }) {
       {(() => {
         const tags = (Array.isArray(meta.tags) ? meta.tags : Array.isArray(meta.genres) ? meta.genres : []) as string[];
         return tags.length > 0 ? (
-        <div className="border-t pt-4 space-y-2">
-          <h4 className="font-serif text-sm font-bold text-foreground">Tags</h4>
-          <TagCloud tags={tags} maxInitial={10} />
-        </div>
+          <div className="border-t pt-4 space-y-2">
+            <h4 className="font-serif text-sm font-bold text-foreground">Tags</h4>
+            <TagCloud tags={tags} maxInitial={10} />
+          </div>
         ) : null;
       })()}
 

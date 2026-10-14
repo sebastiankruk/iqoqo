@@ -102,25 +102,27 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
   );
   const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.work?.contributions ?? []);
-  const [seriesMemberships, setSeriesMemberships] = useState<Array<{ 
-    series_work_id: number; 
-    sequence: number;
-    title?: string;
-  }>>(() =>
+  const [seriesMemberships, setSeriesMemberships] = useState<
+    Array<{
+      series_work_id: number;
+      sequence: number;
+      title?: string;
+    }>
+  >(() =>
     (tree.work?.series_memberships ?? []).map(sm => ({
       series_work_id: sm.series_work_id,
       sequence: sm.sequence,
       title: sm.title,
     }))
   );
-  
+
   // Series search state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<WorkSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [newSeriesSeq, setNewSeriesSeq] = useState("1");
   const [showResults, setShowResults] = useState(false);
-  
+
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   // Search works when query changes
@@ -154,11 +156,14 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
 
   const handleSelectSeries = (work: WorkSearchResult) => {
     if (seriesMemberships.some(sm => sm.series_work_id === work.id)) return;
-    setSeriesMemberships(prev => [...prev, { 
-      series_work_id: work.id, 
-      sequence: parseInt(newSeriesSeq, 10) || 0,
-      title: work.title,
-    }]);
+    setSeriesMemberships(prev => [
+      ...prev,
+      {
+        series_work_id: work.id,
+        sequence: parseInt(newSeriesSeq, 10) || 0,
+        title: work.title,
+      },
+    ]);
     setSearchQuery("");
     setSearchResults([]);
     setShowResults(false);
@@ -246,7 +251,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
                 className="flex h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
               />
             </div>
-            
+
             {showResults && (searchQuery.length >= 2 || searchResults.length > 0) && (
               <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-background border border-input rounded-md shadow-lg z-50">
                 {isSearching ? (
