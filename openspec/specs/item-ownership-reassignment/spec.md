@@ -8,12 +8,17 @@ Provides an auditable, administrator-controlled way to correct Item ownership af
 
 ### Requirement: Ownership reassignment is restricted to authorized administrators
 
-The system SHALL permit Item ownership reassignment only to an authenticated user who has both the `admin` role and the `write:users` permission. Source/target account discovery SHALL additionally require `read:users`. Ordinary owners, borrowers, users with only `update:item` or `write:item`, and callers without authentication SHALL NOT use reassignment operations. Reassignment SHALL NOT be exposed as a public or self-service ownership override, and the ordinary Item update API SHALL continue to reject `owner_id` changes.
+The system SHALL permit Item ownership reassignment to an authenticated user who has either the `admin` role or the `custodian` role, along with the `write:users` permission. Source/target account discovery SHALL additionally require `read:users`. Ordinary owners, borrowers, users with only `update:item` or `write:item`, and callers without authentication SHALL NOT use reassignment operations. Reassignment SHALL NOT be exposed as a public or self-service ownership override, and the ordinary Item update API SHALL continue to reject `owner_id` changes. Reassignment affordances SHALL be accessible within both administrator and custodian navigation surfaces.
 
 #### Scenario: Authorized administrator opens reassignment
 
 - **WHEN** an authenticated administrator with `write:users` requests the reassignment UI or API
 - **THEN** the system permits the operation subject to source, target, and scope validation
+
+#### Scenario: Authorized custodian opens reassignment
+
+- **WHEN** an authenticated custodian with `write:users` requests the reassignment UI or API
+- **THEN** the system permits the operation subject to source, target, and scope validation and displays the reassignment option in the custodian navigation menu
 
 #### Scenario: Administrator without account-read permission requests account discovery
 
@@ -22,7 +27,7 @@ The system SHALL permit Item ownership reassignment only to an authenticated use
 
 #### Scenario: Non-admin with user-write permission attempts reassignment
 
-- **WHEN** an authenticated non-admin has `write:users` and submits a reassignment request
+- **WHEN** an authenticated user who has neither `admin` nor `custodian` role has `write:users` and submits a reassignment request
 - **THEN** the system denies the request and changes no Item or custody data
 
 #### Scenario: Ordinary owner attempts self-service ownership override
