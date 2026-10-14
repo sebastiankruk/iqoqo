@@ -13,19 +13,20 @@ Talk like caveman
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
 - **Session End Ingestion Prohibition**: Do NOT run automatic MemPalace updates or mining at the end of sessions. MemPalace ingestion is strictly manual or reserved for scheduled/release maintenance (`make mempalace-index` or `make knowledge-sync-full`).
+- **Fast Short-Circuit**: `make mempalace-index` automatically caches scope SHA-256 fingerprints and skips unchanged scopes. Pass `ARGS=--force` only when forcing a complete re-index.
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
-- **Scope & Coverage**: CodeGraph indexes the **entire repository** including backend (`app/**`, `tests/**`) and frontend (`frontend/**` TypeScript/React/TSX).
+- **Scope & Coverage**: CodeGraph indexes the **entire repository** across both languages: Python backend (`app/**`, `tests/**`) and Next.js frontend (`frontend/**` TypeScript/React/TSX).
 - **Mandatory First-Stop Navigation (STRICT NO-GREP FIRST)**: NEVER run `grep`, `grep_search`, `find_by_name`, or ripgrep for any code symbol, route, hook, or model before querying CodeGraph first:
   - Search routes & partial symbols: `codegraph query "<pattern>"` (e.g. `codegraph query "items/bulk"`, `codegraph query "useManifestation"`)
   - Inspect symbol / definition: `codegraph node <SymbolName>` (for exact symbol declarations)
-  - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`)
+  - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`). If a symbol exists in multiple files, NEVER fall back to grep—always disambiguate with `-f`.
   - Call hierarchy: `codegraph callers <SymbolName>` / `codegraph callees <SymbolName>`
   - Impact & ripple analysis: `codegraph impact <SymbolName>`
   - Explore paths: `codegraph explore "<query>"`
   - Test blast radius: `codegraph affected <file_path>`
-- **HTTP Boundary Note**: Frontend API calls (`apiClient.post`) and Flask routes (`@api_bp.route`) do not share static AST edges. Discover endpoints using `codegraph query "<route_path>"` rather than `codegraph node`.
+- **HTTP Boundary Note**: Frontend API calls (`apiClient.post`) and Flask routes (`@api_bp.route`) do not share static AST edges across languages. Discover endpoints using `codegraph query "<route_path>"` rather than `codegraph node`.
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 ### 🕸️ Graphify Knowledge Graph Directive
