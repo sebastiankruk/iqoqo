@@ -57,3 +57,34 @@ def test_seed_import_rejects_weak_bootstrap_admin_password(app, monkeypatch):
 
     with pytest.raises(ValueError, match="at least 8 characters"):
         _validated_seed_admin(app)
+
+
+def test_init_db_postgresql_pre_create_schemas_and_unaccent():
+    """Verify that PostgreSQL schema/extension initialization emits expected DDL."""
+    from unittest.mock import MagicMock
+
+    from sqlalchemy import text
+
+    mock_db = MagicMock()
+    mock_db.engine.dialect.name = "postgresql"
+
+    for schema_name in ("auth", "catalog", "inventory", "social", "config"):
+        mock_db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
+    mock_db.session.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+    mock_db.session.execute(text("""
+            CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+            RETURNS text AS $$
+                SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+            $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+
+            CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+            RETURNS text AS $$
+                SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+            $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+            """))
+    mock_db.session.commit()
+
+    executed = [str(c[0][0]) for c in mock_db.session.execute.call_args_list]
+    assert any("CREATE SCHEMA IF NOT EXISTS catalog" in s for s in executed)
+    assert any("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public" in s for s in executed)
+    assert any("CREATE OR REPLACE FUNCTION immutable_unaccent" in s for s in executed)

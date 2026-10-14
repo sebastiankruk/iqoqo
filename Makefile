@@ -712,7 +712,7 @@ _test-e2e-run:
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		if [ -z '$(NO_RESET)' ]; then \
 			echo "Resetting the verified dedicated E2E database..."; \
-			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social'; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social' -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public'; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset --force; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" SECRET_KEY=test-secret-key-not-for-production ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_auth.py; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py; \

@@ -56,3 +56,22 @@ def _register_sqlite_unaccent(dbapi_connection, _connection_record) -> None:
 
         dbapi_connection.create_function("unaccent", 1, normalize_diacritics)
         dbapi_connection.create_function("immutable_unaccent", 1, normalize_diacritics)
+
+
+@event.listens_for(db.metadata, "before_create")
+def _ensure_pg_unaccent_functions(_target, connection, **_kw) -> None:
+    if connection.dialect.name == "postgresql":
+        from sqlalchemy import text
+
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+        connection.execute(text("""
+                CREATE OR REPLACE FUNCTION immutable_unaccent(text)
+                RETURNS text AS $$
+                    SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+
+                CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+                RETURNS text AS $$
+                    SELECT public.unaccent('public.unaccent'::regdictionary, $1);
+                $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT;
+                """))
