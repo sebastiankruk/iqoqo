@@ -15,7 +15,6 @@
 //
 import { BggAttribution } from "@/components/ui/bgg-attribution";
 import { IgdbAttribution } from "@/components/ui/igdb-attribution";
-import { DiscoveryPivot } from "./discovery-pivot";
 import { TagCloud } from "@/components/ui/tag-cloud";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 

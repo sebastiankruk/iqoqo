@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Loader2, GitMerge } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -116,37 +116,52 @@ export function getProviderLabel(provider: string): string {
 /**
  * Helper to extract a field value from provider-specific raw payload structures.
  */
-function extractProviderField(providerData: any, fieldKey: string): string | string[] | undefined {
+function extractProviderField(providerData: unknown, fieldKey: string): string | string[] | undefined {
   if (!providerData || typeof providerData !== "object") return undefined;
+  const pData = providerData as Record<string, unknown>;
+  const volumeInfo = (pData.volumeInfo && typeof pData.volumeInfo === "object" ? pData.volumeInfo : undefined) as
+    | Record<string, unknown>
+    | undefined;
+
   switch (fieldKey) {
     case "title":
-      return providerData.title || providerData.volumeInfo?.title || undefined;
+      return (
+        (typeof pData.title === "string" ? pData.title : undefined) ||
+        (typeof volumeInfo?.title === "string" ? volumeInfo.title : undefined)
+      );
     case "authors": {
-      const val = providerData.authors || providerData.volumeInfo?.authors;
+      const val = pData.authors || volumeInfo?.authors;
       if (Array.isArray(val)) return val.map(String);
       if (typeof val === "string" && val.trim()) return [val.trim()];
       return undefined;
     }
     case "description": {
-      const val = providerData.description || providerData.volumeInfo?.description;
+      const val = pData.description || volumeInfo?.description;
       return typeof val === "string" ? val : undefined;
     }
     case "language":
-      return providerData.language || providerData.volumeInfo?.language || undefined;
+      return (
+        (typeof pData.language === "string" ? pData.language : undefined) ||
+        (typeof volumeInfo?.language === "string" ? volumeInfo.language : undefined)
+      );
     case "publisher": {
-      const val = providerData.publisher || providerData.publishers?.[0] || providerData.volumeInfo?.publisher;
+      const publishers = Array.isArray(pData.publishers) ? pData.publishers : undefined;
+      const val = pData.publisher || publishers?.[0] || volumeInfo?.publisher;
       return typeof val === "string" ? val : undefined;
     }
     case "cover_url": {
-      const val =
-        providerData.cover_url ||
-        providerData.cover ||
-        providerData.thumbnail ||
-        providerData.volumeInfo?.imageLinks?.thumbnail;
+      const imageLinks = (
+        volumeInfo?.imageLinks && typeof volumeInfo.imageLinks === "object" ? volumeInfo.imageLinks : undefined
+      ) as Record<string, unknown> | undefined;
+      const val = pData.cover_url || pData.cover || pData.thumbnail || imageLinks?.thumbnail;
       return typeof val === "string" ? val : undefined;
     }
-    default:
-      return providerData[fieldKey];
+    default: {
+      const val = pData[fieldKey];
+      if (typeof val === "string") return val;
+      if (Array.isArray(val)) return val.map(String);
+      return undefined;
+    }
   }
 }
 
@@ -166,11 +181,15 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
   const manifProv =
     (manifMeta._provenance as Record<string, string>) ?? (manifMeta.provenance as Record<string, string>) ?? {};
 
-  const rawPayload = ((manif as any)?.raw_payload ??
+  const manifObj = manif as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
+  const workObj = tree.work as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
+  const workMeta = (tree.work?.meta ?? {}) as Record<string, unknown>;
+
+  const rawPayload = (manifObj?.raw_payload ??
     manifMeta.raw_payload ??
-    (tree.work as any)?.raw_payload ??
-    (tree.work?.meta as any)?.raw_payload ??
-    {}) as Record<string, any>;
+    workObj?.raw_payload ??
+    workMeta.raw_payload ??
+    {}) as Record<string, unknown>;
 
   // Known external provider keys in raw_payload
   const providerKeys = new Set<string>();
@@ -302,7 +321,9 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
   });
 
   // Cover Image
-  const coverUrl = (manifMeta.cover_url as string) || (manif as any)?.cover_url || "";
+  const coverUrl =
+    (manifMeta.cover_url as string) ||
+    ((manif as unknown as { cover_url?: string } | null | undefined)?.cover_url ?? "");
   const coverProv = manifProv.cover_url || "current";
   const coverCandidates: ProviderCandidate[] = [];
   if (coverUrl) {
@@ -360,27 +381,8 @@ export function ProviderMergeDialog({
     return customFields ?? (tree ? buildFieldComparisonsFromTree(tree) : []);
   }, [customFields, tree]);
 
-  // Per-field selected provider key: fieldKey -> provider name
-  const [selectedProviders, setSelectedProviders] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    for (const comp of comparisons) {
-      if (comp.candidates.length > 0) {
-        initial[comp.fieldKey] = comp.candidates[0].provider;
-      }
-    }
-    return initial;
-  });
-
-  // Re-synchronize selected provider state whenever derived comparisons change
-  useEffect(() => {
-    const initial: Record<string, string> = {};
-    for (const comp of comparisons) {
-      if (comp.candidates.length > 0) {
-        initial[comp.fieldKey] = comp.candidates[0].provider;
-      }
-    }
-    setSelectedProviders(initial);
-  }, [comparisons]);
+  // Per-field selected provider key: fieldKey -> provider name (defaults to first candidate)
+  const [selectedProviders, setSelectedProviders] = useState<Record<string, string>>({});
 
   const handleSelect = (fieldKey: string, provider: string) => {
     setSelectedProviders(prev => ({
@@ -399,7 +401,7 @@ export function ProviderMergeDialog({
       };
 
       for (const comp of comparisons) {
-        const chosenProvider = selectedProviders[comp.fieldKey];
+        const chosenProvider = selectedProviders[comp.fieldKey] || comp.candidates[0]?.provider;
         const candidate = comp.candidates.find(c => c.provider === chosenProvider) || comp.candidates[0];
         if (!candidate) continue;
 

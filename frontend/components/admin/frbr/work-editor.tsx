@@ -15,7 +15,8 @@
 //
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X, Search } from "lucide-react";
 import {
@@ -119,47 +120,26 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
 
   // Series search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<WorkSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [newSeriesSeq, setNewSeriesSeq] = useState("1");
   const [showResults, setShowResults] = useState(false);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const isSearchActive = Boolean(debouncedSearch && debouncedSearch.length >= 2);
 
-  // Search works when query changes
-  useEffect(() => {
-    if (!debouncedSearch || debouncedSearch.length < 2) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setIsSearching(true);
-
-    apiClient
-      .get<{ success: boolean; data: WorkSearchResult[] }>(
+  const { data: searchResultsData, isLoading: isSearching } = useQuery({
+    queryKey: ["adminWorksSearch", debouncedSearch],
+    queryFn: async ({ signal }) => {
+      const res = await apiClient.get<{ success: boolean; data: WorkSearchResult[] }>(
         `/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`,
-        { signal: controller.signal }
-      )
-      .then(res => {
-        setSearchResults(res.data.data || []);
-      })
-      .catch(error => {
-        if (error?.name !== "CanceledError" && error?.name !== "AbortError") {
-          console.error("Search failed:", error);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setIsSearching(false);
-        }
-      });
+        { signal }
+      );
+      return res.data.data || [];
+    },
+    enabled: isSearchActive,
+    staleTime: 30000,
+  });
 
-    return () => {
-      controller.abort();
-    };
-  }, [debouncedSearch]);
+  const activeSearchResults = isSearchActive ? (searchResultsData ?? []) : [];
 
   const handleSelectSeries = (work: WorkSearchResult) => {
     if (seriesMemberships.some(sm => sm.series_work_id === work.id)) return;
@@ -259,12 +239,12 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
               />
             </div>
 
-            {showResults && (searchQuery.length >= 2 || searchResults.length > 0) && (
+            {showResults && isSearchActive && (
               <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-background border border-input rounded-md shadow-lg z-50">
                 {isSearching ? (
                   <div className="p-2 text-xs text-muted-foreground text-center">Searching...</div>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map(result => (
+                ) : activeSearchResults.length > 0 ? (
+                  activeSearchResults.map(result => (
                     <button
                       key={result.id}
                       type="button"
@@ -275,9 +255,9 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
                       <span className="ml-2 text-muted-foreground">{result.title}</span>
                     </button>
                   ))
-                ) : searchQuery.length >= 2 ? (
+                ) : (
                   <div className="p-2 text-xs text-muted-foreground text-center">No works found</div>
-                ) : null}
+                )}
               </div>
             )}
           </div>

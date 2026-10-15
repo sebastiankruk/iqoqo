@@ -16,7 +16,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ItemSidebar } from "@/components/item/item-sidebar";
-import * as hooks from "@/lib/api/hooks";
 import type { Item } from "@/types/frbr";
 
 vi.mock("@/lib/api/hooks", () => ({
