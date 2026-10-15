@@ -29,7 +29,7 @@ from typing import Any
 
 from rdflib import Graph, Namespace
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload
 
 from app.core.iri import get_lod_base_url as _get_lod_base_url
 from app.db.core import Expression, Item, Manifestation, Work, db

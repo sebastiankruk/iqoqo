@@ -16,7 +16,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -37,23 +37,22 @@ export interface EditItemDialogProps {
   onSuccess?: () => void;
 }
 
+interface EditItemFormProps {
+  item: Item;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+}
+
 /**
- * Dialog for editing physical Item exemplar details, including local barcode and condition.
+ * Inner form component for editing Item details.
  *
  * @param props - Component props
- * @returns {React.JSX.Element} Edit item dialog component
+ * @returns {React.JSX.Element} The rendered form
  */
-export function EditItemDialog({ item, isOpen, onOpenChange, onSuccess }: EditItemDialogProps) {
-  const [localBarcode, setLocalBarcode] = useState<string>("");
-  const [condition, setCondition] = useState<string>("");
+function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
+  const [localBarcode, setLocalBarcode] = useState<string>(item.local_barcode ?? "");
+  const [condition, setCondition] = useState<string>(item.condition ?? "");
   const updateItem = useUpdateItem(item.id);
-
-  useEffect(() => {
-    if (isOpen) {
-      setLocalBarcode(item.local_barcode ?? "");
-      setCondition(item.condition ?? "");
-    }
-  }, [isOpen, item]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +70,64 @@ export function EditItemDialog({ item, isOpen, onOpenChange, onSuccess }: EditIt
   };
 
   return (
+    <form onSubmit={handleSubmit} className="space-y-4 py-2">
+      <div className="space-y-2">
+        <label
+          htmlFor="item-local-barcode"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Local Barcode / Inventory Tag
+        </label>
+        <input
+          id="item-local-barcode"
+          name="local_barcode"
+          value={localBarcode}
+          onChange={e => setLocalBarcode(e.target.value)}
+          placeholder="e.g. SHELF-01-A, INV-12345"
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Physical shelf sticker or exemplar barcode, separate from Manifestation ISBN.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="item-condition"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          Condition
+        </label>
+        <input
+          id="item-condition"
+          name="condition"
+          value={condition}
+          onChange={e => setCondition(e.target.value)}
+          placeholder="e.g. Like New, Good, Fair"
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        />
+      </div>
+
+      <DialogFooter className="pt-2">
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateItem.isPending}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={updateItem.isPending}>
+          {updateItem.isPending ? "Saving..." : "Save Changes"}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/**
+ * Dialog for editing physical Item exemplar details, including local barcode and condition.
+ *
+ * @param props - Component props
+ * @returns {React.JSX.Element} Edit item dialog component
+ */
+export function EditItemDialog({ item, isOpen, onOpenChange, onSuccess }: EditItemDialogProps) {
+  return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -78,53 +135,7 @@ export function EditItemDialog({ item, isOpen, onOpenChange, onSuccess }: EditIt
           <DialogDescription>Update physical exemplar details, local shelf barcode, and condition.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-2">
-            <label
-              htmlFor="item-local-barcode"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Local Barcode / Inventory Tag
-            </label>
-            <input
-              id="item-local-barcode"
-              name="local_barcode"
-              value={localBarcode}
-              onChange={e => setLocalBarcode(e.target.value)}
-              placeholder="e.g. SHELF-01-A, INV-12345"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Physical shelf sticker or exemplar barcode, separate from Manifestation ISBN.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="item-condition"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Condition
-            </label>
-            <input
-              id="item-condition"
-              name="condition"
-              value={condition}
-              onChange={e => setCondition(e.target.value)}
-              placeholder="e.g. Like New, Good, Fair"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-          </div>
-
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateItem.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={updateItem.isPending}>
-              {updateItem.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </form>
+        {isOpen && <EditItemForm item={item} onOpenChange={onOpenChange} onSuccess={onSuccess} />}
       </DialogContent>
     </Dialog>
   );
