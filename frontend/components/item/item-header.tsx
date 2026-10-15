@@ -77,7 +77,7 @@ function normalizeAuthors(authors: unknown): string[] {
 export function ItemHeader({ item }: ItemHeaderProps) {
   const work = item.work;
   const meta = item.manifestation_meta ?? {};
-  const tags = (meta["tags"] as string[] | undefined) ?? [];
+  const tags = Array.from(new Set([...(item.tags ?? []), ...((meta["tags"] as string[] | undefined) ?? [])]));
 
   const { data: partsResponse } = useWorkParts(work?.container_work_id ?? work?.id ?? 0);
   const parts = partsResponse?.data ?? [];
@@ -193,7 +193,7 @@ export function ItemHeader({ item }: ItemHeaderProps) {
         {/* Tags */}
         {tags.length > 0 && (
           <div className="mb-3">
-            <TagCloud tags={tags} maxInitial={10} />
+            <TagCloud tags={tags} pivotType="tags" maxInitial={10} />
           </div>
         )}
 

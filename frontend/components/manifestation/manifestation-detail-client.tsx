@@ -367,7 +367,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             {tags.length > 0 && (
               <div className="pt-6 border-t border-border space-y-3">
                 <h2 className="text-lg font-semibold">{t("indexedTags")}</h2>
-                <TagCloud tags={tags} maxInitial={10} />
+                <TagCloud tags={tags} pivotType="tags" maxInitial={10} />
               </div>
             )}
 

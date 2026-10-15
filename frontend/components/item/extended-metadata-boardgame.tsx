@@ -16,6 +16,7 @@
 import { BggAttribution } from "@/components/ui/bgg-attribution";
 import { IgdbAttribution } from "@/components/ui/igdb-attribution";
 import { DiscoveryPivot } from "./discovery-pivot";
+import { TagCloud } from "@/components/ui/tag-cloud";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 
 interface ExtendedMetadataBoardGameProps {
@@ -78,10 +79,8 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
         {mechanics && mechanics.length > 0 && (
           <div className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Mechanics</span>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {mechanics.map((mech, idx) => (
-                <DiscoveryPivot key={`${mech}-${idx}`} type="tags" value={mech} />
-              ))}
+            <div className="mt-1">
+              <TagCloud tags={mechanics} pivotType="tags" maxInitial={10} />
             </div>
           </div>
         )}

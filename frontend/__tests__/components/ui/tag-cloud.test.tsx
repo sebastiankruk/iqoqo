@@ -84,4 +84,66 @@ describe("TagCloud component", () => {
     const chip4 = screen.getByText("Generic");
     expect(chip4).toHaveAttribute("title", "Source: Catalog Ingestion");
   });
+
+  it("renders interactive DiscoveryPivot links when pivotType is provided and folds overflow", async () => {
+    const user = userEvent.setup();
+    const genres = [
+      "Shoegaze",
+      "Dream Pop",
+      "Post-Rock",
+      "Ambient",
+      "Indie Rock",
+      "Noise Rock",
+      "Drone",
+      "Slowcore",
+      "Ethereal Wave",
+      "Art Rock",
+      "Krautrock",
+      "Space Rock",
+    ];
+
+    render(<TagCloud tags={genres} pivotType="genres" maxInitial={10} />);
+
+    // Top 10 should be links pointing to collection
+    const link1 = screen.getByRole("link", { name: "Shoegaze" });
+    expect(link1).toHaveAttribute("href", "/collection?genres=Shoegaze");
+
+    const link10 = screen.getByRole("link", { name: "Art Rock" });
+    expect(link10).toHaveAttribute("href", "/collection?genres=Art%20Rock");
+
+    // 11th should be folded
+    expect(screen.queryByRole("link", { name: "Krautrock" })).toBeNull();
+
+    // Toggle button displays "+2 more"
+    const toggle = screen.getByTestId("tag-cloud-toggle");
+    expect(toggle).toHaveTextContent("+2 more");
+
+    // Expand
+    await user.click(toggle);
+    const link11 = screen.getByRole("link", { name: "Krautrock" });
+    expect(link11).toBeInTheDocument();
+    expect(link11).toHaveAttribute("href", "/collection?genres=Krautrock");
+    expect(toggle).toHaveTextContent("Show less");
+
+    // Collapse
+    await user.click(toggle);
+    expect(screen.queryByRole("link", { name: "Krautrock" })).toBeNull();
+  });
+
+  it("supports custom tag rendering via renderTag prop", () => {
+    const tags = ["One", "Two"];
+    render(
+      <TagCloud
+        tags={tags}
+        renderTag={(tag, idx) => (
+          <button key={tag.name} data-testid={`custom-${idx}`}>
+            {tag.name}
+          </button>
+        )}
+      />
+    );
+
+    expect(screen.getByTestId("custom-0")).toHaveTextContent("One");
+    expect(screen.getByTestId("custom-1")).toHaveTextContent("Two");
+  });
 });

@@ -18,6 +18,7 @@
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DiscoveryPivot } from "@/components/item/discovery-pivot";
 
 export interface TagItem {
   name: string;
@@ -31,6 +32,9 @@ export interface TagCloudProps {
   maxInitial?: number;
   className?: string;
   chipClassName?: string;
+  pivotType?: "tags" | "genres" | "publishers" | "q";
+  badgeVariant?: "default" | "secondary" | "destructive" | "outline";
+  renderTag?: (tag: TagItem, index: number) => React.ReactNode;
 }
 
 /**
@@ -49,7 +53,15 @@ function formatSourceLabel(source?: string): string {
 /**
  * Responsive, compact tag cloud with "+X more" folding and provenance tooltips.
  */
-export function TagCloud({ tags, maxInitial = 10, className = "", chipClassName = "" }: TagCloudProps) {
+export function TagCloud({
+  tags,
+  maxInitial = 10,
+  className = "",
+  chipClassName = "",
+  pivotType,
+  badgeVariant = "secondary",
+  renderTag,
+}: TagCloudProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!tags || tags.length === 0) {
@@ -66,7 +78,25 @@ export function TagCloud({ tags, maxInitial = 10, className = "", chipClassName 
     <div className={cn("space-y-2", className)} data-testid="tag-cloud">
       <div className="flex flex-wrap items-center gap-1.5" role="list" aria-label="Tags">
         {visibleTags.map((tag, idx) => {
+          if (renderTag) {
+            return <React.Fragment key={`${tag.name}-${idx}`}>{renderTag(tag, idx)}</React.Fragment>;
+          }
+
           const sourceTooltip = formatSourceLabel(tag.source);
+
+          if (pivotType) {
+            return (
+              <DiscoveryPivot
+                key={`${tag.name}-${idx}`}
+                type={pivotType}
+                value={tag.name}
+                title={sourceTooltip}
+                badgeVariant={badgeVariant}
+                className={chipClassName}
+              />
+            );
+          }
+
           return (
             <span
               key={`${tag.name}-${idx}`}
