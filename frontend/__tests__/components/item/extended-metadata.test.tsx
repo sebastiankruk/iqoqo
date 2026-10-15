@@ -78,10 +78,7 @@ describe("ExtendedMetadata", () => {
 
   it("deduplicates categories across manifestation categories and work genres", () => {
     render(
-      <ExtendedMetadata
-        meta={{ categories: ["Drama", "Mystery"] }}
-        workMeta={{ genres: ["Mystery", "Thriller"] }}
-      />
+      <ExtendedMetadata meta={{ categories: ["Drama", "Mystery"] }} workMeta={{ genres: ["Mystery", "Thriller"] }} />
     );
 
     const mysteryLinks = screen.getAllByRole("link", { name: "Mystery" });

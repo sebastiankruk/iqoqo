@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.4] - TBD
+## [0.8.4] - 2026-10-15
 
 ### Added
 
@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Search Pagination Determinism**: Added deterministic tie-breakers (`id DESC`) on full-text search queries in `app/core/search_service.py` to ensure stable pagination across zero-ranked contributor matches.
 - **Provider Time Budget Bounding**: Passed remaining time budgets down as socket timeouts to Google Books and OpenLibrary API adapters in `app/utils/isbn.py`, ensuring provider queries strictly observe `max_duration` limits.
 - **Frontend Circular Module Dependencies**: Moved `STATUS_LABELS` out of `item-sidebar.tsx` into a dedicated `constants.ts` module to eliminate circular imports between `ItemSidebar` and its child action components.
+
+### Database Migrations
+
+- **`v0_8_4_work_series_memberships`**: Adds the `work_series_memberships` table with primary key `id`, foreign keys to `works.id` for both child work and container series work, and a `sequence` integer ordering column.
+- **`v0_8_4_fts_unaccent`**: Introduces an immutable `immutable_unaccent()` wrapper in the `public` schema for PostgreSQL and builds accent-folded GIN full-text search expressions across titles, authors, and genres.
+- **`v0_8_4_search_unaccent`**: Adds complementary SQL expressions enabling accent-folded title and creator queries across SQLite and PostgreSQL catalog search pathways.
 
 ## [0.8.3] - 2026-10-10
 

@@ -26,7 +26,7 @@ Content-Type: application/json
     "refresh_token": "eyJ..."
   }
 }
-```json
+```
 
 Use the token in subsequent requests:
 
@@ -50,30 +50,38 @@ copy of it working.
 ### Permission Requirements
 
 Access is granted by **permission**, not by role. The `contributor` role holds
-every `*:metadata` permission, so a curator gets the metadata workflow without
+every `*:metadata` permission and `transfer:item`, so a curator gets the metadata and custody workflow without
 being an administrator.
 
-| Endpoint Category | Permission | Auth Type |
-| ----------------- | ---------- | --------- |
-| SPARQL | `read:metadata` | Required |
-| Data Export | Any authenticated | Required |
-| Semantic-link relink / delete | `write:metadata` | Required |
-| Duplicate review — list | `read:metadata` | Required |
-| Duplicate review — scan, dismiss, merge | `write:metadata` | Required |
-| Public Linked Data | None | Not required |
-| Public Feeds | None | Not required |
+| Endpoint Category                       | Permission        | Auth Type    |
+| --------------------------------------- | ----------------- | ------------ |
+| SPARQL                                  | `read:metadata`   | Required     |
+| Data Export                             | Any authenticated | Required     |
+| Semantic-link relink / delete           | `write:metadata`  | Required     |
+| Duplicate review — list                 | `read:metadata`   | Required     |
+| Duplicate review — scan, dismiss, merge | `write:metadata`  | Required     |
+| Custodian provider merge                | `write:metadata`  | Required     |
+| Work series membership mutate           | `write:metadata`  | Required     |
+| Work series search autocomplete         | `read:metadata`   | Required     |
+| Item custody reassignment               | `transfer:item`   | Required     |
+| Public Linked Data                      | None              | Not required |
+| Public Feeds                            | None              | Not required |
 
 ### Admin Endpoints
 
-Duplicate review lives on the `admin` blueprint, which is mounted at
-`/api/v1/admin`. All four routes are audit-logged with the acting user.
+Administrative and curation endpoints live on the `admin` blueprint, mounted at
+`/api/v1/admin`. All state-mutating routes are audit-logged with the acting user.
 
-| Route | Method | Permission | Purpose |
-| ----- | ------ | ---------- | ------- |
-| `/api/v1/admin/duplicates/` | `GET` | `read:metadata` | Paginated pending-candidate queue; filter by tier, status, confidence |
-| `/api/v1/admin/duplicates/scan` | `POST` | `write:metadata` | Trigger a detection run |
-| `/api/v1/admin/duplicates/<id>/dismiss` | `POST` | `write:metadata` | Mark a false positive |
-| `/api/v1/admin/duplicates/<id>/merge` | `POST` | `write:metadata` | Execute a transactional merge for a chosen primary |
+| Route                                                  | Method | Permission       | Purpose                                                               |
+| ------------------------------------------------------ | ------ | ---------------- | --------------------------------------------------------------------- |
+| `/api/v1/admin/duplicates/`                            | `GET`  | `read:metadata`  | Paginated pending-candidate queue; filter by tier, status, confidence |
+| `/api/v1/admin/duplicates/scan`                        | `POST` | `write:metadata` | Trigger a detection run                                               |
+| `/api/v1/admin/duplicates/<id>/dismiss`                | `POST` | `write:metadata` | Mark a false positive                                                 |
+| `/api/v1/admin/duplicates/<id>/merge`                  | `POST` | `write:metadata` | Execute a transactional merge for a chosen primary                    |
+| `/api/v1/admin/frbr/manifestation/<id>/provider-merge` | `POST` | `write:metadata` | Consolidate custodian-selected provider fragments across FRBR tiers   |
+| `/api/v1/admin/works/search`                           | `GET`  | `read:metadata`  | Diacritic-insensitive series work search autocomplete                 |
+| `/api/v1/admin/ownership/preview`                      | `POST` | `transfer:item`  | Preview item custody ownership transfer impact                        |
+| `/api/v1/admin/ownership/reassign`                     | `POST` | `transfer:item`  | Atomically execute item custody ownership transfer                    |
 
 A scan defaults to the `heuristic` engine, which classifies candidate pairs
 without contacting an inference service:
@@ -116,7 +124,7 @@ curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 5" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/sparql-results+json"
-```bash
+```
 
 ### `POST /api/sparql`
 
@@ -126,11 +134,11 @@ Execute a SPARQL query via request body.
 
 **Supported Content Types:**
 
-| Content-Type                 | Body Format                                |
-| ---------------------------- | ------------------------------------------ |
-| `application/sparql-query`   | Raw SPARQL query string                    |
-| `application/json`           | `{"query": "SELECT ..."}`                  |
-| `application/x-www-form-urlencoded` | `query=SELECT+...` (form-encoded)   |
+| Content-Type                        | Body Format                       |
+| ----------------------------------- | --------------------------------- |
+| `application/sparql-query`          | Raw SPARQL query string           |
+| `application/json`                  | `{"query": "SELECT ..."}`         |
+| `application/x-www-form-urlencoded` | `query=SELECT+...` (form-encoded) |
 
 **Example (JSON):**
 
@@ -140,7 +148,7 @@ curl -X POST http://localhost:8000/api/sparql \
   -H "Content-Type: application/json" \
   -H "Accept: application/sparql-results+json" \
   -d '{"query": "SELECT ?title WHERE { ?work a <http://purl.org/vocab/frbr/core#Work> ; <http://purl.org/dc/terms/title> ?title } LIMIT 10"}'
-```bash
+```
 
 **Example (Raw SPARQL):**
 
@@ -149,18 +157,18 @@ curl -X POST http://localhost:8000/api/sparql \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/sparql-query" \
   -d 'SELECT * WHERE { ?s ?p ?o } LIMIT 5'
-```bash
+```
 
 ### Response Formats
 
 #### SELECT / ASK Results
 
-| Accept Header                      | Format               |
-| ---------------------------------- | -------------------- |
-| `application/sparql-results+json`  | SPARQL JSON (default)|
-| `application/sparql-results+xml`   | SPARQL XML           |
-| `text/csv`                         | CSV                  |
-| `text/tab-separated-values`        | TSV                  |
+| Accept Header                     | Format                |
+| --------------------------------- | --------------------- |
+| `application/sparql-results+json` | SPARQL JSON (default) |
+| `application/sparql-results+xml`  | SPARQL XML            |
+| `text/csv`                        | CSV                   |
+| `text/tab-separated-values`       | TSV                   |
 
 **SPARQL JSON Response:**
 
@@ -176,15 +184,15 @@ curl -X POST http://localhost:8000/api/sparql \
     ]
   }
 }
-```json
+```
 
 #### CONSTRUCT / DESCRIBE Results
 
-| Accept Header          | Format              |
-| ---------------------- | ------------------- |
-| `text/turtle`          | Turtle (default)    |
-| `application/ld+json`  | JSON-LD             |
-| `application/rdf+xml`  | RDF/XML             |
+| Accept Header         | Format           |
+| --------------------- | ---------------- |
+| `text/turtle`         | Turtle (default) |
+| `application/ld+json` | JSON-LD          |
+| `application/rdf+xml` | RDF/XML          |
 
 **Turtle Response:**
 
@@ -195,7 +203,7 @@ curl -X POST http://localhost:8000/api/sparql \
 <https://iqoqo.cc/works/42> a frbr:Work ;
     dc:title "The Hobbit" ;
     dc:creator "J.R.R. Tolkien" .
-```bash
+```
 
 ---
 
@@ -211,8 +219,8 @@ Retrieve a Work entity as RDF.
 
 **Parameters:**
 
-| Parameter | Type   | Required | Description                            |
-| --------- | ------ | -------- | -------------------------------------- |
+| Parameter | Type   | Required | Description                                |
+| --------- | ------ | -------- | ------------------------------------------ |
 | `format`  | string | No       | Override format: `json-ld`, `turtle`, `nt` |
 
 **Example:**
@@ -226,7 +234,7 @@ curl -H "Accept: text/turtle" http://localhost:8000/api/public/works/1
 
 # N-Triples via query parameter
 curl "http://localhost:8000/api/public/works/1?format=nt"
-```bash
+```
 
 **Response (JSON-LD):**
 
@@ -242,7 +250,7 @@ curl "http://localhost:8000/api/public/works/1?format=nt"
   "dc:title": "The Hobbit",
   "dc:creator": "J.R.R. Tolkien"
 }
-```bash
+```
 
 ### `GET /api/public/expressions/<id>`
 
@@ -252,7 +260,7 @@ Retrieve an Expression entity as RDF.
 
 ```bash
 curl -H "Accept: text/turtle" http://localhost:8000/api/public/expressions/3
-```bash
+```
 
 ### `GET /api/public/manifestations/<id>`
 
@@ -262,7 +270,7 @@ Retrieve a Manifestation entity as RDF.
 
 ```bash
 curl -H "Accept: application/ld+json" http://localhost:8000/api/public/manifestations/42
-```bash
+```
 
 ### `GET /api/public/items/<id>`
 
@@ -272,7 +280,7 @@ Retrieve an Item entity as RDF. Only non-hidden items are accessible.
 
 ```bash
 curl "http://localhost:8000/api/public/items/7?format=turtle"
-```bash
+```
 
 ### `GET /api/public/u/<username>/items`
 
@@ -282,13 +290,13 @@ Retrieve a user's public collection items.
 
 **Parameters:**
 
-| Parameter  | Type    | Required | Description                                |
-| ---------- | ------- | -------- | ------------------------------------------ |
-| `format`   | string  | No       | RDF format: `json-ld`, `turtle`, `nt`      |
-| `limit`    | integer | No       | Items per page (1–1000, default: 100)      |
-| `stream`   | boolean | No       | Enable streaming for large collections     |
-| `page`     | integer | No       | Page number (JSON mode only)               |
-| `per_page` | integer | No       | Items per page (JSON mode, max: 100)       |
+| Parameter  | Type    | Required | Description                            |
+| ---------- | ------- | -------- | -------------------------------------- |
+| `format`   | string  | No       | RDF format: `json-ld`, `turtle`, `nt`  |
+| `limit`    | integer | No       | Items per page (1–1000, default: 100)  |
+| `stream`   | boolean | No       | Enable streaming for large collections |
+| `page`     | integer | No       | Page number (JSON mode only)           |
+| `per_page` | integer | No       | Items per page (JSON mode, max: 100)   |
 
 **Example:**
 
@@ -302,7 +310,7 @@ curl "http://localhost:8000/api/public/u/alice/items?format=turtle&stream=true&l
 
 # Standard JSON (paginated)
 curl "http://localhost:8000/api/public/u/alice/items?page=1&per_page=24"
-```bash
+```
 
 ### `GET /api/public/feed.xml`
 
@@ -311,7 +319,7 @@ Global fresh arrivals RSS feed.
 ```bash
 curl http://localhost:8000/api/public/feed.xml
 curl "http://localhost:8000/api/public/feed.xml?view=works"
-```bash
+```
 
 ### `GET /api/public/sitemap.xml`
 
@@ -319,7 +327,7 @@ XML sitemap for search engine indexing.
 
 ```bash
 curl http://localhost:8000/api/public/sitemap.xml
-```bash
+```
 
 ### CORS Headers
 
@@ -329,7 +337,7 @@ All public endpoints include:
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Accept, Authorization
-```text
+```
 
 ---
 
@@ -385,6 +393,53 @@ The response includes both the untouched, authoritative raw metadata in `manifes
 
 ---
 
+## Work Series Endpoints
+
+### `GET /api/works/<id>/series`
+
+Retrieve all series memberships and sequence positions for a specific Work.
+
+**Authentication:** Optional
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 12,
+      "series_work_id": 101,
+      "title": "The Lord of the Rings",
+      "sequence": 1
+    }
+  ]
+}
+```
+
+### `POST /api/works/<id>/series`
+
+Attach a Work to a container series Work with an optional sequence number.
+
+**Authentication:** Required (`write:metadata` permission)
+
+**Payload:**
+
+```json
+{
+  "series_work_id": 101,
+  "sequence": 1
+}
+```
+
+### `DELETE /api/works/<id>/series/<series_work_id>`
+
+Detach a Work from a container series Work.
+
+**Authentication:** Required (`write:metadata` permission)
+
+---
+
 ## Data Export Endpoint
 
 ### `GET /api/items/export`
@@ -416,15 +471,15 @@ curl -H "Authorization: Bearer $TOKEN" \
 curl -H "Authorization: Bearer $TOKEN" \
   -o my-library.json \
   "http://localhost:8000/api/items/export?format=json"
-```bash
+```
 
 **Response Headers:**
 
-```bash
+```http
 Content-Type: application/ld+json  (or text/turtle, application/json)
 Content-Disposition: attachment; filename="iqoqo-export-20260921-143022.jsonld"
 Transfer-Encoding: chunked
-```text
+```
 
 ### Format Details
 
@@ -464,7 +519,7 @@ Hierarchical JSON following the FRBR Group 1 structure:
     }
   ]
 }
-```json
+```
 
 ---
 
@@ -472,40 +527,40 @@ Hierarchical JSON following the FRBR Group 1 structure:
 
 ### Accept Headers
 
-| Endpoint Type          | Supported Accept Headers                                        | Default             |
-| ---------------------- | --------------------------------------------------------------- | ------------------- |
-| SPARQL SELECT/ASK      | `application/sparql-results+json`, `+xml`, `text/csv`, `text/tab-separated-values` | SPARQL JSON         |
-| SPARQL CONSTRUCT/DESCRIBE | `text/turtle`, `application/ld+json`, `application/rdf+xml` | Turtle              |
-| Public Entity          | `application/ld+json`, `text/turtle`, `application/n-triples`, `text/html` | JSON-LD             |
-| Public Collection      | `application/ld+json`, `text/turtle`, `application/n-triples`  | JSON-LD             |
+| Endpoint Type             | Supported Accept Headers                                                           | Default     |
+| ------------------------- | ---------------------------------------------------------------------------------- | ----------- |
+| SPARQL SELECT/ASK         | `application/sparql-results+json`, `+xml`, `text/csv`, `text/tab-separated-values` | SPARQL JSON |
+| SPARQL CONSTRUCT/DESCRIBE | `text/turtle`, `application/ld+json`, `application/rdf+xml`                        | Turtle      |
+| Public Entity             | `application/ld+json`, `text/turtle`, `application/n-triples`, `text/html`         | JSON-LD     |
+| Public Collection         | `application/ld+json`, `text/turtle`, `application/n-triples`                      | JSON-LD     |
 
 ### Format Query Parameter
 
 As an alternative to `Accept` headers, use the `?format=` parameter:
 
-| `?format=` Value | MIME Type                  |
-| ---------------- | -------------------------- |
-| `json-ld`        | `application/ld+json`      |
-| `turtle`         | `text/turtle`              |
-| `nt`             | `application/n-triples`    |
-| `n-triples`      | `application/n-triples`    |
-| `jsonld`         | `application/ld+json`      |
+| `?format=` Value | MIME Type               |
+| ---------------- | ----------------------- |
+| `json-ld`        | `application/ld+json`   |
+| `turtle`         | `text/turtle`           |
+| `nt`             | `application/n-triples` |
+| `n-triples`      | `application/n-triples` |
+| `jsonld`         | `application/ld+json`   |
 
 ---
 
 ## Rate Limits
 
-| Endpoint                          | Rate Limit        | Scope        |
-| --------------------------------- | ----------------- | ------------ |
-| `GET /api/sparql`                 | 10 per minute     | Per user     |
-| `POST /api/sparql`                | 10 per minute     | Per user     |
-| `GET /api/public/works/<id>`      | 120 per minute    | Global       |
-| `GET /api/public/expressions/<id>`| 120 per minute    | Global       |
-| `GET /api/public/manifestations/<id>` | 120 per minute | Global       |
-| `GET /api/public/items/<id>`      | 120 per minute    | Global       |
-| `GET /api/public/feed.xml`        | 60 per minute     | Global       |
-| `GET /api/public/sitemap.xml`     | 60 per minute     | Global       |
-| `GET /api/items/export`           | Standard API limits | Per user   |
+| Endpoint                              | Rate Limit          | Scope    |
+| ------------------------------------- | ------------------- | -------- |
+| `GET /api/sparql`                     | 10 per minute       | Per user |
+| `POST /api/sparql`                    | 10 per minute       | Per user |
+| `GET /api/public/works/<id>`          | 120 per minute      | Global   |
+| `GET /api/public/expressions/<id>`    | 120 per minute      | Global   |
+| `GET /api/public/manifestations/<id>` | 120 per minute      | Global   |
+| `GET /api/public/items/<id>`          | 120 per minute      | Global   |
+| `GET /api/public/feed.xml`            | 60 per minute       | Global   |
+| `GET /api/public/sitemap.xml`         | 60 per minute       | Global   |
+| `GET /api/items/export`               | Standard API limits | Per user |
 
 When rate limited, the API returns:
 
@@ -514,7 +569,7 @@ When rate limited, the API returns:
   "error": "Rate limit exceeded. Try again in X seconds.",
   "code": 429
 }
-```json
+```
 
 ---
 
@@ -527,36 +582,36 @@ All error responses follow a consistent JSON envelope:
   "error": "Human-readable error message",
   "code": 400
 }
-```json
+```
 
 ### SPARQL Error Codes
 
-| Status | Error                    | Cause                                       |
-| ------ | ------------------------ | ------------------------------------------- |
-| 400    | Syntax error             | Invalid SPARQL query syntax                 |
-| 400    | Write rejected           | Query contains INSERT/DELETE/UPDATE         |
-| 400    | Empty query              | Missing or empty query string               |
-| 401    | Unauthorized             | Missing or invalid JWT token                |
-| 403    | Forbidden                | User lacks `read:metadata` permission       |
-| 413    | Query too large          | Query exceeds 10KB limit                    |
-| 413    | Resource limit           | Result exceeds size/row/triple limits       |
-| 413    | Result too large         | Serialized response exceeds 10MB            |
-| 502    | Child process error      | SPARQL subprocess crashed                   |
-| 503    | Concurrency limit        | Too many simultaneous queries (max: 4)      |
-| 504    | Timeout                  | Query exceeded 15-second execution limit    |
+| Status | Error               | Cause                                    |
+| ------ | ------------------- | ---------------------------------------- |
+| 400    | Syntax error        | Invalid SPARQL query syntax              |
+| 400    | Write rejected      | Query contains INSERT/DELETE/UPDATE      |
+| 400    | Empty query         | Missing or empty query string            |
+| 401    | Unauthorized        | Missing or invalid JWT token             |
+| 403    | Forbidden           | User lacks `read:metadata` permission    |
+| 413    | Query too large     | Query exceeds 10KB limit                 |
+| 413    | Resource limit      | Result exceeds size/row/triple limits    |
+| 413    | Result too large    | Serialized response exceeds 10MB         |
+| 502    | Child process error | SPARQL subprocess crashed                |
+| 503    | Concurrency limit   | Too many simultaneous queries (max: 4)   |
+| 504    | Timeout             | Query exceeded 15-second execution limit |
 
 ### Public Endpoint Error Codes
 
-| Status | Error                    | Cause                                       |
-| ------ | ------------------------ | ------------------------------------------- |
-| 404    | Not found                | Entity does not exist or item is hidden     |
+| Status | Error     | Cause                                   |
+| ------ | --------- | --------------------------------------- |
+| 404    | Not found | Entity does not exist or item is hidden |
 
 ### Export Error Codes
 
-| Status | Error                    | Cause                                       |
-| ------ | ------------------------ | ------------------------------------------- |
-| 400    | Invalid format           | Unsupported export format value             |
-| 401    | Unauthorized             | Missing or invalid JWT token                |
+| Status | Error          | Cause                           |
+| ------ | -------------- | ------------------------------- |
+| 400    | Invalid format | Unsupported export format value |
+| 401    | Unauthorized   | Missing or invalid JWT token    |
 
 ---
 
