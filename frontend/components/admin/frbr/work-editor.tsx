@@ -15,8 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X, Search } from "lucide-react";
 import {
@@ -120,26 +119,45 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
 
   // Series search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchState, setSearchState] = useState<{ query: string; results: WorkSearchResult[] }>({
+    query: "",
+    results: [],
+  });
   const [newSeriesSeq, setNewSeriesSeq] = useState("1");
   const [showResults, setShowResults] = useState(false);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
   const isSearchActive = Boolean(debouncedSearch && debouncedSearch.length >= 2);
+  const isSearching = isSearchActive && searchState.query !== debouncedSearch;
 
-  const { data: searchResultsData, isLoading: isSearching } = useQuery({
-    queryKey: ["adminWorksSearch", debouncedSearch],
-    queryFn: async ({ signal }) => {
-      const res = await apiClient.get<{ success: boolean; data: WorkSearchResult[] }>(
+  useEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    apiClient
+      .get<{ success: boolean; data: WorkSearchResult[] }>(
         `/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`,
-        { signal }
-      );
-      return res.data.data || [];
-    },
-    enabled: isSearchActive,
-    staleTime: 30000,
-  });
+        { signal: controller.signal }
+      )
+      .then(res => {
+        setSearchState({ query: debouncedSearch, results: res.data.data || [] });
+      })
+      .catch(error => {
+        if (error?.name !== "CanceledError" && error?.name !== "AbortError") {
+          console.error("Search failed:", error);
+          setSearchState({ query: debouncedSearch, results: [] });
+        }
+      });
 
-  const activeSearchResults = isSearchActive ? (searchResultsData ?? []) : [];
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedSearch]);
+
+  const activeSearchResults = isSearchActive && searchState.query === debouncedSearch ? searchState.results : [];
 
   const handleSelectSeries = (work: WorkSearchResult) => {
     if (seriesMemberships.some(sm => sm.series_work_id === work.id)) return;
@@ -154,6 +172,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     setSearchQuery("");
     setShowResults(false);
     setNewSeriesSeq("1");
+    setSearchState({ query: "", results: [] });
   };
 
   const handleRemoveSeries = (sId: number) => {
