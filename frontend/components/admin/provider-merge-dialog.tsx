@@ -181,8 +181,8 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
   const manifProv =
     (manifMeta._provenance as Record<string, string>) ?? (manifMeta.provenance as Record<string, string>) ?? {};
 
-  const manifObj = manif as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
-  const workObj = tree.work as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
+  const manifObj = manif as unknown as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
+  const workObj = tree.work as unknown as (Record<string, unknown> & { raw_payload?: unknown }) | null | undefined;
   const workMeta = (tree.work?.meta ?? {}) as Record<string, unknown>;
 
   const rawPayload = (manifObj?.raw_payload ??
@@ -201,7 +201,6 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
 
   // 1. Work Tier (F1)
   const work = tree.work;
-  const workMeta = (work?.meta ?? {}) as Record<string, unknown>;
   const workProv =
     (workMeta._provenance as Record<string, string>) ?? (workMeta.provenance as Record<string, string>) ?? {};
 

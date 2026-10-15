@@ -152,7 +152,6 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
       },
     ]);
     setSearchQuery("");
-    setSearchResults([]);
     setShowResults(false);
     setNewSeriesSeq("1");
   };
