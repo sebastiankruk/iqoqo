@@ -151,6 +151,12 @@ iqoqo:condition a owl:DatatypeProperty ;
     rdfs:domain iqoqo:Item ;
     rdfs:range xsd:string .
 
+iqoqo:local_barcode a owl:DatatypeProperty ;
+    rdfs:label "item local barcode" ;
+    rdfs:comment "Physical exemplar barcode or shelf inventory tag." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
 :applicableToCategory a owl:ObjectProperty ;
     rdfs:domain :ProgressStatus ;
     rdfs:range :MediaCategory ;
@@ -607,3 +613,135 @@ iqoqo:FeedbackComment a owl:Class ;
     rdfs:comment "Timestamp when the audit log was recorded." ;
     rdfs:domain :EntityAuditLog ;
     rdfs:range xsd:dateTime .
+
+# ---------------------------------------------------------------------------
+# Semantic Link (LOD)
+# ---------------------------------------------------------------------------
+
+:SemanticLink a owl:Class ;
+    rdfs:label "SemanticLink" ;
+    rdfs:comment "Reified external Linked Open Data authority link (catalog.semantic_links)." .
+
+:semanticEntityType a owl:DatatypeProperty ;
+    rdfs:label "semantic entity type" ;
+    rdfs:comment "Target entity tier ('work', 'manifestation', 'contributor')." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:string .
+
+:semanticEntityId a owl:DatatypeProperty ;
+    rdfs:label "semantic entity id" ;
+    rdfs:comment "Primary key of target entity." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:integer .
+
+:semanticAuthority a owl:DatatypeProperty ;
+    rdfs:label "semantic authority" ;
+    rdfs:comment "LOD authority source ('dbpedia', 'geonames', 'wordnet')." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:string .
+
+:externalUri a owl:DatatypeProperty ;
+    rdfs:label "external uri" ;
+    rdfs:comment "Target URI in external authority dataset." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:string .
+
+:prefLabel a owl:DatatypeProperty ;
+    rdfs:label "preferred label" ;
+    rdfs:comment "Human-readable label from external authority." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:string .
+
+:linkConfidence a owl:DatatypeProperty ;
+    rdfs:label "link confidence" ;
+    rdfs:comment "Match confidence score [0.0, 1.0]." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:float .
+
+:linkVerified a owl:DatatypeProperty ;
+    rdfs:label "link verified" ;
+    rdfs:comment "Whether link has been manually verified by custodian." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:boolean .
+
+:linkStatus a owl:DatatypeProperty ;
+    rdfs:label "link status" ;
+    rdfs:comment "Link acceptance status ('accepted', 'rejected', 'proposed')." ;
+    rdfs:domain :SemanticLink ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Multi-Series Membership
+# ---------------------------------------------------------------------------
+
+:WorkSeriesMembership a owl:Class ;
+    rdfs:label "WorkSeriesMembership" ;
+    rdfs:comment "Reified membership linking a member Work to a series container Work (catalog.work_series_memberships)." .
+
+:seriesWork a owl:ObjectProperty ;
+    rdfs:label "series work" ;
+    rdfs:comment "The member Work belonging to the series." ;
+    rdfs:domain :WorkSeriesMembership ;
+    rdfs:range :Work .
+
+:seriesContainer a owl:ObjectProperty ;
+    rdfs:label "series container" ;
+    rdfs:comment "The container Work representing the series." ;
+    rdfs:domain :WorkSeriesMembership ;
+    rdfs:range :Work .
+
+:seriesSequence a owl:DatatypeProperty ;
+    rdfs:label "series sequence" ;
+    rdfs:comment "Ordinal position of the Work in the series." ;
+    rdfs:domain :WorkSeriesMembership ;
+    rdfs:range xsd:integer .
+
+# ---------------------------------------------------------------------------
+# Duplicate Candidate
+# ---------------------------------------------------------------------------
+
+:DuplicateCandidate a owl:Class ;
+    rdfs:label "DuplicateCandidate" ;
+    rdfs:comment "Review queue candidate pair for duplicate detection (inventory.duplicate_candidates)." .
+
+:candidateTier a owl:DatatypeProperty ;
+    rdfs:label "candidate tier" ;
+    rdfs:comment "Entity tier of duplicate candidate pair ('work', 'expression', 'manifestation')." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:string .
+
+:sourceId a owl:DatatypeProperty ;
+    rdfs:label "source id" ;
+    rdfs:comment "Primary key of the first entity in the duplicate pair." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:integer .
+
+:targetId a owl:DatatypeProperty ;
+    rdfs:label "target id" ;
+    rdfs:comment "Primary key of the second entity in the duplicate pair." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:integer .
+
+:candidateConfidence a owl:DatatypeProperty ;
+    rdfs:label "candidate confidence" ;
+    rdfs:comment "Probability or confidence of duplicate equivalence [0.0, 1.0]." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:float .
+
+:candidateStatus a owl:DatatypeProperty ;
+    rdfs:label "candidate status" ;
+    rdfs:comment "Status of the duplicate review ('pending', 'merged', 'dismissed')." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:string .
+
+:resolutionSource a owl:DatatypeProperty ;
+    rdfs:label "resolution source" ;
+    rdfs:comment "Source of duplicate identification ('heuristic', 'llama')." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:string .
+
+:llmReasoning a owl:DatatypeProperty ;
+    rdfs:label "llm reasoning" ;
+    rdfs:comment "Rationale or LLM justification for duplicate candidate judgment." ;
+    rdfs:domain :DuplicateCandidate ;
+    rdfs:range xsd:string .

@@ -29,10 +29,10 @@ from typing import Any
 
 from rdflib import Graph, Namespace
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.iri import get_lod_base_url as _get_lod_base_url
-from app.db.core import Expression, Item, Manifestation, db
+from app.db.core import Expression, Item, Manifestation, Work, db
 
 logger = logging.getLogger(__name__)
 
@@ -462,7 +462,18 @@ class ExportService:
         stmt = (
             select(Item)
             .where(Item.owner_id == resolved_uid)
-            .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+            .options(
+                joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
+                joinedload(Item.manifestation).selectinload(Manifestation.semantic_links),
+                joinedload(Item.manifestation)
+                .joinedload(Manifestation.expression)
+                .joinedload(Expression.work)
+                .selectinload(Work.semantic_links),
+                joinedload(Item.manifestation)
+                .joinedload(Manifestation.expression)
+                .joinedload(Expression.work)
+                .selectinload(Work.series_memberships),
+            )
             .execution_options(yield_per=batch_size)
             .order_by(Item.id.asc())
         )

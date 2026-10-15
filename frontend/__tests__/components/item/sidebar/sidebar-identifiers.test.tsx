@@ -27,4 +27,39 @@ describe("SidebarIdentifiers Unit Test (Plain Props)", () => {
     const { container } = render(<SidebarIdentifiers isbn={null} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("renders local barcode when provided via localBarcode prop", () => {
+    render(<SidebarIdentifiers localBarcode="INV-98765" />);
+    expect(screen.getByText("Barcode: INV-98765")).toBeInTheDocument();
+  });
+
+  it("renders local barcode when provided on item object", () => {
+    const mockItem = {
+      id: 1,
+      manifestation_id: 1,
+      owner_id: "user-1",
+      status: "read",
+      collection_status: "available",
+      local_barcode: "SHELF-42-A",
+      meta: {},
+    } as any;
+    render(<SidebarIdentifiers item={mockItem} />);
+    expect(screen.getByText("Barcode: SHELF-42-A")).toBeInTheDocument();
+  });
+
+  it("renders both ISBN and local barcode when both are provided", () => {
+    const mockItem = {
+      id: 1,
+      manifestation_id: 1,
+      owner_id: "user-1",
+      status: "read",
+      collection_status: "available",
+      isbn: "978-0-123-45678-9",
+      local_barcode: "INV-COEXIST-100",
+      meta: {},
+    } as any;
+    render(<SidebarIdentifiers item={mockItem} />);
+    expect(screen.getByText("ISBN: 978-0-123-45678-9")).toBeInTheDocument();
+    expect(screen.getByText("Barcode: INV-COEXIST-100")).toBeInTheDocument();
+  });
 });
