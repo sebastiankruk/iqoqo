@@ -28,7 +28,7 @@ import {
   useRemoveItemFromCollection,
   useUserCollections,
 } from "@/lib/api/hooks";
-import { STATUS_LABELS } from "../item-sidebar";
+import { STATUS_LABELS } from "./constants";
 
 /** Options for useItemSidebarActions hook */
 export interface UseItemSidebarActionsOptions {

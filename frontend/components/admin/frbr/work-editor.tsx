@@ -29,6 +29,7 @@ import { MetaFieldsEditor } from "./meta-fields-editor";
 import { ContributorRowsEditor } from "./contributor-rows-editor";
 import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { apiClient } from "@/lib/api/client";
 
 interface WorkSearchResult {
   id: number;
@@ -128,30 +129,36 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
   // Search works when query changes
   useEffect(() => {
     if (!debouncedSearch || debouncedSearch.length < 2) {
-      // Clear results asynchronously to avoid synchronous setState in effect
-      const clearResults = async () => {
-        setSearchResults([]);
-      };
-      clearResults();
+      setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
-    const searchWorks = async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.data || []);
-        }
-      } catch (error) {
-        console.error("Search failed:", error);
-      } finally {
-        setIsSearching(false);
-      }
-    };
+    const controller = new AbortController();
+    setIsSearching(true);
 
-    searchWorks();
+    apiClient
+      .get<{ success: boolean; data: WorkSearchResult[] }>(
+        `/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`,
+        { signal: controller.signal }
+      )
+      .then(res => {
+        setSearchResults(res.data.data || []);
+      })
+      .catch(error => {
+        if (error?.name !== "CanceledError" && error?.name !== "AbortError") {
+          console.error("Search failed:", error);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
   }, [debouncedSearch]);
 
   const handleSelectSeries = (work: WorkSearchResult) => {
@@ -210,7 +217,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
                 key={sm.series_work_id}
                 className="flex items-center gap-2 bg-background p-2 rounded-md border text-xs"
               >
-                <span className="font-medium text-foreground">Series Work #{sm.series_work_id}</span>
+                <span className="font-medium text-foreground">{sm.title || `Series Work #${sm.series_work_id}`}</span>
                 <span className="text-muted-foreground">Seq: #{sm.sequence}</span>
                 <button
                   type="button"

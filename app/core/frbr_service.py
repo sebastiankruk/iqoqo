@@ -1207,44 +1207,47 @@ def update_work(
     if series_memberships is not None:
         from app.db.models import WorkPart, WorkSeriesMembership
 
-        # Validate all series_work_ids exist before creating memberships
+        # Batch-fetch existing memberships and legacy parts using SQLAlchemy 2.0
+        existing_memberships = {
+            m.series_work_id: m
+            for m in db.session.execute(select(WorkSeriesMembership).where(WorkSeriesMembership.work_id == work.id)).scalars().all()
+        }
+        existing_legacy_parts = {
+            wp.container_work_id: wp for wp in db.session.execute(select(WorkPart).where(WorkPart.part_work_id == work.id)).scalars().all()
+        }
+
+        # Validate desired series works and build desired map (series_id -> sequence)
+        desired_series_map: dict[int, int] = {}
         for sm_dict in series_memberships:
-            s_id = sm_dict.get("series_work_id") or sm_dict.get("id")
-            if s_id and int(s_id) != work.id:
-                series_work = db.session.get(Work, int(s_id))
-                if not series_work:
-                    raise ValueError(f"Series Work with id {s_id} does not exist")
+            raw_s_id = sm_dict.get("series_work_id") or sm_dict.get("series_id")
+            if raw_s_id is None:
+                continue
+            series_id = int(raw_s_id)
+            if series_id == work.id:
+                continue
+            series_work = db.session.get(Work, series_id)
+            if not series_work:
+                raise ValueError(f"Series Work with id {series_id} does not exist")
+            desired_series_map[series_id] = int(sm_dict.get("sequence", 0))
 
-        # Delete existing memberships not in desired list or replace
-        desired_series_ids = set()
-        for sm_dict in series_memberships:
-            s_id = sm_dict.get("series_work_id") or sm_dict.get("id")
-            if s_id and s_id != work.id:
-                desired_series_ids.add(int(s_id))
-                seq = int(sm_dict.get("sequence", 0))
-                existing = WorkSeriesMembership.query.filter_by(work_id=work.id, series_work_id=int(s_id)).first()
-                if not existing:
-                    db.session.add(WorkSeriesMembership(work_id=work.id, series_work_id=int(s_id), sequence=seq))
-                else:
-                    existing.sequence = seq
+        # Add new or update existing memberships
+        for s_id, seq in desired_series_map.items():
+            if s_id in existing_memberships:
+                existing_memberships[s_id].sequence = seq
+            else:
+                db.session.add(WorkSeriesMembership(work_id=work.id, series_work_id=s_id, sequence=seq))
 
-                # sync legacy WorkPart
-                legacy_wp = WorkPart.query.filter_by(container_work_id=int(s_id), part_work_id=work.id).first()
-                if not legacy_wp:
-                    db.session.add(WorkPart(container_work_id=int(s_id), part_work_id=work.id, sequence=seq))
-                else:
-                    legacy_wp.sequence = seq
+            if s_id in existing_legacy_parts:
+                existing_legacy_parts[s_id].sequence = seq
+            else:
+                db.session.add(WorkPart(container_work_id=s_id, part_work_id=work.id, sequence=seq))
 
-        # Remove memberships that are no longer present
-        to_remove = WorkSeriesMembership.query.filter(
-            WorkSeriesMembership.work_id == work.id,
-            ~WorkSeriesMembership.series_work_id.in_(desired_series_ids) if desired_series_ids else True,
-        ).all()
-        for rem in to_remove:
-            rem_legacy = WorkPart.query.filter_by(container_work_id=rem.series_work_id, part_work_id=work.id).first()
-            if rem_legacy:
-                db.session.delete(rem_legacy)
-            db.session.delete(rem)
+        # Remove memberships that are no longer desired
+        for s_id, mem in existing_memberships.items():
+            if s_id not in desired_series_map:
+                db.session.delete(mem)
+                if s_id in existing_legacy_parts:
+                    db.session.delete(existing_legacy_parts[s_id])
 
         db.session.commit()
 
@@ -1688,7 +1691,8 @@ def apply_custodian_provider_merge(
     expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
     work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
 
-    # Deterministic lock ordering across entities: collect present IDs and lock
+    # Deterministic lock ordering across entities: lock strictly in canonical FRBR
+    # hierarchy order (Work -> Expression -> Manifestation) to prevent transaction deadlocks
     entities_to_lock: list[tuple[type, int]] = []
     if work:
         entities_to_lock.append((Work, work.id))
@@ -1696,10 +1700,10 @@ def apply_custodian_provider_merge(
         entities_to_lock.append((Expression, expr.id))
     entities_to_lock.append((Manifestation, manif.id))
 
-    # Sort deterministically by (model_name, id) or id
-    entities_to_lock.sort(key=lambda item: item[1])
     for model_cls, ent_id in entities_to_lock:
-        db.session.execute(select(model_cls).where(model_cls.id == ent_id).with_for_update()).scalar_one_or_none()
+        db.session.execute(
+            select(model_cls).where(model_cls.id == ent_id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
 
     diff_log: dict[str, Any] = {"work": {}, "expression": {}, "manifestation": {}}
 
@@ -1800,9 +1804,11 @@ def apply_custodian_provider_merge(
                 manif.isbn13 = clean_isbn
                 diff_log["manifestation"]["isbn13"] = {"before": old_val, "after": clean_isbn}
             elif field in ("cover_url", "cover") and val is not None:
-                old_val = manif_meta.get("cover_url")
-                manif_meta["cover_url"] = str(val).strip()
-                diff_log["manifestation"]["cover_url"] = {"before": old_val, "after": manif_meta["cover_url"]}
+                old_val = manif.cover_url or manif_meta.get("cover_url")
+                clean_cover = str(val).strip()
+                manif.cover_url = clean_cover
+                manif_meta["cover_url"] = clean_cover
+                diff_log["manifestation"]["cover_url"] = {"before": old_val, "after": clean_cover}
             elif val is not None:
                 old_val = manif_meta.get(field)
                 manif_meta[field] = val

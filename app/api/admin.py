@@ -28,7 +28,7 @@ from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -536,6 +536,15 @@ def get_frbr_tree(manif_id):
                         "title": work.title,
                         "meta": sanitize_meta(work.meta),
                         "contributions": work_contributions,
+                        "series_memberships": [
+                            {
+                                "id": sm.id,
+                                "series_work_id": sm.series_work_id,
+                                "title": sm.series.title if sm.series else "",
+                                "sequence": sm.sequence,
+                            }
+                            for sm in getattr(work, "series_memberships", [])
+                        ],
                     }
                     if work
                     else None
@@ -576,7 +585,10 @@ def get_frbr_tree(manif_id):
 def search_works():
     """Search works for series selection (autocomplete)."""
     q = (request.args.get("q") or "").strip()
-    limit = min(int(request.args.get("limit", 20)), 50)
+    try:
+        limit = min(max(int(request.args.get("limit", 20)), 1), 50)
+    except (ValueError, TypeError):
+        limit = 20
 
     if not q:
         return jsonify({"success": True, "data": []})
@@ -585,17 +597,15 @@ def search_works():
     from app.core.search_service import normalize_diacritics
 
     norm_q = normalize_diacritics(q)
-    works = (
-        Work.query.filter(
-            db.or_(
-                Work.title.ilike(f"%{q}%"),
-                db.func.immutable_unaccent(Work.title).ilike(f"%{norm_q}%"),
-                Work.id == int(q) if q.isdigit() else False,
-            )
-        )
-        .limit(limit)
-        .all()
-    )
+    conditions = [
+        Work.title.ilike(f"%{q}%"),
+        db.func.immutable_unaccent(Work.title).ilike(f"%{norm_q}%"),
+    ]
+    if q.isdigit():
+        conditions.append(Work.id == int(q))
+
+    stmt = select(Work).where(or_(*conditions)).limit(limit)
+    works = db.session.execute(stmt).scalars().all()
 
     return jsonify({"success": True, "data": [{"id": w.id, "title": w.title} for w in works]})
 
@@ -710,6 +720,7 @@ def custodian_provider_merge(manif_id: int):
         )
         return jsonify({"success": True, "data": result})
     except ValueError as e:
+        db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 404
     except Exception as exc:
         db.session.rollback()
@@ -1656,7 +1667,30 @@ def get_ownership_accounts():
     if not _has_permission(user, PermissionName.TRANSFER_ITEM):
         return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
-    users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
+    try:
+        limit = min(max(int(request.args.get("limit", 20)), 1), 50)
+    except (ValueError, TypeError):
+        limit = 20
+
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
+
+    q = (request.args.get("q") or "").strip()
+
+    stmt = select(User).where(User.is_active.is_(True))
+    if q:
+        search_filter = or_(
+            User.email.ilike(f"%{q}%"),
+            User.display_name.ilike(f"%{q}%"),
+        )
+        if hasattr(User, "username"):
+            search_filter = or_(search_filter, User.username.ilike(f"%{q}%"))
+        stmt = stmt.where(search_filter)
+
+    stmt = stmt.order_by(User.email.asc()).limit(limit).offset(offset)
+    users = db.session.execute(stmt).scalars().all()
     return jsonify(
         {
             "success": True,
@@ -1670,6 +1704,10 @@ def get_ownership_accounts():
                 }
                 for u in users
             ],
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+            },
         }
     )
 

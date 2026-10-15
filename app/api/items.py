@@ -552,6 +552,15 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                     "authors": work.meta.get("authors", []) if work.meta else [],
                     "meta": work.meta,
                     "container_work_id": container_work_id,
+                    "series_memberships": [
+                        {
+                            "id": sm.id,
+                            "series_work_id": sm.series_work_id,
+                            "title": sm.series.title if sm.series else "",
+                            "sequence": sm.sequence,
+                        }
+                        for sm in getattr(work, "series_memberships", [])
+                    ],
                 }
 
     return jsonify({"success": True, "data": item_data, "error": None})

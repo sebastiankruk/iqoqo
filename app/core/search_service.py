@@ -371,7 +371,7 @@ class SearchService:
         JOIN {catalog_prefix}works w ON w.id = e.work_id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
-        ORDER BY rank DESC
+        ORDER BY rank DESC, m.id DESC
         LIMIT :limit OFFSET :offset
         """
         count_stmt = text(count_sql)
@@ -542,7 +542,7 @@ class SearchService:
         JOIN {inventory_prefix}items i ON i.manifestation_id = m.id
         WHERE ({w_tsvector_expr} @@ {tsquery_expr} OR {m_tsvector_expr} @@ {tsquery_expr} OR {w_search_vector_expr} @@ {tsquery_expr} OR {contributor_search_sql})
         {extra_filters_sql}
-        ORDER BY rank DESC
+        ORDER BY rank DESC, i.id DESC
         LIMIT :limit OFFSET :offset
         """
 

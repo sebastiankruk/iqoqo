@@ -28,7 +28,6 @@ import { ItemProvenanceTimeline } from "./item-timeline";
 import { MultiScanGallery } from "./multi-scan-gallery";
 import { FRBRFeedback } from "../social/frbr-feedback";
 import { SemanticLinks } from "../manifestation/semantic-links";
-import { TagCloud } from "../ui/tag-cloud";
 
 const TABS = [
   { id: "details", label: "Details", icon: FileText },
@@ -66,17 +65,6 @@ function DetailsTab({ item }: { item: Item }) {
         owner_name={item.owner_name}
         owner_count={item.owner_count}
       />
-
-      {/* Indexed Tags */}
-      {(() => {
-        const tags = (Array.isArray(meta.tags) ? meta.tags : Array.isArray(meta.genres) ? meta.genres : []) as string[];
-        return tags.length > 0 ? (
-          <div className="border-t pt-4 space-y-2">
-            <h4 className="font-serif text-sm font-bold text-foreground">Tags</h4>
-            <TagCloud tags={tags} maxInitial={10} />
-          </div>
-        ) : null;
-      })()}
 
       {/* Multi-series badges */}
       {item.work?.series_memberships && item.work.series_memberships.length > 0 && (

@@ -77,6 +77,11 @@ const mockTree: adminApi.FrbrTree = {
     meta: {
       cover_url: "https://example.com/cover.jpg",
       _provenance: { publisher: "open_library", cover_url: "google_books" },
+      raw_payload: {
+        google_books: {
+          publisher: "Chilton Company",
+        },
+      },
     },
   },
   items: [],
@@ -202,5 +207,32 @@ describe("ProviderMergeDialog", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Database locked");
     });
+  });
+
+  it("re-synchronizes selected provider state reactively when comparisons update", () => {
+    const { rerender } = renderWithClient(
+      <ProviderMergeDialog open={true} onOpenChange={vi.fn()} manifestationId={3} customFields={customComparisons} />
+    );
+
+    expect(screen.getByTestId("candidate-title-google_books")).toHaveClass("border-primary");
+
+    const updatedComparisons: FieldComparison[] = [
+      {
+        fieldKey: "title",
+        fieldLabel: "Title",
+        tier: "work",
+        currentValue: "Dune",
+        candidates: [
+          { provider: "open_library", providerLabel: "Open Library", value: "Dune: Deluxe" },
+          { provider: "google_books", providerLabel: "Google Books", value: "Dune" },
+        ],
+      },
+    ];
+
+    rerender(
+      <ProviderMergeDialog open={true} onOpenChange={vi.fn()} manifestationId={3} customFields={updatedComparisons} />
+    );
+
+    expect(screen.getByTestId("candidate-title-open_library")).toHaveClass("border-primary");
   });
 });

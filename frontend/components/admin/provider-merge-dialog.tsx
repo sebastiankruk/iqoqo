@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Loader2, GitMerge } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -90,13 +90,95 @@ function deduplicateCandidates(candidates: ProviderCandidate[]): ProviderCandida
 }
 
 /**
+ * Returns a human-readable label for a provider key.
+ */
+export function getProviderLabel(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "google_books":
+      return "Google Books";
+    case "open_library":
+      return "Open Library";
+    case "allegro":
+      return "Allegro";
+    case "discogs":
+      return "Discogs";
+    case "musicbrainz":
+      return "MusicBrainz";
+    case "tmdb":
+      return "TMDB";
+    case "current":
+      return "Current Catalog";
+    default:
+      return provider.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) || "Current Catalog";
+  }
+}
+
+/**
+ * Helper to extract a field value from provider-specific raw payload structures.
+ */
+function extractProviderField(providerData: any, fieldKey: string): string | string[] | undefined {
+  if (!providerData || typeof providerData !== "object") return undefined;
+  switch (fieldKey) {
+    case "title":
+      return providerData.title || providerData.volumeInfo?.title || undefined;
+    case "authors": {
+      const val = providerData.authors || providerData.volumeInfo?.authors;
+      if (Array.isArray(val)) return val.map(String);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return undefined;
+    }
+    case "description": {
+      const val = providerData.description || providerData.volumeInfo?.description;
+      return typeof val === "string" ? val : undefined;
+    }
+    case "language":
+      return providerData.language || providerData.volumeInfo?.language || undefined;
+    case "publisher": {
+      const val = providerData.publisher || providerData.publishers?.[0] || providerData.volumeInfo?.publisher;
+      return typeof val === "string" ? val : undefined;
+    }
+    case "cover_url": {
+      const val =
+        providerData.cover_url ||
+        providerData.cover ||
+        providerData.thumbnail ||
+        providerData.volumeInfo?.imageLinks?.thumbnail;
+      return typeof val === "string" ? val : undefined;
+    }
+    default:
+      return providerData[fieldKey];
+  }
+}
+
+/**
  * Builds standard comparison fields from FRBR tree and metadata provenance.
+ * Extracts authentic candidate values from provider payloads and entity provenance
+ * without fabricating synthetic strings.
  *
  * @param tree - The FRBR hierarchy tree.
  * @returns Array of field comparisons across tiers.
  */
 export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[] {
   const fields: FieldComparison[] = [];
+
+  const manif = tree.manifestation;
+  const manifMeta = (manif?.meta ?? {}) as Record<string, unknown>;
+  const manifProv =
+    (manifMeta._provenance as Record<string, string>) ?? (manifMeta.provenance as Record<string, string>) ?? {};
+
+  const rawPayload = ((manif as any)?.raw_payload ??
+    manifMeta.raw_payload ??
+    (tree.work as any)?.raw_payload ??
+    (tree.work?.meta as any)?.raw_payload ??
+    {}) as Record<string, any>;
+
+  // Known external provider keys in raw_payload
+  const providerKeys = new Set<string>();
+  for (const k of Object.keys(rawPayload)) {
+    if (typeof rawPayload[k] === "object" && rawPayload[k] !== null) {
+      providerKeys.add(k);
+    }
+  }
 
   // 1. Work Tier (F1)
   const work = tree.work;
@@ -106,47 +188,67 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
 
   // Title
   const workTitle = work?.title || (workMeta.Title as string) || "";
+  const titleProv = workProv.title || workProv.Title || "current";
+  const titleCandidates: ProviderCandidate[] = [
+    { provider: titleProv, providerLabel: getProviderLabel(titleProv), value: workTitle },
+  ];
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "title");
+    if (val) {
+      titleCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
   fields.push({
     fieldKey: "title",
     fieldLabel: "Title",
     tier: "work",
     currentValue: workTitle,
-    currentProvider: workProv.title || workProv.Title || "Current",
-    candidates: deduplicateCandidates([
-      { provider: workProv.title || "current", providerLabel: workProv.title || "Current Catalog", value: workTitle },
-      { provider: "google_books", providerLabel: "Google Books", value: workTitle },
-      { provider: "open_library", providerLabel: "Open Library", value: workTitle ? `${workTitle} (OpenLibrary)` : "" },
-    ]),
+    currentProvider: titleProv,
+    candidates: deduplicateCandidates(titleCandidates),
   });
 
   // Authors
   const authors = (workMeta.authors as string[]) || (workMeta.Authors as string[]) || [];
+  const authorsProv = workProv.authors || workProv.Authors || "current";
+  const authorsCandidates: ProviderCandidate[] = [
+    { provider: authorsProv, providerLabel: getProviderLabel(authorsProv), value: authors },
+  ];
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "authors");
+    if (val && Array.isArray(val) && val.length > 0) {
+      authorsCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
   fields.push({
     fieldKey: "authors",
     fieldLabel: "Authors",
     tier: "work",
     currentValue: authors,
-    currentProvider: workProv.authors || workProv.Authors || "Current",
-    candidates: deduplicateCandidates([
-      { provider: workProv.authors || "current", providerLabel: workProv.authors || "Current Catalog", value: authors },
-      { provider: "google_books", providerLabel: "Google Books", value: authors },
-      { provider: "open_library", providerLabel: "Open Library", value: authors },
-    ]),
+    currentProvider: authorsProv,
+    candidates: deduplicateCandidates(authorsCandidates),
   });
 
   // Description
   const description = (workMeta.description as string) || (workMeta.Description as string) || "";
-  if (description) {
+  const descProv = workProv.description || "current";
+  const descCandidates: ProviderCandidate[] = [
+    { provider: descProv, providerLabel: getProviderLabel(descProv), value: description },
+  ];
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "description");
+    if (val) {
+      descCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
+  const deduppedDesc = deduplicateCandidates(descCandidates);
+  if (deduppedDesc.length > 0 && description) {
     fields.push({
       fieldKey: "description",
       fieldLabel: "Description",
       tier: "work",
       currentValue: description,
-      currentProvider: workProv.description || "Current",
-      candidates: deduplicateCandidates([
-        { provider: "google_books", providerLabel: "Google Books", value: description },
-        { provider: "open_library", providerLabel: "Open Library", value: description },
-      ]),
+      currentProvider: descProv,
+      candidates: deduppedDesc,
     });
   }
 
@@ -158,70 +260,81 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
 
   // Language
   const language = expr?.language || "en";
+  const langProv = exprProv.language || "current";
+  const langCandidates: ProviderCandidate[] = [
+    { provider: langProv, providerLabel: getProviderLabel(langProv), value: language },
+  ];
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "language");
+    if (val) {
+      langCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
   fields.push({
     fieldKey: "language",
     fieldLabel: "Language",
     tier: "expression",
     currentValue: language,
-    currentProvider: exprProv.language || "Current",
-    candidates: deduplicateCandidates([
-      {
-        provider: exprProv.language || "current",
-        providerLabel: exprProv.language || "Current Catalog",
-        value: language,
-      },
-      { provider: "google_books", providerLabel: "Google Books", value: language },
-      { provider: "open_library", providerLabel: "Open Library", value: "en" },
-    ]),
+    currentProvider: langProv,
+    candidates: deduplicateCandidates(langCandidates),
   });
 
   // 3. Manifestation Tier (F3)
-  const manif = tree.manifestation;
-  const manifMeta = (manif?.meta ?? {}) as Record<string, unknown>;
-  const manifProv =
-    (manifMeta._provenance as Record<string, string>) ?? (manifMeta.provenance as Record<string, string>) ?? {};
-
   // Publisher
   const publisher = manif?.publisher || (manifMeta.publisher as string) || "";
+  const pubProv = manifProv.publisher || "current";
+  const pubCandidates: ProviderCandidate[] = [
+    { provider: pubProv, providerLabel: getProviderLabel(pubProv), value: publisher },
+  ];
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "publisher");
+    if (val) {
+      pubCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
   fields.push({
     fieldKey: "publisher",
     fieldLabel: "Publisher",
     tier: "manifestation",
     currentValue: publisher,
-    currentProvider: manifProv.publisher || "Current",
-    candidates: deduplicateCandidates([
-      {
-        provider: manifProv.publisher || "current",
-        providerLabel: manifProv.publisher || "Current Catalog",
-        value: publisher,
-      },
-      { provider: "google_books", providerLabel: "Google Books", value: publisher },
-      { provider: "open_library", providerLabel: "Open Library", value: publisher ? `${publisher} Press` : "" },
-    ]),
+    currentProvider: pubProv,
+    candidates: deduplicateCandidates(pubCandidates),
   });
 
   // Cover Image
-  const coverUrl = (manifMeta.cover_url as string) || "";
-  fields.push({
-    fieldKey: "cover_url",
-    fieldLabel: "Cover Art",
-    tier: "manifestation",
-    currentValue: coverUrl,
-    currentProvider: manifProv.cover_url || "Current",
-    candidates: deduplicateCandidates([
-      {
-        provider: manifProv.cover_url || "current",
-        providerLabel: manifProv.cover_url || "Current Catalog",
-        value: coverUrl,
-      },
-      { provider: "google_books", providerLabel: "Google Books", value: coverUrl },
-      {
-        provider: "open_library",
-        providerLabel: "Open Library",
-        value: `https://covers.openlibrary.org/b/isbn/${manif.isbn13 || "default"}-L.jpg`,
-      },
-    ]),
-  });
+  const coverUrl = (manifMeta.cover_url as string) || (manif as any)?.cover_url || "";
+  const coverProv = manifProv.cover_url || "current";
+  const coverCandidates: ProviderCandidate[] = [];
+  if (coverUrl) {
+    coverCandidates.push({
+      provider: coverProv,
+      providerLabel: getProviderLabel(coverProv),
+      value: coverUrl,
+    });
+  }
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "cover_url");
+    if (val && typeof val === "string") {
+      coverCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
+  if (manif?.isbn13 && manif.isbn13.length >= 10 && !coverCandidates.some(c => c.provider === "open_library")) {
+    coverCandidates.push({
+      provider: "open_library",
+      providerLabel: "Open Library",
+      value: `https://covers.openlibrary.org/b/isbn/${manif.isbn13}-L.jpg`,
+    });
+  }
+  if (coverCandidates.length > 0) {
+    fields.push({
+      fieldKey: "cover_url",
+      fieldLabel: "Cover Art",
+      tier: "manifestation",
+      currentValue: coverUrl,
+      currentProvider: coverProv,
+      candidates: deduplicateCandidates(coverCandidates),
+    });
+  }
 
   return fields;
 }
@@ -257,6 +370,17 @@ export function ProviderMergeDialog({
     }
     return initial;
   });
+
+  // Re-synchronize selected provider state whenever derived comparisons change
+  useEffect(() => {
+    const initial: Record<string, string> = {};
+    for (const comp of comparisons) {
+      if (comp.candidates.length > 0) {
+        initial[comp.fieldKey] = comp.candidates[0].provider;
+      }
+    }
+    setSelectedProviders(initial);
+  }, [comparisons]);
 
   const handleSelect = (fieldKey: string, provider: string) => {
     setSelectedProviders(prev => ({

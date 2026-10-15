@@ -186,6 +186,7 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
 
 # All keys that are rendered in a dedicated surface and should be omitted from Additional Details
 ALL_RENDERED_OR_STRUCTURAL_KEYS: set[str] = ALL_DECLARED_SPELLINGS | ADDITIONAL_SECTION_KEYS | {k.lower() for k in EXCLUDED_STRUCTURAL_KEYS}
+ALL_RENDERED_OR_STRUCTURAL_KEYS_LOWER: set[str] = {k.lower() for k in ALL_RENDERED_OR_STRUCTURAL_KEYS}
 
 
 def read_first_present_value(meta: dict[str, Any], keys: tuple[str, ...]) -> Any:
@@ -269,12 +270,18 @@ def build_display_projection(meta: dict[str, Any] | None) -> dict[str, Any]:
         if not isinstance(raw_key, str):
             continue
 
+        # Exclude internal / provenance keys starting with '_'
+        if raw_key.startswith("_"):
+            continue
+
+        raw_key_lower = raw_key.lower()
+
         # Exclude structural columns
-        if raw_key.lower() in EXCLUDED_STRUCTURAL_KEYS:
+        if raw_key_lower in EXCLUDED_STRUCTURAL_KEYS:
             continue
 
         # Exclude keys rendered in dedicated sections or declared in vocabulary
-        if raw_key in ALL_RENDERED_OR_STRUCTURAL_KEYS or raw_key.lower() in {k.lower() for k in ALL_RENDERED_OR_STRUCTURAL_KEYS}:
+        if raw_key in ALL_RENDERED_OR_STRUCTURAL_KEYS or raw_key_lower in ALL_RENDERED_OR_STRUCTURAL_KEYS_LOWER:
             continue
 
         # Value-level filtering

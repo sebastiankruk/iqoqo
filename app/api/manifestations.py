@@ -30,6 +30,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.core.frbr_service import normalize_authors_list
+from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -367,6 +368,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "format": m.format_type or m.format,
         "year": resolved_year,
         "meta": m.meta,
+        "display": build_display_projection(m.meta),
         "title": work_title,
         "authors": authors,
         "cover_url": m.cover_url,

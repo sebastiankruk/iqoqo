@@ -45,15 +45,63 @@ export const FIELD_CHAINS = {
 } as const satisfies Record<string, KeyChain>;
 
 /**
- * Check if a raw key matches any known spelling of a field declared in FIELD_CHAINS.
- * Derived dynamically from FIELD_CHAINS so adding a spelling immediately updates suppression.
+ * Dedicated section keys rendered by specific UI sections (Audio, Video, BoardGame, Puzzle, Identifiers)
+ * that must be suppressed from fallback Additional Details.
+ */
+export const DEDICATED_SECTION_KEYS: readonly string[] = [
+  "track_list",
+  "tracks",
+  "additional_images",
+  "imageLinks",
+  "barcode",
+  "isbn",
+  "upc",
+  "ean",
+  "catalog_number",
+  "matrix_number",
+  "pressing_number",
+  "disc_count",
+  "min_players",
+  "max_players",
+  "playing_time",
+  "playtime",
+  "min_playtime",
+  "max_playtime",
+  "mechanics",
+  "cast",
+  "directors",
+  "runtime",
+  "piece_count",
+  "dimensions",
+  "artist",
+  "manufacturer",
+  "puzzle_type",
+  "cover_status",
+  "cover_source",
+  "cover_url",
+  "cover_status_updated_at",
+  "local_cover",
+  "tags",
+  "data_source",
+] as const;
+
+/**
+ * Check if a raw key matches any known spelling of a field declared in FIELD_CHAINS
+ * or dedicated section keys, matched case-insensitively.
  *
  * @param key - The raw metadata key
- * @returns True if the key is a known spelling of a declared field
+ * @returns True if the key is a known spelling of a declared or dedicated field
  */
 export function isKnownMetaSpelling(key: string): boolean {
+  if (!key) return false;
+  const lowerKey = key.toLowerCase();
   for (const spellings of Object.values(FIELD_CHAINS)) {
-    if ((spellings as readonly string[]).includes(key)) {
+    if ((spellings as readonly string[]).some(s => s.toLowerCase() === lowerKey)) {
+      return true;
+    }
+  }
+  for (const s of DEDICATED_SECTION_KEYS) {
+    if (s.toLowerCase() === lowerKey) {
       return true;
     }
   }

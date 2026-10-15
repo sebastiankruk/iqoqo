@@ -50,10 +50,16 @@ describe("RichText helper functions", () => {
       delete global.window;
       const dirty = '<p>Hello <b>World</b></p><script>alert("ssr-xss")</script><img src="x" onerror="alert(1)">';
       const ssrClean = sanitizeRichHtml(dirty);
-      expect(ssrClean).toBe('Hello Worldalert("ssr-xss")');
+      expect(ssrClean).toBe("Hello World");
+      expect(ssrClean).not.toContain("alert");
       expect(ssrClean).not.toContain("<script>");
       expect(ssrClean).not.toContain("<p>");
       expect(ssrClean).not.toContain("<img>");
+
+      const malformed = "<img src=x onerror=alert(1)//";
+      const ssrMalformed = sanitizeRichHtml(malformed);
+      expect(ssrMalformed).not.toContain("<img");
+      expect(ssrMalformed).toContain("&lt;img");
     } finally {
       global.window = originalWindow;
     }

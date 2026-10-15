@@ -239,5 +239,8 @@ class WorkSeriesMembership(db.Model):  # type: ignore[name-defined]
         "Work", foreign_keys=[work_id], backref=db.backref("series_memberships", lazy="selectin", cascade="all, delete-orphan")
     )
     series = db.relationship(
-        "Work", foreign_keys=[series_work_id], backref=db.backref("series_items", lazy="selectin", cascade="all, delete-orphan")
+        "Work",
+        foreign_keys=[series_work_id],
+        lazy="selectin",
+        backref=db.backref("series_items", lazy="selectin", cascade="all, delete-orphan"),
     )

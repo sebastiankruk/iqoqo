@@ -21,7 +21,7 @@ import { CameraCapture } from "@/components/scanner/camera-capture";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
 import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
-import { STATUS_LABELS } from "../item-sidebar";
+import { STATUS_LABELS } from "./constants";
 
 /** Props for SidebarActions component */
 export interface SidebarActionsProps {

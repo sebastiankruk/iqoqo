@@ -256,3 +256,42 @@ class TestItemDetailDisplayEndpoint:
         # Primary fields suppressed from additional_details
         assert "Format" not in add_keys
         assert "Publisher" not in add_keys
+
+    def test_manifestation_detail_includes_display_projection(self, app, client):
+        """Task 3.1: Verify GET /api/manifestations/<id> response contains display projection."""
+        from app.db.core import MediaCategory
+        from app.db.models import Expression, Manifestation, Work, db
+
+        with app.app_context():
+            w = Work(title="Manifestation Display Test Work")
+            db.session.add(w)
+            db.session.flush()
+
+            e = Expression(work_id=w.id, content_type=MediaCategory.TEXT)
+            db.session.add(e)
+            db.session.flush()
+
+            raw_meta = {
+                "format": "Hardcover",
+                "publisher": "Tor Books",
+                "_provenance": {"source": "openlibrary"},
+                "_raw_candidates": {},
+                "custom_edition": "First Edition",
+            }
+            m = Manifestation(expression_id=e.id, meta=raw_meta)
+            db.session.add(m)
+            db.session.commit()
+            m_id = m.id
+
+        resp = client.get(f"/api/manifestations/{m_id}")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+
+        assert "display" in data
+        display = data["display"]
+        assert display["sections"]["format"] == "Hardcover"
+        add_keys = {entry["key"] for entry in display["additional_details"]}
+        assert "custom_edition" in add_keys
+        # Ensure underscore internal keys are stripped
+        assert "_provenance" not in add_keys
+        assert "_raw_candidates" not in add_keys

@@ -161,11 +161,12 @@ def canonicalize_isbn(raw: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _lookup_google_books_outcome(isbn: str) -> ISBNProviderOutcome:
+def _lookup_google_books_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Google Books API without leaking secrets.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
+        timeout: Optional (connect, read) timeout tuple or float in seconds.
 
     Returns:
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
@@ -178,7 +179,8 @@ def _lookup_google_books_outcome(isbn: str) -> ISBNProviderOutcome:
 
     try:
         session = _make_session()
-        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        response = session.get(url, timeout=to)
         response.raise_for_status()
         data = response.json()
     except requests.HTTPError as exc:
@@ -347,11 +349,12 @@ def fetch_google_books_candidates(query: str, max_results: int = 10) -> list[dic
     return results
 
 
-def _lookup_open_library_outcome(isbn: str) -> ISBNProviderOutcome:
+def _lookup_open_library_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Open Library Books API.
 
     Args:
         isbn: A canonical 13-digit ISBN string.
+        timeout: Optional (connect, read) timeout tuple or float in seconds.
 
     Returns:
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
@@ -360,7 +363,8 @@ def _lookup_open_library_outcome(isbn: str) -> ISBNProviderOutcome:
     url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data"
     try:
         session = _make_session()
-        response = session.get(url, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+        to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        response = session.get(url, timeout=to)
         response.raise_for_status()
         data = response.json()
     except requests.HTTPError as exc:
@@ -531,7 +535,13 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
     def _remaining_time() -> float:
         return max_duration - (time.monotonic() - start_time)
 
-    google_outcome = _lookup_google_books_outcome(isbn)
+    def _calc_timeout() -> tuple[float, float]:
+        rem = max(0.1, _remaining_time())
+        conn_to = min(float(_CONNECT_TIMEOUT), max(0.1, rem * 0.4))
+        read_to = max(0.1, rem - conn_to)
+        return (conn_to, read_to)
+
+    google_outcome = _lookup_google_books_outcome(isbn, timeout=_calc_timeout())
     if google_outcome.status == ISBNProviderOutcomeStatus.SUCCESS and google_outcome.metadata:
         logger.info("ISBN %s resolved via Google Books", isbn)
         result = google_outcome.metadata
@@ -539,7 +549,7 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         # Check for gap-filling from Open Library if gaps exist and time remains
         if _metadata_has_gaps(result) and _remaining_time() > 0:
             logger.debug("Google Books result has gaps for ISBN %s, querying Open Library for enrichment", isbn)
-            ol_outcome = _lookup_open_library_outcome(isbn)
+            ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
             if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS and ol_outcome.metadata:
                 logger.info("Enriching ISBN %s metadata gaps from Open Library", isbn)
                 result = _merge_metadata_gaps(result, ol_outcome.metadata, "google_books", "open_library")
@@ -551,7 +561,7 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         if _remaining_time() <= 0:
             logger.warning("Lookup duration ceiling reached before Open Library check for ISBN %s", isbn)
             return None
-        ol_outcome = _lookup_open_library_outcome(isbn)
+        ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
         if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
             logger.info("ISBN %s resolved via Open Library", isbn)
             return ol_outcome.metadata
@@ -564,7 +574,7 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         logger.warning("Lookup duration ceiling reached before Open Library fallback for ISBN %s", isbn)
         return None
 
-    ol_outcome = _lookup_open_library_outcome(isbn)
+    ol_outcome = _lookup_open_library_outcome(isbn, timeout=_calc_timeout())
     if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
         logger.info("ISBN %s resolved via Open Library after Google Books transient failure", isbn)
         return ol_outcome.metadata
@@ -587,7 +597,7 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         logger.warning("Lookup duration ceiling reached after retry delay for ISBN %s", isbn)
         return None
 
-    retry_google_outcome = _lookup_google_books_outcome(isbn)
+    retry_google_outcome = _lookup_google_books_outcome(isbn, timeout=_calc_timeout())
     if retry_google_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
         logger.info("ISBN %s resolved via Google Books retry", isbn)
         return retry_google_outcome.metadata

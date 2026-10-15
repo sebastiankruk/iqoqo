@@ -431,10 +431,18 @@ class TestAuthorizedReassignmentApi:
         source_id = str(transfer_fixture["source_id"])
         target_id = str(transfer_fixture["target_id"])
 
-        # Contributor can access accounts
-        res_acc = client.get("/api/v1/admin/ownership/accounts", headers=contributor_headers)
+        # Contributor can access accounts with pagination and query filtering
+        res_acc = client.get("/api/v1/admin/ownership/accounts?limit=1&offset=0", headers=contributor_headers)
         assert res_acc.status_code == 200
         assert res_acc.json["success"] is True
+        assert "pagination" in res_acc.json
+        assert res_acc.json["pagination"]["limit"] == 1
+        assert len(res_acc.json["data"]) <= 1
+
+        # Search filter by query
+        res_q = client.get("/api/v1/admin/ownership/accounts?q=Contributor", headers=contributor_headers)
+        assert res_q.status_code == 200
+        assert any("Contributor" in u["display_name"] for u in res_q.json["data"])
 
         # Contributor can preview
         res_prev = client.post(
