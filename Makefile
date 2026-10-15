@@ -761,9 +761,19 @@ db-export: .venv/bin/activate
 	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
 
-migrate-secrets: .venv/bin/activate
+migrate-secrets: .venv/bin/activate ## Migrate API secrets from env file into encrypted database settings
 	@echo "Migrating API secrets from .env into encrypted database settings..."
-	.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args)
+	@env_file=$$(echo "$(args)" | grep -oP '(?<=--env-file\s)[^\s]+' || echo "$(COMPOSE_ENV_FILE)"); \
+	[ -f "$$env_file" ] || env_file=".env"; \
+	db_url=$$(grep -E '^DATABASE_URL=' "$$env_file" 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+	db_port=$$(grep -E '^DB_PORT=' "$$env_file" 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+	[ -z "$$db_port" ] && db_port="5432"; \
+	local_db_url=$$(echo "$$db_url" | sed -E "s|@db(:[0-9]+)?/|@127.0.0.1:$$db_port/|"); \
+	if [ -n "$$local_db_url" ] && [ "$$local_db_url" != "$$db_url" ]; then \
+		DATABASE_URL="$$local_db_url" .venv/bin/python scripts/migrate_env_secrets_to_db.py $(args); \
+	else \
+		.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args); \
+	fi
 
 backup-run:
 	@remote_target="$(remote)"; \

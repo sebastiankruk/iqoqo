@@ -23,8 +23,10 @@ and comments them out in the .env file with a migration marker.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
+import socket
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -195,6 +197,18 @@ def main() -> int:
 
     if args.env_file.exists():
         load_dotenv(args.env_file, override=True)
+
+    # If running directly on the host (outside docker network), the container hostname "db"
+    # will not resolve. Automatically translate "@db:5432" or "@db" to 127.0.0.1 using DB_PORT.
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url and "@db" in db_url:
+        try:
+            socket.gethostbyname("db")
+        except socket.gaierror:
+            host_db_port = os.environ.get("DB_PORT", "5432")
+            # Replace @db:5432 or @db with 127.0.0.1:<DB_PORT>
+            adapted_url = re.sub(r"@db(?::\d+)?(/|$)", rf"@127.0.0.1:{host_db_port}\1", db_url)
+            os.environ["DATABASE_URL"] = adapted_url
 
     app = create_app()
     with app.app_context():
