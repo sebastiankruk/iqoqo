@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect } from "vitest";
 import { ExtendedMetadata } from "@/components/item/extended-metadata";
 
@@ -28,6 +29,65 @@ describe("ExtendedMetadata", () => {
     render(<ExtendedMetadata meta={{ Categories: ["Sci-Fi", "Thriller"] }} />);
     expect(screen.getByText("Sci-Fi")).toBeInTheDocument();
     expect(screen.getByText("Thriller")).toBeInTheDocument();
+  });
+
+  it("folds categories to 10 items and allows expansion when list is large (regression test for manifestation 1569)", async () => {
+    const user = userEvent.setup();
+    const categories = [
+      "Manuscripts, Latin",
+      "Glossaries, vocabularies, etc.",
+      "Early works to 1800",
+      "Bible",
+      "Latin language",
+      "Theology",
+      "History",
+      "Christian literature",
+      "Church history",
+      "Criticism, interpretation",
+      "Commentaries",
+      "Religious texts",
+      "Ancient philosophy",
+      "Medieval studies",
+      "Philology",
+    ];
+
+    render(<ExtendedMetadata meta={{ categories }} />);
+
+    // Top 10 categories should be visible as links
+    expect(screen.getByRole("link", { name: "Manuscripts, Latin" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Criticism, interpretation" })).toBeInTheDocument();
+
+    // 11th category should NOT be rendered initially
+    expect(screen.queryByRole("link", { name: "Commentaries" })).not.toBeInTheDocument();
+
+    // Toggle button should show "+5 more"
+    const toggle = screen.getByTestId("tag-cloud-toggle");
+    expect(toggle).toHaveTextContent("+5 more");
+
+    // Click to expand
+    await user.click(toggle);
+    expect(screen.getByRole("link", { name: "Commentaries" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Philology" })).toBeInTheDocument();
+    expect(toggle).toHaveTextContent("Show less");
+
+    // Click to collapse
+    await user.click(toggle);
+    expect(screen.queryByRole("link", { name: "Commentaries" })).not.toBeInTheDocument();
+    expect(toggle).toHaveTextContent("+5 more");
+  });
+
+  it("deduplicates categories across manifestation categories and work genres", () => {
+    render(
+      <ExtendedMetadata
+        meta={{ categories: ["Drama", "Mystery"] }}
+        workMeta={{ genres: ["Mystery", "Thriller"] }}
+      />
+    );
+
+    const mysteryLinks = screen.getAllByRole("link", { name: "Mystery" });
+    expect(mysteryLinks).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Drama" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Thriller" })).toBeInTheDocument();
   });
 
   it("renders description when present", () => {
