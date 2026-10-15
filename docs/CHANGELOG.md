@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-10-15
+
+### Added
+
+- **Multi-Provider Gap Fill Ingestion**: Enriched manifestation and expression metadata during ingestion by consulting secondary providers (such as Google Books, OpenLibrary, and Allegro) for missing identifiers, publication year, descriptions, and contributors when the primary provider returns incomplete records (`multi-provider-gap-fill-v084`).
+- **FRBR Multi-Series Work Memberships (C67)**: Works can now belong to multiple series with explicit sequence positions via `work_series_memberships` table, serialized in `get_frbr_tree` and item detail endpoints, debounced autocomplete series search, and transactional set reconciliation in `update_work` (`frbr-multi-series-membership-v084`).
+- **Custodian Item Ownership Reassignment (C69)**: Enabled custodians and contributors with `transfer:item` permission to reassign item ownership with audit logging, supported by SQL `LIMIT`/`OFFSET` pagination and search filtering in account discovery (`custodian-ownership-reassignment-v084`).
+- **Custodian Provider Merge Workflow (C66)**: Added provider merge dialog for custodians to reconcile and consolidate metadata candidates across upstream providers, with canonical hierarchical locking (`Work -> Expression -> Manifestation`) and cover URL synchronization (`custodian-provider-merge-v084`).
+
+### Changed
+
+- **ItemSidebar Component Decomposition**: Decomposed the monolithic 838-line `ItemSidebar` component into 6 focused presentational components (`SidebarCover`, `SidebarStatusBadges`, `SidebarLendingInfo`, `SidebarIdentifiers`, `SidebarActions`, `SidebarFrbrInfo`) and a dedicated custom hook (`useItemSidebarActions`) in `frontend/components/item/sidebar/`. Preserves byte-identical presentation and contract with no dynamic import splits and zero provider wrappers. Added full unit and baseline test suites in `frontend/__tests__/components/item/sidebar/`.
+- **Item Metadata Type & Carrier Synchronization**: When `update_frbr_entity_type` updates the carrier and entity type of a Work, Expression, or Manifestation, the update now descends into child Items holding carrier or format metadata (`format`, `Format`, or `type`) in `Item.meta`. The keys are updated in lockstep via `_sync_type_meta` while user-annotated metadata is preserved, resolving staleness across active entities and ensuring JSON data export parity without adding N+1 queries (`item-metadata-staleness-v084`, Direction D2). Note: historical rows modified prior to this update are not backfilled until their parent entity type is updated.
+- **Suspended Account Login Status Code Enumeration**: Collapsed the HTTP response status code for suspended accounts on `POST /api/auth/login` from 403 to 401, matching the status code returned for unregistered emails and wrong passwords. The suspension check remains strictly evaluated after full password verification to avoid introducing a timing oracle. The response body retains the suspension reason `{"error": "Account suspended", "suspended": true}` to preserve clarity for legitimate users while narrowing automated status-code-based account enumeration (`suspended-account-status-enumeration-v084`).
+- **Operational Author Repair Modernization**: Refactored `scripts/repair_frbr_authors.py` to use SQLAlchemy 2.0 `select(Work)` with `selectinload(Work.contributions)` and batch-based pagination, ensuring constant heap memory consumption and eliminating N+1 queries during bulk metadata repair (`v084-release-review-findings`).
+- **Gazetteer Download Network Integrity**: Enforced strict HTTPS for GeoNames dump retrieval and eliminated cleartext HTTP fallback in `scripts/init_geonames_db.py`, with support for optional `--sha256` integrity verification (`v084-release-review-findings`).
+- **Reverse Proxy SPARQL Timeouts**: Added explicit `/api/sparql` reverse proxy route with `proxy_read_timeout 45s;` in `deploy/nginx.conf.example`, accommodating the 30s SPARQL execution service deadline plus client transport buffers (`v084-release-review-findings`).
+- **Production SPARQL Secret Healthcheck**: Added automated check in `scripts/iqoqo-status.sh` validating that `SPARQL_SERVICE_SECRET` is configured and not set to the default development secret in production deployments (`v084-release-review-findings`).
+
+### Fixed
+
+- **Security Vulnerability Updates (Dependabot)**: Updated root and frontend dependencies to patch 10 open security advisories across `next` (16.3.8; SSRF, cache poisoning, and draft mode leaks), `@modelcontextprotocol/sdk` (>=1.31.0), `sharp` (>=0.35.5), `proxy-addr` (>=2.0.8), `smol-toml` (^1.9.0), `katex` (^0.18.2), `source-map-js` (^1.2.2), and `postcss-selector-parser` (^7.1.6).
+- **SPARQL Container Image Build in Release Pipeline**: Added the missing `Build and push SPARQL Runner Image` step in `.github/workflows/release.yml`, ensuring `iqoqo-sparql` is published to GHCR during release workflows so that prebuilt production deployments (`make prod start prebuilt`) find all required images.
+- **AiOps Test Output Verbosity**: Wired `PYTEST_FLAGS` (`-q --tb=short --no-header`), `VITEST_FLAGS` (`--reporter=dot`), and `BATS_FLAGS` (`--formatter tap`) in `Makefile` under `IQOQO_AI_MODE=1` to provide terse, token-efficient output across test suites.
+- **Frontend RichText SSR Sanitization**: Updated `sanitizeRichHtml` in `frontend/components/ui/rich-text.tsx` to safely strip HTML tags, script payloads, and style blocks when the DOMPurify `window` context is unavailable during SSR passes, entity-encoding residual angle brackets to prevent un-sanitized raw HTML emission during Next.js server-side rendering passes (`v084-release-review-findings`).
+- **Metadata Display Duplication on Item Detail**: Fixed duplicate rendering of metadata fields (such as "Media Format", "Author", and "Publisher") when the "Additional Details" section is expanded on item detail pages. The duplication occurred on records using capitalized keys (such as `Format`, `Author`, or `Publisher` produced by OCR imports) because suppression against primary display sections was matched case-sensitively, causing values to appear twice across dedicated sections and the additional details panel (`metadata-display-projection-v084`).
+- **Search With National Characters**: Front-page catalog search (`/api/manifestations?q=`) and item search now fold diacritics (`milosc` finds `miłość`, `Mroz` finds `Mróz`) across title, work/manifestation metadata, tags and contributors through one shared ILIKE clause. JSON `\uXXXX` escapes are decoded, PostgreSQL full-text search also covers authors, tags and genres, the `unaccent` extension is pinned to the `public` schema, `v0_8_4_fts_unaccent` is guarded to PostgreSQL, and admin `/works/search` and `/frbr/search` are accent-insensitive.
+- **Metadata Display Projection & Interactive Navigation (C68)**: Restored interactive click-to-filter `<DiscoveryPivot>` links for category, genre, and board game mechanics chips across manifestation details while preserving responsive tag cloud folding (`TagCloud` with `pivotType` and `maxInitial={10}`), deduplicated tag clouds on item detail views, aligned metadata suppression tables with server-derived display projections case-insensitively, and emitted `display` projections on `GET /api/manifestations/<id>`.
+- **Search Pagination Determinism**: Added deterministic tie-breakers (`id DESC`) on full-text search queries in `app/core/search_service.py` to ensure stable pagination across zero-ranked contributor matches.
+- **Provider Time Budget Bounding**: Passed remaining time budgets down as socket timeouts to Google Books and OpenLibrary API adapters in `app/utils/isbn.py`, ensuring provider queries strictly observe `max_duration` limits.
+- **Frontend Circular Module Dependencies**: Moved `STATUS_LABELS` out of `item-sidebar.tsx` into a dedicated `constants.ts` module to eliminate circular imports between `ItemSidebar` and its child action components.
+
+### Database Migrations
+
+- **`v0_8_4_work_series_memberships`**: Adds the `work_series_memberships` table with primary key `id`, foreign keys to `works.id` for both child work and container series work, and a `sequence` integer ordering column.
+- **`v0_8_4_fts_unaccent`**: Introduces an immutable `immutable_unaccent()` wrapper in the `public` schema for PostgreSQL and builds accent-folded GIN full-text search expressions across titles, authors, and genres.
+- **`v0_8_4_search_unaccent`**: Adds complementary SQL expressions enabling accent-folded title and creator queries across SQLite and PostgreSQL catalog search pathways.
+
 ## [0.8.3] - 2026-10-10
 
 ### Added

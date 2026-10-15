@@ -49,6 +49,7 @@ class PermissionName(StrEnum):
     REGENERATE_COVER = "regenerate:cover"
     TICKETS_ADMIN = "tickets:admin"
     TICKETS_CREATOR = "tickets:creator"
+    TRANSFER_ITEM = "transfer:item"
     UPDATE_ITEM = "update:item"
     UPLOAD_COVER = "upload:cover"
     WRITE_ITEM = "write:item"
@@ -72,7 +73,7 @@ class RoleName(StrEnum):
 # so a permission missing from permissions.yaml is still granted where it matches.
 ROLE_PERMISSION_PATTERNS: dict[str, tuple[str, ...]] = {
     RoleName.ADMIN: ("*",),
-    RoleName.CONTRIBUTOR: ("*:metadata", "llm_generate:*", "edit:cover", "delete:item", "escalate:resolve"),
+    RoleName.CONTRIBUTOR: ("*:metadata", "llm_generate:*", "edit:cover", "delete:item", "escalate:resolve", "transfer:item"),
     RoleName.USER: (
         "write:item",
         "update:item",

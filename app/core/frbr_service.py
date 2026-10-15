@@ -1147,6 +1147,7 @@ def update_work(
     meta: dict[str, Any] | None = None,
     raw_payload: dict[str, Any] | None = None,
     contributions: list[dict[str, Any]] | None = None,
+    series_memberships: list[dict[str, Any]] | None = None,
 ) -> Work:
     """
     Update an existing Work.
@@ -1203,6 +1204,53 @@ def update_work(
             {"name": author_name, "role": "author", "sequence": idx} for idx, author_name in enumerate(current_meta.get("authors", []))
         ]
         sync_entity_contributions(work, desired_contributions)
+    if series_memberships is not None:
+        from app.db.models import WorkPart, WorkSeriesMembership
+
+        # Batch-fetch existing memberships and legacy parts using SQLAlchemy 2.0
+        existing_memberships = {
+            m.series_work_id: m
+            for m in db.session.execute(select(WorkSeriesMembership).where(WorkSeriesMembership.work_id == work.id)).scalars().all()
+        }
+        existing_legacy_parts = {
+            wp.container_work_id: wp for wp in db.session.execute(select(WorkPart).where(WorkPart.part_work_id == work.id)).scalars().all()
+        }
+
+        # Validate desired series works and build desired map (series_id -> sequence)
+        desired_series_map: dict[int, int] = {}
+        for sm_dict in series_memberships:
+            raw_s_id = sm_dict.get("series_work_id") or sm_dict.get("series_id")
+            if raw_s_id is None:
+                continue
+            series_id = int(raw_s_id)
+            if series_id == work.id:
+                continue
+            series_work = db.session.get(Work, series_id)
+            if not series_work:
+                raise ValueError(f"Series Work with id {series_id} does not exist")
+            desired_series_map[series_id] = int(sm_dict.get("sequence", 0))
+
+        # Add new or update existing memberships
+        for s_id, seq in desired_series_map.items():
+            if s_id in existing_memberships:
+                existing_memberships[s_id].sequence = seq
+            else:
+                db.session.add(WorkSeriesMembership(work_id=work.id, series_work_id=s_id, sequence=seq))
+
+            if s_id in existing_legacy_parts:
+                existing_legacy_parts[s_id].sequence = seq
+            else:
+                db.session.add(WorkPart(container_work_id=s_id, part_work_id=work.id, sequence=seq))
+
+        # Remove memberships that are no longer desired
+        for s_id, mem in existing_memberships.items():
+            if s_id not in desired_series_map:
+                db.session.delete(mem)
+                if s_id in existing_legacy_parts:
+                    db.session.delete(existing_legacy_parts[s_id])
+
+        db.session.commit()
+
     return work
 
 
@@ -1611,6 +1659,186 @@ def update_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     if contributions is not None:
         sync_entity_contributions(manif, contributions)
     return manif
+
+
+def apply_custodian_provider_merge(
+    manifestation_id: int,
+    selections: dict[str, dict[str, Any]],
+    user_id: Any = None,
+) -> dict[str, Any]:
+    """Atomically apply custodian-selected provider fragments across FRBR tiers.
+
+    Acquires row-level locks on Work, Expression, and Manifestation in ascending ID
+    order to prevent deadlocks, updates chosen attributes, maintains field-level
+    provenance in meta["_provenance"], and records an EntityAuditLog entry.
+
+    Args:
+        manifestation_id: ID of the manifestation to update.
+        selections: Dictionary keyed by tier ('work', 'expression', 'manifestation'),
+            containing field names and their selected value dict:
+            e.g. {"work": {"title": {"value": "Dune", "provider": "google_books"}}}
+            or direct values with separate provenance:
+            {"work": {"title": "Dune"}, "_provenance": {"title": "google_books"}}
+        user_id: ID of the acting custodian/administrator.
+
+    Returns:
+        Dict summarizing updated entities and changes.
+    """
+    manif = db.session.get(Manifestation, manifestation_id)
+    if manif is None:
+        raise ValueError(f"Manifestation with id {manifestation_id} not found")
+
+    expr = db.session.get(Expression, manif.expression_id) if manif.expression_id else None
+    work = db.session.get(Work, expr.work_id) if expr and expr.work_id else None
+
+    # Deterministic lock ordering across entities: lock strictly in canonical FRBR
+    # hierarchy order (Work -> Expression -> Manifestation) to prevent transaction deadlocks
+    entities_to_lock: list[tuple[type, int]] = []
+    if work:
+        entities_to_lock.append((Work, work.id))
+    if expr:
+        entities_to_lock.append((Expression, expr.id))
+    entities_to_lock.append((Manifestation, manif.id))
+
+    for model_cls, ent_id in entities_to_lock:
+        db.session.execute(
+            select(model_cls).where(model_cls.id == ent_id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+    diff_log: dict[str, Any] = {"work": {}, "expression": {}, "manifestation": {}}
+
+    # Handle Work tier
+    work_sel = selections.get("work") or {}
+    if work and work_sel:
+        work_meta = dict(work.meta or {})
+        work_prov = dict(work_meta.get("_provenance") or {})
+        for field, item in work_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field == "title" and val is not None:
+                old_val = work.title
+                work.title = str(val).strip()
+                work.sort_title = derive_sort_title(work.title)
+                diff_log["work"]["title"] = {"before": old_val, "after": work.title}
+            elif field in ("authors", "Authors") and val is not None:
+                old_val = work_meta.get("authors")
+                clean_authors = normalize_authors_list(val)
+                work_meta["authors"] = clean_authors
+                desired_contribs = [{"name": a, "role": "author", "sequence": idx} for idx, a in enumerate(clean_authors)]
+                sync_entity_contributions(work, desired_contribs)
+                diff_log["work"]["authors"] = {"before": old_val, "after": clean_authors}
+            elif val is not None:
+                old_val = work_meta.get(field)
+                work_meta[field] = val
+                diff_log["work"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                work_prov[field] = str(prov)
+
+        if work_prov:
+            work_meta["_provenance"] = work_prov
+        sanitize_metadata_description(work_meta)
+        work.meta = work_meta
+
+    # Handle Expression tier
+    expr_sel = selections.get("expression") or {}
+    if expr and expr_sel:
+        expr_meta = dict(expr.meta or {})
+        expr_prov = dict(expr_meta.get("_provenance") or {})
+        for field, item in expr_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field == "language" and val is not None:
+                old_val = expr.language
+                expr.language = str(val).strip()
+                diff_log["expression"]["language"] = {"before": old_val, "after": expr.language}
+            elif field in ("content_type", "type") and val is not None:
+                old_val = expr.content_type
+                expr.content_type = str(val).strip()
+                diff_log["expression"]["content_type"] = {"before": old_val, "after": expr.content_type}
+            elif field == "kind" and val is not None:
+                old_val = expr.kind
+                expr.kind = str(val).strip()
+                diff_log["expression"]["kind"] = {"before": old_val, "after": expr.kind}
+            elif val is not None:
+                old_val = expr_meta.get(field)
+                expr_meta[field] = val
+                diff_log["expression"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                expr_prov[field] = str(prov)
+
+        if expr_prov:
+            expr_meta["_provenance"] = expr_prov
+        sanitize_metadata_description(expr_meta)
+        expr.meta = expr_meta
+
+    # Handle Manifestation tier
+    manif_sel = selections.get("manifestation") or {}
+    if manif_sel:
+        manif_meta = dict(manif.meta or {})
+        manif_prov = dict(manif_meta.get("_provenance") or {})
+        for field, item in manif_sel.items():
+            if field == "_provenance" or field == "provenance":
+                continue
+            val = item.get("value") if isinstance(item, dict) and "value" in item else item
+            prov = item.get("provider") if isinstance(item, dict) else selections.get("_provenance", {}).get(field)
+
+            if field in ("publisher", "Publisher") and val is not None:
+                old_val = manif.publisher
+                manif.publisher = str(val).strip()[:255]
+                diff_log["manifestation"]["publisher"] = {"before": old_val, "after": manif.publisher}
+            elif field in ("publication_date", "PublicationDate", "date") and val is not None:
+                old_val = str(manif.publication_date) if manif.publication_date else None
+                manif.publication_date = str(val).strip()
+                diff_log["manifestation"]["publication_date"] = {"before": old_val, "after": manif.publication_date}
+            elif field in ("isbn13", "isbn") and val is not None:
+                old_val = manif.isbn13
+                clean_isbn = str(val).replace("-", "").replace(" ", "").strip()
+                manif.isbn13 = clean_isbn
+                diff_log["manifestation"]["isbn13"] = {"before": old_val, "after": clean_isbn}
+            elif field in ("cover_url", "cover") and val is not None:
+                old_val = manif.cover_url or manif_meta.get("cover_url")
+                clean_cover = str(val).strip()
+                manif.cover_url = clean_cover
+                manif_meta["cover_url"] = clean_cover
+                diff_log["manifestation"]["cover_url"] = {"before": old_val, "after": clean_cover}
+            elif val is not None:
+                old_val = manif_meta.get(field)
+                manif_meta[field] = val
+                diff_log["manifestation"][field] = {"before": old_val, "after": val}
+
+            if prov:
+                manif_prov[field] = str(prov)
+
+        if manif_prov:
+            manif_meta["_provenance"] = manif_prov
+        sanitize_metadata_description(manif_meta)
+        manif.meta = manif_meta
+
+    # Write EntityAuditLog
+    audit = EntityAuditLog(
+        entity_type="manifestation",
+        entity_id=manif.id,
+        actor_id=user_id,
+        change_type="provider_merge",
+        diff=diff_log,
+    )
+    db.session.add(audit)
+    db.session.commit()
+
+    return {
+        "manifestation_id": manif.id,
+        "expression_id": expr.id if expr else None,
+        "work_id": work.id if work else None,
+        "diff": diff_log,
+    }
 
 
 def update_item(
@@ -2057,6 +2285,17 @@ def _sync_type_meta(meta: dict[str, Any], current_format: Any, new_type: str) ->
     return carrier
 
 
+def _sync_manifestation_items_type(manifestation_id: int, carrier: str, new_type: str) -> None:
+    """Propagate type and carrier format updates down to child Items' metadata."""
+    child_items = db.session.execute(select(Item).where(Item.manifestation_id == manifestation_id)).scalars().all()
+    for item in child_items:
+        if item.meta:
+            i_meta = dict(item.meta)
+            if any(k in i_meta for k in ("format", "Format", "type")):
+                _sync_type_meta(i_meta, carrier, new_type)
+                item.meta = i_meta
+
+
 def update_frbr_entity_type(
     entity_class: Any,
     entity_id: int,
@@ -2065,8 +2304,8 @@ def update_frbr_entity_type(
     """
     Update the type of a FRBR entity and adapt parent/child entities to maintain consistency.
 
-    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations are preserved
-    when they stay valid for the new type; only invalid or type-like format
+    Carrier formats (``bluray``, ``vinyl`` …) on Manifestations and child Items
+    are preserved when they stay valid for the new type; only invalid or type-like format
     values degrade to the category's ``unknown_*`` placeholder.
     """
     entity = db.session.get(entity_class, entity_id)
@@ -2085,6 +2324,7 @@ def update_frbr_entity_type(
             entity.format = carrier
 
     if entity_class == Manifestation:
+        _sync_manifestation_items_type(entity.id, carrier, new_type)
         if entity.expression:
             entity.expression.content_type = new_type
             if entity.expression.work:
@@ -2108,6 +2348,7 @@ def update_frbr_entity_type(
             m.meta = m_meta
             if hasattr(m, "format"):
                 m.format = carrier
+            _sync_manifestation_items_type(m.id, carrier, new_type)
     elif entity_class == Work:
         w_meta = dict(entity.meta or {})
         w_meta["type"] = new_type
@@ -2124,6 +2365,7 @@ def update_frbr_entity_type(
                 m.meta = m_meta
                 if hasattr(m, "format"):
                     m.format = carrier
+                _sync_manifestation_items_type(m.id, carrier, new_type)
 
     db.session.commit()
     return entity
@@ -2176,46 +2418,66 @@ def _add_provenance_triples(
             g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
         return
 
-    source = meta.get("data_source") or meta.get("source") or meta.get("provider")
-    if not source and raw_payload:
-        source = raw_payload.get("source") or raw_payload.get("data_source")
+    # Check for multi-provider field provenance in meta["_provenance"] or meta["provenance"]
+    provenance_map = meta.get("_provenance")
+    if not isinstance(provenance_map, dict):
+        provenance_map = meta.get("provenance")
 
-    if not source:
+    sources_to_add: set[str] = set()
+    if isinstance(provenance_map, dict):
+        for prov_val in provenance_map.values():
+            if prov_val and isinstance(prov_val, str):
+                sources_to_add.add(prov_val)
+
+    if not sources_to_add:
+        source = meta.get("data_source") or meta.get("source") or meta.get("provider")
+        if not source and raw_payload:
+            source = raw_payload.get("source") or raw_payload.get("data_source")
+        if source:
+            sources_to_add.add(str(source))
+
+    if not sources_to_add:
         return
 
-    source_str = str(source).lower()
-    if source_str.startswith(("http://", "https://")):
-        safe_prov = _safe_iri(str(source))
-        if safe_prov is not None:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
-    elif "openlibrary" in source_str or "open_library" in source_str:
-        olid = meta.get("openlibrary_id") or meta.get("olid")
-        if olid:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/books/{olid}")))
-        elif isbn:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/isbn/{isbn}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://openlibrary.org")))
-    elif "musicbrainz" in source_str:
-        mbid = meta.get("musicbrainz_id") or meta.get("mbid")
-        if mbid:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://musicbrainz.org/release/{mbid}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org")))
-    elif "bgg" in source_str or "boardgamegeek" in source_str:
-        bgg_id = meta.get("bgg_id") or meta.get("boardgamegeek_id")
-        if bgg_id:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://boardgamegeek.com/boardgame/{bgg_id}")))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://boardgamegeek.com")))
-    elif "allegro" in source_str:
-        allegro_url = meta.get("allegro_url")
-        if allegro_url:
-            safe_allegro = _safe_iri(str(allegro_url))
-            if safe_allegro is not None:
-                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
-        else:
-            g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
+    for source_entry in sorted(sources_to_add):
+        source_str = source_entry.lower()
+        if source_str.startswith(("http://", "https://")):
+            safe_prov = _safe_iri(source_entry)
+            if safe_prov is not None:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_prov)))
+        elif "google" in source_str:
+            if isbn:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://books.google.com")))
+        elif "openlibrary" in source_str or "open_library" in source_str:
+            olid = meta.get("openlibrary_id") or meta.get("olid")
+            if olid:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/books/{olid}")))
+            elif isbn:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://openlibrary.org/isbn/{isbn}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://openlibrary.org")))
+        elif "musicbrainz" in source_str:
+            mbid = meta.get("musicbrainz_id") or meta.get("mbid")
+            if mbid:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://musicbrainz.org/release/{mbid}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://musicbrainz.org")))
+        elif "bgg" in source_str or "boardgamegeek" in source_str:
+            bgg_id = meta.get("bgg_id") or meta.get("boardgamegeek_id")
+            if bgg_id:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef(f"https://boardgamegeek.com/boardgame/{bgg_id}")))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://boardgamegeek.com")))
+        elif "allegro" in source_str:
+            allegro_url = meta.get("allegro_url")
+            if allegro_url:
+                safe_allegro = _safe_iri(str(allegro_url))
+                if safe_allegro is not None:
+                    g.add((m_uri, PROV.wasDerivedFrom, URIRef(safe_allegro)))
+            else:
+                g.add((m_uri, PROV.wasDerivedFrom, URIRef("https://allegro.pl")))
 
 
 def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:

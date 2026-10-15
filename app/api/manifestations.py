@@ -30,6 +30,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.core.frbr_service import normalize_authors_list
+from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
@@ -367,6 +368,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "format": m.format_type or m.format,
         "year": resolved_year,
         "meta": m.meta,
+        "display": build_display_projection(m.meta),
         "title": work_title,
         "authors": authors,
         "cover_url": m.cover_url,
@@ -380,6 +382,15 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "is_live_performance": is_live_performance(expression),
         "contributions": contributions,
         "container_aggregation": container_aggregation,
+        "tags": [
+            (
+                t
+                if isinstance(t, dict)
+                else {"name": t, "source": (m.meta or {}).get("tag_sources", {}).get(t, (m.meta or {}).get("data_source") or "catalog")}
+            )
+            for t in ((m.meta or {}).get("tags") or (m.meta or {}).get("genres") or [])
+            if isinstance(t, (str, dict))
+        ],
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

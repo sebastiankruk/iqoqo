@@ -368,4 +368,12 @@ describe("FRBRTreeView", () => {
     expect(screen.getByText("F3")).toBeInTheDocument();
     expect(screen.getByText("F5")).toBeInTheDocument();
   });
+
+  it("calls onProviderMerge when Merge Provider Metadata is clicked in manifestation menu", () => {
+    const onProviderMerge = vi.fn();
+    render(<FRBRTreeView {...defaultProps} onProviderMerge={onProviderMerge} />);
+    const mergeItem = screen.getByText("Merge Provider Metadata");
+    fireEvent.click(mergeItem);
+    expect(onProviderMerge).toHaveBeenCalledWith(3);
+  });
 });

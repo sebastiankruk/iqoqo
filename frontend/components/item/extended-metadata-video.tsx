@@ -16,6 +16,7 @@
 import { TmdbAttribution } from "@/components/ui/tmdb-attribution";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 import { DiscoveryPivot } from "./discovery-pivot";
+import { TagCloud } from "@/components/ui/tag-cloud";
 
 interface ExtendedMetadataVideoProps {
   meta: Record<string, unknown>;
@@ -71,10 +72,8 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
         {cast && cast.length > 0 && (
           <div className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Cast</span>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {cast.map(c => (
-                <DiscoveryPivot key={c} type="q" value={c} badgeVariant="secondary" className="font-normal" />
-              ))}
+            <div className="mt-1">
+              <TagCloud tags={cast} pivotType="q" maxInitial={10} chipClassName="font-normal" />
             </div>
           </div>
         )}

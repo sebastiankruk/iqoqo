@@ -48,8 +48,11 @@ Trigger this skill when the user types `/iqoqo-mempalace <command>` or when you 
 
 ## Workflow: Full Index (`/iqoqo-mempalace index` or `make mempalace-index`)
 
+> [!NOTE]
+> `make mempalace-index` uses deterministic SHA-256 scope fingerprinting (`.iqoqo-mempalace/scope_fingerprints.json`). When codebase files and notes are unchanged, indexing short-circuits in <1 second instead of walking the 15-minute hallway graph. To force a complete re-index, pass `ARGS=--force` (e.g. `make mempalace-index ARGS=--force`).
+
 > [!WARNING]
-> Full palace indexing walks 297k+ entity links in its hallway graph and takes ~15 minutes on CPU. Do NOT run full indexing automatically during interactive sessions. Use surgical targeted mining instead.
+> Full palace indexing walks 297k+ entity links in its hallway graph and takes ~15 minutes on CPU when rebuilding uncached scopes. Do NOT run full indexing automatically during interactive sessions. Use surgical targeted mining instead.
 
 ### Step 1 — Detect scopes
 ```bash
@@ -59,23 +62,26 @@ Trigger this skill when the user types `/iqoqo-mempalace <command>` or when you 
 - Resolves codebase directories (`app`, `frontend`, `migrations`, `deploy`, `scripts`, `shared`, `tests`, `docs`, `openspec/specs`)
 - Resolves selected Obsidian notes (`.context/notes/{sre,bugs,code,design,dev,marketing,plan,review,security,tests,tools,notes}`)
 - Auto-detects current version from `package.json` for `.context/ai-memory/<version>`
-- Strictly excludes `app/static/covers/`, `screenshots/`, and non-current versions
+- Strictly excludes `app/static/covers/`, `screenshots/`, `.env.example`, credentials, and non-current versions
 
 ### Step 2 — Run mining
 ```bash
 .venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py
+# Or to bypass fingerprint cache:
+.venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py --force
 ```
-- Mines project scopes with `.venv/bin/mempalace mine <scope> --mode projects --wing iqoqo`
-- Mines conversation memory with `.venv/bin/mempalace mine .context/ai-memory/<version> --mode convos --wing iqoqo`
+- Compares scope file fingerprints against `.iqoqo-mempalace/scope_fingerprints.json` and skips unchanged scopes
+- Mines changed project scopes with `.venv/bin/mempalace mine <scope> --mode projects --wing iqoqo`
+- Mines changed conversation memory with `.venv/bin/mempalace mine .context/ai-memory/<version> --mode convos --wing iqoqo`
 
 ### Step 3 — Report status
 ```bash
 .venv/bin/python .agents/skills/iqoqo-mempalace/scripts/get_status.py
 ```
 
-## Workflow: Targeted Mining (Fast Single-File Ingestion, ~1-2s)
+## Workflow: Targeted Mining (Manual Single-File Ingestion, ~1-2s)
 
-To mine a specific file or directory after making changes during interactive sessions:
+Targeted mining is **manual-only** when explicitly requested by the developer, and is **never** executed automatically at the end of sessions (post-session sync is limited to `make knowledge-sync`):
 ```bash
 .venv/bin/python .agents/skills/iqoqo-mempalace/scripts/run_mine.py <path>
 ```

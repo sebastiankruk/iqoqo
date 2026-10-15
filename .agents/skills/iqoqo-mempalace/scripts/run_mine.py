@@ -21,13 +21,14 @@ and versioned AI session memory as conversations (--mode convos --wing iqoqo).
 """
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 def find_mempalace() -> str:
@@ -63,13 +64,40 @@ def is_sensitive_target(target_path: Path) -> bool:
     """Check if target path matches sensitive file or credential patterns."""
     name = target_path.name.lower()
     path_str = str(target_path).lower()
-    if name.startswith(".env") or ".env." in name:
+    if name.startswith(".env") or ".env." in name or ".env.example" in name:
         return True
     if any(name.endswith(ext) for ext in [".key", ".pem", ".pfx", ".pkcs12", ".crt"]):
         return True
-    if any(secret_kw in path_str for secret_kw in ["antigravity-oauth-token", "id_rsa", "id_ed25519"]):
+    if any(
+        secret_kw in path_str
+        for secret_kw in [
+            "antigravity-oauth-token",
+            "id_rsa",
+            "id_ed25519",
+            "auth.json",
+            "secret",
+            "credential",
+            "password",
+        ]
+    ):
         return True
     return False
+
+
+def compute_scope_fingerprint(project_root: Path, file_paths: List[str]) -> str:
+    """Compute deterministic SHA-256 fingerprint for files in a scope.
+
+    Uses sorted relative paths, file sizes, and modification timestamps (ns).
+    """
+    hasher = hashlib.sha256()
+    for rel_path in sorted(file_paths):
+        full_path = project_root / rel_path
+        try:
+            st = full_path.stat()
+            hasher.update(f"{rel_path}:{st.st_size}:{st.st_mtime_ns}\n".encode("utf-8"))
+        except OSError:
+            hasher.update(f"{rel_path}:missing\n".encode("utf-8"))
+    return hasher.hexdigest()
 
 
 def main() -> None:
@@ -77,6 +105,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Mine scoped iQoQo assets into MemPalace")
     parser.add_argument("target", nargs="?", help="Optional specific file or directory to mine")
     parser.add_argument("--dry-run", action="store_true", help="Perform a dry run without modifying palace")
+    parser.add_argument("--force", action="store_true", help="Force re-mining even if scope files have not changed")
     parser.add_argument("--mode", choices=["projects", "convos"], help="Explicit ingest mode for specific target")
     parser.add_argument("--wing", default="iqoqo", help="Palace wing (default: iqoqo)")
     args = parser.parse_args()
@@ -120,32 +149,82 @@ def main() -> None:
     convos_scopes = manifest.get("convos_scopes", [])
     wing = manifest.get("wing", "iqoqo")
 
+    # Load fingerprint cache
+    fingerprints_file = state_dir / "scope_fingerprints.json"
+    cached_fingerprints: Dict[str, str] = {}
+    if fingerprints_file.exists() and not args.force:
+        try:
+            cached_fingerprints = json.loads(fingerprints_file.read_text(encoding="utf-8"))
+        except Exception:
+            cached_fingerprints = {}
+
     start_time = time.time()
     total_processed = 0
+    skipped_scopes = 0
+    mined_scopes = 0
 
     print("=" * 60)
     print(f"  Starting iQoQo Scoped MemPalace Mining (Wing: {wing})")
+    if args.force:
+        print("  [Mode: FORCE re-indexing all scopes]")
     print("=" * 60)
 
-    # Mine project scopes
+    # Process project scopes
     for scope in project_scopes:
         path = scope["path"]
+        scope_key = f"projects:{path}"
+        files = scope.get("files", [])
+        fingerprint = compute_scope_fingerprint(project_root, files)
+
+        if not args.force and not args.dry_run and cached_fingerprints.get(scope_key) == fingerprint:
+            count = scope.get("count", len(files))
+            print(f"\n--- Scope unchanged (projects: {path}, {count} files). Skipping hallway walk. ---")
+            total_processed += count
+            skipped_scopes += 1
+            continue
+
         print(f"\n--- Mining Project Scope: {path} ---")
         code = mine_scope(mempalace_bin, path, mode="projects", wing=wing, dry_run=args.dry_run)
         if code == 0:
             total_processed += scope.get("count", 1)
+            mined_scopes += 1
+            if not args.dry_run:
+                cached_fingerprints[scope_key] = fingerprint
 
-    # Mine conversation scopes
+    # Process conversation scopes
     for scope in convos_scopes:
         path = scope["path"]
+        scope_key = f"convos:{path}"
+        files = scope.get("files", [])
+        fingerprint = compute_scope_fingerprint(project_root, files)
+
+        if not args.force and not args.dry_run and cached_fingerprints.get(scope_key) == fingerprint:
+            count = scope.get("count", len(files))
+            print(f"\n--- Scope unchanged (convos: {path}, {count} files). Skipping hallway walk. ---")
+            total_processed += count
+            skipped_scopes += 1
+            continue
+
         print(f"\n--- Mining Conversation Scope (AI Memory): {path} ---")
         code = mine_scope(mempalace_bin, path, mode="convos", wing=wing, dry_run=args.dry_run)
         if code == 0:
             total_processed += scope.get("count", 1)
+            mined_scopes += 1
+            if not args.dry_run:
+                cached_fingerprints[scope_key] = fingerprint
+
+    if not args.dry_run and mined_scopes > 0:
+        fingerprints_file.write_text(json.dumps(cached_fingerprints, indent=2), encoding="utf-8")
 
     elapsed = time.time() - start_time
     print("\n" + "=" * 60)
-    print(f"  MemPalace Mining Complete! (Time: {elapsed:.2f}s, Processed: ~{total_processed} items)")
+    if mined_scopes == 0 and skipped_scopes > 0:
+        print(f"  All {skipped_scopes} scopes up-to-date! Mining short-circuited in {elapsed:.2f}s.")
+        print("  (Use --force or 'make mempalace-index ARGS=--force' to force re-indexing)")
+    else:
+        print(
+            f"  MemPalace Mining Complete! (Time: {elapsed:.2f}s, Processed: ~{total_processed} items, Mined: {mined_scopes}, Skipped: {skipped_scopes})"
+        )
     print("=" * 60)
 
 

@@ -38,6 +38,71 @@ def test_search_schema_prefix_allowlist_accepts_supported_pairs(monkeypatch):
     assert search_service._validated_schema_prefixes() == ("", "")
 
 
+def test_pg_manifestation_fts_includes_contributor_search(monkeypatch):
+    """The PostgreSQL FTS path must also match Work/Expression contributor names."""
+    import app.core.search_service as search_service
+
+    monkeypatch.setattr(search_service, "_USE_PG", True)
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog.")
+    monkeypatch.setattr(search_service, "_INVENTORY", "inventory.")
+
+    captured = {}
+
+    def fake_execute(stmt, params=None):
+        captured["sql"] = str(stmt)
+        # Return a value that lets count() succeed and rows() return empty
+        if "count" in captured["sql"]:
+            return type("R", (), {"scalar": lambda self: 0})()
+        return type("R", (), {"all": lambda self: []})()
+
+    monkeypatch.setattr(search_service.db.session, "execute", fake_execute)
+
+    search_service.SearchService._pg_manifestation_fts("Garcia", limit=10, offset=0)
+
+    sql = captured.get("sql", "")
+    assert "work_contributions" in sql
+    assert "expression_contributions" in sql
+    assert "contributors" in sql
+    assert "immutable_unaccent(c.name)" in sql
+
+
+def test_pg_item_fts_includes_contributor_search(monkeypatch):
+    """The PostgreSQL item FTS path must also match Work/Expression contributor names."""
+    import app.core.search_service as search_service
+    from app.core.search_service import ItemSearchFilters
+
+    monkeypatch.setattr(search_service, "_USE_PG", True)
+    monkeypatch.setattr(search_service, "_CATALOG", "catalog.")
+    monkeypatch.setattr(search_service, "_INVENTORY", "inventory.")
+
+    captured = {}
+
+    def fake_execute(stmt, params=None):
+        captured["sql"] = str(stmt)
+        if "count" in captured["sql"]:
+            return type("R", (), {"scalar": lambda self: 0})()
+        return type(
+            "R",
+            (),
+            {
+                "mappings": lambda self: type("M", (), {"all": lambda self: []})(),
+                "all": lambda self: [],
+            },
+        )()
+
+    monkeypatch.setattr(search_service.db.session, "execute", fake_execute)
+
+    search_service.SearchService._pg_item_fts(
+        "Garcia", user_id="00000000-0000-4000-a000-000000000000", limit=10, offset=0, filters=ItemSearchFilters()
+    )
+
+    sql = captured.get("sql", "")
+    assert "work_contributions" in sql
+    assert "expression_contributions" in sql
+    assert "contributors" in sql
+    assert "immutable_unaccent(c.name)" in sql
+
+
 def test_search_items_by_title(app, client, normal_user_headers):
     """Ensure full-text search endpoint responds and that `q` filters results."""
     from app.db.models import Expression, Item, Manifestation, User, Work, db
@@ -97,3 +162,219 @@ def test_search_items_by_title(app, client, normal_user_headers):
     assert no_match_data["success"] is True
     assert isinstance(no_match_data["data"], list)
     assert len(no_match_data["data"]) == 0
+
+
+def test_search_items_by_contributor_and_diacritics(app, client, normal_user_headers):
+    """Verify search matches author/contributor names and folds diacritics."""
+    from app.db.contributions import Contributor, WorkContribution
+    from app.db.models import Expression, Item, Manifestation, User, Work, db
+
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").one_or_none()
+        assert user is not None
+
+        # Seed work with author containing diacritics
+        work = Work(title="Cien anos de soledad", meta={"authors": ["Gabriel García Márquez"]})
+        db.session.add(work)
+        db.session.flush()
+
+        contributor = Contributor(name="Gabriel García Márquez", type="person")
+        db.session.add(contributor)
+        db.session.flush()
+
+        work_contrib = WorkContribution(work_id=work.id, contributor_id=contributor.id, role="author")
+        db.session.add(work_contrib)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text", language="es", meta={})
+        db.session.add(expr)
+        db.session.flush()
+
+        manif = Manifestation(expression_id=expr.id, isbn13="9780307474728", meta={})
+        db.session.add(manif)
+        db.session.flush()
+
+        item = Item(manifestation_id=manif.id, owner_id=user.id, status="available", meta={})
+        db.session.add(item)
+
+        # Seed another work with Polish diacritics
+        work2 = Work(title="Miłość w czasach zarazy", meta={"authors": ["Gabriel García Márquez"]})
+        db.session.add(work2)
+        db.session.flush()
+
+        work_contrib2 = WorkContribution(work_id=work2.id, contributor_id=contributor.id, role="author")
+        db.session.add(work_contrib2)
+        db.session.flush()
+
+        expr2 = Expression(work_id=work2.id, content_type="text", language="pl", meta={})
+        db.session.add(expr2)
+        db.session.flush()
+
+        manif2 = Manifestation(expression_id=expr2.id, isbn13="9788377583648", meta={})
+        db.session.add(manif2)
+        db.session.flush()
+
+        item2 = Item(manifestation_id=manif2.id, owner_id=user.id, status="available", meta={})
+        db.session.add(item2)
+        db.session.commit()
+
+        item_id1 = item.id
+        item_id2 = item2.id
+
+    # 1. Author search with accented characters
+    res = client.get("/api/items?q=García+Márquez", headers=normal_user_headers)
+    assert res.status_code == 200
+    ids = [it["id"] for it in res.get_json()["data"]]
+    assert item_id1 in ids
+    assert item_id2 in ids
+
+    # 2. Author search with unaccented characters (Garcia Marquez)
+    res_unaccent = client.get("/api/items?q=Garcia+Marquez", headers=normal_user_headers)
+    assert res_unaccent.status_code == 200
+    ids_unaccent = [it["id"] for it in res_unaccent.get_json()["data"]]
+    assert item_id1 in ids_unaccent
+    assert item_id2 in ids_unaccent
+
+    # 3. Title search with unaccented characters (milosc -> Miłość)
+    res_title_unaccent = client.get("/api/items?q=milosc", headers=normal_user_headers)
+    assert res_title_unaccent.status_code == 200
+    ids_title = [it["id"] for it in res_title_unaccent.get_json()["data"]]
+    assert item_id2 in ids_title
+
+
+def test_normalize_diacritics_decodes_json_unicode_escapes():
+    from app.core.search_service import normalize_diacritics
+
+    assert normalize_diacritics("Mr\\u00f3z") == "Mroz"
+    assert normalize_diacritics("Mr\u00f3z") == "Mroz"
+    assert normalize_diacritics("Stanis\u0142aw Lem") == "Stanislaw Lem"
+    assert normalize_diacritics(None) == ""
+
+
+def test_sqlite_registers_immutable_unaccent(app):
+    from app.db.models import db
+
+    with app.app_context():
+        if db.engine.dialect.name != "sqlite":
+            pytest.skip("SQLite-only function registration")
+        assert db.session.execute(db.text("SELECT immutable_unaccent('\u0141\u00f3d\u017a')")).scalar() == "Lodz"
+
+
+def _seed_diacritic_catalog(app):
+    """Seed three items: contributor-only author, meta-only author, tag-only match."""
+    from app.db.contributions import Contributor, WorkContribution
+    from app.db.models import Expression, Item, Manifestation, User, Work, db
+
+    ids = {}
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").one()
+
+        w1 = Work(title="Dziennik", meta={})
+        w2 = Work(title="Prawda", meta={"authors": ["Remigiusz Mr\u00f3z"]})  # meta only, no Contributor row
+        w3 = Work(title="Tytul neutralny", meta={})
+        db.session.add_all([w1, w2, w3])
+        db.session.flush()
+
+        lem = Contributor(name="Stanis\u0142aw Lem", type="person")
+        other = Contributor(name="Drugi Autor", type="person")
+        db.session.add_all([lem, other])
+        db.session.flush()
+        # Two contributors on w1: must not inflate totals or duplicate ids
+        db.session.add_all(
+            [
+                WorkContribution(work_id=w1.id, contributor_id=lem.id, role="author"),
+                WorkContribution(work_id=w1.id, contributor_id=other.id, role="author"),
+            ]
+        )
+
+        for key, work, isbn, meta in (
+            ("lem", w1, "9788308048450", {}),
+            ("mroz", w2, "9788377583648", {}),
+            ("tag", w3, "9780307474728", {"tags": ["mi\u0142o\u015b\u0107"]}),
+        ):
+            expr = Expression(work_id=work.id, content_type="text", language="pl", meta={})
+            db.session.add(expr)
+            db.session.flush()
+            manif = Manifestation(expression_id=expr.id, isbn13=isbn, meta=meta)
+            db.session.add(manif)
+            db.session.flush()
+            item = Item(manifestation_id=manif.id, owner_id=user.id, status="available", meta={})
+            db.session.add(item)
+            db.session.flush()
+            ids[key] = (manif.id, item.id)
+        db.session.commit()
+    return ids
+
+
+@pytest.mark.parametrize(
+    "query,key",
+    [
+        ("Stanislaw+Lem", "lem"),
+        ("Stanis\u0142aw+Lem", "lem"),
+        ("stanislaw", "lem"),
+        ("Mroz", "mroz"),
+        ("Mr\u00f3z", "mroz"),
+        ("milosc", "tag"),
+        ("mi\u0142o\u015b\u0107", "tag"),
+    ],
+)
+def test_catalog_and_item_search_fold_diacritics(app, client, normal_user_headers, query, key):
+    """Front-page (/api/manifestations) and /api/items search match across diacritics, in every field."""
+    ids = _seed_diacritic_catalog(app)
+    manif_id, item_id = ids[key]
+
+    res_m = client.get(f"/api/manifestations?q={query}", headers=normal_user_headers)
+    assert res_m.status_code == 200
+    assert manif_id in [m["id"] for m in res_m.get_json()["data"]]
+
+    res_i = client.get(f"/api/items?q={query}", headers=normal_user_headers)
+    assert res_i.status_code == 200
+    assert item_id in [i["id"] for i in res_i.get_json()["data"]]
+
+
+def test_catalog_search_with_facets_and_multiple_contributors(app, client, normal_user_headers):
+    """A facet forces the ILIKE path; two contributors must not duplicate rows or inflate the total."""
+    ids = _seed_diacritic_catalog(app)
+
+    res = client.get("/api/manifestations?q=Stanislaw+Lem&category=text", headers=normal_user_headers)
+    assert res.status_code == 200
+    body = res.get_json()
+    found = [m["id"] for m in body["data"]]
+    assert found.count(ids["lem"][0]) == 1
+    assert len(found) == len(set(found))
+
+    res_item = client.get("/api/items?q=milosc&category=text", headers=normal_user_headers)
+    assert ids["tag"][1] in [i["id"] for i in res_item.get_json()["data"]]
+
+
+def test_admin_works_search_folds_diacritics(app, client, admin_headers):
+    from app.db.models import Work, db
+
+    with app.app_context():
+        work = Work(title="Mi\u0142o\u015b\u0107 w czasach zarazy", meta={})
+        db.session.add(work)
+        db.session.commit()
+        work_id = work.id
+
+    res = client.get("/api/v1/admin/works/search?q=milosc", headers=admin_headers)
+    assert res.status_code == 200
+    assert work_id in [w["id"] for w in res.get_json()["data"]]
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("DATABASE_URL", "").startswith("postgresql"),
+    reason="PostgreSQL FTS integration (runs under test-postgres-gated)",
+)
+def test_postgres_fts_matches_diacritics_without_ilike_fallback(app):
+    """Call the FTS backends directly so an error is not masked by the ILIKE fallback."""
+    from app.core.search_service import ItemSearchFilters, SearchService
+    from app.db.models import User
+
+    ids = _seed_diacritic_catalog(app)
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").one()
+        for query, key in (("milosc", "tag"), ("Mroz", "mroz"), ("Stanislaw Lem", "lem")):
+            _, m_ids = SearchService._pg_manifestation_fts(query, limit=20, offset=0)
+            assert ids[key][0] in m_ids, query
+            _, rows = SearchService._pg_item_fts(query, user.id, 20, 0, ItemSearchFilters())
+            assert ids[key][1] in [r["item_id"] for r in rows], query

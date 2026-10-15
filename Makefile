@@ -87,11 +87,17 @@ ifeq ($(IQOQO_AI_MODE),1)
 RUFF_FLAGS    ?= --output-format=concise
 PYLINT_FLAGS  ?= --msg-template='{path}:{line}: {msg} ({symbol})'
 MYPY_FLAGS    ?= --no-error-summary
+PYTEST_FLAGS  ?= -q --tb=short --no-header
+VITEST_FLAGS  ?= --reporter=dot
+BATS_FLAGS    ?= --formatter tap
 AI_ECHO       := @:
 else
 RUFF_FLAGS    ?=
 PYLINT_FLAGS  ?=
 MYPY_FLAGS    ?=
+PYTEST_FLAGS  ?=
+VITEST_FLAGS  ?=
+BATS_FLAGS    ?=
 AI_ECHO       := @echo
 endif
 
@@ -590,7 +596,7 @@ format: format-python format-js
 # Testing
 test-backend: .venv/bin/activate
 	$(AI_ECHO) "Running backend tests..."
-	.venv/bin/pytest tests/
+	.venv/bin/pytest $(PYTEST_FLAGS) tests/
 
 test-backend-pg: .venv/bin/activate
 	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
@@ -610,14 +616,14 @@ test-backend-pg: .venv/bin/activate
 
 test-frontend:
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
-	cd frontend && $(NPM) run test
+	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 
 test-scripts-bash:
 	$(AI_ECHO) "Running BATS script tests..."
 	@if command -v bats >/dev/null 2>&1; then \
-		bats tests/bash/; \
+		bats $(BATS_FLAGS) tests/bash/; \
 	elif [ -f node_modules/.bin/bats ]; then \
-		$(NPX) bats tests/bash/; \
+		$(NPX) bats $(BATS_FLAGS) tests/bash/; \
 	else \
 		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
 		exit 1; \
@@ -625,7 +631,7 @@ test-scripts-bash:
 
 test-scripts-python: .venv/bin/activate
 	$(AI_ECHO) "Running Python script logic tests..."
-	.venv/bin/pytest tests/test_scripts.py tests/test_script_utilities.py
+	.venv/bin/pytest $(PYTEST_FLAGS) tests/test_scripts.py tests/test_script_utilities.py
 
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
 # Safe to call on SQLite (psql not installed; the app creates public only).
@@ -712,7 +718,7 @@ _test-e2e-run:
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		if [ -z '$(NO_RESET)' ]; then \
 			echo "Resetting the verified dedicated E2E database..."; \
-			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social'; \
+			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social' -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public'; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset --force; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" SECRET_KEY=test-secret-key-not-for-production ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_auth.py; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py; \

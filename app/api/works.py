@@ -25,7 +25,7 @@ from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
 from app.core.permissions import PermissionName
-from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, db
+from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, WorkSeriesMembership, db
 
 
 @api_bp.route("/works/shelf", methods=["GET"])
@@ -585,6 +585,89 @@ def remove_work_part(work_id: int, part_id: int) -> Response | tuple[Response, i
     return jsonify({"success": True})
 
 
+@api_bp.route("/works/<int:work_id>/series", methods=["GET"])
+@optional_auth
+def get_work_series(work_id: int) -> Response | tuple[Response, int]:
+    """Get all series memberships for a given work."""
+    work = db.session.get(Work, work_id)
+    if not work:
+        return jsonify({"error": "Work not found", "code": 404}), 404
+
+    memberships = (
+        WorkSeriesMembership.query.filter_by(work_id=work_id)
+        .join(Work, WorkSeriesMembership.series_work_id == Work.id)
+        .order_by(WorkSeriesMembership.sequence.asc())
+        .all()
+    )
+    data = [
+        {
+            "id": m.id,
+            "series_work_id": m.series_work_id,
+            "title": m.series.title,
+            "sequence": m.sequence,
+        }
+        for m in memberships
+    ]
+    return jsonify({"success": True, "data": data})
+
+
+@api_bp.route("/works/<int:work_id>/series", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def add_work_series(work_id: int) -> Response | tuple[Response, int]:
+    """Attach a work to a series container."""
+    data = request.get_json()
+    if not data or "series_work_id" not in data:
+        return invalid_json_payload_response()
+
+    series_work_id = data["series_work_id"]
+    sequence = data.get("sequence", 0)
+
+    if work_id == series_work_id:
+        return jsonify({"error": "A work cannot be its own series container", "code": 400}), 400
+
+    work = db.session.get(Work, work_id)
+    series_work = db.session.get(Work, series_work_id)
+    if not work or not series_work:
+        return jsonify({"error": "Work not found", "code": 404}), 404
+
+    membership = WorkSeriesMembership.query.filter_by(work_id=work_id, series_work_id=series_work_id).first()
+    if not membership:
+        membership = WorkSeriesMembership(work_id=work_id, series_work_id=series_work_id, sequence=sequence)
+        db.session.add(membership)
+    else:
+        membership.sequence = sequence
+
+    # Also keep legacy WorkPart in sync for backwards compatibility
+    wp = WorkPart.query.filter_by(container_work_id=series_work_id, part_work_id=work_id).first()
+    if not wp:
+        wp = WorkPart(container_work_id=series_work_id, part_work_id=work_id, sequence=sequence)
+        db.session.add(wp)
+    else:
+        wp.sequence = sequence
+
+    db.session.commit()
+    return jsonify({"success": True, "data": {"id": membership.id, "series_work_id": series_work_id, "sequence": membership.sequence}})
+
+
+@api_bp.route("/works/<int:work_id>/series/<int:series_work_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def remove_work_series(work_id: int, series_work_id: int) -> Response | tuple[Response, int]:
+    """Detach a work from a series container."""
+    membership = WorkSeriesMembership.query.filter_by(work_id=work_id, series_work_id=series_work_id).first()
+    if membership:
+        db.session.delete(membership)
+
+    # Also delete legacy WorkPart link if present
+    wp = WorkPart.query.filter_by(container_work_id=series_work_id, part_work_id=work_id).first()
+    if wp:
+        db.session.delete(wp)
+
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 @api_bp.route("/works/<int:work_id>/intent", methods=["GET"])
 @require_auth
 def get_work_intent(work_id: int) -> Response | tuple[Response, int]:
@@ -722,6 +805,15 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
 
     authors = work.meta.get("authors", []) if work.meta else []
     contributions = serialize_contributions(work=work)
+    series_memberships = [
+        {
+            "id": sm.id,
+            "series_work_id": sm.series_work_id,
+            "title": sm.series.title if sm.series else "",
+            "sequence": sm.sequence,
+        }
+        for sm in getattr(work, "series_memberships", [])
+    ]
 
     data = {
         "id": work.id,
@@ -730,6 +822,7 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
         "meta": work.meta,
         "contributions": contributions,
         "expressions": expressions_data,
+        "series_memberships": series_memberships,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

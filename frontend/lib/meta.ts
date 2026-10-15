@@ -29,7 +29,7 @@
 type KeyChain = readonly string[];
 
 /** Fields this project reads, with every spelling known to occur. */
-const FIELD_CHAINS = {
+export const FIELD_CHAINS = {
   format: ["format", "Format"],
   year: ["year", "Year"],
   title: ["title", "Title"],
@@ -43,6 +43,70 @@ const FIELD_CHAINS = {
 
   subtitle: ["subtitle", "Subtitle"],
 } as const satisfies Record<string, KeyChain>;
+
+/**
+ * Dedicated section keys rendered by specific UI sections (Audio, Video, BoardGame, Puzzle, Identifiers)
+ * that must be suppressed from fallback Additional Details.
+ */
+export const DEDICATED_SECTION_KEYS: readonly string[] = [
+  "track_list",
+  "tracks",
+  "additional_images",
+  "imageLinks",
+  "barcode",
+  "isbn",
+  "upc",
+  "ean",
+  "catalog_number",
+  "matrix_number",
+  "pressing_number",
+  "disc_count",
+  "min_players",
+  "max_players",
+  "playing_time",
+  "playtime",
+  "min_playtime",
+  "max_playtime",
+  "mechanics",
+  "cast",
+  "directors",
+  "runtime",
+  "piece_count",
+  "dimensions",
+  "artist",
+  "manufacturer",
+  "puzzle_type",
+  "cover_status",
+  "cover_source",
+  "cover_url",
+  "cover_status_updated_at",
+  "local_cover",
+  "tags",
+  "data_source",
+] as const;
+
+/**
+ * Check if a raw key matches any known spelling of a field declared in FIELD_CHAINS
+ * or dedicated section keys, matched case-insensitively.
+ *
+ * @param key - The raw metadata key
+ * @returns True if the key is a known spelling of a declared or dedicated field
+ */
+export function isKnownMetaSpelling(key: string): boolean {
+  if (!key) return false;
+  const lowerKey = key.toLowerCase();
+  for (const spellings of Object.values(FIELD_CHAINS)) {
+    if ((spellings as readonly string[]).some(s => s.toLowerCase() === lowerKey)) {
+      return true;
+    }
+  }
+  for (const s of DEDICATED_SECTION_KEYS) {
+    if (s.toLowerCase() === lowerKey) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** A logical metadata field this module knows how to read. */
 export type MetaField = keyof typeof FIELD_CHAINS;

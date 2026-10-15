@@ -538,6 +538,27 @@ def admin_required(f):
     return decorated_function
 
 
+def admin_or_custodian_required(f):
+    """Requires either the admin role or a curator role (contributor or legacy custodian).
+
+    Use when a route allows administrative or curator-level curation."""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = getattr(g, "user_id", None)
+        if not user_id:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        user = db.session.get(User, user_id)
+        is_authorized = any(role.name in {"admin", "contributor", "custodian"} for role in getattr(user, "roles", [])) if user else False
+        if not is_authorized:
+            return jsonify({"success": False, "error": "Admin or curator privileges required"}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 def require_physical_item(f):
     """Declarative FRBR boundary interceptor for item-level route handlers.
 

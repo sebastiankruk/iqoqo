@@ -28,12 +28,12 @@ from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
-from app.api.decorators import admin_required, require_auth, require_permission
+from app.api.decorators import admin_or_custodian_required, admin_required, require_auth, require_permission
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
@@ -536,6 +536,15 @@ def get_frbr_tree(manif_id):
                         "title": work.title,
                         "meta": sanitize_meta(work.meta),
                         "contributions": work_contributions,
+                        "series_memberships": [
+                            {
+                                "id": sm.id,
+                                "series_work_id": sm.series_work_id,
+                                "title": sm.series.title if sm.series else "",
+                                "sequence": sm.sequence,
+                            }
+                            for sm in getattr(work, "series_memberships", [])
+                        ],
                     }
                     if work
                     else None
@@ -570,6 +579,37 @@ def get_frbr_tree(manif_id):
     )
 
 
+@admin_bp.route("/works/search", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.READ_METADATA)
+def search_works():
+    """Search works for series selection (autocomplete)."""
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = min(max(int(request.args.get("limit", 20)), 1), 50)
+    except (ValueError, TypeError):
+        limit = 20
+
+    if not q:
+        return jsonify({"success": True, "data": []})
+
+    # Search by title (diacritic-insensitive) or ID
+    from app.core.search_service import normalize_diacritics
+
+    norm_q = normalize_diacritics(q)
+    conditions = [
+        Work.title.ilike(f"%{q}%"),
+        db.func.immutable_unaccent(Work.title).ilike(f"%{norm_q}%"),
+    ]
+    if q.isdigit():
+        conditions.append(Work.id == int(q))
+
+    stmt = select(Work).where(or_(*conditions)).limit(limit)
+    works = db.session.execute(stmt).scalars().all()
+
+    return jsonify({"success": True, "data": [{"id": w.id, "title": w.title} for w in works]})
+
+
 @admin_bp.route("/frbr/work/<int:work_id>", methods=["PUT"])
 @require_auth
 @require_permission(PermissionName.WRITE_METADATA)
@@ -579,15 +619,18 @@ def update_work(work_id):
     try:
         raw_contributions = data.get("contributions")
         contributions = frbr_service.parse_agent_input(raw_contributions, default_role="author") if raw_contributions is not None else None
+        raw_series = data.get("series_memberships")
         work = frbr_service.update_work(
             work_id,
             title=data.get("title"),
             meta=parse_meta(data.get("meta")),
             contributions=contributions,
+            series_memberships=raw_series if raw_series is not None else None,
         )
         return jsonify({"success": True, "data": {"id": work.id}})
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 404
+        status = 404 if f"Work with id {work_id} not found" in str(e) else 400
+        return jsonify({"success": False, "error": str(e)}), status
 
 
 @admin_bp.route("/frbr/expression/<int:expr_id>", methods=["PUT"])
@@ -655,6 +698,34 @@ def update_manifestation(manif_id):
         return jsonify({"success": True, "data": {"id": manif.id}})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 404
+
+
+@admin_bp.route("/frbr/manifestation/<int:manif_id>/provider-merge", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_METADATA)
+def custodian_provider_merge(manif_id: int):
+    """Atomically merge custodian-selected provider fragments across FRBR tiers."""
+    user = _get_current_user()
+    payload = request.get_json(silent=True) or {}
+    selections = payload.get("selections") if "selections" in payload else payload
+
+    if not isinstance(selections, dict):
+        return jsonify({"success": False, "error": "Invalid payload format; object expected"}), 400
+
+    try:
+        result = frbr_service.apply_custodian_provider_merge(
+            manifestation_id=manif_id,
+            selections=selections,
+            user_id=user.id if user else None,
+        )
+        return jsonify({"success": True, "data": result})
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 404
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Provider merge failed: %s", exc)
+        return jsonify({"success": False, "error": "Provider merge failed"}), 500
 
 
 @admin_bp.route("/frbr/item/<int:item_id>", methods=["PUT"])
@@ -732,8 +803,13 @@ def search_frbr_entities():
 
     results = []
 
+    from app.core.search_service import normalize_diacritics
+
+    norm_query = normalize_diacritics(query)
+    title_match = db.or_(Work.title.ilike(f"%{query}%"), db.func.immutable_unaccent(Work.title).ilike(f"%{norm_query}%"))
+
     if entity_type == "work":
-        works = db.session.execute(db.select(Work).filter(Work.title.ilike(f"%{query}%")).limit(limit)).scalars().all()
+        works = db.session.execute(db.select(Work).filter(title_match).limit(limit)).scalars().all()
         results = [{"id": w.id, "title": w.title, "type": "work"} for w in works]
     elif entity_type == "expression":
         # Join with Work to filter by title
@@ -741,7 +817,7 @@ def search_frbr_entities():
             db.session.execute(
                 db.select(Expression)
                 .join(Work, Expression.work_id == Work.id)
-                .filter(db.or_(Work.title.ilike(f"%{query}%"), Expression.content_type.ilike(f"%{query}%")))
+                .filter(db.or_(title_match, Expression.content_type.ilike(f"%{query}%")))
                 .limit(limit)
             )
             .scalars()
@@ -760,7 +836,7 @@ def search_frbr_entities():
     else:  # manifestation
         # Search by ISBN/UPC/EAN OR by work title/author in meta
         work_filter = db.or_(
-            Work.title.ilike(f"%{query}%"),
+            title_match,
             db.or_(
                 Work.meta["authors"].cast(db.String).ilike(f"%{query}%"),
                 Work.meta["author"].cast(db.String).ilike(f"%{query}%"),
@@ -955,7 +1031,7 @@ def upload_cover():
 
 
 def curator_or_admin_required(f):
-    """Require user to have admin or custodian role, or metadata curation permissions."""
+    """Require user to have admin or curator role, or metadata curation permissions."""
 
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -969,12 +1045,13 @@ def curator_or_admin_required(f):
         user_roles_list = [r.name for r in getattr(user, "roles", [])]
         is_curator_or_admin = (
             "admin" in user_roles_list
+            or "contributor" in user_roles_list
             or "custodian" in user_roles_list
             or user.has_permission(PermissionName.REFETCH_METADATA)
             or user.has_permission(PermissionName.WRITE_METADATA)
         )
         if not is_curator_or_admin:
-            return jsonify({"success": False, "error": "Admin or custodian privileges required", "code": 403}), 403
+            return jsonify({"success": False, "error": "Admin or curator privileges required", "code": 403}), 403
         return f(*args, **kwargs)
 
     return decorated
@@ -1583,14 +1660,37 @@ def merge_duplicate_candidate_endpoint(candidate_id: int):
 
 @admin_bp.route("/ownership/accounts", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_accounts():
     """Discover accounts for ownership transfer source and target selection."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS) or not _has_permission(user, PermissionName.READ_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users and read:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
-    users = db.session.execute(select(User).order_by(User.email.asc())).scalars().all()
+    try:
+        limit = min(max(int(request.args.get("limit", 20)), 1), 50)
+    except (ValueError, TypeError):
+        limit = 20
+
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
+
+    q = (request.args.get("q") or "").strip()
+
+    stmt = select(User).where(User.is_active.is_(True))
+    if q:
+        search_filter = or_(
+            User.email.ilike(f"%{q}%"),
+            User.display_name.ilike(f"%{q}%"),
+        )
+        if hasattr(User, "username"):
+            search_filter = or_(search_filter, User.username.ilike(f"%{q}%"))
+        stmt = stmt.where(search_filter)
+
+    stmt = stmt.order_by(User.email.asc()).limit(limit).offset(offset)
+    users = db.session.execute(stmt).scalars().all()
     return jsonify(
         {
             "success": True,
@@ -1604,18 +1704,22 @@ def get_ownership_accounts():
                 }
                 for u in users
             ],
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+            },
         }
     )
 
 
 @admin_bp.route("/ownership/items", methods=["GET"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def get_ownership_source_items():
     """Get paginated physical items belonging to a specified source account."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     source_id_raw = request.args.get("source_user_id")
     if not source_id_raw:
@@ -1677,12 +1781,12 @@ def get_ownership_source_items():
 
 @admin_bp.route("/ownership/preview", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def preview_item_reassignment():
     """Preview an item ownership reassignment operation and return a deterministic scope digest."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")
@@ -1707,12 +1811,12 @@ def preview_item_reassignment():
 
 @admin_bp.route("/ownership/reassign", methods=["POST"])
 @require_auth
-@admin_required
+@admin_or_custodian_required
 def execute_item_reassignment():
     """Confirm and execute an item ownership reassignment operation with atomic rollback."""
     user = _get_current_user()
-    if not _has_permission(user, PermissionName.WRITE_USERS):
-        return jsonify({"success": False, "error": "Permission denied: write:users required"}), 403
+    if not _has_permission(user, PermissionName.TRANSFER_ITEM):
+        return jsonify({"success": False, "error": "Permission denied: transfer:item required"}), 403
 
     payload = request.get_json(silent=True) or {}
     source_user_id = payload.get("source_user_id")

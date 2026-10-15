@@ -22,8 +22,9 @@ import { toast } from "sonner";
 
 /** Descriptions for system roles */
 const ROLE_DESCRIPTIONS: Record<string, string> = {
-  admin: "Full system access including user management, settings, and all custodian privileges.",
-  custodian: "Can manage catalog metadata, cover art, and FRBR entities. Cannot manage users or system settings.",
+  admin: "Full system access including user management, settings, and all curator privileges.",
+  contributor:
+    "Trusted curator who can edit metadata and covers, resolve escalations, delete items, and reassign physical item ownership.",
   user: "Standard user. Can view the catalog, manage their own collection, and scan items.",
 };
 

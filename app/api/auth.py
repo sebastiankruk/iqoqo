@@ -392,7 +392,9 @@ def local_login():
     """Authenticate with an email and password.
 
     The password is verified against a hash, and the response is generic on failure
-    so it does not reveal whether an account exists."""
+    so it does not reveal whether an account exists. The HTTP status code carries
+    no account state (both invalid credentials and suspended accounts return 401
+    only after full password verification)."""
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
@@ -403,7 +405,7 @@ def local_login():
     if not _verify_login_password(user, password):
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.is_active:
-        return jsonify({"error": "Suspended"}), 403
+        return jsonify({"error": "Account suspended", "suspended": True}), 401
 
     user.last_login = datetime.now(UTC)
     db.session.commit()

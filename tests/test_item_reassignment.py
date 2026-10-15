@@ -17,7 +17,7 @@
 Verifies:
 - Custody provenance with structured from/to owner references and account-deletion SET NULL.
 - Transactional reassignment service with preview fingerprinting and atomic rollback.
-- Admin-only API security boundaries (admin + write:users required).
+- API security boundaries (admin or contributor with transfer:item required).
 - Non-admin and ordinary owner self-service override prohibition.
 - Stale preview conflict rejection (HTTP 409).
 - Preservation of FRBR hierarchy, item status, lending status, and tags.
@@ -31,6 +31,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import select
 
 from app.core.permissions import PermissionName
 from app.db.core import (
@@ -397,6 +398,65 @@ class TestAuthorizedReassignmentApi:
         assert res_exec.status_code == 200
         assert res_exec.json["success"] is True
         assert res_exec.json["data"]["transferred_count"] == 1
+
+    def test_contributor_ownership_endpoints_flow(self, app: Any, client: Any, transfer_fixture: dict[str, Any]) -> None:
+        """Verify user with contributor role and transfer:item permission can perform ownership reassignment."""
+        from app.api.auth import generate_internal_jwt
+
+        with app.app_context():
+            contributor_role = db.session.scalar(select(Role).where(Role.name == "contributor"))
+            if not contributor_role:
+                contributor_role = Role(name="contributor")
+                db.session.add(contributor_role)
+            transfer_perm = db.session.scalar(select(Permission).where(Permission.name == PermissionName.TRANSFER_ITEM.value))
+            if not transfer_perm:
+                transfer_perm = Permission(name=PermissionName.TRANSFER_ITEM.value, description="Transfer Item Ownership")
+                db.session.add(transfer_perm)
+            if transfer_perm not in contributor_role.permissions:
+                contributor_role.permissions.append(transfer_perm)
+
+            contributor_user = User(
+                email=f"contributor_{uuid.uuid4().hex[:6]}@example.com",
+                display_name="Contributor User",
+                is_active=True,
+            )
+            contributor_user.set_password("ContributorPass!")
+            contributor_user.roles.append(contributor_role)
+            db.session.add(contributor_user)
+            db.session.commit()
+
+            token = generate_internal_jwt(contributor_user)
+            contributor_headers = {"Authorization": f"Bearer {token}"}
+
+        source_id = str(transfer_fixture["source_id"])
+        target_id = str(transfer_fixture["target_id"])
+
+        # Contributor can access accounts with pagination and query filtering
+        res_acc = client.get("/api/v1/admin/ownership/accounts?limit=1&offset=0", headers=contributor_headers)
+        assert res_acc.status_code == 200
+        assert res_acc.json["success"] is True
+        assert "pagination" in res_acc.json
+        assert res_acc.json["pagination"]["limit"] == 1
+        assert len(res_acc.json["data"]) <= 1
+
+        # Search filter by query
+        res_q = client.get("/api/v1/admin/ownership/accounts?q=Contributor", headers=contributor_headers)
+        assert res_q.status_code == 200
+        assert any("Contributor" in u["display_name"] for u in res_q.json["data"])
+
+        # Contributor can preview
+        res_prev = client.post(
+            "/api/v1/admin/ownership/preview",
+            json={
+                "source_user_id": source_id,
+                "target_user_id": target_id,
+                "mode": "single",
+                "item_ids": [transfer_fixture["item2_id"]],
+            },
+            headers=contributor_headers,
+        )
+        assert res_prev.status_code == 200
+        assert res_prev.json["success"] is True
 
     def test_ordinary_put_item_rejects_owner_id_change(
         self, client: Any, normal_user_headers: Any, transfer_fixture: dict[str, Any]

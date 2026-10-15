@@ -50,6 +50,7 @@ import {
   type ItemFormData,
 } from "./frbr/types";
 import { RelationManagementDialog } from "./relation-management-dialog";
+import { ProviderMergeDialog } from "./provider-merge-dialog";
 
 // ---------------------------------------------------------------------------
 // Name normalization — must match backend ``normalize_contributor_name`` rules
@@ -211,6 +212,9 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
     entityTitle: string;
   }>({ open: false, entityType: "work", entityId: 0, entityTitle: "" });
 
+  // Provider merge dialog state
+  const [providerMergeDialogOpen, setProviderMergeDialogOpen] = useState(false);
+
   const handleWorkSubmit = useCallback(
     async (data: WorkFormData) => {
       if (!tree?.work) return;
@@ -220,7 +224,12 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
           manifestationId,
           type: "work",
           id: tree.work.id,
-          data: { title: data.title, meta, contributions: data.contributions },
+          data: {
+            title: data.title,
+            meta,
+            contributions: data.contributions,
+            series_memberships: data.series_memberships,
+          },
         });
         toast.success("Work updated successfully");
       } catch (err) {
@@ -529,6 +538,7 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         onEscalate={handleEscalate}
         onDelete={handleDelete}
         onRelationManagement={hasWriteMetadata ? handleRelationManagement : undefined}
+        onProviderMerge={hasWriteMetadata ? () => setProviderMergeDialogOpen(true) : undefined}
       />
 
       {activeTab === "work" && (
@@ -701,6 +711,14 @@ export function FrbrEditor({ manifestationId, onClose }: FrbrEditorProps) {
         entityId={relationDialog.entityId}
         entityTitle={relationDialog.entityTitle}
         manifestationId={manifestationId}
+      />
+
+      {/* Provider Merge Dialog */}
+      <ProviderMergeDialog
+        open={providerMergeDialogOpen}
+        onOpenChange={setProviderMergeDialogOpen}
+        manifestationId={manifestationId}
+        tree={tree}
       />
     </div>
   );

@@ -58,11 +58,18 @@ DEFAULT_EXCLUDES = [
     "**/Thumbs.db",
     "**/*.log",
     "**/.env*",
+    "**/.env.example",
     "**/*.key",
     "**/*.pem",
+    "**/*.pfx",
+    "**/*.pkcs12",
+    "**/*.crt",
     "**/antigravity-oauth-token*",
     "**/*.token*",
     "**/*secret*",
+    "**/*credential*",
+    "**/*password*",
+    "**/tests/fixtures/secrets/**",
 ]
 
 
@@ -194,22 +201,28 @@ def resolve_scopes(
         elif scope_path.is_dir():
             files = []
             fast_prune_dirs = {
-                "node_modules", ".git", ".venv", ".next", "dist", "build",
-                "__pycache__", "graphify-out",
-                ".pytest_cache", ".mypy_cache", ".ruff_cache", ".iqoqo-mempalace",
-                "instance", "data", "covers", "static/covers", "static/gallery"
+                "node_modules",
+                ".git",
+                ".venv",
+                ".next",
+                "dist",
+                "build",
+                "__pycache__",
+                "graphify-out",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".ruff_cache",
+                ".iqoqo-mempalace",
+                "instance",
+                "data",
+                "covers",
+                "static/covers",
+                "static/gallery",
             }
-            skip_extensions = {
-                ".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".svg",
-                ".pyc", ".bin", ".tar", ".gz", ".zip"
-            }
+            skip_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".svg", ".pyc", ".bin", ".tar", ".gz", ".zip"}
 
             for root, dirs, fnames in os.walk(scope_path):
-                dirs[:] = [
-                    d for d in dirs
-                    if d not in fast_prune_dirs
-                    and not should_exclude(str(Path(root) / d), exclude_patterns)
-                ]
+                dirs[:] = [d for d in dirs if d not in fast_prune_dirs and not should_exclude(str(Path(root) / d), exclude_patterns)]
                 for fn in fnames:
                     item = Path(root) / fn
                     if item.suffix.lower() in skip_extensions:

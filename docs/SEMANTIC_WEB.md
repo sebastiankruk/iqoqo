@@ -11,7 +11,7 @@ The SPARQL endpoint provides read-only access to your collection using the stand
 ```bash
 GET  /api/sparql?query=<url-encoded-sparql>
 POST /api/sparql
-```text
+```
 
 ### Authentication
 
@@ -23,7 +23,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"you@example.com","password":"your_password"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["access_token"])')
-```bash
+```
 
 ### Query Examples
 
@@ -41,14 +41,14 @@ WHERE {
 }
 ORDER BY ?title
 LIMIT 20
-```text
+```
 
 ```bash
 curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode 'query=PREFIX dc: <http://purl.org/dc/terms/> PREFIX frbr: <http://purl.org/vocab/frbr/core#> SELECT ?title ?author WHERE { ?work a frbr:Work ; dc:title ?title ; dc:creator ?author . } ORDER BY ?title LIMIT 20' \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: application/sparql-results+json"
-```bash
+```
 
 #### Count Items by Format
 
@@ -64,7 +64,7 @@ WHERE {
 }
 GROUP BY ?format
 ORDER BY DESC(?count)
-```text
+```
 
 #### Find Books by Publisher
 
@@ -83,7 +83,7 @@ WHERE {
   ?work dc:title ?title .
   FILTER(CONTAINS(LCASE(?publisher), "penguin"))
 }
-```text
+```
 
 #### CONSTRUCT a Sub-Graph
 
@@ -101,7 +101,7 @@ WHERE {
         dc:creator ?author .
   FILTER(CONTAINS(LCASE(?title), "hobbit"))
 }
-```text
+```
 
 ### POST Request Formats
 
@@ -124,21 +124,21 @@ curl -X POST http://localhost:8000/api/sparql \
 curl -X POST http://localhost:8000/api/sparql \
   -H "Authorization: Bearer $TOKEN" \
   -d "query=SELECT+*+WHERE+%7B+%3Fs+%3Fp+%3Fo+%7D+LIMIT+5"
-```bash
+```
 
 ### Resource Limits
 
-| Parameter           | Limit     | Description                                |
-| ------------------- | --------- | ------------------------------------------ |
-| Query size          | 10 KB     | Maximum query string length                |
-| Execution timeout   | 15 s      | Maximum query execution time               |
-| Graph items         | 5,000     | Maximum items materialized into RDF graph  |
-| Graph triples       | 100,000   | Maximum triples in materialized graph      |
-| Result rows         | 1,000     | Maximum SELECT result rows                 |
-| Result triples      | 50,000    | Maximum CONSTRUCT/DESCRIBE result triples  |
-| Concurrent queries  | 4         | Maximum simultaneous expensive queries     |
-| Rate limit          | 10/min    | Maximum queries per user per minute        |
-| Result size         | 10 MB     | Maximum serialized response size           |
+| Parameter          | Limit   | Description                               |
+| ------------------ | ------- | ----------------------------------------- |
+| Query size         | 10 KB   | Maximum query string length               |
+| Execution timeout  | 15 s    | Maximum query execution time              |
+| Graph items        | 5,000   | Maximum items materialized into RDF graph |
+| Graph triples      | 100,000 | Maximum triples in materialized graph     |
+| Result rows        | 1,000   | Maximum SELECT result rows                |
+| Result triples     | 50,000  | Maximum CONSTRUCT/DESCRIBE result triples |
+| Concurrent queries | 4       | Maximum simultaneous expensive queries    |
+| Rate limit         | 10/min  | Maximum queries per user per minute       |
+| Result size        | 10 MB   | Maximum serialized response size          |
 
 ### Security Model
 
@@ -155,12 +155,12 @@ Public endpoints serve FRBR/Schema.org semantic metadata for individual entities
 
 ### Endpoints
 
-| Endpoint                                   | Description                      |
-| ------------------------------------------ | -------------------------------- |
-| `GET /api/public/works/<id>`               | Work entity as RDF               |
-| `GET /api/public/expressions/<id>`         | Expression entity as RDF         |
-| `GET /api/public/manifestations/<id>`      | Manifestation entity as RDF      |
-| `GET /api/public/items/<id>`               | Item entity as RDF (non-hidden)  |
+| Endpoint                              | Description                     |
+| ------------------------------------- | ------------------------------- |
+| `GET /api/public/works/<id>`          | Work entity as RDF              |
+| `GET /api/public/expressions/<id>`    | Expression entity as RDF        |
+| `GET /api/public/manifestations/<id>` | Manifestation entity as RDF     |
+| `GET /api/public/items/<id>`          | Item entity as RDF (non-hidden) |
 
 ### Usage Examples
 
@@ -176,7 +176,7 @@ curl "http://localhost:8000/api/public/items/7?format=nt"
 
 # Get an Expression as Turtle via query parameter
 curl "http://localhost:8000/api/public/expressions/3?format=turtle"
-```bash
+```
 
 ### CORS Headers
 
@@ -186,7 +186,7 @@ All public endpoints include open CORS headers for cross-origin access:
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Accept, Authorization
-```text
+```
 
 ### HTML Redirect
 
@@ -195,7 +195,7 @@ Browser requests (Accept: text/html) receive a 303 redirect to the frontend page
 ```bash
 # Browser request → redirects to /work/1
 curl -H "Accept: text/html" -L http://localhost:8000/api/public/works/1
-```bash
+```
 
 ### Collection Feeds
 
@@ -210,7 +210,7 @@ curl http://localhost:8000/api/public/u/username/feed.xml
 
 # Shared collection feed
 curl http://localhost:8000/api/public/share/TOKEN/feed.xml
-```bash
+```
 
 ### Rate Limits
 
@@ -226,17 +226,17 @@ Export your complete library in Linked Data or JSON formats. You own your data �
 
 ```text
 GET /api/items/export?format=<format>
-```text
+```
 
 **Authentication required.**
 
 ### Format Options
 
-| Format    | Content-Type           | Extension | Description                             |
-| --------- | ---------------------- | --------- | --------------------------------------- |
-| `json-ld` | `application/ld+json`  | `.jsonld` | JSON-LD with FRBR/Schema.org context    |
-| `turtle`  | `text/turtle`          | `.ttl`    | RDF Turtle serialization                |
-| `json`    | `application/json`     | `.json`   | Hierarchical JSON (FRBR structure)      |
+| Format    | Content-Type          | Extension | Description                          |
+| --------- | --------------------- | --------- | ------------------------------------ |
+| `json-ld` | `application/ld+json` | `.jsonld` | JSON-LD with FRBR/Schema.org context |
+| `turtle`  | `text/turtle`         | `.ttl`    | RDF Turtle serialization             |
+| `json`    | `application/json`    | `.json`   | Hierarchical JSON (FRBR structure)   |
 
 ### Usage Examples
 
@@ -255,7 +255,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 curl -H "Authorization: Bearer $TOKEN" \
   -o my-library.json \
   "http://localhost:8000/api/items/export?format=json"
-```bash
+```
 
 ### JSON-LD Context
 
@@ -279,7 +279,7 @@ The JSON-LD export includes a canonical `@context` mapping to standard vocabular
     "publisher": "schema:publisher"
   }
 }
-```text
+```
 
 ### Streaming
 
@@ -293,31 +293,31 @@ iqoqo automatically embeds Schema.org structured data in RDF serializations, ena
 
 ### Type Mappings
 
-| Content Type   | Schema.org Type   |
-| -------------- | ----------------- |
-| `text`         | `schema:Book`     |
-| `audiobook`    | `schema:Audiobook`|
-| `music`        | `schema:MusicAlbum`|
-| `movie`        | `schema:Movie`    |
-| `board_game`   | `schema:Game`     |
-| `puzzle`       | `schema:Product`  |
-| `concert`      | `schema:MusicEvent`|
+| Content Type | Schema.org Type     |
+| ------------ | ------------------- |
+| `text`       | `schema:Book`       |
+| `audiobook`  | `schema:Audiobook`  |
+| `music`      | `schema:MusicAlbum` |
+| `movie`      | `schema:Movie`      |
+| `board_game` | `schema:Game`       |
+| `puzzle`     | `schema:Product`    |
+| `concert`    | `schema:MusicEvent` |
 
 ### Properties Mapped
 
-| FRBR Attribute     | Schema.org Property       |
-| ------------------ | ------------------------- |
-| Title              | `schema:name`             |
-| ISBN-13            | `schema:isbn`             |
-| Publisher          | `schema:publisher`        |
-| Language           | `schema:inLanguage`       |
-| Publication Date   | `schema:datePublished`    |
-| Cover Image        | `schema:image`            |
+| FRBR Attribute     | Schema.org Property                    |
+| ------------------ | -------------------------------------- |
+| Title              | `schema:name`                          |
+| ISBN-13            | `schema:isbn`                          |
+| Publisher          | `schema:publisher`                     |
+| Language           | `schema:inLanguage`                    |
+| Publication Date   | `schema:datePublished`                 |
+| Cover Image        | `schema:image`                         |
 | Authors            | `schema:author` / `schema:contributor` |
-| Board Game Players | `schema:numberOfPlayers`  |
-| Concert Performers | `schema:performer`        |
-| Concert Date       | `schema:startDate`        |
-| Concert Location   | `schema:location`         |
+| Board Game Players | `schema:numberOfPlayers`               |
+| Concert Performers | `schema:performer`                     |
+| Concert Date       | `schema:startDate`                     |
+| Concert Location   | `schema:location`                      |
 
 ### Benefits
 
@@ -332,7 +332,7 @@ An XML sitemap is automatically generated at `/api/public/sitemap.xml` listing a
 
 ```bash
 curl http://localhost:8000/api/public/sitemap.xml
-```bash
+```
 
 ---
 
@@ -353,18 +353,18 @@ BASE_URL=http://localhost:5000
 
 # Custom domain
 BASE_URL=https://library.example.com
-```bash
+```
 
 If not set, the default is `https://iqoqo.cc`.
 
 ### IRI Patterns
 
-| Entity        | IRI Pattern                              | Example                            |
-| ------------- | ---------------------------------------- | ---------------------------------- |
-| Work          | `{BASE_URL}/works/{id}`                  | `https://iqoqo.cc/works/42`        |
-| Expression    | `{BASE_URL}/expressions/{id}`            | `https://iqoqo.cc/expressions/17`  |
-| Manifestation | `{BASE_URL}/manifestations/{id}`         | `https://iqoqo.cc/manifestations/99`|
-| Item          | `{BASE_URL}/items/{id}`                  | `https://iqoqo.cc/items/256`       |
+| Entity        | IRI Pattern                      | Example                              |
+| ------------- | -------------------------------- | ------------------------------------ |
+| Work          | `{BASE_URL}/works/{id}`          | `https://iqoqo.cc/works/42`          |
+| Expression    | `{BASE_URL}/expressions/{id}`    | `https://iqoqo.cc/expressions/17`    |
+| Manifestation | `{BASE_URL}/manifestations/{id}` | `https://iqoqo.cc/manifestations/99` |
+| Item          | `{BASE_URL}/items/{id}`          | `https://iqoqo.cc/items/256`         |
 
 ### Usage in RDF
 
@@ -377,7 +377,7 @@ IRIs are used as subject URIs in all RDF serializations:
 <https://iqoqo.cc/works/42> a frbr:Work ;
     dc:title "The Hobbit" ;
     dc:creator "J.R.R. Tolkien" .
-```bash
+```
 
 ### Fallback Chain
 
@@ -395,16 +395,16 @@ iqoqo supports HTTP content negotiation for RDF formats via the `Accept` header 
 
 ### Supported Formats
 
-| Format       | Accept Header                    | `?format=` Value | MIME Type                  |
-| ------------ | -------------------------------- | ---------------- | -------------------------- |
-| JSON-LD      | `application/ld+json`            | `json-ld`        | `application/ld+json`      |
-| Turtle       | `text/turtle`                    | `turtle`         | `text/turtle`              |
-| N-Triples    | `application/n-triples`          | `nt`             | `application/n-triples`    |
-| SPARQL JSON  | `application/sparql-results+json`| —                | `application/sparql-results+json` |
-| SPARQL XML   | `application/sparql-results+xml` | —                | `application/sparql-results+xml` |
-| CSV          | `text/csv`                       | —                | `text/csv`                 |
-| TSV          | `text/tab-separated-values`      | —                | `text/tab-separated-values`|
-| RDF/XML      | `application/rdf+xml`            | —                | `application/rdf+xml`      |
+| Format      | Accept Header                     | `?format=` Value | MIME Type                         |
+| ----------- | --------------------------------- | ---------------- | --------------------------------- |
+| JSON-LD     | `application/ld+json`             | `json-ld`        | `application/ld+json`             |
+| Turtle      | `text/turtle`                     | `turtle`         | `text/turtle`                     |
+| N-Triples   | `application/n-triples`           | `nt`             | `application/n-triples`           |
+| SPARQL JSON | `application/sparql-results+json` | —                | `application/sparql-results+json` |
+| SPARQL XML  | `application/sparql-results+xml`  | —                | `application/sparql-results+xml`  |
+| CSV         | `text/csv`                        | —                | `text/csv`                        |
+| TSV         | `text/tab-separated-values`       | —                | `text/tab-separated-values`       |
+| RDF/XML     | `application/rdf+xml`             | —                | `application/rdf+xml`             |
 
 ### Examples
 
@@ -420,7 +420,7 @@ curl -G "http://localhost:8000/api/sparql" \
   --data-urlencode "query=SELECT * WHERE { ?s ?p ?o } LIMIT 5" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/csv"
-```bash
+```
 
 ### Default Behavior
 
@@ -447,7 +447,7 @@ curl http://localhost:8000/api/public/feed.xml
 # Get user's public collection as JSON-LD
 curl -H "Accept: application/ld+json" \
   http://localhost:8000/api/public/u/username/items
-```bash
+```
 
 ### Querying with SPARQL
 
@@ -468,7 +468,7 @@ WHERE {
         schema:bookFormat schema:Game .
   OPTIONAL { ?work dc:creator ?author }
 }
-```json
+```
 
 ### CORS for Cross-Origin Access
 
@@ -480,7 +480,7 @@ Use the `?stream=true` parameter for memory-efficient streaming of large collect
 
 ```bash
 curl "http://localhost:8000/api/public/u/username/items?format=json-ld&stream=true&limit=1000"
-```bash
+```
 
 ### Linked Data Crawling
 

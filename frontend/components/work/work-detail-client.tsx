@@ -197,6 +197,26 @@ export function WorkDetailClient({ initialWork }: WorkDetailClientProps) {
                     ))}
                   </div>
                 )}
+                {/* Series Badges */}
+                {work.series_memberships && work.series_memberships.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Series:
+                    </span>
+                    {work.series_memberships.map(sm => (
+                      <Link key={sm.series_work_id} href={`/work/${sm.series_work_id}`}>
+                        <Badge
+                          variant="outline"
+                          className="bg-primary/5 hover:bg-primary/10 text-primary border-primary/20 transition-colors cursor-pointer gap-1.5 py-1 px-2.5 text-xs font-medium"
+                        >
+                          <Layers className="h-3 w-3" />
+                          <span>{sm.title || `Series #${sm.series_work_id}`}</span>
+                          <span className="text-muted-foreground font-normal">#{sm.sequence}</span>
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                )}
 
                 {/* FRBR Hierarchy description */}
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

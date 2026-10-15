@@ -95,8 +95,8 @@ describe("OwnershipPage and OwnershipManagement UI", () => {
     vi.clearAllMocks();
   });
 
-  it("renders Access Restricted when missing write:users permission or admin role", () => {
-    mockProfile(["admin"], ["read:users"]); // missing write:users
+  it("renders Access Restricted when missing transfer:item permission or admin role", () => {
+    mockProfile(["admin"], ["read:users"]); // missing transfer:item
 
     render(<OwnershipPage />);
 
@@ -104,8 +104,21 @@ describe("OwnershipPage and OwnershipManagement UI", () => {
     expect(screen.queryByText("Account Selection")).not.toBeInTheDocument();
   });
 
-  it("renders full ownership UI when authorized with admin role and write:users", async () => {
-    mockProfile(["admin"], ["read:users", "write:users"]);
+  it("renders full ownership UI when authorized with admin role and transfer:item", async () => {
+    mockProfile(["admin"], ["transfer:item"]);
+    vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);
+
+    render(<OwnershipPage />);
+
+    expect(screen.getByText("Item Ownership Reassignment")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Source Account/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Target Account/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders full ownership UI when authorized with contributor role and transfer:item", async () => {
+    mockProfile(["contributor"], ["transfer:item"]);
     vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);
 
     render(<OwnershipPage />);
@@ -118,7 +131,7 @@ describe("OwnershipPage and OwnershipManagement UI", () => {
   });
 
   it("loads source items when source account selected and supports single transfer preview", async () => {
-    mockProfile(["admin"], ["read:users", "write:users"]);
+    mockProfile(["admin"], ["transfer:item"]);
     vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);
     vi.mocked(adminApi.getOwnershipItems).mockResolvedValue({
       items: mockItems,
@@ -168,7 +181,7 @@ describe("OwnershipPage and OwnershipManagement UI", () => {
   });
 
   it("requires affirmative acknowledgement checkbox for all-scope transfer", async () => {
-    mockProfile(["admin"], ["read:users", "write:users"]);
+    mockProfile(["admin"], ["transfer:item"]);
     vi.mocked(adminApi.getOwnershipAccounts).mockResolvedValue(mockAccounts);
     vi.mocked(adminApi.getOwnershipItems).mockResolvedValue({
       items: mockItems,

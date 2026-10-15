@@ -52,6 +52,7 @@ from app.db.contributions import (  # noqa: F401
     ExpressionContribution,
     WorkContribution,
     WorkPart,
+    WorkSeriesMembership,
 )
 from app.db.core import (  # noqa: F401
     COLLECTION_STATUSES,

@@ -19,7 +19,7 @@ All external HTTP calls are mocked so these tests run fully offline.
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import requests
 
@@ -259,7 +259,13 @@ class TestFetchIsbnMetadata:
     """Integration-style tests for :func:`app.utils.isbn.fetch_isbn_metadata`."""
 
     def test_google_books_hit_is_returned_directly(self):
-        expected = {"Title": "The Hobbit", "Authors": ["J.R.R. Tolkien"]}
+        expected = {
+            "Title": "The Hobbit",
+            "Authors": ["J.R.R. Tolkien"],
+            "cover_url": "https://example.com/cover.jpg",
+            "publisher": "George Allen & Unwin",
+            "publication_date": "1937-09-21",
+        }
         gb_success = ISBNProviderOutcome(
             status=ISBNProviderOutcomeStatus.SUCCESS,
             metadata=expected,
@@ -272,7 +278,7 @@ class TestFetchIsbnMetadata:
             result = fetch_isbn_metadata("9780553380163")
 
         assert result == expected
-        mock_gb.assert_called_once_with("9780553380163")
+        mock_gb.assert_called_once_with("9780553380163", timeout=ANY)
         mock_ol.assert_not_called()
 
     def test_falls_back_to_open_library_when_google_books_returns_none(self):
@@ -293,8 +299,8 @@ class TestFetchIsbnMetadata:
             result = fetch_isbn_metadata("9780553380163")
 
         assert result == expected
-        mock_gb.assert_called_once_with("9780553380163")
-        mock_ol.assert_called_once_with("9780553380163")
+        mock_gb.assert_called_once_with("9780553380163", timeout=ANY)
+        mock_ol.assert_called_once_with("9780553380163", timeout=ANY)
 
     def test_returns_none_when_both_sources_fail(self):
         with (
@@ -334,8 +340,8 @@ class TestFetchIsbnMetadata:
         assert result == ol_meta
         assert result["Title"] == "The Rough Guide to the USA"
         assert result["Source"] == "Open Library"
-        mock_gb.assert_called_once_with("9781843537861")
-        mock_ol.assert_called_once_with("9781843537861")
+        mock_gb.assert_called_once_with("9781843537861", timeout=ANY)
+        mock_ol.assert_called_once_with("9781843537861", timeout=ANY)
 
     def test_google_definitive_no_result_does_not_retry_google(self):
         """Task 3.2: Google returns successful empty result; verify Google is NOT retried."""
@@ -357,7 +363,7 @@ class TestFetchIsbnMetadata:
         assert result is None
         # Google should be queried exactly once (no retry on definitive no_result)
         assert mock_gb.call_count == 1
-        mock_ol.assert_called_once_with("9780553380163")
+        mock_ol.assert_called_once_with("9780553380163", timeout=ANY)
 
     def test_google_transient_open_library_empty_google_retry_succeeds(self):
         """Task 3.3: Google fails transiently, OL has no result, single Google retry succeeds."""
@@ -385,7 +391,7 @@ class TestFetchIsbnMetadata:
         assert result is not None
         assert result["Title"] == "Retry Success Book"
         assert mock_gb.call_count == 2
-        mock_ol.assert_called_once_with("9780553380163")
+        mock_ol.assert_called_once_with("9780553380163", timeout=ANY)
 
     def test_both_google_attempts_fail_and_chain_continues(self):
         """Task 3.4: Both Google attempts fail transiently, returns None so strategy continues downstream."""
@@ -407,7 +413,7 @@ class TestFetchIsbnMetadata:
 
         assert result is None
         assert mock_gb.call_count == 2
-        mock_ol.assert_called_once_with("9780553380163")
+        mock_ol.assert_called_once_with("9780553380163", timeout=ANY)
 
         # Verify BookLookupStrategy moves to Allegro when fetch_isbn_metadata returns None
         from app.strategies.book import BookLookupStrategy

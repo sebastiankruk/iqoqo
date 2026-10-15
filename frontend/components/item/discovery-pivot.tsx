@@ -34,6 +34,8 @@ interface DiscoveryPivotProps {
   badgeVariant?: BadgeProps["variant"];
   /** Additional CSS classes. */
   className?: string;
+  /** Optional tooltip title. */
+  title?: string;
   /** Optional children to override label/value display. */
   children?: ReactNode;
 }
@@ -49,6 +51,7 @@ interface DiscoveryPivotProps {
  * @param props.variant - Whether to render as a Badge or a simple Link.
  * @param props.badgeVariant - If variant is 'badge', the shadcn badge variant.
  * @param props.className - Additional CSS classes.
+ * @param props.title - Optional tooltip title.
  * @param props.children - Optional children to override label/value display.
  * @returns {JSX.Element} The rendered component
  */
@@ -59,6 +62,7 @@ export function DiscoveryPivot({
   variant = "badge",
   badgeVariant = "secondary",
   className,
+  title,
   children,
 }: DiscoveryPivotProps) {
   const href = `/collection?${type}=${encodeURIComponent(value)}`;
@@ -68,6 +72,7 @@ export function DiscoveryPivot({
     return (
       <Link
         href={href}
+        title={title}
         className={cn("hover:text-primary hover:underline transition-colors cursor-pointer font-medium", className)}
       >
         {content}
@@ -76,7 +81,7 @@ export function DiscoveryPivot({
   }
 
   return (
-    <Link href={href} className="transition-transform hover:scale-105 active:scale-95 inline-block">
+    <Link href={href} title={title} className="transition-transform hover:scale-105 active:scale-95 inline-block">
       <Badge
         variant={badgeVariant}
         className={cn("hover:bg-muted hover:text-primary transition-colors cursor-pointer", className)}

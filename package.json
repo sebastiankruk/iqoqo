@@ -1,6 +1,6 @@
 {
   "name": "iqoqo",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "The Library of Everything - A distributed, semantic, and federated library system",
   "private": true,
   "scripts": {
@@ -17,8 +17,11 @@
   },
   "overrides": {
     "js-yaml": "^4.3.2",
-    "smol-toml": "^1.7.1",
-    "colord": "^2.9.4"
+    "smol-toml": "^1.9.0",
+    "colord": "^2.9.4",
+    "katex": "^0.18.2",
+    "source-map-js": "^1.2.2",
+    "postcss-selector-parser": "^7.1.6"
   },
   "repository": {
     "type": "git",

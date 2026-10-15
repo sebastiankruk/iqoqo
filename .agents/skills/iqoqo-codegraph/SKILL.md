@@ -61,6 +61,8 @@ When investigating unfamiliar code or tracking down a symbol, follow this 4-step
    codegraph node -f <filename> <SymbolName>
    ```
    Instantly displays the symbol declaration, file path, line numbers, docstring, and immediate caller/callee list without drowning in string search hits.
+   > [!TIP]
+   > When a symbol has twins across the stack (e.g. `InstanceSettings` in both `settings.py` and `instance-settings.tsx`), always specify `-f <filename>` to disambiguate. Never fall back to grep.
 
 3. **Assess Blast Radius & Ripple Effects**:
    ```bash

@@ -15,9 +15,9 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Save, Plus, MoreVertical, ArrowUpRight, Trash2 } from "lucide-react";
+import { Save, Plus, MoreVertical, ArrowUpRight, Trash2, Layers, X, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +28,13 @@ import { transformMetaToFields, type WorkFormData, type MetaField } from "./type
 import { MetaFieldsEditor } from "./meta-fields-editor";
 import { ContributorRowsEditor } from "./contributor-rows-editor";
 import type { FrbrTree, FrbrContribution } from "@/lib/api/admin";
+import { useDebounce } from "@/lib/hooks/use-debounce";
+import { apiClient } from "@/lib/api/client";
+
+interface WorkSearchResult {
+  id: number;
+  title: string;
+}
 
 /**
  * Props for the WorkEditor component.
@@ -96,6 +103,81 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
     transformMetaToFields(tree.work?.meta).filter(f => f.key !== "mechanics")
   );
   const [contributions, setContributions] = useState<FrbrContribution[]>(() => tree.work?.contributions ?? []);
+  const [seriesMemberships, setSeriesMemberships] = useState<
+    Array<{
+      series_work_id: number;
+      sequence: number;
+      title?: string;
+    }>
+  >(() =>
+    (tree.work?.series_memberships ?? []).map(sm => ({
+      series_work_id: sm.series_work_id,
+      sequence: sm.sequence,
+      title: sm.title,
+    }))
+  );
+
+  // Series search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchState, setSearchState] = useState<{ query: string; results: WorkSearchResult[] }>({
+    query: "",
+    results: [],
+  });
+  const [newSeriesSeq, setNewSeriesSeq] = useState("1");
+  const [showResults, setShowResults] = useState(false);
+
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const isSearchActive = Boolean(debouncedSearch && debouncedSearch.length >= 2);
+  const isSearching = isSearchActive && searchState.query !== debouncedSearch;
+
+  useEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    apiClient
+      .get<{ success: boolean; data: WorkSearchResult[] }>(
+        `/v1/admin/works/search?q=${encodeURIComponent(debouncedSearch)}&limit=10`,
+        { signal: controller.signal }
+      )
+      .then(res => {
+        setSearchState({ query: debouncedSearch, results: res.data.data || [] });
+      })
+      .catch(error => {
+        if (error?.name !== "CanceledError" && error?.name !== "AbortError") {
+          console.error("Search failed:", error);
+          setSearchState({ query: debouncedSearch, results: [] });
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [debouncedSearch]);
+
+  const activeSearchResults = isSearchActive && searchState.query === debouncedSearch ? searchState.results : [];
+
+  const handleSelectSeries = (work: WorkSearchResult) => {
+    if (seriesMemberships.some(sm => sm.series_work_id === work.id)) return;
+    setSeriesMemberships(prev => [
+      ...prev,
+      {
+        series_work_id: work.id,
+        sequence: parseInt(newSeriesSeq, 10) || 0,
+        title: work.title,
+      },
+    ]);
+    setSearchQuery("");
+    setShowResults(false);
+    setNewSeriesSeq("1");
+    setSearchState({ query: "", results: [] });
+  };
+
+  const handleRemoveSeries = (sId: number) => {
+    setSeriesMemberships(prev => prev.filter(sm => sm.series_work_id !== sId));
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,6 +186,7 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
       title: formData.get("title") as string,
       metaFields,
       contributions,
+      series_memberships: seriesMemberships,
     };
     await onSubmit(data);
   };
@@ -114,6 +197,91 @@ export function WorkEditor({ tree, onSubmit, onAddChild, onEscalate, onDelete }:
         <label className="text-sm font-medium">Title</label>
         <InputField name="title" defaultValue={tree.work?.title ?? ""} required />
       </div>
+
+      {/* Multi-series containers */}
+      <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-primary" />
+            Series Memberships
+          </label>
+          <span className="text-xs text-muted-foreground">Multi-Series Support</span>
+        </div>
+
+        {seriesMemberships.length > 0 ? (
+          <div className="space-y-2">
+            {seriesMemberships.map(sm => (
+              <div
+                key={sm.series_work_id}
+                className="flex items-center gap-2 bg-background p-2 rounded-md border text-xs"
+              >
+                <span className="font-medium text-foreground">{sm.title || `Series Work #${sm.series_work_id}`}</span>
+                <span className="text-muted-foreground">Seq: #{sm.sequence}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSeries(sm.series_work_id)}
+                  className="ml-auto text-muted-foreground hover:text-destructive p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No series memberships attached.</p>
+        )}
+
+        <div className="space-y-2 pt-1">
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search for a series Work by title or ID..."
+                  value={searchQuery}
+                  onChange={e => {
+                    setSearchQuery(e.target.value);
+                    setShowResults(true);
+                  }}
+                  onFocus={() => setShowResults(true)}
+                  className="flex h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs"
+                />
+              </div>
+              <input
+                type="number"
+                placeholder="Seq #"
+                value={newSeriesSeq}
+                onChange={e => setNewSeriesSeq(e.target.value)}
+                className="flex h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
+              />
+            </div>
+
+            {showResults && isSearchActive && (
+              <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-background border border-input rounded-md shadow-lg z-50">
+                {isSearching ? (
+                  <div className="p-2 text-xs text-muted-foreground text-center">Searching...</div>
+                ) : activeSearchResults.length > 0 ? (
+                  activeSearchResults.map(result => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => handleSelectSeries(result)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted/50 border-b border-border/50 last:border-b-0"
+                    >
+                      <span className="font-medium">#{result.id}</span>
+                      <span className="ml-2 text-muted-foreground">{result.title}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="p-2 text-xs text-muted-foreground text-center">No works found</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <MetaFieldsEditor fields={metaFields} onChange={setMetaFields} />
       <ContributorRowsEditor roles={WORK_ROLES} contributions={contributions} onChange={setContributions} />
       <div className="flex items-center gap-2">

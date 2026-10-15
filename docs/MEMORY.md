@@ -331,7 +331,7 @@ iqoqo/
 
 ## 12. Version & Release Context
 
-- **Release Version:** `0.8.3`
-- **Release Branch:** `release/0.8.3`
-- **Release Date:** `TBD`
+- **Latest Released Version:** `0.8.4` (2026-10-15)
+- **Active Development Version:** `0.9.0` (Federation & Decentralization)
+- **Release Branch:** `release/0.8.4`
 - **Changelog:** Documented in [CHANGELOG.md](CHANGELOG.md)

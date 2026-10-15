@@ -31,6 +31,7 @@ setup() {
   export REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
   export VALIDATOR="${REPO_ROOT}/scripts/validate_nginx_example.py"
   export COMMITTED="${REPO_ROOT}/deploy/nginx.conf.example"
+  export INITIAL_COMMITTED_MD5="$(sha256sum "${COMMITTED}" | awk '{print $1}')"
 
   # Each test gets its own scratch copy.
   WORK_DIR="$(mktemp -d)"
@@ -249,6 +250,6 @@ STUB
   # mutated the real file and restored it in teardown; an interrupted run left
   # the committed config corrupted and every later test in the file failed for
   # the wrong reason.
-  run git -C "${REPO_ROOT}" diff --quiet -- deploy/nginx.conf.example
-  [ "${status}" -eq 0 ]
+  current_sha="$(sha256sum "${COMMITTED}" | awk '{print $1}')"
+  [ "${current_sha}" = "${INITIAL_COMMITTED_MD5}" ]
 }

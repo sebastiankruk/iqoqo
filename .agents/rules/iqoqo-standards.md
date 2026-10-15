@@ -7,37 +7,36 @@ Talk like caveman
 
 ### 🏰 MemPalace CLI Memory & Entity Alignment Directive
 - **Context Awareness**: Long-term episodic memory and architectural decisions are indexed locally via `.venv/bin/mempalace` CLI utility. Do NOT look for MCP memory tools.
-- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt or implementing new domain features, you RECOMMEND executing a shell query in your terminal to retrieve historical engineering decisions:
+- **Pre-Flight Querying (CLI)**: Before analyzing architectural debt, implementing new domain features, or searching history/rationale, you MUST execute a shell query in your terminal before running grep:
   `.venv/bin/mempalace search "<keyword phrase>" --wing iqoqo`
 - **Query Discipline**: Use focused 2-4 keyword phrases (MiniLM cosine similarity degrades on multi-sentence queries). NEVER pipe to `head` (truncates results) and NEVER redirect stderr to `/dev/null` (swallows diagnostic errors).
 - **Ontological Purity Check**: When interpreting or writing domain entities, strictly enforce the four-tier FRBR/FRBRoo standard hierarchy (Work -> Expression -> Manifestation -> Item).
 - **Generic Entity Protection**: Never feed generic runtime infrastructure terms (*Flask*, *React*, *Docker*, *Colima*) into memory. Focus memory tracking strictly on library domain concepts (*FRBR*, *Manifestation*, *Item provenance*, *ActivityPub*).
-- **Post-Task Ingestion Trigger (CLI)**: During interactive sessions, only run surgical single-file mining against specifically modified domain documentation or notes:
-  `.venv/bin/mempalace mine <specific_file> --wing iqoqo`
-  Do NOT run full `make mempalace-index` or un-scoped `mempalace mine .context/notes/` during sessions as hallway graph recalculation takes ~15 minutes.
+- **Session End Ingestion Prohibition**: Do NOT run automatic MemPalace updates or mining at the end of sessions. MemPalace ingestion is strictly manual or reserved for scheduled/release maintenance (`make mempalace-index` or `make knowledge-sync-full`).
+- **Fast Short-Circuit**: `make mempalace-index` automatically caches scope SHA-256 fingerprints and skips unchanged scopes. Pass `ARGS=--force` only when forcing a complete re-index.
 
 ### 🕸️ CodeGraph CLI Dependency Mapping Directive
 - **On-Demand Execution**: Do NOT look for or expect an active CodeGraph MCP server. Use the `codegraph` CLI tool natively inside your terminal sandbox.
-- **Scope & Coverage**: CodeGraph indexes the **entire repository** including backend (`app/**`, `tests/**`) and frontend (`frontend/**` TypeScript/React/TSX).
-- **Mandatory First-Stop Navigation**: Before running `grep_search`, `find_by_name`, or ripgrep for any code symbol (class, function, method, SQLAlchemy model, Flask route, or React hook), you MUST first execute CodeGraph:
+- **Scope & Coverage**: CodeGraph indexes the **entire repository** across both languages: Python backend (`app/**`, `tests/**`) and Next.js frontend (`frontend/**` TypeScript/React/TSX).
+- **Mandatory First-Stop Navigation (STRICT NO-GREP FIRST)**: NEVER run `grep`, `grep_search`, `find_by_name`, or ripgrep for any code symbol, route, hook, or model before querying CodeGraph first:
   - Search routes & partial symbols: `codegraph query "<pattern>"` (e.g. `codegraph query "items/bulk"`, `codegraph query "useManifestation"`)
   - Inspect symbol / definition: `codegraph node <SymbolName>` (for exact symbol declarations)
-  - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`)
+  - Disambiguate multi-definition symbols: `codegraph node -f <file_or_pattern> <SymbolName>` (e.g. `codegraph node -f instance-settings.tsx InstanceSettings` vs `codegraph node -f settings.py InstanceSettings`). If a symbol exists in multiple files, NEVER fall back to grep—always disambiguate with `-f`.
   - Call hierarchy: `codegraph callers <SymbolName>` / `codegraph callees <SymbolName>`
   - Impact & ripple analysis: `codegraph impact <SymbolName>`
   - Explore paths: `codegraph explore "<query>"`
   - Test blast radius: `codegraph affected <file_path>`
-- **HTTP Boundary Note**: Frontend API calls (`apiClient.post`) and Flask routes (`@api_bp.route`) do not share static AST edges. Discover endpoints using `codegraph query "<route_path>"` rather than `codegraph node`.
+- **HTTP Boundary Note**: Frontend API calls (`apiClient.post`) and Flask routes (`@api_bp.route`) do not share static AST edges across languages. Discover endpoints using `codegraph query "<route_path>"` rather than `codegraph node`.
 - **Zero Prompt-Context Overhead**: Do not attempt to retain full AST dependency trees in your short-term message loop. Use CLI queries to trace specific ripple paths only when planning structural changes.
 
 ### 🕸️ Graphify Knowledge Graph Directive
-- **Primary Navigation Tool**: Consult `graphify-out/graph.json` for codebase questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused architecture questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives.
+- **Primary Architecture Navigation (STRICT NO-GREP FIRST)**: Consult `graphify-out/graph.json` for architecture and cross-module questions before grepping raw files. Use `.venv/bin/graphify query "<question>"` for focused architecture questions, `.venv/bin/graphify path "<A>" "<B>"` for relationship tracing, and `.venv/bin/graphify explain "<concept>"` for deep dives. Grepping codebase for high-level structure without querying Graphify is strictly forbidden.
 - **Scoped Over Broad**: Prefer graphify query results (scoped subgraph) over reading `GRAPH_REPORT.md` (broad architecture review) or raw grep output.
 - **Version-Scoped AI Memory**: Only `.context/ai-memory/<current-version>/` is indexed. Current version is auto-detected from `package.json`. When releasing a new version, run `make graphify-index` to update the scope.
 - **Index Update**: RECOMMEND running `make graphify-update` after code changes.
 
 ### 🧩 Memory Tools Integration Trio
-- **Integration**: Each of the 3 memory tools serves a distinct, non-overlapping question:
+- **Integration**: Each of the 3 memory tools serves a distinct, non-overlapping question — ALWAYS consult before raw grep:
   - **CodeGraph**: *"Where is symbol X defined, who calls it, and what will break if I change it?"*
   - **Graphify**: *"What are the high-level architecture layers and how do modules connect?"*
   - **MemPalace**: *"Why did we decide this, and what architectural decisions were made in past releases?"*
@@ -74,9 +73,8 @@ Talk like caveman
   - No inline hand-written CSS. Use the Tailwind theme tokens in `app/globals.css`.
 
 ### 🔄 Post-Session Knowledge Sync
-- **Fast Knowledge Sync**: After committing and pushing code changes, RECOMMEND running `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
-- **Mempalace**: If specific domain documentation or notes were modified, RECOMMEND running surgical single-file mining: `mempalace mine <file> --wing iqoqo` (~1-2s). Strictly avoid running full `make mempalace-index` during interactive sessions.
-- **Automated Full Sync Prohibition**: NEVER automatically invoke `make knowledge-sync-full` or `make mempalace-index` during interactive sessions or in automated agent hooks. Full sync is reserved for scheduled release CI or manual execution.
+- **Fast Knowledge Sync Only**: After committing and pushing code changes, post-session sync is limited strictly to `make knowledge-sync` to keep CodeGraph and Graphify current (<45s, 0 LLM tokens).
+- **No Automatic MemPalace End-of-Session Updates**: Never run automatic MemPalace updates or mining (`mempalace mine`, `mempalace-index`, `knowledge-sync-full`) at the end of interactive sessions or in automated agent hooks. Full MemPalace sync is reserved for scheduled release CI or manual execution.
 - **Version Sync**: When releasing a new version, the indexed ai-memory folder updates automatically on the next `/iqoqo-graphify index` run.
 - **Linked Open Data:** Ensure all metadata is exposed or capable of being exposed as RDF/JSON-LD.
 - **Updated .env.example:** Updated `.env.example` to include the new required system variables (Auth keys, Admin details, and `NEXT_PUBLIC_FRONTEND_URL`).
@@ -86,7 +84,7 @@ Talk like caveman
 
 - **Plan + Pause:** All complex agent workflows SHOULD begin with a "plan and pause" phase. Review the situation, formulate a plan, and wait for user approval before modifying code.
 - **Zero-Polling Background Execution:** NEVER poll `manage_task(Action='status')` or schedule repetitive short timers in a tight loop to check running tests, builds, or commands. The agent runtime is fully reactive and automatically delivers completion notifications. After launching an asynchronous command or task, stop calling tools and wait for the reactive system wakeup.
-- **Mempalace Updates:** During interactive sessions, if specific domain documentation or notes were edited, run targeted single-file mining: `mempalace mine <file> --wing iqoqo`. Do NOT run `make mempalace-index` or `make knowledge-sync-full` during interactive sessions.
+- **Mempalace Updates:** Do NOT perform automatic MemPalace updates or mining at the end of interactive sessions. Knowledge synchronization at session close is limited strictly to `make knowledge-sync`.
 - **Prohibit Heredoc / `cat << EOF` File Editing:** NEVER use `cat << EOF`, `cat << 'EOF'`, or shell heredoc redirection inside `run_command` to create or edit project files. Always use designated agent file tools (`replace_file_content` or dedicated file editing tools) to modify or create files. Authoring files via shell heredocs bypasses diff inspections, escapes syntax checks, risks quote corruption, and is strictly prohibited.
 
 ## Python Backend (Flask)

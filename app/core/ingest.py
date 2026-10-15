@@ -324,10 +324,13 @@ class IngestService:
                 "publisher": meta.get("publisher"),
             }
         )
+        if "_provenance" in meta:
+            man_meta["_provenance"] = meta["_provenance"]
 
         manifestation = Manifestation(
             expression=expression,
             meta=man_meta,
+            raw_payload=meta.get("raw_payload") or meta,
         )
         db.session.add(manifestation)
         db.session.commit()

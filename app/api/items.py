@@ -40,6 +40,7 @@ from app.core.export_service import ExportService
 from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
+from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
 from app.db.models import (
     Expression,
@@ -322,6 +323,9 @@ def get_items():
                     "lent_to_user_id": row.get("lent_to_user_id"),
                     "lent_to_name": row.get("lent_to_name"),
                     "manifestation_id": row["manifestation_id"],
+                    "work_id": row.get("work_id"),
+                    "work_title": row.get("title"),
+                    "expression_id": row.get("expression_id"),
                     "isbn": row.get("isbn13") or row.get("isbn"),
                     "title": row["title"],
                     "publisher": row.get("publisher"),
@@ -435,6 +439,9 @@ def get_items():
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": item.manifestation_id,
+                    "work_id": work.id if work else None,
+                    "work_title": work_title or (work.title if work else None),
+                    "expression_id": phys_expr.id if phys_expr else None,
                     "isbn": manifestation.isbn13 if manifestation else None,
                     "title": work_title,
                     "publisher": manifestation.publisher if manifestation else None,
@@ -522,6 +529,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
+        item_data["display"] = build_display_projection(manifestation.meta)
         item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
@@ -544,6 +552,15 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                     "authors": work.meta.get("authors", []) if work.meta else [],
                     "meta": work.meta,
                     "container_work_id": container_work_id,
+                    "series_memberships": [
+                        {
+                            "id": sm.id,
+                            "series_work_id": sm.series_work_id,
+                            "title": sm.series.title if sm.series else "",
+                            "sequence": sm.sequence,
+                        }
+                        for sm in getattr(work, "series_memberships", [])
+                    ],
                 }
 
     return jsonify({"success": True, "data": item_data, "error": None})

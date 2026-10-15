@@ -508,3 +508,29 @@ def test_get_items_sort_by_author(client, normal_user_headers, app):
     data = resp.get_json()["data"]
     titles = [item["title"] for item in data if item["title"] in ("Zebra", "Apple")]
     assert titles == ["Zebra", "Apple"]
+
+
+def test_get_items_includes_frbr_lineage_ids(client, normal_user_headers, app):
+    """Ensure /api/items returns work_id, work_title, and expression_id for collection cards."""
+    with app.app_context():
+        user = db.session.execute(db.select(User).filter_by(email="test_user@iqoqo.local")).scalar_one()
+        work = Work(title="Hierarchy Test Work", meta={"authors": ["Author Person"]})
+        expr = Expression(work_id=work.id, content_type="text")
+        work.expressions.append(expr)
+        man = Manifestation(expression=expr)
+        item = Item(manifestation=man, owner_id=user.id, status="available")
+        db.session.add_all([work, expr, man, item])
+        db.session.commit()
+        item_id = item.id
+        work_id = work.id
+        expr_id = expr.id
+
+    resp = client.get("/api/items", headers=normal_user_headers)
+    assert resp.status_code == 200
+    items = resp.get_json()["data"]
+    matched = [it for it in items if it["id"] == item_id]
+    assert len(matched) == 1
+    record = matched[0]
+    assert record["work_id"] == work_id
+    assert record["work_title"] == "Hierarchy Test Work"
+    assert record["expression_id"] == expr_id

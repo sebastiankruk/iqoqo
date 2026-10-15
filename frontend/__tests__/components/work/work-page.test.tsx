@@ -143,6 +143,33 @@ describe("WorkPage & ExpressionPage Semantic Web Validation", () => {
     expect(container.querySelector("[itemprop='name']")?.textContent).toBe("The Singles 1992 - 2003");
   });
 
+  it("should render multi-series badges when Work has series_memberships", async () => {
+    const workWithSeries = {
+      ...mockWork,
+      series_memberships: [
+        { id: 1, series_work_id: 888, title: "Rock Universe", sequence: 1 },
+        { id: 2, series_work_id: 999, title: "Greatest Hits Collection", sequence: 3 },
+      ],
+    };
+    (global.fetch as any).mockImplementation((url: string) => {
+      if (url.includes("/works/1993")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, data: workWithSeries }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    const page = await WorkPage({ params: Promise.resolve({ id: "1993" }) });
+    const { container } = renderWithQueryClient(page);
+
+    expect(container.textContent).toContain("Rock Universe");
+    expect(container.textContent).toContain("Greatest Hits Collection");
+    expect(container.textContent).toContain("#1");
+    expect(container.textContent).toContain("#3");
+  });
+
   it("should generate SEO metadata for WorkPage pointing to public JSON-LD endpoint", async () => {
     const metadata = await generateWorkMetadata({ params: Promise.resolve({ id: "1993" }) });
     expect(metadata.title).toBe("The Singles 1992 - 2003 - iqoqo");

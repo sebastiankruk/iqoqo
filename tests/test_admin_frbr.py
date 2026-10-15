@@ -16,6 +16,8 @@
 
 """Tests for the FRBR entity management API endpoints."""
 
+import uuid
+
 from app.core import frbr_service
 from app.db.core import Expression, Item, Manifestation, Work, db
 
@@ -645,3 +647,142 @@ def test_roadmap_item_single_frbr_level_constraint(client, normal_user_headers, 
         headers=normal_user_headers,
     )
     assert res.status_code == 201
+
+
+def test_custodian_provider_merge_unauthorized(client):
+    """Ensure unauthenticated users cannot call provider-merge."""
+    res = client.post("/api/v1/admin/frbr/manifestation/1/provider-merge", json={})
+    assert res.status_code in (401, 403)
+
+
+def test_custodian_provider_merge_forbidden(client, normal_user_headers):
+    """Ensure users without WRITE_METADATA get 403 Forbidden."""
+    res = client.post("/api/v1/admin/frbr/manifestation/1/provider-merge", json={}, headers=normal_user_headers)
+    assert res.status_code == 403
+
+
+def test_custodian_provider_merge_success(client, admin_headers, app):
+    """Test custodian selective merge across Work and Manifestation tiers."""
+    from app.db.core import EntityAuditLog
+
+    with app.app_context():
+        work = frbr_service.create_work(title="Old Title", meta={"authors": ["Old Author"]})
+        expr = frbr_service.create_expression(work_id=work.id, content_type="text", language="en")
+        manif = frbr_service.create_manifestation(
+            expression_id=expr.id,
+            publisher="Old Publisher",
+            isbn13="9780000000001",
+            meta={"cover_url": "https://example.com/old.jpg"},
+        )
+        manif_id = manif.id
+        work_id = work.id
+        expr_id = expr.id
+
+    payload = {
+        "work": {
+            "title": {"value": "Merged Canonical Title", "provider": "google_books"},
+            "authors": {"value": ["Frank Herbert", "Brian Herbert"], "provider": "open_library"},
+        },
+        "expression": {
+            "language": {"value": "pl", "provider": "allegro"},
+        },
+        "manifestation": {
+            "publisher": {"value": "Chilton Books", "provider": "google_books"},
+            "cover_url": {"value": "https://covers.openlibrary.org/b/id/999-L.jpg", "provider": "open_library"},
+        },
+    }
+
+    res = client.post(
+        f"/api/v1/admin/frbr/manifestation/{manif_id}/provider-merge",
+        json=payload,
+        headers=admin_headers,
+    )
+    assert res.status_code == 200
+    assert res.json["success"] is True
+
+    with app.app_context():
+        updated_work = db.session.get(Work, work_id)
+        assert updated_work.title == "Merged Canonical Title"
+        assert updated_work.meta["authors"] == ["Frank Herbert", "Brian Herbert"]
+        assert updated_work.meta["_provenance"]["title"] == "google_books"
+        assert updated_work.meta["_provenance"]["authors"] == "open_library"
+
+        updated_expr = db.session.get(Expression, expr_id)
+        assert updated_expr.language == "pl"
+        assert updated_expr.meta["_provenance"]["language"] == "allegro"
+
+        updated_manif = db.session.get(Manifestation, manif_id)
+        assert updated_manif.publisher == "Chilton Books"
+        assert updated_manif.cover_url == "https://covers.openlibrary.org/b/id/999-L.jpg"
+        assert updated_manif.meta["cover_url"] == "https://covers.openlibrary.org/b/id/999-L.jpg"
+        assert updated_manif.meta["_provenance"]["publisher"] == "google_books"
+        assert updated_manif.meta["_provenance"]["cover_url"] == "open_library"
+
+        # Check EntityAuditLog
+        audit = db.session.execute(
+            db.select(EntityAuditLog).filter_by(entity_type="manifestation", entity_id=manif_id, change_type="provider_merge")
+        ).scalar_one_or_none()
+        assert audit is not None
+        assert audit.diff["work"]["title"]["after"] == "Merged Canonical Title"
+        assert audit.diff["manifestation"]["publisher"]["after"] == "Chilton Books"
+
+
+def test_series_memberships_roundtrip_and_clear(client, admin_headers, app):
+    """Verify series_memberships serialized in tree/item and clearing with empty list does not crash."""
+    with app.app_context():
+        series_work = frbr_service.create_work(title="Foundation Series")
+        book_work = frbr_service.create_work(title="Foundation and Empire")
+        expr = frbr_service.create_expression(work_id=book_work.id, content_type="text", language="en")
+        manif = frbr_service.create_manifestation(expression_id=expr.id, publisher="Gnome Press", isbn13="9780000000002")
+        item = frbr_service.create_item(manifestation_id=manif.id, owner_id=uuid.uuid4())
+
+        series_work_id = series_work.id
+        book_work_id = book_work.id
+        manif_id = manif.id
+        item_id = item.id
+
+    # 1. Update work with series membership
+    res = client.put(
+        f"/api/v1/admin/frbr/work/{book_work_id}",
+        json={
+            "title": "Foundation and Empire",
+            "series_memberships": [{"series_work_id": series_work_id, "sequence": 2}],
+        },
+        headers=admin_headers,
+    )
+    assert res.status_code == 200
+    assert res.json["success"] is True
+
+    # 2. Verify get_frbr_tree includes series_memberships
+    tree_res = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=admin_headers)
+    assert tree_res.status_code == 200
+    work_tree = tree_res.json["data"]["work"]
+    assert "series_memberships" in work_tree
+    assert len(work_tree["series_memberships"]) == 1
+    assert work_tree["series_memberships"][0]["series_work_id"] == series_work_id
+    assert work_tree["series_memberships"][0]["title"] == "Foundation Series"
+    assert work_tree["series_memberships"][0]["sequence"] == 2
+
+    # 3. Verify item detail includes series_memberships
+    item_res = client.get(f"/api/items/{item_id}", headers=admin_headers)
+    assert item_res.status_code == 200
+    item_work = item_res.json["data"]["work"]
+    assert "series_memberships" in item_work
+    assert len(item_work["series_memberships"]) == 1
+    assert item_work["series_memberships"][0]["series_work_id"] == series_work_id
+
+    # 4. Clear all series memberships with empty list [] (tests the SQLAlchemy 2.0 filter bugfix)
+    clear_res = client.put(
+        f"/api/v1/admin/frbr/work/{book_work_id}",
+        json={
+            "title": "Foundation and Empire",
+            "series_memberships": [],
+        },
+        headers=admin_headers,
+    )
+    assert clear_res.status_code == 200
+    assert clear_res.json["success"] is True
+
+    # 5. Verify memberships are empty
+    tree_res_after = client.get(f"/api/v1/admin/frbr/tree/manifestation/{manif_id}", headers=admin_headers)
+    assert tree_res_after.json["data"]["work"]["series_memberships"] == []

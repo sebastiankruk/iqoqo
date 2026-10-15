@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { describe, it, expect } from "vitest";
-import { readMeta, readMetaChain, hasMeta, hasMetaChain } from "@/lib/meta";
+import { readMeta, readMetaChain, hasMeta, hasMetaChain, isKnownMetaSpelling } from "@/lib/meta";
 
 describe("readMeta", () => {
   it("reads the canonical lowercase spelling first", () => {
@@ -108,5 +108,35 @@ describe("hasMeta / hasMetaChain", () => {
 
   it("is true when any spelling in the chain carries a value", () => {
     expect(hasMetaChain({ "Matrix / Runout": "L-12345" }, ["matrix_number", "Matrix / Runout"])).toBe(true);
+  });
+});
+
+describe("isKnownMetaSpelling", () => {
+  it("matches FIELD_CHAINS case-insensitively", () => {
+    expect(isKnownMetaSpelling("format")).toBe(true);
+    expect(isKnownMetaSpelling("Format")).toBe(true);
+    expect(isKnownMetaSpelling("FORMAT")).toBe(true);
+    expect(isKnownMetaSpelling("year")).toBe(true);
+    expect(isKnownMetaSpelling("YEAR")).toBe(true);
+    expect(isKnownMetaSpelling("authors")).toBe(true);
+    expect(isKnownMetaSpelling("Publisher")).toBe(true);
+    expect(isKnownMetaSpelling("PUBLISHER")).toBe(true);
+  });
+
+  it("matches dedicated section keys case-insensitively", () => {
+    expect(isKnownMetaSpelling("catalog_number")).toBe(true);
+    expect(isKnownMetaSpelling("CATALOG_NUMBER")).toBe(true);
+    expect(isKnownMetaSpelling("min_players")).toBe(true);
+    expect(isKnownMetaSpelling("Min_Players")).toBe(true);
+    expect(isKnownMetaSpelling("mechanics")).toBe(true);
+    expect(isKnownMetaSpelling("barcode")).toBe(true);
+    expect(isKnownMetaSpelling("isbn")).toBe(true);
+    expect(isKnownMetaSpelling("data_source")).toBe(true);
+  });
+
+  it("returns false for arbitrary unmapped metadata keys", () => {
+    expect(isKnownMetaSpelling("custom_note")).toBe(false);
+    expect(isKnownMetaSpelling("shelf_location")).toBe(false);
+    expect(isKnownMetaSpelling("signed_by_author")).toBe(false);
   });
 });
