@@ -2116,24 +2116,22 @@ def merge_frbr_entities(
             # FRBRoo F3: identifiers belong to the Manifestation and nowhere else.
             frbr_merge.consolidate_manifestation_identifiers(target, source)
 
-        # Record audit log
-        audit = EntityAuditLog(
+        # Record audit log and tombstone
+        extra_diff = {
+            "migrated_children": repointed.get(_ENTITY_CHILD_MAP[entity_type][0].__name__ + "." + _ENTITY_CHILD_MAP[entity_type][1], 0),
+            "migrated_contributions": repointed.get("WorkContribution.work_id")
+            or repointed.get("ExpressionContribution.expression_id")
+            or repointed.get("ManifestationContribution.manifestation_id")
+            or 0,
+        }
+        frbr_merge.record_merge_tombstone(
             entity_type=entity_type,
-            entity_id=source_id,
+            source_id=source_id,
+            target_id=target_id,
             actor_id=user_id,
-            change_type=_MERGE_CHANGE_TYPES[entity_type],
-            diff={
-                "source_id": source_id,
-                "target_id": target_id,
-                "migrated_children": repointed.get(_ENTITY_CHILD_MAP[entity_type][0].__name__ + "." + _ENTITY_CHILD_MAP[entity_type][1], 0),
-                "migrated_contributions": repointed.get("WorkContribution.work_id")
-                or repointed.get("ExpressionContribution.expression_id")
-                or repointed.get("ManifestationContribution.manifestation_id")
-                or 0,
-                "repointed": repointed,
-            },
+            repointed=repointed,
+            extra_diff=extra_diff,
         )
-        db.session.add(audit)
 
         # Drop the source with a Core-level DELETE; an ORM delete would cascade
         # delete-orphan over re-pointed children (see frbr_merge.delete_source_row).

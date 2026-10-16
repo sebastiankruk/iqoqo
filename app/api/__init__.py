@@ -20,6 +20,7 @@ from . import (
     admin,
     auth,
     collections,
+    federation,
     feedback,
     items,
     manifestations,
@@ -40,6 +41,7 @@ from .core import api_bp
 if hasattr(admin, "admin_bp"):
     api_bp.register_blueprint(admin.admin_bp)
 
+api_bp.register_blueprint(federation.federation_bp)
 api_bp.register_blueprint(public_rdf.public_bp)
 api_bp.register_blueprint(sharing.sharing_bp)
 api_bp.register_blueprint(sparql.sparql_bp)
@@ -51,6 +53,7 @@ _ = (
     auth,
     collections,
     feedback,
+    federation,
     items,
     manifestations,
     profile,

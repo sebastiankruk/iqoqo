@@ -246,12 +246,14 @@ def create_app(config_class=Config, config_override=None):
 
     from app.api.account import account_bp
     from app.api.docs import docs_bp
+    from app.api.federation import wellknown_bp
     from app.api.lending import lending_bp
     from app.api.roadmap import roadmap_bp
     from app.api.wishlist import wishlist_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(lod_bp)
+    app.register_blueprint(wellknown_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(account_bp)

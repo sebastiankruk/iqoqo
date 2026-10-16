@@ -68,7 +68,6 @@ from app.db.core import (
     DUPLICATE_STATUS_MERGED,
     DUPLICATE_STATUS_PENDING,
     DuplicateCandidate,
-    EntityAuditLog,
     Expression,
     Manifestation,
     Work,
@@ -1606,20 +1605,17 @@ def merge_work(source: Work, target: Work, user_id: UUID | None) -> Work:
         repointed = frbr_merge.repoint_references(TIER_WORK, source.id, target.id)
         target.meta = _consolidate_meta(target.meta, source.meta)
 
-        db.session.add(
-            EntityAuditLog(
-                entity_type=TIER_WORK,
-                entity_id=source.id,
-                actor_id=user_id,
-                change_type="merge_work",
-                diff={
-                    "source_id": source.id,
-                    "target_id": target.id,
-                    "migrated_children": repointed.get("Expression.work_id", 0),
-                    "migrated_contributions": repointed.get("WorkContribution.work_id", 0),
-                    "repointed": repointed,
-                },
-            )
+        extra_diff = {
+            "migrated_children": repointed.get("Expression.work_id", 0),
+            "migrated_contributions": repointed.get("WorkContribution.work_id", 0),
+        }
+        frbr_merge.record_merge_tombstone(
+            entity_type=TIER_WORK,
+            source_id=source.id,
+            target_id=target.id,
+            actor_id=user_id,
+            repointed=repointed,
+            extra_diff=extra_diff,
         )
 
         frbr_merge.delete_source_row(source)
@@ -1675,20 +1671,17 @@ def merge_expression(source: Expression, target: Expression, user_id: UUID | Non
         repointed = frbr_merge.repoint_references(TIER_EXPRESSION, source.id, target.id)
         target.meta = _consolidate_meta(target.meta, source.meta)
 
-        db.session.add(
-            EntityAuditLog(
-                entity_type=TIER_EXPRESSION,
-                entity_id=source.id,
-                actor_id=user_id,
-                change_type="merge_expression",
-                diff={
-                    "source_id": source.id,
-                    "target_id": target.id,
-                    "migrated_children": repointed.get("Manifestation.expression_id", 0),
-                    "migrated_contributions": repointed.get("ExpressionContribution.expression_id", 0),
-                    "repointed": repointed,
-                },
-            )
+        extra_diff = {
+            "migrated_children": repointed.get("Manifestation.expression_id", 0),
+            "migrated_contributions": repointed.get("ExpressionContribution.expression_id", 0),
+        }
+        frbr_merge.record_merge_tombstone(
+            entity_type=TIER_EXPRESSION,
+            source_id=source.id,
+            target_id=target.id,
+            actor_id=user_id,
+            repointed=repointed,
+            extra_diff=extra_diff,
         )
 
         frbr_merge.delete_source_row(source)
@@ -1737,22 +1730,19 @@ def merge_manifestation(source: Manifestation, target: Manifestation, user_id: U
         source_isbn13 = source.isbn13
         frbr_merge.consolidate_manifestation_identifiers(target, source)
 
-        db.session.add(
-            EntityAuditLog(
-                entity_type=TIER_MANIFESTATION,
-                entity_id=source.id,
-                actor_id=user_id,
-                change_type="merge_manifestation",
-                diff={
-                    "source_id": source.id,
-                    "target_id": target.id,
-                    "migrated_children": repointed.get("Item.manifestation_id", 0),
-                    "migrated_contributions": repointed.get("ManifestationContribution.manifestation_id", 0),
-                    "repointed": repointed,
-                    "adopted_source_isbn13": source_isbn13,
-                    "target_isbn13": target.isbn13,
-                },
-            )
+        extra_diff = {
+            "migrated_children": repointed.get("Item.manifestation_id", 0),
+            "migrated_contributions": repointed.get("ManifestationContribution.manifestation_id", 0),
+            "adopted_source_isbn13": source_isbn13,
+            "target_isbn13": target.isbn13,
+        }
+        frbr_merge.record_merge_tombstone(
+            entity_type=TIER_MANIFESTATION,
+            source_id=source.id,
+            target_id=target.id,
+            actor_id=user_id,
+            repointed=repointed,
+            extra_diff=extra_diff,
         )
 
         frbr_merge.delete_source_row(source)
