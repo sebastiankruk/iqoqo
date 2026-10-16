@@ -780,8 +780,25 @@ db-seed-e2e: .venv/bin/activate
 
 db-export: .venv/bin/activate
 	@echo "Exporting database to exports/backup.json..."
-	@$(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"
-	@docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true
+	@mkdir -p exports
+	@touch exports/backup.json && chmod 666 exports/backup.json 2>/dev/null || true
+	@if [ -n "$$(docker compose -p $(COMPOSE_PROJECT) ps -q web 2>/dev/null)" ]; then \
+		docker compose -p $(COMPOSE_PROJECT) exec -T -u root web python -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"; \
+		docker compose -p $(COMPOSE_PROJECT) cp web:/usr/src/app/exports/backup.json ./exports/backup.json 2>/dev/null || true; \
+	else \
+		env_file="$(COMPOSE_ENV_FILE)"; \
+		[ -f "$$env_file" ] || env_file=".env"; \
+		db_url=$$(grep -E '^DATABASE_URL=' "$$env_file" 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+		db_port=$$(grep -E '^DB_PORT=' "$$env_file" 2>/dev/null | cut -d= -f2- | tr -d '\042\047'); \
+		[ -z "$$db_port" ] && db_port="5432"; \
+		local_db_url=$$(echo "$$db_url" | sed -E "s|@db(:[0-9]+)?/|@127.0.0.1:$$db_port/|"); \
+		if [ -n "$$local_db_url" ] && [ "$$local_db_url" != "$$db_url" ]; then \
+			DATABASE_URL="$$local_db_url" $(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"; \
+		else \
+			$(PYTHON_CMD) -c "exec(\"from app import create_app\nfrom app.core.data_manager import DataManager\napp = create_app()\nwith app.app_context():\n DataManager.export_to_file('exports/backup.json')\")"; \
+		fi; \
+	fi
+	@chmod 644 exports/backup.json 2>/dev/null || true
 	@echo "Export complete: exports/backup.json"
 
 migrate-secrets: .venv/bin/activate ## Migrate API secrets from env file into encrypted database settings
