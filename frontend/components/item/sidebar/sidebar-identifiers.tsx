@@ -20,20 +20,27 @@ import type { Item } from "@/types/frbr";
 export interface SidebarIdentifiersProps {
   isbn?: string | null;
   item?: Item;
+  localBarcode?: string | null;
 }
 
 /**
- * Identifiers region of ItemSidebar, displaying ISBN.
+ * Identifiers region of ItemSidebar, displaying ISBN and exemplar local barcode.
  *
  * @param props - Props object
- * @returns {JSX.Element | null} Rendered ISBN or null if absent
+ * @returns {JSX.Element | null} Rendered identifiers or null if absent
  */
-export function SidebarIdentifiers({ isbn, item }: SidebarIdentifiersProps) {
-  const value = isbn !== undefined ? isbn : item?.isbn;
+export function SidebarIdentifiers({ isbn, item, localBarcode }: SidebarIdentifiersProps) {
+  const isbnValue = isbn !== undefined ? isbn : item?.isbn;
+  const barcodeValue = localBarcode !== undefined ? localBarcode : item?.local_barcode;
 
-  if (!value) {
+  if (!isbnValue && !barcodeValue) {
     return null;
   }
 
-  return <p className="text-center text-xs text-muted-foreground">ISBN: {value}</p>;
+  return (
+    <div className="space-y-0.5 text-center text-xs text-muted-foreground">
+      {isbnValue && <p>ISBN: {isbnValue}</p>}
+      {barcodeValue && <p data-testid="sidebar-local-barcode">Barcode: {barcodeValue}</p>}
+    </div>
+  );
 }

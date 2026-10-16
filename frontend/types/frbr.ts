@@ -226,6 +226,8 @@ export interface Item {
   owner_count?: number;
   status: ProgressStatus;
   collection_status: CollectionStatus;
+  condition?: string | null;
+  local_barcode?: string | null;
   lent_to_user_id?: string | null;
   lent_to_name?: string | null;
   is_borrowed?: boolean;

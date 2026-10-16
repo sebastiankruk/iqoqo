@@ -37,6 +37,7 @@ import { SidebarLendingInfo } from "./sidebar/sidebar-lending-info";
 import { SidebarIdentifiers } from "./sidebar/sidebar-identifiers";
 import { SidebarActions } from "./sidebar/sidebar-actions";
 import { SidebarFrbrInfo } from "./sidebar/sidebar-frbr-info";
+import { EditItemDialog } from "./edit-item-dialog";
 
 import { STATUS_LABELS } from "./sidebar/constants";
 export { STATUS_LABELS };
@@ -124,6 +125,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
     handleToggleVisibility,
   } = useItemSidebarActions(item, { isOwner, canModifyItem });
 
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+
   return (
     <div className="flex flex-col items-center gap-5">
       {/* Book/Audio cover */}
@@ -156,7 +159,7 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         canModifyItem={canModifyItem}
         isOwner={isOwner}
         profile={profile}
-        onEdit={onEdit}
+        onEdit={onEdit ?? (() => setIsEditDialogOpen(true))}
         format={format}
         isAudio={isAudio}
         isVideo={isVideo}
@@ -265,6 +268,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditItemDialog item={item} isOpen={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} />
     </div>
   );
 }

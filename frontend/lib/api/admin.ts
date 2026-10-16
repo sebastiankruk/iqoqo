@@ -279,6 +279,7 @@ export interface FrbrItem {
   id: number;
   status: string;
   condition: string | null;
+  local_barcode?: string | null;
   meta: Record<string, unknown>;
   owner_id: string;
   owner_name?: string;
