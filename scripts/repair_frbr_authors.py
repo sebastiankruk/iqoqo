@@ -22,7 +22,13 @@ entities, and ensures author list consistency across the catalog.
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from collections.abc import Sequence
+
+# Add the project root to the Python path
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, root_dir)
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
