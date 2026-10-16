@@ -186,6 +186,10 @@ class Config:
     SPARQL_SERVICE_ENABLED = os.environ.get("SPARQL_SERVICE_ENABLED", "true").lower() in {"true", "1", "yes"}
     SPARQL_QUERY_TIMEOUT = float(os.environ.get("SPARQL_QUERY_TIMEOUT", 15.0))
 
+    # ActivityPub Federation (v0.9.0)
+    FEDERATION_ENABLED = os.environ.get("FEDERATION_ENABLED", "false").lower() in {"true", "1", "yes"}
+    FEDERATION_BASE_URL = os.environ.get("FEDERATION_BASE_URL")
+
     @staticmethod
     def _get_version():
         """Resolve application version from environment or pyproject.toml.
