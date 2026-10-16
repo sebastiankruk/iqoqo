@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-"""ActivityPub Federation and WebFinger endpoints for iqoqo v0.9.0."""
+"""ActivityPub Federation, NodeInfo 2.1, and WebFinger endpoints for iqoqo v0.9.0."""
 
 from __future__ import annotations
 
@@ -22,12 +22,15 @@ from typing import Any
 from urllib.parse import urlparse
 
 from flask import Blueprint, Response, current_app, jsonify, redirect, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from app.api.federation_guard import federation_required, is_federation_enabled
+from app.core import federation_keys
 from app.core.iri import canonical_actor_iri, get_lod_base_url, legacy_actor_iri
 from app.core.limiter import limiter
 from app.db import db
 from app.db.auth import User
+from app.db.federation import FederationConsent
 
 federation_bp = Blueprint("federation", __name__, url_prefix="/federation")
 wellknown_bp = Blueprint("wellknown", __name__, url_prefix="/.well-known")
@@ -107,6 +110,12 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
     if not user:
         return jsonify({"error": f"Resource not found: {resource}", "code": 404}), 404
 
+    # Require explicit user opt-in consent or public visibility
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    if not is_opted_in:
+        return jsonify({"error": f"Resource not found: {resource}", "code": 404}), 404
+
     canonical_actor_uri = canonical_actor_iri(user.id, base_url)
     aliases: list[str] = [canonical_actor_uri]
     if user.public_username:
@@ -139,6 +148,7 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
 
 
 @wellknown_bp.route("/webfinger", methods=["GET"])
+@federation_required
 @limiter.limit("120 per minute")
 def wellknown_webfinger() -> Response | tuple[Response, int]:
     """RFC 7033 WebFinger endpoint at /.well-known/webfinger."""
@@ -146,13 +156,118 @@ def wellknown_webfinger() -> Response | tuple[Response, int]:
 
 
 @federation_bp.route("/webfinger", methods=["GET"])
+@federation_required
 @limiter.limit("120 per minute")
 def federation_webfinger() -> Response | tuple[Response, int]:
     """WebFinger discovery endpoint under /api/federation/webfinger."""
     return _handle_webfinger_lookup()
 
 
+@wellknown_bp.route("/nodeinfo", methods=["GET"])
+@federation_required
+@limiter.limit("120 per minute")
+def wellknown_nodeinfo() -> Response:
+    """RFC/NodeInfo discovery document pointing to NodeInfo 2.1 schema."""
+    base_url = _get_base_url()
+    data: dict[str, Any] = {
+        "links": [
+            {
+                "rel": "http://nodeinfo.diaspora.software/ns/schema/2.1",
+                "href": f"{base_url}/api/federation/nodeinfo/2.1",
+            }
+        ]
+    }
+    resp = jsonify(data)
+    resp.mimetype = "application/json"
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@federation_bp.route("/nodeinfo/2.1", methods=["GET"])
+@federation_required
+@limiter.limit("120 per minute")
+def federation_nodeinfo_2_1() -> Response:
+    """NodeInfo 2.1 document advertising instance software, protocols, and usage."""
+    from app.config import Config
+
+    total_users = db.session.execute(select(func.count(User.id))).scalar() or 0  # pylint: disable=not-callable
+    active_users = (
+        db.session.execute(select(func.count(User.id)).where(User.is_active.is_(True))).scalar() or 0  # pylint: disable=not-callable
+    )
+
+    data: dict[str, Any] = {
+        "version": "2.1",
+        "software": {
+            "name": "iqoqo",
+            "version": Config.VERSION,
+        },
+        "protocols": ["activitypub"],
+        "services": {
+            "inbound": [],
+            "outbound": [],
+        },
+        "openRegistrations": False,
+        "usage": {
+            "users": {
+                "total": total_users,
+                "activeHalfyear": active_users,
+                "activeMonth": active_users,
+            },
+            "localPosts": 0,
+        },
+        "metadata": {
+            "nodeName": "iqoqo",
+            "federation": {
+                "enabled": is_federation_enabled(),
+            },
+        },
+    }
+    resp = jsonify(data)
+    resp.mimetype = "application/json"
+    resp.headers["Content-Type"] = 'application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"; charset=utf-8'
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
+    """Construct ActivityPub Person actor JSON-LD representation."""
+    canonical_uri = canonical_actor_iri(user.id, base_url)
+
+    # Resolve or create actor cryptographic keypair
+    public_key_pem = federation_keys.get_actor_public_key(str(user.id))
+    if not public_key_pem:
+        _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
+        user.federation_public_key = public_key_pem
+        user.federation_key_id = f"{canonical_uri}#main-key"
+        db.session.commit()
+
+    return {
+        "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ],
+        "id": canonical_uri,
+        "type": "Person",
+        "preferredUsername": user.public_username or str(user.id),
+        "name": user.display_name or user.public_username or "iqoqo User",
+        "summary": user.bio or "",
+        "url": f"{base_url}/user/{user.public_username}" if user.public_username else base_url,
+        "inbox": f"{canonical_uri}/inbox",
+        "outbox": f"{canonical_uri}/outbox",
+        "publicKey": {
+            "id": f"{canonical_uri}#main-key",
+            "owner": canonical_uri,
+            "publicKeyPem": public_key_pem,
+        },
+        "endpoints": {
+            "sharedInbox": f"{base_url}/api/federation/inbox",
+        },
+    }
+
+
 @federation_bp.route("/actor/u/<string:user_uuid>", methods=["GET"])
+@federation_required
 @limiter.limit("120 per minute")
 def get_actor_by_uuid(user_uuid: str) -> Response | tuple[Response, int]:
     """Canonical ActivityPub Actor representation keyed by immutable user UUID."""
@@ -165,26 +280,13 @@ def get_actor_by_uuid(user_uuid: str) -> Response | tuple[Response, int]:
     if not user:
         return jsonify({"error": "Actor not found", "code": 404}), 404
 
-    base_url = _get_base_url()
-    actor_uri = canonical_actor_iri(user.id, base_url)
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    if not is_opted_in:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
 
-    actor_payload: dict[str, Any] = {
-        "@context": [
-            "https://www.w3.org/ns/activitystreams",
-            "https://w3id.org/security/v1",
-        ],
-        "id": actor_uri,
-        "type": "Person",
-        "preferredUsername": user.public_username or str(user.id),
-        "name": user.display_name or user.public_username or "iqoqo User",
-        "summary": user.bio or "",
-        "url": f"{base_url}/user/{user.public_username}" if user.public_username else None,
-        "inbox": f"{actor_uri}/inbox",
-        "outbox": f"{actor_uri}/outbox",
-        "endpoints": {
-            "sharedInbox": f"{base_url}/api/federation/inbox",
-        },
-    }
+    base_url = _get_base_url()
+    actor_payload = _build_actor_payload(user, base_url)
 
     resp = jsonify(actor_payload)
     resp.mimetype = "application/activity+json"
@@ -194,12 +296,25 @@ def get_actor_by_uuid(user_uuid: str) -> Response | tuple[Response, int]:
 
 
 @federation_bp.route("/actor/<string:username>", methods=["GET"])
+@federation_required
 @limiter.limit("120 per minute")
 def get_actor_by_username(username: str) -> Response | tuple[Response, int]:
     """Legacy/vanity username actor lookup, permanently redirecting (301) to canonical UUID Actor IRI."""
     stmt = select(User).where(User.public_username == username)
     user = db.session.execute(stmt).scalars().first()
     if not user:
+        try:
+            parsed_uuid = uuid.UUID(username)
+            user = db.session.execute(select(User).where(User.id == parsed_uuid)).scalars().first()
+        except (ValueError, TypeError):
+            user = None
+
+    if not user:
+        return jsonify({"error": f"Actor not found for username: {username}", "code": 404}), 404
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    if not is_opted_in:
         return jsonify({"error": f"Actor not found for username: {username}", "code": 404}), 404
 
     base_url = _get_base_url()
