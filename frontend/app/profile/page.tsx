@@ -32,6 +32,7 @@ import { MyEscalations } from "@/components/escalation/my-escalations";
 import { EmailVerificationCard } from "@/components/profile/email-verification-card";
 import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog";
 import { DeletionPendingNotice } from "@/components/profile/deletion-pending-notice";
+import { FederationConsentSettings } from "@/components/settings/federation-consent";
 
 /**
  * User consent record
@@ -56,6 +57,7 @@ interface UserProfile {
   bio: string | null;
   avatar_url: string | null;
   visibility: "public" | "private";
+  default_item_visibility?: "public" | "private";
   created_at: string;
   consents: ConsentRecord;
   /**
@@ -86,6 +88,7 @@ export default function ProfilePage() {
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("private");
+  const [defaultItemVisibility, setDefaultItemVisibility] = useState<"public" | "private">("private");
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -113,6 +116,7 @@ export default function ProfilePage() {
         setBio(data.bio || "");
         setAvatarUrl(data.avatar_url || "");
         setVisibility(data.visibility || "private");
+        setDefaultItemVisibility(data.default_item_visibility || "private");
       })
       .catch(err => console.error("Failed to load profile", err));
   }, []);
@@ -130,6 +134,7 @@ export default function ProfilePage() {
         bio: bio.trim(),
         avatar_url: avatarUrl.trim(),
         visibility,
+        default_item_visibility: defaultItemVisibility,
       });
       setProfile(prev =>
         prev
@@ -140,6 +145,7 @@ export default function ProfilePage() {
               bio: bio.trim(),
               avatar_url: avatarUrl.trim(),
               visibility,
+              default_item_visibility: defaultItemVisibility,
             }
           : null
       );
@@ -219,7 +225,8 @@ export default function ProfilePage() {
     publicUsername !== (profile.public_username || "") ||
     bio !== (profile.bio || "") ||
     avatarUrl !== (profile.avatar_url || "") ||
-    visibility !== (profile.visibility || "private");
+    visibility !== (profile.visibility || "private") ||
+    defaultItemVisibility !== (profile.default_item_visibility || "private");
 
   return (
     <div className="min-h-screen bg-background">
@@ -353,6 +360,41 @@ export default function ProfilePage() {
                 </label>
               </div>
             </div>
+
+            {/* Default Item Visibility */}
+            <div>
+              <p className="text-sm font-medium mb-2">Default Item Visibility</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="default_item_visibility"
+                    value="private"
+                    checked={defaultItemVisibility === "private"}
+                    onChange={() => setDefaultItemVisibility("private")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Private (Recommended)</p>
+                    <p className="text-xs text-muted-foreground">New scanned or ingested items default to private.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="default_item_visibility"
+                    value="public"
+                    checked={defaultItemVisibility === "public"}
+                    onChange={() => setDefaultItemVisibility("public")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Public</p>
+                    <p className="text-xs text-muted-foreground">New scanned or ingested items default to public.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Single primary CTA per card */}
@@ -412,6 +454,9 @@ export default function ProfilePage() {
             </Button>
           </div>
         </div>
+
+        {/* ── Federation Privacy & Consent ── */}
+        {config?.federation_enabled && <FederationConsentSettings />}
 
         {/* ── Export Collection Card ── */}
         <div className="p-4 border rounded-lg bg-card space-y-4" data-testid="export-collection-card">

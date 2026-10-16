@@ -35,7 +35,7 @@ from app.core.ingest import IngestService
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, UserWorkIntent, db
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, UserWorkIntent, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
@@ -602,6 +602,15 @@ def _scan_to_library(
     is_new_manifestation = context.is_new_manifestation
     default_progress = context.default_progress
     user_id = context.user_id
+    user = db.session.get(User, user_id) if user_id else None
+    user_default_visibility = getattr(user, "default_item_visibility", "private") if user else "private"
+    if payload.is_public is not None:
+        is_hidden = not payload.is_public
+    elif payload.is_hidden is not None:
+        is_hidden = payload.is_hidden
+    else:
+        is_hidden = user_default_visibility == "private"
+
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
         manifestation_id=manifestation.id,
@@ -610,6 +619,7 @@ def _scan_to_library(
         collection_status=collection_status,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        is_hidden=is_hidden,
     )
     db.session.add(new_item)
 
