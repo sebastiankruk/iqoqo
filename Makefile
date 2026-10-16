@@ -659,11 +659,12 @@ test-scripts-python: .venv/bin/activate
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
 	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
-		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social) if missing..."; \
+		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS social;" 2>&1 | grep -v 'already exists' || true; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS federation;" 2>&1 | grep -v 'already exists' || true; \
 	fi
 
 # This dedicated Compose file/project has its own PostgreSQL service, port, and
