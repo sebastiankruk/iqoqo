@@ -598,6 +598,28 @@ test-backend: .venv/bin/activate
 	$(AI_ECHO) "Running backend tests..."
 	.venv/bin/pytest $(PYTEST_FLAGS) tests/
 
+# 4 Parallel Test Streams
+test-stream-domain: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 1 (FRBR, Ontology & Domain Core)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream domain
+
+test-stream-api: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 2 (API, Auth & Federation)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream api
+
+test-stream-frontend: test-frontend
+
+test-stream-tooling: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 4 (Services, Tooling, Scripts & BATS)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream tooling
+
+test-parallel: .venv/bin/activate
+	$(AI_ECHO) "Running 4 test streams in parallel..."
+	.venv/bin/python scripts/run_tests_parallel.py
+
+test-fast: test-parallel
+test-streams: test-parallel
+
 test-backend-pg: .venv/bin/activate
 	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
 	@echo "Ensuring test database exists..."
