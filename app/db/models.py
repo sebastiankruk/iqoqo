@@ -84,6 +84,16 @@ from app.db.core import (  # noqa: F401
     Work,
     WorkExpansionLink,
 )
+from app.db.federation import (  # noqa: F401
+    ActivityStatus,
+    FederationActivity,
+    FederationActor,
+    FederationConsent,
+    FederationFollower,
+    FederationInstance,
+    FollowStatus,
+    TrustLevel,
+)
 from app.db.games import MANIFESTATION_GAME_META_KEYS, ContainerAggregation  # noqa: F401
 from app.db.lending import LoanRequest  # noqa: F401
 from app.db.puzzle import MANIFESTATION_PUZZLE_META_KEYS  # noqa: F401

@@ -456,10 +456,11 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_4_item_local_barcode"
+    assert heads[0] == "v0_9_0_federation_schema"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_9_0_federation_schema",
         "v0_8_4_item_local_barcode",
         "v0_8_4_fts_unaccent",
         "v0_8_4_work_series_mem",

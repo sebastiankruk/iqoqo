@@ -58,6 +58,7 @@ from app.core import account_mail, account_tokens, mail_service
 from app.core.account_tokens import AccountTokenPurpose, MailUnavailableError
 from app.db.auth import AccountActionToken
 from app.db.core import ItemStatusLog
+from app.db.federation import FederationConsent, FederationFollower
 from app.db.lending import LoanRequest
 from app.db.models import OAuthExchangeCode, User, db
 from app.db.roadmap import ReadingRoadmap
@@ -94,6 +95,8 @@ NOT_NULL_USER_REFERENCES: tuple[tuple[type, str], ...] = (
     (LoanRequest, "requester_id"),
     (ReadingRoadmap, "user_id"),
     (OAuthExchangeCode, "user_id"),
+    (FederationFollower, "local_user_id"),
+    (FederationConsent, "user_id"),
 )
 
 
@@ -354,6 +357,14 @@ def _delete_account_rows(user: User) -> int:
 
     db.session.delete(user)
     db.session.flush()
+
+    try:
+        from app.core.federation_keys import delete_actor_keypair
+
+        delete_actor_keypair(str(user.id))
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to delete federation keypair for user %s: %s", user.id, exc)
+
     return removed
 
 
