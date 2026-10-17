@@ -17,7 +17,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CANDIDATE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -f "$CANDIDATE_ROOT/pyproject.toml" ] && [ -f "$CANDIDATE_ROOT/deploy/Dockerfile" ]; then
+    REPO_ROOT="$CANDIDATE_ROOT"
+elif [ -n "${IQOQO_DEV_DIR:-}" ] && [ -f "$IQOQO_DEV_DIR/pyproject.toml" ]; then
+    REPO_ROOT="$IQOQO_DEV_DIR"
+elif [ -f "/home/sebastiankruk/Development/iqoqo/pyproject.toml" ]; then
+    REPO_ROOT="/home/sebastiankruk/Development/iqoqo"
+else
+    echo "💥 ERROR: Cannot find iqoqo source checkout containing deploy/Dockerfile." >&2
+    echo "Please set IQOQO_DEV_DIR or run from the development repository." >&2
+    exit 1
+fi
+
 cd "$REPO_ROOT"
 
 # Parameter defaults (overridable via env or CLI flags)
@@ -116,7 +129,7 @@ else
     if [ -n "$SRC_HOST" ]; then
         clone_args+=("src_host=${SRC_HOST}")
     fi
-    make clone "${clone_args[@]}"
+    FORCE="${FORCE:-0}" make clone "${clone_args[@]}"
 fi
 
 # 4. Restart preview stack cleanly (optionally with federation peer)
