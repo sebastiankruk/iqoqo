@@ -382,10 +382,19 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	 else \
 		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
 	 fi; \
-	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	 fed_overlay=""; \
+	 if [ -n "$(FEDERATION_PAIR)" ] && [ "$(FEDERATION_PAIR)" != "0" ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+		echo "🔗 Federation Pair mode active: launching secondary peer instance stack..."; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay up -d
 
 preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml down
+	@fed_overlay=""; \
+	 if [ -f $(DEPLOY_DIR)/docker-compose.federation-preview.yml ] || [ -f docker-compose.federation-preview.yml ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay down
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"

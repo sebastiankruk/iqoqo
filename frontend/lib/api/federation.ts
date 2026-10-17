@@ -143,3 +143,50 @@ export async function updateFederationConsent(consent: Partial<FederationConsent
   }
   return res.data.data;
 }
+
+// ---------------------------------------------------------------------------
+// Cross-Instance Discovery & Interaction
+// ---------------------------------------------------------------------------
+
+export interface RemoteActorLookupResult {
+  success: boolean;
+  handle: string;
+  actor_uri: string;
+  actor: Record<string, unknown>;
+}
+
+export interface RemoteFollowResult {
+  success: boolean;
+  status: string;
+  activity: Record<string, unknown>;
+  remote_actor: Record<string, unknown>;
+}
+
+/**
+ * Resolve remote actor handle via WebFinger and retrieve Actor JSON-LD document.
+ * @param handle - Remote actor handle (e.g. @alice@remote.iqoqo.test)
+ */
+export async function lookupRemoteActor(handle: string): Promise<RemoteActorLookupResult> {
+  const params = new URLSearchParams({ handle });
+  const res = await apiClient.get<ApiResponse<RemoteActorLookupResult>>(`/federation/lookup?${params.toString()}`);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to lookup remote actor");
+  }
+  return res.data.data;
+}
+
+/**
+ * Send an ActivityPub Follow activity to a remote Actor's inbox.
+ * @param params - Either handle or actor_uri and optional inbox_url
+ */
+export async function followRemoteActor(params: {
+  handle?: string;
+  actor_uri?: string;
+  inbox_url?: string;
+}): Promise<RemoteFollowResult> {
+  const res = await apiClient.post<ApiResponse<RemoteFollowResult>>("/federation/follow", params);
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to follow remote actor");
+  }
+  return res.data.data;
+}

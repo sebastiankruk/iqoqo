@@ -124,6 +124,11 @@ def is_ip_blocked(ip_str: str) -> bool:
         # Unparseable addresses are treated as blocked for safety.
         return True
 
+    import os
+
+    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true" and (ip_obj.is_loopback or str(ip_obj) == "127.0.0.1"):
+        return False
+
     if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
         return True
 
@@ -281,7 +286,8 @@ def safe_get(
                 netloc = resolved_ip
 
             rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-            merged_headers.setdefault("Host", hostname)
+            host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
+            merged_headers.setdefault("Host", host_header_val)
 
         response = session.get(
             rewritten_url,
@@ -375,7 +381,8 @@ def safe_post(
             port = parsed.port
             netloc = f"{resolved_ip}:{port}" if port else resolved_ip
             rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-            merged_headers.setdefault("Host", hostname)
+            host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
+            merged_headers.setdefault("Host", host_header_val)
 
         response = session.post(
             rewritten_url,
