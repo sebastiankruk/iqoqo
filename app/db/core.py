@@ -625,6 +625,16 @@ class Item(db.Model):  # type: ignore[name-defined]
         """Return the canonical Linked Data IRI for this Item."""
         return canonical_frbr_iri("item", self.id)
 
+    @property
+    def is_public(self) -> bool:
+        """Return whether this Item is publicly visible."""
+        return not self.is_hidden
+
+    @is_public.setter
+    def is_public(self, value: bool) -> None:
+        """Set whether this Item is publicly visible by toggling is_hidden."""
+        self.is_hidden = not value
+
     def to_dict(self) -> dict:
         """Serialize Item entity to dictionary."""
         return {
@@ -638,6 +648,7 @@ class Item(db.Model):  # type: ignore[name-defined]
             "lent_to_user_id": str(self.lent_to_user_id) if self.lent_to_user_id else None,
             "lent_to_name": self.lent_to_name,
             "is_hidden": self.is_hidden,
+            "is_public": not self.is_hidden,
             "added_at": self.added_at.isoformat() if self.added_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "meta": self.meta or {},

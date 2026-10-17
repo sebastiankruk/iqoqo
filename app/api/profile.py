@@ -19,19 +19,18 @@ Profiles are authenticated but not privileged: the routes expose only what a
 profile owner or a permitted viewer may see, and hide entries through visibility
 flags rather than by omitting them from the query."""
 
+import os
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import bleach
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 from sqlalchemy import select
 
-# Imported for `pending_deletion_state` on the profile read.  Module-level so
-# the import graph is explicit; this module has no import cycle with it because
-# `account_lifecycle` only reaches back for the models.
+from app.api.core import api_bp, invalid_json_payload_response
 from app.core.account_lifecycle import pending_deletion_state
 from app.core.limiter import limiter
-from app.db.models import ConsentRecord, User, db
+from app.db.models import ConsentRecord, FederationConsent, User, db
 from app.utils.http_client import is_safe_url
 
 from .decorators import require_auth
@@ -165,6 +164,13 @@ def update_profile():
         val = data["visibility"]
         if val in ["public", "private"]:
             user.visibility = val
+
+    if "default_item_visibility" in data:
+        val = data["default_item_visibility"]
+        if val in ["public", "private"]:
+            user.default_item_visibility = val
+        else:
+            return jsonify({"error": "Invalid default_item_visibility. Must be 'public' or 'private'", "code": 400}), 400
 
     if "avatar_url" in data:
         raw_avatar = data["avatar_url"]
@@ -305,6 +311,13 @@ def update_profile_settings():
         if val in ["public", "private"]:
             user.visibility = val
 
+    if "default_item_visibility" in data:
+        val = data["default_item_visibility"]
+        if val in ["public", "private"]:
+            user.default_item_visibility = val
+        else:
+            return jsonify({"error": "Invalid default_item_visibility. Must be 'public' or 'private'", "code": 400}), 400
+
     db.session.commit()
     return jsonify({"success": True, "message": "Profile updated successfully.", "data": user.to_dict()})
 
@@ -337,3 +350,109 @@ def get_insights_distribution():
     owner_id = user_id if scope != "global" else None
     data = get_distribution_stats(owner_id)
     return jsonify({"success": True, "data": data})
+
+
+def _handle_get_federation_consent() -> tuple[Response, int] | Response:
+    """Core logic to retrieve current user's federation consent."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"success": False, "data": None, "error": "User not found"}), 404
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    if not consent:
+        data = {
+            "user_id": str(user.id),
+            "federated_profile": False,
+            "federated_collection": False,
+            "updated_at": None,
+        }
+    else:
+        data = consent.to_dict()
+
+    return jsonify({"success": True, "data": data, "error": None}), 200
+
+
+def _handle_update_federation_consent() -> tuple[Response, int] | Response:
+    """Core logic to update current user's federation consent."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"success": False, "data": None, "error": "User not found"}), 404
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return invalid_json_payload_response()
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    if not consent:
+        consent = FederationConsent(
+            user_id=user.id,
+            federated_profile=bool(payload.get("federated_profile", False)),
+            federated_collection=bool(payload.get("federated_collection", False)),
+        )
+        db.session.add(consent)
+    else:
+        if "federated_profile" in payload:
+            consent.federated_profile = bool(payload["federated_profile"])
+        if "federated_collection" in payload:
+            consent.federated_collection = bool(payload["federated_collection"])
+        consent.updated_at = datetime.now(UTC)
+
+    # Trigger actor RSA keypair generation on initial opt-in
+    if consent.federated_profile or consent.federated_collection:
+        from app.core import federation_keys
+        from app.core.iri import canonical_actor_iri
+
+        has_key = False
+        try:
+            has_key = bool(federation_keys.get_actor_public_key(str(user.id)))
+        except Exception:
+            has_key = False
+
+        if not has_key:
+            try:
+                base_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "https://iqoqo.app").rstrip("/")
+                key_id_suffix, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
+                canonical_uri = canonical_actor_iri(user.id, base_url)
+                user.federation_public_key = public_key_pem
+                user.federation_key_id = f"{canonical_uri}#main-key"
+            except Exception as e:
+                current_app.logger.warning("Failed to generate actor keypair on opt-in: %s", e)
+
+    db.session.commit()
+    return jsonify({"success": True, "data": consent.to_dict(), "message": "Federation consent updated", "error": None}), 200
+
+
+@profile_bp.route("/federation-consent", methods=["GET"])
+@require_auth
+def get_federation_consent():
+    """Retrieve federation consent settings for current user."""
+    return _handle_get_federation_consent()
+
+
+@profile_bp.route("/federation-consent", methods=["PUT", "PATCH"])
+@require_auth
+def update_federation_consent():
+    """Update federation consent settings for current user."""
+    return _handle_update_federation_consent()
+
+
+@api_bp.route("/v1/profile/federation-consent", methods=["GET"])
+@require_auth
+def get_federation_consent_v1():
+    """Retrieve federation consent settings via v1 profile endpoint."""
+    return _handle_get_federation_consent()
+
+
+@api_bp.route("/v1/profile/federation-consent", methods=["PUT", "PATCH"])
+@require_auth
+def update_federation_consent_v1():
+    """Update federation consent settings via v1 profile endpoint."""
+    return _handle_update_federation_consent()

@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, Response, current_app, jsonify, redirect, request
 from sqlalchemy import func, select
 
+from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
 from app.core.iri import canonical_actor_iri, get_lod_base_url, legacy_actor_iri
@@ -320,3 +321,21 @@ def get_actor_by_username(username: str) -> Response | tuple[Response, int]:
     base_url = _get_base_url()
     canonical_uri = canonical_actor_iri(user.id, base_url)
     return redirect(canonical_uri, code=301)
+
+
+@federation_bp.route("/consent", methods=["GET"])
+@require_auth
+def federation_consent_get() -> Response | tuple[Response, int]:
+    """Retrieve federation consent settings for the current user."""
+    from app.api.profile import _handle_get_federation_consent
+
+    return _handle_get_federation_consent()
+
+
+@federation_bp.route("/consent", methods=["PUT", "PATCH"])
+@require_auth
+def federation_consent_update() -> Response | tuple[Response, int]:
+    """Update federation consent settings for the current user."""
+    from app.api.profile import _handle_update_federation_consent
+
+    return _handle_update_federation_consent()

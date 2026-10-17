@@ -400,6 +400,7 @@ export interface UserProfile {
   bio?: string;
   avatar_url?: string;
   visibility?: string;
+  default_item_visibility?: "public" | "private";
   consents?: Record<string, boolean>;
   roles?: string[];
   permissions?: string[];

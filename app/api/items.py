@@ -895,6 +895,32 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     return jsonify({"ids": [item.id for item in items]})
 
 
+def _resolve_item_hidden_state(
+    user_id: uuid.UUID | str | None,
+    payload_json: dict | None,
+    schema_is_hidden: bool | None,
+) -> bool:
+    """Determine whether an item should be hidden (private) or visible (public).
+
+    Priority:
+    1. Explicit `is_public` boolean in the payload JSON.
+    2. Explicit `is_hidden` boolean in the payload JSON or schema.
+    3. User's configured `default_item_visibility` (defaults to 'private' -> is_hidden=True).
+    """
+    if payload_json and "is_public" in payload_json:
+        return not bool(payload_json["is_public"])
+    if payload_json and "is_hidden" in payload_json:
+        return bool(payload_json["is_hidden"])
+    if schema_is_hidden is not None:
+        return bool(schema_is_hidden)
+    if user_id:
+        u_id = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        user = db.session.get(User, u_id)
+        if user and getattr(user, "default_item_visibility", None) == "public":
+            return False
+    return True
+
+
 @api_bp.route("/item/<isbn>", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -976,6 +1002,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
         meta={},
     )
     db.session.add(item)
@@ -1085,6 +1112,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
         meta={},
     )
     db.session.add(item)
@@ -1339,7 +1367,7 @@ def create_item() -> Response | tuple[Response, int]:
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
-        is_hidden=payload.is_hidden or False,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
         meta=payload.meta or {},
     )
     db.session.add(item)
