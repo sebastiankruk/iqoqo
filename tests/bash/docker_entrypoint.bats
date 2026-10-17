@@ -145,3 +145,44 @@ teardown() {
   [[ "${output}" =~ "DB=postgresql://iqoqo:pass@db:5432/iqoqo" ]]
   [[ "${output}" =~ "REDIS=redis://redis:6379/0" ]]
 }
+
+@test "entrypoint succeeds when all storage directories are writable" {
+  mock_dir="${TEST_TEMP_DIR}/mock_writable"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  cd "${mock_dir}"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 0 ]
+  [[ ! "${output}" =~ "ERROR: Storage volume writability verification failed" ]]
+}
+
+@test "entrypoint fails with diagnostics and remediation command when storage directory is unwritable" {
+  mock_dir="${TEST_TEMP_DIR}/mock_unwritable"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  chmod 0555 "${mock_dir}/app/static/covers"
+  cd "${mock_dir}"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 1 ]
+  [[ "${output}" =~ "ERROR: Storage volume writability verification failed" ]]
+  [[ "${output}" =~ "app/static/covers" ]]
+  [[ "${output}" =~ "chmod -R a+rwX" ]]
+  [[ "${output}" =~ "make ensure-mount-perms" ]]
+
+  chmod 0755 "${mock_dir}/app/static/covers"
+}
+
+@test "entrypoint failure message identifies effective UID/GID" {
+  mock_dir="${TEST_TEMP_DIR}/mock_uid_gid"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  chmod 0555 "${mock_dir}/exports"
+  cd "${mock_dir}"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 1 ]
+  [[ "${output}" =~ "UID:" ]]
+  [[ "${output}" =~ "GID:" ]]
+  [[ "${output}" =~ "exports" ]]
+
+  chmod 0755 "${mock_dir}/exports"
+}

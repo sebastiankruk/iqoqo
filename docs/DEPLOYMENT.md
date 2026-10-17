@@ -19,9 +19,11 @@ A deployment directory is an isolated host directory that contains runtime confi
    - Exactly one `.env` file describes a deployment (`<DEPLOY_DIR>/.env`).
    - All tools, diagnostics (`make status`), backups, and Compose operations read this file directly. Diagnostics never fall back to an unrelated checkout's `.env`.
 
-3. **Pre-Flight Mount Guards**:
+3. **Pre-Flight Mount Guards & Non-Root UID Invariants**:
+   - Backend application services (`web`, `worker`) execute as an unprivileged user (`appuser`, UID 10001, GID 10001).
+   - Writable directory-target bind mount sources (`app/static/covers/`, `app/static/gallery/`, `app/static/uploads/raw_covers/`, `data/`, and `exports/`) **MUST** be writable by UID 10001 (`chmod -R a+rwX` or owner aligned with UID 10001) prior to container startup.
+   - Container entrypoint (`deploy/docker-entrypoint.sh`) enforces a pre-start writability probe across all mounted asset and data paths, failing fast with actionable remediation commands if non-root write access is denied.
    - File-target bind mount sources (`.allegro_token.json`, `deploy/nginx.conf`) **MUST** be regular files, never directories.
-   - Directory-target bind mount sources (`data/`, `exports/`, `app/static/covers/`, `gallery/`, `uploads/`, `shared/`, `scripts/`, `docs/ontology/`) are created with the application user's ownership and explicit permissions (`0755`) prior to `docker compose up`, preventing Docker from silently creating them as root-owned directories.
    - Sensitive environment files (`.env`) are tightened to `0600`.
 
 4. **Ontology Validation**:
@@ -85,6 +87,9 @@ make preview-down
 
 # 7. Check health of preview stack reading DEPLOY_DIR/.env
 make status preview
+
+# 8. Ensure host mount directories exist with permissive write access
+make ensure-mount-perms
 ```
 
 ---

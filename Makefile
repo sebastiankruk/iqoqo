@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -322,8 +322,12 @@ ensure-secrets: ## Ensure required secrets exist in environment file (ENV_FILE d
 		python3 scripts/ensure_env_secrets.py --env-file $(if $(ENV_FILE),$(ENV_FILE),$(COMPOSE_ENV_FILE)); \
 	fi
 
+ensure-mount-perms: ## Ensure host bind-mount paths exist and have permissive write access for unprivileged container user
+	@mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers exports data
+	@chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers exports data 2>/dev/null || true
+
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
-start:
+start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -334,7 +338,7 @@ start:
 	fi
 	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
 else
-start:
+start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
 		python3 scripts/ensure_env_secrets.py --env-file $(if $(wildcard $(COMPOSE_ENV_FILE)),$(COMPOSE_ENV_FILE),.env); \
@@ -343,8 +347,12 @@ start:
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 endif
 
-preview-up: ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
+preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@if [ -d "$(DEPLOY_DIR)" ]; then \
+		mkdir -p $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports $(DEPLOY_DIR)/data; \
+		chmod -R a+rwX $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports $(DEPLOY_DIR)/data 2>/dev/null || true; \
+	fi
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/sync_deploy_dir.py ]; then \
 		python3 scripts/sync_deploy_dir.py $(CURDIR) $(DEPLOY_DIR); \
 	fi

@@ -44,6 +44,14 @@ DIRECTORY_MOUNTS = [
     "docs/ontology",
 ]
 
+WRITABLE_MOUNTS = {
+    "app/static/covers",
+    "app/static/gallery",
+    "app/static/uploads/raw_covers",
+    "data",
+    "exports",
+}
+
 
 def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
     deploy_dir = deploy_dir_path.resolve()
@@ -102,16 +110,21 @@ def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
         if otel_file.exists() and otel_file.is_dir():
             errors.append(f"File-target mount source '{otel_file}' is a directory instead of a regular file.")
 
-    # 4. Directory-target mounts: create with app user ownership and 0755 mode if absent
+    # 4. Directory-target mounts: create with app user ownership and ensure writable mounts have permissive access
     for rel_dir in DIRECTORY_MOUNTS:
         target_dir = deploy_dir / rel_dir
         if target_dir.exists():
             if not target_dir.is_dir() and not target_dir.is_symlink():
                 errors.append(f"Expected directory mount source '{target_dir}' is a regular file.")
+            elif rel_dir in WRITABLE_MOUNTS:
+                try:
+                    os.chmod(target_dir, 0o777)
+                except OSError:
+                    pass
         else:
             try:
                 target_dir.mkdir(parents=True, exist_ok=True)
-                os.chmod(target_dir, 0o755)
+                os.chmod(target_dir, 0o777 if rel_dir in WRITABLE_MOUNTS else 0o755)
             except OSError as exc:
                 errors.append(f"Cannot create mount directory '{target_dir}': {exc}")
 
