@@ -102,7 +102,8 @@ COPY --chown=appuser:appuser app app/
 COPY --chown=appuser:appuser migrations migrations/
 COPY --chown=appuser:appuser scripts scripts/
 COPY --chown=appuser:appuser shared shared/
-RUN mkdir -p data && chown appuser:appuser data
+RUN mkdir -p data exports app/static/covers app/static/gallery app/static/uploads/raw_covers && \
+    chown -R appuser:appuser data exports app/static
 COPY --chown=appuser:appuser docs/ontology docs/ontology/
 COPY --chown=appuser:appuser run.py wsgi.py ./
 

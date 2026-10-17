@@ -154,6 +154,7 @@ What would you like to do?
 - Update task checkbox immediately after completing each task
 - Pause on errors, blockers, or unclear requirements - don't guess
 - Use contextFiles from CLI output, don't assume specific file names
+- Always commit and push on completion: After finishing all tasks and validating tests, lint, and secret-scan pass, commit changes using Conventional Commits and push the branch to remote origin before concluding.
 
 **Fluid Workflow Integration**
 

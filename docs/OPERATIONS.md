@@ -348,6 +348,57 @@ make etl-frbr ARGS="--verbose"
 docker compose logs web | grep "SPARQL"
 ```
 
+### Container Mount Permission Errors (PermissionError: [Errno 13])
+
+**Symptom:**
+Application containers fail to start or logs show `PermissionError: [Errno 13] Permission denied` during cover downloads, camera uploads, or database exports:
+
+```text
+ERROR: Storage volume writability verification failed.
+       Container user: appuser (UID: 10001, GID: 10001)
+       The following mount paths are not writable:
+         - app/static/covers
+         - exports
+```
+
+**Cause:**
+Backend services run as unprivileged `appuser` (UID 10001, GID 10001). When host bind mounts (`./app/static/covers`, `./app/static/gallery`, `./app/static/uploads/raw_covers`, `./exports`, `./data`) are created with default host permissions (`0755` owned by UID 1000 or `root`), the container user cannot create or modify files.
+
+**Diagnostic:**
+Run `make status` to inspect active container mount permissions:
+
+```bash
+make status
+# or for preview/production stacks:
+make status preview
+make status prod
+```
+
+Look for `Mount permissions` under the `Covers` section.
+
+**Resolution:**
+
+1. **Automated Fix:**
+   Run the Makefile target to ensure all bind-mount paths exist and possess permissive write access:
+
+   ```bash
+   make ensure-mount-perms
+   ```
+
+2. **Manual Host Remediation:**
+   Alternatively, grant write permissions directly on the host:
+
+   ```bash
+   chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers exports data
+   ```
+
+3. **Restart Containers:**
+   After adjusting permissions, restart the application services:
+
+   ```bash
+   docker compose restart web worker
+   ```
+
 ---
 
 ## Backup and Recovery Procedures

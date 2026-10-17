@@ -119,5 +119,26 @@ teardown() {
   [[ "$output" =~ "SPARQL_SERVICE_SECRET is configured with non-default value" ]]
 }
 
+@test "iqoqo-status.sh warns when container mounts are unwritable" {
+  mock_bin="${TEST_TEMP_DIR}/mock_bin"
+  mkdir -p "${mock_bin}"
+  printf '#!/bin/bash\nif [[ "$*" == *"test -w"* ]]; then\n  if [[ "$*" == *"exports"* ]]; then exit 1; fi\n  exit 0\nfi\nif [[ "$*" == *"ps --format"* ]]; then\n  echo "iqoqo-web-1"\n  exit 0\nfi\nexit 0\n' > "${mock_bin}/docker"
+  chmod +x "${mock_bin}/docker"
 
+  run env -u IQOQO_AI_MODE PATH="${mock_bin}:$PATH" bash scripts/iqoqo-status.sh prod
+  [[ "$output" =~ "Mount permissions" ]]
+  [[ "$output" =~ "NOT writable in container" ]]
+  [[ "$output" =~ "exports" ]]
+  [[ "$output" =~ "make ensure-mount-perms" ]]
+}
 
+@test "iqoqo-status.sh passes when all container mounts are writable" {
+  mock_bin="${TEST_TEMP_DIR}/mock_bin2"
+  mkdir -p "${mock_bin}"
+  printf '#!/bin/bash\nif [[ "$*" == *"test -w"* ]]; then\n  exit 0\nfi\nif [[ "$*" == *"ps --format"* ]]; then\n  echo "iqoqo-web-1"\n  exit 0\nfi\nexit 0\n' > "${mock_bin}/docker"
+  chmod +x "${mock_bin}/docker"
+
+  run env -u IQOQO_AI_MODE PATH="${mock_bin}:$PATH" bash scripts/iqoqo-status.sh prod
+  [[ "$output" =~ "Mount permissions" ]]
+  [[ "$output" =~ "covers, gallery, exports, data writable" ]]
+}

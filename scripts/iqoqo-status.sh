@@ -728,6 +728,21 @@ if [[ -d "$covers_dir" ]]; then
             fi
         fi
     fi
+    # Check container mount write permissions
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        unwritable_mounts=""
+        for mount_path in "/usr/src/app/app/static/covers" "/usr/src/app/app/static/gallery" "/usr/src/app/exports" "/usr/src/app/data"; do
+            if ! docker exec "$web_cname" test -w "$mount_path" 2>/dev/null; then
+                unwritable_mounts="${unwritable_mounts:+$unwritable_mounts, }$mount_path"
+            fi
+        done
+        if [[ -z "$unwritable_mounts" ]]; then
+            check "Mount permissions" pass "covers, gallery, exports, data writable"
+        else
+            check "Mount permissions" warn "NOT writable in container: ${unwritable_mounts} (Fix: chmod -R a+rwX on host, or make ensure-mount-perms)"
+        fi
+    fi
 else
     check "Directory" fail "NOT FOUND at ${covers_dir}"
 fi
