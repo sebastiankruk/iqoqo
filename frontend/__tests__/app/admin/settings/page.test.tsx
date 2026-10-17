@@ -14,10 +14,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import SettingsHubPage from "@/app/admin/settings/page";
 import { useProfile } from "@/lib/api/hooks";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import type { UserProfile } from "@/types/frbr";
 
@@ -120,7 +120,8 @@ describe("SettingsHubPage", () => {
     expect(screen.getByRole("button", { name: "API Integrations" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Roles" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Security" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Security" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Monetization" })).not.toBeInTheDocument();
   });
 
   // ── Regression: Custodian permission format (colon vs underscore) ────────
@@ -338,5 +339,73 @@ describe("SettingsHubPage", () => {
 
     // Custodian should see the SPARQL Explorer nav item
     expect(screen.getByText("SPARQL Explorer")).toBeInTheDocument();
+  });
+
+  describe("Admin Navigation & Fallback", () => {
+    const adminProfile = {
+      id: "2",
+      email: "admin@test.com",
+      display_name: "Admin User",
+      roles: ["admin"],
+      permissions: [
+        "config:external_apis",
+        "config:federation",
+        "config:affiliate",
+        "config:internal",
+        "read:users",
+        "write:users",
+        "read:roles",
+        "write:roles",
+      ],
+    } as unknown as UserProfile;
+
+    it("navigates between Settings, API Integrations, and Users tabs", async () => {
+      vi.mocked(useProfile).mockReturnValue({
+        data: adminProfile,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useProfile>);
+
+      render(<SettingsHubPage />);
+
+      // Initially on Settings (Instance Settings)
+      expect(screen.getByRole("heading", { name: "Instance Settings", level: 1 })).toBeInTheDocument();
+
+      // Click API Integrations
+      act(() => {
+        screen.getByRole("button", { name: "API Integrations" }).click();
+      });
+      expect(await screen.findByRole("heading", { name: "API Integrations", level: 1 })).toBeInTheDocument();
+
+      // Click Users
+      act(() => {
+        screen.getByRole("button", { name: "Users" }).click();
+      });
+      expect(await screen.findByRole("heading", { name: "User Management", level: 1 })).toBeInTheDocument();
+
+      // Roles is a link to /admin/groups
+      expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/admin/groups");
+
+      // Click back to Settings
+      act(() => {
+        screen.getByRole("button", { name: "Settings" }).click();
+      });
+      expect(await screen.findByRole("heading", { name: "Instance Settings", level: 1 })).toBeInTheDocument();
+    });
+
+    it("falls back to instance tab when an empty or removed tab is requested in searchParams", () => {
+      vi.mocked(useSearchParams).mockReturnValue(
+        new URLSearchParams("tab=federation") as unknown as ReturnType<typeof useSearchParams>
+      );
+
+      vi.mocked(useProfile).mockReturnValue({
+        data: adminProfile,
+        isLoading: false,
+      } as unknown as ReturnType<typeof useProfile>);
+
+      render(<SettingsHubPage />);
+
+      // Rather than rendering empty content, smoothly falls back to Instance Settings
+      expect(screen.getByRole("heading", { name: "Instance Settings", level: 1 })).toBeInTheDocument();
+    });
   });
 });

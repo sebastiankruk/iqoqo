@@ -65,12 +65,10 @@ const ALL_ITEMS = [
   "LOD Reconciliation",
   "Settings",
   "Federation",
-  "Monetization",
   "API Integrations",
   "Users",
   "Item Ownership",
   "Roles",
-  "Security",
 ];
 
 describe("AdminSidebar", () => {
@@ -96,9 +94,10 @@ describe("AdminSidebar", () => {
    * @returns The matching element.
    */
   function item(label: string): HTMLElement {
-    const byLink = screen.queryByRole("link", { name: label });
+    const pattern = new RegExp(`^${label}`);
+    const byLink = screen.queryByRole("link", { name: pattern });
     if (byLink) return byLink;
-    return screen.getByRole("button", { name: label });
+    return screen.getByRole("button", { name: pattern });
   }
 
   /**
@@ -223,5 +222,24 @@ describe("AdminSidebar", () => {
 
     expect(screen.getByText("Custodians")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Item Ownership" })).toBeInTheDocument();
+  });
+
+  it("never renders Monetization or Security tabs", () => {
+    mockProfile(profile(["admin"], ADMIN_PERMISSIONS));
+
+    render(<AdminSidebar />);
+
+    expect(screen.queryByText("Monetization")).not.toBeInTheDocument();
+    expect(screen.queryByText("Security")).not.toBeInTheDocument();
+  });
+
+  it("renders Federation as disabled with Coming in v0.9.1 badge", () => {
+    mockProfile(profile(["admin"], ADMIN_PERMISSIONS));
+
+    render(<AdminSidebar />);
+
+    const federationItem = item("Federation");
+    expect(federationItem).toBeDisabled();
+    expect(screen.getByText("Coming in v0.9.1")).toBeInTheDocument();
   });
 });

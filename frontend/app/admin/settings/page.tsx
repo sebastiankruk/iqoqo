@@ -78,30 +78,43 @@ function SettingsContent(): React.JSX.Element {
     hasPermission(PermissionName.CONFIG_FEDERATION) ||
     hasPermission(PermissionName.CONFIG_AFFILIATE) ||
     hasPermission(PermissionName.CONFIG_INTERNAL);
+  const canViewApiKeys = hasPermission(PermissionName.CONFIG_EXTERNAL_APIS);
   const canViewUsers = hasPermission(PermissionName.READ_USERS);
   const canEditUsers = hasPermission(PermissionName.WRITE_USERS);
   const canViewMetadata = hasPermission(PermissionName.WRITE_METADATA);
-  const canEditCover = hasPermission(PermissionName.EDIT_COVER);
-  const canViewEscalationQueue = hasPermission(PermissionName.ESCALATE_RESOLVE);
-  const canAccessSparql =
-    hasPermission(PermissionName.READ_METADATA) ||
-    hasPermission(PermissionName.WRITE_METADATA) ||
-    (profile.roles ?? []).includes("admin") ||
-    (profile.roles ?? []).includes("contributor");
   const isAdmin = (profile.roles ?? []).includes("admin");
 
-  // Determine default tab based on permissions
+  // Check if a tab can be rendered for current user on this page
+  const isTabAvailable = (tab: string | null): boolean => {
+    if (!tab) return false;
+    switch (tab) {
+      case "instance":
+        return isAdmin || canViewSettings;
+      case "apikeys":
+        return canViewApiKeys;
+      case "users":
+        return canViewUsers;
+      case "metadata":
+        return canViewMetadata;
+      default:
+        return false;
+    }
+  };
+
+  // Determine default tab based on permissions without landing on empty tabs
   const getDefaultTab = (): string => {
-    if (searchParams.get("tab")) return searchParams.get("tab")!;
-    if (isAdmin && canViewSettings) return "instance";
+    const requested = searchParams.get("tab");
+    if (requested && isTabAvailable(requested)) {
+      return requested;
+    }
+    if (isAdmin || canViewSettings) return "instance";
     if (canViewMetadata) return "metadata";
-    if (canEditCover) return "cover-art";
-    if (canViewEscalationQueue) return "escalations";
-    if (canAccessSparql) return "sparql";
+    if (canViewApiKeys) return "apikeys";
+    if (canViewUsers) return "users";
     return "instance";
   };
 
-  const activeTab = internalTab || getDefaultTab();
+  const activeTab = internalTab && isTabAvailable(internalTab) ? internalTab : getDefaultTab();
 
   return (
     <div className="min-h-screen bg-background dark:bg-[#040608] flex flex-col">
@@ -122,34 +135,6 @@ function SettingsContent(): React.JSX.Element {
                 </p>
               </div>
               <InstanceSettings category="internal" />
-            </div>
-          )}
-
-          {activeTab === "federation" && (
-            <div className="flex flex-col gap-8">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Federation</h1>
-                <p className="text-sm text-muted-foreground mt-1">Manage federated instances and partnerships.</p>
-              </div>
-              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6">
-                  <p className="text-sm text-muted-foreground">Coming soon</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "monetization" && (
-            <div className="flex flex-col gap-8">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Monetization</h1>
-                <p className="text-sm text-muted-foreground mt-1">Configure affiliate programs and revenue sharing.</p>
-              </div>
-              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6">
-                  <p className="text-sm text-muted-foreground">Coming soon</p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -174,20 +159,6 @@ function SettingsContent(): React.JSX.Element {
                 </p>
               </div>
               <UserManagement canEdit={canEditUsers} />
-            </div>
-          )}
-
-          {activeTab === "security" && hasPermission(PermissionName.CONFIG_INTERNAL) && (
-            <div className="flex flex-col gap-8">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
-                <p className="text-sm text-muted-foreground mt-1">Configure internal security settings.</p>
-              </div>
-              <div className="border border-border dark:border-white/10 rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-                <div className="p-6">
-                  <p className="text-sm text-muted-foreground">Coming soon</p>
-                </div>
-              </div>
             </div>
           )}
 
