@@ -164,6 +164,16 @@ def _get_header(request: Any, header_name: str) -> str:
     return ""
 
 
+def _record_sig_failure(reason: str) -> None:
+    """Record HTTP signature verification failure metric."""
+    try:
+        from app.core.telemetry import federation_sig_failures_total
+
+        federation_sig_failures_total.add(1, {"reason": reason})
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, ImportError):
+        pass
+
+
 def verify_request(
     request: Any,
     max_skew_seconds: int = 300,
@@ -193,6 +203,7 @@ def verify_request(
     # 1. Parse Signature header
     sig_raw = _get_header(request, "Signature") or _get_header(request, "Authorization")
     if not sig_raw:
+        _record_sig_failure("missing_signature_header")
         raise SignatureVerificationError("Missing Signature header")
 
     params = _parse_signature_header(sig_raw)
@@ -202,9 +213,11 @@ def verify_request(
     headers_str = params.get("headers", "(request-target)")
 
     if not key_id or not sig_b64:
+        _record_sig_failure("missing_params")
         raise SignatureVerificationError("Signature header missing keyId or signature")
 
     if algorithm.lower() not in ("rsa-sha256", "hs2019"):
+        _record_sig_failure("unsupported_algorithm")
         raise SignatureVerificationError(f"Unsupported signature algorithm: {algorithm}")
 
     headers_list = [h.strip().lower() for h in headers_str.split(" ") if h.strip()]
@@ -212,6 +225,7 @@ def verify_request(
     # 2. Date skew validation (+/- 300s)
     date_str = _get_header(request, "Date")
     if not date_str:
+        _record_sig_failure("missing_date_header")
         raise DateSkewError("Missing Date header in signed request")
 
     try:
@@ -219,11 +233,13 @@ def verify_request(
         if date_dt.tzinfo is None:
             date_dt = date_dt.replace(tzinfo=UTC)
     except Exception as exc:
+        _record_sig_failure("invalid_date_format")
         raise DateSkewError(f"Invalid Date header format: {date_str}") from exc
 
     now = datetime.now(UTC)
     skew = abs((now - date_dt).total_seconds())
     if skew > max_skew_seconds:
+        _record_sig_failure("date_skew_exceeded")
         raise DateSkewError(f"Date header skew ({skew:.1f}s) exceeds maximum allowed ({max_skew_seconds}s)")
 
     # 3. Digest header verification
@@ -234,10 +250,12 @@ def verify_request(
     if "digest" in headers_list or _get_header(request, "Digest"):
         digest_hdr = _get_header(request, "Digest")
         if not digest_hdr:
+            _record_sig_failure("missing_digest_header")
             raise DigestMismatchError("Missing Digest header in request")
 
         expected_digest = compute_digest(body_bytes)
         if digest_hdr.strip() != expected_digest:
+            _record_sig_failure("digest_mismatch")
             raise DigestMismatchError(f"Digest header mismatch: expected {expected_digest}, got {digest_hdr}")
 
     # 4. Actor vs keyId domain matching
@@ -246,11 +264,13 @@ def verify_request(
     actor_netloc = urlparse(actor_uri).netloc.lower()
 
     if not key_netloc or not actor_netloc or key_netloc != actor_netloc:
+        _record_sig_failure("domain_mismatch")
         raise SignatureVerificationError(f"keyId domain ({key_netloc}) does not match actor domain ({actor_netloc})")
 
     if expected_actor_uri:
         exp_netloc = urlparse(expected_actor_uri).netloc.lower()
         if exp_netloc and exp_netloc != key_netloc:
+            _record_sig_failure("domain_mismatch")
             raise SignatureVerificationError(f"keyId domain ({key_netloc}) does not match expected actor domain ({exp_netloc})")
 
     if body_bytes:
@@ -261,6 +281,7 @@ def verify_request(
                 if isinstance(payload_actor, str):
                     p_netloc = urlparse(payload_actor).netloc.lower()
                     if p_netloc and p_netloc != key_netloc:
+                        _record_sig_failure("domain_mismatch")
                         raise SignatureVerificationError(f"keyId domain ({key_netloc}) does not match payload actor domain ({p_netloc})")
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
@@ -294,9 +315,11 @@ def verify_request(
                 if isinstance(pk_info, dict) and "publicKeyPem" in pk_info:
                     public_key_pem = pk_info["publicKeyPem"]
         except Exception as exc:
+            _record_sig_failure("key_fetch_error")
             raise KeyFetchError(f"Failed to fetch public key for actor {actor_uri}: {exc}") from exc
 
     if not public_key_pem:
+        _record_sig_failure("key_not_resolved")
         raise KeyFetchError(f"Could not resolve public key for keyId {key_id}")
 
     # 6. Reconstruct signing string
@@ -330,6 +353,7 @@ def verify_request(
             hashes.SHA256(),
         )
     except Exception as exc:
+        _record_sig_failure("crypto_verification_failed")
         raise SignatureVerificationError(f"RSA signature verification failed: {exc}") from exc
 
     return actor_uri

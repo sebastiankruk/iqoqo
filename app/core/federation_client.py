@@ -28,6 +28,7 @@ import requests
 from app.core import federation_keys
 from app.core.http_signatures import sign_request
 from app.core.iri import canonical_actor_iri, get_lod_base_url
+from app.core.telemetry import record_outbound_telemetry
 from app.utils.http_client import SSRFError, safe_get, safe_post
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,17 @@ class FederationClient:
 
     def __init__(self, timeout: float = 10.0):
         self.timeout = timeout
+
+    @staticmethod
+    def _record_delivery_failure(target_url: str, reason: str) -> None:
+        """Record outbound federation delivery failure metric."""
+        try:
+            from app.core.telemetry import federation_delivery_failures_total
+
+            domain = urlparse(target_url).netloc.lower() or "unknown"
+            federation_delivery_failures_total.add(1, {"domain": domain, "reason": reason})
+        except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, ImportError):
+            pass
 
     def fetch_actor(self, actor_uri: str) -> dict[str, Any] | None:
         """Fetch remote ActivityPub Actor document with SSRF protection and local cache.
@@ -55,16 +67,20 @@ class FederationClient:
             "Accept": 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
             "User-Agent": "iqoqo-federation/0.9.0",
         }
+        record_outbound_telemetry("Federation", headers, url=actor_uri)
 
         try:
             resp = safe_get(actor_uri, headers=headers, timeout=self.timeout)
             if resp.status_code != 200:
+                self._record_delivery_failure(actor_uri, f"http_{resp.status_code}")
                 logger.warning("Failed to fetch actor %s: HTTP %d", actor_uri, resp.status_code)
                 return None
             data = resp.json()
         except SSRFError:
+            self._record_delivery_failure(actor_uri, "ssrf_blocked")
             raise
         except Exception as exc:
+            self._record_delivery_failure(actor_uri, "network_error")
             logger.error("Error fetching actor %s: %s", actor_uri, exc)
             return None
 
@@ -159,7 +175,9 @@ class FederationClient:
         if sender_user_id:
             priv_key = federation_keys.get_actor_private_key(sender_user_id)
             if priv_key:
-                base_url = get_lod_base_url()
+                from flask import current_app, has_app_context
+
+                base_url = (current_app.config.get("BASE_URL") or get_lod_base_url()) if has_app_context() else get_lod_base_url()
                 key_id = f"{canonical_actor_iri(sender_user_id, base_url)}#main-key"
                 headers = sign_request(
                     method="POST",
@@ -170,9 +188,21 @@ class FederationClient:
                     headers=headers,
                 )
 
-        return safe_post(
-            target_inbox_url,
-            data=body_bytes,
-            headers=headers,
-            timeout=self.timeout,
-        )
+        record_outbound_telemetry("Federation", headers, url=target_inbox_url)
+
+        try:
+            resp = safe_post(
+                target_inbox_url,
+                data=body_bytes,
+                headers=headers,
+                timeout=self.timeout,
+            )
+            if resp.status_code >= 400:
+                self._record_delivery_failure(target_inbox_url, f"http_{resp.status_code}")
+            return resp
+        except SSRFError:
+            self._record_delivery_failure(target_inbox_url, "ssrf_blocked")
+            raise
+        except Exception:
+            self._record_delivery_failure(target_inbox_url, "network_error")
+            raise
