@@ -12,7 +12,7 @@ The manual entry interface SHALL allow users on mobile and desktop devices to se
 #### Scenario: Selecting an image from mobile photo library
 
 - **WHEN** a user opens the manual entry form on a mobile device
-- **AND** taps "Choose from Photos"
+- **AND** clicks "Upload Cover" and selects "Choose from Photos"
 - **THEN** the device opens the system photo picker/gallery
 - **AND** the selected image is staged for cover upload.
 
