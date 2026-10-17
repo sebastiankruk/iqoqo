@@ -320,6 +320,7 @@ def get_items():
                     "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
                     "status": row["status"],
                     "collection_status": row["collection_status"],
+                    "local_barcode": row.get("local_barcode"),
                     "lent_to_user_id": row.get("lent_to_user_id"),
                     "lent_to_name": row.get("lent_to_name"),
                     "manifestation_id": row["manifestation_id"],
@@ -436,6 +437,7 @@ def get_items():
                     "owner_id": item.owner_id,
                     "status": item.status,
                     "collection_status": item.collection_status,
+                    "local_barcode": item.local_barcode,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": item.manifestation_id,
@@ -511,6 +513,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
+        "local_barcode": item.local_barcode,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
@@ -640,6 +643,8 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         item.lent_to_user_id = uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None
     if "lent_to_name" in payload.model_fields_set:
         item.lent_to_name = payload.lent_to_name
+    if "local_barcode" in payload.model_fields_set:
+        item.local_barcode = payload.local_barcode.strip() if (payload.local_barcode and payload.local_barcode.strip()) else None
     if payload.is_hidden is not None:
         item.is_hidden = payload.is_hidden
 
@@ -668,7 +673,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         db.session.commit()
         # Tag/status changes alter this user's facet counts.
         invalidate_facets_cache(user_id)
-        return jsonify({"success": True, "data": {"id": item.id}, "error": None})
+        return jsonify({"success": True, "data": {"id": item.id, "local_barcode": item.local_barcode}, "error": None})
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
@@ -890,6 +895,32 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     return jsonify({"ids": [item.id for item in items]})
 
 
+def _resolve_item_hidden_state(
+    user_id: uuid.UUID | str | None,
+    payload_json: dict | None,
+    schema_is_hidden: bool | None,
+) -> bool:
+    """Determine whether an item should be hidden (private) or visible (public).
+
+    Priority:
+    1. Explicit `is_public` boolean in the payload JSON.
+    2. Explicit `is_hidden` boolean in the payload JSON or schema.
+    3. User's configured `default_item_visibility` (defaults to 'private' -> is_hidden=True).
+    """
+    if payload_json and "is_public" in payload_json:
+        return not bool(payload_json["is_public"])
+    if payload_json and "is_hidden" in payload_json:
+        return bool(payload_json["is_hidden"])
+    if schema_is_hidden is not None:
+        return bool(schema_is_hidden)
+    if user_id:
+        u_id = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        user = db.session.get(User, u_id)
+        if user and getattr(user, "default_item_visibility", None) == "public":
+            return False
+    return True
+
+
 @api_bp.route("/item/<isbn>", methods=["POST"])
 @require_auth
 @require_permission(PermissionName.WRITE_ITEM)
@@ -968,8 +999,10 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         owner_id=user_id,
         status=payload.status or "want_to_read",
         collection_status=payload.collection_status,
+        local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
         meta={},
     )
     db.session.add(item)
@@ -980,7 +1013,17 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         db.session.commit()
         # A new item changes this user's facet counts.
         invalidate_facets_cache(user_id)
-        return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "item_id": item.id,
+                    "manifestation_id": manifestation.id,
+                    "local_barcode": item.local_barcode,
+                },
+                "error": None,
+            }
+        )
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         current_app.logger.exception("Failed to add item for ISBN %s for user %s: %s", isbn, user_id, e)
@@ -1066,8 +1109,10 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         owner_id=user_id,
         status=payload.status or "want_to_read",
         collection_status=payload.collection_status,
+        local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
         meta={},
     )
     db.session.add(item)
@@ -1080,7 +1125,17 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     db.session.commit()
     invalidate_facets_cache(user_id)
 
-    return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+    return jsonify(
+        {
+            "success": True,
+            "data": {
+                "item_id": item.id,
+                "manifestation_id": manifestation.id,
+                "local_barcode": item.local_barcode,
+            },
+            "error": None,
+        }
+    )
 
 
 @api_bp.route("/items/bulk", methods=["POST"])
@@ -1245,6 +1300,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
             owner_id=user_id,
             status=payload.status or default_status,
             collection_status=payload.collection_status,
+            local_barcode=payload.local_barcode,
             lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
             lent_to_name=payload.lent_to_name,
             meta={},
@@ -1256,11 +1312,78 @@ def add_item_manual() -> Response | tuple[Response, int]:
         db.session.commit()
         invalidate_facets_cache(user_id)
 
-        return jsonify({"success": True, "data": {"item_id": item.id, "manifestation_id": manifestation.id}, "error": None})
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "item_id": item.id,
+                    "manifestation_id": manifestation.id,
+                    "local_barcode": item.local_barcode,
+                },
+                "error": None,
+            }
+        )
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         current_app.logger.exception("Failed to create manual item for user %s: %s", user_id, e)
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
+
+
+@api_bp.route("/items", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+def create_item() -> Response | tuple[Response, int]:
+    """Create a new physical item under an existing manifestation."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = ItemCreateSchema(**payload_json)
+    except (ValidationError, TypeError) as e:
+        return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    manifestation_id = payload.manifestation_id
+    if not manifestation_id:
+        return jsonify({"error": "manifestation_id is required", "code": 400}), 400
+
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    if payload.collection_status == "lent":
+        if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
+            return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
+
+    item = Item(
+        manifestation_id=manifestation.id,
+        owner_id=user_id,
+        status=payload.status or "want_to_read",
+        collection_status=payload.collection_status or "available",
+        local_barcode=payload.local_barcode,
+        lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
+        lent_to_name=payload.lent_to_name,
+        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
+        meta=payload.meta or {},
+    )
+    db.session.add(item)
+    db.session.flush()
+    log_initial_item_status(item.id, user_id, item.status, item.collection_status)
+    if payload.collection_id:
+        link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
+        db.session.add(link)
+    sync_tags(item.id, user_id, payload.tags)
+    db.session.commit()
+    invalidate_facets_cache(user_id)
+
+    res_data = item.to_dict()
+    res_data["item_id"] = item.id
+    res_data["manifestation_id"] = manifestation.id
+    return jsonify({"success": True, "data": res_data, "error": None}), 201
 
 
 @api_bp.route("/items/<int:item_id>/logs", methods=["GET"])

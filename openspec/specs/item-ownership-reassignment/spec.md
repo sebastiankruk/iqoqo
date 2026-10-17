@@ -8,7 +8,7 @@ Provides an auditable, administrator-controlled way to correct Item ownership af
 
 ### Requirement: Ownership reassignment is restricted to authorized administrators
 
-The system SHALL permit Item ownership reassignment to an authenticated user who has either the `admin` role or the `custodian` role, along with the `write:users` permission. Source/target account discovery SHALL additionally require `read:users`. Ordinary owners, borrowers, users with only `update:item` or `write:item`, and callers without authentication SHALL NOT use reassignment operations. Reassignment SHALL NOT be exposed as a public or self-service ownership override, and the ordinary Item update API SHALL continue to reject `owner_id` changes. Reassignment affordances SHALL be accessible within both administrator and custodian navigation surfaces.
+The system SHALL permit Item ownership reassignment to an authenticated user who has either the `admin` role, `custodian` role, or `contributor` role with item transfer privileges (`transfer:item` / `write:users`). Source/target account discovery SHALL enforce SQL-level pagination and bounds (`limit`/`offset`/query filtering) rather than unbounded table dumps, and SHALL require appropriate account read authorization (`read:users` or `transfer:item`). Ordinary owners, borrowers, users with only `update:item` or `write:item`, and callers without authentication SHALL NOT use reassignment operations. Reassignment affordances SHALL be accessible within administrator and custodian navigation surfaces for users holding any of the authorized roles (`admin`, `custodian`, or `contributor`).
 
 #### Scenario: Authorized administrator opens reassignment
 
@@ -17,8 +17,13 @@ The system SHALL permit Item ownership reassignment to an authenticated user who
 
 #### Scenario: Authorized custodian opens reassignment
 
-- **WHEN** an authenticated custodian with `write:users` requests the reassignment UI or API
-- **THEN** the system permits the operation subject to source, target, and scope validation and displays the reassignment option in the custodian navigation menu
+- **WHEN** an authenticated custodian or contributor with transfer permissions requests the reassignment UI or API
+- **THEN** the system permits the operation subject to source, target, and scope validation and displays the reassignment option in the navigation menu
+
+#### Scenario: Account discovery enforces pagination bounds
+
+- **WHEN** an authorized user queries the ownership account discovery endpoint
+- **THEN** the system executes bounded SQL queries with limit and search constraints and returns paginated accounts without dumping the entire user directory into memory.
 
 #### Scenario: Administrator without account-read permission requests account discovery
 

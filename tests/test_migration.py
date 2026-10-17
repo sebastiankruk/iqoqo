@@ -456,10 +456,13 @@ def test_alembic_single_head_and_unbroken_lineage() -> None:
 
     heads = script.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 Alembic migration head, found {len(heads)}: {heads}"
-    assert heads[0] == "v0_8_4_fts_unaccent"
+    assert heads[0] == "v0_9_0_user_default_visibility"
 
     revisions = [rev.revision for rev in script.walk_revisions()]
     assert revisions == [
+        "v0_9_0_user_default_visibility",
+        "v0_9_0_federation_schema",
+        "v0_8_4_item_local_barcode",
         "v0_8_4_fts_unaccent",
         "v0_8_4_work_series_mem",
         "v0_8_4_search_unaccent",
@@ -1885,5 +1888,58 @@ def test_v0_8_3_semantic_links_status_upgrade_and_downgrade() -> None:
             inspector = sa.inspect(connection)
             cols = {c["name"]: c for c in inspector.get_columns("semantic_links")}
             assert "status" not in cols
+    finally:
+        engine.dispose()
+
+
+def test_v0_8_4_item_local_barcode_upgrade_and_downgrade() -> None:
+    """Test upgrade adds local_barcode column and index, downgrade removes them."""
+    from importlib import import_module
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration: Any = import_module("migrations.versions.v0_8_4_item_local_barcode")
+    assert migration.revision == "v0_8_4_item_local_barcode"
+    assert migration.down_revision == "v0_8_4_fts_unaccent"
+    assert len(migration.revision) <= 32
+
+    engine = sa.create_engine("sqlite://")
+
+    def run_migration(operation) -> None:
+        with engine.begin() as connection:
+            previous_op = migration.op
+            migration.op = Operations(MigrationContext.configure(connection))
+            try:
+                operation()
+            finally:
+                migration.op = previous_op
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "CREATE TABLE items (" "id INTEGER PRIMARY KEY, " "manifestation_id INTEGER NOT NULL, " "owner_id VARCHAR(36) NOT NULL" ")"
+            )
+        )
+
+    try:
+        run_migration(migration.upgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("items")}
+            assert "local_barcode" in cols
+            indices = {idx["name"] for idx in inspector.get_indexes("items")}
+            assert "ix_items_local_barcode" in indices
+
+        run_migration(migration.downgrade)
+
+        with engine.connect() as connection:
+            inspector = sa.inspect(connection)
+            cols = {c["name"]: c for c in inspector.get_columns("items")}
+            assert "local_barcode" not in cols
+            indices = {idx["name"] for idx in inspector.get_indexes("items")}
+            assert "ix_items_local_barcode" not in indices
     finally:
         engine.dispose()

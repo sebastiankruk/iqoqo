@@ -86,6 +86,7 @@ Talk like caveman
 - **Zero-Polling Background Execution:** NEVER poll `manage_task(Action='status')` or schedule repetitive short timers in a tight loop to check running tests, builds, or commands. The agent runtime is fully reactive and automatically delivers completion notifications. After launching an asynchronous command or task, stop calling tools and wait for the reactive system wakeup.
 - **Mempalace Updates:** Do NOT perform automatic MemPalace updates or mining at the end of interactive sessions. Knowledge synchronization at session close is limited strictly to `make knowledge-sync`.
 - **Prohibit Heredoc / `cat << EOF` File Editing:** NEVER use `cat << EOF`, `cat << 'EOF'`, or shell heredoc redirection inside `run_command` to create or edit project files. Always use designated agent file tools (`replace_file_content` or dedicated file editing tools) to modify or create files. Authoring files via shell heredocs bypasses diff inspections, escapes syntax checks, risks quote corruption, and is strictly prohibited.
+- **Always Commit & Push on OpenSpec Completion:** When you finish implementing all tasks in an OpenSpec change, you MUST verify local checks pass (`make secret-scan`, `make lint`, test suites), commit the implementation using Conventional Commits, and immediately push the branch to the remote repository (`git push -u origin <branch>`). Never leave a completed OpenSpec implementation uncommitted or unpushed.
 
 ## Python Backend (Flask)
 - **Engine:** Use Python 3.14+ exclusively.

@@ -45,10 +45,12 @@ class ItemCreateSchema(BaseModel):
 
     status: str | None = Field(default=None, description="The progress status of the item")
     collection_status: str | None = Field(default="available", description="The physical status of the item")
-    is_hidden: bool | None = Field(default=False, description="Whether the item is hidden from public profiles")
+    is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
     tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
     collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
+    manifestation_id: int | None = Field(default=None, description="The manifestation ID to shelve an item under")
+    local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
     lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
 
@@ -132,6 +134,7 @@ class ItemUpdateSchema(BaseModel):
 
     status: str | None = None
     collection_status: str | None = None
+    local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
     is_hidden: bool | None = None
@@ -192,6 +195,7 @@ class ItemManualCreateSchema(BaseModel):
     Description: str | None = None
     status: str | None = None
     collection_status: str | None = "available"
+    local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
     tags: list[str] | None = None
     lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
@@ -255,6 +259,8 @@ class ScanBarcodeSchema(BaseModel):
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
     meta: dict[str, Any] | None = None
+    is_hidden: bool | None = None
+    is_public: bool | None = None
 
     @field_validator("policy")
     @classmethod

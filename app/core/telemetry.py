@@ -40,6 +40,14 @@ mapping_parse_failures_total = meter.create_counter(
     name="mapping_parse_failures_total",
     description="Number of format mapping parse or validation failures",
 )
+federation_sig_failures_total = meter.create_counter(
+    name="federation_sig_failures_total",
+    description="Number of HTTP signature verification failures in federation",
+)
+federation_delivery_failures_total = meter.create_counter(
+    name="federation_delivery_failures_total",
+    description="Number of outbound federation delivery failures",
+)
 
 
 def request_hook(span: Any, environ: dict) -> None:

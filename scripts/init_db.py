@@ -109,7 +109,7 @@ def init_database(seed_file: Path | None = None, reset: bool = False, force: boo
         if db.engine.dialect.name == "postgresql":
             from sqlalchemy import text
 
-            for schema_name in ("auth", "catalog", "inventory", "social", "config"):
+            for schema_name in ("auth", "catalog", "inventory", "social", "config", "federation"):
                 db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
             db.session.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
             db.session.execute(text("""

@@ -25,8 +25,9 @@ from flask import Blueprint, Response, current_app, jsonify, redirect, request, 
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.core.frbr_merge import get_entity_tombstone
 from app.core.frbr_service import serialize_collection_to_rdf
-from app.core.iri import get_lod_base_url
+from app.core.iri import canonical_frbr_iri, get_lod_base_url
 from app.core.limiter import limiter
 from app.db.models import Expression, Item, Manifestation, Work, db
 
@@ -104,9 +105,18 @@ def _prefers_html() -> bool:
         and "application/ld+json" not in accept
         and "text/turtle" not in accept
         and "application/n-triples" not in accept
+        and "application/activity+json" not in accept
     ):
         return True
     return False
+
+
+def _prefers_activitystreams() -> bool:
+    """Return True if the request explicitly asks for ActivityStreams/ActivityPub."""
+    if request.args.get("format", "").lower() in ("activity", "activitypub", "as", "activity+json"):
+        return True
+    accept = request.headers.get("Accept", "")
+    return "application/activity+json" in accept or 'profile="https://www.w3.org/ns/activitystreams"' in accept
 
 
 def _negotiate_rdf_format(default_format: str = "json-ld") -> tuple[str, str]:
@@ -130,6 +140,83 @@ def _negotiate_rdf_format(default_format: str = "json-ld") -> tuple[str, str]:
     return "turtle", "text/turtle"
 
 
+def _handle_entity_tombstone(tier: str, entity_id: int, tombstone: Any) -> Response | tuple[Response, int]:
+    """Handle dereferencing for an entity consolidated and deleted by a FRBR merge.
+
+    Emits permanent 301 redirection for browsers, ActivityStreams Move/Tombstone
+    payloads for federation agents, or owl:sameAs triples for Linked Data crawlers.
+    """
+    diff = getattr(tombstone, "diff", {}) or {}
+    target_id = diff.get("target_id")
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+
+    source_iri = diff.get("source_iri") or canonical_frbr_iri(tier, entity_id, base_url)
+    target_iri = diff.get("target_iri") or (canonical_frbr_iri(tier, target_id, base_url) if target_id else base_url)
+
+    # 1. HTML browser request: redirect to surviving entity's frontend page
+    if _prefers_html() and target_id:
+        return cast(Response, redirect(f"/{tier}/{target_id}", code=301))
+
+    # 2. ActivityStreams / Fediverse request
+    if _prefers_activitystreams():
+        move_payload = diff.get("activitystreams_move")
+        if not move_payload:
+            move_payload = {
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "id": f"{source_iri}#move",
+                "type": "Move",
+                "actor": base_url,
+                "object": source_iri,
+                "target": target_iri,
+            }
+        resp = jsonify(move_payload)
+        resp.status_code = 410
+        resp.mimetype = "application/activity+json"
+        resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+        resp.headers["Location"] = target_iri
+        resp.headers["Link"] = f'<{target_iri}>; rel="canonical"'
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+
+    # 3. Explicit redirect query parameter
+    if request.args.get("redirect") in ("1", "true"):
+        return cast(Response, redirect(target_iri, code=301))
+
+    # 4. Public RDF / Linked Data request (owl:sameAs)
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+    if rdf_format == "turtle":
+        payload = f"@prefix owl: <http://www.w3.org/2002/07/owl#> .\n\n<{source_iri}> owl:sameAs <{target_iri}> .\n"
+    elif rdf_format == "nt":
+        payload = f"<{source_iri}> <http://www.w3.org/2002/07/owl#sameAs> <{target_iri}> .\n"
+    else:
+        import json
+
+        payload = json.dumps(
+            {
+                "@context": {
+                    "owl": "http://www.w3.org/2002/07/owl#",
+                    "as": "https://www.w3.org/ns/activitystreams#",
+                },
+                "@id": source_iri,
+                "owl:sameAs": {"@id": target_iri},
+            },
+            indent=2,
+        )
+
+    resp = Response(
+        payload,
+        status=410,
+        mimetype=rdf_mimetype,
+        headers={
+            "Content-Type": f"{rdf_mimetype}; charset=utf-8",
+            "Location": target_iri,
+            "Link": f'<{target_iri}>; rel="duplicate"',
+            "Cache-Control": "public, max-age=300",
+        },
+    )
+    return resp
+
+
 @public_bp.route("/manifestations/<int:manifestation_id>", methods=["GET"])
 @limiter.limit("120 per minute")
 def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response, int]:
@@ -146,6 +233,9 @@ def get_public_manifestation(manifestation_id: int) -> Response | tuple[Response
     )
     manifestation = db.session.execute(stmt).scalars().first()
     if not manifestation:
+        tombstone = get_entity_tombstone("manifestation", manifestation_id)
+        if tombstone:
+            return _handle_entity_tombstone("manifestation", manifestation_id, tombstone)
         return jsonify({"error": "Manifestation not found"}), 404
 
     if _prefers_html():
@@ -187,6 +277,9 @@ def get_public_work(work_id: int) -> Response | tuple[Response, int]:
     )
     work = db.session.execute(stmt).scalars().first()
     if not work:
+        tombstone = get_entity_tombstone("work", work_id)
+        if tombstone:
+            return _handle_entity_tombstone("work", work_id, tombstone)
         return jsonify({"error": "Work not found"}), 404
 
     if _prefers_html():
@@ -232,6 +325,9 @@ def get_public_expression(expression_id: int) -> Response | tuple[Response, int]
     )
     expression = db.session.execute(stmt).scalars().first()
     if not expression:
+        tombstone = get_entity_tombstone("expression", expression_id)
+        if tombstone:
+            return _handle_entity_tombstone("expression", expression_id, tombstone)
         return jsonify({"error": "Expression not found"}), 404
 
     if _prefers_html():

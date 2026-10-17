@@ -322,6 +322,7 @@ class User(db.Model):  # type: ignore[name-defined]
     __tablename__ = "users"
     __table_args__ = (
         db.CheckConstraint("visibility IN ('private', 'shared', 'public')", name="check_user_visibility"),
+        db.CheckConstraint("default_item_visibility IN ('private', 'public')", name="check_user_default_item_visibility"),
         db.CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL", name="check_user_auth_method"),
         *(({"schema": _AUTH},) if _AUTH else ()),
     )
@@ -338,6 +339,7 @@ class User(db.Model):  # type: ignore[name-defined]
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     last_login = db.Column(db.DateTime, nullable=True)
     visibility = db.Column(db.String(20), default="private")
+    default_item_visibility = db.Column(db.String(20), default="private", nullable=False, server_default="private")
 
     # -- Email verification -------------------------------------------------
     # The address on the row is *not* evidence of mailbox control: it may have
@@ -356,10 +358,19 @@ class User(db.Model):  # type: ignore[name-defined]
     #: re-verification of federated addresses without losing the history.
     email_verified_source = db.Column(db.String(16), nullable=True)
 
+    # -- Federation: ActivityPub actor identity ----------------------------
+    federation_key_id = db.Column(db.String(255), nullable=True)
+    federation_public_key = db.Column(db.Text, nullable=True)
+
     roles: Mapped[list[Role]] = relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
     items = db.relationship("Item", foreign_keys="Item.owner_id", backref="owner", lazy="dynamic", cascade="all, delete-orphan")
     lent_items = db.relationship("Item", foreign_keys="Item.lent_to_user_id", backref="borrower", lazy="dynamic")
     consents = db.relationship("ConsentRecord", backref="user", lazy="dynamic", cascade="all, delete-orphan")
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("default_item_visibility", "private")
+        kwargs.setdefault("visibility", "private")
+        super().__init__(**kwargs)
 
     @property
     def is_email_verified(self) -> bool:
@@ -423,6 +434,7 @@ class User(db.Model):  # type: ignore[name-defined]
             "bio": self.bio,
             "avatar_url": self.avatar_url,
             "visibility": self.visibility,
+            "default_item_visibility": self.default_item_visibility or "private",
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

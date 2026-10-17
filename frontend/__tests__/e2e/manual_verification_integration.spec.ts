@@ -130,7 +130,7 @@ test.describe("Manual Verification Integration E2E", () => {
     const displayName = page.getByPlaceholder("Enter your display name");
     const publicUsername = page.getByPlaceholder("your-username");
     const bio = page.getByPlaceholder("Tell the world about your library...");
-    const publicRadio = page.locator('input[value="public"]');
+    const publicRadio = page.locator('input[name="visibility"][value="public"]');
     const saveButton = page.getByRole("button", { name: "Save Profile" });
 
     // Set bio and update display name

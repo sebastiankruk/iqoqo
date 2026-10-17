@@ -77,6 +77,9 @@ MODEL_CLASS_MAP: dict[str, str] = {
     "SocialNote": "SocialNote",
     "EscalationRequest": "EscalationRequest",
     "EntityAuditLog": "EntityAuditLog",
+    "SemanticLink": "SemanticLink",
+    "WorkSeriesMembership": "WorkSeriesMembership",
+    "DuplicateCandidate": "DuplicateCandidate",
     # System / Social / Catalog additions
     "ImageScan": "ImageScan",
     "UserCollection": "UserCollection",
@@ -100,6 +103,7 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "status": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
     "collection_status": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
     "condition": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
+    "local_barcode": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
     "has_mechanic": (OWL.ObjectProperty, IQOQO.Work, IQOQO.BoardgameMechanic),
     "intentWork": (OWL.ObjectProperty, IQOQO.UserWorkIntent, IQOQO.Work),
     "intentUser": (OWL.ObjectProperty, IQOQO.UserWorkIntent, IQOQO.User),
@@ -146,6 +150,24 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "auditEntityId": (OWL.DatatypeProperty, IQOQO.EntityAuditLog, XSD.integer),
     "auditChangeType": (OWL.DatatypeProperty, IQOQO.EntityAuditLog, XSD.string),
     "auditLoggedAt": (OWL.DatatypeProperty, IQOQO.EntityAuditLog, XSD.dateTime),
+    "semanticEntityType": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.string),
+    "semanticEntityId": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.integer),
+    "semanticAuthority": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.string),
+    "externalUri": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.string),
+    "prefLabel": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.string),
+    "linkConfidence": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.float),
+    "linkVerified": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.boolean),
+    "linkStatus": (OWL.DatatypeProperty, IQOQO.SemanticLink, XSD.string),
+    "seriesWork": (OWL.ObjectProperty, IQOQO.WorkSeriesMembership, IQOQO.Work),
+    "seriesContainer": (OWL.ObjectProperty, IQOQO.WorkSeriesMembership, IQOQO.Work),
+    "seriesSequence": (OWL.DatatypeProperty, IQOQO.WorkSeriesMembership, XSD.integer),
+    "candidateTier": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
+    "sourceId": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.integer),
+    "targetId": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.integer),
+    "candidateConfidence": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.float),
+    "candidateStatus": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
+    "resolutionSource": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
+    "llmReasoning": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
 }
 
 # Required shape identifier -> exact target class. This is selective: a shape
@@ -171,6 +193,9 @@ REQUIRED_SHAPE_CONTRACT: dict[str, URIRef] = {
     "SocialNoteShape": IQOQO.SocialNote,
     "EscalationRequestShape": IQOQO.EscalationRequest,
     "EntityAuditLogShape": IQOQO.EntityAuditLog,
+    "SemanticLinkShape": IQOQO.SemanticLink,
+    "WorkSeriesMembershipShape": IQOQO.WorkSeriesMembership,
+    "DuplicateCandidateShape": IQOQO.DuplicateCandidate,
 }
 
 

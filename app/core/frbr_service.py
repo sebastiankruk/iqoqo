@@ -29,11 +29,11 @@ from urllib.parse import quote, urlsplit, urlunsplit
 #
 import bleach
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
-from rdflib.namespace import RDF
+from rdflib.namespace import OWL, RDF, XSD
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.core import frbr_merge
 from app.core.iri import canonical_frbr_iri, canonical_related_iri
@@ -43,6 +43,7 @@ from app.core.ontology_validation import (
 )
 from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY, FORMAT_TO_CATEGORY
 from app.db.audio import Contributor, ExpressionContribution, WorkContribution, WorkPart
+from app.db.contributions import WorkSeriesMembership
 from app.db.core import (
     EXPRESSION_KIND_LIVE_PERFORMANCE,
     EXPRESSION_KINDS,
@@ -53,6 +54,7 @@ from app.db.core import (
     ImageScan,
     Item,
     Manifestation,
+    SemanticLink,
     UserCollectionItem,
     Work,
     WorkExpansionLink,
@@ -2114,24 +2116,22 @@ def merge_frbr_entities(
             # FRBRoo F3: identifiers belong to the Manifestation and nowhere else.
             frbr_merge.consolidate_manifestation_identifiers(target, source)
 
-        # Record audit log
-        audit = EntityAuditLog(
+        # Record audit log and tombstone
+        extra_diff = {
+            "migrated_children": repointed.get(_ENTITY_CHILD_MAP[entity_type][0].__name__ + "." + _ENTITY_CHILD_MAP[entity_type][1], 0),
+            "migrated_contributions": repointed.get("WorkContribution.work_id")
+            or repointed.get("ExpressionContribution.expression_id")
+            or repointed.get("ManifestationContribution.manifestation_id")
+            or 0,
+        }
+        frbr_merge.record_merge_tombstone(
             entity_type=entity_type,
-            entity_id=source_id,
+            source_id=source_id,
+            target_id=target_id,
             actor_id=user_id,
-            change_type=_MERGE_CHANGE_TYPES[entity_type],
-            diff={
-                "source_id": source_id,
-                "target_id": target_id,
-                "migrated_children": repointed.get(_ENTITY_CHILD_MAP[entity_type][0].__name__ + "." + _ENTITY_CHILD_MAP[entity_type][1], 0),
-                "migrated_contributions": repointed.get("WorkContribution.work_id")
-                or repointed.get("ExpressionContribution.expression_id")
-                or repointed.get("ManifestationContribution.manifestation_id")
-                or 0,
-                "repointed": repointed,
-            },
+            repointed=repointed,
+            extra_diff=extra_diff,
         )
-        db.session.add(audit)
 
         # Drop the source with a Core-level DELETE; an ORM delete would cascade
         # delete-orphan over re-pointed children (see frbr_merge.delete_source_row).
@@ -2537,6 +2537,27 @@ def _enrich_dict_item(g: Graph, item: dict[str, Any], base_url: str) -> None:
             g.add((w_uri, SCHEMA.hasPart, p_uri))
             g.add((p_uri, SCHEMA.isPartOf, w_uri))
 
+    for link in item.get("semantic_links", []):
+        link_status = link.get("status", "accepted") if isinstance(link, dict) else getattr(link, "status", "accepted")
+        if link_status == "accepted":
+            ext_uri = link.get("external_uri") if isinstance(link, dict) else getattr(link, "external_uri", None)
+            e_type = link.get("entity_type") if isinstance(link, dict) else getattr(link, "entity_type", "manifestation")
+            if ext_uri:
+                safe_link = _safe_iri(str(ext_uri))
+                if safe_link:
+                    target_uri = w_uri if e_type == "work" else m_uri
+                    g.add((target_uri, OWL.sameAs, URIRef(safe_link)))
+                    g.add((target_uri, SCHEMA.sameAs, URIRef(safe_link)))
+
+    for sm in item.get("series_memberships", []):
+        series_id = sm.get("series_work_id") if isinstance(sm, dict) else getattr(sm, "series_work_id", None)
+        seq = sm.get("sequence") if isinstance(sm, dict) else getattr(sm, "sequence", None)
+        if series_id:
+            s_uri = URIRef(str(series_id)) if str(series_id).startswith("http") else _frbr_uri("work", series_id, base_url)
+            g.add((w_uri, SCHEMA.partOfSeries, s_uri))
+            if seq is not None:
+                g.add((w_uri, SCHEMA.position, Literal(seq, datatype=XSD.integer)))
+
 
 def _enrich_graph_from_db(
     g: Graph,
@@ -2775,6 +2796,59 @@ def _enrich_graph_from_db(
                         if contributor:
                             g.add((contributor_uri, SCHEMA.name, Literal(contributor.name)))
                         g.add((m_uri, SCHEMA.performer, contributor_uri))
+
+        # SemanticLinks (accepted external LOD links for Manifestation and Work)
+        if seen_manifestations:
+            m_links = (
+                db.session.execute(
+                    select(SemanticLink).where(
+                        SemanticLink.entity_type == "manifestation",
+                        SemanticLink.entity_id.in_(seen_manifestations),
+                        SemanticLink.status == "accepted",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for link in m_links:
+                m_uri = _frbr_uri("manifestation", link.entity_id, base_url)
+                ext_iri = _safe_iri(str(link.external_uri))
+                if ext_iri is not None:
+                    ext_ref = URIRef(ext_iri)
+                    g.add((m_uri, OWL.sameAs, ext_ref))
+                    g.add((m_uri, SCHEMA.sameAs, ext_ref))
+
+        if seen_works:
+            w_links = (
+                db.session.execute(
+                    select(SemanticLink).where(
+                        SemanticLink.entity_type == "work",
+                        SemanticLink.entity_id.in_(seen_works),
+                        SemanticLink.status == "accepted",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for link in w_links:
+                w_uri = _frbr_uri("work", link.entity_id, base_url)
+                ext_iri = _safe_iri(str(link.external_uri))
+                if ext_iri is not None:
+                    ext_ref = URIRef(ext_iri)
+                    g.add((w_uri, OWL.sameAs, ext_ref))
+                    g.add((w_uri, SCHEMA.sameAs, ext_ref))
+
+        # WorkSeriesMembership (schema:partOfSeries and schema:position on Work)
+        if seen_works:
+            series_members = (
+                db.session.execute(select(WorkSeriesMembership).where(WorkSeriesMembership.work_id.in_(seen_works))).scalars().all()
+            )
+            for sm in series_members:
+                w_uri = _frbr_uri("work", sm.work_id, base_url)
+                s_uri = _frbr_uri("work", sm.series_work_id, base_url)
+                g.add((w_uri, SCHEMA.partOfSeries, s_uri))
+                if sm.sequence is not None:
+                    g.add((w_uri, SCHEMA.position, Literal(sm.sequence, datatype=XSD.integer)))
     except (SQLAlchemyError, AttributeError, KeyError):
         pass
 
@@ -2803,6 +2877,8 @@ def build_collection_rdf_graph(
     g.bind("schema", SCHEMA)
     g.bind("prov", PROV)
     g.bind("iqoqo", IQOQO)
+    g.bind("owl", OWL)
+    g.bind("xsd", XSD)
 
     for item in items:
         # Resolve whether dict or db object
@@ -3088,6 +3164,40 @@ def build_collection_rdf_graph(
             if condition:
                 g.add((i_uri, IQOQO.condition, Literal(condition)))
 
+        # External LOD semantic links for Manifestation
+        m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+        if m_obj and hasattr(m_obj, "semantic_links"):
+            for sl in getattr(m_obj, "semantic_links", []) or []:
+                if getattr(sl, "status", None) == "accepted":
+                    ext_iri = _safe_iri(str(sl.external_uri))
+                    if ext_iri:
+                        ext_ref = URIRef(ext_iri)
+                        g.add((m_uri, OWL.sameAs, ext_ref))
+                        g.add((m_uri, SCHEMA.sameAs, ext_ref))
+
+        # External LOD semantic links and series memberships for Work
+        w_obj = None
+        if hasattr(item, "expressions") or isinstance(item, Work):
+            w_obj = item
+        elif m_obj and getattr(m_obj, "expression", None) and getattr(m_obj.expression, "work", None):
+            w_obj = m_obj.expression.work
+
+        if w_obj and hasattr(w_obj, "semantic_links"):
+            for sl in getattr(w_obj, "semantic_links", []) or []:
+                if getattr(sl, "status", None) == "accepted":
+                    ext_iri = _safe_iri(str(sl.external_uri))
+                    if ext_iri:
+                        ext_ref = URIRef(ext_iri)
+                        g.add((w_uri, OWL.sameAs, ext_ref))
+                        g.add((w_uri, SCHEMA.sameAs, ext_ref))
+
+        if w_obj and hasattr(w_obj, "series_memberships"):
+            for sm in getattr(w_obj, "series_memberships", []) or []:
+                s_uri = _frbr_uri("work", sm.series_work_id, base_url)
+                g.add((w_uri, SCHEMA.partOfSeries, s_uri))
+                if getattr(sm, "sequence", None) is not None:
+                    g.add((w_uri, SCHEMA.position, Literal(sm.sequence, datatype=XSD.integer)))
+
         # Specialized domain mapping for Concerts
         is_concert = content_type == "concert" or expression_kind == EXPRESSION_KIND_LIVE_PERFORMANCE
         is_concert = is_concert or (isinstance(item, dict) and item.get("is_concert"))
@@ -3232,7 +3342,18 @@ def _eager_load_items_fallback(items: list[Any]) -> list[Any]:
         if item_ids:
             stmt = (
                 select(Item)
-                .options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+                .options(
+                    joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
+                    selectinload(Item.manifestation).selectinload(Manifestation.semantic_links),
+                    selectinload(Item.manifestation)
+                    .selectinload(Manifestation.expression)
+                    .selectinload(Expression.work)
+                    .selectinload(Work.semantic_links),
+                    selectinload(Item.manifestation)
+                    .selectinload(Manifestation.expression)
+                    .selectinload(Expression.work)
+                    .selectinload(Work.series_memberships),
+                )
                 .where(Item.id.in_(item_ids))
             )
             for loaded_item in db.session.execute(stmt).scalars().unique().all():
@@ -3242,7 +3363,12 @@ def _eager_load_items_fallback(items: list[Any]) -> list[Any]:
         if manifestation_ids:
             m_stmt = (
                 select(Manifestation)
-                .options(joinedload(Manifestation.expression).joinedload(Expression.work))
+                .options(
+                    joinedload(Manifestation.expression).joinedload(Expression.work),
+                    selectinload(Manifestation.semantic_links),
+                    selectinload(Manifestation.expression).selectinload(Expression.work).selectinload(Work.semantic_links),
+                    selectinload(Manifestation.expression).selectinload(Expression.work).selectinload(Work.series_memberships),
+                )
                 .where(Manifestation.id.in_(manifestation_ids))
             )
             for loaded_m in db.session.execute(m_stmt).scalars().unique().all():

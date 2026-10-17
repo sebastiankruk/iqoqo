@@ -41,7 +41,7 @@ import pytest
 ENV_PY = Path(__file__).resolve().parents[1] / "migrations" / "env.py"
 
 # Kept in sync with migrations/env.py by test_allowlist_has_not_drifted.
-EXPECTED_SCHEMAS = {"public", "catalog", "inventory", "auth", "social", "config"}
+EXPECTED_SCHEMAS = {"public", "catalog", "inventory", "auth", "social", "config", "federation"}
 
 
 def _env_tree() -> ast.Module:
