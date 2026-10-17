@@ -89,6 +89,16 @@ Or using the `iqopretest` pre-flight runner:
 iqopretest --federation-pair
 ```
 
+Clone parameters can be overridden via environment variables or CLI flags if syncing from a specific host:
+
+```bash
+# Override clone host and locations
+iqopretest --src-host other.host.net --src-loc /opt/iqoqo --federation-pair
+
+# Or skip cloning to test against existing local preview state
+iqopretest --skip-clone --federation-pair
+```
+
 This starts:
 
 - **Primary Instance**:
