@@ -38,9 +38,13 @@ vi.mock("@/lib/api/escalations", () => ({
   useMyEscalations: vi.fn(() => ({ data: [], isLoading: false })),
 }));
 
-// Mock CameraCapture since it's a subcomponent
-vi.mock("@/components/scanner/camera-capture", () => ({
-  CameraCapture: () => <div data-testid="camera-capture">CameraCapture</div>,
+// Mock CoverUploadPicker since it's a subcomponent
+vi.mock("@/components/scanner/cover-upload-picker", () => ({
+  CoverUploadPicker: () => (
+    <div data-testid="cover-upload-picker" data-testid-legacy="camera-capture">
+      CoverUploadPicker
+    </div>
+  ),
 }));
 
 const mockManifestation = {
@@ -142,7 +146,7 @@ describe("ManifestationActions Component", () => {
 
     expect(screen.getByText(/Refetch Metadata/i)).toBeInTheDocument();
     expect(screen.getByText(/Regenerate Cover/i)).toBeInTheDocument();
-    expect(screen.getByTestId("camera-capture")).toBeInTheDocument();
+    expect(screen.getByTestId("cover-upload-picker")).toBeInTheDocument();
     expect(screen.getByText(/Delete manifestation/i)).toBeInTheDocument();
   });
 

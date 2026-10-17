@@ -30,7 +30,7 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CameraCapture } from "@/components/scanner/camera-capture";
+import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
 
 import { useProfile, useRegenerateCover, queryKeys } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
@@ -308,7 +308,7 @@ export function ManifestationActions({ manifestation }: { manifestation: Manifes
               )}
 
               {hasPermission(PermissionName.UPLOAD_COVER) && (
-                <CameraCapture
+                <CoverUploadPicker
                   manifestation_id={manifestation.id}
                   onUploadComplete={() => {
                     toast.success("Cover uploaded and processing started!");

@@ -17,7 +17,7 @@ import * as React from "react";
 import { ChangeEvent } from "react";
 import { Pencil, QrCode, Eye, EyeOff, Folder, X, Plus, Loader2, ImagePlus } from "lucide-react";
 import type { Item, MediaFormat } from "@/types/frbr";
-import { CameraCapture } from "@/components/scanner/camera-capture";
+import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
 import { PrintQrCodeDialog } from "@/components/item/qrcode-dialog";
@@ -382,7 +382,7 @@ export function SidebarActions({
         )}
 
         {canModifyItem && hasUploadPermission && (
-          <CameraCapture
+          <CoverUploadPicker
             manifestation_id={item.manifestation_id}
             format={format as MediaFormat}
             onUploadComplete={handleUploadComplete}
@@ -394,7 +394,6 @@ export function SidebarActions({
                 ? "This manifestation already has a cover. Are you sure you want to replace it with your own image?"
                 : undefined
             }
-            source="scanner_camera"
             className="[&>button]:flex [&>button]:items-center [&>button]:gap-2 [&>button]:text-xs [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors [&>button]:hover:text-foreground [&>button]:bg-transparent [&>button]:border-none [&>button]:p-0"
           />
         )}

@@ -24,6 +24,15 @@ import React from "react";
 import { Save, X, ImagePlus, Loader2, Search, Camera, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api/client";
 
@@ -84,6 +93,7 @@ export function ManualEntryForm({
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const galleryInputRef = React.useRef<HTMLInputElement | null>(null);
   const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [coverDialogOpen, setCoverDialogOpen] = React.useState(false);
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   /** Phase 4 UX Polish: tracks in-flight metadata lookup to prevent double-click */
@@ -328,7 +338,7 @@ export function ManualEntryForm({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => galleryInputRef.current?.click()}
+                      onClick={() => setCoverDialogOpen(true)}
                       className="h-7 text-xs"
                     >
                       <ImagePlus className="mr-1 h-3.5 w-3.5 text-primary" />
@@ -353,24 +363,50 @@ export function ManualEntryForm({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => galleryInputRef.current?.click()}
+                  onClick={() => setCoverDialogOpen(true)}
                   className="flex h-9 items-center gap-2"
                 >
                   <ImagePlus className="h-4 w-4 text-primary" />
-                  {t("manualEntry.chooseFromPhotos")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex h-9 items-center gap-2"
-                >
-                  <Camera className="h-4 w-4 text-primary" />
-                  {t("manualEntry.takePhoto")}
+                  {t("manualEntry.uploadCover")}
                 </Button>
               </div>
             )}
+            <AlertDialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t("manualEntry.manualCoverUpload")}</AlertDialogTitle>
+                  <AlertDialogDescription>{t("manualEntry.chooseCoverSource")}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                  <AlertDialogCancel>{t("cameraCapture.cancel")}</AlertDialogCancel>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="manual-take-photo"
+                    onClick={() => {
+                      setCoverDialogOpen(false);
+                      cameraInputRef.current?.click();
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <Camera className="h-4 w-4" />
+                    {t("manualEntry.takePhoto")}
+                  </Button>
+                  <Button
+                    type="button"
+                    data-testid="manual-choose-gallery"
+                    onClick={() => {
+                      setCoverDialogOpen(false);
+                      galleryInputRef.current?.click();
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    {t("manualEntry.chooseFromPhotos")}
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <input
               ref={galleryInputRef}
               id="manual-cover-gallery"
