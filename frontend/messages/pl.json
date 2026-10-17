@@ -449,7 +449,8 @@
       "orBrowse": "lub kliknij, aby przeglądać pliki",
       "browseFiles": "Przeglądaj pliki",
       "takePhoto": "Zrób zdjęcie",
-      "chooseFromGallery": "Wybierz z galerii"
+      "chooseFromGallery": "Wybierz z galerii",
+      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
     },
     "bottomSheet": {
       "barcodeTab": "Kod kreskowy",
@@ -479,7 +480,9 @@
       "changeImage": "Zmień",
       "removeImage": "Usuń",
       "manualCoverUpload": "Ręczne dodawanie okładki",
-      "coverPreview": "Podgląd okładki"
+      "coverPreview": "Podgląd okładki",
+      "uploadCover": "Dodaj okładkę",
+      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
     }
   },
   "SemanticLinks": {

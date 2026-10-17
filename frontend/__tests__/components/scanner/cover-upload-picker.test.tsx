@@ -75,7 +75,7 @@ describe("CoverUploadPicker Component", () => {
   };
 
   describe("2.1 Camera vs File Selection Triggering", () => {
-    it("renders Contribute Cover trigger without replacement modal when no cover exists", () => {
+    it("renders Contribute Cover trigger without replacement warning when no cover exists", () => {
       renderComponent({
         manifestation_id: 42,
         label: "Contribute Cover",
@@ -87,7 +87,7 @@ describe("CoverUploadPicker Component", () => {
       expect(screen.getByTestId("gallery-file-input")).toBeInTheDocument();
     });
 
-    it("opens dropdown menu and triggers camera input upon selecting Take Photo", async () => {
+    it("opens selection modal directly and triggers camera input upon selecting Take Photo", async () => {
       renderComponent({
         manifestation_id: 42,
         label: "Contribute Cover",
@@ -96,19 +96,17 @@ describe("CoverUploadPicker Component", () => {
       const cameraInput = screen.getByTestId("camera-file-input") as HTMLInputElement;
       const clickSpy = vi.spyOn(cameraInput, "click");
 
-      // Open dropdown
-      const button = screen.getByRole("button", { name: /Contribute Cover/i });
-      fireEvent.pointerDown(button, { pointerType: "mouse" });
-      fireEvent.click(button);
+      // Click button directly opens dialog (no dropdown)
+      fireEvent.click(screen.getByRole("button", { name: /Contribute Cover/i }));
 
-      const takePhotoItem = await screen.findByTestId("menu-take-photo");
+      const takePhotoItem = await screen.findByTestId("confirm-take-photo");
       expect(takePhotoItem).toBeInTheDocument();
 
       fireEvent.click(takePhotoItem);
       expect(clickSpy).toHaveBeenCalled();
     });
 
-    it("opens dropdown menu and triggers gallery input upon selecting Choose from Gallery", async () => {
+    it("opens selection modal directly and triggers gallery input upon selecting Choose from Gallery", async () => {
       renderComponent({
         manifestation_id: 42,
         label: "Contribute Cover",
@@ -117,12 +115,10 @@ describe("CoverUploadPicker Component", () => {
       const galleryInput = screen.getByTestId("gallery-file-input") as HTMLInputElement;
       const clickSpy = vi.spyOn(galleryInput, "click");
 
-      // Open dropdown
-      const button = screen.getByRole("button", { name: /Contribute Cover/i });
-      fireEvent.pointerDown(button, { pointerType: "mouse" });
-      fireEvent.click(button);
+      // Click button directly opens dialog (no dropdown)
+      fireEvent.click(screen.getByRole("button", { name: /Contribute Cover/i }));
 
-      const chooseGalleryItem = await screen.findByTestId("menu-choose-gallery");
+      const chooseGalleryItem = await screen.findByTestId("confirm-choose-gallery");
       expect(chooseGalleryItem).toBeInTheDocument();
 
       fireEvent.click(chooseGalleryItem);

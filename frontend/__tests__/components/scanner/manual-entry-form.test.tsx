@@ -164,12 +164,21 @@ describe("ManualEntryForm", () => {
 
     render(<ManualEntryForm onSubmit={mockSubmit} onCancel={mockCancel} />);
 
-    // Check gallery and camera buttons are rendered when no file
-    expect(screen.getByRole("button", { name: /Choose from Photos/i })).toBeInTheDocument();
+    // Check single upload button is rendered when no file
+    const uploadBtn = screen.getByRole("button", { name: /Upload Cover/i });
+    expect(uploadBtn).toBeInTheDocument();
+
+    // Clicking Upload Cover opens dialog with source choices
+    fireEvent.click(uploadBtn);
+    const choosePhotosBtn = screen.getByRole("button", { name: /Choose from Photos/i });
+    expect(choosePhotosBtn).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Take Photo/i })).toBeInTheDocument();
 
+    // Select Choose from Photos to trigger gallery picker
+    fireEvent.click(choosePhotosBtn);
+
     const file = new File(["dummy cover data"], "custom-cover.jpg", { type: "image/jpeg" });
-    const galleryInput = screen.getByLabelText(/Manual Cover Upload/i) as HTMLInputElement;
+    const galleryInput = document.getElementById("manual-cover-gallery") as HTMLInputElement;
 
     fireEvent.change(galleryInput, { target: { files: [file] } });
 
@@ -185,7 +194,7 @@ describe("ManualEntryForm", () => {
 
     await waitFor(() => {
       expect(screen.queryByAltText(/Cover preview/i)).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Choose from Photos/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Upload Cover/i })).toBeInTheDocument();
     });
   });
 

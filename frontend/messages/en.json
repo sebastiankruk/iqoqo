@@ -449,7 +449,8 @@
       "orBrowse": "or click to browse files",
       "browseFiles": "Browse Files",
       "takePhoto": "Take Photo",
-      "chooseFromGallery": "Choose from Gallery"
+      "chooseFromGallery": "Choose from Gallery",
+      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
     },
     "bottomSheet": {
       "barcodeTab": "Barcode",
@@ -479,7 +480,9 @@
       "changeImage": "Change",
       "removeImage": "Remove",
       "manualCoverUpload": "Manual Cover Upload",
-      "coverPreview": "Cover preview"
+      "coverPreview": "Cover preview",
+      "uploadCover": "Upload Cover",
+      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
     }
   },
   "SemanticLinks": {

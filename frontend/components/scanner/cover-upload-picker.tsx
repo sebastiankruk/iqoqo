@@ -22,14 +22,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -71,12 +64,11 @@ export interface CoverUploadPickerProps {
 
 /**
  * Dual-source cover art contributor and replacer.
- * Enables collectors to contribute high-resolution covers either by
- * snapping a photo with their camera or selecting an existing image file
- * from their gallery or filesystem.
+ * Presents a single unified button that opens a selection modal,
+ * allowing collectors to pick between camera snapshot and device photo gallery.
  *
  * @param props - Component configuration props.
- * @returns {JSX.Element} Rendered button with dual-source upload triggers.
+ * @returns {JSX.Element} Rendered button with dual-source upload trigger.
  */
 export function CoverUploadPicker({
   manifestation_id,
@@ -95,12 +87,9 @@ export function CoverUploadPicker({
   const t = useTranslations("scanner");
   const [uploading, setUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingSource, setPendingSource] = useState<"camera" | "gallery" | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-
-  const hasConfirmation = Boolean(confirmTitle && confirmMessage);
 
   /**
    * Upload the selected cover image file to the manifestation endpoint.
@@ -142,33 +131,6 @@ export function CoverUploadPicker({
     }
   };
 
-  const handleCameraSelect = () => {
-    if (hasConfirmation) {
-      setPendingSource("camera");
-      setConfirmOpen(true);
-    } else {
-      cameraInputRef.current?.click();
-    }
-  };
-
-  const handleGallerySelect = () => {
-    if (hasConfirmation) {
-      setPendingSource("gallery");
-      setConfirmOpen(true);
-    } else {
-      galleryInputRef.current?.click();
-    }
-  };
-
-  const handleConfirmAction = () => {
-    setConfirmOpen(false);
-    if (pendingSource === "camera") {
-      cameraInputRef.current?.click();
-    } else {
-      galleryInputRef.current?.click();
-    }
-  };
-
   const buttonContent = (
     <>
       {uploading ? (
@@ -184,6 +146,9 @@ export function CoverUploadPicker({
       )}
     </>
   );
+
+  const dialogTitle = confirmTitle || label || t("cameraCapture.snapCover");
+  const dialogDescription = confirmMessage || t("cameraCapture.chooseCoverSource");
 
   return (
     <div className={className} data-testid="cover-upload-picker">
@@ -210,88 +175,52 @@ export function CoverUploadPicker({
         className="hidden"
       />
 
-      {hasConfirmation ? (
-        <>
-          <Button
-            type="button"
-            variant={variant}
-            disabled={disabled || uploading}
-            className={buttonClassName}
-            onClick={() => {
-              setPendingSource(null);
-              setConfirmOpen(true);
-            }}
-          >
-            {buttonContent}
-          </Button>
+      <Button
+        type="button"
+        variant={variant}
+        disabled={disabled || uploading}
+        className={buttonClassName}
+        onClick={() => setConfirmOpen(true)}
+      >
+        {buttonContent}
+      </Button>
 
-          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-                <AlertDialogDescription>{confirmMessage}</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                <AlertDialogCancel>{t("cameraCapture.cancel")}</AlertDialogCancel>
-                <Button
-                  type="button"
-                  variant="outline"
-                  data-testid="confirm-take-photo"
-                  onClick={() => {
-                    setConfirmOpen(false);
-                    cameraInputRef.current?.click();
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <Camera className="h-4 w-4" />
-                  {t("cameraCapture.takePhoto")}
-                </Button>
-                <Button
-                  type="button"
-                  data-testid="confirm-choose-gallery"
-                  onClick={() => {
-                    setConfirmOpen(false);
-                    galleryInputRef.current?.click();
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                  {t("cameraCapture.chooseFromGallery")}
-                </Button>
-                {pendingSource && (
-                  <AlertDialogAction onClick={handleConfirmAction}>{t("cameraCapture.continue")}</AlertDialogAction>
-                )}
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant={variant} disabled={disabled || uploading} className={buttonClassName}>
-              {buttonContent}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              data-testid="menu-take-photo"
-              onClick={handleCameraSelect}
-              className="cursor-pointer flex items-center gap-2"
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{dialogDescription}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>{t("cameraCapture.cancel")}</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="confirm-take-photo"
+              onClick={() => {
+                setConfirmOpen(false);
+                cameraInputRef.current?.click();
+              }}
+              className="flex items-center gap-1.5"
             >
               <Camera className="h-4 w-4" />
               {t("cameraCapture.takePhoto")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              data-testid="menu-choose-gallery"
-              onClick={handleGallerySelect}
-              className="cursor-pointer flex items-center gap-2"
+            </Button>
+            <Button
+              type="button"
+              data-testid="confirm-choose-gallery"
+              onClick={() => {
+                setConfirmOpen(false);
+                galleryInputRef.current?.click();
+              }}
+              className="flex items-center gap-1.5"
             >
               <ImagePlus className="h-4 w-4" />
               {t("cameraCapture.chooseFromGallery")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
