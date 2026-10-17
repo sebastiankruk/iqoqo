@@ -89,17 +89,25 @@ fi
 STORAGE_MOUNT_DIRS="app/static/covers app/static/gallery exports data"
 UNWRITABLE_DIRS=""
 
+# Non-server tasks (such as database migrations or ad-hoc CLI commands) do not
+# consume asset caches or export storage; only treat missing directories as
+# fatal for application server processes (gunicorn, celery) or explicit checks.
+is_server=false
+case "$*" in
+  *gunicorn*|*celery*) is_server=true ;;
+esac
+
 for dir in $STORAGE_MOUNT_DIRS; do
   mkdir -p "$dir" 2>/dev/null || true
-  if [ ! -d "$dir" ] || [ ! -w "$dir" ]; then
-    UNWRITABLE_DIRS="${UNWRITABLE_DIRS:+$UNWRITABLE_DIRS }$dir"
-  else
+  if [ -d "$dir" ]; then
     probe="${dir}/.writetest.$$"
     if touch "$probe" 2>/dev/null; then
       rm -f "$probe"
     else
       UNWRITABLE_DIRS="${UNWRITABLE_DIRS:+$UNWRITABLE_DIRS }$dir"
     fi
+  elif [ "$is_server" = "true" ] || [ -z "$*" ] || [ "$1" = "true" ]; then
+    UNWRITABLE_DIRS="${UNWRITABLE_DIRS:+$UNWRITABLE_DIRS }$dir"
   fi
 done
 

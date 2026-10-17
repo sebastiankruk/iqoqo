@@ -186,3 +186,26 @@ teardown() {
 
   chmod 0755 "${mock_dir}/exports"
 }
+
+@test "entrypoint permits non-server migration commands when asset mount directories are absent" {
+  mock_dir="${TEST_TEMP_DIR}/mock_migration"
+  mkdir -p "${mock_dir}"
+  cd "${mock_dir}"
+
+  run bash "${ENTRYPOINT}" sh -c 'echo "migration success"'
+  [ "${status}" -eq 0 ]
+  [[ "${output}" =~ "migration success" ]]
+}
+
+@test "entrypoint blocks application server when storage directory is missing" {
+  mock_dir="${TEST_TEMP_DIR}/mock_server_missing"
+  mkdir -p "${mock_dir}/ro"
+  chmod 0555 "${mock_dir}/ro"
+  cd "${mock_dir}/ro"
+
+  run bash "${ENTRYPOINT}" gunicorn --bind 0.0.0.0:5000 run:app
+  [ "${status}" -eq 1 ]
+  [[ "${output}" =~ "ERROR: Storage volume writability verification failed" ]]
+
+  chmod 0755 "${mock_dir}/ro"
+}
