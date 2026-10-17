@@ -103,10 +103,10 @@ This starts:
 
 - **Primary Instance**:
   - Web UI: `http://localhost:8000` (or configured `NGINX_PORT`)
-  - Flask API: `http://localhost:5000`
+  - Flask API: `http://localhost:5001` (or `WEB_PORT` in `.env.preview`)
 - **Secondary Peer Instance** (`docker-compose.federation-preview.yml`):
   - Web UI: `http://localhost:3001` (Peer Frontend)
-  - Flask API: `http://localhost:5001` (Peer Backend)
+  - Flask API: `http://localhost:5005` (Peer Backend)
   - Dedicated PostgreSQL database: `peer-db` (`iqoqo_peer`)
 
 ### 4.2 Step-by-Step Manual Inspection
@@ -115,14 +115,14 @@ This starts:
 
    ```bash
    curl -I http://localhost:8000/api/health
-   curl -I http://localhost:5001/api/health
+   curl -I http://localhost:5005/api/health
    ```
 
 2. **Verify Cross-Instance WebFinger Discovery**:
    Query the peer instance's WebFinger endpoint:
 
    ```bash
-   curl -s "http://localhost:5001/.well-known/webfinger?resource=acct:peer-admin@iqoqo.cc" | jq .
+   curl -s "http://localhost:5005/.well-known/webfinger?resource=acct:peer-admin@iqoqo.cc" | jq .
    ```
 
    Confirm the returned JSON contains a `self` link with `type: "application/activity+json"`.
