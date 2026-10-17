@@ -21,11 +21,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Parameter defaults (overridable via env or CLI flags)
-SRC_HOST="${SRC_HOST:-${CLONE_SRC_HOST:-h.kruk.me}}"
+SRC_HOST="${SRC_HOST:-${CLONE_SRC_HOST:-prod.iqoqo.cc}}"
 SRC_LOC="${SRC_LOC:-${CLONE_SRC_LOC:-/opt/iqoqo}}"
 SRC_NAME="${SRC_NAME:-${CLONE_SRC_NAME:-prod}}"
 DST_LOC="${DST_LOC:-${CLONE_DST_LOC:-/opt/pre.iqoqo}}"
-DST_NAME="${DST_NAME:-${CLONE_DST_NAME:-preview}}"
+DST_NAME="${DST_NAME:-${CLONE_DST_NAME:-preview}}"		
 SKIP_CLONE="${SKIP_CLONE:-0}"
 FEDERATION_PAIR="${FEDERATION_PAIR:-0}"
 
