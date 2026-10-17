@@ -18,7 +18,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Multi-Instance Federation E2E", () => {
   const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5002/api";
-  const peerApiUrl = process.env.PEER_API_URL || "http://127.0.0.1:5003/api";
+  const _peerApiUrl = process.env.PEER_API_URL || "http://127.0.0.1:5003/api";
 
   test("1. WebFinger RFC 7033 resolution across instances", async ({ page }) => {
     // 1. Resolve local user on primary instance via WebFinger

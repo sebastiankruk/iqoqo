@@ -178,6 +178,9 @@ export async function lookupRemoteActor(handle: string): Promise<RemoteActorLook
 /**
  * Send an ActivityPub Follow activity to a remote Actor's inbox.
  * @param params - Either handle or actor_uri and optional inbox_url
+ * @param params.handle - Remote actor handle
+ * @param params.actor_uri - Remote actor URI
+ * @param params.inbox_url - Optional inbox URL
  */
 export async function followRemoteActor(params: {
   handle?: string;
