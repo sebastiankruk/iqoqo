@@ -447,7 +447,9 @@
       "extractingDetails": "Extracting details via vision API",
       "dragDropCover": "Drag & Drop cover image here",
       "orBrowse": "or click to browse files",
-      "browseFiles": "Browse Files"
+      "browseFiles": "Browse Files",
+      "takePhoto": "Take Photo",
+      "chooseFromGallery": "Choose from Gallery"
     },
     "bottomSheet": {
       "barcodeTab": "Barcode",

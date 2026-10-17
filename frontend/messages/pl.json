@@ -447,7 +447,9 @@
       "extractingDetails": "Wyodrębnianie szczegółów przez API analizy obrazu",
       "dragDropCover": "Przeciągnij i upuść tutaj obraz okładki",
       "orBrowse": "lub kliknij, aby przeglądać pliki",
-      "browseFiles": "Przeglądaj pliki"
+      "browseFiles": "Przeglądaj pliki",
+      "takePhoto": "Zrób zdjęcie",
+      "chooseFromGallery": "Wybierz z galerii"
     },
     "bottomSheet": {
       "barcodeTab": "Kod kreskowy",
