@@ -33,13 +33,11 @@ import {
   Code2,
   CopyCheck,
   Database,
-  DollarSign,
   Image as ImageIcon,
   Key,
   LifeBuoy,
   Network,
   Settings,
-  Shield,
   Users,
 } from "lucide-react";
 import { useProfile } from "@/lib/api/hooks";
@@ -53,6 +51,8 @@ interface NavItemProps {
   isActive: boolean;
   onClick: () => void;
   href?: string;
+  disabled?: boolean;
+  badge?: string;
 }
 
 /**
@@ -65,22 +65,35 @@ interface NavItemProps {
  * @param props.onClick - Click handler
  * @param props.href - When set, the item links to another page instead of
  *   switching a tab in place
+ * @param props.disabled - When true, item is disabled and not clickable
+ * @param props.badge - Optional badge text to render alongside the label
  * @returns Navigation item component
  */
-function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
+function NavItem({ label, icon: Icon, isActive, onClick, href, disabled, badge }: NavItemProps) {
   const className = cn(
-    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+    "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+    disabled
+      ? "text-muted-foreground/50 cursor-not-allowed opacity-75"
+      : isActive
+        ? "bg-muted text-foreground"
+        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
   );
 
   const content = (
     <>
-      <Icon className="h-4 w-4" />
-      {label}
+      <span className="flex items-center gap-3">
+        <Icon className="h-4 w-4" />
+        {label}
+      </span>
+      {badge && (
+        <span className="text-[10px] tracking-wide font-medium px-1.5 py-0.5 rounded border border-border text-muted-foreground bg-muted/30">
+          {badge}
+        </span>
+      )}
     </>
   );
 
-  if (href) {
+  if (href && !disabled) {
     return (
       <Link href={href} className={className} onClick={onClick}>
         {content}
@@ -89,7 +102,7 @@ function NavItem({ label, icon: Icon, isActive, onClick, href }: NavItemProps) {
   }
 
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button type="button" disabled={disabled} onClick={disabled ? undefined : onClick} className={className}>
       {content}
     </button>
   );
@@ -231,16 +244,10 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
               <NavItem
                 label="Federation"
                 icon={Building2}
-                isActive={activeTab === "federation"}
-                onClick={() => selectTab("federation")}
-              />
-            )}
-            {hasPermission(PermissionName.CONFIG_AFFILIATE) && (
-              <NavItem
-                label="Monetization"
-                icon={DollarSign}
-                isActive={activeTab === "monetization"}
-                onClick={() => selectTab("monetization")}
+                isActive={false}
+                onClick={noop}
+                disabled
+                badge="Coming in v0.9.1"
               />
             )}
             {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
@@ -261,14 +268,6 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
                 isActive={activeTab === "roles"}
                 onClick={() => selectTab("roles")}
                 href="/admin/groups"
-              />
-            )}
-            {hasPermission(PermissionName.CONFIG_INTERNAL) && (
-              <NavItem
-                label="Security"
-                icon={Shield}
-                isActive={activeTab === "security"}
-                onClick={() => selectTab("security")}
               />
             )}
           </nav>
