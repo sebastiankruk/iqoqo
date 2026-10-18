@@ -109,6 +109,11 @@ This starts:
   - Flask API: `http://localhost:5005` (Peer Backend)
   - Dedicated PostgreSQL database: `peer-db` (`iqoqo_peer`)
 
+> [!NOTE]
+> **SSRF Protection & Loopback Communication (`FEDERATION_ALLOW_LOOPBACK`)**:
+> In standard deployments, outbound HTTP clients in `app/utils/http_client.py` block loopback (`127.0.0.1`, `localhost`) and private RFC 1918 IPs to prevent Server-Side Request Forgery.
+> In dual-instance preview staging (`docker-compose.federation-preview.yml`), both instances set `FEDERATION_ALLOW_LOOPBACK=true` so peer containers co-located on the same host can exchange WebFinger queries and ActivityPub activities over host loopback ports. This parameter must remain `false` or unset in production.
+
 ### 4.2 Step-by-Step Manual Inspection
 
 1. **Verify Primary and Secondary Health**:

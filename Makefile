@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -657,15 +657,29 @@ test-frontend:
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 
+test-scripts: test-scripts-python test-scripts-bash ## Run Python and BATS script tests
+
 test-scripts-bash:
 	$(AI_ECHO) "Running BATS script tests..."
-	@if command -v bats >/dev/null 2>&1; then \
-		bats $(BATS_FLAGS) tests/bash/; \
-	elif [ -f node_modules/.bin/bats ]; then \
-		$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+	@if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+		set -o pipefail; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	else \
-		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
-		exit 1; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	fi
 
 test-scripts-python: .venv/bin/activate
