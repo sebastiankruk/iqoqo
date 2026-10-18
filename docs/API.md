@@ -391,6 +391,32 @@ The response includes both the untouched, authoritative raw metadata in `manifes
 }
 ```
 
+### `PUT /api/items/<id>`
+
+Update exemplar details of a physical item, including its local barcode and physical condition.
+
+**Authentication:** Required (Item owner or administrator).
+
+**Request Body:**
+
+```json
+{
+  "local_barcode": "SHELF-01-A",
+  "condition": "like_new"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42
+  }
+}
+```
+
 ---
 
 ## Work Series Endpoints
@@ -548,6 +574,86 @@ As an alternative to `Accept` headers, use the `?format=` parameter:
 
 ---
 
+## Federation & ActivityPub Endpoints
+
+Introduced in **v0.9.0**, iQoQo supports decentralized discovery and social federation via ActivityPub, RFC 7033 WebFinger, and NodeInfo 2.1.
+
+### `GET /.well-known/webfinger` (also `GET /api/federation/webfinger`)
+
+Resolve user account identity and retrieve ActivityPub actor descriptors.
+
+**Parameters:**
+
+| Parameter  | Type   | Required | Description                                                    |
+| ---------- | ------ | -------- | -------------------------------------------------------------- |
+| `resource` | string | Yes      | Account query (e.g. `acct:alice@example.com` or canonical IRI) |
+
+**Authentication:** Not required (Public). Requires user opt-in federation consent (`federated_profile: true`).
+
+**CORS:** Wildcard `Access-Control-Allow-Origin: *`.
+
+---
+
+### `GET /.well-known/nodeinfo` & `GET /api/federation/nodeinfo/2.1`
+
+Standard NodeInfo protocol describing server metadata, supported protocols, and catalog usage statistics.
+
+**Authentication:** Not required (Public).
+
+**CORS:** Wildcard `Access-Control-Allow-Origin: *`.
+
+---
+
+### `GET /api/federation/actor/u/<user_uuid>` (and `GET /api/federation/actor/<username>`)
+
+Retrieve ActivityStreams 2.0 `Person` Actor JSON-LD representation.
+
+**Authentication:** Not required (Public). Requires user opt-in federation consent.
+
+**CORS:** Wildcard `Access-Control-Allow-Origin: *`.
+
+**Response:** Contains canonical Actor IRI, `inbox`, `outbox`, and `publicKey` with PEM certificate for HTTP Signature verification.
+
+---
+
+### `POST /api/federation/inbox` (and `POST /api/federation/actor/u/<user_uuid>/inbox`)
+
+Inbound ActivityPub delivery endpoint accepting signed ActivityStreams activities (e.g., `Follow`, `Undo`).
+
+**Authentication:** Enforces `draft-cavage-12` HTTP Signatures (`(request-target)`, `host`, `date`, and `digest` when body is present). Remote public keys are fetched via SSRF-safe client.
+
+**Protections:** Rate limited to 60 requests per minute and capped at 100KB payload limit (`413 Payload Too Large`).
+
+---
+
+### `GET /api/federation/lookup`
+
+Query and discover remote federated actors by handle (`@user@domain`) or Actor URL.
+
+**Authentication:** Required.
+
+**Rate Limit:** 20 per minute.
+
+---
+
+### `POST /api/federation/follow`
+
+Dispatch an outbound `Follow` request to a remote ActivityPub actor.
+
+**Authentication:** Required.
+
+**Rate Limit:** 10 per minute.
+
+---
+
+### `GET /api/federation/consent` & `PUT /api/federation/consent`
+
+Retrieve or update the authenticated user's federation discovery preferences (`federated_profile` and `federated_collection`).
+
+**Authentication:** Required.
+
+---
+
 ## Rate Limits
 
 | Endpoint                              | Rate Limit          | Scope    |
@@ -561,6 +667,9 @@ As an alternative to `Accept` headers, use the `?format=` parameter:
 | `GET /api/public/feed.xml`            | 60 per minute       | Global   |
 | `GET /api/public/sitemap.xml`         | 60 per minute       | Global   |
 | `GET /api/items/export`               | Standard API limits | Per user |
+| `GET /api/federation/lookup`          | 20 per minute       | Per user |
+| `POST /api/federation/follow`         | 10 per minute       | Per user |
+| `POST /api/federation/inbox`          | 60 per minute       | Global   |
 
 When rate limited, the API returns:
 

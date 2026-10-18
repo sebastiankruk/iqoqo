@@ -53,6 +53,7 @@ A deployment directory is an isolated host directory that contains runtime confi
 | `deploy/otel-collector-prod.yaml` | File | OTel Collector production configuration | Synced by `deploy-sync` |
 | `docs/ontology/` | Directory | Canonical OWL ontology & SHACL shapes | Synced by `deploy-sync` |
 | `data/` | Directory | SQLite DBs (e.g. GeoNames gazetteer) | **Application Data** (Preserved) |
+| `data/keys/` | Directory (`0700`) | RSA actor key pairs (PEM files `0600`) | **Cryptographic Secrets** (Protected) |
 | `exports/` | Directory | Data dumps & exported records | **Application Data** (Preserved) |
 | `app/static/covers/` | Directory | Media cover assets | **Application Data** (Preserved) |
 | `app/static/gallery/` | Directory | Gallery photos & scans | **Application Data** (Preserved) |

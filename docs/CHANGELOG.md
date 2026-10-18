@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Item Condition Persistence**: Supported `condition` in `ItemUpdateSchema`, persisted it in `_update_physical_item`, and included it in item detail responses.
 - **WebFinger Cache Churn**: Removed unnecessary `db.session.expire_all()` on public WebFinger lookups.
 
+### Database Migrations
+
+- **`v0_8_4_item_local_barcode`**: Adds `local_barcode` column (`VARCHAR(128)`) to the `items` table in the `inventory` schema with index `ix_inventory_items_local_barcode`.
+- **`v0_9_0_federation_schema`**: Introduces the dedicated `federation` PostgreSQL schema and creates `federation_instances`, `federation_actors`, `federation_followers`, `federation_activities`, and `federation_consent` tables.
+- **`v0_9_0_user_default_visibility`**: Adds the `default_item_visibility` column (`VARCHAR(16)`, default `'private'`, non-nullable) to the `users` table in the `auth` schema.
+
 ## [0.8.4] - 2026-10-15
 
 ### Added
