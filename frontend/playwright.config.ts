@@ -96,7 +96,7 @@ export default defineConfig({
         // the response; it is forwarded here alongside the secret because the two
         // are required together and forwarding one without the other is how the
         // helper stays silently broken. Set only for this spawned process.
-        "PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False TESTING=true " +
+        "FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False TESTING=true " +
         "ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
         pythonExecutable +
         " -m flask run --port 5002",
