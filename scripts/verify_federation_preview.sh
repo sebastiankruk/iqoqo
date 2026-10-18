@@ -124,13 +124,15 @@ pass "Inbox endpoint securely rejects unsigned activities (HTTP ${unsigned_code}
 
 # 7. Test Cross-Container ActivityPub Resolution (FederationClient)
 info "Testing cross-container actor fetch via FederationClient..."
+actor_path=$(echo "$actor_href" | sed -E 's|^https?://[^/]+||')
+internal_actor_url="http://peer-web:5000${actor_path}"
 fetch_result=$(docker exec -i iqoqo-preview-web-1 python3 -c "
 from app import create_app
 from app.core.federation_client import FederationClient
 app = create_app()
 with app.app_context():
     client = FederationClient()
-    actor = client.fetch_actor('http://peer-web:5000/api/federation/actor/u/44135ab2-524c-45e1-b247-3102a7ca6a45')
+    actor = client.fetch_actor('${internal_actor_url}')
     if actor and actor.get('preferredUsername') == 'peeradmin':
         print('SUCCESS')
     else:

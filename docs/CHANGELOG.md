@@ -5,13 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - TBD
+## [0.9.0] - 2026-10-18
 
 ### Added
 
+- **Physical Item Local Barcode Tracking (C71)**: Added `local_barcode` column to `Item` (F5), supporting physical library asset tags, shelf barcode labels, and inventory stickers across item creation, editing dialogs, and detail views (`semantic-gaps-and-inventory-tag-v090`).
+- **Linked Open Data & Series RDF Serialization (C71)**: Serialized accepted external LOD `SemanticLink` rows into `owl:sameAs` / `schema:sameAs` triples for Manifestation and Work entities, serialized `WorkSeriesMembership` rows into `schema:partOfSeries` and `schema:position`, and emitted `iqoqo:local_barcode` on Item RDF nodes in `app/core/frbr_service.py`.
+- **Ontology & SHACL Shape Synchronization (C71)**: Synchronized OWL classes (`:SemanticLink`, `:WorkSeriesMembership`, `:DuplicateCandidate`), `iqoqo:local_barcode`, and SHACL SPARQL self-reference constraints in `docs/ontology/iqoqo.ttl` and `iqoqo-shapes.ttl`.
+- **Canonical URI Immutability & Merge Tombstones (C72)**: Decoupled canonical ActivityPub Actor URIs and FRBR Object URIs from mutable user profile handles, locking them to immutable permanent identifiers in `app/core/iri.py`. Emitted RDF `owl:sameAs` and ActivityStreams `Move` / `Tombstone` redirects on deduplication merges in `app/core/frbr_merge.py` and `app/api/public_rdf.py`.
+- **PostgreSQL Federation Schema & Keypair Lifecycle (C73)**: Introduced dedicated `federation` PostgreSQL schema (`FederationInstance`, `FederationActor`, `FederationFollower`, `FederationActivity`, `FederationConsent`) and Fernet-encrypted RSA-2048 actor key lifecycle in `app/core/federation_keys.py`.
+- **ActivityPub Discovery & HTTP Signatures (C74)**: Implemented RFC 7033 WebFinger, NodeInfo 2.1, and ActivityPub Person Actor JSON-LD endpoints in `app/api/federation.py`. Added `draft-cavage-12` HTTP Signature signing and verification in `app/core/http_signatures.py` and SSRF-safe outbound `FederationClient` utilizing socket-level IP pinning.
+- **User Default Visibility & Federation Consent UI (C75)**: Added configurable `default_item_visibility` (`private` / `public`) to user accounts and built the Federation Consent management settings panel in `frontend/components/settings/federation-consent.tsx`.
+- **Container Mount Permissions Hardening (C75b)**: Added non-root `appuser` (UID 10001) volume writability assertions in `deploy/docker-entrypoint.sh`, host orchestration preparation in `Makefile` (`ensure-mount-perms`), and runtime volume diagnostics in `scripts/iqoqo-status.sh`.
+- **Dual-Source Contribute Cover Picker (C75c)**: Unified cover upload and camera capture in `CoverUploadPicker` across Manifestation and Item detail pages.
+- **Dual-Instance Preview Sandbox (C75e)**: Provided Docker Compose preview overlay `docker-compose.federation-preview.yml`, `scripts/launch_federation_peer.py`, and automated dual-instance verification in `scripts/verify_federation_preview.sh`.
+
 ### Changed
 
+- **Cryptographic Key Storage Permissions**: Excluded sensitive key directory (`data/keys`) from recursive `a+rwX` permission changes in `Makefile` and `scripts/pre_deploy_mounts.py`, strictly maintaining directory mode `0700` and private key PEM file mode `0600`.
+- **Discovery CORS Isolation**: Restricted wildcard `Access-Control-Allow-Origin: *` headers exclusively to public read-only discovery routes (`/webfinger`, `/nodeinfo`, `/actor`), eliminating wildcard CORS on authenticated profile and state-changing endpoints.
+- **Strict Federation Consent Enforcement**: Enforced explicit opt-in consent (`consent.federated_profile is True`), removing public user profile visibility fallback on federation endpoints.
+- **Admin Settings Cleanup**: Removed placeholder/stubbed 'Coming soon' tabs for Monetization and Security from the Admin UI sidebar and settings page ahead of release.
+
 ### Fixed
+
+- **HTTP Signature Mandatory Header Enforcement**: Enforced that `(request-target)`, `host`, `date`, and (when body is present) `digest` must be included in the signed header list of incoming HTTP signatures, preventing signature replay and payload tampering.
+- **Horizontal Actor Impersonation**: Enforced strict equality between key owner and payload actor (`payload_actor == actor_uri`) in `verify_request` and verified actor consistency in `receive_inbox`, preventing same-domain user impersonation.
+- **Federation Lookup SSRF & Port Downgrade**: Added `@require_auth` and rate limiting (`20/min`) to `GET /api/federation/lookup`, generic error strings without exception leakage, and eliminated cleartext HTTP downgrade on custom port lookups.
+- **Inbound Inbox Protection**: Added rate limiting (`60/min`) and 100KB payload cap (`413 Payload Too Large`) on `/inbox` endpoints.
+- **Collection Streaming Export Crashes**: Removed invalid `selectinload(*.semantic_links)` calls from `stream_user_collection` and `_eager_load_items_fallback`, unblocking collection streaming exports and restoring FRBR eager loading.
+- **Collection Link Ownership Validation**: Enforced `UserCollection.owner_id == user_id` before attaching items to collections in `create_item` and `add_item_by_manifestation`, preventing IDOR and integrity errors.
+- **Manual Item Privacy Inheritance**: Resolved privacy leak in `POST /api/items/manual` by inheriting user `default_item_visibility` when visibility is not explicitly specified.
+- **Item Condition Persistence**: Supported `condition` in `ItemUpdateSchema`, persisted it in `_update_physical_item`, and included it in item detail responses.
+- **WebFinger Cache Churn**: Removed unnecessary `db.session.expire_all()` on public WebFinger lookups.
 
 ## [0.8.4] - 2026-10-15
 
