@@ -126,8 +126,11 @@ def is_ip_blocked(ip_str: str) -> bool:
 
     import os
 
-    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true" and (ip_obj.is_loopback or str(ip_obj) == "127.0.0.1"):
-        return False
+    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true":
+        # Allow loopback and Docker container network RFC 1918 private ranges during staging/tests,
+        # but NEVER allow link-local / cloud metadata (169.254.169.254).
+        if not ip_obj.is_link_local and (ip_obj.is_loopback or str(ip_obj) == "127.0.0.1" or ip_obj.is_private):
+            return False
 
     if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
         return True
@@ -280,10 +283,11 @@ def safe_get(
             session.mount("https://", adapter)
         else:
             port = parsed.port
+            ip_formatted = f"[{resolved_ip}]" if ":" in resolved_ip and not resolved_ip.startswith("[") else resolved_ip
             if port:
-                netloc = f"{resolved_ip}:{port}"
+                netloc = f"{ip_formatted}:{port}"
             else:
-                netloc = resolved_ip
+                netloc = ip_formatted
 
             rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
             host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
@@ -379,7 +383,8 @@ def safe_post(
             session.mount("https://", adapter)
         else:
             port = parsed.port
-            netloc = f"{resolved_ip}:{port}" if port else resolved_ip
+            ip_formatted = f"[{resolved_ip}]" if ":" in resolved_ip and not resolved_ip.startswith("[") else resolved_ip
+            netloc = f"{ip_formatted}:{port}" if port else ip_formatted
             rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
             host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
             merged_headers.setdefault("Host", host_header_val)

@@ -52,6 +52,8 @@ services:
 
   web:
     environment:
+      - FEDERATION_ENABLED=true
+      - FEDERATION_AUTO_ACCEPT_FOLLOWS=true
       - FEDERATION_ALLOW_LOOPBACK=true
 
   peer-web:

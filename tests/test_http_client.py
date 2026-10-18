@@ -84,14 +84,16 @@ class TestIsIpBlocked:
         assert is_ip_blocked("not-an-ip") is True
 
     def test_federation_allow_loopback_unblocks_loopback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """FEDERATION_ALLOW_LOOPBACK=true unblocks 127.0.0.1 and ::1 while preserving RFC 1918 blocks."""
+        """FEDERATION_ALLOW_LOOPBACK=true unblocks loopback and private container subnets while blocking metadata."""
         monkeypatch.setenv("FEDERATION_ALLOW_LOOPBACK", "true")
         assert is_ip_blocked("127.0.0.1") is False
         assert is_ip_blocked("127.0.0.2") is False
         assert is_ip_blocked("::1") is False
-        # Non-loopback private networks and metadata must still be blocked
-        assert is_ip_blocked("10.0.0.1") is True
-        assert is_ip_blocked("192.168.1.1") is True
+        # Docker container network RFC 1918 addresses are allowed for local/preview testing
+        assert is_ip_blocked("10.0.0.1") is False
+        assert is_ip_blocked("192.168.1.1") is False
+        assert is_ip_blocked("172.19.0.8") is False
+        # Link-local cloud metadata must strictly remain blocked
         assert is_ip_blocked("169.254.169.254") is True
 
     def test_federation_allow_loopback_disabled_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
