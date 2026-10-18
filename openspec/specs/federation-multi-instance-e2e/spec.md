@@ -1,7 +1,7 @@
 # federation-multi-instance-e2e Specification
 
 ## Purpose
-TBD - created by archiving change federation-multi-instance-e2e-and-preview-v090. Update Purpose after archive.
+Defines automated multi-instance end-to-end integration testing and orchestration capabilities for iqoqo federation, validating ActivityPub WebFinger discovery, dual-context identity isolation, signed Follow activity delivery, and reproducible local multi-instance preview environments.
 
 ## Requirements
 
