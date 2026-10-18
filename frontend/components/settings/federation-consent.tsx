@@ -39,6 +39,7 @@ export function FederationConsentSettings() {
   }, []);
 
   const handleToggle = async (field: "federated_profile" | "federated_collection", value: boolean) => {
+    setConsent(prev => (prev ? { ...prev, [field]: value } : prev));
     setSaving(true);
     setSaved(false);
     try {
@@ -48,6 +49,7 @@ export function FederationConsentSettings() {
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
       console.error("Failed to update consent", e);
+      setConsent(prev => (prev ? { ...prev, [field]: !value } : prev));
     } finally {
       setSaving(false);
     }
@@ -80,11 +82,11 @@ export function FederationConsentSettings() {
         </div>
 
         <div className="space-y-4 pt-2">
-          <label htmlFor="toggle-fed-profile" className="flex items-center justify-between cursor-pointer group">
-            <div className="space-y-0.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="toggle-fed-profile" className="space-y-0.5 cursor-pointer">
               <p className="text-sm font-medium">Make profile discoverable</p>
               <p className="text-xs text-muted-foreground">Allow other instances to find your profile via federation</p>
-            </div>
+            </label>
             <input
               id="toggle-fed-profile"
               type="checkbox"
@@ -93,13 +95,13 @@ export function FederationConsentSettings() {
               onChange={e => handleToggle("federated_profile", e.target.checked)}
               disabled={saving}
             />
-          </label>
+          </div>
 
-          <label htmlFor="toggle-fed-collection" className="flex items-center justify-between cursor-pointer group">
-            <div className="space-y-0.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="toggle-fed-collection" className="space-y-0.5 cursor-pointer">
               <p className="text-sm font-medium">Share collection updates</p>
               <p className="text-xs text-muted-foreground">Broadcast collection changes to federated followers</p>
-            </div>
+            </label>
             <input
               id="toggle-fed-collection"
               type="checkbox"
@@ -108,7 +110,7 @@ export function FederationConsentSettings() {
               onChange={e => handleToggle("federated_collection", e.target.checked)}
               disabled={saving}
             />
-          </label>
+          </div>
         </div>
       </div>
     </div>
