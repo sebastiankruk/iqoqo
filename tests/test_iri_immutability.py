@@ -24,6 +24,7 @@ import pytest
 from app.core.iri import canonical_actor_iri, legacy_actor_iri
 from app.db import db
 from app.db.auth import User
+from app.db.federation import FederationConsent
 
 
 @pytest.fixture
@@ -40,14 +41,25 @@ def test_user(app):
         user.set_password("SecurePass123!")
         db.session.add(user)
         db.session.commit()
-        user_id = user.id
-        yield user_id
 
-        # Clean up
+        consent = FederationConsent(
+            user_id=user.id,
+            federated_profile=True,
+            federated_collection=True,
+        )
+        db.session.add(consent)
+        db.session.commit()
+        user_id = user.id
+        db.session.remove()
+
+    yield user_id
+
+    with app.app_context():
         u = db.session.get(User, user_id)
         if u:
             db.session.delete(u)
             db.session.commit()
+            db.session.remove()
 
 
 def test_canonical_actor_iri_generation(app):
@@ -117,11 +129,11 @@ def test_uri_stability_across_username_update(client, app, test_user):
         # Update username
         user.public_username = "fedtester_v2"
         db.session.commit()
-        db.session.expire_all()
 
         # Canonical URI is invariant
         post_update_canonical_iri = canonical_actor_iri(user.id)
         assert initial_canonical_iri == post_update_canonical_iri
+        db.session.remove()
 
     # WebFinger for new username resolves to the exact same canonical URI
     resp = client.get(f"/.well-known/webfinger?resource=acct:fedtester_v2@{domain}")
