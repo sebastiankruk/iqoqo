@@ -126,21 +126,34 @@ test.describe("Multi-Instance Federation E2E", () => {
     });
 
     // Perform remote lookup from Page A
-    const lookupRes = await pageA.request.get("/api/federation/lookup?handle=@bob@peer.local");
-    expect(lookupRes.ok()).toBeTruthy();
-    const lookupData = await lookupRes.json();
+    await pageA.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
+    await pageA.goto("/");
+    const lookupData = await pageA.evaluate(async () => {
+      const res = await fetch("/api/federation/lookup?handle=@bob@peer.local");
+      if (!res.ok) throw new Error(`Lookup failed with status ${res.status}`);
+      return res.json();
+    });
     expect(lookupData.actor.preferredUsername).toBe("bob");
     expect(lookupData.actor.inbox).toContain("/inbox");
 
     // Perform Follow request from Page A targeting remote peer
-    const followRes = await pageA.request.post("/api/federation/follow", {
-      data: {
+    const followData = await pageA.evaluate(
+      async data => {
+        const res = await fetch("/api/federation/follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Follow failed with status ${res.status}`);
+        return res.json();
+      },
+      {
         actor_uri: lookupData.actor_uri,
         inbox_url: lookupData.actor.inbox,
-      },
-    });
-    expect(followRes.ok()).toBeTruthy();
-    const followData = await followRes.json();
+      }
+    );
     expect(followData.status).toBe("delivered");
     expect(followData.activity.type).toBe("Follow");
 
