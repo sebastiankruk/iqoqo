@@ -27,11 +27,20 @@ from sqlalchemy import func, select
 from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
+from app.core.federation_client import FederationClient
+from app.core.http_signatures import SignatureVerificationError, verify_request
 from app.core.iri import canonical_actor_iri, get_lod_base_url, legacy_actor_iri
 from app.core.limiter import limiter
 from app.db import db
 from app.db.auth import User
-from app.db.federation import FederationConsent
+from app.db.federation import (
+    ActivityStatus,
+    FederationActivity,
+    FederationActor,
+    FederationConsent,
+    FederationFollower,
+    FollowStatus,
+)
 
 federation_bp = Blueprint("federation", __name__, url_prefix="/federation")
 wellknown_bp = Blueprint("wellknown", __name__, url_prefix="/.well-known")
@@ -339,3 +348,244 @@ def federation_consent_update() -> Response | tuple[Response, int]:
     from app.api.profile import _handle_update_federation_consent
 
     return _handle_update_federation_consent()
+
+
+@federation_bp.route("/inbox", methods=["POST"])
+@federation_bp.route("/actor/u/<string:user_uuid>/inbox", methods=["POST"])
+@federation_required
+def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, int]:
+    """ActivityPub inbox endpoint receiving inbound signed activities."""
+    verified_actor: str | None = None
+    try:
+        verified_actor = verify_request(request)
+    except SignatureVerificationError as exc:
+        current_app.logger.warning("Inbound activity rejected due to invalid signature: %s", exc)
+        return jsonify({"error": f"Invalid signature: {exc}", "code": 401}), 401
+    except Exception as exc:
+        current_app.logger.warning("Signature verification error: %s", exc)
+        return jsonify({"error": "Signature verification failed", "code": 401}), 401
+
+    payload = request.get_json(silent=True)
+    if not payload or not isinstance(payload, dict):
+        return jsonify({"error": "Invalid or missing JSON payload", "code": 400}), 400
+
+    activity_type = str(payload.get("type", "Create"))
+    activity_id = str(payload.get("id") or uuid.uuid4())
+    actor_uri = str(payload.get("actor") or verified_actor)
+
+    # Record inbound activity log
+    try:
+        activity_rec = FederationActivity(
+            actor_uri=actor_uri,
+            activity_type=activity_type,
+            object_json=payload,
+            target_uri=request.url,
+            direction="inbound",
+            status=ActivityStatus.DELIVERED,
+        )
+        db.session.add(activity_rec)
+        db.session.commit()
+    except Exception as exc:
+        current_app.logger.error("Failed to record inbound activity: %s", exc)
+        db.session.rollback()
+
+    # Process Follow activities
+    if activity_type == "Follow":
+        target_obj = payload.get("object")
+        target_user: User | None = None
+        if user_uuid:
+            try:
+                target_user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+            except (ValueError, TypeError):
+                target_user = None
+        elif isinstance(target_obj, str):
+            if "/actor/u/" in target_obj:
+                u_str = target_obj.split("/actor/u/")[-1].strip("/")
+                try:
+                    target_user = db.session.execute(select(User).where(User.id == uuid.UUID(u_str))).scalars().first()
+                except (ValueError, TypeError):
+                    target_user = None
+            elif "/actor/" in target_obj:
+                uname = target_obj.split("/actor/")[-1].strip("/")
+                target_user = db.session.execute(select(User).where(User.public_username == uname)).scalars().first()
+
+        if target_user:
+            actor_db = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
+            if not actor_db:
+                client = FederationClient()
+                client.fetch_actor(actor_uri)
+                actor_db = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
+
+            if actor_db:
+                auto_accept = current_app.config.get("FEDERATION_AUTO_ACCEPT_FOLLOWS", True)
+                follow_status = FollowStatus.ACCEPTED if auto_accept else FollowStatus.PENDING
+
+                existing_follower = (
+                    db.session.execute(
+                        select(FederationFollower).where(
+                            FederationFollower.local_user_id == target_user.id,
+                            FederationFollower.remote_actor_id == actor_db.id,
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+
+                if not existing_follower:
+                    follower_entry = FederationFollower(
+                        local_user_id=target_user.id,
+                        remote_actor_id=actor_db.id,
+                        status=follow_status,
+                    )
+                    db.session.add(follower_entry)
+                    db.session.commit()
+
+    resp = jsonify({"status": "accepted", "id": activity_id})
+    resp.status_code = 202
+    return resp
+
+
+@federation_bp.route("/lookup", methods=["GET"])
+@federation_required
+def federation_lookup() -> Response | tuple[Response, int]:
+    """Resolve remote actor handle via WebFinger and retrieve Actor JSON-LD document."""
+    handle = request.args.get("handle", "").strip()
+    if not handle:
+        return jsonify({"error": "Missing 'handle' query parameter", "code": 400}), 400
+
+    clean_handle = handle.lstrip("@")
+    if "@" not in clean_handle:
+        return jsonify({"error": "Invalid handle format. Expected username@domain", "code": 400}), 400
+
+    username, domain = clean_handle.split("@", 1)
+    scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or ":" in domain) else "https"
+    webfinger_url = f"{scheme}://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
+
+    try:
+        from app.utils.http_client import safe_get
+
+        headers = {"Accept": "application/jrd+json, application/json"}
+        wf_resp = safe_get(webfinger_url, headers=headers, timeout=5.0)
+        if wf_resp.status_code != 200:
+            return (
+                jsonify({"error": f"WebFinger resolution failed with status {wf_resp.status_code}", "code": wf_resp.status_code}),
+                wf_resp.status_code,
+            )
+
+        wf_data = wf_resp.json()
+        actor_uri: str | None = None
+        for link in wf_data.get("links", []):
+            if link.get("rel") == "self" and "activity" in link.get("type", ""):
+                actor_uri = link.get("href")
+                break
+
+        if not actor_uri:
+            for link in wf_data.get("links", []):
+                if link.get("rel") == "self":
+                    actor_uri = link.get("href")
+                    break
+
+        if not actor_uri:
+            return jsonify({"error": "No ActivityPub actor link found in WebFinger response", "code": 404}), 404
+
+        client = FederationClient()
+        actor_data = client.fetch_actor(actor_uri)
+        if not actor_data:
+            return jsonify({"error": "Failed to fetch remote Actor document", "code": 502}), 502
+
+        return jsonify(
+            {
+                "success": True,
+                "handle": f"@{username}@{domain}",
+                "actor_uri": actor_uri,
+                "actor": actor_data,
+            }
+        )
+    except Exception as exc:
+        current_app.logger.warning("Remote federation lookup error for %s: %s", handle, exc)
+        return jsonify({"error": str(exc), "code": 500}), 500
+
+
+@federation_bp.route("/follow", methods=["POST"])
+@require_auth
+@federation_required
+def federation_follow_remote() -> Response | tuple[Response, int]:
+    """Initiate an outbound Follow activity to a remote Actor."""
+    from app.api.auth import get_current_user
+
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    payload = request.get_json(silent=True) or {}
+    target_handle = payload.get("handle")
+    target_actor_uri = payload.get("actor_uri")
+    target_inbox_url = payload.get("inbox_url")
+
+    client = FederationClient()
+
+    if target_handle and not target_actor_uri:
+        clean_handle = str(target_handle).lstrip("@")
+        if "@" in clean_handle:
+            username, domain = clean_handle.split("@", 1)
+            scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or ":" in domain) else "https"
+            wf_url = f"{scheme}://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
+            try:
+                from app.utils.http_client import safe_get
+
+                wf_resp = safe_get(wf_url, headers={"Accept": "application/jrd+json, application/json"}, timeout=5.0)
+                if wf_resp.status_code == 200:
+                    for link in wf_resp.json().get("links", []):
+                        if link.get("rel") == "self":
+                            target_actor_uri = link.get("href")
+                            break
+            except Exception as exc:
+                current_app.logger.warning("WebFinger lookup error: %s", exc)
+
+    if not target_actor_uri:
+        return jsonify({"error": "Missing target_actor_uri or unresolvable handle", "code": 400}), 400
+
+    actor_data = client.fetch_actor(str(target_actor_uri))
+    if not actor_data:
+        return jsonify({"error": f"Failed to retrieve remote actor at {target_actor_uri}", "code": 502}), 502
+
+    inbox_url = target_inbox_url or actor_data.get("inbox")
+    if not inbox_url:
+        return jsonify({"error": "Remote actor document lacks an inbox endpoint", "code": 400}), 400
+
+    base_url = _get_base_url()
+    alpha_actor_uri = canonical_actor_iri(current_user.id, base_url)
+
+    follow_activity: dict[str, Any] = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"{base_url}/activities/{uuid.uuid4()}",
+        "type": "Follow",
+        "actor": alpha_actor_uri,
+        "object": target_actor_uri,
+    }
+
+    try:
+        resp = client.post_to_inbox(inbox_url, follow_activity, sender_user_id=str(current_user.id))
+        if resp.status_code in (200, 201, 202):
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "status": "delivered",
+                        "activity": follow_activity,
+                        "remote_actor": actor_data,
+                    }
+                ),
+                200,
+            )
+        return (
+            jsonify(
+                {
+                    "error": f"Remote inbox returned HTTP {resp.status_code}",
+                    "code": resp.status_code,
+                }
+            ),
+            resp.status_code,
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Delivery failed: {exc}", "code": 500}), 500

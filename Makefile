@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -382,10 +382,22 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	 else \
 		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
 	 fi; \
-	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	 fed_overlay=""; \
+	 if [ -n "$(FEDERATION_PAIR)" ] && [ "$(FEDERATION_PAIR)" != "0" ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+		echo "🔗 Federation Pair mode active: launching secondary peer instance stack..."; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay up -d
 
 preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml down
+	@fed_overlay=""; \
+	 if [ -f $(DEPLOY_DIR)/docker-compose.federation-preview.yml ] || [ -f docker-compose.federation-preview.yml ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay down
+
+preview-verify-federation: ## Run automated federation health, WebFinger, and ActivityPub verification across preview pair
+	@bash scripts/verify_federation_preview.sh
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -648,15 +660,29 @@ test-frontend:
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 
+test-scripts: test-scripts-python test-scripts-bash ## Run Python and BATS script tests
+
 test-scripts-bash:
 	$(AI_ECHO) "Running BATS script tests..."
-	@if command -v bats >/dev/null 2>&1; then \
-		bats $(BATS_FLAGS) tests/bash/; \
-	elif [ -f node_modules/.bin/bats ]; then \
-		$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+	@if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+		set -o pipefail; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	else \
-		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
-		exit 1; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	fi
 
 test-scripts-python: .venv/bin/activate
@@ -757,7 +783,7 @@ _test-e2e-run:
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
 		echo "Running Playwright against the verified isolated E2E database..."; \
-		cd frontend; FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
+		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e

@@ -97,6 +97,11 @@ const nextConfig: NextConfig = {
           destination: `${backendBase}/api/:path*`,
         },
         {
+          // Proxy RFC well-known URIs (WebFinger, NodeInfo) to Flask backend
+          source: "/.well-known/:path*",
+          destination: `${backendBase}/.well-known/:path*`,
+        },
+        {
           // Intercept static asset requests (stored as /static/... in DB)
           // and proxy them to the backend API static serving endpoint.
           source: "/static/:path*",

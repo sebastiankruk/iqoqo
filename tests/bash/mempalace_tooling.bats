@@ -31,7 +31,7 @@
   if ! command -v mempalace >/dev/null 2>&1 && [ ! -f .venv/bin/mempalace ]; then
     skip "mempalace CLI not installed in environment"
   fi
-  run make mempalace-index ARGS="--dry-run"
+  run make mempalace-index ARGS="docs/CONTEXT.md --dry-run"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Starting iQoQo Scoped MemPalace Mining"* ]]
+  [[ "$output" == *"MemPalace Mine"* ]]
 }

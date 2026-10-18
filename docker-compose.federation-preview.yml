@@ -1,0 +1,96 @@
+# Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>
+#
+# Overlay compose file for staging multi-instance federation preview (Instance Beta)
+# Usage: docker compose -f docker-compose.prebuilt.yml -f docker-compose.federation-preview.yml up -d
+
+services:
+  peer-db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=iqoqo_peer
+      - POSTGRES_PASSWORD=iqoqo_peer_secret
+      - POSTGRES_DB=iqoqo_peer
+      - PGDATA=/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iqoqo_peer -d iqoqo_peer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - peer_postgres_data:/var/lib/postgresql/data
+
+  peer-migration:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-preview}
+    restart: "no"
+    command: >-
+      sh -c "python scripts/fix_alembic.py && flask db upgrade && env PYTHONPATH=. python scripts/sync_db_permissions.py && env PYTHONPATH=. python scripts/init_auth.py"
+    environment:
+      - DATABASE_URL=postgresql://iqoqo_peer:iqoqo_peer_secret@peer-db:5432/iqoqo_peer
+      - ADMIN_EMAIL=${PEER_ADMIN_EMAIL:-peer-admin@iqoqo.cc}
+      - ADMIN_PASSWORD=${PEER_ADMIN_PASSWORD:-PeerBootstrapPassword123!}
+      - SECRET_KEY=${PEER_SECRET_KEY:-peer-preview-secret-key-32-chars-ok}
+      - JWT_SECRET_KEY=${PEER_JWT_SECRET_KEY:-peer-jwt-secret-preview-32-chars}
+      - AUTH_SECRET=${PEER_AUTH_SECRET:-peer-auth-secret-preview-32-chars}
+    depends_on:
+      peer-db:
+        condition: service_healthy
+
+  web:
+    environment:
+      - FEDERATION_ENABLED=true
+      - FEDERATION_AUTO_ACCEPT_FOLLOWS=true
+      - FEDERATION_ALLOW_LOOPBACK=true
+
+  peer-web:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-preview}
+    restart: always
+    command: >-
+      gunicorn --bind 0.0.0.0:5000 --workers ${GUNICORN_WORKERS:-2} --worker-class sync --threads 1 --timeout 30 run:app
+    environment:
+      - DATABASE_URL=postgresql://iqoqo_peer:iqoqo_peer_secret@peer-db:5432/iqoqo_peer
+      - ADMIN_EMAIL=${PEER_ADMIN_EMAIL:-peer-admin@iqoqo.cc}
+      - ADMIN_PASSWORD=${PEER_ADMIN_PASSWORD:-PeerBootstrapPassword123!}
+      - SECRET_KEY=${PEER_SECRET_KEY:-peer-preview-secret-key-32-chars-ok}
+      - JWT_SECRET_KEY=${PEER_JWT_SECRET_KEY:-peer-jwt-secret-preview-32-chars}
+      - AUTH_SECRET=${PEER_AUTH_SECRET:-peer-auth-secret-preview-32-chars}
+      - BASE_URL=${PEER_BASE_URL:-http://localhost:5005}
+      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-http://localhost:3001}
+      - FEDERATION_ENABLED=true
+      - FEDERATION_AUTO_ACCEPT_FOLLOWS=true
+      - FEDERATION_ALLOW_LOOPBACK=true
+    ports:
+      - "127.0.0.1:${PEER_BACKEND_PORT:-5005}:5000"
+    depends_on:
+      peer-db:
+        condition: service_healthy
+      peer-migration:
+        condition: service_completed_successfully
+
+  peer-frontend:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-preview}
+    restart: always
+    environment:
+      - NEXT_PUBLIC_API_URL=${PEER_BASE_URL:-http://localhost:5005}/api
+      - PORT=3000
+    ports:
+      - "${PEER_FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      - peer-web
+
+volumes:
+  peer_postgres_data:
