@@ -202,3 +202,11 @@ class TestActorEndpoints:
             data = resp.get_json()
             assert data["type"] == "Person"
             assert user_id in data["id"]
+
+    def test_lookup_unauthenticated_rejected(self, client, app):
+        """Verify unauthenticated GET /api/federation/lookup is rejected with 401."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+
+        resp = client.get("/api/federation/lookup?handle=@user@remote.domain")
+        assert resp.status_code == 401

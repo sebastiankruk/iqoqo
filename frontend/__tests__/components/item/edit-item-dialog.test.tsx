@@ -87,4 +87,21 @@ describe("EditItemDialog", () => {
       });
     });
   });
+
+  it("submits updated condition on save", async () => {
+    render(<EditItemDialog item={mockItem} isOpen={true} onOpenChange={vi.fn()} />);
+
+    const conditionInput = screen.getByLabelText(/Condition/i);
+    fireEvent.change(conditionInput, { target: { value: "Near Mint" } });
+
+    const submitBtn = screen.getByRole("button", { name: /Save Changes/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        local_barcode: "TAG-456",
+        condition: "Near Mint",
+      });
+    });
+  });
 });

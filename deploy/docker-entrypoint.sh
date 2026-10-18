@@ -82,11 +82,11 @@ fi
 #
 # The container backend and worker processes run as unprivileged appuser
 # (UID 10001, GID 10001). Host bind-mounted directories (app/static/covers,
-# app/static/gallery, exports, data) are frequently created with host UID 1000
+# app/static/gallery, exports, data, app/static/uploads/raw_covers) are frequently created with host UID 1000
 # and 0755 mode, causing unhandled PermissionError: [Errno 13] at runtime.
 # Failing fast here guarantees instant visibility at container startup before
 # accepting requests.
-STORAGE_MOUNT_DIRS="app/static/covers app/static/gallery exports data"
+STORAGE_MOUNT_DIRS="app/static/covers app/static/gallery exports data app/static/uploads/raw_covers"
 UNWRITABLE_DIRS=""
 
 # Non-server tasks (such as database migrations or ad-hoc CLI commands) do not

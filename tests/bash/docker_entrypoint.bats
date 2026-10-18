@@ -148,7 +148,7 @@ teardown() {
 
 @test "entrypoint succeeds when all storage directories are writable" {
   mock_dir="${TEST_TEMP_DIR}/mock_writable"
-  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data" "${mock_dir}/app/static/uploads/raw_covers"
   cd "${mock_dir}"
 
   run bash "${ENTRYPOINT}" true
@@ -158,7 +158,7 @@ teardown() {
 
 @test "entrypoint fails with diagnostics and remediation command when storage directory is unwritable" {
   mock_dir="${TEST_TEMP_DIR}/mock_unwritable"
-  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data" "${mock_dir}/app/static/uploads/raw_covers"
   chmod 0555 "${mock_dir}/app/static/covers"
   cd "${mock_dir}"
 
@@ -174,7 +174,7 @@ teardown() {
 
 @test "entrypoint failure message identifies effective UID/GID" {
   mock_dir="${TEST_TEMP_DIR}/mock_uid_gid"
-  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data" "${mock_dir}/app/static/uploads/raw_covers"
   chmod 0555 "${mock_dir}/exports"
   cd "${mock_dir}"
 
@@ -185,6 +185,20 @@ teardown() {
   [[ "${output}" =~ "exports" ]]
 
   chmod 0755 "${mock_dir}/exports"
+}
+
+@test "entrypoint checks writability of app/static/uploads/raw_covers" {
+  mock_dir="${TEST_TEMP_DIR}/mock_raw_covers"
+  mkdir -p "${mock_dir}/app/static/covers" "${mock_dir}/app/static/gallery" "${mock_dir}/exports" "${mock_dir}/data" "${mock_dir}/app/static/uploads/raw_covers"
+  chmod 0555 "${mock_dir}/app/static/uploads/raw_covers"
+  cd "${mock_dir}"
+
+  run bash "${ENTRYPOINT}" true
+  [ "${status}" -eq 1 ]
+  [[ "${output}" =~ "ERROR: Storage volume writability verification failed" ]]
+  [[ "${output}" =~ "app/static/uploads/raw_covers" ]]
+
+  chmod 0755 "${mock_dir}/app/static/uploads/raw_covers"
 }
 
 @test "entrypoint permits non-server migration commands when asset mount directories are absent" {

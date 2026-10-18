@@ -578,3 +578,19 @@ class TestSecretRedactionInLogs:
         assert "token=%2A%2A%2AREDACTED%2A%2A%2A" in sanitized
         assert "api_key=%2A%2A%2AREDACTED%2A%2A%2A" in sanitized
         assert "mode=direct" in sanitized
+
+    def test_inbox_payload_cap_rejection(self, client, app) -> None:
+        """Verify that requests exceeding the 100KB payload limit are rejected with 413."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+
+        oversized_data = b"a" * (101 * 1024)
+        resp = client.post(
+            "/api/federation/inbox",
+            data=oversized_data,
+            headers={"Content-Type": "application/activity+json"},
+        )
+        assert resp.status_code == 413
+        data = resp.get_json()
+        assert data["code"] == 413
+        assert "100KB" in data["error"]
