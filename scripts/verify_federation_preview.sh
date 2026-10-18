@@ -29,7 +29,6 @@ PEER_URL="http://127.0.0.1:${PEER_API_PORT}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
