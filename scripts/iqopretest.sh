@@ -138,3 +138,9 @@ make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version
 make status preview
+
+# 6. Run automated federation verification if federation pair is active
+if [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
+    echo "🔗 Running automated federation preview verification..."
+    bash scripts/verify_federation_preview.sh
+fi

@@ -174,6 +174,12 @@ class FederationClient:
         # If sender_user_id specified, sign request with actor key
         if sender_user_id:
             priv_key = federation_keys.get_actor_private_key(sender_user_id)
+            if not priv_key:
+                try:
+                    federation_keys.generate_actor_keypair(sender_user_id)
+                    priv_key = federation_keys.get_actor_private_key(sender_user_id)
+                except Exception as exc:
+                    logger.warning("Could not auto-generate keypair for %s: %s", sender_user_id, exc)
             if priv_key:
                 from flask import current_app, has_app_context
 

@@ -114,41 +114,35 @@ This starts:
 > In standard deployments, outbound HTTP clients in `app/utils/http_client.py` block loopback (`127.0.0.1`, `localhost`) and private RFC 1918 IPs to prevent Server-Side Request Forgery.
 > In dual-instance preview staging (`docker-compose.federation-preview.yml`), both instances set `FEDERATION_ALLOW_LOOPBACK=true` so peer containers co-located on the same host can exchange WebFinger queries and ActivityPub activities over host loopback ports. This parameter must remain `false` or unset in production.
 
-### 4.2 Step-by-Step Manual Inspection
+### 4.2 Automated Preview Federation Verification
 
-1. **Verify Primary and Secondary Health**:
+Run the full automated federation verification suite with a single command:
 
-   ```bash
-   curl -I http://localhost:8000/api/health
-   curl -I http://localhost:5005/api/health
-   ```
+```bash
+make preview-verify-federation
+# Or run directly:
+./scripts/verify_federation_preview.sh
+```
 
-2. **Verify Cross-Instance WebFinger Discovery**:
-   Query the peer instance's WebFinger endpoint:
+When deploying via `scripts/iqopretest.sh` with `FEDERATION_PAIR=1`, this verification executes automatically on startup. The automated verifier exercises:
 
-   ```bash
-   curl -s "http://localhost:5005/.well-known/webfinger?resource=acct:peer-admin@iqoqo.cc" | jq .
-   ```
+1. **HTTP Health Probes**: Validates primary (`:5001`) and secondary (`:5005`) backend endpoints.
+2. **Peer Identity & Consent**: Ensures `peeradmin` user profile has active federation consent.
+3. **WebFinger RFC 7033**: Resolves `acct:peeradmin@...` and extracts ActivityStreams self link.
+4. **Actor JSON-LD Retrieval**: Fetches and verifies ActivityPub actor document, public keys, and inbox URL.
+5. **Inbox Security**: Verifies remote inbox strictly rejects unsigned activities (HTTP 401).
+6. **Cross-Container Federation**: Validates internal network actor discovery using `FederationClient`.
 
-   Confirm the returned JSON contains a `self` link with `type: "application/activity+json"`.
+### 4.3 Manual UI & Admin Inspection
 
-3. **Verify Actor JSON-LD Profile**:
-   Fetch the resolved Actor URI with the ActivityPub accept header:
+- Navigate to `http://localhost:8000/admin` on the primary instance.
+- Open **Federation Management** to review trusted peer instances (`/admin/federation`).
+- Check the **Activity Stream** tab to observe inbound and outbound federated activities in real time.
 
-   ```bash
-   curl -s -H "Accept: application/activity+json" http://localhost:5001/api/federation/actor/peer-admin | jq .
-   ```
+### 4.4 Teardown
 
-   Ensure `publicKey` and `inbox` fields are populated.
+When inspection is complete, stop the preview stack cleanly:
 
-4. **Verify Activity Logs in Admin UI**:
-   - Navigate to `http://localhost:8000/admin` on the primary instance.
-   - Open **Federation Management** to review trusted peer instances (`/admin/federation`).
-   - Check the **Activity Stream** tab to observe inbound and outbound federated activities in real time.
-
-5. **Teardown**:
-   When inspection is complete, stop the preview stack cleanly:
-
-   ```bash
-   make preview-down
-   ```
+```bash
+make preview-down
+```
