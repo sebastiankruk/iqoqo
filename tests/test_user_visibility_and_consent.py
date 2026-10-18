@@ -217,6 +217,27 @@ class TestUserVisibilityDefaults:
         assert data["is_hidden"] is False
         assert data["is_public"] is True
 
+    def test_add_item_manual_inherits_user_default_visibility(self, client, private_user_headers):
+        """POST /api/items/manual inherits default_item_visibility='private'."""
+        headers = {"Authorization": private_user_headers["Authorization"]}
+        res = client.post(
+            "/api/items/manual",
+            json={
+                "Title": "Secret Private Book",
+                "Authors": ["Anonymous Author"],
+                "Format": "text",
+            },
+            headers=headers,
+        )
+        assert res.status_code == 200
+        item_id = res.get_json()["data"]["item_id"]
+
+        with client.application.app_context():
+            item = db.session.get(Item, item_id)
+            assert item is not None
+            assert item.is_hidden is True
+            assert item.is_public is False
+
 
 class TestFederationConsent:
     """Test Federation Consent API and actor keypair generation."""

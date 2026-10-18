@@ -974,3 +974,45 @@ class TestSemanticLinksAndSeriesRdfSerialization:
 
         assert (w_uri, SCHEMA.partOfSeries, series_uri) in g
         assert (w_uri, SCHEMA.position, Literal(2, datatype=XSD.integer)) in g
+
+    def test_local_barcode_serialized_on_item(self, app):
+        from app.core.frbr_service import IQOQO
+
+        with app.app_context():
+            user = User(
+                email="barcode_rdf@iqoqo.local",
+                display_name="Barcode RDF",
+                public_username="barcoderdf",
+            )
+            db.session.add(user)
+            db.session.flush()
+
+            work = Work(title="Barcode Book")
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            mani = Manifestation(expression_id=expr.id)
+            db.session.add(mani)
+            db.session.flush()
+
+            item = Item(
+                owner_id=user.id,
+                manifestation_id=mani.id,
+                status="read",
+                condition="mint",
+                local_barcode="SHELF-STICKER-42",
+            )
+            db.session.add(item)
+            db.session.commit()
+
+            ttl = serialize_collection_to_rdf([item], "http://testserver", output_format="turtle")
+            g = Graph()
+            g.parse(data=ttl, format="turtle")
+
+            item_uri = URIRef(f"http://testserver/items/{item.id}")
+            assert (item_uri, IQOQO.local_barcode, Literal("SHELF-STICKER-42")) in g
+            assert (item_uri, IQOQO.condition, Literal("mint")) in g

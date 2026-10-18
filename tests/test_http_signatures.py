@@ -199,3 +199,49 @@ class TestHttpSignatures:
         req = MockRequest(method="GET", path="/actor", headers={})
         with pytest.raises(SignatureVerificationError):
             verify_request(req)
+
+    def test_missing_mandatory_signed_headers_rejected(self, rsa_keypair):
+        priv_key, pub_pem = rsa_keypair
+        actor_uri = "https://example.org/users/alice"
+        key_id = f"{actor_uri}#main-key"
+        body = b'{"type":"Note"}'
+
+        # Craft signature that only signs (request-target)
+        sig_header = f'keyId="{key_id}",' 'algorithm="rsa-sha256",' 'headers="(request-target)",' 'signature="ZmFrZXNpZw=="'
+        req = MockRequest(
+            method="POST",
+            path="/users/alice/inbox",
+            headers={
+                "Signature": sig_header,
+                "Date": email.utils.formatdate(usegmt=True),
+                "Host": "example.org",
+                "Digest": compute_digest(body),
+            },
+            body=body,
+        )
+        with pytest.raises(SignatureVerificationError) as exc_info:
+            verify_request(req, key_resolver=lambda _: pub_pem)
+        assert "must sign mandatory headers" in str(exc_info.value).lower()
+
+    def test_horizontal_actor_impersonation_same_domain_rejected(self, rsa_keypair):
+        priv_key, pub_pem = rsa_keypair
+        # Eve signs with her key on example.org claiming to be Alice on example.org
+        eve_key_id = "https://example.org/users/eve#main-key"
+        body = b'{"type":"Create","actor":"https://example.org/users/alice"}'
+
+        signed_headers = sign_request(
+            method="POST",
+            url="https://example.org/inbox",
+            body=body,
+            key_id=eve_key_id,
+            private_key=priv_key,
+        )
+        req = MockRequest(
+            method="POST",
+            path="/inbox",
+            headers=signed_headers,
+            body=body,
+        )
+        with pytest.raises(SignatureVerificationError) as exc_info:
+            verify_request(req, key_resolver=lambda _: pub_pem)
+        assert "does not match payload actor" in str(exc_info.value).lower()

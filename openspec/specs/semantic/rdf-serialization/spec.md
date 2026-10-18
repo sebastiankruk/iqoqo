@@ -114,6 +114,11 @@ The system SHALL ensure that queries fetching collection items for RDF serializa
 - **WHEN** `serialize_collection_to_rdf()` processes a list of ORM items
 - **THEN** all related manifestations, expressions, and works are loaded in the initial database queries via joined/selected relationships, executing zero additional queries during graph iteration.
 
+#### Scenario: Eager loading excludes non-existent polymorphic relationships
+
+- **WHEN** Item hierarchies are eager loaded for collection export
+- **THEN** The query uses `selectinload` only on actual ORM relationships (excluding polymorphic `semantic_links`), preventing query construction failures.
+
 ### Requirement: Canonical Entity Identity Across RDF Formats
 
 Equivalent Work, Expression, Manifestation, and Item entities MUST use one canonical IRI policy across model helpers, public RDF, SPARQL graphs, Turtle, N-Triples, JSON-LD, and authenticated exports.

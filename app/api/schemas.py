@@ -134,6 +134,7 @@ class ItemUpdateSchema(BaseModel):
 
     status: str | None = None
     collection_status: str | None = None
+    condition: str | None = None
     local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
@@ -199,6 +200,7 @@ class ItemManualCreateSchema(BaseModel):
     tags: list[str] | None = None
     lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
+    is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
 
     @field_validator("lent_to_user_id")
     @classmethod

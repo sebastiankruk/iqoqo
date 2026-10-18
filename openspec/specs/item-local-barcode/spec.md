@@ -33,3 +33,30 @@ The system SHALL preserve strict ontological boundaries between Manifestation-le
 
 - **WHEN** an Item has a `local_barcode` and its parent Manifestation has an ISBN-13
 - **THEN** both identifiers are exposed in their respective FRBR tiers without collisions, overwrites, or cross-tier pollution.
+
+### Requirement: RDF Graph Barcode Serialization
+
+The system SHALL serialize `iqoqo:local_barcode` onto the Item RDF node when exporting or streaming Linked Open Data collection graphs.
+
+#### Scenario: Item with local barcode emits RDF triple
+
+- **WHEN** A collection RDF export is generated containing an Item with a `local_barcode`
+- **THEN** The RDF graph contains the triple `<item_uri> iqoqo:local_barcode "VALUE"`.
+
+### Requirement: Physical Item Condition Tracking
+
+The system SHALL accept and persist the physical `condition` of an Item across update endpoints and return it in item detail responses.
+
+#### Scenario: Condition updated and retrieved
+
+- **WHEN** An authenticated owner submits `PUT /api/items/<id>` with `condition: "near_mint"`
+- **THEN** The value is persisted and returned in the item detail response `data.condition`.
+
+### Requirement: Collection Link Ownership Validation
+
+The system SHALL verify that any `collection_id` specified during item creation is owned by the authenticated caller.
+
+#### Scenario: Item creation rejected for unowned collection
+
+- **WHEN** An item is created with `collection_id` belonging to a different user or non-existent
+- **THEN** The endpoint returns 404 Not Found without creating the link.

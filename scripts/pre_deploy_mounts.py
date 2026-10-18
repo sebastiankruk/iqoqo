@@ -113,20 +113,31 @@ def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
     # 4. Directory-target mounts: create with app user ownership and ensure writable mounts have permissive access
     for rel_dir in DIRECTORY_MOUNTS:
         target_dir = deploy_dir / rel_dir
+        mode = 0o775 if rel_dir == "data" else 0o777
         if target_dir.exists():
             if not target_dir.is_dir() and not target_dir.is_symlink():
                 errors.append(f"Expected directory mount source '{target_dir}' is a regular file.")
             elif rel_dir in WRITABLE_MOUNTS:
                 try:
-                    os.chmod(target_dir, 0o777)
+                    os.chmod(target_dir, mode)
                 except OSError:
                     pass
         else:
             try:
                 target_dir.mkdir(parents=True, exist_ok=True)
-                os.chmod(target_dir, 0o777 if rel_dir in WRITABLE_MOUNTS else 0o755)
+                os.chmod(target_dir, mode if rel_dir in WRITABLE_MOUNTS else 0o755)
             except OSError as exc:
                 errors.append(f"Cannot create mount directory '{target_dir}': {exc}")
+
+    # 5. Protect actor private keys directory (0700) and keys (0600)
+    keys_dir = deploy_dir / "data" / "keys"
+    if keys_dir.exists() and keys_dir.is_dir():
+        try:
+            os.chmod(keys_dir, 0o700)
+            for pem in keys_dir.glob("*.pem"):
+                os.chmod(pem, 0o600)
+        except OSError:
+            pass
 
     if errors:
         print("❌ Pre-deploy mount validation failed:", file=sys.stderr)

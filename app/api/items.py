@@ -27,7 +27,7 @@ from typing import Any
 
 from flask import Response, current_app, g, jsonify, request, send_file, stream_with_context
 from pydantic import ValidationError
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp, invalid_json_payload_response
@@ -513,6 +513,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
+        "condition": item.condition,
         "local_barcode": item.local_barcode,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
@@ -645,6 +646,8 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         item.lent_to_name = payload.lent_to_name
     if "local_barcode" in payload.model_fields_set:
         item.local_barcode = payload.local_barcode.strip() if (payload.local_barcode and payload.local_barcode.strip()) else None
+    if "condition" in payload.model_fields_set:
+        item.condition = payload.condition.strip() if (payload.condition and payload.condition.strip()) else None
     if payload.is_hidden is not None:
         item.is_hidden = payload.is_hidden
 
@@ -673,7 +676,9 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         db.session.commit()
         # Tag/status changes alter this user's facet counts.
         invalidate_facets_cache(user_id)
-        return jsonify({"success": True, "data": {"id": item.id, "local_barcode": item.local_barcode}, "error": None})
+        return jsonify(
+            {"success": True, "data": {"id": item.id, "local_barcode": item.local_barcode, "condition": item.condition}, "error": None}
+        )
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
@@ -1119,6 +1124,18 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     db.session.flush()
     log_initial_item_status(item.id, user_id, item.status, item.collection_status)
     if payload.collection_id:
+        collection = (
+            db.session.execute(
+                select(UserCollection).where(
+                    UserCollection.id == payload.collection_id,
+                    UserCollection.owner_id == user_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not collection:
+            return jsonify({"error": "Collection not found", "code": 404}), 404
         link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
@@ -1303,6 +1320,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
             local_barcode=payload.local_barcode,
             lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
             lent_to_name=payload.lent_to_name,
+            is_hidden=_resolve_item_hidden_state(user_id, data, getattr(payload, "is_hidden", None)),
             meta={},
         )
         db.session.add(item)
@@ -1374,6 +1392,18 @@ def create_item() -> Response | tuple[Response, int]:
     db.session.flush()
     log_initial_item_status(item.id, user_id, item.status, item.collection_status)
     if payload.collection_id:
+        collection = (
+            db.session.execute(
+                select(UserCollection).where(
+                    UserCollection.id == payload.collection_id,
+                    UserCollection.owner_id == user_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not collection:
+            return jsonify({"error": "Collection not found", "code": 404}), 404
         link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)

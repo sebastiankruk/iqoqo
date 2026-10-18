@@ -464,11 +464,6 @@ class ExportService:
             .where(Item.owner_id == resolved_uid)
             .options(
                 joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
-                joinedload(Item.manifestation).selectinload(Manifestation.semantic_links),
-                joinedload(Item.manifestation)
-                .joinedload(Manifestation.expression)
-                .joinedload(Expression.work)
-                .selectinload(Work.semantic_links),
                 joinedload(Item.manifestation)
                 .joinedload(Manifestation.expression)
                 .joinedload(Expression.work)

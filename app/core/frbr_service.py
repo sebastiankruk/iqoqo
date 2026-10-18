@@ -2893,6 +2893,7 @@ def build_collection_rdf_graph(
             status = item.get("status")
             collection_status = item.get("collection_status")
             condition = item.get("condition")
+            local_barcode = item.get("local_barcode")
             work_id = item.get("work_id", manifestation_id)
             content_type = item.get("content_type")
             expression_kind = item.get("expression_kind")
@@ -2915,6 +2916,7 @@ def build_collection_rdf_graph(
                 status = getattr(item, "status", None)
                 collection_status = getattr(item, "collection_status", None)
                 condition = getattr(item, "condition", None)
+                local_barcode = getattr(item, "local_barcode", None)
                 content_type = None
                 expression_kind = None
                 expression_meta: dict[str, Any] = {}
@@ -3056,6 +3058,7 @@ def build_collection_rdf_graph(
                 status = getattr(item, "status", None)
                 collection_status = getattr(item, "collection_status", None)
                 condition = getattr(item, "condition", None)
+                local_barcode = getattr(item, "local_barcode", None)
                 content_type = None
                 expression_kind = None
                 expression_meta = {}
@@ -3163,6 +3166,8 @@ def build_collection_rdf_graph(
                 g.add((i_uri, IQOQO.collection_status, Literal(collection_status)))
             if condition:
                 g.add((i_uri, IQOQO.condition, Literal(condition)))
+            if local_barcode:
+                g.add((i_uri, IQOQO.local_barcode, Literal(local_barcode)))
 
         # External LOD semantic links for Manifestation
         m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
@@ -3344,11 +3349,6 @@ def _eager_load_items_fallback(items: list[Any]) -> list[Any]:
                 select(Item)
                 .options(
                     joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
-                    selectinload(Item.manifestation).selectinload(Manifestation.semantic_links),
-                    selectinload(Item.manifestation)
-                    .selectinload(Manifestation.expression)
-                    .selectinload(Expression.work)
-                    .selectinload(Work.semantic_links),
                     selectinload(Item.manifestation)
                     .selectinload(Manifestation.expression)
                     .selectinload(Expression.work)
@@ -3365,8 +3365,6 @@ def _eager_load_items_fallback(items: list[Any]) -> list[Any]:
                 select(Manifestation)
                 .options(
                     joinedload(Manifestation.expression).joinedload(Expression.work),
-                    selectinload(Manifestation.semantic_links),
-                    selectinload(Manifestation.expression).selectinload(Expression.work).selectinload(Work.semantic_links),
                     selectinload(Manifestation.expression).selectinload(Expression.work).selectinload(Work.series_memberships),
                 )
                 .where(Manifestation.id.in_(manifestation_ids))

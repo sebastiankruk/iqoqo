@@ -68,8 +68,11 @@ def _add_federation_headers(response: Response) -> Response:
 
 @federation_bp.after_request
 def federation_after_request(response: Response) -> Response:
-    """Apply CORS headers to all federation routes."""
-    return _add_federation_headers(response)
+    """Apply CORS headers to public federation routes."""
+    path = request.path
+    if "/webfinger" in path or "/nodeinfo" in path or "/actor" in path:
+        return _add_federation_headers(response)
+    return response
 
 
 @wellknown_bp.after_request
@@ -86,7 +89,6 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
 
     base_url = _get_base_url()
     domain = _get_domain()
-    db.session.expire_all()
     user: User | None = None
 
     if resource.startswith("acct:"):
@@ -120,9 +122,9 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
     if not user:
         return jsonify({"error": f"Resource not found: {resource}", "code": 404}), 404
 
-    # Require explicit user opt-in consent or public visibility
+    # Require explicit user opt-in consent for federation
     consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
-    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    is_opted_in = bool(consent and consent.federated_profile)
     if not is_opted_in:
         return jsonify({"error": f"Resource not found: {resource}", "code": 404}), 404
 
@@ -291,7 +293,7 @@ def get_actor_by_uuid(user_uuid: str) -> Response | tuple[Response, int]:
         return jsonify({"error": "Actor not found", "code": 404}), 404
 
     consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
-    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    is_opted_in = bool(consent and consent.federated_profile)
     if not is_opted_in:
         return jsonify({"error": "Actor not found", "code": 404}), 404
 
@@ -323,7 +325,7 @@ def get_actor_by_username(username: str) -> Response | tuple[Response, int]:
         return jsonify({"error": f"Actor not found for username: {username}", "code": 404}), 404
 
     consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
-    is_opted_in = (consent and consent.federated_profile) or (consent is None and getattr(user, "visibility", None) == "public")
+    is_opted_in = bool(consent and consent.federated_profile)
     if not is_opted_in:
         return jsonify({"error": f"Actor not found for username: {username}", "code": 404}), 404
 
@@ -353,8 +355,13 @@ def federation_consent_update() -> Response | tuple[Response, int]:
 @federation_bp.route("/inbox", methods=["POST"])
 @federation_bp.route("/actor/u/<string:user_uuid>/inbox", methods=["POST"])
 @federation_required
+@limiter.limit("60 per minute")
 def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, int]:
     """ActivityPub inbox endpoint receiving inbound signed activities."""
+    content_length = request.content_length
+    if content_length and content_length > 100 * 1024:
+        return jsonify({"error": "Payload exceeds 100KB limit", "code": 413}), 413
+
     verified_actor: str | None = None
     try:
         verified_actor = verify_request(request)
@@ -371,7 +378,15 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
 
     activity_type = str(payload.get("type", "Create"))
     activity_id = str(payload.get("id") or uuid.uuid4())
-    actor_uri = str(payload.get("actor") or verified_actor)
+
+    # Actor identity verification: payload actor MUST match verified signature actor
+    payload_actor_raw = payload.get("actor")
+    payload_actor = payload_actor_raw.get("id") if isinstance(payload_actor_raw, dict) else payload_actor_raw
+    if payload_actor and str(payload_actor) != verified_actor:
+        current_app.logger.warning("Actor mismatch in inbox: payload=%s, verified=%s", payload_actor, verified_actor)
+        return jsonify({"error": "Payload actor does not match verified signature actor", "code": 403}), 403
+
+    actor_uri = verified_actor
 
     # Record inbound activity log
     try:
@@ -410,6 +425,14 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
                 target_user = db.session.execute(select(User).where(User.public_username == uname)).scalars().first()
 
         if target_user:
+            # Enforce consent: target user must have enabled federated_profile
+            consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == target_user.id)).scalars().first()
+            if not consent or not consent.federated_profile:
+                current_app.logger.info("Dropping activity for non-federated user %s", target_user.id)
+                resp = jsonify({"status": "ignored", "id": activity_id})
+                resp.status_code = 202
+                return resp
+
             actor_db = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
             if not actor_db:
                 client = FederationClient()
@@ -446,7 +469,9 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
 
 
 @federation_bp.route("/lookup", methods=["GET"])
+@require_auth
 @federation_required
+@limiter.limit("20 per minute")
 def federation_lookup() -> Response | tuple[Response, int]:
     """Resolve remote actor handle via WebFinger and retrieve Actor JSON-LD document."""
     handle = request.args.get("handle", "").strip()
@@ -458,7 +483,7 @@ def federation_lookup() -> Response | tuple[Response, int]:
         return jsonify({"error": "Invalid handle format. Expected username@domain", "code": 400}), 400
 
     username, domain = clean_handle.split("@", 1)
-    scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or ":" in domain) else "https"
+    scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or domain.startswith("peer-web")) else "https"
     webfinger_url = f"{scheme}://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
 
     try:
@@ -503,7 +528,7 @@ def federation_lookup() -> Response | tuple[Response, int]:
         )
     except Exception as exc:
         current_app.logger.warning("Remote federation lookup error for %s: %s", handle, exc)
-        return jsonify({"error": str(exc), "code": 500}), 500
+        return jsonify({"error": "Remote federation lookup failed", "code": 500}), 500
 
 
 @federation_bp.route("/follow", methods=["POST"])

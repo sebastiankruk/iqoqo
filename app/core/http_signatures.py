@@ -222,6 +222,20 @@ def verify_request(
 
     headers_list = [h.strip().lower() for h in headers_str.split(" ") if h.strip()]
 
+    # Enforcement: mandatory signed headers (draft-cavage-12)
+    body_bytes = request.get_data() if hasattr(request, "get_data") else getattr(request, "body", b"")
+    if isinstance(body_bytes, str):
+        body_bytes = body_bytes.encode("utf-8")
+
+    required_headers = {"(request-target)", "host", "date"}
+    if body_bytes:
+        required_headers.add("digest")
+
+    missing_signed = required_headers - set(headers_list)
+    if missing_signed:
+        _record_sig_failure("missing_mandatory_signed_headers")
+        raise SignatureVerificationError(f"Signature header must sign mandatory headers: {', '.join(sorted(missing_signed))}")
+
     # 2. Date skew validation (+/- 300s)
     date_str = _get_header(request, "Date")
     if not date_str:
@@ -243,10 +257,6 @@ def verify_request(
         raise DateSkewError(f"Date header skew ({skew:.1f}s) exceeds maximum allowed ({max_skew_seconds}s)")
 
     # 3. Digest header verification
-    body_bytes = request.get_data() if hasattr(request, "get_data") else getattr(request, "body", b"")
-    if isinstance(body_bytes, str):
-        body_bytes = body_bytes.encode("utf-8")
-
     if "digest" in headers_list or _get_header(request, "Digest"):
         digest_hdr = _get_header(request, "Digest")
         if not digest_hdr:
@@ -258,7 +268,7 @@ def verify_request(
             _record_sig_failure("digest_mismatch")
             raise DigestMismatchError(f"Digest header mismatch: expected {expected_digest}, got {digest_hdr}")
 
-    # 4. Actor vs keyId domain matching
+    # 4. Actor vs keyId domain matching and exact actor verification
     actor_uri = key_id.split("#")[0]
     key_netloc = urlparse(key_id).netloc.lower()
     actor_netloc = urlparse(actor_uri).netloc.lower()
@@ -272,17 +282,24 @@ def verify_request(
         if exp_netloc and exp_netloc != key_netloc:
             _record_sig_failure("domain_mismatch")
             raise SignatureVerificationError(f"keyId domain ({key_netloc}) does not match expected actor domain ({exp_netloc})")
+        if expected_actor_uri != actor_uri:
+            _record_sig_failure("actor_mismatch")
+            raise SignatureVerificationError(f"keyId actor ({actor_uri}) does not match expected actor ({expected_actor_uri})")
 
     if body_bytes:
         try:
             body_json = json.loads(body_bytes.decode("utf-8"))
             if isinstance(body_json, dict) and "actor" in body_json:
-                payload_actor = body_json["actor"]
-                if isinstance(payload_actor, str):
+                payload_actor_raw = body_json["actor"]
+                payload_actor = payload_actor_raw.get("id") if isinstance(payload_actor_raw, dict) else payload_actor_raw
+                if isinstance(payload_actor, str) and payload_actor:
                     p_netloc = urlparse(payload_actor).netloc.lower()
                     if p_netloc and p_netloc != key_netloc:
                         _record_sig_failure("domain_mismatch")
                         raise SignatureVerificationError(f"keyId domain ({key_netloc}) does not match payload actor domain ({p_netloc})")
+                    if payload_actor != actor_uri:
+                        _record_sig_failure("actor_impersonation")
+                        raise SignatureVerificationError(f"Signing key actor ({actor_uri}) does not match payload actor ({payload_actor})")
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
 

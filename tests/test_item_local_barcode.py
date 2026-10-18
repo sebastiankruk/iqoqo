@@ -186,3 +186,60 @@ def test_ontological_distinction_manifestation_isbn_and_item_barcode(client, nor
     assert detail["isbn"] == "9780131429017"
     # Item level has local_barcode
     assert detail["local_barcode"] == "LOCAL-ITEM-999"
+
+
+def test_update_item_condition_persists(client, normal_user_headers, sample_manifestation):
+    """Verify PUT /api/items/<id> persists condition on Item."""
+    create_res = client.post(
+        "/api/items",
+        data=json.dumps({"manifestation_id": sample_manifestation, "status": "want_to_read"}),
+        headers=normal_user_headers,
+        content_type="application/json",
+    )
+    assert create_res.status_code == 201
+    item_id = create_res.get_json()["data"]["item_id"]
+
+    update_res = client.put(
+        f"/api/items/{item_id}",
+        data=json.dumps({"condition": "near_mint"}),
+        headers=normal_user_headers,
+        content_type="application/json",
+    )
+    assert update_res.status_code == 200
+
+    get_res = client.get(f"/api/items/{item_id}", headers=normal_user_headers)
+    assert get_res.status_code == 200
+    assert get_res.get_json()["data"]["condition"] == "near_mint"
+
+
+def test_create_item_unowned_collection_rejected(client, normal_user_headers, sample_manifestation):
+    """Verify POST /api/items with unowned or non-existent collection_id is rejected."""
+    res = client.post(
+        "/api/items",
+        data=json.dumps(
+            {
+                "manifestation_id": sample_manifestation,
+                "collection_id": 999999,
+            }
+        ),
+        headers=normal_user_headers,
+        content_type="application/json",
+    )
+    assert res.status_code == 404
+    assert "Collection not found" in res.get_json()["error"]
+
+
+def test_add_item_by_manifestation_unowned_collection_rejected(client, normal_user_headers, sample_manifestation):
+    """Verify POST /api/manifestations/<id>/add with unowned collection_id is rejected."""
+    res = client.post(
+        f"/api/manifestations/{sample_manifestation}/add",
+        data=json.dumps(
+            {
+                "collection_id": 999999,
+            }
+        ),
+        headers=normal_user_headers,
+        content_type="application/json",
+    )
+    assert res.status_code == 404
+    assert "Collection not found" in res.get_json()["error"]
