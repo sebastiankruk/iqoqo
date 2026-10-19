@@ -70,7 +70,7 @@ def _task_wrapper(self, func_path: str, *args, user_id=None, **kwargs):
         raise e
 
 
-def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> str | None:
+def submit_task(func: Callable, *args, user_id: str | None = None, queue: str | None = None, **kwargs) -> str | None:
     """
     Submit a background task to the Celery queue.
 
@@ -78,6 +78,7 @@ def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> 
         func: The callable to execute in the background.
         *args, **kwargs: Arguments to pass to the callable.
         user_id: Optional user ID for ownership tracking.
+        queue: Optional target Celery queue (e.g. 'federation').
 
     Returns:
         str | None: A unique task_id to poll for the result, or None if the queue
@@ -85,14 +86,18 @@ def submit_task(func: Callable, *args, user_id: str | None = None, **kwargs) -> 
     """
     # Convert function to dotted path for Celery serialization
     func_path = f"{func.__module__}.{func.__name__}"
+    target_queue = queue or ("federation" if func_path.startswith("app.core.federation_tasks") else None)
     try:
         # retry=False prevents blocking the gunicorn worker for ~20 s when Redis is
         # unreachable (Celery default: 20 retries × 1 s each before raising).
-        result = _task_wrapper.apply_async(
-            args=(func_path,) + tuple(args),
-            kwargs={"user_id": user_id, **kwargs},
-            retry=False,
-        )
+        apply_kwargs: dict[str, Any] = {
+            "args": (func_path,) + tuple(args),
+            "kwargs": {"user_id": user_id, **kwargs},
+            "retry": False,
+        }
+        if target_queue:
+            apply_kwargs["queue"] = target_queue
+        result = _task_wrapper.apply_async(**apply_kwargs)
         return str(result.id)
     except (KombuError, OSError) as exc:
         logger.warning("Background task queue unavailable for %s: %s", func.__name__, exc)

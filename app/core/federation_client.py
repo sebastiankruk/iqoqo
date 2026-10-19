@@ -151,6 +151,7 @@ class FederationClient:
         target_inbox_url: str,
         activity: dict[str, Any],
         sender_user_id: str | None = None,
+        actor_key_id: str | None = None,
     ) -> requests.Response:
         """Deliver signed ActivityPub activity payload to target inbox.
 
@@ -158,6 +159,7 @@ class FederationClient:
             target_inbox_url: Recipient inbox endpoint.
             activity: ActivityStreams JSON dictionary.
             sender_user_id: Local UUID string of the sending user actor.
+            actor_key_id: Optional full key ID URI for signing.
 
         Returns:
             requests.Response from the remote instance.
@@ -183,7 +185,7 @@ class FederationClient:
                     logger.warning("Could not auto-generate keypair for %s: %s", sender_user_id, exc)
             if priv_key:
                 base_url = get_federation_base_url()
-                key_id = f"{canonical_actor_iri(sender_user_id, base_url)}#main-key"
+                key_id = actor_key_id or f"{canonical_actor_iri(sender_user_id, base_url)}#main-key"
                 headers = sign_request(
                     method="POST",
                     url=target_inbox_url,
