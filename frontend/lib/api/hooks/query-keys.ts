@@ -191,4 +191,8 @@ export const queryKeys = {
   itemsAll: ["items"] as const,
   worksShelfAll: ["works", "shelf"] as const,
   expressionsShelfAll: ["expressions", "shelf"] as const,
+  federationInstances: ["admin", "federation", "instances"] as const,
+  federationActivities: (page: number = 1, filters?: Record<string, string | undefined>) =>
+    ["admin", "federation", "activities", page, filters] as const,
+  federationKeyFingerprint: ["admin", "federation", "key-fingerprint"] as const,
 };

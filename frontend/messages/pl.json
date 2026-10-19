@@ -593,6 +593,19 @@
     "saving": "Zapisywanie...",
     "success": "Szczegóły egzemplarza zostały pomyślnie zaktualizowane",
     "error": "Nie udało się zaktualizować szczegółów egzemplarza"
+  },
+  "AdminFederation": {
+    "title": "Zarządzanie federacją",
+    "description": "Nadzoruj połączone biblioteki w Fediverse, polityki zaufania i potok aktywności ActivityPub.",
+    "tabInstances": "Instancje partnerskie",
+    "tabActivity": "Dziennik potoku aktywności",
+    "tabSettings": "Ustawienia federacji",
+    "discoverTitle": "Odkryj i połącz instancję partnerską",
+    "discoverDesc": "Zbadaj zdalną instancję ActivityPub za pomocą NodeInfo, aby nawiązać federację i synchronizować metadane.",
+    "connectedTitle": "Połączone instancje Fediverse",
+    "connectedDesc": "Skonfiguruj reguły zaufania dla połączonych instancji. Metadane od zaufanych partnerów są automatycznie uzgadniane.",
+    "accessRestricted": "Dostęp ograniczony",
+    "accessRestrictedDesc": "Nie posiadasz uprawnienia config:federation wymaganego do zarządzania ustawieniami federacji ActivityPub."
   }
 }
 

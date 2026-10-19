@@ -593,6 +593,19 @@
     "saving": "Saving...",
     "success": "Item details updated successfully",
     "error": "Failed to update item details"
+  },
+  "AdminFederation": {
+    "title": "Federation Management",
+    "description": "Oversee connected Fediverse library peers, trust policies, and the ActivityPub activity pipeline.",
+    "tabInstances": "Peer Instances",
+    "tabActivity": "Activity Pipeline Log",
+    "tabSettings": "Federation Settings",
+    "discoverTitle": "Discover & Connect Peer Instance",
+    "discoverDesc": "Probe a remote ActivityPub Fediverse instance using NodeInfo to establish federation and sync metadata.",
+    "connectedTitle": "Connected Fediverse Instances",
+    "connectedDesc": "Configure trust policies for connected instances. Metadata from trusted peers is automatically reconciled.",
+    "accessRestricted": "Access Restricted",
+    "accessRestrictedDesc": "You do not have the config:federation permission required to manage ActivityPub federation settings."
   }
 }
 

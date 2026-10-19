@@ -1850,3 +1850,140 @@ def execute_item_reassignment():
         db.session.rollback()
         current_app.logger.exception("Ownership reassignment failed and was rolled back: %s", exc)
         return jsonify({"success": False, "error": "Reassignment failed and all changes were rolled back"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Federation Administration
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/federation/instances", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def get_federation_instances() -> tuple[Response, int] | Response:
+    """List all registered federation instances."""
+    from app.db.federation import FederationInstance
+
+    stmt = select(FederationInstance).order_by(FederationInstance.domain.asc())
+    instances = db.session.execute(stmt).scalars().all()
+    return jsonify({"success": True, "data": [inst.to_dict() for inst in instances]})
+
+
+@admin_bp.route("/federation/instances", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def add_federation_instance() -> tuple[Response, int] | Response:
+    """Manually discover and register a remote federation instance by domain."""
+    from app.core import federation_discovery
+
+    payload = request.get_json(silent=True) or {}
+    domain = payload.get("domain", "").strip()
+    if not domain:
+        return jsonify({"success": False, "error": "Domain is required"}), 400
+
+    instance = federation_discovery.discover_instance(domain)
+    if not instance:
+        return jsonify({"success": False, "error": f"Failed to discover or validate instance {domain}"}), 400
+
+    return jsonify({"success": True, "data": instance.to_dict()}), 201
+
+
+@admin_bp.route("/federation/instances/<int:instance_id>/trust", methods=["PUT"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
+    """Update trust level for a federation instance."""
+    from app.db.federation import FederationInstance, TrustLevel
+
+    instance = db.session.get(FederationInstance, instance_id)
+    if not instance:
+        return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    trust_level = str(payload.get("trust_level", "")).lower().strip()
+    if trust_level not in TrustLevel.ALL:
+        return (
+            jsonify({"success": False, "error": f"Invalid trust_level. Must be one of {TrustLevel.ALL}"}),
+            400,
+        )
+
+    instance.trust_level = trust_level
+    db.session.commit()
+    return jsonify({"success": True, "data": instance.to_dict()})
+
+
+@admin_bp.route("/federation/instances/<int:instance_id>", methods=["DELETE"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def delete_federation_instance(instance_id: int) -> tuple[Response, int] | Response:
+    """Remove a federation instance from the registry."""
+    from app.db.federation import FederationInstance
+
+    instance = db.session.get(FederationInstance, instance_id)
+    if not instance:
+        return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    db.session.delete(instance)
+    db.session.commit()
+    return jsonify({"success": True, "data": {"deleted": True}})
+
+
+@admin_bp.route("/federation/activities", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def get_federation_activities() -> tuple[Response, int] | Response:
+    """Get paginated activity log with optional filters."""
+    from app.db.federation import FederationActivity
+
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = min(100, max(1, int(request.args.get("per_page", 20))))
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid pagination parameters"}), 400
+
+    direction = request.args.get("direction")
+    activity_type = request.args.get("type")
+    status = request.args.get("status")
+
+    stmt = select(FederationActivity)
+    count_stmt = select(func.count(FederationActivity.id))  # pylint: disable=not-callable
+
+    if direction:
+        stmt = stmt.where(FederationActivity.direction == direction)
+        count_stmt = count_stmt.where(FederationActivity.direction == direction)
+    if activity_type:
+        stmt = stmt.where(FederationActivity.activity_type == activity_type)
+        count_stmt = count_stmt.where(FederationActivity.activity_type == activity_type)
+    if status:
+        stmt = stmt.where(FederationActivity.status == status)
+        count_stmt = count_stmt.where(FederationActivity.status == status)
+
+    total = db.session.execute(count_stmt).scalar() or 0
+    pages = (total + per_page - 1) // per_page if total > 0 else 1
+
+    activities_stmt = stmt.order_by(FederationActivity.created_at.desc()).limit(per_page).offset((page - 1) * per_page)
+    activities = db.session.execute(activities_stmt).scalars().all()
+
+    return jsonify(
+        {
+            "success": True,
+            "data": [act.to_dict() for act in activities],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": pages,
+            },
+        }
+    )
+
+
+@admin_bp.route("/federation/key-fingerprint", methods=["GET"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def get_federation_key_fingerprint() -> tuple[Response, int] | Response:
+    """Get SHA-256 fingerprint of the server actor public key."""
+    from app.core import federation_keys
+
+    fingerprint = federation_keys.get_key_fingerprint()
+    return jsonify({"success": True, "data": {"fingerprint": fingerprint}})

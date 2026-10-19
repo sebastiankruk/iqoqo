@@ -244,10 +244,9 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
               <NavItem
                 label="Federation"
                 icon={Building2}
-                isActive={false}
+                isActive={activeTab === "federation"}
                 onClick={noop}
-                disabled
-                badge="Coming in v0.9.1"
+                href="/admin/federation"
               />
             )}
             {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
