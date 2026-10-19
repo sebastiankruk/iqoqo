@@ -249,7 +249,10 @@ describe("ProviderMergeDialog", () => {
         id: 42,
         expression_id: 10,
         isbn13: "9780441172719",
+        upc: null,
+        ean: null,
         publisher: "Chilton",
+        publication_date: "1965",
         meta: {
           page_count: 412,
           _provenance: { publisher: "open_library", page_count: "current" },
