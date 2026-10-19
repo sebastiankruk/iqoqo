@@ -29,7 +29,7 @@ from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
 from app.core.federation_client import FederationClient
 from app.core.http_signatures import SignatureVerificationError, verify_request
-from app.core.iri import canonical_actor_iri, get_lod_base_url, legacy_actor_iri
+from app.core.iri import canonical_actor_iri, get_federation_base_url, legacy_actor_iri
 from app.core.limiter import limiter
 from app.db import db
 from app.db.auth import User
@@ -48,7 +48,7 @@ wellknown_bp = Blueprint("wellknown", __name__, url_prefix="/.well-known")
 
 def _get_base_url() -> str:
     """Return the configured base URL for federation endpoints."""
-    return str(current_app.config.get("BASE_URL") or get_lod_base_url()).rstrip("/")
+    return get_federation_base_url()
 
 
 def _get_domain() -> str:
@@ -93,7 +93,13 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
 
     if resource.startswith("acct:"):
         account_part = resource[5:]
-        username = account_part.split("@")[0]
+        if "@" in account_part:
+            username, req_domain = account_part.split("@", 1)
+            req_host = request.host.split(":")[0].strip().lower() if request.host else ""
+            if req_domain.strip().lower() not in (domain.lower(), req_host):
+                return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
+        else:
+            username = account_part
         # Look up by public_username or UUID string
         stmt = select(User).where(User.public_username == username)
         user = db.session.execute(stmt).scalars().first()
@@ -147,7 +153,7 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
             {
                 "rel": "http://webfinger.net/rel/profile-page",
                 "type": "text/html",
-                "href": f"{base_url}/user/{user.public_username}" if user.public_username else base_url,
+                "href": f"{base_url}/u/{user.public_username}" if user.public_username else base_url,
             },
         ],
     }
@@ -246,13 +252,8 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
     """Construct ActivityPub Person actor JSON-LD representation."""
     canonical_uri = canonical_actor_iri(user.id, base_url)
 
-    # Resolve or create actor cryptographic keypair
-    public_key_pem = federation_keys.get_actor_public_key(str(user.id))
-    if not public_key_pem:
-        _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
-        user.federation_public_key = public_key_pem
-        user.federation_key_id = f"{canonical_uri}#main-key"
-        db.session.commit()
+    # Resolve actor cryptographic public key without generating on-the-fly during unauthenticated GET
+    public_key_pem = user.federation_public_key or federation_keys.get_actor_public_key(str(user.id))
 
     return {
         "@context": [
@@ -264,7 +265,7 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
         "preferredUsername": user.public_username or str(user.id),
         "name": user.display_name or user.public_username or "iqoqo User",
         "summary": user.bio or "",
-        "url": f"{base_url}/user/{user.public_username}" if user.public_username else base_url,
+        "url": f"{base_url}/u/{user.public_username}" if user.public_username else base_url,
         "inbox": f"{canonical_uri}/inbox",
         "outbox": f"{canonical_uri}/outbox",
         "publicKey": {
@@ -534,6 +535,7 @@ def federation_lookup() -> Response | tuple[Response, int]:
 @federation_bp.route("/follow", methods=["POST"])
 @require_auth
 @federation_required
+@limiter.limit("10 per minute")
 def federation_follow_remote() -> Response | tuple[Response, int]:
     """Initiate an outbound Follow activity to a remote Actor."""
     from app.api.auth import get_current_user
@@ -553,7 +555,7 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
         clean_handle = str(target_handle).lstrip("@")
         if "@" in clean_handle:
             username, domain = clean_handle.split("@", 1)
-            scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or ":" in domain) else "https"
+            scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain) else "https"
             wf_url = f"{scheme}://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
             try:
                 from app.utils.http_client import safe_get
@@ -613,4 +615,5 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
             resp.status_code,
         )
     except Exception as exc:
-        return jsonify({"error": f"Delivery failed: {exc}", "code": 500}), 500
+        current_app.logger.error("Outbound federation follow error: %s", exc)
+        return jsonify({"error": "Outbound delivery failed", "code": 500}), 500

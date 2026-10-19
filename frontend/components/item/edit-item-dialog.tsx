@@ -17,6 +17,7 @@
 
 import * as React from "react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -50,6 +51,7 @@ interface EditItemFormProps {
  * @returns {React.JSX.Element} The rendered form
  */
 function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
+  const t = useTranslations("EditItemDialog");
   const [localBarcode, setLocalBarcode] = useState<string>(item.local_barcode ?? "");
   const [condition, setCondition] = useState<string>(item.condition ?? "");
   const updateItem = useUpdateItem(item.id);
@@ -61,11 +63,11 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
         local_barcode: localBarcode.trim() ? localBarcode.trim() : null,
         condition: condition.trim() ? condition.trim() : null,
       });
-      toast.success("Item details updated successfully");
+      toast.success(t("success"));
       onOpenChange(false);
       onSuccess?.();
     } catch {
-      toast.error("Failed to update item details");
+      toast.error(t("error"));
     }
   };
 
@@ -76,19 +78,17 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           htmlFor="item-local-barcode"
           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
         >
-          Local Barcode / Inventory Tag
+          {t("localBarcode")}
         </label>
         <input
           id="item-local-barcode"
           name="local_barcode"
           value={localBarcode}
           onChange={e => setLocalBarcode(e.target.value)}
-          placeholder="e.g. SHELF-01-A, INV-12345"
+          placeholder={t("localBarcodePlaceholder")}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Physical shelf sticker or exemplar barcode, separate from Manifestation ISBN.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t("localBarcodeHint")}</p>
       </div>
 
       <div className="space-y-2">
@@ -96,24 +96,24 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           htmlFor="item-condition"
           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
         >
-          Condition
+          {t("condition")}
         </label>
         <input
           id="item-condition"
           name="condition"
           value={condition}
           onChange={e => setCondition(e.target.value)}
-          placeholder="e.g. Like New, Good, Fair"
+          placeholder={t("conditionPlaceholder")}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
       </div>
 
       <DialogFooter className="pt-2">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateItem.isPending}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" disabled={updateItem.isPending}>
-          {updateItem.isPending ? "Saving..." : "Save Changes"}
+          {updateItem.isPending ? t("saving") : t("saveChanges")}
         </Button>
       </DialogFooter>
     </form>
@@ -127,12 +127,13 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
  * @returns {React.JSX.Element} Edit item dialog component
  */
 export function EditItemDialog({ item, isOpen, onOpenChange, onSuccess }: EditItemDialogProps) {
+  const t = useTranslations("EditItemDialog");
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit Item Details</DialogTitle>
-          <DialogDescription>Update physical exemplar details, local shelf barcode, and condition.</DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         {isOpen && <EditItemForm item={item} onOpenChange={onOpenChange} onSuccess={onSuccess} />}

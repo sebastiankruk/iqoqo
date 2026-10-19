@@ -370,6 +370,34 @@ def verify_request(
             hashes.SHA256(),
         )
     except Exception as exc:
+        # Re-fetch actor's remote JSON-LD document and retry verification once
+        # to handle remote key rotation without dropouts
+        refreshed_pem: str | None = None
+        try:
+            from app.core.federation_client import FederationClient
+
+            client = FederationClient()
+            actor_data = client.fetch_actor(actor_uri)
+            if actor_data and "publicKey" in actor_data:
+                pk_info = actor_data["publicKey"]
+                if isinstance(pk_info, dict) and "publicKeyPem" in pk_info:
+                    refreshed_pem = pk_info["publicKeyPem"]
+        except Exception:
+            refreshed_pem = None
+
+        if refreshed_pem and refreshed_pem != public_key_pem:
+            try:
+                new_pub_key_obj = serialization.load_pem_public_key(refreshed_pem.encode("utf-8"))
+                new_pub_key_obj.verify(  # type: ignore[union-attr]
+                    sig_bytes,
+                    signing_string.encode("utf-8"),
+                    padding.PKCS1v15(),
+                    hashes.SHA256(),
+                )
+                return actor_uri
+            except Exception:
+                pass
+
         _record_sig_failure("crypto_verification_failed")
         raise SignatureVerificationError(f"RSA signature verification failed: {exc}") from exc
 

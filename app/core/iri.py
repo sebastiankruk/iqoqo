@@ -36,6 +36,35 @@ def get_lod_base_url() -> str:
     return base_url.rstrip("/")
 
 
+def get_federation_base_url() -> str:
+    """Return the configured canonical base URL for ActivityPub federation.
+
+    Priority order:
+    1. current_app.config['FEDERATION_BASE_URL'] (if in Flask application context)
+    2. FEDERATION_BASE_URL environment variable
+    3. current_app.config['BASE_URL'] (if in Flask application context)
+    4. get_lod_base_url()
+    """
+    try:
+        from flask import current_app, has_app_context
+
+        if has_app_context():
+            fed_url = current_app.config.get("FEDERATION_BASE_URL")
+            if fed_url:
+                return str(fed_url).rstrip("/")
+            app_base = current_app.config.get("BASE_URL")
+            if app_base:
+                return str(app_base).rstrip("/")
+    except ImportError:
+        pass
+
+    env_fed = os.environ.get("FEDERATION_BASE_URL")
+    if env_fed:
+        return env_fed.rstrip("/")
+
+    return get_lod_base_url()
+
+
 def canonical_frbr_iri(entity_type: str, entity_id: object, base_url: str | None = None) -> str:
     """Build the canonical IRI for one persisted FRBR entity.
 

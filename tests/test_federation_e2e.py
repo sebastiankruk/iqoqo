@@ -534,6 +534,16 @@ class TestObservabilityAndTelemetry:
             assert called_args[1].get("domain") == "failed-target.example.org"
             assert called_args[1].get("reason") == "network_error"
 
+    def test_post_to_inbox_retries_on_503_and_transient_network_errors(self) -> None:
+        """Verify FederationClient.post_to_inbox retries HTTP 503 up to 3 times before succeeding or failing."""
+        client = FederationClient()
+        assert client.timeout == (10, 30)
+        mock_503 = MagicMock(status_code=503)
+        with patch("app.core.federation_client.safe_post", side_effect=[mock_503, mock_503, MagicMock(status_code=202)]) as mock_post:
+            resp = client.post_to_inbox("https://retry-target.example.org/inbox", {"type": "Follow"})
+            assert resp.status_code == 202
+            assert mock_post.call_count == 3
+
     def test_outbound_federation_records_telemetry_span(self) -> None:
         """Verify record_outbound_telemetry is invoked when FederationClient sends activities."""
         with patch("app.core.federation_client.record_outbound_telemetry") as mock_rec_telemetry:

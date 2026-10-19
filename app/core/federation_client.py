@@ -24,10 +24,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from tenacity import Retrying, retry_if_exception, retry_if_result, stop_after_attempt, wait_exponential
 
 from app.core import federation_keys
 from app.core.http_signatures import sign_request
-from app.core.iri import canonical_actor_iri, get_lod_base_url
+from app.core.iri import canonical_actor_iri, get_federation_base_url
 from app.core.telemetry import record_outbound_telemetry
 from app.utils.http_client import SSRFError, safe_get, safe_post
 
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 class FederationClient:
     """Outbound ActivityPub client with socket-level SSRF defense and HTTP Signatures."""
 
-    def __init__(self, timeout: float = 10.0):
+    def __init__(self, timeout: tuple[int, int] | float | int = (10, 30)):
         self.timeout = timeout
 
     @staticmethod
@@ -181,9 +182,7 @@ class FederationClient:
                 except Exception as exc:
                     logger.warning("Could not auto-generate keypair for %s: %s", sender_user_id, exc)
             if priv_key:
-                from flask import current_app, has_app_context
-
-                base_url = (current_app.config.get("BASE_URL") or get_lod_base_url()) if has_app_context() else get_lod_base_url()
+                base_url = get_federation_base_url()
                 key_id = f"{canonical_actor_iri(sender_user_id, base_url)}#main-key"
                 headers = sign_request(
                     method="POST",
@@ -196,14 +195,32 @@ class FederationClient:
 
         record_outbound_telemetry("Federation", headers, url=target_inbox_url)
 
+        def _should_retry_exception(exc: BaseException) -> bool:
+            if isinstance(exc, SSRFError):
+                return False
+            return isinstance(exc, (requests.RequestException, ConnectionError, TimeoutError, OSError))
+
+        def _should_retry_result(result: Any) -> bool:
+            if result is None:
+                return False
+            status_code = getattr(result, "status_code", None)
+            return status_code is not None and status_code >= 500
+
         try:
-            resp = safe_post(
+            retryer = Retrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
+                retry=(retry_if_exception(_should_retry_exception) | retry_if_result(_should_retry_result)),
+                reraise=True,
+            )
+            resp = retryer(
+                safe_post,
                 target_inbox_url,
                 data=body_bytes,
                 headers=headers,
                 timeout=self.timeout,
             )
-            if resp.status_code >= 400:
+            if resp is not None and resp.status_code >= 400:
                 self._record_delivery_failure(target_inbox_url, f"http_{resp.status_code}")
             return resp
         except SSRFError:

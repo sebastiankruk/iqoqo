@@ -560,7 +560,41 @@
       "noLinksAdded": "Brak pasujących powiązań",
       "manifestationLabel": "Wydanie #{id}"
     }
+  },
+  "FederationConsent": {
+    "title": "Prywatność federacji",
+    "description": "Określ, w jaki sposób Twój profil i kolekcja są widoczne dla innych instancji iqoqo w federacji.",
+    "saved": "Zapisano",
+    "makeProfileDiscoverable": "Zezwól na odkrywanie profilu",
+    "makeProfileDiscoverableHint": "Pozwól innym instancjom wyszukiwać Twój profil przez federację",
+    "shareCollectionUpdates": "Udostępniaj aktualizacje kolekcji",
+    "shareCollectionUpdatesHint": "Przesyłaj zmiany w kolekcji do obserwujących w federacji"
+  },
+  "Profile": {
+    "defaultItemVisibility": "Domyślna widoczność egzemplarzy",
+    "defaultItemVisibilityDesc": "Nowe zeskanowane lub dodane egzemplarze będą domyślnie prywatne lub publiczne.",
+    "privateRecommended": "Prywatny (zalecane)",
+    "privateDesc": "Nowe zeskanowane lub dodane egzemplarze będą domyślnie prywatne.",
+    "public": "Publiczny",
+    "publicDesc": "Nowe zeskanowane lub dodane egzemplarze będą domyślnie publiczne.",
+    "saveProfile": "Zapisz profil",
+    "saving": "Zapisywanie..."
+  },
+  "EditItemDialog": {
+    "title": "Edycja szczegółów egzemplarza",
+    "description": "Zaktualizuj szczegóły fizycznego egzemplarza, lokalny kod kreskowy i stan.",
+    "localBarcode": "Lokalny kod kreskowy / etykieta inwentarzowa",
+    "localBarcodeHint": "Fizyczna naklejka na półce lub kod kreskowy egzemplarza, niezależny od numeru ISBN wydania.",
+    "localBarcodePlaceholder": "np. POLKA-01-A, INV-12345",
+    "condition": "Stan zachowania",
+    "conditionPlaceholder": "np. Jak nowy, Dobry, Zadowalający",
+    "cancel": "Anuluj",
+    "saveChanges": "Zapisz zmiany",
+    "saving": "Zapisywanie...",
+    "success": "Szczegóły egzemplarza zostały pomyślnie zaktualizowane",
+    "error": "Nie udało się zaktualizować szczegółów egzemplarza"
   }
 }
+
 
 

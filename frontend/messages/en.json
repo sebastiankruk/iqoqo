@@ -560,7 +560,41 @@
       "noLinksAdded": "No links matched",
       "manifestationLabel": "Edition #{id}"
     }
+  },
+  "FederationConsent": {
+    "title": "Federation Privacy",
+    "description": "Control how your profile and collection are visible to other iqoqo instances through federation.",
+    "saved": "Saved",
+    "makeProfileDiscoverable": "Make profile discoverable",
+    "makeProfileDiscoverableHint": "Allow other instances to find your profile via federation",
+    "shareCollectionUpdates": "Share collection updates",
+    "shareCollectionUpdatesHint": "Broadcast collection changes to federated followers"
+  },
+  "Profile": {
+    "defaultItemVisibility": "Default Item Visibility",
+    "defaultItemVisibilityDesc": "New scanned or ingested items will default to private or public.",
+    "privateRecommended": "Private (Recommended)",
+    "privateDesc": "New scanned or ingested items default to private.",
+    "public": "Public",
+    "publicDesc": "New scanned or ingested items default to public.",
+    "saveProfile": "Save Profile",
+    "saving": "Saving..."
+  },
+  "EditItemDialog": {
+    "title": "Edit Item Details",
+    "description": "Update physical exemplar details, local shelf barcode, and condition.",
+    "localBarcode": "Local Barcode / Inventory Tag",
+    "localBarcodeHint": "Physical shelf sticker or exemplar barcode, separate from Manifestation ISBN.",
+    "localBarcodePlaceholder": "e.g. SHELF-01-A, INV-12345",
+    "condition": "Condition",
+    "conditionPlaceholder": "e.g. Like New, Good, Fair",
+    "cancel": "Cancel",
+    "saveChanges": "Save Changes",
+    "saving": "Saving...",
+    "success": "Item details updated successfully",
+    "error": "Failed to update item details"
   }
 }
+
 
 

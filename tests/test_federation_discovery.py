@@ -28,6 +28,12 @@ from app.db.auth import User
 from app.db.federation import FederationConsent
 
 
+@pytest.fixture(autouse=True)
+def configure_federation_base_url(app) -> None:
+    """Set FEDERATION_BASE_URL to match test host iqoqo.local."""
+    app.config["FEDERATION_BASE_URL"] = "http://iqoqo.local"
+
+
 @pytest.fixture
 def custom_keys_dir(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     """Isolate key storage in temporary test directory."""
@@ -132,6 +138,15 @@ class TestWebFingerDiscovery:
             assert resp.status_code == 200
             data = resp.get_json()
             assert data["subject"].startswith(f"acct:{username}")
+
+    def test_webfinger_domain_mismatch(self, client, app, federated_user_data):
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+            username = federated_user_data["public_username"]
+            resp = client.get(f"/.well-known/webfinger?resource=acct:{username}@remote-instance.com")
+            assert resp.status_code == 404
+            data = resp.get_json()
+            assert "domain mismatch" in data["error"].lower()
 
 
 class TestNodeInfoDiscovery:

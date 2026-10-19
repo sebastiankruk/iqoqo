@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -77,6 +78,7 @@ interface UserProfile {
  * @returns {JSX.Element} The page component
  */
 export default function ProfilePage() {
+  const t = useTranslations("Profile");
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const { data: config } = useAppConfig();
@@ -363,7 +365,7 @@ export default function ProfilePage() {
 
             {/* Default Item Visibility */}
             <div>
-              <p className="text-sm font-medium mb-2">Default Item Visibility</p>
+              <p className="text-sm font-medium mb-2">{t("defaultItemVisibility")}</p>
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
@@ -375,8 +377,8 @@ export default function ProfilePage() {
                     className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
                   />
                   <div>
-                    <p className="text-sm font-medium">Private (Recommended)</p>
-                    <p className="text-xs text-muted-foreground">New scanned or ingested items default to private.</p>
+                    <p className="text-sm font-medium">{t("privateRecommended")}</p>
+                    <p className="text-xs text-muted-foreground">{t("privateDesc")}</p>
                   </div>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer group">
@@ -389,8 +391,8 @@ export default function ProfilePage() {
                     className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
                   />
                   <div>
-                    <p className="text-sm font-medium">Public</p>
-                    <p className="text-xs text-muted-foreground">New scanned or ingested items default to public.</p>
+                    <p className="text-sm font-medium">{t("public")}</p>
+                    <p className="text-xs text-muted-foreground">{t("publicDesc")}</p>
                   </div>
                 </label>
               </div>
@@ -400,7 +402,7 @@ export default function ProfilePage() {
           {/* Single primary CTA per card */}
           <div className="bg-muted/40 dark:bg-white/[0.02] border-t border-border px-6 py-3 flex justify-end">
             <Button onClick={handleSaveProfile} disabled={isSaving || !isProfileDirty}>
-              {isSaving ? "Saving..." : "Save Profile"}
+              {isSaving ? t("saving") : t("saveProfile")}
             </Button>
           </div>
         </div>

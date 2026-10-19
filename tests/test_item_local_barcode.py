@@ -243,3 +243,28 @@ def test_add_item_by_manifestation_unowned_collection_rejected(client, normal_us
     )
     assert res.status_code == 404
     assert "Collection not found" in res.get_json()["error"]
+
+
+def test_lookup_by_local_barcode_resolves_manifestation(client, normal_user_headers, sample_manifestation):
+    """Verify GET /api/lookup/<barcode> resolves locally via Item.local_barcode."""
+    local_code = "LOCAL-STICKER-998877"
+    create_res = client.post(
+        "/api/items",
+        data=json.dumps(
+            {
+                "manifestation_id": sample_manifestation,
+                "local_barcode": local_code,
+                "status": "want_to_read",
+            }
+        ),
+        headers=normal_user_headers,
+        content_type="application/json",
+    )
+    assert create_res.status_code == 201
+
+    lookup_res = client.get(f"/api/lookup/{local_code}", headers=normal_user_headers)
+    assert lookup_res.status_code == 200
+    data = lookup_res.get_json()
+    assert data["success"] is True
+    assert data["data"]["local_barcode"] == local_code
+    assert data["data"]["manifestation_id"] == sample_manifestation

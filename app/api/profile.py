@@ -19,7 +19,6 @@ Profiles are authenticated but not privileged: the routes expose only what a
 profile owner or a permitted viewer may see, and hide entries through visibility
 flags rather than by omitting them from the query."""
 
-import os
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -408,17 +407,18 @@ def _handle_update_federation_consent() -> tuple[Response, int] | Response:
     # Trigger actor RSA keypair generation on initial opt-in
     if consent.federated_profile or consent.federated_collection:
         from app.core import federation_keys
-        from app.core.iri import canonical_actor_iri
+        from app.core.iri import canonical_actor_iri, get_federation_base_url
 
-        has_key = False
-        try:
-            has_key = bool(federation_keys.get_actor_public_key(str(user.id)))
-        except Exception:
-            has_key = False
+        has_key = bool(user.federation_public_key)
+        if not has_key:
+            try:
+                has_key = bool(federation_keys.get_actor_public_key(str(user.id)))
+            except Exception:
+                has_key = False
 
         if not has_key:
             try:
-                base_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "https://iqoqo.app").rstrip("/")
+                base_url = get_federation_base_url()
                 key_id_suffix, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
                 canonical_uri = canonical_actor_iri(user.id, base_url)
                 user.federation_public_key = public_key_pem

@@ -108,10 +108,16 @@ def _get_manifestation_filters(code: str):
 
 
 def _find_locally(code: str) -> Manifestation | None:
-    """Unified helper to find manifestation by identifier."""
+    """Unified helper to find manifestation by identifier or item local barcode."""
     # pylint: disable=singleton-comparison
-    result = Manifestation.query.filter(or_(*_get_manifestation_filters(code))).first()
-    return result if isinstance(result, Manifestation) else None
+    clean_code = code.strip()
+    result = Manifestation.query.filter(or_(*_get_manifestation_filters(clean_code))).first()
+    if isinstance(result, Manifestation):
+        return result
+    item = Item.query.filter(Item.local_barcode == clean_code).first()
+    if item and isinstance(item.manifestation, Manifestation):
+        return item.manifestation
+    return None
 
 
 def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | None) -> Manifestation:
@@ -188,6 +194,12 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         query_obj = query_obj.filter(Expression.content_type == category_hint)
 
     all_manifestations = query_obj.all()
+    matched_item: Item | None = None
+    if not all_manifestations:
+        matched_item = Item.query.filter(Item.local_barcode == query.strip()).first()
+        if matched_item and matched_item.manifestation:
+            all_manifestations = [matched_item.manifestation]
+
     manifestation = all_manifestations[0] if all_manifestations else None
 
     if manifestation and manifestation.meta:
@@ -229,8 +241,10 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
             # Check if user owns it
             user_id = getattr(g, "user_id", None)
             item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
-            data["already_in_collection"] = item is not None
-            data["item_id"] = item.id if item else None
+            data["already_in_collection"] = item is not None or matched_item is not None
+            data["item_id"] = item.id if item else (matched_item.id if matched_item else None)
+            if matched_item:
+                data["local_barcode"] = matched_item.local_barcode
 
             _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
             return jsonify({"success": True, "data": data, "error": None}), 200

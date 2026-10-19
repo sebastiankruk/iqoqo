@@ -146,7 +146,10 @@ class FederationFollower(db.Model):  # type: ignore[name-defined]
     """Follow relationships between remote actors and local users."""
 
     __tablename__ = "federation_followers"
-    __table_args__ = ({"schema": _FED},) if _FED else ()
+    __table_args__ = (
+        db.UniqueConstraint("local_user_id", "remote_actor_id", name="uq_federation_followers_pair"),
+        *(({"schema": _FED},) if _FED else ()),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     local_user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
