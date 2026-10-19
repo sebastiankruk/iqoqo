@@ -122,6 +122,64 @@ class TestFederationDiscovery:
                 assert inst.software_version == "0.9.1"
                 assert inst.last_seen_at is not None
 
+    def test_probe_instance_health_retargets_localhost_nodeinfo_href(self, app, monkeypatch):
+        monkeypatch.setenv("FEDERATION_ALLOW_LOOPBACK", "true")
+        with app.app_context():
+            inst = FederationInstance(
+                domain="peer-web:5000",
+                trust_level=TrustLevel.UNTRUSTED,
+            )
+            db.session.add(inst)
+            db.session.commit()
+
+            with patch("app.core.federation_discovery.safe_get") as mock_get:
+                # nodeinfo returns href with localhost:5005 (which fails inside container)
+                # but retargeted URL to peer-web:5000 succeeds
+                def safe_get_mock(url, *args, **kwargs):
+                    if "https://" in url:
+                        raise ConnectionRefusedError("No HTTPS")
+                    if "/.well-known/nodeinfo" in url:
+                        resp = MagicMock(status_code=200)
+                        resp.json.return_value = {
+                            "links": [
+                                {
+                                    "rel": "http://nodeinfo.diaspora.software/ns/schema/2.1",
+                                    "href": "http://localhost:5005/api/federation/nodeinfo/2.1",
+                                }
+                            ]
+                        }
+                        return resp
+                    if "localhost:5005" in url:
+                        raise ConnectionRefusedError("Connection refused on localhost:5005")
+                    if "peer-web:5000/api/federation/nodeinfo/2.1" in url:
+                        resp = MagicMock(status_code=200)
+                        resp.json.return_value = {
+                            "software": {"name": "iqoqo", "version": "0.9.1"},
+                        }
+                        return resp
+                    return MagicMock(status_code=404)
+
+                mock_get.side_effect = safe_get_mock
+                success = federation_discovery.probe_instance_health(inst)
+                assert success is True
+                assert inst.software_name == "iqoqo"
+                assert inst.software_version == "0.9.1"
+
+    def test_discover_instance_persists_even_when_probe_fails(self, app):
+        with app.app_context():
+            with patch("app.core.federation_discovery.safe_get") as mock_get:
+                mock_get.side_effect = ConnectionRefusedError("Remote completely offline")
+                inst = federation_discovery.discover_instance("offline-peer.example.org")
+                assert inst is not None
+                assert inst.domain == "offline-peer.example.org"
+                assert inst.trust_level == TrustLevel.UNTRUSTED
+                assert inst.id is not None
+
+                # Query database directly to ensure it was committed
+                saved = db.session.get(FederationInstance, inst.id)
+                assert saved is not None
+                assert saved.domain == "offline-peer.example.org"
+
     def test_probe_instance_health_nodeinfo(self, app):
         with app.app_context():
             inst = FederationInstance(

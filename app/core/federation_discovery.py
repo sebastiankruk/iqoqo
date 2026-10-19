@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from sqlalchemy import select
 
@@ -74,7 +74,7 @@ def discover_instance(domain_or_url: str) -> FederationInstance | None:
             created_at=datetime.now(UTC),
         )
         db.session.add(instance)
-        db.session.flush()
+        db.session.commit()
 
     probe_instance_health(instance)
     return instance
@@ -121,16 +121,38 @@ def probe_instance_health(instance: FederationInstance) -> bool:
                         break
 
                 if nodeinfo_href:
-                    ni_resp = safe_get(nodeinfo_href, headers={"Accept": "application/json"}, timeout=timeout)
-                    if ni_resp.status_code == 200:
-                        ni_data = ni_resp.json()
-                        software = ni_data.get("software", {}) if isinstance(ni_data, dict) else {}
-                        if isinstance(software, dict):
-                            instance.software_name = str(software.get("name") or instance.software_name or "")[:100] or None
-                            instance.software_version = str(software.get("version") or instance.software_version or "")[:50] or None
-                        metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
-                        if isinstance(metadata, dict) and metadata.get("sharedInbox"):
-                            instance.shared_inbox_url = str(metadata["sharedInbox"])[:500]
+                    try:
+                        parsed_href = urlparse(nodeinfo_href)
+                        candidates = [nodeinfo_href]
+                        if parsed_href.netloc != instance.domain and (
+                            ":" in instance.domain
+                            or "peer" in instance.domain
+                            or "web" in instance.domain
+                            or "localhost" in parsed_href.netloc
+                        ):
+                            candidates.append(urlunparse(parsed_href._replace(scheme=scheme, netloc=instance.domain)))
+
+                        ni_resp = None
+                        for cand in candidates:
+                            try:
+                                c_resp = safe_get(cand, headers={"Accept": "application/json"}, timeout=timeout)
+                                if c_resp.status_code == 200:
+                                    ni_resp = c_resp
+                                    break
+                            except Exception:
+                                continue
+
+                        if ni_resp and ni_resp.status_code == 200:
+                            ni_data = ni_resp.json()
+                            software = ni_data.get("software", {}) if isinstance(ni_data, dict) else {}
+                            if isinstance(software, dict):
+                                instance.software_name = str(software.get("name") or instance.software_name or "")[:100] or None
+                                instance.software_version = str(software.get("version") or instance.software_version or "")[:50] or None
+                            metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
+                            if isinstance(metadata, dict) and metadata.get("sharedInbox"):
+                                instance.shared_inbox_url = str(metadata["sharedInbox"])[:500]
+                    except Exception as ni_exc:
+                        logger.debug("Failed parsing nodeinfo 2.1 schema for %s: %s", instance.domain, ni_exc)
 
                 instance.last_seen_at = datetime.now(UTC)
                 db.session.commit()

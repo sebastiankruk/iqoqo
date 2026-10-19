@@ -1885,6 +1885,7 @@ def add_federation_instance() -> tuple[Response, int] | Response:
     if not instance:
         return jsonify({"success": False, "error": f"Failed to discover or validate instance {domain}"}), 400
 
+    db.session.commit()
     return jsonify({"success": True, "data": instance.to_dict()}), 201
 
 
