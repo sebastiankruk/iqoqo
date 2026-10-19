@@ -6,7 +6,7 @@
 
 ## 2. Fediverse Discovery & Identity Hygiene
 
-- [ ] 2.1 Enforce strict domain match in `_handle_webfinger_lookup` and link to `/u/{username}` canonical profile in `app/api/federation.py`, verifying with `tests/test_federation_discovery.py`
+- [ ] 2.1 Enforce strict domain match in `_handle_webfinger_lookup` and link to `/u/{username}` canonical profile, apply `@limiter.limit("10 per minute")` to `POST /api/federation/follow`, remove `":" in domain` from scheme check, and sanitize 500 error message in `federation_follow_remote` in `app/api/federation.py`, verifying with `tests/test_federation_discovery.py`
 - [ ] 2.2 Shift on-demand RSA-2048 keypair generation out of unauthenticated `GET /api/federation/actor/u/<uuid>` into consent opt-in in `app/api/profile.py`
 
 ## 3. Database Schema Integrity & Migrations
