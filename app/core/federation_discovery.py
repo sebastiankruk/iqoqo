@@ -37,7 +37,7 @@ def clean_instance_domain(domain_or_url: str) -> str:
         domain_or_url: Raw domain string or full URL.
 
     Returns:
-        Normalized domain hostname.
+        Normalized domain hostname (with port if non-standard).
     """
     cleaned = domain_or_url.strip()
     if not cleaned:
@@ -46,6 +46,8 @@ def clean_instance_domain(domain_or_url: str) -> str:
         cleaned = f"https://{cleaned}"
     parsed = urlparse(cleaned)
     host = (parsed.hostname or "").lower().strip()
+    if parsed.port and parsed.port not in (80, 443):
+        return f"{host}:{parsed.port}"
     return host
 
 
@@ -83,6 +85,7 @@ def probe_instance_health(instance: FederationInstance) -> bool:
 
     Respects TrustLevel.BLOCKED: blocked instances are never probed.
     On success, updates `last_seen_at` and software metadata.
+    Supports both HTTPS and HTTP for local/staging federation pair environments.
 
     Args:
         instance: The FederationInstance record to probe.
@@ -90,55 +93,64 @@ def probe_instance_health(instance: FederationInstance) -> bool:
     Returns:
         True if the remote instance responded positively, False otherwise.
     """
+    import os
+
     if instance.trust_level == TrustLevel.BLOCKED:
         logger.debug("Skipping health probe for blocked instance: %s", instance.domain)
         return False
 
-    base_url = f"https://{instance.domain}"
-    nodeinfo_well_known = f"{base_url}/.well-known/nodeinfo"
+    schemes = ["https"]
+    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true" or ":" in instance.domain or instance.domain in ("localhost", "peer-web"):
+        schemes = ["https", "http"]
+
     timeout = (5, 10)
 
-    try:
-        resp = safe_get(nodeinfo_well_known, headers={"Accept": "application/json"}, timeout=timeout)
-        if resp.status_code == 200:
-            data = resp.json()
-            links = data.get("links", []) if isinstance(data, dict) else []
-            nodeinfo_href = None
-            for link in links:
-                if isinstance(link, dict) and "2." in link.get("rel", ""):
-                    nodeinfo_href = link.get("href")
-                    break
+    for scheme in schemes:
+        base_url = f"{scheme}://{instance.domain}"
+        nodeinfo_well_known = f"{base_url}/.well-known/nodeinfo"
 
-            if nodeinfo_href:
-                ni_resp = safe_get(nodeinfo_href, headers={"Accept": "application/json"}, timeout=timeout)
-                if ni_resp.status_code == 200:
-                    ni_data = ni_resp.json()
-                    software = ni_data.get("software", {}) if isinstance(ni_data, dict) else {}
-                    if isinstance(software, dict):
-                        instance.software_name = str(software.get("name") or instance.software_name or "")[:100] or None
-                        instance.software_version = str(software.get("version") or instance.software_version or "")[:50] or None
-                    metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
-                    if isinstance(metadata, dict) and metadata.get("sharedInbox"):
-                        instance.shared_inbox_url = str(metadata["sharedInbox"])[:500]
+        try:
+            resp = safe_get(nodeinfo_well_known, headers={"Accept": "application/json"}, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                links = data.get("links", []) if isinstance(data, dict) else []
+                nodeinfo_href = None
+                for link in links:
+                    if isinstance(link, dict) and "2." in link.get("rel", ""):
+                        nodeinfo_href = link.get("href")
+                        break
 
-            instance.last_seen_at = datetime.now(UTC)
-            db.session.commit()
-            return True
+                if nodeinfo_href:
+                    ni_resp = safe_get(nodeinfo_href, headers={"Accept": "application/json"}, timeout=timeout)
+                    if ni_resp.status_code == 200:
+                        ni_data = ni_resp.json()
+                        software = ni_data.get("software", {}) if isinstance(ni_data, dict) else {}
+                        if isinstance(software, dict):
+                            instance.software_name = str(software.get("name") or instance.software_name or "")[:100] or None
+                            instance.software_version = str(software.get("version") or instance.software_version or "")[:50] or None
+                        metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
+                        if isinstance(metadata, dict) and metadata.get("sharedInbox"):
+                            instance.shared_inbox_url = str(metadata["sharedInbox"])[:500]
 
-        # Fallback probe to root base_url
-        root_resp = safe_get(base_url, timeout=timeout)
-        if root_resp.status_code < 500:
-            instance.last_seen_at = datetime.now(UTC)
-            db.session.commit()
-            return True
+                instance.last_seen_at = datetime.now(UTC)
+                db.session.commit()
+                return True
 
-        return False
-    except SSRFError as exc:
-        logger.warning("SSRF blocked probe for %s: %s", instance.domain, exc)
-        return False
-    except Exception as exc:
-        logger.debug("Health probe failed for %s: %s", instance.domain, exc)
-        return False
+            # Fallback probe to root base_url
+            root_resp = safe_get(base_url, timeout=timeout)
+            if root_resp.status_code < 500:
+                instance.last_seen_at = datetime.now(UTC)
+                db.session.commit()
+                return True
+
+        except SSRFError as exc:
+            logger.warning("SSRF blocked probe for %s: %s", instance.domain, exc)
+            return False
+        except Exception as exc:
+            logger.debug("Health probe attempt via %s failed for %s: %s", scheme, instance.domain, exc)
+            continue
+
+    return False
 
 
 def probe_registered_instances() -> dict[str, bool]:

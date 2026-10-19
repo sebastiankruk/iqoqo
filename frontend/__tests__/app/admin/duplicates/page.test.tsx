@@ -187,7 +187,10 @@ describe("DuplicatesPage", () => {
       "/admin/content?tab=escalations",
       "/admin/sparql",
       "/admin/lod",
+      "/admin/settings?tab=instance",
       "/admin/federation",
+      "/admin/settings?tab=apikeys",
+      "/admin/settings?tab=users",
       "/admin/groups",
     ]);
   });

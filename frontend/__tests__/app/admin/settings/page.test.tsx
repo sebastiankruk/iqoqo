@@ -116,9 +116,9 @@ describe("SettingsHubPage", () => {
     expect(screen.queryByRole("button", { name: "Profile" })).not.toBeInTheDocument();
 
     // Admin tabs should be visible
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "API Integrations" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Users" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "API Integrations" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Users" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Roles" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Security" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Monetization" })).not.toBeInTheDocument();
@@ -372,13 +372,13 @@ describe("SettingsHubPage", () => {
 
       // Click API Integrations
       act(() => {
-        screen.getByRole("button", { name: "API Integrations" }).click();
+        screen.getByRole("link", { name: "API Integrations" }).click();
       });
       expect(await screen.findByRole("heading", { name: "API Integrations", level: 1 })).toBeInTheDocument();
 
       // Click Users
       act(() => {
-        screen.getByRole("button", { name: "Users" }).click();
+        screen.getByRole("link", { name: "Users" }).click();
       });
       expect(await screen.findByRole("heading", { name: "User Management", level: 1 })).toBeInTheDocument();
 
@@ -387,7 +387,7 @@ describe("SettingsHubPage", () => {
 
       // Click back to Settings
       act(() => {
-        screen.getByRole("button", { name: "Settings" }).click();
+        screen.getByRole("link", { name: "Settings" }).click();
       });
       expect(await screen.findByRole("heading", { name: "Instance Settings", level: 1 })).toBeInTheDocument();
     });

@@ -63,6 +63,13 @@ def frbr_catalog(app):
 class TestFederationDiscovery:
     """Test suite for instance discovery and periodic health probes."""
 
+    def test_clean_instance_domain_preserves_non_standard_port(self):
+        assert federation_discovery.clean_instance_domain("peer-web:5000") == "peer-web:5000"
+        assert federation_discovery.clean_instance_domain("http://peer-web:5000/inbox") == "peer-web:5000"
+        assert federation_discovery.clean_instance_domain("https://mastodon.social:443") == "mastodon.social"
+        assert federation_discovery.clean_instance_domain("https://mastodon.social") == "mastodon.social"
+        assert federation_discovery.clean_instance_domain("localhost:5005") == "localhost:5005"
+
     def test_discover_instance_creates_untrusted(self, app):
         with app.app_context():
             with patch("app.core.federation_discovery.safe_get") as mock_get:
@@ -74,6 +81,46 @@ class TestFederationDiscovery:
                 assert inst is not None
                 assert inst.domain == "books.remote-library.org"
                 assert inst.trust_level == TrustLevel.UNTRUSTED
+
+    def test_probe_instance_health_http_fallback(self, app, monkeypatch):
+        monkeypatch.setenv("FEDERATION_ALLOW_LOOPBACK", "true")
+        with app.app_context():
+            inst = FederationInstance(
+                domain="peer-web:5000",
+                trust_level=TrustLevel.UNTRUSTED,
+            )
+            db.session.add(inst)
+            db.session.commit()
+
+            with patch("app.core.federation_discovery.safe_get") as mock_get:
+                # https raises connection error, http succeeds
+                http_ni = MagicMock()
+                http_ni.status_code = 200
+                http_ni.json.return_value = {
+                    "software": {"name": "iqoqo", "version": "0.9.1"},
+                }
+
+                def safe_get_mock(url, *args, **kwargs):
+                    if url.startswith("https://"):
+                        raise ConnectionRefusedError("Connection refused")
+                    if "/.well-known/nodeinfo" in url:
+                        resp = MagicMock(status_code=200)
+                        resp.json.return_value = {
+                            "links": [
+                                {"rel": "http://nodeinfo.diaspora.software/ns/schema/2.1", "href": "http://peer-web:5000/api/nodeinfo"}
+                            ]
+                        }
+                        return resp
+                    if "/api/nodeinfo" in url:
+                        return http_ni
+                    return MagicMock(status_code=404)
+
+                mock_get.side_effect = safe_get_mock
+                success = federation_discovery.probe_instance_health(inst)
+                assert success is True
+                assert inst.software_name == "iqoqo"
+                assert inst.software_version == "0.9.1"
+                assert inst.last_seen_at is not None
 
     def test_probe_instance_health_nodeinfo(self, app):
         with app.app_context():
