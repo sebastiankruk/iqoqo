@@ -93,6 +93,9 @@ function deduplicateCandidates(candidates: ProviderCandidate[]): ProviderCandida
  * Returns a human-readable label for a provider key.
  */
 export function getProviderLabel(provider: string): string {
+  if (provider.toLowerCase().startsWith("federation:")) {
+    return `Federation (${provider.slice(11)})`;
+  }
   switch (provider.toLowerCase()) {
     case "google_books":
       return "Google Books";
@@ -155,6 +158,10 @@ function extractProviderField(providerData: unknown, fieldKey: string): string |
       ) as Record<string, unknown> | undefined;
       const val = pData.cover_url || pData.cover || pData.thumbnail || imageLinks?.thumbnail;
       return typeof val === "string" ? val : undefined;
+    }
+    case "page_count": {
+      const val = pData.page_count ?? pData.pageCount ?? volumeInfo?.pageCount;
+      return val != null ? String(val) : undefined;
     }
     default: {
       const val = pData[fieldKey];
@@ -353,6 +360,37 @@ export function buildFieldComparisonsFromTree(tree: FrbrTree): FieldComparison[]
       currentValue: coverUrl,
       currentProvider: coverProv,
       candidates: deduplicateCandidates(coverCandidates),
+    });
+  }
+
+  // Page Count
+  const rawPageCount =
+    (manifMeta.page_count as string | number | undefined) ??
+    (manif as unknown as { page_count?: string | number } | null | undefined)?.page_count;
+  const pageCount = rawPageCount != null ? String(rawPageCount) : "";
+  const pageProv = manifProv.page_count || "current";
+  const pageCandidates: ProviderCandidate[] = [];
+  if (pageCount) {
+    pageCandidates.push({
+      provider: pageProv,
+      providerLabel: getProviderLabel(pageProv),
+      value: pageCount,
+    });
+  }
+  for (const pKey of providerKeys) {
+    const val = extractProviderField(rawPayload[pKey], "page_count");
+    if (val && typeof val === "string") {
+      pageCandidates.push({ provider: pKey, providerLabel: getProviderLabel(pKey), value: val });
+    }
+  }
+  if (pageCandidates.length > 0) {
+    fields.push({
+      fieldKey: "page_count",
+      fieldLabel: "Page Count",
+      tier: "manifestation",
+      currentValue: pageCount,
+      currentProvider: pageProv,
+      candidates: deduplicateCandidates(pageCandidates),
     });
   }
 

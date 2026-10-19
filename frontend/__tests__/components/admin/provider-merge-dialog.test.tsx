@@ -16,7 +16,12 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ProviderMergeDialog, type FieldComparison } from "@/components/admin/provider-merge-dialog";
+import {
+  ProviderMergeDialog,
+  buildFieldComparisonsFromTree,
+  getProviderLabel,
+  type FieldComparison,
+} from "@/components/admin/provider-merge-dialog";
 import * as adminApi from "@/lib/api/admin";
 import { toast } from "sonner";
 
@@ -234,5 +239,40 @@ describe("ProviderMergeDialog", () => {
     );
 
     expect(screen.getByTestId("candidate-title-open_library")).toHaveClass("border-primary");
+  });
+
+  it("extracts federation provider label and page_count from raw_payload", () => {
+    const federationTree: adminApi.FrbrTree = {
+      work: null,
+      expression: null,
+      manifestation: {
+        id: 42,
+        expression_id: 10,
+        isbn13: "9780441172719",
+        publisher: "Chilton",
+        meta: {
+          page_count: 412,
+          _provenance: { publisher: "open_library", page_count: "current" },
+          raw_payload: {
+            "federation:library.remote": {
+              page_count: 520,
+              publisher: "Remote Federated Press",
+            },
+          },
+        },
+      },
+      items: [],
+    };
+
+    const comparisons = adminApi ? buildFieldComparisonsFromTree(federationTree) : [];
+    const pageField = comparisons.find(c => c.fieldKey === "page_count");
+    expect(pageField).toBeDefined();
+    expect(pageField?.tier).toBe("manifestation");
+    expect(pageField?.currentValue).toBe("412");
+
+    const fedCandidate = pageField?.candidates.find(c => c.provider === "federation:library.remote");
+    expect(fedCandidate).toBeDefined();
+    expect(fedCandidate?.providerLabel).toBe("Federation (library.remote)");
+    expect(fedCandidate?.value).toBe("520");
   });
 });

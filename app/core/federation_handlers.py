@@ -348,6 +348,10 @@ def handle_create(activity: dict[str, Any]) -> bool:
         logger.info("Ignoring Create from untrusted/blocked instance: %s", domain)
         return False
 
+    from app.core import federation_sync
+
+    res = federation_sync.reconcile_activity(activity)
+    logger.info("Create activity reconciliation result: %s", res.get("status"))
     return True
 
 
@@ -371,6 +375,10 @@ def handle_update(activity: dict[str, Any]) -> bool:
         logger.info("Ignoring Update from untrusted/blocked instance: %s", domain)
         return False
 
+    from app.core import federation_sync
+
+    res = federation_sync.reconcile_activity(activity)
+    logger.info("Update activity reconciliation result: %s", res.get("status"))
     return True
 
 
