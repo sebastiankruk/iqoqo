@@ -27,6 +27,12 @@ import { InstanceSettings } from "@/components/admin/instance-settings";
 import { PermissionName } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Admin Federation dashboard page providing peer instance management,
+ * activity pipeline logs, and federation settings.
+ *
+ * @returns Federation administration page component.
+ */
 export default function FederationAdminPage() {
   const { data: profile, isLoading } = useProfile();
   const [activeTab, setActiveTab] = useState<"instances" | "activity" | "settings">("instances");

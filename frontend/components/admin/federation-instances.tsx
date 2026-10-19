@@ -17,18 +17,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  Building2,
-  CheckCircle2,
-  Globe,
-  Loader2,
-  Plus,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+import { Building2, Globe, Loader2, Plus, Shield, ShieldAlert, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -52,6 +41,12 @@ import type { FederationInstance, TrustLevel } from "@/types/federation";
 
 const TRUST_LEVELS: TrustLevel[] = ["untrusted", "pending", "trusted", "blocked"];
 
+/**
+ * Render trust level badge component with associated icon and style.
+ *
+ * @param trust - Instance trust level ('untrusted' | 'pending' | 'trusted' | 'blocked').
+ * @returns Badge element.
+ */
 function getTrustBadge(trust: TrustLevel) {
   switch (trust) {
     case "trusted":
@@ -81,6 +76,12 @@ function getTrustBadge(trust: TrustLevel) {
   }
 }
 
+/**
+ * Format ISO date string into human-readable relative time.
+ *
+ * @param dateStr - ISO date string or null.
+ * @returns Formatted relative time string.
+ */
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return "Never";
   try {
@@ -95,6 +96,12 @@ function formatRelativeTime(dateStr: string | null): string {
   }
 }
 
+/**
+ * FederationInstancesManager component for discovering, adding, modifying trust,
+ * and removing peer instances.
+ *
+ * @returns Instance manager component.
+ */
 export function FederationInstancesManager() {
   const { data: instances = [], isLoading, error } = useFederationInstances();
   const addInstance = useAddFederationInstance();

@@ -17,7 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
-import { useFederationKeyFingerprint } from "@/lib/api/hooks/federation";
+import { getFederationKeyFingerprint } from "@/lib/api/federation";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
 
@@ -269,7 +269,8 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [allegroAuthStatus, setAllegroAuthStatus] = useState<string>("");
   const [allegroAuthUrl, setAllegroAuthUrl] = useState<string | null>(null);
   const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
-  const { data: keyFingerprint, isLoading: isLoadingFingerprint } = useFederationKeyFingerprint();
+  const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
+  const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(category === "federation");
 
   useEffect(() => {
     let isMounted = true;
@@ -288,6 +289,20 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+
+    if (category === "federation") {
+      getFederationKeyFingerprint()
+        .then(res => {
+          if (isMounted) setKeyFingerprint(res);
+        })
+        .catch(() => {
+          if (isMounted) setKeyFingerprint(null);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingFingerprint(false);
+        });
+    }
+
     return () => {
       isMounted = false;
     };

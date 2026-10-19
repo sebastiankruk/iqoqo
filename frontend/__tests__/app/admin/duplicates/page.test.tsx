@@ -187,6 +187,7 @@ describe("DuplicatesPage", () => {
       "/admin/content?tab=escalations",
       "/admin/sparql",
       "/admin/lod",
+      "/admin/federation",
       "/admin/groups",
     ]);
   });

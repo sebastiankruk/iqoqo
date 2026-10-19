@@ -35,6 +35,12 @@ import type { FederationActivityFilters } from "@/types/federation";
 
 const ACTIVITY_TYPES = ["", "Follow", "Accept", "Reject", "Create", "Update", "Delete", "Undo", "Announce"];
 
+/**
+ * Render status badge component for activity status.
+ *
+ * @param status - Activity delivery status.
+ * @returns Status badge element.
+ */
 function getStatusBadge(status: string) {
   switch (status) {
     case "delivered":
@@ -60,6 +66,12 @@ function getStatusBadge(status: string) {
   }
 }
 
+/**
+ * Render direction badge component for inbound/outbound activities.
+ *
+ * @param direction - Direction string ('inbound' | 'outbound').
+ * @returns Direction badge element.
+ */
 function getDirectionBadge(direction: string) {
   if (direction === "inbound") {
     return (
@@ -75,6 +87,11 @@ function getDirectionBadge(direction: string) {
   );
 }
 
+/**
+ * FederationActivityLog component rendering searchable, filterable activity log.
+ *
+ * @returns Activity log component.
+ */
 export function FederationActivityLog() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<FederationActivityFilters>({});
