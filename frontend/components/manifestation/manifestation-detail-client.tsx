@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ManifestationActions } from "@/components/manifestation/manifestation-actions";
 import { AddToCollectionDropdown } from "@/components/collection/add-to-collection-dropdown";
-import { CameraCapture } from "@/components/scanner/camera-capture";
+import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { FRBRFeedback } from "@/components/social/frbr-feedback";
@@ -209,7 +209,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             </div>
             {!coverUrl && (
               <div className="mt-4">
-                <CameraCapture
+                <CoverUploadPicker
                   manifestation_id={manifestation.id}
                   format={(manifestation.meta?.format as "book" | "cd" | "vinyl") || "book"}
                   onUploadComplete={() => {

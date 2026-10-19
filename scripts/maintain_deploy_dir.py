@@ -47,6 +47,7 @@ KNOWN_ROOT_ITEMS = {
     "docker-compose.yml",
     "docker-compose.prebuilt.yml",
     "docker-compose.monitoring.yml",
+    "docker-compose.federation-preview.yml",
     "Makefile",
     "scripts",
     "shared",

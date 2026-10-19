@@ -130,7 +130,7 @@ test.describe("Manual Verification Integration E2E", () => {
     const displayName = page.getByPlaceholder("Enter your display name");
     const publicUsername = page.getByPlaceholder("your-username");
     const bio = page.getByPlaceholder("Tell the world about your library...");
-    const publicRadio = page.locator('input[value="public"]');
+    const publicRadio = page.locator('input[name="visibility"][value="public"]');
     const saveButton = page.getByRole("button", { name: "Save Profile" });
 
     // Set bio and update display name
@@ -560,5 +560,130 @@ test.describe("Manual Verification Integration E2E", () => {
       data: "{invalid-json",
     });
     expect(badJsonRes.status()).toBe(400);
+  });
+
+  test("Item Local Barcode & Condition Editing via Dialog", async ({ page }) => {
+    let itemState: any = {
+      id: 123,
+      title: "Ancient Stone Tablet",
+      authors: ["Caveman Elder"],
+      status: "available",
+      collection_status: "available",
+      condition: "good",
+      local_barcode: "OLD-BARCODE-001",
+      is_owner: true,
+      owner_id: "test-user-id",
+      manifestation_id: 10,
+      meta: { format: "book" },
+      manifestation_meta: { format: "book" },
+    };
+
+    // Route item detail and collections
+    await page.route("**/api/items/123/collections*", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, collections: [] }),
+      });
+    });
+
+    await page.route(/\/api\/items\/123(\?.*)?$/, async route => {
+      if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON();
+        itemState = { ...itemState, ...body };
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: { id: 123 } }),
+        });
+      } else {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: itemState }),
+        });
+      }
+    });
+
+    await page.goto("/item/123");
+    await page.waitForLoadState("networkidle");
+
+    // Initial barcode in sidebar
+    await expect(page.getByTestId("sidebar-local-barcode")).toContainText("OLD-BARCODE-001");
+
+    // Open Edit Item Dialog via Edit Metadata button
+    const editBtn = page.getByRole("button", { name: /edit metadata/i });
+    await expect(editBtn).toBeVisible();
+    await editBtn.click();
+
+    // Verify dialog opens
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText("Edit Item Details")).toBeVisible();
+
+    // Fill new barcode and condition
+    const barcodeInput = page.locator("#item-local-barcode");
+    await barcodeInput.fill("SHELF-STONE-999");
+
+    const conditionInput = page.locator("#item-condition");
+    await conditionInput.fill("pristine");
+
+    // Submit dialog form
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    // Verify success toast notification
+    await expect(page.getByText(/item details updated successfully/i)).toBeVisible();
+
+    // Verify sidebar displays updated barcode
+    await expect(page.getByTestId("sidebar-local-barcode")).toContainText("SHELF-STONE-999");
+  });
+
+  test("Profile Federation Privacy Consent Toggles", async ({ page }) => {
+    let consentState = {
+      federated_profile: false,
+      federated_collection: false,
+    };
+
+    await page.route("**/api/v1/profile/federation-consent**", async route => {
+      if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON();
+        consentState = { ...consentState, ...body };
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: consentState }),
+        });
+      } else {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: consentState }),
+        });
+      }
+    });
+
+    await page.goto("/profile");
+    await page.waitForLoadState("networkidle");
+
+    // Locate federation privacy section
+    await expect(page.getByTestId("federation-consent-settings")).toBeVisible();
+    await expect(page.getByText("Federation Privacy")).toBeVisible();
+
+    // Toggle "Make profile discoverable"
+    const profileToggle = page.locator("#toggle-fed-profile");
+    await expect(profileToggle).not.toBeChecked();
+    await profileToggle.check();
+
+    // Verify Saved indicator appears
+    await expect(page.getByText("Saved")).toBeVisible();
+    await expect(profileToggle).toBeChecked();
+
+    // Toggle "Share collection updates"
+    const collectionToggle = page.locator("#toggle-fed-collection");
+    await expect(collectionToggle).not.toBeChecked();
+    await collectionToggle.check();
+
+    // Verify Saved indicator appears
+    await expect(page.getByText("Saved")).toBeVisible();
+    await expect(collectionToggle).toBeChecked();
   });
 });

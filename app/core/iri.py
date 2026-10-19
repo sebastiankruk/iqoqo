@@ -59,3 +59,24 @@ def canonical_related_iri(entity_type: str, entity_id: object, base_url: str) ->
     if entity_id is None or str(entity_id) == "":
         raise ValueError("A related entity IRI requires a non-empty identifier")
     return f"{base_url.rstrip('/')}/{entity_type}/{quote(str(entity_id), safe='-._~')}"
+
+
+def canonical_actor_iri(user_id: object, base_url: str | None = None) -> str:
+    """Build the canonical ActivityPub Actor IRI based on immutable user UUID.
+
+    Actor IRIs are permanent identity endpoints across the Fediverse. They are
+    keyed by the immutable user UUID rather than the mutable public username,
+    preserving follower links and signature integrity across username updates.
+    """
+    if user_id is None or str(user_id) == "":
+        raise ValueError("An actor IRI requires a non-empty user identifier")
+    base = (base_url or get_lod_base_url()).rstrip("/")
+    return f"{base}/api/federation/actor/u/{quote(str(user_id), safe='-._~')}"
+
+
+def legacy_actor_iri(username: str, base_url: str | None = None) -> str:
+    """Build legacy/vanity username actor lookup URI used for redirects."""
+    if not username:
+        raise ValueError("A legacy actor IRI requires a non-empty username")
+    base = (base_url or get_lod_base_url()).rstrip("/")
+    return f"{base}/api/federation/actor/{quote(str(username), safe='-._~')}"

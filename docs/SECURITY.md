@@ -4,6 +4,7 @@
 
 | Version | Supported          |
 |---------|--------------------|
+| 0.9.x   | :white_check_mark: |
 | 0.8.x   | :white_check_mark: |
 | 0.7.x   | :white_check_mark: |
 
@@ -26,6 +27,10 @@ If you discover a security vulnerability in this project, please email the maint
 - **Linked-Open-Data Mutation Routes Require `write:metadata`**: the semantic-link relink and delete endpoints were declared `@require_auth` with no permission check, letting any signed-in standard user schedule outbound authority lookups for any manifestation, or delete links the reconciler had established. The relink route is an egress trigger reachable from the inside — the same amplification the SSRF allowlist prevents from the outside.
 - **Browser RUM Credential Is Provisioned, Not Shipped**: the OpenObserve RUM ingest token was baked into the frontend bundle. It is now provisioned at deploy time by `scripts/provision_rum_token.py` and injected server-side.
 - **Bounded DNS Resolution Pool** *(corrected — see the August 2026 entry, which described the vulnerable mechanism as the fix)*: a single process-wide pool behind a bounded semaphore that fails closed with `SSRFError` on exhaustion.
+- **ActivityPub SSRF & Loopback Testing Boundary (`FEDERATION_ALLOW_LOOPBACK`)**: Outbound federation requests (`app/core/federation_client.py`) pass through `app/utils/http_client.py` which strictly drops connections to private, link-local, and loopback IP spaces before TCP socket binding. To permit multi-instance development, end-to-end tests, and preview pair staging (`docker-compose.federation-preview.yml`), loopback resolution can be explicitly allowed using `FEDERATION_ALLOW_LOOPBACK=true`. Private RFC 1918 subnets and cloud metadata endpoints (`169.254.169.254`) remain blocked regardless of this setting.
+- **ActivityPub HTTP Signature Mandatory Headers & Replay Protection**: Inbound requests to `/inbox` must sign `(request-target)`, `host`, `date`, and (when body is present) `digest`. Clock skew is capped at ±300s, preventing replay attacks and payload tampering.
+- **Horizontal Actor Impersonation Prevention**: Strictly enforces key owner and payload actor equality (`payload_actor == actor_uri`) in `verify_request` and `receive_inbox`, preventing actors on the same instance from impersonating one another.
+- **Inbound Inbox & Lookup Protection**: Gated `GET /api/federation/lookup` behind `@require_auth` with 20/min rate limiting, and enforced 60/min rate limiting plus a 100KB payload limit (`413 Payload Too Large`) on incoming `/inbox` payloads.
 
 #### Scanning & Supply Chain
 

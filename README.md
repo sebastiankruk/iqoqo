@@ -114,7 +114,7 @@ See the **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** for SPARQL examples, Link
 - [x] Schema.org SEO and structured data
 - [x] Data sovereignty export (JSON-LD, Turtle, JSON)
 - [ ] Mobile apps (iOS & Android)
-- [ ] Federation protocol for cross-instance discovery (ActivityPub)
+- [x] Federation protocol for cross-instance discovery (ActivityPub)
 
 ## 💖 Support & Upstream Sustainability
 

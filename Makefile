@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets preview-up preview-down secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -322,8 +322,15 @@ ensure-secrets: ## Ensure required secrets exist in environment file (ENV_FILE d
 		python3 scripts/ensure_env_secrets.py --env-file $(if $(ENV_FILE),$(ENV_FILE),$(COMPOSE_ENV_FILE)); \
 	fi
 
+ensure-mount-perms: ## Ensure host bind-mount paths exist and have permissive write access for unprivileged container user
+	@mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers exports data/keys
+	@chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers exports 2>/dev/null || true
+	@chmod 775 data 2>/dev/null || true
+	@chmod 700 data/keys 2>/dev/null || true
+	@if [ -d data/keys ]; then chmod 600 data/keys/*.pem 2>/dev/null || true; fi
+
 ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)
-start:
+start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@echo "Deploying $(COMPOSE_PROJECT) (prebuilt)..."
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -334,7 +341,7 @@ start:
 	fi
 	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
 else
-start:
+start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/ensure_env_secrets.py ]; then \
 		python3 scripts/ensure_env_secrets.py --env-file $(if $(wildcard $(COMPOSE_ENV_FILE)),$(COMPOSE_ENV_FILE),.env); \
@@ -343,8 +350,15 @@ start:
 	@./run.sh $(MODE) $(PREBUILT_FLAG) $(args)
 endif
 
-preview-up: ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
+preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local preview images
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
+	@if [ -d "$(DEPLOY_DIR)" ]; then \
+		mkdir -p $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports $(DEPLOY_DIR)/data/keys; \
+		chmod -R a+rwX $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports 2>/dev/null || true; \
+		chmod 775 $(DEPLOY_DIR)/data 2>/dev/null || true; \
+		chmod 700 $(DEPLOY_DIR)/data/keys 2>/dev/null || true; \
+		if [ -d "$(DEPLOY_DIR)/data/keys" ]; then chmod 600 $(DEPLOY_DIR)/data/keys/*.pem 2>/dev/null || true; fi; \
+	fi
 	@if command -v python3 >/dev/null 2>&1 && [ -f scripts/sync_deploy_dir.py ]; then \
 		python3 scripts/sync_deploy_dir.py $(CURDIR) $(DEPLOY_DIR); \
 	fi
@@ -374,10 +388,22 @@ preview-up: ## Start preview stack in DEPLOY_DIR (/opt/pre.iqoqo) using local pr
 	 else \
 		export OPENOBSERVE_RUM_CLIENT_TOKEN=""; \
 	 fi; \
-	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml up -d
+	 fed_overlay=""; \
+	 if [ -n "$(FEDERATION_PAIR)" ] && [ "$(FEDERATION_PAIR)" != "0" ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+		echo "🔗 Federation Pair mode active: launching secondary peer instance stack..."; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay up -d
 
 preview-down: ## Stop preview stack in DEPLOY_DIR (/opt/pre.iqoqo) cleanly
-	@COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml down
+	@fed_overlay=""; \
+	 if [ -f $(DEPLOY_DIR)/docker-compose.federation-preview.yml ] || [ -f docker-compose.federation-preview.yml ]; then \
+		fed_overlay="-f docker-compose.federation-preview.yml"; \
+	 fi; \
+	 COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.prebuilt.yml $$fed_overlay down
+
+preview-verify-federation: ## Run automated federation health, WebFinger, and ActivityPub verification across preview pair
+	@bash scripts/verify_federation_preview.sh
 
 version:
 	@echo "Project version: $(IQOQO_VERSION)"
@@ -598,6 +624,28 @@ test-backend: .venv/bin/activate
 	$(AI_ECHO) "Running backend tests..."
 	.venv/bin/pytest $(PYTEST_FLAGS) tests/
 
+# 4 Parallel Test Streams
+test-stream-domain: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 1 (FRBR, Ontology & Domain Core)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream domain
+
+test-stream-api: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 2 (API, Auth & Federation)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream api
+
+test-stream-frontend: test-frontend
+
+test-stream-tooling: .venv/bin/activate
+	$(AI_ECHO) "Running Stream 4 (Services, Tooling, Scripts & BATS)..."
+	.venv/bin/python scripts/run_tests_parallel.py --stream tooling
+
+test-parallel: .venv/bin/activate
+	$(AI_ECHO) "Running 4 test streams in parallel..."
+	.venv/bin/python scripts/run_tests_parallel.py
+
+test-fast: test-parallel
+test-streams: test-parallel
+
 test-backend-pg: .venv/bin/activate
 	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
 	@echo "Ensuring test database exists..."
@@ -618,15 +666,29 @@ test-frontend:
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 
+test-scripts: test-scripts-python test-scripts-bash ## Run Python and BATS script tests
+
 test-scripts-bash:
 	$(AI_ECHO) "Running BATS script tests..."
-	@if command -v bats >/dev/null 2>&1; then \
-		bats $(BATS_FLAGS) tests/bash/; \
-	elif [ -f node_modules/.bin/bats ]; then \
-		$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+	@if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+		set -o pipefail; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/ | .venv/bin/python scripts/format_bats_ai.py; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	else \
-		echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
-		exit 1; \
+		if command -v bats >/dev/null 2>&1; then \
+			bats $(BATS_FLAGS) tests/bash/; \
+		elif [ -f node_modules/.bin/bats ]; then \
+			$(NPX) bats $(BATS_FLAGS) tests/bash/; \
+		else \
+			echo "Error: bats is not installed. Please install bats-core or run 'npm install'."; \
+			exit 1; \
+		fi; \
 	fi
 
 test-scripts-python: .venv/bin/activate
@@ -637,11 +699,12 @@ test-scripts-python: .venv/bin/activate
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
 	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
-		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social) if missing..."; \
+		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS social;" 2>&1 | grep -v 'already exists' || true; \
+		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS federation;" 2>&1 | grep -v 'already exists' || true; \
 	fi
 
 # This dedicated Compose file/project has its own PostgreSQL service, port, and
@@ -726,7 +789,7 @@ _test-e2e-run:
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
 		echo "Running Playwright against the verified isolated E2E database..."; \
-		cd frontend; FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
+		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e

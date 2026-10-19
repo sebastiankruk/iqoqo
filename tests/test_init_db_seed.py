@@ -68,7 +68,7 @@ def test_init_db_postgresql_pre_create_schemas_and_unaccent():
     mock_db = MagicMock()
     mock_db.engine.dialect.name = "postgresql"
 
-    for schema_name in ("auth", "catalog", "inventory", "social", "config"):
+    for schema_name in ("auth", "catalog", "inventory", "social", "config", "federation"):
         mock_db.session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
     mock_db.session.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
     mock_db.session.execute(text("""

@@ -31,7 +31,7 @@ import json
 import pytest
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.compare import isomorphic
-from rdflib.namespace import RDF
+from rdflib.namespace import OWL, RDF, XSD
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -50,9 +50,10 @@ from app.core.frbr_service import (
 )
 from app.core.shacl_service import validate_graph
 from app.db.audio import ExpressionContribution, WorkContribution, WorkPart
-from app.db.contributions import Contributor, ManifestationContribution
+from app.db.contributions import Contributor, ManifestationContribution, WorkSeriesMembership
 from app.db.core import (
     ImageScan,
+    SemanticLink,
     UserCollection,
     UserCollectionItem,
 )
@@ -800,3 +801,218 @@ class TestPublicApiEndpointsIntegration:
         g_stream = Graph()
         g_stream.parse(data=stream_res.data.decode("utf-8"), format="nt")
         assert len(g_stream) > 0
+
+
+class TestSemanticLinksAndSeriesRdfSerialization:
+    """Test serialization of accepted LOD semantic links and series memberships."""
+
+    def test_accepted_manifestation_semantic_link_emits_same_as(self, app):
+        with app.app_context():
+            work = Work(title="Foundation", meta={"authors": ["Isaac Asimov"]})
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id, content_type="text", language="en")
+            db.session.add(expr)
+            db.session.flush()
+
+            mani = Manifestation(expression_id=expr.id, isbn13="9780553293357")
+            db.session.add(mani)
+            db.session.flush()
+
+            # Accepted link
+            link_accepted = SemanticLink(
+                entity_type="manifestation",
+                entity_id=mani.id,
+                authority="dbpedia",
+                external_uri="http://dbpedia.org/resource/Foundation_(novel)",
+                status="accepted",
+                verified=True,
+            )
+            # Rejected link
+            link_rejected = SemanticLink(
+                entity_type="manifestation",
+                entity_id=mani.id,
+                authority="geonames",
+                external_uri="https://sws.geonames.org/5128581/",
+                status="rejected",
+                verified=False,
+            )
+            # Suggested link
+            link_suggested = SemanticLink(
+                entity_type="manifestation",
+                entity_id=mani.id,
+                authority="wordnet",
+                external_uri="http://wordnet-rdf.princeton.edu/id/10636881-n",
+                status="suggested",
+                verified=False,
+            )
+            db.session.add_all([link_accepted, link_rejected, link_suggested])
+            db.session.commit()
+
+            ttl = serialize_collection_to_rdf([mani], "http://testserver", output_format="turtle")
+            g = Graph()
+            g.parse(data=ttl, format="turtle")
+
+            m_uri = URIRef(f"http://testserver/manifestations/{mani.id}")
+            accepted_ref = URIRef("http://dbpedia.org/resource/Foundation_(novel)")
+            rejected_ref = URIRef("https://sws.geonames.org/5128581/")
+            suggested_ref = URIRef("http://wordnet-rdf.princeton.edu/id/10636881-n")
+
+            assert (m_uri, OWL.sameAs, accepted_ref) in g
+            assert (m_uri, SCHEMA.sameAs, accepted_ref) in g
+
+            # Unverified / rejected links must be excluded
+            assert (m_uri, OWL.sameAs, rejected_ref) not in g
+            assert (m_uri, SCHEMA.sameAs, rejected_ref) not in g
+            assert (m_uri, OWL.sameAs, suggested_ref) not in g
+            assert (m_uri, SCHEMA.sameAs, suggested_ref) not in g
+
+    def test_accepted_work_semantic_link_emits_same_as(self, app):
+        with app.app_context():
+            work = Work(title="Neuromancer", meta={"authors": ["William Gibson"]})
+            db.session.add(work)
+            db.session.flush()
+
+            link = SemanticLink(
+                entity_type="work",
+                entity_id=work.id,
+                authority="dbpedia",
+                external_uri="http://dbpedia.org/resource/Neuromancer",
+                status="accepted",
+                verified=True,
+            )
+            db.session.add(link)
+            db.session.commit()
+
+            ttl = serialize_collection_to_rdf([work], "http://testserver", output_format="turtle")
+            g = Graph()
+            g.parse(data=ttl, format="turtle")
+
+            w_uri = URIRef(f"http://testserver/works/{work.id}")
+            ext_ref = URIRef("http://dbpedia.org/resource/Neuromancer")
+
+            assert (w_uri, OWL.sameAs, ext_ref) in g
+            assert (w_uri, SCHEMA.sameAs, ext_ref) in g
+
+    def test_work_series_membership_emits_part_of_series_and_position(self, app):
+        with app.app_context():
+            series_work = Work(title="Foundation Series")
+            book_work = Work(title="Second Foundation")
+            standalone_work = Work(title="The Caves of Steel")
+            db.session.add_all([series_work, book_work, standalone_work])
+            db.session.flush()
+
+            membership = WorkSeriesMembership(
+                work_id=book_work.id,
+                series_work_id=series_work.id,
+                sequence=3,
+            )
+            db.session.add(membership)
+            db.session.commit()
+
+            ttl = serialize_collection_to_rdf([book_work, standalone_work], "http://testserver", output_format="turtle")
+            g = Graph()
+            g.parse(data=ttl, format="turtle")
+
+            book_uri = URIRef(f"http://testserver/works/{book_work.id}")
+            series_uri = URIRef(f"http://testserver/works/{series_work.id}")
+            standalone_uri = URIRef(f"http://testserver/works/{standalone_work.id}")
+
+            assert (book_uri, SCHEMA.partOfSeries, series_uri) in g
+            assert (book_uri, SCHEMA.position, Literal(3, datatype=XSD.integer)) in g
+
+            # Standalone work without series membership must not have partOfSeries
+            assert (standalone_uri, SCHEMA.partOfSeries, None) not in g
+
+    def test_dict_item_semantic_links_and_series(self):
+        items = [
+            {
+                "id": "i1",
+                "manifestation_id": "m1",
+                "expression_id": "e1",
+                "work_id": "w1",
+                "title": "Dict Book",
+                "semantic_links": [
+                    {
+                        "entity_type": "manifestation",
+                        "external_uri": "http://dbpedia.org/resource/DictBook_Manif",
+                        "status": "accepted",
+                    },
+                    {
+                        "entity_type": "work",
+                        "external_uri": "http://dbpedia.org/resource/DictBook_Work",
+                        "status": "accepted",
+                    },
+                    {
+                        "entity_type": "work",
+                        "external_uri": "http://dbpedia.org/resource/Suggested_Work",
+                        "status": "suggested",
+                    },
+                ],
+                "series_memberships": [
+                    {
+                        "series_work_id": "series-99",
+                        "sequence": 2,
+                    }
+                ],
+            }
+        ]
+        ttl = serialize_collection_to_rdf(items, "http://testserver", output_format="turtle")
+        g = Graph()
+        g.parse(data=ttl, format="turtle")
+
+        m_uri = URIRef("http://testserver/manifestations/m1")
+        w_uri = URIRef("http://testserver/works/w1")
+        series_uri = URIRef("http://testserver/works/series-99")
+
+        assert (m_uri, OWL.sameAs, URIRef("http://dbpedia.org/resource/DictBook_Manif")) in g
+        assert (m_uri, SCHEMA.sameAs, URIRef("http://dbpedia.org/resource/DictBook_Manif")) in g
+        assert (w_uri, OWL.sameAs, URIRef("http://dbpedia.org/resource/DictBook_Work")) in g
+        assert (w_uri, SCHEMA.sameAs, URIRef("http://dbpedia.org/resource/DictBook_Work")) in g
+        assert (w_uri, OWL.sameAs, URIRef("http://dbpedia.org/resource/Suggested_Work")) not in g
+
+        assert (w_uri, SCHEMA.partOfSeries, series_uri) in g
+        assert (w_uri, SCHEMA.position, Literal(2, datatype=XSD.integer)) in g
+
+    def test_local_barcode_serialized_on_item(self, app):
+        from app.core.frbr_service import IQOQO
+
+        with app.app_context():
+            user = User(
+                email="barcode_rdf@iqoqo.local",
+                display_name="Barcode RDF",
+                public_username="barcoderdf",
+            )
+            db.session.add(user)
+            db.session.flush()
+
+            work = Work(title="Barcode Book")
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            mani = Manifestation(expression_id=expr.id)
+            db.session.add(mani)
+            db.session.flush()
+
+            item = Item(
+                owner_id=user.id,
+                manifestation_id=mani.id,
+                status="read",
+                condition="mint",
+                local_barcode="SHELF-STICKER-42",
+            )
+            db.session.add(item)
+            db.session.commit()
+
+            ttl = serialize_collection_to_rdf([item], "http://testserver", output_format="turtle")
+            g = Graph()
+            g.parse(data=ttl, format="turtle")
+
+            item_uri = URIRef(f"http://testserver/items/{item.id}")
+            assert (item_uri, IQOQO.local_barcode, Literal("SHELF-STICKER-42")) in g
+            assert (item_uri, IQOQO.condition, Literal("mint")) in g

@@ -486,3 +486,122 @@ iqoqo:EntityAuditLogShape a sh:NodeShape ;
         sh:message "An EntityAuditLog must record auditLoggedAt dateTime." ;
     ] .
 
+iqoqo:SemanticLinkShape a sh:NodeShape ;
+    sh:targetClass iqoqo:SemanticLink ;
+    sh:name "Semantic Link shape" ;
+    sh:description "A SemanticLink links an internal entity to an external LOD authority." ;
+    sh:property [
+        sh:path iqoqo:semanticEntityType ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "work" "manifestation" "contributor" ) ;
+        sh:message "semanticEntityType must be one of: work, manifestation, contributor." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:semanticEntityId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "semanticEntityId must be an integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:semanticAuthority ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "semanticAuthority must be an authority identifier string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:externalUri ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "externalUri must be a URI string." ;
+    ] .
+
+iqoqo:WorkSeriesMembershipShape a sh:NodeShape ;
+    sh:targetClass iqoqo:WorkSeriesMembership ;
+    sh:name "Work Series Membership shape" ;
+    sh:description "A WorkSeriesMembership links a member Work to a container series Work." ;
+    sh:property [
+        sh:path iqoqo:seriesWork ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "seriesWork must link to a Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:seriesContainer ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:Work ;
+        sh:message "seriesContainer must link to a Work." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:seriesSequence ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "seriesSequence must be an integer." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "seriesWork and seriesContainer must be different Works; a Work cannot be a member of itself." ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this iqoqo:seriesWork ?work .
+                $this iqoqo:seriesContainer ?series .
+                FILTER(?work = ?series)
+            }
+        """ ;
+    ] .
+
+iqoqo:DuplicateCandidateShape a sh:NodeShape ;
+    sh:targetClass iqoqo:DuplicateCandidate ;
+    sh:name "Duplicate Candidate shape" ;
+    sh:description "A DuplicateCandidate records a potential duplicate pair for review." ;
+    sh:property [
+        sh:path iqoqo:candidateTier ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "work" "expression" "manifestation" ) ;
+        sh:message "candidateTier must be one of: work, expression, manifestation." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:sourceId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "sourceId must be an integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:targetId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "targetId must be an integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:candidateStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "pending" "merged" "dismissed" ) ;
+        sh:message "candidateStatus must be one of: pending, merged, dismissed." ;
+    ] ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "sourceId and targetId must be distinct entities." ;
+        sh:select """
+            SELECT $this
+            WHERE {
+                $this iqoqo:sourceId ?src .
+                $this iqoqo:targetId ?tgt .
+                FILTER(?src = ?tgt)
+            }
+        """ ;
+    ] .
+

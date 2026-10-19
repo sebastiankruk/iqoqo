@@ -57,6 +57,22 @@ vi.mock("@/lib/api/export", async importOriginal => {
   };
 });
 
+// Mock federation API functions
+vi.mock("@/lib/api/federation", () => ({
+  getFederationConsent: vi.fn().mockResolvedValue({
+    user_id: "test-user-id",
+    federated_profile: false,
+    federated_collection: false,
+    updated_at: "2026-10-16T12:00:00Z",
+  }),
+  updateFederationConsent: vi.fn().mockResolvedValue({
+    user_id: "test-user-id",
+    federated_profile: true,
+    federated_collection: false,
+    updated_at: "2026-10-16T12:00:00Z",
+  }),
+}));
+
 import ProfilePage from "@/app/profile/page";
 import { apiClient, apiFetch } from "@/lib/api/client";
 import { downloadCollectionExport } from "@/lib/api/export";
@@ -241,5 +257,52 @@ describe("ProfilePage", () => {
     // An unverified address cannot delete an account, so the page has to say so
     // before the user ever reaches the dialog.
     expect(screen.getByTestId("email-unverified-state")).toBeInTheDocument();
+  });
+
+  it("renders default_item_visibility radio inputs and submits updated setting on save", async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Test User")).toBeInTheDocument();
+    });
+
+    vi.mocked(apiClient.put).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {},
+        error: null,
+      },
+    } as never);
+
+    // Find radio button for default_item_visibility="public"
+    const publicRadio = screen.getByRole("radio", {
+      name: /New scanned or ingested items default to public/i,
+    });
+    expect(publicRadio).toBeInTheDocument();
+    fireEvent.click(publicRadio);
+
+    const saveBtn = screen.getByRole("button", { name: "Save Profile" });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(apiClient.put).toHaveBeenCalledWith(
+        "/profile/",
+        expect.objectContaining({
+          default_item_visibility: "public",
+        })
+      );
+    });
+  });
+
+  it("renders FederationConsentSettings when federation_enabled is true", async () => {
+    vi.mocked(useAppConfig).mockReturnValue({
+      data: { federation_enabled: true, version: "0.9.0" },
+    } as never);
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Federation Privacy")).toBeInTheDocument();
+    });
   });
 });

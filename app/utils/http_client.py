@@ -28,6 +28,7 @@ import ipaddress
 import logging
 import socket
 import threading
+from typing import Any
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
@@ -122,6 +123,14 @@ def is_ip_blocked(ip_str: str) -> bool:
     except ValueError:
         # Unparseable addresses are treated as blocked for safety.
         return True
+
+    import os
+
+    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true":
+        # Allow loopback and Docker container network RFC 1918 private ranges during staging/tests,
+        # but NEVER allow link-local / cloud metadata (169.254.169.254).
+        if not ip_obj.is_link_local and (ip_obj.is_loopback or str(ip_obj) == "127.0.0.1" or ip_obj.is_private):
+            return False
 
     if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
         return True
@@ -274,18 +283,117 @@ def safe_get(
             session.mount("https://", adapter)
         else:
             port = parsed.port
+            ip_formatted = f"[{resolved_ip}]" if ":" in resolved_ip and not resolved_ip.startswith("[") else resolved_ip
             if port:
-                netloc = f"{resolved_ip}:{port}"
+                netloc = f"{ip_formatted}:{port}"
             else:
-                netloc = resolved_ip
+                netloc = ip_formatted
 
             rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-            merged_headers.setdefault("Host", hostname)
+            host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
+            merged_headers.setdefault("Host", host_header_val)
 
         response = session.get(
             rewritten_url,
             headers=merged_headers,
             params=request_params,
+            timeout=timeout,
+            stream=stream,
+            verify=True,
+            allow_redirects=False,
+        )
+
+        if getattr(response, "is_redirect", False) is True:
+            if hop >= max_redirects:
+                raise SSRFError("Too many redirects")
+            next_url = response.headers.get("location")
+            if not next_url:
+                raise SSRFError("Redirect missing location header")
+            current_url = urljoin(str(current_url), str(next_url))
+        else:
+            return response
+
+    raise SSRFError("Too many redirects")
+
+
+def safe_post(
+    url: str,
+    *,
+    data: bytes | str | None = None,
+    json: Any = None,
+    headers: dict[str, str] | None = None,
+    timeout: int | float | tuple[int | float, int | float] = 10,
+    stream: bool = False,
+    max_redirects: int = 5,
+) -> requests.Response:
+    """Perform an SSRF-safe HTTP POST request.
+
+    Resolves the hostname to an IP address, validates it against restricted
+    ranges, and makes the request directly to the resolved IP with the original
+    Host header (for HTTP) or via socket-level IP pinning (for HTTPS)
+    to prevent DNS rebinding.
+
+    Args:
+        url: Target URL.
+        data: Optional payload bytes or string.
+        json: Optional JSON-serializable payload.
+        headers: Optional HTTP headers.
+        timeout: Request timeout (seconds or (connect, read) tuple).
+        stream: Whether to stream the response body.
+        max_redirects: Maximum number of redirects to follow safely.
+
+    Returns:
+        :class:`requests.Response` object.
+
+    Raises:
+        SSRFError: If the target resolves to a restricted IP address or too many redirects.
+        requests.RequestException: On network errors.
+    """
+    current_url = url
+    session = requests.Session()
+
+    for hop in range(max_redirects + 1):
+        parsed = urlparse(current_url)
+        if parsed.scheme not in ("http", "https"):
+            raise SSRFError(f"Unsupported scheme: {parsed.scheme}")
+
+        hostname = parsed.hostname
+        if not hostname:
+            raise SSRFError("Missing hostname in URL")
+
+        addr_results = _resolve_with_timeout(hostname, timeout=5.0)
+        if not addr_results:
+            raise SSRFError(f"DNS resolution returned no results for {hostname}")
+
+        resolved_ip: str | None = None
+        for result in addr_results:
+            ip_str = str(result[4][0])
+            if is_ip_blocked(ip_str):
+                raise SSRFError(f"Blocked: {hostname} resolved to restricted IP {ip_str}")
+            if resolved_ip is None:
+                resolved_ip = ip_str
+
+        assert resolved_ip is not None  # noqa: S101
+
+        merged_headers = dict(headers or {})
+
+        if parsed.scheme == "https":
+            rewritten_url = current_url
+            adapter = SSRFProtectionAdapter(pinned_ip=resolved_ip)
+            session.mount("https://", adapter)
+        else:
+            port = parsed.port
+            ip_formatted = f"[{resolved_ip}]" if ":" in resolved_ip and not resolved_ip.startswith("[") else resolved_ip
+            netloc = f"{ip_formatted}:{port}" if port else ip_formatted
+            rewritten_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+            host_header_val = f"{hostname}:{port}" if port and port not in (80, 443) else hostname
+            merged_headers.setdefault("Host", host_header_val)
+
+        response = session.post(
+            rewritten_url,
+            data=data,
+            json=json,
+            headers=merged_headers,
             timeout=timeout,
             stream=stream,
             verify=True,

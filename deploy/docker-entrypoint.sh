@@ -78,4 +78,57 @@ if [ -n "${REDIS_URL:-}" ]; then
   export REDIS_URL
 fi
 
+# Pre-start check: verify writability of critical bind-mount storage paths.
+#
+# The container backend and worker processes run as unprivileged appuser
+# (UID 10001, GID 10001). Host bind-mounted directories (app/static/covers,
+# app/static/gallery, exports, data, app/static/uploads/raw_covers) are frequently created with host UID 1000
+# and 0755 mode, causing unhandled PermissionError: [Errno 13] at runtime.
+# Failing fast here guarantees instant visibility at container startup before
+# accepting requests.
+STORAGE_MOUNT_DIRS="app/static/covers app/static/gallery exports data app/static/uploads/raw_covers"
+UNWRITABLE_DIRS=""
+
+# Non-server tasks (such as database migrations or ad-hoc CLI commands) do not
+# consume asset caches or export storage; only treat missing directories as
+# fatal for application server processes (gunicorn, celery) or explicit checks.
+is_server=false
+case "$*" in
+  *gunicorn*|*celery*) is_server=true ;;
+esac
+
+for dir in $STORAGE_MOUNT_DIRS; do
+  mkdir -p "$dir" 2>/dev/null || true
+  if [ -d "$dir" ]; then
+    probe="${dir}/.writetest.$$"
+    if touch "$probe" 2>/dev/null; then
+      rm -f "$probe"
+    else
+      UNWRITABLE_DIRS="${UNWRITABLE_DIRS:+$UNWRITABLE_DIRS }$dir"
+    fi
+  elif [ "$is_server" = "true" ] || [ -z "$*" ] || [ "$1" = "true" ]; then
+    UNWRITABLE_DIRS="${UNWRITABLE_DIRS:+$UNWRITABLE_DIRS }$dir"
+  fi
+done
+
+if [ -n "$UNWRITABLE_DIRS" ]; then
+  cur_uid=$(id -u 2>/dev/null || echo "unknown")
+  cur_gid=$(id -g 2>/dev/null || echo "unknown")
+  cur_user=$(id -un 2>/dev/null || echo "appuser")
+
+  echo "ERROR: Storage volume writability verification failed." >&2
+  echo "       Container user: ${cur_user} (UID: ${cur_uid}, GID: ${cur_gid})" >&2
+  echo "       The following mount paths are not writable:" >&2
+  for bad_dir in $UNWRITABLE_DIRS; do
+    echo "         - $bad_dir" >&2
+  done
+  echo "" >&2
+  echo "Remediation (on Docker host):" >&2
+  echo "  Grant write access to the unprivileged container user:" >&2
+  echo "    chmod -R a+rwX $UNWRITABLE_DIRS" >&2
+  echo "  Or run from project root:" >&2
+  echo "    make ensure-mount-perms" >&2
+  exit 1
+fi
+
 exec "$@"

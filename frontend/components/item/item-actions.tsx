@@ -57,7 +57,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { CameraCapture } from "@/components/scanner/camera-capture";
+import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
@@ -404,7 +404,7 @@ export function ItemActions({ item }: { item: Item }) {
             )}
 
             {hasPermission(PermissionName.UPLOAD_COVER) && item.manifestation_id && (
-              <CameraCapture
+              <CoverUploadPicker
                 manifestation_id={item.manifestation_id}
                 onUploadComplete={() => {
                   toast.success("Cover uploaded and processing started!");

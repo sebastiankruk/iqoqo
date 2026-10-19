@@ -37,10 +37,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, literal, select
 
+from app.core.iri import canonical_frbr_iri, get_lod_base_url
 from app.db import db
 from app.db.contributions import (
     ExpressionContribution,
@@ -50,6 +52,7 @@ from app.db.contributions import (
     WorkSeriesMembership,
 )
 from app.db.core import (
+    EntityAuditLog,
     Expression,
     ImageScan,
     Item,
@@ -69,7 +72,9 @@ __all__ = [
     "RefPoint",
     "consolidate_manifestation_identifiers",
     "delete_source_row",
+    "get_entity_tombstone",
     "lock_pair",
+    "record_merge_tombstone",
     "repoint_references",
 ]
 
@@ -430,3 +435,103 @@ def lock_pair(model: type, source_id: int, target_id: int) -> list[Any]:
     return list(
         db.session.execute(select(model).where(model.id.in_([source_id, target_id])).order_by(model.id).with_for_update()).scalars().all()
     )
+
+
+def record_merge_tombstone(
+    entity_type: str,
+    source_id: int,
+    target_id: int,
+    actor_id: Any | None = None,
+    repointed: dict[str, int] | None = None,
+    extra_diff: dict[str, Any] | None = None,
+    base_url: str | None = None,
+) -> EntityAuditLog:
+    """Record a consolidation audit log with owl:sameAs and ActivityStreams Move payloads.
+
+    Preserves provenance and federation link coherence when duplicate FRBR entities
+    are merged. The tombstone captures both the surviving canonical target IRI and
+    machine-readable migration payloads (as:Move and as:Tombstone).
+
+    Args:
+        entity_type: "work", "expression", or "manifestation".
+        source_id: Entity ID consolidated away and deleted.
+        target_id: Surviving entity ID.
+        actor_id: Optional UUID of the user performing the merge.
+        repointed: Optional mapping of repointed references.
+        extra_diff: Optional additional diff metadata.
+        base_url: Optional base URL override for IRI minting.
+
+    Returns:
+        The created :class:`EntityAuditLog`.
+    """
+    tier = entity_type.lower()
+    base = (base_url or get_lod_base_url()).rstrip("/")
+    source_iri = canonical_frbr_iri(tier, source_id, base)
+    target_iri = canonical_frbr_iri(tier, target_id, base)
+    now_iso = datetime.now(UTC).isoformat()
+
+    move_payload: dict[str, Any] = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"{source_iri}#move",
+        "type": "Move",
+        "actor": base,
+        "object": source_iri,
+        "target": target_iri,
+        "published": now_iso,
+    }
+
+    tombstone_payload: dict[str, Any] = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": source_iri,
+        "type": "Tombstone",
+        "formerType": tier.capitalize(),
+        "deleted": now_iso,
+        "movedTo": target_iri,
+    }
+
+    diff: dict[str, Any] = {
+        "source_id": source_id,
+        "target_id": target_id,
+        "source_iri": source_iri,
+        "target_iri": target_iri,
+        "owl_same_as": target_iri,
+        "activitystreams_move": move_payload,
+        "tombstone": tombstone_payload,
+    }
+    if repointed:
+        diff["repointed"] = repointed
+    if extra_diff:
+        diff.update(extra_diff)
+
+    audit = EntityAuditLog(
+        entity_type=tier,
+        entity_id=source_id,
+        actor_id=actor_id,
+        change_type=f"merge_{tier}",
+        diff=diff,
+    )
+    db.session.add(audit)
+    return audit
+
+
+def get_entity_tombstone(entity_type: str, entity_id: int) -> EntityAuditLog | None:
+    """Retrieve the most recent merge tombstone audit log for a consolidated entity.
+
+    Args:
+        entity_type: "work", "expression", or "manifestation".
+        entity_id: The ID of the consolidated entity.
+
+    Returns:
+        The matching :class:`EntityAuditLog` if the entity was merged, else None.
+    """
+    tier = entity_type.lower()
+    stmt = (
+        select(EntityAuditLog)
+        .where(
+            EntityAuditLog.entity_type == tier,
+            EntityAuditLog.entity_id == entity_id,
+            EntityAuditLog.change_type == f"merge_{tier}",
+        )
+        .order_by(EntityAuditLog.logged_at.desc())
+    )
+    return db.session.execute(stmt).scalars().first()

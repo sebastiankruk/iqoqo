@@ -96,6 +96,7 @@ def app():
             "SQLALCHEMY_DATABASE_URI": db_uri,
             "SQLALCHEMY_ENGINE_OPTIONS": engine_opts,
             "RATELIMIT_ENABLED": False,
+            "FEDERATION_ENABLED": True,
         }
     )
 

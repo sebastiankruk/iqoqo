@@ -62,3 +62,13 @@ teardown() {
   [[ "$output" =~ "Operation cancelled" ]]
 }
 
+@test "scripts/verify_federation_preview.sh exists and is executable" {
+  [ -x "scripts/verify_federation_preview.sh" ]
+}
+
+@test "Makefile has preview-verify-federation target" {
+  run make -n preview-verify-federation
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "verify_federation_preview.sh" ]]
+}
+
