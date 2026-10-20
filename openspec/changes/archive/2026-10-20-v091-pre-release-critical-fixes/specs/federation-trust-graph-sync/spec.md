@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Local Hostname Verification and Input Sanitization in Federation Metadata Sync
 `resolve_local_manifestation` and `sync_manifestation` in `app/core/federation_sync.py` SHALL verify that `/manifestation/<id>` URIs match the local instance hostname before querying by integer primary key, sanitize all inbound text strings with `bleach.clean`, and validate `http(s)` schemes on `cover_url`.

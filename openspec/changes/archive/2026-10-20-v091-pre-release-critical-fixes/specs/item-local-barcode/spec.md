@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Scanner Local Barcode Resolution and Manual Search Ingestion
 The barcode scanner and manual text search workflow (`GET /api/lookup/<code>` and `POST /api/scan`) SHALL scope `Item.local_barcode` lookups strictly to the authenticated user (`Item.owner_id == g.user_id`) and SHALL allow ingesting items from `payload.meta` when a manual text-search selection lacks a numeric barcode or pre-existing `manifestation_id`.
