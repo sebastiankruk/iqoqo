@@ -45,6 +45,9 @@ def dispatch_collection_update(user: User, item: Any, action: str = "Create") ->
         item: The item being added/removed.
         action: "Create" or "Delete".
     """
+    if getattr(item, "is_hidden", False):
+        return
+
     consent_stmt = select(FederationConsent).where(FederationConsent.user_id == user.id)
     consent = db.session.execute(consent_stmt).scalars().first()
     if not consent or not consent.federated_collection:
@@ -53,16 +56,30 @@ def dispatch_collection_update(user: User, item: Any, action: str = "Create") ->
     base_url = get_federation_base_url()
     actor_url = canonical_actor_iri(user.id, base_url)
 
+    manif = getattr(item, "manifestation", None)
+    obj_payload: dict[str, Any] = {
+        "type": "Document" if manif else "Note",
+        "id": f"{base_url}/api/items/{item.id}" if hasattr(item, "id") else "",
+        "attributedTo": actor_url,
+        "content": f"Collection update: {action}",
+    }
+    if manif:
+        if manif.isbn13:
+            obj_payload["isbn13"] = manif.isbn13
+        if manif.publisher:
+            obj_payload["publisher"] = manif.publisher
+        if manif.publication_date:
+            obj_payload["publication_date"] = str(manif.publication_date)
+        if manif.cover_url:
+            obj_payload["cover_url"] = manif.cover_url
+        if manif.format:
+            obj_payload["format"] = manif.format
+
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": action,
         "actor": actor_url,
-        "object": {
-            "type": "Note",
-            "id": f"{base_url}/api/items/{item.id}" if hasattr(item, "id") else "",
-            "attributedTo": actor_url,
-            "content": f"Collection update: {action}",
-        },
+        "object": obj_payload,
     }
 
     _queue_and_deliver(user, actor_url, activity)
@@ -83,15 +100,27 @@ def dispatch_metadata_update(user: User, manifestation: Any) -> None:
     base_url = get_federation_base_url()
     actor_url = canonical_actor_iri(user.id, base_url)
 
+    obj_payload: dict[str, Any] = {
+        "type": "Document",
+        "id": f"{base_url}/api/manifestations/{manifestation.id}" if hasattr(manifestation, "id") else "",
+        "attributedTo": actor_url,
+    }
+    if manifestation.isbn13:
+        obj_payload["isbn13"] = manifestation.isbn13
+    if manifestation.publisher:
+        obj_payload["publisher"] = manifestation.publisher
+    if manifestation.publication_date:
+        obj_payload["publication_date"] = str(manifestation.publication_date)
+    if manifestation.cover_url:
+        obj_payload["cover_url"] = manifestation.cover_url
+    if manifestation.format:
+        obj_payload["format"] = manifestation.format
+
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Update",
         "actor": actor_url,
-        "object": {
-            "type": "Document",
-            "id": f"{base_url}/api/manifestations/{manifestation.id}" if hasattr(manifestation, "id") else "",
-            "attributedTo": actor_url,
-        },
+        "object": obj_payload,
     }
 
     _queue_and_deliver(user, actor_url, activity)
@@ -154,18 +183,23 @@ def _queue_and_deliver(user: User, actor_url: str, activity: dict[str, Any]) -> 
     from app.core.federation_tasks import deliver_activity
     from app.core.tasks import submit_task
 
-    followers_stmt = select(FederationFollower).where(
-        FederationFollower.local_user_id == user.id,
-        FederationFollower.status == FollowStatus.ACCEPTED,
+    # Join FederationActor in initial query to eliminate N+1 loop queries
+    stmt = (
+        select(FederationFollower, FederationActor)
+        .join(FederationActor, FederationFollower.remote_actor_id == FederationActor.id)
+        .where(
+            FederationFollower.local_user_id == user.id,
+            FederationFollower.status == FollowStatus.ACCEPTED,
+        )
     )
-    followers = db.session.execute(followers_stmt).scalars().all()
-    if not followers:
+    pairs = db.session.execute(stmt).all()
+    if not pairs:
         return
 
     key_id = f"{actor_url}#main-key"
+    created_activities: list[tuple[FederationActivity, str]] = []
 
-    for follower in followers:
-        remote_actor = db.session.get(FederationActor, follower.remote_actor_id)
+    for _follower, remote_actor in pairs:
         if not remote_actor or not remote_actor.inbox_url:
             continue
 
@@ -178,12 +212,16 @@ def _queue_and_deliver(user: User, actor_url: str, activity: dict[str, Any]) -> 
             status=ActivityStatus.QUEUED,
         )
         db.session.add(fed_activity)
-        db.session.flush()
+        created_activities.append((fed_activity, remote_actor.inbox_url))
 
+    # Commit records to database BEFORE enqueuing to Celery to prevent race condition
+    db.session.commit()
+
+    for fed_activity, inbox_url in created_activities:
         task_id = submit_task(
             deliver_activity,
             str(fed_activity.id),
-            remote_actor.inbox_url,
+            inbox_url,
             activity,
             str(user.id),
             key_id,
@@ -192,10 +230,8 @@ def _queue_and_deliver(user: User, actor_url: str, activity: dict[str, Any]) -> 
         if not task_id:
             deliver_activity(
                 str(fed_activity.id),
-                remote_actor.inbox_url,
+                inbox_url,
                 activity,
                 str(user.id),
                 key_id,
             )
-
-    db.session.commit()

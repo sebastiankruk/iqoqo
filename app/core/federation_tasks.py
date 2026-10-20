@@ -88,16 +88,35 @@ def deliver_activity(
 
     client = FederationClient()
     try:
-        client.post_to_inbox(target_inbox_url, activity, sender_user_id, actor_key_id)
+        resp = client.post_to_inbox(target_inbox_url, activity, sender_user_id, actor_key_id)
+        if 200 <= resp.status_code < 300:
+            if fed_activity:
+                fed_activity.status = ActivityStatus.DELIVERED
+                fed_activity.delivered_at = datetime.now(UTC)
+                db.session.commit()
+            return True
+
+        logger.warning("Remote inbox %s returned HTTP %s for activity %s", target_inbox_url, resp.status_code, activity_id)
+        try:
+            from app.core.telemetry import federation_delivery_failures_total
+
+            federation_delivery_failures_total.add(1, {"reason": f"http_{resp.status_code}"})
+        except Exception:
+            pass
 
         if fed_activity:
-            fed_activity.status = ActivityStatus.DELIVERED
-            fed_activity.delivered_at = datetime.now(UTC)
+            fed_activity.status = ActivityStatus.FAILED
             db.session.commit()
-        return True
+        return False
 
     except SSRFError as exc:
         logger.error("SSRF blocked delivery to %s: %s", target_inbox_url, exc)
+        try:
+            from app.core.telemetry import federation_delivery_failures_total
+
+            federation_delivery_failures_total.add(1, {"reason": "ssrf_blocked"})
+        except Exception:
+            pass
         if fed_activity:
             fed_activity.status = ActivityStatus.FAILED
             db.session.commit()
@@ -105,9 +124,14 @@ def deliver_activity(
 
     except Exception as exc:
         logger.warning("Delivery failed to %s: %s", target_inbox_url, exc)
+        try:
+            from app.core.telemetry import federation_delivery_failures_total
+
+            federation_delivery_failures_total.add(1, {"reason": "delivery_exception"})
+        except Exception:
+            pass
         if fed_activity:
             fed_activity.retry_count += 1
-            if fed_activity.retry_count >= 3:
-                fed_activity.status = ActivityStatus.FAILED
+            fed_activity.status = ActivityStatus.FAILED
             db.session.commit()
         return False

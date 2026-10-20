@@ -706,10 +706,22 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
     if not user_id or not verify_item_ownership(item_id, user_id):
         return jsonify({"success": False, "data": None, "error": "Forbidden"}), 403
 
+    user_obj = db.session.get(User, user_id)
+    item_clone = Item(id=item.id, is_hidden=item.is_hidden, manifestation_id=item.manifestation_id)
+
     db.session.delete(item)
     db.session.commit()
     # Facet counts for this user changed; drop the cached entries.
     invalidate_facets_cache(user_id)
+
+    try:
+        from app.core.federation_dispatch import dispatch_collection_update
+
+        if user_obj:
+            dispatch_collection_update(user_obj, item_clone, action="Delete")
+    except Exception as fed_exc:
+        current_app.logger.warning("Federation collection delete dispatch failed: %s", fed_exc)
+
     return jsonify({"success": True, "data": {"id": item_id}, "error": None})
 
 
@@ -1409,6 +1421,15 @@ def create_item() -> Response | tuple[Response, int]:
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
     invalidate_facets_cache(user_id)
+
+    try:
+        from app.core.federation_dispatch import dispatch_collection_update
+
+        user_obj = db.session.get(User, user_id)
+        if user_obj:
+            dispatch_collection_update(user_obj, item, action="Create")
+    except Exception as fed_exc:
+        current_app.logger.warning("Federation collection dispatch failed: %s", fed_exc)
 
     res_data = item.to_dict()
     res_data["item_id"] = item.id

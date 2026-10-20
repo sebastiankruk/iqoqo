@@ -100,7 +100,8 @@ def probe_instance_health(instance: FederationInstance) -> bool:
         return False
 
     schemes = ["https"]
-    if os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true" or ":" in instance.domain or instance.domain in ("localhost", "peer-web"):
+    allow_loopback = os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true"
+    if allow_loopback:
         schemes = ["https", "http"]
 
     timeout = (5, 10)
@@ -124,11 +125,12 @@ def probe_instance_health(instance: FederationInstance) -> bool:
                     try:
                         parsed_href = urlparse(nodeinfo_href)
                         candidates = [nodeinfo_href]
-                        if parsed_href.netloc != instance.domain and (
-                            ":" in instance.domain
-                            or "peer" in instance.domain
-                            or "web" in instance.domain
-                            or "localhost" in parsed_href.netloc
+                        if (
+                            allow_loopback
+                            and parsed_href.netloc != instance.domain
+                            and (
+                                ":" in instance.domain or instance.domain in ("localhost", "peer-web") or "localhost" in parsed_href.netloc
+                            )
                         ):
                             candidates.append(urlunparse(parsed_href._replace(scheme=scheme, netloc=instance.domain)))
 

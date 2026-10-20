@@ -41,6 +41,14 @@ def upgrade():
     fed_schema = "federation" if is_pg else None
 
     if inspector.has_table("users", schema=auth_schema):
+        # Normalize invalid default_item_visibility before adding check constraint
+        users_table = f"{auth_schema}.users" if auth_schema else "users"
+        bind.execute(
+            sa.text(
+                f"UPDATE {users_table} SET default_item_visibility = 'private' "
+                "WHERE default_item_visibility IS NULL OR default_item_visibility NOT IN ('private', 'public')"
+            )
+        )
         with op.batch_alter_table("users", schema=auth_schema) as batch_op:
             batch_op.create_check_constraint(
                 "check_user_default_item_visibility",
@@ -48,6 +56,15 @@ def upgrade():
             )
 
     if inspector.has_table("federation_followers", schema=fed_schema):
+        # Deduplicate existing (local_user_id, remote_actor_id) rows before creating unique constraint
+        followers_table = f"{fed_schema}.federation_followers" if fed_schema else "federation_followers"
+        bind.execute(
+            sa.text(
+                f"DELETE FROM {followers_table} WHERE id NOT IN ("
+                f"SELECT MAX(id) FROM {followers_table} GROUP BY local_user_id, remote_actor_id"
+                ")"
+            )
+        )
         with op.batch_alter_table("federation_followers", schema=fed_schema) as batch_op:
             batch_op.create_unique_constraint(
                 "uq_federation_followers_pair",

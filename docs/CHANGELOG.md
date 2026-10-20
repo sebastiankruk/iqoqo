@@ -5,13 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.1] - TBD
+## [0.9.1] - 2026-10-20
 
 ### Added
 
+- **ActivityPub S2S Inbox/Outbox Pipeline (C76)**: Implemented Actor Inboxes (`/actor/u/<uuid>/inbox`), Shared Inbox (`/inbox`), and paginated read-only Outbox `OrderedCollection` endpoints. Added asynchronous activity processing and delivery on dedicated `federation` Celery queues with `bleach` string sanitization and 100KB payload caps (`activitypub-inbox-outbox-pipeline-v091`).
+- **Federation Trust Graph & Provenance Sync (C77)**: Built peer instance discovery (`/.well-known/nodeinfo`), background health checks, and provenance-aware metadata sync (`_provenance` and `prov:wasDerivedFrom` for `trusted` peers; `ProviderMergeDialog` for `pending` peers) (`federation-trust-graph-and-metadata-sync-v091`).
+- **Admin Federation Dashboard (C78)**: Built full administration interface under `/admin/federation` including instance registry management, trust level transitions, and real-time federation activity log monitoring (`admin-federation-dashboard-v091`).
+- **S2S Security Audit Gate & Multi-Instance Verification (C79)**: Added 2-instance live E2E simulation suites covering WebFinger discovery, Follow/Accept flows, metadata sync, SSRF defense, and Prometheus/OpenObserve metrics (`federation_sig_failures_total`, `federation_delivery_failures_total`) (`federation-s2s-security-audit-gate-v091`).
+
 ### Changed
 
+- **Celery Worker Multi-Queue Consumption**: Configured Celery workers across Docker Compose configurations to consume both `celery` and `federation` queues (`-Q celery,federation`).
+- **Outbound Activity Delivery Verification**: Updated `deliver_activity` to verify HTTP 2xx response status codes from remote inboxes, mark failed attempts as `ActivityStatus.FAILED`, and track delivery failure metrics.
+- **Post-Commit Outbound Activity Fan-Out**: Refactored `_queue_and_deliver` to batch-fetch remote actors without N+1 queries and commit `FederationActivity` rows before enqueuing async delivery tasks.
+
 ### Fixed
+
+- **Manual Text Search Book Ingestion**: Permitted `payload.meta` in scanner request validation when adding books from manual search without an 8–14 digit numeric barcode, unblocking text-search additions (`Barcode or Manifestation ID is required` regression).
+- **Physical Barcode Isolation (IDOR)**: Scoped `Item.local_barcode` lookups in `_find_locally` and `lookup_barcode_preview` strictly to `Item.owner_id == g.user_id`, preventing exemplar identifier collisions from leaking private items.
+- **ActivityPub Delete & Accept Spoofing**: Enforced `actor_uri == object_uri` in `handle_delete` to prevent unauthorized remote actor deletions, and validated follow direction in `handle_accept` / `handle_reject` to block self-approval of pending inbound follows.
+- **Cross-Instance Manifestation Primary Key Collisions**: Verified remote entity IRI hostname matches the local instance before resolving `/manifestation/<id>` by integer primary key in `resolve_local_manifestation`.
+- **Inbound Metadata Sanitization**: Enforced `bleach.clean` HTML tag stripping on remote metadata strings and validated `http(s)` scheme on `cover_url`.
+- **Inbox Chunked Transfer Encoding Protection**: Added raw-byte payload length validation in `receive_inbox`, closing potential 100KB limit bypasses on chunked requests.
+- **Audit Tombstone Mutation Safety**: Expunged `first_audit` from `db.session` before in-memory multi-hop tombstone resolution in `get_entity_tombstone`.
+- **Public Key Re-Fetch Cooldown & Rotation Persistence**: Enforced a 60-second cooldown on remote actor key re-fetching and persisted newly rotated public keys back to `FederationActor`.
+- **Followers Unique Migration Idempotency**: Added pre-migration deduplication of `(local_user_id, remote_actor_id)` pairs and constraint existence checks in `v0_9_1_followers_unique.py`.
 
 ## [0.9.0] - 2026-10-19
 

@@ -371,19 +371,37 @@ def verify_request(
         )
     except Exception as exc:
         # Re-fetch actor's remote JSON-LD document and retry verification once
-        # to handle remote key rotation without dropouts
+        # to handle remote key rotation without dropouts (enforcing 60s cooldown)
         refreshed_pem: str | None = None
-        try:
-            from app.core.federation_client import FederationClient
+        should_refetch = True
 
-            client = FederationClient()
-            actor_data = client.fetch_actor(actor_uri)
-            if actor_data and "publicKey" in actor_data:
-                pk_info = actor_data["publicKey"]
-                if isinstance(pk_info, dict) and "publicKeyPem" in pk_info:
-                    refreshed_pem = pk_info["publicKeyPem"]
+        try:
+            from app.db import db
+            from app.db.federation import FederationActor
+
+            actor_rec = db.session.execute(db.select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
+            if actor_rec and actor_rec.last_fetched_at:
+                age_seconds = (
+                    datetime.now(UTC) - actor_rec.last_fetched_at.replace(tzinfo=UTC if actor_rec.last_fetched_at.tzinfo is None else None)
+                ).total_seconds()
+                if age_seconds < 60:
+                    should_refetch = False
         except Exception:
-            refreshed_pem = None
+            actor_rec = None
+            should_refetch = True
+
+        if should_refetch:
+            try:
+                from app.core.federation_client import FederationClient
+
+                client = FederationClient()
+                actor_data = client.fetch_actor(actor_uri)
+                if actor_data and "publicKey" in actor_data:
+                    pk_info = actor_data["publicKey"]
+                    if isinstance(pk_info, dict) and "publicKeyPem" in pk_info:
+                        refreshed_pem = pk_info["publicKeyPem"]
+            except Exception:
+                refreshed_pem = None
 
         if refreshed_pem and refreshed_pem != public_key_pem:
             try:
@@ -394,6 +412,22 @@ def verify_request(
                     padding.PKCS1v15(),
                     hashes.SHA256(),
                 )
+                # Persist updated rotated key back to database
+                try:
+                    from app.db import db
+                    from app.db.federation import FederationActor
+
+                    if not actor_rec:
+                        actor_rec = (
+                            db.session.execute(db.select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
+                        )
+                    if actor_rec:
+                        actor_rec.public_key_pem = refreshed_pem
+                        actor_rec.last_fetched_at = datetime.now(UTC)
+                        db.session.commit()
+                except Exception:
+                    pass
+
                 return actor_uri
             except Exception:
                 pass

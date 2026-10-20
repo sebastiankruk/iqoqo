@@ -1918,11 +1918,19 @@ def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
 @require_permission(PermissionName.CONFIG_FEDERATION)
 def delete_federation_instance(instance_id: int) -> tuple[Response, int] | Response:
     """Remove a federation instance from the registry."""
-    from app.db.federation import FederationInstance
+    from app.db.federation import FederationActor, FederationFollower, FederationInstance
 
     instance = db.session.get(FederationInstance, instance_id)
     if not instance:
         return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    # Delete linked followers and actors explicitly to avoid FK integrity failures
+    actors = db.session.execute(select(FederationActor).where(FederationActor.instance_id == instance.id)).scalars().all()
+    for actor in actors:
+        followers = db.session.execute(select(FederationFollower).where(FederationFollower.remote_actor_id == actor.id)).scalars().all()
+        for follower in followers:
+            db.session.delete(follower)
+        db.session.delete(actor)
 
     db.session.delete(instance)
     db.session.commit()

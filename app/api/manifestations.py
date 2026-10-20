@@ -20,7 +20,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, g, jsonify, request
+from flask import Response, current_app, g, jsonify, request
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -634,6 +634,18 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
         db.session.commit()
+
+        try:
+            from app.core.federation_dispatch import dispatch_metadata_update
+            from app.db.models import User
+
+            user_id = getattr(g, "user_id", None)
+            user_obj = db.session.get(User, user_id) if user_id else None
+            if user_obj:
+                dispatch_metadata_update(user_obj, manifestation)
+        except Exception as fed_exc:
+            current_app.logger.warning("Federation metadata update dispatch failed: %s", fed_exc)
+
         return jsonify({"status": "ok"}), 200
 
     return jsonify({"error": "No metadata provided"}), 400

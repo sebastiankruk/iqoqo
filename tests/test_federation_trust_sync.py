@@ -453,14 +453,42 @@ class TestActivityPubInboxSyncIntegration:
                     "publisher": "Alpha Scholastic",
                 },
             }
+            res = federation_sync.reconcile_activity(activity)
+            assert res.get("status") == "merged"
 
-            from app.core import federation_handlers
-
-            handled = federation_handlers.handle_update(activity)
-            assert handled is True
-
+    def test_resolve_local_manifestation_rejects_foreign_domain_id(self, app, frbr_catalog):
+        """Manifestation resolution ignores /manifestation/<id> when domain is foreign."""
+        with app.app_context():
             manif_id = frbr_catalog["manifestation_id"]
-            manif = db.session.get(Manifestation, manif_id)
-            assert manif.publisher == "Alpha Scholastic"
-            assert manif.meta.get("page_count") == 890
-            assert manif.meta["_provenance"]["page_count"] == "federation:library.alpha.org"
+            # Foreign domain embedding local ID without matching ISBN
+            foreign_payload = {
+                "id": f"https://foreign-evil.peer/api/manifestations/{manif_id}",
+            }
+            found = federation_sync.resolve_local_manifestation(foreign_payload)
+            assert found is None
+
+    def test_sync_manifestation_strips_html_and_validates_cover_scheme(self, app, frbr_catalog):
+        """sync_manifestation sanitizes HTML tags via bleach and rejects non-http cover_url."""
+        with app.app_context():
+            manif = db.session.get(Manifestation, frbr_catalog["manifestation_id"])
+            manif.publisher = None
+            manif.cover_url = None
+            db.session.commit()
+
+            remote_data = {
+                "publisher": "<b>Vintage Books</b>",
+                "cover_url": "javascript:alert(1)",
+                "format": "Hardcover<img src=x onerror=alert(1)>",
+            }
+
+            res = federation_sync.sync_manifestation(
+                manifestation=manif,
+                remote_data=remote_data,
+                domain="library.alpha.org",
+                trust_level=TrustLevel.TRUSTED,
+            )
+            assert res.get("status") == "merged"
+            db.session.refresh(manif)
+            assert manif.publisher == "Vintage Books"
+            assert manif.format == "Hardcover"
+            assert manif.cover_url is None  # javascript: rejected

@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
+import bleach
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -68,13 +69,21 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
     remote_id = remote_data.get("id")
     if remote_id and isinstance(remote_id, str):
         # Check if local ID is embedded in remote URI path: e.g. /manifestation/<id>
+        # Only permit matching local IDs if the remote_id hostname matches our local instance
+        from app.core.iri import get_federation_base_url, get_lod_base_url
+
         parsed = urlparse(remote_id)
-        parts = [p for p in parsed.path.split("/") if p]
-        if "manifestation" in parts:
-            idx = parts.index("manifestation")
-            if idx + 1 < len(parts) and parts[idx + 1].isdigit():
-                manif_id = int(parts[idx + 1])
-                return db.session.get(Manifestation, manif_id)
+        local_domains = {
+            urlparse(get_federation_base_url()).netloc.lower(),
+            urlparse(get_lod_base_url()).netloc.lower(),
+        }
+        if parsed.netloc and parsed.netloc.lower() in local_domains:
+            parts = [p for p in parsed.path.split("/") if p]
+            if "manifestation" in parts:
+                idx = parts.index("manifestation")
+                if idx + 1 < len(parts) and parts[idx + 1].isdigit():
+                    manif_id = int(parts[idx + 1])
+                    return db.session.get(Manifestation, manif_id)
 
     return None
 
@@ -148,16 +157,18 @@ def sync_manifestation(
             clean_count = int(remote_page_count)
             manif_meta["page_count"] = clean_count
         except (ValueError, TypeError):
-            manif_meta["page_count"] = str(remote_page_count)
+            manif_meta["page_count"] = bleach.clean(str(remote_page_count), tags=[], strip=True)[:50]
         manif_prov["page_count"] = provenance_key
         updated_fields["page_count"] = manif_meta["page_count"]
 
     # 2. publisher (column)
     remote_pub = remote_data.get("publisher")
     if remote_pub and not manifestation.publisher:
-        manifestation.publisher = str(remote_pub).strip()[:255]
-        manif_prov["publisher"] = provenance_key
-        updated_fields["publisher"] = manifestation.publisher
+        clean_pub = bleach.clean(str(remote_pub), tags=[], strip=True).strip()[:255]
+        if clean_pub:
+            manifestation.publisher = clean_pub
+            manif_prov["publisher"] = provenance_key
+            updated_fields["publisher"] = manifestation.publisher
 
     # 3. publication_date (column)
     remote_date = remote_data.get("publication_date") or remote_data.get("published")
@@ -174,16 +185,21 @@ def sync_manifestation(
     # 4. cover_url (column)
     remote_cover = remote_data.get("cover_url") or remote_data.get("cover") or remote_data.get("image") or remote_data.get("icon")
     if remote_cover and not manifestation.cover_url:
-        manifestation.cover_url = str(remote_cover).strip()[:255]
-        manif_prov["cover_url"] = provenance_key
-        updated_fields["cover_url"] = manifestation.cover_url
+        cover_str = str(remote_cover).strip()
+        parsed_cover = urlparse(cover_str)
+        if parsed_cover.scheme in ("https", "http"):
+            manifestation.cover_url = cover_str[:255]
+            manif_prov["cover_url"] = provenance_key
+            updated_fields["cover_url"] = manifestation.cover_url
 
     # 5. format (column)
     remote_format = remote_data.get("format") or remote_data.get("format_type")
     if remote_format and not manifestation.format:
-        manifestation.format = str(remote_format).strip()[:50]
-        manif_prov["format"] = provenance_key
-        updated_fields["format"] = manifestation.format
+        clean_format = bleach.clean(str(remote_format), tags=[], strip=True).strip()[:50]
+        if clean_format:
+            manifestation.format = clean_format
+            manif_prov["format"] = provenance_key
+            updated_fields["format"] = manifestation.format
 
     if not updated_fields:
         return {"status": "no_changes"}

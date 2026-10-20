@@ -564,6 +564,8 @@ def get_entity_tombstone(entity_type: str, entity_id: int, max_hops: int = 5) ->
         return None
 
     if target_id and target_id != first_audit.diff.get("target_id"):
+        # Expunge first_audit from session so mutating diff in-memory does not dirty the database row
+        db.session.expunge(first_audit)
         base_url = get_lod_base_url()
         final_target_iri = canonical_frbr_iri(tier, target_id, base_url)
         resolved_diff = dict(first_audit.diff)

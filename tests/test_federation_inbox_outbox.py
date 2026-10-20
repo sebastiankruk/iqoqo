@@ -436,6 +436,51 @@ class TestActivityHandlers:
             actor = db.session.get(FederationActor, remote_peer_instance["actor_id"])
             assert actor is None
 
+    def test_handle_delete_spoofed_remote_actor_rejected(self, app, remote_peer_instance):
+        """Delete activity where actor_uri != object_uri is rejected."""
+        with app.app_context():
+            del_activity = {
+                "type": "Delete",
+                "actor": "https://malicious-actor.example.org/users/eve",
+                "object": remote_peer_instance["actor_uri"],
+            }
+            assert handle_activity(del_activity) is False
+            actor = db.session.get(FederationActor, remote_peer_instance["actor_id"])
+            assert actor is not None
+
+    def test_handle_accept_spoofed_follow_rejected(self, app, remote_peer_instance):
+        """Accept activity with mismatched followed object is rejected."""
+        with app.app_context():
+            spoofed_accept = {
+                "type": "Accept",
+                "actor": remote_peer_instance["actor_uri"],
+                "object": {
+                    "type": "Follow",
+                    "actor": "https://other.example.org/users/carol",
+                    "object": "https://target.example.org/users/victim",
+                },
+            }
+            assert handle_activity(spoofed_accept) is False
+
+    def test_receive_inbox_chunked_oversized_payload_rejected(self, client):
+        """Inbound inbox POST exceeding 100KB is rejected with 413."""
+        large_body = b" " * 105000
+        res = client.post(
+            "/api/federation/inbox",
+            data=large_body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 413
+
+    def test_receive_inbox_per_actor_unconsented_returns_404(self, client, app):
+        """Inbound per-actor inbox returns 404 if targeted actor does not exist or has not consented."""
+        res = client.post(
+            f"/api/federation/actor/u/{uuid.uuid4()}/inbox",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        assert res.status_code == 404
+
     def test_handle_unknown_activity_type(self, app):
         """Unknown activity type logs warning and returns False without raising."""
         with app.app_context():

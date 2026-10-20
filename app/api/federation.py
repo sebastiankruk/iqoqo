@@ -370,9 +370,37 @@ def federation_consent_update() -> Response | tuple[Response, int]:
 @limiter.limit(FEDERATION_INBOX_LIMIT)
 def receive_inbox(user_uuid: str | None = None, username: str | None = None) -> Response | tuple[Response, int]:
     """ActivityPub inbox endpoint receiving inbound signed activities."""
+    # 1. Bounded payload size check (protects against chunked transfer encoding bypass)
     content_length = request.content_length
     if content_length and content_length > FEDERATION_MAX_PAYLOAD_BYTES:
         return jsonify({"error": "Payload exceeds 100KB limit", "code": 413}), 413
+
+    raw_body = request.get_data(cache=True)
+    if len(raw_body) > FEDERATION_MAX_PAYLOAD_BYTES:
+        return jsonify({"error": "Payload exceeds 100KB limit", "code": 413}), 413
+
+    # 2. Per-actor route validation: ensure targeted local user exists and consented
+    if user_uuid or username:
+        target_user: User | None = None
+        if user_uuid:
+            try:
+                target_user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+            except (ValueError, TypeError):
+                target_user = None
+        elif username:
+            target_user = db.session.execute(select(User).where(User.public_username == username)).scalars().first()
+            if not target_user:
+                try:
+                    target_user = db.session.execute(select(User).where(User.id == uuid.UUID(username))).scalars().first()
+                except (ValueError, TypeError):
+                    target_user = None
+
+        if not target_user:
+            return jsonify({"error": "Actor not found", "code": 404}), 404
+
+        consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == target_user.id)).scalars().first()
+        if not consent or not consent.federated_profile:
+            return jsonify({"error": "Actor not found", "code": 404}), 404
 
     verified_actor: str | None = None
     try:
@@ -426,9 +454,10 @@ def receive_inbox(user_uuid: str | None = None, username: str | None = None) -> 
     except Exception as exc:
         current_app.logger.error("Failed to record inbound activity: %s", exc)
         db.session.rollback()
+        activity_rec = None
 
     # Dispatch via Celery or inline fallback
-    if activity_rec:
+    if activity_rec and activity_rec.id:
         from app.core.federation_tasks import process_inbound_activity
         from app.core.tasks import submit_task
 

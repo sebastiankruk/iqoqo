@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 from flask import current_app
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config_service import ConfigService
 from app.db import db
@@ -70,8 +71,9 @@ def handle_activity(activity: dict[str, Any]) -> bool:
 
     try:
         return handler(activity)
-    except (ValueError, KeyError, TypeError, AttributeError):
+    except (ValueError, KeyError, TypeError, AttributeError, IntegrityError):
         logger.exception("Error handling %s activity", activity_type)
+        db.session.rollback()
         return False
 
 
@@ -93,7 +95,14 @@ def _get_or_create_actor(actor_uri: str) -> FederationActor | None:
         default_trust = ConfigService.get("FEDERATION_DEFAULT_TRUST", TrustLevel.UNTRUSTED)
         instance = FederationInstance(domain=domain, trust_level=str(default_trust))
         db.session.add(instance)
-        db.session.flush()
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            instance = db.session.execute(inst_stmt).scalars().first()
+
+    if not instance:
+        return None
 
     actor = FederationActor(
         actor_uri=actor_uri,
@@ -102,7 +111,11 @@ def _get_or_create_actor(actor_uri: str) -> FederationActor | None:
         last_fetched_at=datetime.now(UTC),
     )
     db.session.add(actor)
-    db.session.flush()
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        actor = db.session.execute(stmt).scalars().first()
     return actor
 
 
@@ -188,7 +201,14 @@ def handle_follow(activity: dict[str, Any]) -> bool:
         )
         db.session.add(follower)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        existing = db.session.execute(follower_stmt).scalars().first()
+        if existing:
+            existing.status = follow_status
+            db.session.commit()
 
     if should_accept:
         _accept_follow(user, remote_actor, activity)
@@ -260,56 +280,67 @@ def _handle_undo_follow(activity: dict[str, Any], follow_activity: dict[str, Any
 
 
 def handle_accept(activity: dict[str, Any]) -> bool:
-    """Handle Accept activity (response to our Follow request)."""
+    """Handle Accept activity (response to our outbound Follow request)."""
     actor_uri = activity.get("actor", "")
     inner = activity.get("object", {})
 
     if isinstance(inner, dict) and inner.get("type") == "Follow":
-        followed_uri = inner.get("actor", "")
+        followed_uri = inner.get("object", "")  # Target being followed
+        follower_actor_uri = inner.get("actor", "")  # Who initiated the follow
     else:
         logger.info("Received Accept without Follow inner object from %s", actor_uri)
         return True
 
+    # Remote actor accepting our follow must match the object being followed
+    if followed_uri != actor_uri:
+        logger.warning("Accept spoofing attempt: actor %s accepted follow intended for %s", actor_uri, followed_uri)
+        return False
+
     stmt = select(FederationActor).where(FederationActor.actor_uri == actor_uri)
     remote_actor = db.session.execute(stmt).scalars().first()
     if not remote_actor:
         return True
 
-    user = _resolve_target_user(followed_uri)
+    user = _resolve_target_user(follower_actor_uri)
     if not user:
         return True
 
+    # Update follower record if tracking relationship
     follower_stmt = select(FederationFollower).where(
         FederationFollower.local_user_id == user.id,
         FederationFollower.remote_actor_id == remote_actor.id,
     )
     follower = db.session.execute(follower_stmt).scalars().first()
-
     if follower:
         follower.status = FollowStatus.ACCEPTED
         db.session.commit()
-        logger.info("Follow accepted by %s for user %s", actor_uri, user.public_username)
 
+    logger.info("Follow accepted by %s for local user %s", actor_uri, user.public_username)
     return True
 
 
 def handle_reject(activity: dict[str, Any]) -> bool:
-    """Handle Reject activity (response to our Follow request)."""
+    """Handle Reject activity (response to our outbound Follow request)."""
     actor_uri = activity.get("actor", "")
     inner = activity.get("object", {})
 
     if isinstance(inner, dict) and inner.get("type") == "Follow":
-        followed_uri = inner.get("actor", "")
+        followed_uri = inner.get("object", "")
+        follower_actor_uri = inner.get("actor", "")
     else:
         logger.info("Received Reject without Follow inner object from %s", actor_uri)
         return True
+
+    if followed_uri != actor_uri:
+        logger.warning("Reject spoofing attempt: actor %s rejected follow intended for %s", actor_uri, followed_uri)
+        return False
 
     stmt = select(FederationActor).where(FederationActor.actor_uri == actor_uri)
     remote_actor = db.session.execute(stmt).scalars().first()
     if not remote_actor:
         return True
 
-    user = _resolve_target_user(followed_uri)
+    user = _resolve_target_user(follower_actor_uri)
     if not user:
         return True
 
@@ -318,12 +349,11 @@ def handle_reject(activity: dict[str, Any]) -> bool:
         FederationFollower.remote_actor_id == remote_actor.id,
     )
     follower = db.session.execute(follower_stmt).scalars().first()
-
     if follower:
         follower.status = FollowStatus.REJECTED
         db.session.commit()
-        logger.info("Follow rejected by %s for user %s", actor_uri, user.public_username)
 
+    logger.info("Follow rejected by %s for local user %s", actor_uri, user.public_username)
     return True
 
 
@@ -389,6 +419,11 @@ def handle_delete(activity: dict[str, Any]) -> bool:
 
     object_uri = obj if isinstance(obj, str) else obj.get("id", "")
     if not object_uri:
+        return False
+
+    # Prevent actor deletion spoofing: actor can only delete itself
+    if actor_uri != object_uri:
+        logger.warning("Delete spoofing attempt: actor %s tried to delete %s", actor_uri, object_uri)
         return False
 
     parsed = urlparse(actor_uri)

@@ -26,7 +26,7 @@ from typing import Any
 from flask import Response, current_app, g, jsonify, request
 from PIL import Image
 from pydantic import ValidationError
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
@@ -114,9 +114,13 @@ def _find_locally(code: str) -> Manifestation | None:
     result = Manifestation.query.filter(or_(*_get_manifestation_filters(clean_code))).first()
     if isinstance(result, Manifestation):
         return result
-    item = Item.query.filter(Item.local_barcode == clean_code).first()
-    if item and isinstance(item.manifestation, Manifestation):
-        return item.manifestation
+
+    user_id = getattr(g, "user_id", None)
+    if user_id:
+        stmt = select(Item).where(Item.local_barcode == clean_code, Item.owner_id == user_id)
+        item = db.session.execute(stmt).scalars().first()
+        if item and isinstance(item.manifestation, Manifestation):
+            return item.manifestation
     return None
 
 
@@ -196,9 +200,12 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     all_manifestations = query_obj.all()
     matched_item: Item | None = None
     if not all_manifestations:
-        matched_item = Item.query.filter(Item.local_barcode == query.strip()).first()
-        if matched_item and matched_item.manifestation:
-            all_manifestations = [matched_item.manifestation]
+        user_id = getattr(g, "user_id", None)
+        if user_id:
+            stmt = select(Item).where(Item.local_barcode == query.strip(), Item.owner_id == user_id)
+            matched_item = db.session.execute(stmt).scalars().first()
+            if matched_item and matched_item.manifestation:
+                all_manifestations = [matched_item.manifestation]
 
     manifestation = all_manifestations[0] if all_manifestations else None
 
@@ -270,6 +277,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         if len(candidates) >= 1:
             normalized_candidates = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates]
             for cand in normalized_candidates:
+                cand.setdefault("data_source", "search")
                 if "already_in_collection" not in cand:
                     cand["already_in_collection"] = False
                 if "item_id" not in cand:
@@ -432,10 +440,13 @@ def _validate_scan_request(payload: ScanBarcodeSchema) -> str | None:
     barcode = payload.barcode
     manifestation_id = payload.manifestation_id
     collection_status = payload.collection_status
+    meta = payload.meta
 
     from app.core.taxonomy import COLLECTION_STATUSES
 
-    if not barcode and not manifestation_id:
+    has_valid_meta = isinstance(meta, dict) and bool(meta.get("title") or meta.get("Title"))
+
+    if not barcode and not manifestation_id and not has_valid_meta:
         return "Barcode or Manifestation ID is required"
     if collection_status not in COLLECTION_STATUSES:
         return f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}"
