@@ -81,6 +81,18 @@ export async function removeFederationInstance(instanceId: number): Promise<void
   }
 }
 
+/**
+ * Fetch instance actor public key fingerprint.
+ * @returns Promise resolving to the key fingerprint
+ */
+export async function getFederationKeyFingerprint(): Promise<string> {
+  const res = await apiClient.get<ApiResponse<{ fingerprint: string }>>("/v1/admin/federation/key-fingerprint");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch key fingerprint");
+  }
+  return res.data.data.fingerprint;
+}
+
 // ---------------------------------------------------------------------------
 // Federation Activities
 // ---------------------------------------------------------------------------

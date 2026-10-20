@@ -26,7 +26,7 @@ from typing import Any
 from flask import Response, current_app, g, jsonify, request
 from PIL import Image
 from pydantic import ValidationError
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
@@ -108,10 +108,20 @@ def _get_manifestation_filters(code: str):
 
 
 def _find_locally(code: str) -> Manifestation | None:
-    """Unified helper to find manifestation by identifier."""
+    """Unified helper to find manifestation by identifier or item local barcode."""
     # pylint: disable=singleton-comparison
-    result = Manifestation.query.filter(or_(*_get_manifestation_filters(code))).first()
-    return result if isinstance(result, Manifestation) else None
+    clean_code = code.strip()
+    result = Manifestation.query.filter(or_(*_get_manifestation_filters(clean_code))).first()
+    if isinstance(result, Manifestation):
+        return result
+
+    user_id = getattr(g, "user_id", None)
+    if user_id:
+        stmt = select(Item).where(Item.local_barcode == clean_code, Item.owner_id == user_id)
+        item = db.session.execute(stmt).scalars().first()
+        if item and isinstance(item.manifestation, Manifestation):
+            return item.manifestation
+    return None
 
 
 def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | None) -> Manifestation:
@@ -188,6 +198,15 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         query_obj = query_obj.filter(Expression.content_type == category_hint)
 
     all_manifestations = query_obj.all()
+    matched_item: Item | None = None
+    if not all_manifestations:
+        user_id = getattr(g, "user_id", None)
+        if user_id:
+            stmt = select(Item).where(Item.local_barcode == query.strip(), Item.owner_id == user_id)
+            matched_item = db.session.execute(stmt).scalars().first()
+            if matched_item and matched_item.manifestation:
+                all_manifestations = [matched_item.manifestation]
+
     manifestation = all_manifestations[0] if all_manifestations else None
 
     if manifestation and manifestation.meta:
@@ -229,8 +248,10 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
             # Check if user owns it
             user_id = getattr(g, "user_id", None)
             item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
-            data["already_in_collection"] = item is not None
-            data["item_id"] = item.id if item else None
+            data["already_in_collection"] = item is not None or matched_item is not None
+            data["item_id"] = item.id if item else (matched_item.id if matched_item else None)
+            if matched_item:
+                data["local_barcode"] = matched_item.local_barcode
 
             _record_scan_telemetry(canonical_id, format_hint, "database", "success", manifestation.id)
             return jsonify({"success": True, "data": data, "error": None}), 200
@@ -256,6 +277,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         if len(candidates) >= 1:
             normalized_candidates = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates]
             for cand in normalized_candidates:
+                cand.setdefault("data_source", "search")
                 if "already_in_collection" not in cand:
                     cand["already_in_collection"] = False
                 if "item_id" not in cand:
@@ -418,10 +440,13 @@ def _validate_scan_request(payload: ScanBarcodeSchema) -> str | None:
     barcode = payload.barcode
     manifestation_id = payload.manifestation_id
     collection_status = payload.collection_status
+    meta = payload.meta
 
     from app.core.taxonomy import COLLECTION_STATUSES
 
-    if not barcode and not manifestation_id:
+    has_valid_meta = isinstance(meta, dict) and bool(meta.get("title") or meta.get("Title"))
+
+    if not barcode and not manifestation_id and not has_valid_meta:
         return "Barcode or Manifestation ID is required"
     if collection_status not in COLLECTION_STATUSES:
         return f"Invalid collection_status. Valid values: {list(COLLECTION_STATUSES)}"

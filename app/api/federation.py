@@ -29,17 +29,25 @@ from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
 from app.core.federation_client import FederationClient
 from app.core.http_signatures import SignatureVerificationError, verify_request
-from app.core.iri import canonical_actor_iri, get_lod_base_url, legacy_actor_iri
-from app.core.limiter import limiter
+from app.core.iri import canonical_actor_iri, get_federation_base_url, legacy_actor_iri
+from app.core.limiter import (
+    FEDERATION_FOLLOW_LIMIT,
+    FEDERATION_INBOX_LIMIT,
+    FEDERATION_LOOKUP_LIMIT,
+    FEDERATION_MAX_PAYLOAD_BYTES,
+    FEDERATION_OUTBOX_LIMIT,
+    limiter,
+)
 from app.db import db
 from app.db.auth import User
 from app.db.federation import (
     ActivityStatus,
     FederationActivity,
-    FederationActor,
     FederationConsent,
     FederationFollower,
+    FederationInstance,
     FollowStatus,
+    TrustLevel,
 )
 
 federation_bp = Blueprint("federation", __name__, url_prefix="/federation")
@@ -48,7 +56,7 @@ wellknown_bp = Blueprint("wellknown", __name__, url_prefix="/.well-known")
 
 def _get_base_url() -> str:
     """Return the configured base URL for federation endpoints."""
-    return str(current_app.config.get("BASE_URL") or get_lod_base_url()).rstrip("/")
+    return get_federation_base_url()
 
 
 def _get_domain() -> str:
@@ -93,7 +101,13 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
 
     if resource.startswith("acct:"):
         account_part = resource[5:]
-        username = account_part.split("@")[0]
+        if "@" in account_part:
+            username, req_domain = account_part.split("@", 1)
+            req_host = request.host.split(":")[0].strip().lower() if request.host else ""
+            if req_domain.strip().lower() not in (domain.lower(), req_host):
+                return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
+        else:
+            username = account_part
         # Look up by public_username or UUID string
         stmt = select(User).where(User.public_username == username)
         user = db.session.execute(stmt).scalars().first()
@@ -147,7 +161,7 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
             {
                 "rel": "http://webfinger.net/rel/profile-page",
                 "type": "text/html",
-                "href": f"{base_url}/user/{user.public_username}" if user.public_username else base_url,
+                "href": f"{base_url}/u/{user.public_username}" if user.public_username else base_url,
             },
         ],
     }
@@ -246,13 +260,8 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
     """Construct ActivityPub Person actor JSON-LD representation."""
     canonical_uri = canonical_actor_iri(user.id, base_url)
 
-    # Resolve or create actor cryptographic keypair
-    public_key_pem = federation_keys.get_actor_public_key(str(user.id))
-    if not public_key_pem:
-        _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
-        user.federation_public_key = public_key_pem
-        user.federation_key_id = f"{canonical_uri}#main-key"
-        db.session.commit()
+    # Resolve actor cryptographic public key without generating on-the-fly during unauthenticated GET
+    public_key_pem = user.federation_public_key or federation_keys.get_actor_public_key(str(user.id))
 
     return {
         "@context": [
@@ -264,9 +273,11 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
         "preferredUsername": user.public_username or str(user.id),
         "name": user.display_name or user.public_username or "iqoqo User",
         "summary": user.bio or "",
-        "url": f"{base_url}/user/{user.public_username}" if user.public_username else base_url,
+        "url": f"{base_url}/u/{user.public_username}" if user.public_username else base_url,
         "inbox": f"{canonical_uri}/inbox",
         "outbox": f"{canonical_uri}/outbox",
+        "followers": f"{canonical_uri}/followers",
+        "following": f"{canonical_uri}/following",
         "publicKey": {
             "id": f"{canonical_uri}#main-key",
             "owner": canonical_uri,
@@ -354,19 +365,48 @@ def federation_consent_update() -> Response | tuple[Response, int]:
 
 @federation_bp.route("/inbox", methods=["POST"])
 @federation_bp.route("/actor/u/<string:user_uuid>/inbox", methods=["POST"])
+@federation_bp.route("/actor/<string:username>/inbox", methods=["POST"])
 @federation_required
-@limiter.limit("60 per minute")
-def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, int]:
+@limiter.limit(FEDERATION_INBOX_LIMIT)
+def receive_inbox(user_uuid: str | None = None, username: str | None = None) -> Response | tuple[Response, int]:
     """ActivityPub inbox endpoint receiving inbound signed activities."""
+    # 1. Bounded payload size check (protects against chunked transfer encoding bypass)
     content_length = request.content_length
-    if content_length and content_length > 100 * 1024:
+    if content_length and content_length > FEDERATION_MAX_PAYLOAD_BYTES:
         return jsonify({"error": "Payload exceeds 100KB limit", "code": 413}), 413
+
+    raw_body = request.get_data(cache=True)
+    if len(raw_body) > FEDERATION_MAX_PAYLOAD_BYTES:
+        return jsonify({"error": "Payload exceeds 100KB limit", "code": 413}), 413
+
+    # 2. Per-actor route validation: ensure targeted local user exists and consented
+    if user_uuid or username:
+        target_user: User | None = None
+        if user_uuid:
+            try:
+                target_user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+            except (ValueError, TypeError):
+                target_user = None
+        elif username:
+            target_user = db.session.execute(select(User).where(User.public_username == username)).scalars().first()
+            if not target_user:
+                try:
+                    target_user = db.session.execute(select(User).where(User.id == uuid.UUID(username))).scalars().first()
+                except (ValueError, TypeError):
+                    target_user = None
+
+        if not target_user:
+            return jsonify({"error": "Actor not found", "code": 404}), 404
+
+        consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == target_user.id)).scalars().first()
+        if not consent or not consent.federated_profile:
+            return jsonify({"error": "Actor not found", "code": 404}), 404
 
     verified_actor: str | None = None
     try:
         verified_actor = verify_request(request)
     except SignatureVerificationError as exc:
-        current_app.logger.warning("Inbound activity rejected due to invalid signature: %s", exc)
+        current_app.logger.warning("Inbound activity rejected (invalid HTTP signature): %s", exc)
         return jsonify({"error": f"Invalid signature: {exc}", "code": 401}), 401
     except Exception as exc:
         current_app.logger.warning("Signature verification error: %s", exc)
@@ -379,6 +419,16 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
     activity_type = str(payload.get("type", "Create"))
     activity_id = str(payload.get("id") or uuid.uuid4())
 
+    # Check if sending instance is blocked
+    parsed_sender = urlparse(verified_actor)
+    sender_domain = parsed_sender.hostname
+    if sender_domain:
+        inst_stmt = select(FederationInstance).where(FederationInstance.domain == sender_domain)
+        sender_instance = db.session.execute(inst_stmt).scalars().first()
+        if sender_instance and sender_instance.trust_level == TrustLevel.BLOCKED:
+            current_app.logger.warning("Rejected activity from blocked instance %s", sender_domain)
+            return jsonify({"error": f"Instance {sender_domain} is blocked", "code": 403}), 403
+
     # Actor identity verification: payload actor MUST match verified signature actor
     payload_actor_raw = payload.get("actor")
     payload_actor = payload_actor_raw.get("id") if isinstance(payload_actor_raw, dict) else payload_actor_raw
@@ -389,6 +439,7 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
     actor_uri = verified_actor
 
     # Record inbound activity log
+    activity_rec: FederationActivity | None = None
     try:
         activity_rec = FederationActivity(
             actor_uri=actor_uri,
@@ -396,82 +447,200 @@ def receive_inbox(user_uuid: str | None = None) -> Response | tuple[Response, in
             object_json=payload,
             target_uri=request.url,
             direction="inbound",
-            status=ActivityStatus.DELIVERED,
+            status=ActivityStatus.QUEUED,
         )
         db.session.add(activity_rec)
         db.session.commit()
     except Exception as exc:
         current_app.logger.error("Failed to record inbound activity: %s", exc)
         db.session.rollback()
+        activity_rec = None
 
-    # Process Follow activities
-    if activity_type == "Follow":
-        target_obj = payload.get("object")
-        target_user: User | None = None
-        if user_uuid:
-            try:
-                target_user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
-            except (ValueError, TypeError):
-                target_user = None
-        elif isinstance(target_obj, str):
-            if "/actor/u/" in target_obj:
-                u_str = target_obj.split("/actor/u/")[-1].strip("/")
-                try:
-                    target_user = db.session.execute(select(User).where(User.id == uuid.UUID(u_str))).scalars().first()
-                except (ValueError, TypeError):
-                    target_user = None
-            elif "/actor/" in target_obj:
-                uname = target_obj.split("/actor/")[-1].strip("/")
-                target_user = db.session.execute(select(User).where(User.public_username == uname)).scalars().first()
+    # Dispatch via Celery or inline fallback
+    if activity_rec and activity_rec.id:
+        from app.core.federation_tasks import process_inbound_activity
+        from app.core.tasks import submit_task
 
-        if target_user:
-            # Enforce consent: target user must have enabled federated_profile
-            consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == target_user.id)).scalars().first()
-            if not consent or not consent.federated_profile:
-                current_app.logger.info("Dropping activity for non-federated user %s", target_user.id)
-                resp = jsonify({"status": "ignored", "id": activity_id})
-                resp.status_code = 202
-                return resp
-
-            actor_db = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
-            if not actor_db:
-                client = FederationClient()
-                client.fetch_actor(actor_uri)
-                actor_db = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
-
-            if actor_db:
-                auto_accept = current_app.config.get("FEDERATION_AUTO_ACCEPT_FOLLOWS", True)
-                follow_status = FollowStatus.ACCEPTED if auto_accept else FollowStatus.PENDING
-
-                existing_follower = (
-                    db.session.execute(
-                        select(FederationFollower).where(
-                            FederationFollower.local_user_id == target_user.id,
-                            FederationFollower.remote_actor_id == actor_db.id,
-                        )
-                    )
-                    .scalars()
-                    .first()
-                )
-
-                if not existing_follower:
-                    follower_entry = FederationFollower(
-                        local_user_id=target_user.id,
-                        remote_actor_id=actor_db.id,
-                        status=follow_status,
-                    )
-                    db.session.add(follower_entry)
-                    db.session.commit()
+        task_id = submit_task(process_inbound_activity, str(activity_rec.id), payload, queue="federation")
+        if not task_id:
+            process_inbound_activity(str(activity_rec.id), payload)
 
     resp = jsonify({"status": "accepted", "id": activity_id})
     resp.status_code = 202
     return resp
 
 
+@federation_bp.route("/actor/u/<string:user_uuid>/outbox", methods=["GET"])
+@federation_bp.route("/actor/<string:username>/outbox", methods=["GET"])
+@federation_required
+@limiter.limit(FEDERATION_OUTBOX_LIMIT)
+def actor_outbox(user_uuid: str | None = None, username: str | None = None) -> Response | tuple[Response, int]:
+    """Per-actor outbox — read-only OrderedCollection of public activities."""
+    user: User | None = None
+    if user_uuid:
+        try:
+            user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+        except (ValueError, TypeError):
+            user = None
+    elif username:
+        user = db.session.execute(select(User).where(User.public_username == username)).scalars().first()
+        if not user:
+            try:
+                user = db.session.execute(select(User).where(User.id == uuid.UUID(username))).scalars().first()
+            except (ValueError, TypeError):
+                user = None
+
+    if not user:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    if not consent or not consent.federated_profile:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    base_url = _get_base_url()
+    canonical_uri = canonical_actor_iri(user.id, base_url)
+    actor_uris = [canonical_uri]
+    if user.public_username:
+        actor_uris.append(f"{base_url}/api/federation/actor/{user.public_username}")
+
+    page = request.args.get("page", type=int)
+    per_page = 20
+
+    if page is None:
+        count_stmt = select(func.count(FederationActivity.id)).where(  # pylint: disable=not-callable
+            FederationActivity.actor_uri.in_(actor_uris),
+            FederationActivity.direction == "outbound",
+            FederationActivity.status == ActivityStatus.DELIVERED,
+        )
+        total = db.session.execute(count_stmt).scalar() or 0
+
+        data = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "OrderedCollection",
+            "id": f"{canonical_uri}/outbox",
+            "totalItems": total,
+            "first": f"{canonical_uri}/outbox?page=1",
+        }
+        resp = jsonify(data)
+        resp.mimetype = "application/activity+json"
+        resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+        return resp
+
+    page_num = max(1, page)
+    items_stmt = (
+        select(FederationActivity)
+        .where(
+            FederationActivity.actor_uri.in_(actor_uris),
+            FederationActivity.direction == "outbound",
+            FederationActivity.status == ActivityStatus.DELIVERED,
+        )
+        .order_by(FederationActivity.created_at.desc())
+        .offset((page_num - 1) * per_page)
+        .limit(per_page)
+    )
+    activities = db.session.execute(items_stmt).scalars().all()
+    items = [a.object_json for a in activities if a.object_json]
+
+    collection_page: dict[str, Any] = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollectionPage",
+        "id": f"{canonical_uri}/outbox?page={page_num}",
+        "partOf": f"{canonical_uri}/outbox",
+        "orderedItems": items,
+    }
+    if len(items) == per_page:
+        collection_page["next"] = f"{canonical_uri}/outbox?page={page_num + 1}"
+
+    resp = jsonify(collection_page)
+    resp.mimetype = "application/activity+json"
+    resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+    return resp
+
+
+@federation_bp.route("/actor/u/<string:user_uuid>/followers", methods=["GET"])
+@federation_bp.route("/actor/<string:username>/followers", methods=["GET"])
+@federation_required
+@limiter.limit(FEDERATION_OUTBOX_LIMIT)
+def actor_followers(user_uuid: str | None = None, username: str | None = None) -> Response | tuple[Response, int]:
+    """Followers collection — returns count and metadata."""
+    user: User | None = None
+    if user_uuid:
+        try:
+            user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+        except (ValueError, TypeError):
+            user = None
+    elif username:
+        user = db.session.execute(select(User).where(User.public_username == username)).scalars().first()
+
+    if not user:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    if not consent or not consent.federated_profile:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    base_url = _get_base_url()
+    canonical_uri = canonical_actor_iri(user.id, base_url)
+
+    count_stmt = select(func.count(FederationFollower.id)).where(  # pylint: disable=not-callable
+        FederationFollower.local_user_id == user.id,
+        FederationFollower.status == FollowStatus.ACCEPTED,
+    )
+    count = db.session.execute(count_stmt).scalar() or 0
+
+    data = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{canonical_uri}/followers",
+        "totalItems": count,
+    }
+    resp = jsonify(data)
+    resp.mimetype = "application/activity+json"
+    resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+    return resp
+
+
+@federation_bp.route("/actor/u/<string:user_uuid>/following", methods=["GET"])
+@federation_bp.route("/actor/<string:username>/following", methods=["GET"])
+@federation_required
+@limiter.limit(FEDERATION_OUTBOX_LIMIT)
+def actor_following(user_uuid: str | None = None, username: str | None = None) -> Response | tuple[Response, int]:
+    """Following collection — returns count and metadata."""
+    user: User | None = None
+    if user_uuid:
+        try:
+            user = db.session.execute(select(User).where(User.id == uuid.UUID(user_uuid))).scalars().first()
+        except (ValueError, TypeError):
+            user = None
+    elif username:
+        user = db.session.execute(select(User).where(User.public_username == username)).scalars().first()
+
+    if not user:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    if not consent or not consent.federated_profile:
+        return jsonify({"error": "Actor not found", "code": 404}), 404
+
+    base_url = _get_base_url()
+    canonical_uri = canonical_actor_iri(user.id, base_url)
+
+    data = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{canonical_uri}/following",
+        "totalItems": 0,
+    }
+    resp = jsonify(data)
+    resp.mimetype = "application/activity+json"
+    resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+    return resp
+
+
 @federation_bp.route("/lookup", methods=["GET"])
 @require_auth
 @federation_required
-@limiter.limit("20 per minute")
+@limiter.limit(FEDERATION_LOOKUP_LIMIT)
 def federation_lookup() -> Response | tuple[Response, int]:
     """Resolve remote actor handle via WebFinger and retrieve Actor JSON-LD document."""
     handle = request.args.get("handle", "").strip()
@@ -534,6 +703,7 @@ def federation_lookup() -> Response | tuple[Response, int]:
 @federation_bp.route("/follow", methods=["POST"])
 @require_auth
 @federation_required
+@limiter.limit(FEDERATION_FOLLOW_LIMIT)
 def federation_follow_remote() -> Response | tuple[Response, int]:
     """Initiate an outbound Follow activity to a remote Actor."""
     from app.api.auth import get_current_user
@@ -553,7 +723,7 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
         clean_handle = str(target_handle).lstrip("@")
         if "@" in clean_handle:
             username, domain = clean_handle.split("@", 1)
-            scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain or ":" in domain) else "https"
+            scheme = "http" if ("localhost" in domain or "127.0.0.1" in domain) else "https"
             wf_url = f"{scheme}://{domain}/.well-known/webfinger?resource=acct:{username}@{domain}"
             try:
                 from app.utils.http_client import safe_get
@@ -613,4 +783,5 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
             resp.status_code,
         )
     except Exception as exc:
-        return jsonify({"error": f"Delivery failed: {exc}", "code": 500}), 500
+        current_app.logger.error("Outbound federation follow error: %s", exc)
+        return jsonify({"error": "Outbound delivery failed", "code": 500}), 500

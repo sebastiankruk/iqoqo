@@ -60,7 +60,7 @@ celery: Celery = Celery(
     broker=REDIS_URL,
     backend=REDIS_URL,
     task_cls=ContextTask,
-    include=["app.core.tasks"],
+    include=["app.core.tasks", "app.core.federation_tasks"],
 )
 celery.Task = ContextTask
 
@@ -74,6 +74,9 @@ celery.conf.update(
     broker_connection_retry_on_startup=True,
     task_time_limit=600,  # hard kill after 10 min (covers slowest LLM tier at 300s)
     task_soft_time_limit=540,  # SoftTimeLimitExceeded after 9 min for graceful cleanup
+    task_routes={
+        "app.core.federation_tasks.*": {"queue": "federation"},
+    },
     beat_schedule={
         "refresh-taxonomies-hourly": {
             "task": "app.core.tasks.refresh_taxonomies_cache",

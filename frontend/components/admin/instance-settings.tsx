@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from "react";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
+import { getFederationKeyFingerprint } from "@/lib/api/federation";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
 
@@ -170,6 +171,18 @@ const SETTING_GROUPS = {
   federation: [
     { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
     { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const, placeholder: "" },
+    {
+      key: "FEDERATION_AUTO_ACCEPT_FOLLOWS",
+      label: "Auto-Accept Follow Requests",
+      type: "boolean" as const,
+      placeholder: "",
+    },
+    {
+      key: "FEDERATION_DEFAULT_TRUST",
+      label: "Default Peer Trust Level",
+      type: "text" as const,
+      placeholder: "untrusted",
+    },
   ],
   affiliate: [
     { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
@@ -256,6 +269,8 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [allegroAuthStatus, setAllegroAuthStatus] = useState<string>("");
   const [allegroAuthUrl, setAllegroAuthUrl] = useState<string | null>(null);
   const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
+  const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
+  const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(category === "federation");
 
   useEffect(() => {
     let isMounted = true;
@@ -274,6 +289,20 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+
+    if (category === "federation") {
+      getFederationKeyFingerprint()
+        .then(res => {
+          if (isMounted) setKeyFingerprint(res);
+        })
+        .catch(() => {
+          if (isMounted) setKeyFingerprint(null);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingFingerprint(false);
+        });
+    }
+
     return () => {
       isMounted = false;
     };
@@ -616,6 +645,21 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               </div>
             );
           })}
+          {category === "federation" && (
+            <div className="flex flex-col gap-1.5 pt-4 border-t border-border dark:border-white/10">
+              <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
+                Instance Actor Key Fingerprint
+              </label>
+              <div className="flex items-center gap-3">
+                <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono border border-border select-all break-all">
+                  {isLoadingFingerprint ? "Loading fingerprint..." : keyFingerprint || "Not configured"}
+                </code>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                SHA-256 fingerprint of the instance actor public key for Fediverse HTTP signature verification.
+              </p>
+            </div>
+          )}
         </div>
       </CardWrapper>
     </div>

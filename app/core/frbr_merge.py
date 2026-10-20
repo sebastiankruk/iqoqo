@@ -514,24 +514,72 @@ def record_merge_tombstone(
     return audit
 
 
-def get_entity_tombstone(entity_type: str, entity_id: int) -> EntityAuditLog | None:
-    """Retrieve the most recent merge tombstone audit log for a consolidated entity.
+def get_entity_tombstone(entity_type: str, entity_id: int, max_hops: int = 5) -> EntityAuditLog | None:
+    """Retrieve the merge tombstone audit log for a consolidated entity, following chained merges.
+
+    Recursively resolves multi-hop tombstones (e.g. A -> B -> C) to point directly to
+    the ultimate surviving canonical target.
 
     Args:
         entity_type: "work", "expression", or "manifestation".
         entity_id: The ID of the consolidated entity.
+        max_hops: Maximum traversal depth to prevent cycles (default: 5).
 
     Returns:
-        The matching :class:`EntityAuditLog` if the entity was merged, else None.
+        The matching :class:`EntityAuditLog` with resolved final target, or None.
     """
     tier = entity_type.lower()
-    stmt = (
-        select(EntityAuditLog)
-        .where(
-            EntityAuditLog.entity_type == tier,
-            EntityAuditLog.entity_id == entity_id,
-            EntityAuditLog.change_type == f"merge_{tier}",
+    current_id = entity_id
+    visited: set[int] = {current_id}
+    first_audit: EntityAuditLog | None = None
+    target_id: int | None = None
+
+    for _ in range(max_hops):
+        stmt = (
+            select(EntityAuditLog)
+            .where(
+                EntityAuditLog.entity_type == tier,
+                EntityAuditLog.entity_id == current_id,
+                EntityAuditLog.change_type == f"merge_{tier}",
+            )
+            .order_by(EntityAuditLog.logged_at.desc())
         )
-        .order_by(EntityAuditLog.logged_at.desc())
-    )
-    return db.session.execute(stmt).scalars().first()
+        audit = db.session.execute(stmt).scalars().first()
+        if not audit:
+            break
+        if first_audit is None:
+            first_audit = audit
+
+        diff = getattr(audit, "diff", {}) or {}
+        next_target = diff.get("target_id")
+        if not next_target:
+            break
+        target_id = next_target
+        if next_target in visited:
+            break
+        visited.add(next_target)
+        current_id = next_target
+
+    if not first_audit:
+        return None
+
+    if target_id and target_id != first_audit.diff.get("target_id"):
+        # Expunge first_audit from session so mutating diff in-memory does not dirty the database row
+        db.session.expunge(first_audit)
+        base_url = get_lod_base_url()
+        final_target_iri = canonical_frbr_iri(tier, target_id, base_url)
+        resolved_diff = dict(first_audit.diff)
+        resolved_diff["target_id"] = target_id
+        resolved_diff["target_iri"] = final_target_iri
+        resolved_diff["owl_same_as"] = final_target_iri
+        if "activitystreams_move" in resolved_diff and isinstance(resolved_diff["activitystreams_move"], dict):
+            move = dict(resolved_diff["activitystreams_move"])
+            move["target"] = final_target_iri
+            resolved_diff["activitystreams_move"] = move
+        if "tombstone" in resolved_diff and isinstance(resolved_diff["tombstone"], dict):
+            tomb = dict(resolved_diff["tombstone"])
+            tomb["movedTo"] = final_target_iri
+            resolved_diff["tombstone"] = tomb
+        first_audit.diff = resolved_diff
+
+    return first_audit

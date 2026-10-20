@@ -20,3 +20,4 @@ export * from "./hooks/roadmap";
 export * from "./hooks/user";
 export * from "./hooks/admin";
 export * from "./hooks/stats";
+export * from "./hooks/federation";

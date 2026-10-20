@@ -16,6 +16,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { getFederationConsent, updateFederationConsent } from "@/lib/api/federation";
 import { Check, Loader2 } from "lucide-react";
 import type { FederationConsent } from "@/types/federation";
@@ -27,6 +28,7 @@ import type { FederationConsent } from "@/types/federation";
  * @returns {JSX.Element} The component
  */
 export function FederationConsentSettings() {
+  const t = useTranslations("FederationConsent");
   const [consent, setConsent] = useState<FederationConsent | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,15 +70,13 @@ export function FederationConsentSettings() {
       <div className="border border-border rounded-xl p-6 bg-card space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-medium">Federation Privacy</h3>
-            <p className="text-sm text-muted-foreground">
-              Control how your profile and collection are visible to other iqoqo instances through federation.
-            </p>
+            <h3 className="text-lg font-medium">{t("title")}</h3>
+            <p className="text-sm text-muted-foreground">{t("description")}</p>
           </div>
           {saved && (
             <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
               <Check className="h-3.5 w-3.5" />
-              Saved
+              {t("saved")}
             </span>
           )}
         </div>
@@ -84,8 +84,8 @@ export function FederationConsentSettings() {
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
             <label htmlFor="toggle-fed-profile" className="space-y-0.5 cursor-pointer">
-              <p className="text-sm font-medium">Make profile discoverable</p>
-              <p className="text-xs text-muted-foreground">Allow other instances to find your profile via federation</p>
+              <p className="text-sm font-medium">{t("makeProfileDiscoverable")}</p>
+              <p className="text-xs text-muted-foreground">{t("makeProfileDiscoverableHint")}</p>
             </label>
             <input
               id="toggle-fed-profile"
@@ -99,8 +99,8 @@ export function FederationConsentSettings() {
 
           <div className="flex items-center justify-between">
             <label htmlFor="toggle-fed-collection" className="space-y-0.5 cursor-pointer">
-              <p className="text-sm font-medium">Share collection updates</p>
-              <p className="text-xs text-muted-foreground">Broadcast collection changes to federated followers</p>
+              <p className="text-sm font-medium">{t("shareCollectionUpdates")}</p>
+              <p className="text-xs text-muted-foreground">{t("shareCollectionUpdatesHint")}</p>
             </label>
             <input
               id="toggle-fed-collection"

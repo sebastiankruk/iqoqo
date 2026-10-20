@@ -86,44 +86,55 @@ test.describe("Multi-Instance Federation E2E", () => {
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
-    // Mock remote peer responses in contextA if peer server is offline
-    await pageA.route("**/api/federation/lookup*", async route => {
-      const url = new URL(route.request().url());
-      const handle = url.searchParams.get("handle") || "@bob@peer.local";
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          handle,
-          actor_uri: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
-          actor: {
-            "@context": ["https://www.w3.org/ns/activitystreams"],
-            id: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
-            type: "Person",
-            preferredUsername: "bob",
-            name: "Peer User Bob",
-            inbox: "http://127.0.0.1:5003/api/federation/inbox",
-          },
-        }),
-      });
-    });
+    // Check if secondary peer container is live before falling back to route mocks
+    let peerOnline = false;
+    try {
+      const ping = await pageA.request.get(`${_peerApiUrl}/federation/nodeinfo/2.1`, { timeout: 1500 });
+      peerOnline = ping.ok();
+    } catch {
+      peerOnline = false;
+    }
 
-    await pageA.route("**/api/federation/follow", async route => {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          status: "delivered",
-          activity: {
-            type: "Follow",
-            actor: "http://localhost:3002/api/federation/actor/u/local-admin-uuid",
-            object: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
-          },
-        }),
+    if (!peerOnline) {
+      // Mock remote peer responses in contextA if peer server is offline
+      await pageA.route("**/api/federation/lookup*", async route => {
+        const url = new URL(route.request().url());
+        const handle = url.searchParams.get("handle") || "@bob@peer.local";
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            handle,
+            actor_uri: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
+            actor: {
+              "@context": ["https://www.w3.org/ns/activitystreams"],
+              id: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
+              type: "Person",
+              preferredUsername: "bob",
+              name: "Peer User Bob",
+              inbox: "http://127.0.0.1:5003/api/federation/inbox",
+            },
+          }),
+        });
       });
-    });
+
+      await pageA.route("**/api/federation/follow", async route => {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            status: "delivered",
+            activity: {
+              type: "Follow",
+              actor: "http://localhost:3002/api/federation/actor/u/local-admin-uuid",
+              object: "http://127.0.0.1:5003/api/federation/actor/u/peer-user-uuid",
+            },
+          }),
+        });
+      });
+    }
 
     // Perform remote lookup from Page A
     await pageA.addInitScript(() => {

@@ -239,15 +239,15 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
               icon={Settings}
               isActive={activeTab === "instance"}
               onClick={() => selectTab("instance")}
+              href="/admin/settings?tab=instance"
             />
             {hasPermission(PermissionName.CONFIG_FEDERATION) && (
               <NavItem
                 label="Federation"
                 icon={Building2}
-                isActive={false}
+                isActive={activeTab === "federation"}
                 onClick={noop}
-                disabled
-                badge="Coming in v0.9.1"
+                href="/admin/federation"
               />
             )}
             {hasPermission(PermissionName.CONFIG_EXTERNAL_APIS) && (
@@ -256,10 +256,17 @@ export function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
                 icon={Key}
                 isActive={activeTab === "apikeys"}
                 onClick={() => selectTab("apikeys")}
+                href="/admin/settings?tab=apikeys"
               />
             )}
             {canViewUsers && (
-              <NavItem label="Users" icon={Users} isActive={activeTab === "users"} onClick={() => selectTab("users")} />
+              <NavItem
+                label="Users"
+                icon={Users}
+                isActive={activeTab === "users"}
+                onClick={() => selectTab("users")}
+                href="/admin/settings?tab=users"
+              />
             )}
             {canViewRoles && (
               <NavItem

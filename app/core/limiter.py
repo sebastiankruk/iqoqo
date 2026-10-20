@@ -33,3 +33,10 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://",  # Default to memory, but app init will override with Redis
 )
+
+# ActivityPub federation limits and payload caps
+FEDERATION_INBOX_LIMIT = "60 per minute"
+FEDERATION_OUTBOX_LIMIT = "120 per minute"
+FEDERATION_FOLLOW_LIMIT = "10 per minute"
+FEDERATION_LOOKUP_LIMIT = "20 per minute"
+FEDERATION_MAX_PAYLOAD_BYTES = 100 * 1024  # 100KB payload cap

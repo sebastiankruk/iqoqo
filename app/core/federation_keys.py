@@ -240,3 +240,22 @@ def delete_actor_keypair(user_id: str) -> bool:
         logger.info("Deleted federation keypair for user %s", user_id)
         return True
     return False
+
+
+def get_key_fingerprint(public_pem: str | bytes | None = None) -> str:
+    """Compute SHA-256 fingerprint of a public key PEM string or server actor key.
+
+    Args:
+        public_pem: Optional public key PEM bytes or string. If None, retrieves "server" actor key.
+
+    Returns:
+        Hex-encoded SHA-256 digest formatted with colons: e.g. "SHA256:xx:xx:...".
+    """
+    if not public_pem:
+        public_pem = get_actor_public_key("server")
+    if not public_pem:
+        return "Not configured"
+    pem_bytes = public_pem.encode("utf-8") if isinstance(public_pem, str) else public_pem
+    digest = hashlib.sha256(pem_bytes).hexdigest()
+    coloned = ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
+    return f"SHA256:{coloned}"

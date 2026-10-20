@@ -245,3 +245,63 @@ class TestHttpSignatures:
         with pytest.raises(SignatureVerificationError) as exc_info:
             verify_request(req, key_resolver=lambda _: pub_pem)
         assert "does not match payload actor" in str(exc_info.value).lower()
+
+    def test_verify_signature_refetches_key_on_failure(self, rsa_keypair, monkeypatch):
+        """When verification fails against cached/old key, verify_request re-fetches and recovers."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        old_priv, old_pub_pem = rsa_keypair
+
+        # Generate new rotated keypair
+        new_priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        new_pub_pem = (
+            new_priv.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("utf-8")
+        )
+
+        actor_uri = "https://example.org/users/alice"
+        key_id = f"{actor_uri}#main-key"
+        body = b'{"type":"Create","actor":"https://example.org/users/alice"}'
+
+        # Sign request with NEW private key
+        signed_headers = sign_request(
+            method="POST",
+            url="https://example.org/inbox",
+            body=body,
+            key_id=key_id,
+            private_key=new_priv,
+        )
+        req = MockRequest(
+            method="POST",
+            path="/inbox",
+            headers=signed_headers,
+            body=body,
+        )
+
+        # Mock FederationClient.fetch_actor to return remote actor with the NEW public key
+        from app.core.federation_client import FederationClient
+
+        refetch_called = []
+
+        def mock_fetch_actor(self, uri):
+            refetch_called.append(uri)
+            return {
+                "id": uri,
+                "publicKey": {
+                    "id": f"{uri}#main-key",
+                    "owner": uri,
+                    "publicKeyPem": new_pub_pem,
+                },
+            }
+
+        monkeypatch.setattr(FederationClient, "fetch_actor", mock_fetch_actor)
+
+        # Initial resolver returns OLD key (stale cache)
+        resolved_actor = verify_request(req, key_resolver=lambda _: old_pub_pem)
+        assert resolved_actor == actor_uri
+        assert len(refetch_called) == 1
+        assert refetch_called[0] == actor_uri

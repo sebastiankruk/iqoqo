@@ -28,6 +28,12 @@ from app.db.auth import User
 from app.db.federation import FederationConsent
 
 
+@pytest.fixture(autouse=True)
+def configure_federation_base_url(app) -> None:
+    """Set FEDERATION_BASE_URL to match test host iqoqo.local."""
+    app.config["FEDERATION_BASE_URL"] = "http://iqoqo.local"
+
+
 @pytest.fixture
 def custom_keys_dir(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     """Isolate key storage in temporary test directory."""
@@ -133,6 +139,15 @@ class TestWebFingerDiscovery:
             data = resp.get_json()
             assert data["subject"].startswith(f"acct:{username}")
 
+    def test_webfinger_domain_mismatch(self, client, app, federated_user_data):
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+            username = federated_user_data["public_username"]
+            resp = client.get(f"/.well-known/webfinger?resource=acct:{username}@remote-instance.com")
+            assert resp.status_code == 404
+            data = resp.get_json()
+            assert "domain mismatch" in data["error"].lower()
+
 
 class TestNodeInfoDiscovery:
     """Test suite for NodeInfo 2.1 endpoints."""
@@ -210,3 +225,36 @@ class TestActorEndpoints:
 
         resp = client.get("/api/federation/lookup?handle=@user@remote.domain")
         assert resp.status_code == 401
+
+    def test_admin_delete_federation_instance_cleans_linked_actors(self, client, app, admin_headers):
+        """Deleting an instance via admin API cleanly removes linked actors and followers without FK violation."""
+        from app.db.federation import FederationActor, FederationFollower, FederationInstance, FollowStatus
+
+        with app.app_context():
+            inst = FederationInstance(domain="tobedeleted.peer", trust_level="untrusted")
+            db.session.add(inst)
+            db.session.flush()
+
+            actor = FederationActor(
+                actor_uri="https://tobedeleted.peer/actor/1",
+                inbox_url="https://tobedeleted.peer/inbox",
+                instance_id=inst.id,
+            )
+            db.session.add(actor)
+            db.session.flush()
+
+            user = db.session.execute(db.select(User)).scalars().first()
+            follower = FederationFollower(
+                local_user_id=user.id,
+                remote_actor_id=actor.id,
+                status=FollowStatus.ACCEPTED,
+            )
+            db.session.add(follower)
+            db.session.commit()
+            inst_id = inst.id
+
+        del_res = client.delete(f"/api/v1/admin/federation/instances/{inst_id}", headers=admin_headers)
+        assert del_res.status_code == 200
+        with app.app_context():
+            assert db.session.get(FederationInstance, inst_id) is None
+            assert db.session.execute(db.select(FederationActor).where(FederationActor.instance_id == inst_id)).scalars().first() is None

@@ -233,13 +233,14 @@ describe("AdminSidebar", () => {
     expect(screen.queryByText("Security")).not.toBeInTheDocument();
   });
 
-  it("renders Federation as disabled with Coming in v0.9.1 badge", () => {
+  it("renders Federation as enabled link pointing to /admin/federation", () => {
     mockProfile(profile(["admin"], ADMIN_PERMISSIONS));
 
     render(<AdminSidebar />);
 
     const federationItem = item("Federation");
-    expect(federationItem).toBeDisabled();
-    expect(screen.getByText("Coming in v0.9.1")).toBeInTheDocument();
+    expect(federationItem).not.toBeDisabled();
+    expect(federationItem).toHaveAttribute("href", "/admin/federation");
+    expect(screen.queryByText("Coming in v0.9.1")).not.toBeInTheDocument();
   });
 });

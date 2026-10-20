@@ -534,6 +534,16 @@ class TestObservabilityAndTelemetry:
             assert called_args[1].get("domain") == "failed-target.example.org"
             assert called_args[1].get("reason") == "network_error"
 
+    def test_post_to_inbox_retries_on_503_and_transient_network_errors(self) -> None:
+        """Verify FederationClient.post_to_inbox retries HTTP 503 up to 3 times before succeeding or failing."""
+        client = FederationClient()
+        assert client.timeout == (10, 30)
+        mock_503 = MagicMock(status_code=503)
+        with patch("app.core.federation_client.safe_post", side_effect=[mock_503, mock_503, MagicMock(status_code=202)]) as mock_post:
+            resp = client.post_to_inbox("https://retry-target.example.org/inbox", {"type": "Follow"})
+            assert resp.status_code == 202
+            assert mock_post.call_count == 3
+
     def test_outbound_federation_records_telemetry_span(self) -> None:
         """Verify record_outbound_telemetry is invoked when FederationClient sends activities."""
         with patch("app.core.federation_client.record_outbound_telemetry") as mock_rec_telemetry:
@@ -594,3 +604,119 @@ class TestSecretRedactionInLogs:
         data = resp.get_json()
         assert data["code"] == 413
         assert "100KB" in data["error"]
+
+
+# ===========================================================================
+# 6. Blocked Instance Isolation and Celery S2S Audit Tests
+# ===========================================================================
+
+
+class TestBlockedInstanceAndSecurityIsolation:
+    """Verify isolation of blocked instances and resilient Celery inbox/outbox handling."""
+
+    def test_blocked_instance_inbox_rejected_with_403(self, client, app) -> None:
+        """Verify activity sent from a BLOCKED instance is rejected with HTTP 403."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+            blocked_inst = FederationInstance(
+                domain="malicious-peer.example.org",
+                trust_level=TrustLevel.BLOCKED,
+            )
+            db.session.add(blocked_inst)
+            db.session.commit()
+
+        actor_uri = "https://malicious-peer.example.org/actor"
+        payload = {"type": "Follow", "actor": actor_uri, "object": "https://iqoqo.local/users/alice"}
+
+        with patch("app.api.federation.verify_request", return_value=actor_uri):
+            resp = client.post(
+                "/api/federation/inbox",
+                json=payload,
+                headers={"Content-Type": "application/activity+json"},
+            )
+            assert resp.status_code == 403
+            data = resp.get_json()
+            assert "blocked" in data["error"].lower()
+
+    def test_payload_actor_mismatch_rejected_with_403(self, client, app) -> None:
+        """Verify activity whose body actor does not match verified signature actor is rejected with 403."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+
+        verified_actor = "https://verified.example.org/actor"
+        spoofed_payload = {
+            "type": "Create",
+            "actor": "https://innocent-victim.example.org/actor",
+            "object": {"type": "Note", "content": "Spoofed identity note"},
+        }
+
+        with patch("app.api.federation.verify_request", return_value=verified_actor):
+            resp = client.post(
+                "/api/federation/inbox",
+                json=spoofed_payload,
+                headers={"Content-Type": "application/activity+json"},
+            )
+            assert resp.status_code == 403
+            data = resp.get_json()
+            assert "does not match verified signature actor" in data["error"]
+
+    def test_deliver_activity_ssrf_marks_activity_failed(self, app) -> None:
+        """Verify deliver_activity marks activity as FAILED when SSRFError is raised."""
+        from app.core.federation_tasks import deliver_activity
+
+        with app.app_context():
+            act = FederationActivity(
+                actor_uri="https://local.test/actor",
+                activity_type="Create",
+                direction="outbound",
+                status=ActivityStatus.QUEUED,
+            )
+            db.session.add(act)
+            db.session.commit()
+            act_id = str(act.id)
+
+            with patch("app.core.federation_client.safe_post", side_effect=SSRFError("Blocked: 127.0.0.1")):
+                result = deliver_activity(
+                    activity_id=act_id,
+                    target_inbox_url="http://127.0.0.1/inbox",
+                    activity={"type": "Create"},
+                    sender_user_id=str(uuid.uuid4()),
+                    actor_key_id="https://local.test/actor#main-key",
+                )
+                assert result is False
+
+            db.session.refresh(act)
+            assert act.status == ActivityStatus.FAILED
+
+    def test_process_inbound_activity_handles_success_and_failure(self, app) -> None:
+        """Verify process_inbound_activity commits DELIVERED or FAILED status appropriately."""
+        from app.core.federation_tasks import process_inbound_activity
+
+        with app.app_context():
+            act1 = FederationActivity(
+                actor_uri="https://peer.test/actor",
+                activity_type="Follow",
+                direction="inbound",
+                status=ActivityStatus.QUEUED,
+            )
+            act2 = FederationActivity(
+                actor_uri="https://peer.test/actor",
+                activity_type="BadActivity",
+                direction="inbound",
+                status=ActivityStatus.QUEUED,
+            )
+            db.session.add_all([act1, act2])
+            db.session.commit()
+            act1_id = str(act1.id)
+            act2_id = str(act2.id)
+
+            with patch("app.core.federation_handlers.handle_activity", return_value=True):
+                assert process_inbound_activity(act1_id, {"type": "Follow"}) is True
+
+            with patch("app.core.federation_handlers.handle_activity", return_value=False):
+                assert process_inbound_activity(act2_id, {"type": "BadActivity"}) is False
+
+            db.session.refresh(act1)
+            db.session.refresh(act2)
+            assert act1.status == ActivityStatus.DELIVERED
+            assert act2.status == ActivityStatus.FAILED

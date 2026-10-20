@@ -228,7 +228,7 @@ services:
         APP_VERSION: ${APP_VERSION:-prod}
     restart: always
     command: >-
-      sh -c "if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument celery -A app.core.celery_app:celery worker --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; else exec celery -A app.core.celery_app:celery worker --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; fi"
+      sh -c "if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; else exec celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=${CELERY_POOL:-threads} --concurrency=${CELERY_CONCURRENCY:-4}; fi"
     env_file:
       - ${ENV_FILE:-.env}
     environment:

@@ -263,16 +263,19 @@ export default function ScanPage() {
             onSelect={choice => {
               setCandidates(null);
               // Derive a stable identifier from the selected candidate
+              const candidateObj = (choice || {}) as unknown as Record<string, unknown>;
               const selectedIdentifier =
-                (typeof choice === "object" &&
-                  choice !== null &&
-                  "identifier" in choice &&
-                  (choice.identifier as string)) ||
-                (typeof choice === "object" && choice !== null && "barcode" in choice && (choice.barcode as string)) ||
-                (typeof choice === "object" && choice !== null && "isbn" in choice && (choice.isbn as string)) ||
+                (typeof candidateObj.identifier === "string" && candidateObj.identifier) ||
+                (typeof candidateObj.barcode === "string" && candidateObj.barcode) ||
+                (typeof candidateObj.isbn === "string" && candidateObj.isbn) ||
                 candidates.isbn;
 
-              setResult({ isbn: selectedIdentifier, meta: choice });
+              const metaObj: IsbnMeta = {
+                ...choice,
+                data_source: choice.data_source || "search",
+              };
+
+              setResult({ isbn: selectedIdentifier, meta: metaObj });
             }}
             onDismiss={handleDismiss}
           />

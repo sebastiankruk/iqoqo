@@ -43,6 +43,8 @@ services:
   worker:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-latest}
     build: !reset null
+    command: >-
+      sh -c "if command -v opentelemetry-instrument >/dev/null 2>&1; then exec opentelemetry-instrument celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=$${CELERY_POOL:-threads} --concurrency=$${CELERY_CONCURRENCY:-4}; else exec celery -A app.core.celery_app:celery worker -Q celery,federation --loglevel=info --pool=$${CELERY_POOL:-threads} --concurrency=$${CELERY_CONCURRENCY:-4}; fi"
     volumes: !override
       - ./exports:/usr/src/app/exports
       - ./app/static/covers:/usr/src/app/app/static/covers

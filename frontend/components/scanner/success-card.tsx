@@ -98,9 +98,10 @@ export function SuccessCard({
 
   const canonicalIdentifier = meta.identifier || meta.barcode || meta.isbn;
   const rawIdentifier = canonicalIdentifier || isbn || "";
-  const isBarcodelike = /^[\dX]{8,14}$/.test(rawIdentifier.trim());
-  const identifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
-  const machineIdentifier = isBarcodelike ? rawIdentifier : meta.discogs_id ? String(meta.discogs_id) : "";
+  const cleanIdentifier = typeof rawIdentifier === "string" ? rawIdentifier.replace(/[-\s]/g, "").trim() : "";
+  const isBarcodelike = /^[\dX]{8,14}$/i.test(cleanIdentifier);
+  const identifier = isBarcodelike ? cleanIdentifier : meta.discogs_id ? `Discogs #${meta.discogs_id}` : "";
+  const machineIdentifier = isBarcodelike ? cleanIdentifier : meta.discogs_id ? String(meta.discogs_id) : "";
   const isMissingID = !machineIdentifier && !meta.manifestation_id && !meta.data_source;
 
   const extendedMeta = (meta.meta as Record<string, unknown>) || {};

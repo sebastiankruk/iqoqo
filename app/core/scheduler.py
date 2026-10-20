@@ -29,6 +29,17 @@ def run_scheduled_cover_cleanup():
         logger.exception("Cover cleanup job failed")
 
 
+def run_scheduled_federation_health_probes():
+    """Periodic health checks for registered federation instances."""
+    try:
+        from app.core.federation_discovery import probe_registered_instances
+
+        with scheduler.app.app_context():
+            probe_registered_instances()
+    except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
+        logger.exception("Federation health probe job failed")
+
+
 def init_scheduler(app):
     """Initializes the APScheduler and registers jobs."""
     if app.config.get("TESTING") and not app.config.get("SCHEDULER_AUTOSTART", False):
@@ -51,6 +62,16 @@ def init_scheduler(app):
             func=run_scheduled_cover_cleanup,
             trigger="interval",
             minutes=5,
+            replace_existing=True,
+        )
+
+        # Federation instance health probe watchdog
+        health_interval = int(app.config.get("FEDERATION_HEALTH_CHECK_INTERVAL_MINUTES", 60))
+        scheduler.add_job(
+            id="federation_health_probes",
+            func=run_scheduled_federation_health_probes,
+            trigger="interval",
+            minutes=health_interval,
             replace_existing=True,
         )
 
