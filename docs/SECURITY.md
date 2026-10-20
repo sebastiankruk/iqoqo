@@ -14,6 +14,20 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Federation S2S & Catalog Access Hardening (Release 0.9.1 - October 2026)
+
+#### ActivityPub S2S Spoofing & Replay Mitigation
+
+- **Delete & Accept Spoofing Defense**: `handle_delete` strictly enforces `actor_uri == object_uri`, preventing unauthorized remote actors from purging third-party actors. `handle_accept` and `handle_reject` verify that the follow direction is outbound (`local_user_id` is the follower), blocking remote actors from self-approving inbound follow requests without local user authorization.
+- **Raw-Byte Inbox Payload Enforcement**: `receive_inbox` validates the 100KB payload limit against raw unparsed bytes via `request.get_data(cache=True)`, closing chunked transfer encoding bypass vectors.
+- **Key Rotation Cooldown & Persistence**: Re-fetching remote actor public keys enforces a 60-second cooldown per actor to prevent denial-of-service amplification, and newly rotated public keys are transactionally persisted to `FederationActor`.
+
+#### Cross-Instance Data Isolation & Ingestion Security
+
+- **Physical Barcode Isolation (IDOR)**: Exemplar lookups via `Item.local_barcode` in `_find_locally` and `lookup_barcode_preview` are strictly scoped to the authenticated user's inventory (`Item.owner_id == g.user_id`), ensuring local exemplar identifiers cannot be enumerated or collided across different users.
+- **Cross-Instance Primary Key Collision Defense**: Remote entity resolution strictly validates that the remote IRI hostname matches the local instance before resolving `/manifestation/<int>` by integer primary key.
+- **Inbound Metadata Sanitization**: Inbound federated metadata strings are sanitized with `bleach.clean(..., tags=[], strip=True)` to prevent stored XSS, and `cover_url` values are strictly verified to use `http` or `https` schemes, rejecting `javascript:` or `data:` payloads.
+
 ### Session, Credential & Egress Hardening (October 2026)
 
 #### Authentication & Session Integrity

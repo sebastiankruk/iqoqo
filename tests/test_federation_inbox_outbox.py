@@ -304,6 +304,48 @@ class TestOutboxEndpoint:
         assert len(page_data["orderedItems"]) == 2
         assert page_data["orderedItems"][0]["type"] in ("Create", "Update")
 
+    def test_outbox_excludes_failed_and_inbound_activities(self, client, app, fed_user):
+        """Outbox only exposes outbound activities with DELIVERED status."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+            base_url = get_federation_base_url()
+            actor_iri = canonical_actor_iri(uuid.UUID(fed_user["id"]), base_url)
+
+            delivered_act = FederationActivity(
+                actor_uri=actor_iri,
+                activity_type="Create",
+                object_json={"type": "Create", "content": "Delivered item"},
+                direction="outbound",
+                status=ActivityStatus.DELIVERED,
+            )
+            failed_act = FederationActivity(
+                actor_uri=actor_iri,
+                activity_type="Create",
+                object_json={"type": "Create", "content": "Failed item"},
+                direction="outbound",
+                status=ActivityStatus.FAILED,
+            )
+            inbound_act = FederationActivity(
+                actor_uri=actor_iri,
+                activity_type="Follow",
+                object_json={"type": "Follow"},
+                direction="inbound",
+                status=ActivityStatus.DELIVERED,
+            )
+            db.session.add_all([delivered_act, failed_act, inbound_act])
+            db.session.commit()
+
+        resp = client.get(f"/api/federation/actor/u/{fed_user['id']}/outbox")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["totalItems"] == 1
+
+        page_resp = client.get(f"/api/federation/actor/u/{fed_user['id']}/outbox?page=1")
+        assert page_resp.status_code == 200
+        page_data = page_resp.get_json()
+        assert len(page_data["orderedItems"]) == 1
+        assert page_data["orderedItems"][0]["content"] == "Delivered item"
+
     def test_followers_and_following_collections(self, client, app, fed_user, remote_peer_instance):
         """Followers and following collections return valid OrderedCollection structures."""
         with app.app_context():

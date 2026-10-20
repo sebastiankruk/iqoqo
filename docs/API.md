@@ -654,6 +654,38 @@ Retrieve or update the authenticated user's federation discovery preferences (`f
 
 ---
 
+### `GET /api/federation/actor/u/<user_uuid>/outbox`
+
+Retrieve the public ActivityStreams `OrderedCollection` representing the user's outbox. Supports pagination via `page=true`.
+
+**Authentication:** Not required (Public). Respects user's `federated_collection` and `federated_profile` consent.
+
+---
+
+### `GET /api/v1/admin/federation/instances` & `POST /api/v1/admin/federation/instances`
+
+List registered peer federation instances or discover and register a new peer via NodeInfo (`/.well-known/nodeinfo`).
+
+**Authentication:** Admin required (`role:admin`).
+
+---
+
+### `PUT /api/v1/admin/federation/instances/<id>` & `DELETE /api/v1/admin/federation/instances/<id>`
+
+Update an instance's trust level (`untrusted`, `pending`, `trusted`, `blocked`) or delete an instance along with linked actors and followers.
+
+**Authentication:** Admin required (`role:admin`).
+
+---
+
+### `GET /api/v1/admin/federation/activities`
+
+Retrieve paginated audit logs of inbound and outbound federation activities with filter support by status and instance.
+
+**Authentication:** Admin required (`role:admin`).
+
+---
+
 ## Rate Limits
 
 | Endpoint                              | Rate Limit          | Scope    |
