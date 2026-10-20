@@ -789,9 +789,9 @@ if [ "$MODE" == "dev" ]; then
         OTEL_METRICS_EXPORTER="${OTEL_METRICS_EXPORTER:-otlp}" \
         OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}" \
         OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED="${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED:-true}" \
-        nohup opentelemetry-instrument celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
+        nohup opentelemetry-instrument celery -A app.core.celery_app:celery worker -Q celery,federation --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
     else
-        nohup .venv/bin/celery -A app.core.celery_app:celery worker --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
+        nohup .venv/bin/celery -A app.core.celery_app:celery worker -Q celery,federation --pool="$CELERY_POOL" --loglevel=info >> "$PID_DIR/celery.log" 2>&1 &
     fi
     echo $! > "$PID_DIR/celery.pid"
 
