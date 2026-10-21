@@ -428,7 +428,7 @@ class Notification(db.Model):  # type: ignore[name-defined]
     __tablename__ = "notifications"
     __table_args__ = (
         (
-            db.Index("ix_notifications_user_unread", "user_id", "read_at"),
+            db.Index(f"ix_{_SOCIAL_PFX.replace('.', '_')}notifications_user_unread", "user_id", "read_at"),
             {"schema": _SOCIAL},
         )
         if _SOCIAL
