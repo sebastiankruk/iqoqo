@@ -760,7 +760,7 @@ test.describe("Dashboard Wishlist Covers Rendering", () => {
     });
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Both cards should be visible
     await expect(page.getByText("Local Cover Book")).toBeVisible();
