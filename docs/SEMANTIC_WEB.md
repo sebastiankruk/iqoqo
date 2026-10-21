@@ -474,6 +474,14 @@ WHERE {
 
 All public endpoints include `Access-Control-Allow-Origin: *` headers, allowing AI agents running in browsers or sandboxed environments to access Linked Data without proxy configuration.
 
+### Privacy & Access Control Scoping
+
+Starting in **v0.9.2**, all SPARQL query execution snapshots and public RDF exports strictly enforce item-level and user-level access rights:
+
+- **Private items (`is_hidden: true` or owner `default_item_visibility: 'private'`)** are strictly excluded from anonymous queries and public RDF serializations.
+- **Federation Consent**: If an owner has opted out of public federation collection sharing (`federated_collection: false`), their items are automatically omitted from public graph builds.
+- **Authenticated Access**: Logged-in users can query their own items alongside public items, as well as items from accepted federated friends.
+
 ### Streaming for Large Collections
 
 Use the `?stream=true` parameter for memory-efficient streaming of large collections:

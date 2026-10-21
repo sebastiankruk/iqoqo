@@ -21,7 +21,7 @@ from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from rdflib import Graph
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -57,21 +57,40 @@ sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 def _get_sparql_items(user: User | None) -> list[Item]:
     """Fetch items for SPARQL querying with eager-loaded FRBR entities.
 
-    Strictly filters Item entities to public records and items owned by user,
-    preventing disclosure of other users' private collection records.
+    Strictly filters Item entities to public records, items owned by user,
+    or items owned by accepted friends of the user, preventing unauthorized disclosure.
     """
+    from app.core.item_access import is_item_publicly_visible
     from app.core.sparql_service import MAX_GRAPH_ITEMS
+    from app.db.federation import FederationFollower, FollowStatus
 
     stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+
+    allowed_owner_ids: set[Any] = set()
     if user and user.id:
-        stmt = stmt.where(or_(Item.is_hidden.is_(False), Item.owner_id == user.id))
-    else:
-        stmt = stmt.where(Item.is_hidden.is_(False))
+        allowed_owner_ids.add(user.id)
+        # Fetch accepted friends
+        friend_stmt = select(FederationFollower.remote_actor_id).where(
+            FederationFollower.local_user_id == user.id,
+            FederationFollower.status == FollowStatus.ACCEPTED,
+        )
+        friend_ids = db.session.execute(friend_stmt).scalars().all()
+        for fid in friend_ids:
+            allowed_owner_ids.add(fid)
 
-    # Apply item count limit
-    stmt = stmt.limit(MAX_GRAPH_ITEMS)
+    all_items = list(db.session.execute(stmt.limit(MAX_GRAPH_ITEMS * 2)).scalars().all())
 
-    return list(db.session.execute(stmt).scalars().all())
+    filtered_items: list[Item] = []
+    for item in all_items:
+        if item.owner_id and item.owner_id in allowed_owner_ids:
+            filtered_items.append(item)
+        elif is_item_publicly_visible(item):
+            filtered_items.append(item)
+
+        if len(filtered_items) >= MAX_GRAPH_ITEMS:
+            break
+
+    return filtered_items
 
 
 def _format_select_ask(result: Any, accept: str) -> tuple[bytes | str, str]:

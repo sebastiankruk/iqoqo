@@ -29,6 +29,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from flask import g, jsonify
 
@@ -54,6 +55,65 @@ def verify_item_ownership(item_id: int, user_id: uuid.UUID) -> bool:
     if not item:
         return False
     return is_admin or str(item.owner_id) == str(user_id)
+
+
+def is_item_publicly_visible(item: Item | dict[str, Any]) -> bool:
+    """Determine whether an item is visible to public, unauthenticated callers.
+
+    Checks:
+    1. Item's explicit `is_hidden` property (must be False).
+    2. Item's explicit `is_public` property if present (must be True).
+    3. Item's `default_item_visibility` from the owner user account:
+       If the owner has default_item_visibility == 'private', items default to private
+       unless explicitly overridden.
+    4. FederationConsent: If federated_collection is explicitly False, items are omitted
+       from public federation snapshots.
+
+    Args:
+        item: Item model or dictionary representation.
+
+    Returns:
+        bool: True if item is publicly visible, False otherwise.
+    """
+    if isinstance(item, dict):
+        if item.get("is_hidden") is True:
+            return False
+        if "is_public" in item and item["is_public"] is False:
+            return False
+        owner_id = item.get("owner_id")
+    else:
+        if getattr(item, "is_hidden", False) is True:
+            return False
+        if hasattr(item, "is_public") and item.is_public is False:
+            return False
+        owner_id = getattr(item, "owner_id", None)
+
+    if owner_id:
+        user_uuid = owner_id if isinstance(owner_id, uuid.UUID) else uuid.UUID(str(owner_id))
+        user = db.session.get(User, user_uuid)
+        if user:
+            # Check owner default visibility
+            if getattr(user, "default_item_visibility", "public") == "private":
+                # For dictionaries, check if explicit is_public was provided as True
+                if isinstance(item, dict) and item.get("is_public") is True:
+                    pass
+                elif not isinstance(item, dict) and getattr(item, "is_hidden", False) is False and "is_public" in getattr(item, "meta", {}):
+                    # Check if explicit is_public was set in meta
+                    if item.meta.get("is_public") is True:
+                        pass
+                    else:
+                        return False
+                else:
+                    return False
+
+            # Check federation consent for collection exposure
+            from app.db.federation import FederationConsent
+
+            consent = db.session.execute(db.select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+            if consent and not consent.federated_collection:
+                return False
+
+    return True
 
 
 def require_item_access(bola: bool = False) -> Callable:
