@@ -1886,7 +1886,10 @@ def add_federation_instance() -> tuple[Response, int] | Response:
         return jsonify({"success": False, "error": f"Failed to discover or validate instance {domain}"}), 400
 
     db.session.commit()
-    return jsonify({"success": True, "data": instance.to_dict()}), 201
+    data = instance.to_dict()
+    probe_succeeded = bool(getattr(instance, "probe_succeeded", False))
+    data["probe_succeeded"] = probe_succeeded
+    return jsonify({"success": True, "data": data, "probe_succeeded": probe_succeeded}), 201
 
 
 @admin_bp.route("/federation/instances/<int:instance_id>/trust", methods=["PUT"])
@@ -1908,7 +1911,22 @@ def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
             400,
         )
 
+    old_trust = instance.trust_level
     instance.trust_level = trust_level
+
+    current_user_id = g.user.id if hasattr(g, "user") and g.user else getattr(g, "user_id", None)
+    audit = EntityAuditLog(
+        entity_type="federation_instance",
+        entity_id=instance.id,
+        actor_id=current_user_id,
+        change_type="trust_level_updated",
+        diff={
+            "domain": instance.domain,
+            "old_trust_level": old_trust,
+            "new_trust_level": trust_level,
+        },
+    )
+    db.session.add(audit)
     db.session.commit()
     return jsonify({"success": True, "data": instance.to_dict()})
 
@@ -1923,6 +1941,19 @@ def delete_federation_instance(instance_id: int) -> tuple[Response, int] | Respo
     instance = db.session.get(FederationInstance, instance_id)
     if not instance:
         return jsonify({"success": False, "error": "Instance not found"}), 404
+
+    current_user_id = g.user.id if hasattr(g, "user") and g.user else getattr(g, "user_id", None)
+    audit = EntityAuditLog(
+        entity_type="federation_instance",
+        entity_id=instance.id,
+        actor_id=current_user_id,
+        change_type="instance_deleted",
+        diff={
+            "domain": instance.domain,
+            "trust_level": instance.trust_level,
+        },
+    )
+    db.session.add(audit)
 
     # Delete linked followers and actors explicitly to avoid FK integrity failures
     actors = db.session.execute(select(FederationActor).where(FederationActor.instance_id == instance.id)).scalars().all()

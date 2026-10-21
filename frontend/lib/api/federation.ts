@@ -81,6 +81,11 @@ export async function removeFederationInstance(instanceId: number): Promise<void
   }
 }
 
+/** Aliases for federation instance administration */
+export const listFederationInstances = getFederationInstances;
+export const updateFederationInstance = updateInstanceTrust;
+export const deleteFederationInstance = removeFederationInstance;
+
 /**
  * Fetch instance actor public key fingerprint.
  * @returns Promise resolving to the key fingerprint
@@ -124,6 +129,9 @@ export async function getFederationActivities(
   }
   return { data: res.data.data, pagination: res.data.pagination };
 }
+
+/** Alias for federation activities listing */
+export const listFederationActivities = getFederationActivities;
 
 // ---------------------------------------------------------------------------
 // Federation Consent (User-facing)

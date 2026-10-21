@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Localized and Tested Admin Federation Dashboard
 The Admin Federation Dashboard (`/admin/federation`, `federation-instances.tsx`, `federation-activity.tsx`, and `instance-settings.tsx`) SHALL use `useTranslations("AdminFederation")` for all user-visible labels, provide `aria-label` attributes on icon-only controls, constrain `FEDERATION_DEFAULT_TRUST` to valid trust levels (`untrusted`, `pending`, `trusted`), and be covered by Vitest unit tests.

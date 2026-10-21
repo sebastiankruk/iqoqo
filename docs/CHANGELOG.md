@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Admin Federation Dashboard Unit Test Coverage (C79d)**: Authored unit test suites for `federation.ts` API functions (`listFederationInstances`, `addFederationInstance`, `updateFederationInstance`, `deleteFederationInstance`, `listFederationActivities`), `FederationInstancesManager` (`federation-instances.test.tsx`), and `FederationActivityLog` (`federation-activity.test.tsx`).
+- **MusicBrainz & BoardGameGeek Identifier Matching (C79d)**: Extended `resolve_local_manifestation` in `app/core/federation_sync.py` to match MusicBrainz (`mbid`) and BoardGameGeek (`bgg_id`) identifiers across `Manifestation.meta` and parent `Work.meta`.
+- **Multi-Tier Work & Expression Provenance Auto-Fill (C79d)**: Extended `sync_manifestation` to auto-fill empty `Expression.language` and `Work.description`/`original_release_year` from `trusted` federation peers while recording `meta["_provenance"]` and `prov:wasDerivedFrom` tracking.
+- **Admin Federation Trust Audit Logging (C79d)**: Added `EntityAuditLog` entries on instance trust level mutations and deletions in `app/api/admin.py`, surfaced `probe_succeeded` on instance registration, and fetched canonical remote Actor JSON-LD inboxes via `FederationClient` in `_get_or_create_actor`.
+- **Bounded Concurrency in Health Probes (C79d)**: Refactored `probe_registered_instances` in `app/core/federation_discovery.py` to use `ThreadPoolExecutor(max_workers=5)` with per-probe deadline guards, preventing slow peers from blocking scheduled jobs.
+
 ### Changed
 
-### Fixed
+- **Admin Federation Localization & Accessibility Polish (C79d)**: Replaced hardcoded English labels across `/admin/federation`, `federation-instances.tsx`, and `federation-activity.tsx` with `useTranslations("AdminFederation")` for English and Polish; added `aria-label`s to pagination and copy buttons; and constrained `FEDERATION_DEFAULT_TRUST` to a dropdown selector in `instance-settings.tsx`.
 
 ## [0.9.1] - 2026-10-20
 

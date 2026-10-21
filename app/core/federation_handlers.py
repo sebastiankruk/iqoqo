@@ -104,9 +104,33 @@ def _get_or_create_actor(actor_uri: str) -> FederationActor | None:
     if not instance:
         return None
 
+    inbox_url = None
+    public_key_pem = None
+    try:
+        from app.core.federation_client import FederationClient
+
+        client = FederationClient()
+        actor_doc = client.fetch_actor(actor_uri)
+        if actor_doc and isinstance(actor_doc, dict):
+            inbox_url = actor_doc.get("inbox")
+            pk_data = actor_doc.get("publicKey")
+            if isinstance(pk_data, dict):
+                public_key_pem = pk_data.get("publicKeyPem")
+    except Exception as exc:
+        logger.debug("Could not resolve remote actor document for %s: %s", actor_uri, exc)
+
+    # Note: fetch_actor may have cached the actor record in the database
+    actor = db.session.execute(stmt).scalars().first()
+    if actor:
+        return actor
+
+    if not inbox_url:
+        inbox_url = f"{actor_uri}/inbox"
+
     actor = FederationActor(
         actor_uri=actor_uri,
-        inbox_url=f"{actor_uri}/inbox",
+        inbox_url=inbox_url,
+        public_key_pem=public_key_pem,
         instance_id=instance.id,
         last_fetched_at=datetime.now(UTC),
     )

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from urllib.parse import urlparse, urlunparse
 
@@ -76,7 +77,8 @@ def discover_instance(domain_or_url: str) -> FederationInstance | None:
         db.session.add(instance)
         db.session.commit()
 
-    probe_instance_health(instance)
+    probe_ok = probe_instance_health(instance)
+    instance.probe_succeeded = probe_ok
     return instance
 
 
@@ -177,8 +179,12 @@ def probe_instance_health(instance: FederationInstance) -> bool:
     return False
 
 
-def probe_registered_instances() -> dict[str, bool]:
-    """Execute health checks for all non-blocked instances registered in the database.
+def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 15.0) -> dict[str, bool]:
+    """Execute health checks for all non-blocked instances registered in the database with bounded concurrency.
+
+    Args:
+        max_workers: Maximum concurrent thread workers (default 5).
+        per_probe_timeout: Timeout per probe future in seconds (default 15.0).
 
     Returns:
         Mapping of domain to probe success status.
@@ -186,8 +192,47 @@ def probe_registered_instances() -> dict[str, bool]:
     stmt = select(FederationInstance).where(FederationInstance.trust_level != TrustLevel.BLOCKED)
     instances = db.session.execute(stmt).scalars().all()
 
+    if not instances:
+        return {}
+
+    instance_map = {inst.id: inst.domain for inst in instances}
     results: dict[str, bool] = {}
-    for inst in instances:
-        results[inst.domain] = probe_instance_health(inst)
+
+    from flask import current_app
+
+    app = current_app._get_current_object() if current_app else None  # type: ignore[attr-defined]
+
+    def _worker(instance_id: int, domain: str) -> tuple[str, bool]:
+        if app:
+            with app.app_context():
+                inst = db.session.get(FederationInstance, instance_id)
+                if not inst:
+                    return domain, False
+                status = probe_instance_health(inst)
+                return domain, status
+        inst = db.session.get(FederationInstance, instance_id)
+        if not inst:
+            return domain, False
+        status = probe_instance_health(inst)
+        return domain, status
+
+    actual_workers = min(max_workers, len(instances))
+    with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+        future_to_domain = {executor.submit(_worker, inst_id, domain): domain for inst_id, domain in instance_map.items()}
+        try:
+            for future in as_completed(future_to_domain, timeout=per_probe_timeout * len(instances)):
+                domain = future_to_domain[future]
+                try:
+                    dom, success = future.result(timeout=per_probe_timeout)
+                    results[dom] = success
+                except Exception as exc:
+                    logger.warning("Periodic health probe timed out or failed for %s: %s", domain, exc)
+                    results[domain] = False
+        except TimeoutError:
+            logger.warning("Periodic health probe batch reached timeout")
+
+        for dom in instance_map.values():
+            if dom not in results:
+                results[dom] = False
 
     return results

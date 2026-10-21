@@ -19,7 +19,8 @@ import { useState, useEffect } from "react";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 import { getFederationKeyFingerprint } from "@/lib/api/federation";
 import { Button } from "@/components/ui/button";
-import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 
 interface InstanceSettingsProps {
   category?: "external_apis" | "federation" | "affiliate" | "internal";
@@ -631,6 +632,17 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                       <option value="true">Enabled</option>
                       <option value="false">Disabled</option>
                     </select>
+                  ) : s.key === "FEDERATION_DEFAULT_TRUST" ? (
+                    <select
+                      aria-label={s.label}
+                      className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={value || "untrusted"}
+                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+                    >
+                      <option value="untrusted">Untrusted</option>
+                      <option value="pending">Pending</option>
+                      <option value="trusted">Trusted</option>
+                    </select>
                   ) : (
                     <input
                       type="text"
@@ -654,6 +666,24 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                 <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono border border-border select-all break-all">
                   {isLoadingFingerprint ? "Loading fingerprint..." : keyFingerprint || "Not configured"}
                 </code>
+                {Boolean(keyFingerprint) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Copy key fingerprint"
+                    onClick={() => {
+                      if (keyFingerprint) {
+                        navigator.clipboard?.writeText(keyFingerprint);
+                        toast.success("Key fingerprint copied to clipboard");
+                      }
+                    }}
+                    className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    Copy
+                  </Button>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
                 SHA-256 fingerprint of the instance actor public key for Fediverse HTTP signature verification.
