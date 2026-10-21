@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Connected Libraries Directory & In-App Documentation Hub (C83b)**: Added public federated directory API (`GET /api/federation/directory`) and frontend directory page (`/federation/directory`) showcasing connected peer libraries from the Trust Graph with public item counts. Built in-app documentation hub (`/help` and `/help/[slug]`) with localized articles (`en`, `pl`) covering FRBR hierarchy, barcode scanning, and federation privacy controls. Wired documentation and library directory links into navigation menus and footer.
 - **SPARQL Federated Access Rights & Privacy Scoping (C83)**: Scoped SPARQL execution runner snapshots and public RDF exports to exclude private items, respects owner `default_item_visibility: 'private'`, and enforces `FederationConsent.federated_collection` opt-outs. Documented the Architectural Decision Record (ADR) in `docs/SPARQL_EXECUTION_SERVICE.md` explaining why `sparql-runner` was retained over Apache Jena Fuseki.
 - **In-App Notification Center (C82)**: Introduced `social.notifications` table and Alembic migration `v0_9_2_notifications`, REST API endpoints (`GET /api/v1/notifications`, `PATCH /api/v1/notifications/read`, `POST /api/v1/notifications/read-all`), event dispatchers across ActivityPub follow requests, loan requests/approvals, and custodian escalation resolutions, along with a header `NotificationCenter` dropdown component with unread badges.
 

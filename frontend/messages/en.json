@@ -8,6 +8,7 @@
     "publicProfile": "Public Profile",
     "profileSettings": "Profile Settings",
     "manageCollections": "Manage Collections",
+    "helpDocs": "Help & Guides",
     "helpAndFeedback": "Help & Feedback",
     "adminConfiguration": "Admin Configuration",
     "adminSettings": "Admin Settings",
@@ -661,6 +662,28 @@
     "next": "Next",
     "prevPageAria": "Previous page",
     "nextPageAria": "Next page"
+  },
+  "FederationDirectory": {
+    "title": "Connected Libraries Directory",
+    "description": "Discover federated iqoqo instances across the Fediverse. Explore connected physical collections, lending networks, and library nodes.",
+    "thisInstance": "This Library Instance",
+    "publicHoldings": "{count} public items tracked",
+    "searchPlaceholder": "Filter connected libraries by domain...",
+    "noLibrariesFound": "No connected peer libraries found.",
+    "visitLibrary": "Visit Library",
+    "unknownSoftware": "iqoqo peer node"
+  },
+  "HelpHub": {
+    "title": "Help & Documentation",
+    "description": "Guides and reference manuals for cataloging physical media, understanding FRBR bibliographic models, and navigating federated lending.",
+    "searchPlaceholder": "Search documentation articles...",
+    "noArticlesFound": "No documentation articles found matching your query.",
+    "backToHub": "Back to Help & Documentation",
+    "categories": {
+      "cataloging": "Cataloging & FRBR",
+      "tools": "Tools & Scanning",
+      "federation": "Federation & Privacy"
+    }
   }
 }
 

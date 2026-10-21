@@ -8,6 +8,7 @@
     "publicProfile": "Profil publiczny",
     "profileSettings": "Ustawienia profilu",
     "manageCollections": "Zarządzaj kolekcjami",
+    "helpDocs": "Pomoc i poradniki",
     "helpAndFeedback": "Pomoc i opinie",
     "adminConfiguration": "Konfiguracja administratora",
     "adminSettings": "Ustawienia administratora",
@@ -661,6 +662,28 @@
     "next": "Następna",
     "prevPageAria": "Poprzednia strona",
     "nextPageAria": "Następna strona"
+  },
+  "FederationDirectory": {
+    "title": "Katalog połączonych bibliotek",
+    "description": "Odkryj federacyjne instancje iqoqo w sieci Fediverse. Przeglądaj połączone zbiory fizyczne, sieci wymiany i węzły biblioteczne.",
+    "thisInstance": "Ta instancja biblioteki",
+    "publicHoldings": "Liczba publicznych egzemplarzy: {count}",
+    "searchPlaceholder": "Filtruj biblioteki po domenie...",
+    "noLibrariesFound": "Nie znaleziono połączonych bibliotek.",
+    "visitLibrary": "Odwiedź bibliotekę",
+    "unknownSoftware": "Węzeł iqoqo"
+  },
+  "HelpHub": {
+    "title": "Pomoc i dokumentacja",
+    "description": "Przewodniki i dokumentacja dotyczące katalogowania zbiorów fizycznych, modeli bibliograficznych FRBR oraz wypożyczeń w sieci federacyjnej.",
+    "searchPlaceholder": "Szukaj w artykułach pomocy...",
+    "noArticlesFound": "Nie znaleziono artykułów odpowiadających zapytaniu.",
+    "backToHub": "Powrót do pomocy i dokumentacji",
+    "categories": {
+      "cataloging": "Katalogowanie i FRBR",
+      "tools": "Narzędzia i skanowanie",
+      "federation": "Federacja i prywatność"
+    }
   }
 }
 

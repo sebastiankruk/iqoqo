@@ -19,6 +19,7 @@ import type {
   FederationActivity,
   FederationActivityFilters,
   FederationConsent,
+  FederationDirectoryData,
   FederationInstance,
   PaginationMeta,
   TrustLevel,
@@ -210,6 +211,18 @@ export async function followRemoteActor(params: {
   const res = await apiClient.post<ApiResponse<RemoteFollowResult>>("/federation/follow", params);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to follow remote actor");
+  }
+  return res.data.data;
+}
+
+/**
+ * Fetch connected federated library directory and instance stats.
+ * @returns Promise resolving to directory overview
+ */
+export async function getFederationDirectory(): Promise<FederationDirectoryData> {
+  const res = await apiClient.get<ApiResponse<FederationDirectoryData>>("/federation/directory");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch federation directory");
   }
   return res.data.data;
 }

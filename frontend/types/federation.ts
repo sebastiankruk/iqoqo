@@ -59,3 +59,16 @@ export interface PaginationMeta {
   total: number;
   pages: number;
 }
+
+export interface LocalInstanceInfo {
+  domain: string;
+  software_name: string;
+  software_version: string;
+  public_items_count: number;
+}
+
+export interface FederationDirectoryData {
+  local_instance: LocalInstanceInfo;
+  peers: FederationInstance[];
+  total_peers: number;
+}

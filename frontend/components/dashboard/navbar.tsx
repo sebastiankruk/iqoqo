@@ -31,6 +31,7 @@ import {
   SunMoon,
   Globe,
   HelpCircle,
+  BookOpen,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -249,6 +250,11 @@ export function Navbar() {
                         className="cursor-pointer rounded-md py-2 px-3 text-sm"
                       >
                         <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <Link href="/help">
+                          <BookOpen className="mr-2 h-4 w-4" /> {t("helpDocs")}
+                        </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
                         <Link href="/feedback">

@@ -894,3 +894,42 @@ def get_friend_collections(actor_id: int) -> Response | tuple[Response, int]:
     except Exception as exc:
         current_app.logger.warning("Error fetching collections for friend %s: %s", actor.actor_uri, exc)
         return jsonify({"error": "Failed to fetch friend collections", "code": 502}), 502
+
+
+@federation_bp.route("/directory", methods=["GET"])
+@federation_required
+@limiter.limit("60 per minute")
+def get_federation_directory() -> Response:
+    """Return public directory listing of connected, verified peer libraries and instance overview."""
+    from app.config import Config
+    from app.core.iri import get_federation_base_url
+    from app.db.core import Item
+
+    # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
+    stmt = (
+        select(FederationInstance)
+        .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
+        .order_by(FederationInstance.last_seen_at.desc().nullslast())
+    )
+    peers = db.session.execute(stmt).scalars().all()
+
+    # 2. Local public items stats
+    public_items_count = (
+        db.session.execute(select(func.count(Item.id)).where(Item.is_hidden.is_(False))).scalar() or 0  # pylint: disable=not-callable
+    )
+
+    base_url = get_federation_base_url()
+    local_domain = urlparse(base_url).netloc if base_url else "localhost"
+
+    directory_data = {
+        "local_instance": {
+            "domain": local_domain,
+            "software_name": "iqoqo",
+            "software_version": Config.VERSION,
+            "public_items_count": public_items_count,
+        },
+        "peers": [peer.to_dict() for peer in peers],
+        "total_peers": len(peers),
+    }
+
+    return jsonify({"success": True, "data": directory_data}), 200
