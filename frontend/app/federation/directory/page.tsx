@@ -25,6 +25,11 @@ import { Badge } from "@/components/ui/badge";
 import { Globe, Library, Server, ShieldCheck, Clock, ExternalLink, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+/**
+ * Connected libraries directory page rendering peer instances and local library statistics.
+ *
+ * @returns {JSX.Element} The rendered directory page.
+ */
 export default function FederationDirectoryPage() {
   const t = useTranslations("FederationDirectory");
   const [data, setData] = useState<FederationDirectoryData | null>(null);

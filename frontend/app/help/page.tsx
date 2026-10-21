@@ -20,11 +20,16 @@ import Link from "next/link";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Footer } from "@/components/dashboard/footer";
 import { HELP_ARTICLES, HelpArticle } from "@/lib/help-articles";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Search, ArrowRight, Layers, ScanLine, Share2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
+/**
+ * Help and documentation hub page rendering guide search and category navigation.
+ *
+ * @returns {JSX.Element} The rendered help hub page.
+ */
 export default function HelpHubPage() {
   const t = useTranslations("HelpHub");
   const rawLocale = useLocale();

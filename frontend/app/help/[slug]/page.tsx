@@ -24,9 +24,14 @@ import { HELP_ARTICLES } from "@/lib/help-articles";
 import { RichText } from "@/components/ui/rich-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
+/**
+ * Help article detail page rendering markdown documentation with locale support.
+ *
+ * @returns {JSX.Element} The rendered help article detail page.
+ */
 export default function HelpArticleDetailPage() {
   const t = useTranslations("HelpHub");
   const rawLocale = useLocale();
