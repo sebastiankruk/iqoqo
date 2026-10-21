@@ -195,6 +195,7 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
     if not instances:
         return {}
 
+    instances_by_id = {inst.id: inst for inst in instances}
     instance_map = {inst.id: inst.domain for inst in instances}
     results: dict[str, bool] = {}
 
@@ -203,17 +204,26 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
     app = current_app._get_current_object() if current_app else None  # type: ignore[attr-defined]
 
     def _worker(instance_id: int, domain: str) -> tuple[str, bool]:
+        fallback_inst = instances_by_id.get(instance_id)
         if app:
             with app.app_context():
-                inst = db.session.get(FederationInstance, instance_id)
-                if not inst:
+                try:
+                    db_inst = db.session.get(FederationInstance, instance_id)
+                except Exception:
+                    db_inst = None
+                target_inst = db_inst or fallback_inst
+                if not target_inst:
                     return domain, False
-                status = probe_instance_health(inst)
+                status = probe_instance_health(target_inst)
                 return domain, status
-        inst = db.session.get(FederationInstance, instance_id)
-        if not inst:
+        try:
+            db_inst = db.session.get(FederationInstance, instance_id)
+        except Exception:
+            db_inst = None
+        target_inst = db_inst or fallback_inst
+        if not target_inst:
             return domain, False
-        status = probe_instance_health(inst)
+        status = probe_instance_health(target_inst)
         return domain, status
 
     actual_workers = min(max_workers, len(instances))
