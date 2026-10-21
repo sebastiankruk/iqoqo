@@ -82,7 +82,7 @@ def test_is_item_publicly_visible_respects_owner_privacy(app, private_user):
         db.session.add(manif)
         db.session.flush()
 
-        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available")
+        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available", is_hidden=True)
         db.session.add(item)
         db.session.commit()
 
@@ -105,7 +105,7 @@ def test_is_item_publicly_visible_respects_federation_consent(app, non_consented
         db.session.add(manif)
         db.session.flush()
 
-        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available")
+        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available", is_hidden=True)
         db.session.add(item)
         db.session.commit()
 
@@ -128,7 +128,7 @@ def test_build_graph_omits_private_item_from_anonymous_snapshot(app, private_use
         db.session.add(manif)
         db.session.flush()
 
-        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available")
+        item = Item(manifestation_id=manif.id, owner_id=user.id, collection_status="available", is_hidden=True)
         db.session.add(item)
         db.session.commit()
 

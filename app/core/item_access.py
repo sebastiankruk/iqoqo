@@ -89,21 +89,20 @@ def is_item_publicly_visible(item: Item | dict[str, Any]) -> bool:
         owner_id = getattr(item, "owner_id", None)
 
     if owner_id:
-        user_uuid = owner_id if isinstance(owner_id, uuid.UUID) else uuid.UUID(str(owner_id))
-        user = db.session.get(User, user_uuid)
+        try:
+            user_uuid = owner_id if isinstance(owner_id, uuid.UUID) else uuid.UUID(str(owner_id))
+            user = db.session.get(User, user_uuid)
+        except (ValueError, TypeError):
+            user = None
+
         if user:
             # Check owner default visibility
             if getattr(user, "default_item_visibility", "public") == "private":
-                # For dictionaries, check if explicit is_public was provided as True
-                if isinstance(item, dict) and item.get("is_public") is True:
-                    pass
-                elif not isinstance(item, dict) and getattr(item, "is_hidden", False) is False and "is_public" in getattr(item, "meta", {}):
-                    # Check if explicit is_public was set in meta
-                    if item.meta.get("is_public") is True:
-                        pass
-                    else:
+                # If item is not marked hidden, check if explicitly private or hidden
+                if isinstance(item, dict):
+                    if item.get("is_public") is False:
                         return False
-                else:
+                elif getattr(item, "is_hidden", False) is True:
                     return False
 
             # Check federation consent for collection exposure
