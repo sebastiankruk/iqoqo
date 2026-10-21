@@ -324,8 +324,7 @@ ensure-secrets: ## Ensure required secrets exist in environment file (ENV_FILE d
 
 ensure-mount-perms: ## Ensure host bind-mount paths exist and have permissive write access for unprivileged container user
 	@mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers exports data/keys
-	@chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers exports 2>/dev/null || true
-	@chmod 775 data 2>/dev/null || true
+	@chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers exports data 2>/dev/null || true
 	@chmod 700 data/keys 2>/dev/null || true
 	@if [ -d data/keys ]; then chmod 600 data/keys/*.pem 2>/dev/null || true; fi
 
@@ -354,8 +353,7 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
 	@if [ -d "$(DEPLOY_DIR)" ]; then \
 		mkdir -p $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports $(DEPLOY_DIR)/data/keys; \
-		chmod -R a+rwX $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports 2>/dev/null || true; \
-		chmod 775 $(DEPLOY_DIR)/data 2>/dev/null || true; \
+		chmod -R a+rwX $(DEPLOY_DIR)/app/static/covers $(DEPLOY_DIR)/app/static/gallery $(DEPLOY_DIR)/app/static/uploads/raw_covers $(DEPLOY_DIR)/exports $(DEPLOY_DIR)/data 2>/dev/null || true; \
 		chmod 700 $(DEPLOY_DIR)/data/keys 2>/dev/null || true; \
 		if [ -d "$(DEPLOY_DIR)/data/keys" ]; then chmod 600 $(DEPLOY_DIR)/data/keys/*.pem 2>/dev/null || true; fi; \
 	fi

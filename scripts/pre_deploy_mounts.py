@@ -113,7 +113,7 @@ def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
     # 4. Directory-target mounts: create with app user ownership and ensure writable mounts have permissive access
     for rel_dir in DIRECTORY_MOUNTS:
         target_dir = deploy_dir / rel_dir
-        mode = 0o775 if rel_dir == "data" else 0o777
+        mode = 0o777
         if target_dir.exists():
             if not target_dir.is_dir() and not target_dir.is_symlink():
                 errors.append(f"Expected directory mount source '{target_dir}' is a regular file.")
