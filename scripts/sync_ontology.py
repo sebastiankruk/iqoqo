@@ -49,6 +49,10 @@ SHAPES_PATH = Path(__file__).resolve().parent.parent / "docs" / "ontology" / "iq
 IQOQO = Namespace("https://iqoqo.org/ontology#")
 SH = Namespace("http://www.w3.org/ns/shacl#")
 FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+SCHEMA = Namespace("https://schema.org/")
+AS = Namespace("https://www.w3.org/ns/activitystreams#")
+CRM = Namespace("http://www.cidoc-crm.org/cidoc-crm/")
+FOAF = Namespace("http://xmlns.com/foaf/0.1/")
 
 # Mapping of SQLAlchemy model class names to ontology class local names
 MODEL_CLASS_MAP: dict[str, str] = {
@@ -83,6 +87,7 @@ MODEL_CLASS_MAP: dict[str, str] = {
     # System / Social / Catalog additions
     "ImageScan": "ImageScan",
     "UserCollection": "UserCollection",
+    "FederationFollower": "FederationFollower",
     "BoardgameMechanic": "BoardgameMechanic",
     "FeedbackItem": "FeedbackItem",
     "FeedbackComment": "FeedbackComment",
@@ -168,11 +173,17 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "candidateStatus": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
     "resolutionSource": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
     "llmReasoning": (OWL.DatatypeProperty, IQOQO.DuplicateCandidate, XSD.string),
+    "collectionOwner": (OWL.ObjectProperty, IQOQO.UserCollection, IQOQO.User),
+    "collectionName": (OWL.DatatypeProperty, IQOQO.UserCollection, XSD.string),
+    "collectionItem": (OWL.ObjectProperty, IQOQO.UserCollection, IQOQO.Item),
+    "followerLocalUser": (OWL.ObjectProperty, IQOQO.FederationFollower, IQOQO.User),
+    "followerStatus": (OWL.DatatypeProperty, IQOQO.FederationFollower, XSD.string),
+    "knowsFriend": (OWL.ObjectProperty, IQOQO.User, IQOQO.User),
 }
 
 # Required shape identifier -> exact target class. This is selective: a shape
 # requirement is only asserted where the vocabulary has a declared contract.
-REQUIRED_SHAPE_CONTRACT: dict[str, URIRef] = {
+REQUIRED_SHAPE_CONTRACT: dict[str, URIRef | set[URIRef]] = {
     "WorkShape": FRBR.Work,
     "WorkExpansionLinkShape": IQOQO.WorkExpansionLink,
     "ContainerAggregationShape": IQOQO.ContainerAggregation,
@@ -183,9 +194,11 @@ REQUIRED_SHAPE_CONTRACT: dict[str, URIRef] = {
     "FRBRManifestationShape": FRBR.Manifestation,
     "FRBRItemShape": FRBR.Item,
     "FRBRWorkShape": FRBR.Work,
-    "UserWorkIntentShape": IQOQO.UserWorkIntent,
-    "ItemCustodyEventShape": IQOQO.ItemCustodyEvent,
-    "LoanRequestShape": IQOQO.LoanRequest,
+    "UserWorkIntentShape": {IQOQO.UserWorkIntent, SCHEMA.WantAction},
+    "UserCollectionShape": {IQOQO.UserCollection, AS.OrderedCollection},
+    "FederationFollowerShape": {IQOQO.FederationFollower, AS.Follow},
+    "ItemCustodyEventShape": {IQOQO.ItemCustodyEvent, CRM.E10_Transfer_of_Custody},
+    "LoanRequestShape": {IQOQO.LoanRequest, AS.Offer},
     "ReadingRoadmapShape": IQOQO.ReadingRoadmap,
     "RoadmapItemShape": IQOQO.RoadmapItem,
     "TagShape": IQOQO.Tag,
@@ -384,18 +397,19 @@ def check_drift(
             diagnostics.append({"key": "missing_shapes", "message": f"Missing required SHACL NodeShape iqoqo:{local_name}."})
             continue
         actual_targets = set(shapes_graph.objects(shape, SH.targetClass))
-        if actual_targets != {expected_target}:
+        expected_set = set(expected_target) if isinstance(expected_target, (set, frozenset, tuple, list)) else {expected_target}
+        if actual_targets != expected_set:
             changed_shape_targets.append(
                 {
                     "shape": local_name,
-                    "expected": _term_name(expected_target),
+                    "expected": _format_terms(expected_set),
                     "actual": sorted(_term_name(target) for target in actual_targets),
                 }
             )
             diagnostics.append(
                 {
                     "key": "changed_shape_targets",
-                    "message": f"iqoqo:{local_name} must target {_term_name(expected_target)} (found {_format_terms(actual_targets)}).",
+                    "message": f"iqoqo:{local_name} must target {_format_terms(expected_set)} (found {_format_terms(actual_targets)}).",
                 }
             )
 

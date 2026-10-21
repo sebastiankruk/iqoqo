@@ -28,6 +28,9 @@
 @prefix frbrer: <http://iflastandards.info/ns/frbr/frbrer/> .
 @prefix schema: <https://schema.org/> .
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix crm: <http://www.cidoc-crm.org/cidoc-crm/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 
 iqoqo: a sh:Ontology ;
     rdfs:label "iqoqo SHACL Shapes" ;
@@ -252,7 +255,7 @@ iqoqo:CreativeWorkShape a sh:NodeShape ;
 # ---------------------------------------------------------------------------
 
 iqoqo:UserWorkIntentShape a sh:NodeShape ;
-    sh:targetClass iqoqo:UserWorkIntent ;
+    sh:targetClass iqoqo:UserWorkIntent , schema:WantAction ;
     sh:name "User Work Intent shape" ;
     sh:description "A UserWorkIntent links a User to a Work with a progress status." ;
     sh:property [
@@ -277,8 +280,46 @@ iqoqo:UserWorkIntentShape a sh:NodeShape ;
         sh:message "A UserWorkIntent must have an intent status string." ;
     ] .
 
+iqoqo:UserCollectionShape a sh:NodeShape ;
+    sh:targetClass iqoqo:UserCollection , as:OrderedCollection ;
+    sh:name "User Collection shape" ;
+    sh:description "A UserCollection represents a curated, ordered grouping of library items." ;
+    sh:property [
+        sh:path iqoqo:collectionOwner ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A UserCollection must have an owner User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:collectionName ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A UserCollection must have a collection name." ;
+    ] .
+
+iqoqo:FederationFollowerShape a sh:NodeShape ;
+    sh:targetClass iqoqo:FederationFollower , as:Follow ;
+    sh:name "Federation Follower shape" ;
+    sh:description "A FederationFollower represents a federated follow relationship." ;
+    sh:property [
+        sh:path iqoqo:followerLocalUser ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class iqoqo:User ;
+        sh:message "A FederationFollower must link to a local User." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:followerStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "A FederationFollower must have a follower status string." ;
+    ] .
+
 iqoqo:ItemCustodyEventShape a sh:NodeShape ;
-    sh:targetClass iqoqo:ItemCustodyEvent ;
+    sh:targetClass iqoqo:ItemCustodyEvent , crm:E10_Transfer_of_Custody ;
     sh:name "Item Custody Event shape" ;
     sh:description "An ItemCustodyEvent records an immutable provenance event on an Item." ;
     sh:property [
@@ -304,7 +345,7 @@ iqoqo:ItemCustodyEventShape a sh:NodeShape ;
     ] .
 
 iqoqo:LoanRequestShape a sh:NodeShape ;
-    sh:targetClass iqoqo:LoanRequest ;
+    sh:targetClass iqoqo:LoanRequest , as:Offer ;
     sh:name "Loan Request shape" ;
     sh:description "A circulation LoanRequest links an Item to a requester User." ;
     sh:property [
