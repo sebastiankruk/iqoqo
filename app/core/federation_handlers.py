@@ -58,6 +58,7 @@ def handle_activity(activity: dict[str, Any]) -> bool:
         "Undo": handle_undo,
         "Accept": handle_accept,
         "Reject": handle_reject,
+        "Offer": handle_offer,
         "Create": handle_create,
         "Update": handle_update,
         "Delete": handle_delete,
@@ -311,8 +312,11 @@ def handle_accept(activity: dict[str, Any]) -> bool:
     if isinstance(inner, dict) and inner.get("type") == "Follow":
         followed_uri = inner.get("object", "")  # Target being followed
         follower_actor_uri = inner.get("actor", "")  # Who initiated the follow
+    elif isinstance(inner, dict) and inner.get("type") == "Offer":
+        logger.info("Remote actor %s accepted our loan Offer %s", actor_uri, inner.get("id"))
+        return True
     else:
-        logger.info("Received Accept without Follow inner object from %s", actor_uri)
+        logger.info("Received Accept without recognized inner object from %s", actor_uri)
         return True
 
     # Remote actor accepting our follow must match the object being followed
@@ -351,8 +355,11 @@ def handle_reject(activity: dict[str, Any]) -> bool:
     if isinstance(inner, dict) and inner.get("type") == "Follow":
         followed_uri = inner.get("object", "")
         follower_actor_uri = inner.get("actor", "")
+    elif isinstance(inner, dict) and inner.get("type") == "Offer":
+        logger.info("Remote actor %s rejected our loan Offer %s", actor_uri, inner.get("id"))
+        return True
     else:
-        logger.info("Received Reject without Follow inner object from %s", actor_uri)
+        logger.info("Received Reject without recognized inner object from %s", actor_uri)
         return True
 
     if followed_uri != actor_uri:
@@ -378,6 +385,93 @@ def handle_reject(activity: dict[str, Any]) -> bool:
         db.session.commit()
 
     logger.info("Follow rejected by %s for local user %s", actor_uri, user.public_username)
+    return True
+
+
+def handle_offer(activity: dict[str, Any]) -> bool:
+    """Handle an inbound Offer activity — remote friend requesting a loan of an item."""
+    actor_uri = activity.get("actor", "")
+    object_uri = activity.get("object", "")
+    activity_id = activity.get("id", "")
+    notes = activity.get("notes") or ""
+
+    if not actor_uri or not object_uri:
+        logger.warning("Offer missing actor or object: %s", activity)
+        return False
+
+    item_id = None
+    try:
+        parts = object_uri.rstrip("/").split("/")
+        item_id = int(parts[-1])
+    except (ValueError, IndexError):
+        logger.warning("Could not extract item_id from Offer object: %s", object_uri)
+        return False
+
+    from app.db.core import Item
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        logger.warning("Offer target item %s not found", item_id)
+        return False
+
+    if item.collection_status != "available":
+        logger.info("Offer target item %s is not available (status: %s)", item_id, item.collection_status)
+        return False
+
+    remote_actor = _get_or_create_actor(actor_uri)
+    if not remote_actor:
+        logger.warning("Could not create FederationActor for %s", actor_uri)
+        return False
+
+    if remote_actor.instance and remote_actor.instance.trust_level == TrustLevel.BLOCKED:
+        logger.warning("Offer from blocked instance %s rejected", remote_actor.instance.domain)
+        return False
+
+    shadow_email = f"fed_actor_{remote_actor.id}@federated.local"
+    shadow_stmt = select(User).where(User.email == shadow_email)
+    requester_user = db.session.execute(shadow_stmt).scalars().first()
+    if not requester_user:
+        requester_user = User(
+            email=shadow_email,
+            public_username=f"fed_{remote_actor.username or 'actor'}_{remote_actor.id}",
+            display_name=f"{remote_actor.display_name or remote_actor.username or 'Remote Friend'} ({remote_actor.instance.domain if remote_actor.instance else 'federated'})",
+            is_active=False,
+            visibility="public",
+        )
+        db.session.add(requester_user)
+        db.session.flush()
+
+    from app.db.lending import LoanRequest
+
+    existing_stmt = select(LoanRequest).where(
+        LoanRequest.item_id == item.id,
+        LoanRequest.requester_id == requester_user.id,
+        LoanRequest.status == "pending",
+    )
+    existing = db.session.execute(existing_stmt).scalars().first()
+    if existing:
+        logger.info("Pending LoanRequest already exists for item %s from %s", item.id, actor_uri)
+        return True
+
+    import json
+
+    fed_meta = {
+        "remote_actor_uri": actor_uri,
+        "remote_activity_id": activity_id,
+        "inbox_url": remote_actor.inbox_url,
+        "user_notes": notes,
+    }
+    notes_str = f"[Federated Offer from {actor_uri}]\n{json.dumps(fed_meta)}"
+
+    loan_request = LoanRequest(
+        item_id=item.id,
+        requester_id=requester_user.id,
+        notes=notes_str,
+        status="pending",
+    )
+    db.session.add(loan_request)
+    db.session.commit()
+    logger.info("Created federated LoanRequest #%s for item %s from %s", loan_request.id, item.id, actor_uri)
     return True
 
 

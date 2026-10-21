@@ -92,22 +92,65 @@ def check_inventory(username: str):
     )
     items = db.session.execute(item_stmt.options(selectinload(Item.manifestation)).limit(5)).scalars().all()
 
-    if items:
+    friend_items = []
+    if data.get("include_friends"):
+        from app.core.federation_client import FederationClient
+        from app.db.federation import FederationActor, FederationFollower, FollowStatus
+
+        friend_stmt = (
+            select(FederationActor)
+            .join(FederationFollower, FederationFollower.remote_actor_id == FederationActor.id)
+            .where(
+                FederationFollower.local_user_id == user.id,
+                FederationFollower.status == FollowStatus.ACCEPTED,
+            )
+        )
+        friend_actors = db.session.execute(friend_stmt).scalars().all()
+        client = FederationClient()
+        for friend in friend_actors:
+            try:
+                col = client.fetch_actor_collections(friend.actor_uri)
+                if col and isinstance(col, dict):
+                    items_list = col.get("orderedItems") or col.get("items") or []
+                    for it in items_list:
+                        if isinstance(it, dict):
+                            title = it.get("name") or it.get("title") or ""
+                            if query_term.lower() in title.lower():
+                                domain = friend.instance.domain if friend.instance else "remote"
+                                handle = f"@{friend.username}@{domain}" if friend.username else friend.actor_uri
+                                friend_items.append(
+                                    {
+                                        "type": "friend_item",
+                                        "id": it.get("id") or 0,
+                                        "title": title,
+                                        "status": it.get("status", "available"),
+                                        "collection_status": it.get("collection_status", "available"),
+                                        "cover_url": it.get("image") or it.get("cover_url"),
+                                        "owner_handle": handle,
+                                        "owner_actor_uri": friend.actor_uri,
+                                    }
+                                )
+            except Exception:
+                pass
+
+    if items or friend_items:
+        results = [
+            {
+                "type": "item",
+                "id": item.id,
+                "manifestation_id": item.manifestation_id,
+                "title": item.manifestation.title,
+                "status": item.status,
+                "collection_status": item.collection_status,
+                "cover_url": item.manifestation.cover_url,
+            }
+            for item in items
+        ]
+        results.extend(friend_items)
         return jsonify(
             {
                 "success": True,
-                "data": [
-                    {
-                        "type": "item",
-                        "id": item.id,
-                        "manifestation_id": item.manifestation_id,
-                        "title": item.manifestation.title,
-                        "status": item.status,
-                        "collection_status": item.collection_status,
-                        "cover_url": item.manifestation.cover_url,
-                    }
-                    for item in items
-                ],
+                "data": results,
             }
         )
 

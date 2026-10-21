@@ -393,7 +393,7 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    needs: [test, test-frontend, test-scripts]
+    needs: [test-frontend]
     env:
       ADMIN_EMAIL: ci-admin@iqoqo.cc
       ADMIN_PASSWORD: E2EBootstrapPassword123!
