@@ -101,6 +101,25 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     try:
         db.session.add(loan_request)
         db.session.commit()
+        try:
+            from app.core.notifications import create_notification
+
+            target_owner_id = item.user_id or item.owner_id
+            if target_owner_id:
+                create_notification(
+                    user_id=target_owner_id,
+                    notification_type="loan_request",
+                    payload={
+                        "item_id": item.id,
+                        "loan_request_id": loan_request.id,
+                        "requester_id": str(user_id),
+                        "message": f"Loan request received for item #{item.id}",
+                    },
+                    target_iri=f"/items/{item.id}",
+                )
+        except Exception as notif_err:
+            logger.warning("Failed to emit local loan_request notification: %s", notif_err)
+
         return jsonify({"success": True, "data": loan_request.to_dict()}), 201
     except IntegrityError as e:
         db.session.rollback()
@@ -265,6 +284,26 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
                 logger.warning("Could not dispatch federated %s response: %s", action, exc)
 
         db.session.commit()
+
+        try:
+            from app.core.notifications import create_notification
+
+            if loan_request.requester_id:
+                notif_type = "loan_approved" if action == "approve" else "loan_rejected"
+                create_notification(
+                    user_id=loan_request.requester_id,
+                    notification_type=notif_type,
+                    payload={
+                        "item_id": item.id,
+                        "loan_request_id": loan_request.id,
+                        "action": action,
+                        "message": f"Your loan request for item #{item.id} was {loan_request.status}",
+                    },
+                    target_iri=f"/items/{item.id}",
+                )
+        except Exception as notif_err:
+            logger.warning("Failed to emit loan resolution notification: %s", notif_err)
+
         return jsonify({"success": True, "data": loan_request.to_dict()}), 200
     except SQLAlchemyError as e:
         logger.error("Error resolving loan request %s: %s", request_id, e)

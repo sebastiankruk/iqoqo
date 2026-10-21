@@ -238,6 +238,23 @@ def handle_follow(activity: dict[str, Any]) -> bool:
     if should_accept:
         _accept_follow(user, remote_actor, activity)
 
+    try:
+        from app.core.notifications import create_notification
+
+        create_notification(
+            user_id=user.id,
+            notification_type="follow_request",
+            payload={
+                "actor_uri": actor_uri,
+                "actor_name": remote_actor.display_name or remote_actor.username or actor_uri,
+                "status": follow_status,
+                "message": f"New follower from {remote_actor.instance.domain if remote_actor.instance else actor_uri}",
+            },
+            actor_uri=actor_uri,
+        )
+    except Exception as notif_err:
+        logger.warning("Failed to emit follow_request notification: %s", notif_err)
+
     return True
 
 
@@ -472,6 +489,27 @@ def handle_offer(activity: dict[str, Any]) -> bool:
     db.session.add(loan_request)
     db.session.commit()
     logger.info("Created federated LoanRequest #%s for item %s from %s", loan_request.id, item.id, actor_uri)
+
+    try:
+        from app.core.notifications import create_notification
+
+        if item.user_id:
+            create_notification(
+                user_id=item.user_id,
+                notification_type="loan_request",
+                payload={
+                    "item_id": item.id,
+                    "requester_name": remote_actor.display_name or remote_actor.username or actor_uri,
+                    "actor_uri": actor_uri,
+                    "loan_request_id": loan_request.id,
+                    "message": f"Loan request received for item #{item.id}",
+                },
+                actor_uri=actor_uri,
+                target_iri=f"/items/{item.id}",
+            )
+    except Exception as notif_err:
+        logger.warning("Failed to emit loan_request notification: %s", notif_err)
+
     return True
 
 

@@ -418,3 +418,43 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class Notification(db.Model):  # type: ignore[name-defined]
+    """
+    In-app notification persisted for a user across social, lending, custodian, and federation events.
+    """
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        (
+            db.Index("ix_notifications_user_unread", "user_id", "read_at"),
+            {"schema": _SOCIAL},
+        )
+        if _SOCIAL
+        else (db.Index("ix_notifications_user_unread", "user_id", "read_at"),)
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    type = db.Column(db.String(50), nullable=False, index=True)
+    actor_uri = db.Column(db.String(500), nullable=True)
+    target_iri = db.Column(db.String(500), nullable=True)
+    payload_json = db.Column(JSONB if _USE_PG else db.JSON, nullable=False, default=dict)
+    read_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC), index=True)
+
+    user = db.relationship("User", backref=db.backref("notifications", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the notification model for API clients."""
+        return {
+            "id": self.id,
+            "user_id": str(self.user_id),
+            "type": self.type,
+            "actor_uri": self.actor_uri,
+            "target_iri": self.target_iri,
+            "payload": self.payload_json or {},
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
