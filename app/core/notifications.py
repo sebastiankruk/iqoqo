@@ -21,6 +21,8 @@ import logging
 import uuid
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.db import db
 from app.db.social import Notification
 
@@ -58,7 +60,7 @@ def create_notification(
         db.session.add(notification)
         db.session.commit()
         return notification
-    except Exception as exc:  # pylint: disable=broad-except
+    except (SQLAlchemyError, ValueError, TypeError) as exc:
         db.session.rollback()
         logger.warning("Failed to persist notification for user %s: %s", user_id, exc)
         return None
