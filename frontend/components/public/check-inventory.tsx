@@ -37,6 +37,7 @@ interface CheckResultData {
   title: string;
   cover_url?: string;
   status?: string;
+  collection_status?: string;
   publisher?: string;
   owner_handle?: string;
   owner_actor_uri?: string;
@@ -65,10 +66,14 @@ export function CheckInventory({ username }: CheckInventoryProps) {
     setError(null);
 
     try {
-      const res = await apiClient.post<{ success: boolean; data: CheckResultData[] }>(`/public/u/${username}/check`, {
-        query: query.trim(),
-        include_friends: includeFriends,
-      });
+      const payload: { query: string; include_friends?: boolean } = { query: query.trim() };
+      if (includeFriends) {
+        payload.include_friends = true;
+      }
+      const res = await apiClient.post<{ success: boolean; data: CheckResultData[] }>(
+        `/public/u/${username}/check`,
+        payload
+      );
       // An empty `data` is a real answer ("not in this collection") and must
       // render as such; only a missing/failed request is an error.
       if (!res.data?.success || !Array.isArray(res.data.data)) {
