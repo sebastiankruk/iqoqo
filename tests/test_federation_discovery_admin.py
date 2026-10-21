@@ -148,6 +148,7 @@ class TestFederationDiscoveryAdmin:
     def test_probe_registered_instances_bounded_concurrency(self, app):
         """probe_registered_instances probes multiple peers concurrently with bounded workers."""
         with app.app_context():
+            db.session.query(FederationInstance).delete()
             for i in range(5):
                 inst = FederationInstance(
                     domain=f"peer-{i}.example.org",

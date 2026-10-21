@@ -195,36 +195,18 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
     if not instances:
         return {}
 
-    instances_by_id = {inst.id: inst for inst in instances}
     instance_map = {inst.id: inst.domain for inst in instances}
+    instance_obj_map = {inst.id: inst for inst in instances}
     results: dict[str, bool] = {}
 
-    from flask import current_app
-
-    app = current_app._get_current_object() if current_app else None  # type: ignore[attr-defined]
-
-    def _worker(instance_id: int, domain: str) -> tuple[str, bool]:
-        fallback_inst = instances_by_id.get(instance_id)
-        if app:
-            with app.app_context():
-                try:
-                    db_inst = db.session.get(FederationInstance, instance_id)
-                except Exception:
-                    db_inst = None
-                target_inst = db_inst or fallback_inst
-                if not target_inst:
-                    return domain, False
-                status = probe_instance_health(target_inst)
-                return domain, status
+    def _worker(inst_id: int, domain: str) -> tuple[str, bool]:
+        inst = instance_obj_map.get(inst_id)
         try:
-            db_inst = db.session.get(FederationInstance, instance_id)
-        except Exception:
-            db_inst = None
-        target_inst = db_inst or fallback_inst
-        if not target_inst:
+            status = probe_instance_health(inst) if inst else False
+            return domain, bool(status)
+        except Exception as exc:
+            logger.warning("Periodic health probe failed for %s: %s", domain, exc)
             return domain, False
-        status = probe_instance_health(target_inst)
-        return domain, status
 
     actual_workers = min(max_workers, len(instances))
     with ThreadPoolExecutor(max_workers=actual_workers) as executor:
