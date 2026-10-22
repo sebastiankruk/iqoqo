@@ -51,7 +51,16 @@ export function FriendsCard() {
   const [isLoading, setIsLoading] = useState(true);
   const [targetIdentifier, setTargetIdentifier] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"accepted" | "incoming" | "outgoing">("accepted");
+  const [activeTab, setActiveTab] = useState<"accepted" | "incoming" | "outgoing">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "incoming" || tabParam === "outgoing" || tabParam === "accepted") {
+        return tabParam;
+      }
+    }
+    return "accepted";
+  });
 
   const loadFriends = useCallback(async () => {
     try {
@@ -87,12 +96,18 @@ export function FriendsCard() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const tabParam = params.get("tab");
-    if (tabParam === "incoming" || tabParam === "outgoing" || tabParam === "accepted") {
-      setActiveTab(tabParam);
-    }
+    const handleUrlSync = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "incoming" || tabParam === "outgoing" || tabParam === "accepted") {
+        setActiveTab(tabParam);
+      }
+    };
+
+    window.addEventListener("popstate", handleUrlSync);
+    return () => {
+      window.removeEventListener("popstate", handleUrlSync);
+    };
   }, []);
 
   const handleSendRequest = async (e: React.FormEvent) => {
