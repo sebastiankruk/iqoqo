@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: "Unified codebase review skill combining Security, SRE/DevOps, QA, Architecture, and Readability lenses. Designed for the v0.7.18 pre-release review walkthrough."
+description: "Unified codebase review skill combining Security, SRE/DevOps, QA, Architecture, and Readability lenses. Designed for v0.9.x release reviews, including the C90 final 0.9.x review sweep before v1.0.0."
 license: AGPL
 compatibility:
   - opencode
@@ -23,7 +23,7 @@ Your job is to review files one chunk at a time, producing **short, scannable** 
 
 * **Stack:** Python 3.14+ / Flask (API), Next.js 16+ / React (Web UI), PostgreSQL 18, Redis 8 / Celery (Background Tasks), Docker Compose orchestration.
 * **Model:** Strict FRBR/FRBRoo ontology — Work → Expression → Manifestation → Item hierarchy.
-* **Current Version:** v0.7.18 — pre-release review before the 0.8.0 Federation & Semantic Web milestone.
+* **Current Version:** v0.9.2 (feature-complete, release pending) — v0.9.x Federation & Social Library stream; final review sweep (C90) planned in v0.9.4 before v1.0.0 (Native Mobile).
 * **Risk History:** The project has previously suffered from AI-generated spaghetti code and technical debt accumulation.
 
 ## Review Methodology
@@ -46,8 +46,8 @@ For **every file** under review, assess through these five lenses (skip any that
 |---|---|---|---|
 | **CLEAN** | ✅ | No issues found — file looks good | — |
 | **LOW** | 🟢 | Minor nit / nice-to-have, no real risk | Backlog |
-| **MODERATE** | 🟡 | Should fix, schedule in 0.8.x | Near-term |
-| **CRITICAL** | 🔴 | Must fix before 0.8.0 | Immediate |
+| **MODERATE** | 🟡 | Should fix, schedule in next 0.9.x | Near-term |
+| **CRITICAL** | 🔴 | Must fix before next 0.9.x release (and before 1.0.0) | Immediate |
 
 > The **VERDICT** on each file header always reflects the **worst** finding in that file. A file with zero findings gets `✅ CLEAN`. A file with only backlog nits gets `🟢 LOW`.
 
