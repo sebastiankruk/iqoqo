@@ -17,7 +17,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Bell, Check, Loader2, UserPlus, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
+import { Bell, Check, Loader2, UserPlus, UserCheck, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,8 +51,20 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
     }
   };
 
+  const getNotificationTargetUrl = (notif: NotificationItem): string | null => {
+    if (notif.target_iri) return notif.target_iri;
+    if (typeof notif.payload?.target_iri === "string") return notif.payload.target_iri;
+    if (notif.type === "friend_request") return "/profile?tab=incoming#friends";
+    if (notif.type === "friend_accepted") return "/profile?tab=accepted#friends";
+    return null;
+  };
+
   const renderIcon = (type: string) => {
     switch (type) {
+      case "friend_request":
+        return <UserPlus className="h-4 w-4 text-sky-500" />;
+      case "friend_accepted":
+        return <UserCheck className="h-4 w-4 text-emerald-500" />;
       case "follow_request":
         return <UserPlus className="h-4 w-4 text-sky-500" />;
       case "loan_request":
@@ -119,7 +131,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
             </div>
           ) : (
             notifications.map(notif => {
-              const targetUrl = notif.target_iri || (notif.payload?.target_iri as string) || null;
+              const targetUrl = getNotificationTargetUrl(notif);
               const content = (
                 <div
                   className={`flex items-start gap-3 p-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
@@ -149,7 +161,12 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
               return (
                 <div key={notif.id} className="py-1">
                   {targetUrl ? (
-                    <Link href={targetUrl} className="block">
+                    <Link
+                      href={targetUrl}
+                      className="block"
+                      onClick={() => handleNotificationClick(notif)}
+                      data-testid={`notification-link-${notif.id}`}
+                    >
                       {content}
                     </Link>
                   ) : (

@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import * as React from "react";
-import { EyeOff } from "lucide-react";
+import { EyeOff, Users } from "lucide-react";
 import type { Item } from "@/types/frbr";
 
 /** Props for SidebarStatusBadges component */
@@ -22,6 +22,7 @@ export interface SidebarStatusBadgesProps {
   collectionStatusInfo: { label: string; class: string };
   progressStatusInfo: { label: string; class: string };
   isHidden?: boolean;
+  visibility?: "private" | "friends_only" | "shared" | "public";
   item?: Item;
 }
 
@@ -36,9 +37,12 @@ export function SidebarStatusBadges({
   collectionStatusInfo,
   progressStatusInfo,
   isHidden,
+  visibility,
   item,
 }: SidebarStatusBadgesProps) {
-  const hidden = isHidden ?? item?.is_hidden;
+  const itemVisibility = visibility ?? item?.visibility;
+  const isFriendsOnly = itemVisibility === "friends_only";
+  const hidden = isFriendsOnly ? false : (isHidden ?? item?.is_hidden);
 
   return (
     <div className="flex flex-wrap justify-center gap-2 px-2">
@@ -56,10 +60,21 @@ export function SidebarStatusBadges({
         <span className="h-1 w-1 rounded-full bg-current opacity-70" />
         {progressStatusInfo.label?.toUpperCase() || "UNKNOWN"}
       </span>
+      {isFriendsOnly && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold ring-1 transition-all bg-sky-950 text-sky-200 ring-sky-700 dark:bg-sky-900/60 dark:text-sky-300 dark:ring-sky-600"
+          title="Visible only to accepted friends"
+          data-testid="badge-friends-only"
+        >
+          <Users className="h-3 w-3" />
+          FRIENDS ONLY
+        </span>
+      )}
       {hidden && (
         <span
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold ring-1 transition-all bg-zinc-900 text-zinc-100 ring-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:ring-zinc-300"
           title="Item is hidden from your public profile"
+          data-testid="badge-hidden"
         >
           <EyeOff className="h-3 w-3" />
           HIDDEN

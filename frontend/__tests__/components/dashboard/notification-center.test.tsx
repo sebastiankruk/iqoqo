@@ -125,4 +125,69 @@ describe("NotificationCenter", () => {
     expect(heading).toBeInTheDocument();
     expect(screen.getByText("Bob requested Dune")).toBeInTheDocument();
   });
+
+  it("links friend_request notification to /profile?tab=incoming#friends and marks as read on click", async () => {
+    const user = userEvent.setup();
+    vi.mocked(notificationsApi.useNotifications).mockReturnValue({
+      data: {
+        notifications: [
+          {
+            id: 201,
+            user_id: "user-1",
+            type: "friend_request",
+            payload: { message: "Alice sent you a friend request" },
+            target_iri: "/profile?tab=incoming#friends",
+            read_at: null,
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        unread_count: 1,
+        limit: 20,
+        offset: 0,
+      },
+      isLoading: false,
+    } as any);
+
+    renderComponent();
+    await user.click(screen.getByTestId("notification-bell"));
+
+    const item = await screen.findByText("Alice sent you a friend request");
+    expect(item).toBeInTheDocument();
+
+    const link = screen.getByTestId("notification-link-201");
+    expect(link).toHaveAttribute("href", "/profile?tab=incoming#friends");
+
+    await user.click(link);
+    expect(mockMarkRead).toHaveBeenCalledWith([201]);
+  });
+
+  it("links friend_accepted notification to /profile?tab=accepted#friends", async () => {
+    const user = userEvent.setup();
+    vi.mocked(notificationsApi.useNotifications).mockReturnValue({
+      data: {
+        notifications: [
+          {
+            id: 202,
+            user_id: "user-1",
+            type: "friend_accepted",
+            payload: { message: "Bob accepted your friend request" },
+            read_at: null,
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        unread_count: 1,
+        limit: 20,
+        offset: 0,
+      },
+      isLoading: false,
+    } as any);
+
+    renderComponent();
+    await user.click(screen.getByTestId("notification-bell"));
+
+    const link = await screen.findByTestId("notification-link-202");
+    expect(link).toHaveAttribute("href", "/profile?tab=accepted#friends");
+  });
 });

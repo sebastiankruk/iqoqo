@@ -265,7 +265,13 @@ def send_friend_request(
                 create_notification(
                     user_id=target_user.id,
                     notification_type="friend_accepted",
-                    payload={"friend_id": str(requester.id), "username": requester.public_username or requester.email},
+                    payload={
+                        "friend_id": str(requester.id),
+                        "username": requester.public_username or requester.email,
+                        "message": f"{requester.public_username or requester.email} accepted your friend request",
+                        "target_iri": "/profile?tab=accepted#friends",
+                    },
+                    target_iri="/profile?tab=accepted#friends",
                 )
                 return existing.to_dict(), None, 200
 
@@ -280,7 +286,13 @@ def send_friend_request(
         create_notification(
             user_id=target_user.id,
             notification_type="friend_request",
-            payload={"requester_id": str(requester.id), "username": requester.public_username or requester.email},
+            payload={
+                "requester_id": str(requester.id),
+                "username": requester.public_username or requester.email,
+                "message": f"New friend request from {requester.public_username or requester.email}",
+                "target_iri": "/profile?tab=incoming#friends",
+            },
+            target_iri="/profile?tab=incoming#friends",
         )
         db.session.commit()
         return new_friendship.to_dict(), None, 201
@@ -358,7 +370,13 @@ def respond_friend_request(
         create_notification(
             user_id=friendship.requester_id,
             notification_type="friend_accepted",
-            payload={"friend_id": str(u_uuid), "username": user.public_username if user else "Friend"},
+            payload={
+                "friend_id": str(u_uuid),
+                "username": user.public_username if user else "Friend",
+                "message": f"{user.public_username if user else 'A user'} accepted your friend request",
+                "target_iri": "/profile?tab=accepted#friends",
+            },
+            target_iri="/profile?tab=accepted#friends",
         )
         return friendship.to_dict(), None, 200
     elif action == "reject":

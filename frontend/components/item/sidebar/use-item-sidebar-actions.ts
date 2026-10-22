@@ -193,8 +193,9 @@ export function useItemSidebarActions(item: Item, options?: UseItemSidebarAction
 
   const handleToggleVisibility = () => {
     const newHidden = !item.is_hidden;
+    const newVisibility = newHidden ? "private" : "public";
     updateItem.mutate(
-      { is_hidden: newHidden },
+      { is_hidden: newHidden, visibility: newVisibility },
       {
         onSuccess: () => toast.success(`Item is now ${newHidden ? "hidden" : "public"}`),
         onError: e => toast.error((e as Error).message),

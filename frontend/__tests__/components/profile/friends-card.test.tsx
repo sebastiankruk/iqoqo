@@ -165,4 +165,16 @@ describe("FriendsCard", () => {
       expect(apiClient.delete).toHaveBeenCalledWith("/profile/friends/1");
     });
   });
+
+  it("activates incoming tab automatically when URL search contains tab=incoming", async () => {
+    delete (window as any).location;
+    window.location = new URL("http://localhost/profile?tab=incoming#friends") as any;
+
+    render(<FriendsCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dave Request")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Accept/i })).toBeInTheDocument();
+    });
+  });
 });

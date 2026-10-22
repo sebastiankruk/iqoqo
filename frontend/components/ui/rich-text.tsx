@@ -191,6 +191,58 @@ export function RichText({ content, className }: RichTextProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          h1: ({ ...props }) => (
+            <h1
+              {...props}
+              className="mt-8 mb-4 text-2xl sm:text-3xl font-serif font-bold tracking-tight text-foreground"
+            />
+          ),
+          h2: ({ ...props }) => (
+            <h2
+              {...props}
+              className="mt-8 mb-3 text-xl sm:text-2xl font-serif font-bold tracking-tight text-foreground border-b border-border/50 pb-2"
+            />
+          ),
+          h3: ({ ...props }) => (
+            <h3 {...props} className="mt-6 mb-2 text-lg sm:text-xl font-serif font-semibold text-foreground" />
+          ),
+          h4: ({ ...props }) => <h4 {...props} className="mt-4 mb-2 text-base font-semibold text-foreground" />,
+          p: ({ ...props }) => (
+            <p {...props} className="mb-4 leading-relaxed text-foreground/90 text-sm sm:text-base" />
+          ),
+          ul: ({ ...props }) => (
+            <ul {...props} className="my-4 ml-6 list-disc space-y-2 text-foreground/90 text-sm sm:text-base" />
+          ),
+          ol: ({ ...props }) => (
+            <ol {...props} className="my-4 ml-6 list-decimal space-y-2 text-foreground/90 text-sm sm:text-base" />
+          ),
+          li: ({ ...props }) => <li {...props} className="leading-relaxed" />,
+          blockquote: ({ ...props }) => (
+            <blockquote
+              {...props}
+              className="my-6 border-l-4 border-primary/50 pl-4 italic text-muted-foreground bg-muted/20 py-2 rounded-r-md text-sm sm:text-base"
+            />
+          ),
+          hr: ({ ...props }) => <hr {...props} className="my-8 border-border" />,
+          strong: ({ ...props }) => <strong {...props} className="font-semibold text-foreground" />,
+          a: ({ ...props }) => (
+            <a {...props} className="text-primary underline hover:text-primary/80 transition-colors" />
+          ),
+          code: ({ className, children, ...props }: React.ComponentPropsWithoutRef<"code">) => {
+            const match = /language-(\w+)/.exec(className || "");
+            const isInline = !match && typeof children === "string" && !children.includes("\n");
+            return isInline ? (
+              <code {...props} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                {children}
+              </code>
+            ) : (
+              <pre className="my-4 overflow-x-auto rounded-lg border border-border bg-muted/60 p-4 font-mono text-xs">
+                <code {...props} className={className}>
+                  {children}
+                </code>
+              </pre>
+            );
+          },
           img: ({ ...imgProps }) => (
             <span className="my-6 block overflow-hidden rounded-xl border border-border bg-card shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}

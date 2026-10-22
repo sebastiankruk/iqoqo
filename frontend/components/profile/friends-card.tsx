@@ -86,6 +86,15 @@ export function FriendsCard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "incoming" || tabParam === "outgoing" || tabParam === "accepted") {
+      setActiveTab(tabParam);
+    }
+  }, []);
+
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetIdentifier.trim()) return;
@@ -131,7 +140,7 @@ export function FriendsCard() {
   };
 
   return (
-    <div className="rounded-xl border border-border/80 bg-card p-6 shadow-sm">
+    <div id="friends" data-testid="friends-card" className="rounded-xl border border-border/80 bg-card p-6 shadow-sm">
       <div className="flex items-center gap-3 mb-2">
         <Users className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold">{t("friendsManagement") || "Friends & Social Library"}</h2>

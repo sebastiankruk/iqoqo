@@ -52,25 +52,38 @@ To understand how iqoqo thinks about your collection, imagine a single creative 
 ![The Four Pillars of FRBR: Work, Expression, Manifestation, and Item](/images/help/frbr-pillars.jpg)
 
 ### 1. Work (F1): The Pure Idea
+
 A **Work** is a distinct intellectual or artistic creation. Think of it as the abstract concept in the creator's head before a single word is printed or a single note is pressed onto vinyl.
+
 * **Examples:** Homer's *Odyssey*, Pink Floyd's *The Dark Side of the Moon*, the board game *Catan*, or the 1994 Rock in Rio concert event.
+
 * **Why it matters to you:** At the Work level, iqoqo groups everything that shares the same soul. Your overall appreciation of a story, its thematic tags, and its place in a broader series live right here.
 
 ### 2. Expression (F2): How the Idea is Told
+
 An **Expression** is the specific intellectual or artistic realization of a Work. Whenever a Work is translated, narrated, abridged, arranged, or remastered, a new Expression is born.
+
 * **Examples:** 
   * Emily Wilson's 2018 English verse translation of the *Odyssey* vs. Robert Fagles' 1996 translation.
+
   * The 2011 James Guthrie 5.1 Surround Sound remaster of *The Dark Side of the Moon* vs. the original 1973 stereo mix.
+
 * **Why it matters to you:** Maybe you loved the story of a novel (the *Work*), but you thought the English translation or the audiobook narrator (the *Expression*) was terrible. iqoqo lets you distinguish between the two!
 
 ### 3. Manifestation (F3): The Published Package
+
 A **Manifestation** is the physical or digital embodiment of an Expression. This is the level where barcodes (ISBN, EAN, UPC), publishers, page counts, box dimensions, and release dates appear.
+
 * **Examples:** The 2003 Penguin Classics trade paperback with the black spine; the 180-gram gatefold vinyl pressing released by Harvest Records; the PlayStation 5 SteelBook edition of a video game.
+
 * **Why it matters to you:** Collectors care deeply about *which* edition they own or want to buy. Manifestations hold the cover art, the physical format (Hardcover, Blu-ray, Vinyl, Meeple-heavy Board Game Box), and external catalog links (OpenLibrary, MusicBrainz, BGG, IGDB, TMDB).
 
 ### 4. Item (F4): The Copy in Your Hands
+
 An **Item** is a single, tangible exemplar of a Manifestation—the actual object sitting on your bookshelf, in your Kallax cube, or on your hard drive.
+
 * **Examples:** *Your* copy of the Penguin Classics paperback—the one with the coffee stain on page 42, your personal ex-libris stamp, and a custom QR inventory sticker on the inside cover.
+
 * **Why it matters to you:** You don't lend an "ISBN" to a friend; you lend *your specific copy*. Privacy settings, lending statuses, acquisition dates, purchase prices, and physical shelf locations are all tracked at the Item level.
 
 ---
@@ -118,25 +131,39 @@ Aby zrozumieć sposób myślenia iqoqo, wyobraź sobie twórczą myśl wędrują
 ![Cztery filary FRBR: Dzieło, Ekspresja, Manifestacja i Egzemplarz](/images/help/frbr-pillars.jpg)
 
 ### 1. Dzieło (F1): Czysta idea
+
 **Dzieło** to odrębna kreacja intelektualna lub artystyczna. To abstrakcyjny pomysł w głowie twórcy, zanim jeszcze pierwsze słowo trafi do druku lub nuta na płytę winylową.
+
 * **Przykłady:** *Odyseja* Homera, album *The Dark Side of the Moon* zespołu Pink Floyd, gra planszowa *Catan* czy koncert na festiwalu Rock in Rio 1994.
+
 * **Dlaczego ma to znaczenie:** Na poziomie Dzieła iqoqo łączy wszystko, co dzieli tę samą duszę. Twoja ocena opowieści, tagi tematyczne i przynależność do cyklu wydawniczego żyją właśnie tutaj.
 
 ### 2. Ekspresja (F2): Sposób opowiedzenia idei
+
 **Ekspresja** to konkretna realizacja intelektualna lub artystyczna Dzieła. Za każdym razem, gdy Dzieło jest tłumaczone, czytane przez lektora, aranżowane na nowo lub remasterowane, rodzi się nowa Ekspresja.
+
 * **Przykłady:**
+
   * Przekład *Władcy Pierścieni* Marii Skibniewskiej a przekład Jerzego Łozińskiego.
+
   * Remaster 5.1 Surround Sound albumu *The Dark Side of the Moon* Jamesa Guthriego z 2011 r. a oryginalny miks stereo z 1973 r.
+
 * **Dlaczego ma to znaczenie:** Możesz kochać fabułę powieści (*Dzieło*), ale nie znosić konkretnego tłumaczenia lub lektora audiobooka (*Ekspresja*). iqoqo pozwala Ci to precyzyjnie rozróżnić!
 
 ### 3. Manifestacja (F3): Wydanie / Publikacja
+
 **Manifestacja** to fizyczne lub cyfrowe ucieleśnienie Ekspresji. Na tym poziomie pojawiają się kody kreskowe (ISBN, EAN, UPC), wydawnictwa, liczba stron, format pudełka i daty premier.
+
 * **Przykłady:** Wydanie kieszonkowe z czarnym grzbietem z 2003 roku; 180-gramowy winyl w okładce gatefold; limitowane wydanie gry na PlayStation 5 w metalowym pudełku (SteelBook).
+
 * **Dlaczego ma to znaczenie:** Kolekcjonerzy zwracają ogromną uwagę na to, *które* wydanie posiadają lub na które polują. Manifestacje przechowują okładki, fizyczny nośnik (twarda oprawa, Blu-ray, winyl) oraz powiązania z zewnętrznymi katalogami (OpenLibrary, MusicBrainz, BGG, IGDB, TMDB).
 
 ### 4. Egzemplarz (F4): Przedmiot w Twoich rękach
+
 **Egzemplarz** to pojedynczy fizyczny egzemplarz danej Manifestacji — konkretny przedmiot stojący na Twoim regale lub leżący na biurku.
+
 * **Przykłady:** *Twój* egzemplarz książki — ten ze śladem po kawie na 42. stronie, Twoim osobistym ekslibrisem i kodem QR na wewnętrznej stronie okładki.
+
 * **Dlaczego ma to znaczenie:** Przyjacielowi nie pożyczasz abstrakcyjnego numeru „ISBN”, lecz *swój własny egzemplarz*. Prywatność, historia wypożyczeń, data zakupu, cena i lokalizacja na półce są rejestrowane właśnie na poziomie Egzemplarza.
 
 ---
@@ -196,11 +223,17 @@ When you open the Scanner, you will notice two controls in the top bar before yo
 ![Scanner Mode, Intent, and Ingestion Flow](/images/help/scanner-workflow.jpg)
 
 ### Single vs. Batch Mode
+
+
 * **Single Mode:** Best when you just bought one new book or game. You scan the barcode, review the rich success card, and jump straight to the new item's page.
+
 * **Batch Mode:** Built for cataloging an entire bookshelf at once. Keep your phone in one hand and pull books off the shelf with the other—every time iqoqo recognizes a barcode, it chimes, shows a non-blocking toast card at the bottom of the screen, and **keeps the camera viewfinder active** so you can scan the next item immediately.
 
 ### Policy / Intent: Collection vs. Wishlist
+
+
 * **Add to Collection (OWNED):** Creates a physical **Item (F4)** in your inventory and links it to the Manifestation.
+
 * **Add to Wishlist (WISHLIST):** Bypasses physical Item creation and records your intent to acquire that **Manifestation (F3)** or **Work (F1)** in your Wishlist—perfect for when you are browsing a brick-and-mortar bookstore or board game shop!
 
 ---
@@ -210,11 +243,15 @@ When you open the Scanner, you will notice two controls in the top bar before yo
 Barcodes can be messy. Sometimes a publisher reuses an EAN barcode across three different board game printings, or an old book simply predates the invention of ISBNs in 1970.
 
 ### Step A: The Disambiguation Sheet
+
 If your scan or title search returns multiple plausible matches across our upstream providers (OpenLibrary, Google Books, Allegro, BGG, Discogs, MusicBrainz, IGDB, TMDB), iqoqo slides up the **Disambiguation Sheet**.
+
 * Compare cover thumbnails, publication years, publishers, and media badges (\`Book\`, \`Board Game\`, \`Vinyl\`, \`Video Game\`).
+
 * Tap the exact edition you hold in your hands to bind it to your catalog.
 
 ### Step B: Going All the Way to Manual Entry
+
 If an item is completely unknown to global databases—such as a local indie zine, a self-published chapbook, a bootleg concert recording, or a vintage puzzle—click **Add Manually** in the scanner bottom sheet:
 1. **Select the Media Kind:** Choose whether you are adding a \`Book\`, \`Audio\`, \`Video\`, \`Board Game\`, \`Video Game\`, or \`Puzzle\`. The form dynamically adjusts its fields to match your medium!
 2. **Enter Core Bibliographic Details:** Provide the Title, Creator/Author, Publisher, Publication Year, and Language.
@@ -232,11 +269,16 @@ Because of **FRBR!** Remember that while your **Item (F4)** belongs exclusively 
 Instead, iqoqo uses a collaborative **Curator Escalation System**:
 
 ### What You Can Do Yourself (Instant)
+
+
 * Edit your **Item's** private notes, physical location/shelf, condition, purchase price, lending status, and visibility.
+
 * Contribute a missing cover photo to a coverless Manifestation.
+
 * Add or remove items from your personal Wishlist and Reading Roadmaps.
 
 ### When to Request Curator Help (Escalations)
+
 On any Item, Manifestation, Expression, or Work page, click the **Request Curator Help / Report Issue** button in the action bar whenever you need to:
 1. **Remove an Item or Duplicate Record (DELETION_REQUEST):** Need to remove a mistaken scan or delete an item from your inventory? Submit a deletion request—a Curator will verify whether only your F4 Item should be removed or if an orphaned F3 Manifestation should be cleaned up too.
 2. **Fix Bibliographic Metadata (METADATA_FIX):** Spotted a typo in a title, a missing translator, the wrong publication year, or a book categorized as a board game? Flag it for a Curator, who can use the FRBR Editor or trigger a multi-provider metadata refetch.
@@ -251,13 +293,19 @@ On any Item, Manifestation, Expression, or Work page, click the **Request Curato
 If you are an **Instance Administrator**, you can supercharge both the Scanner and the Cover Art Editor by enabling optional AI integrations in Instance Settings (or via your \`.env\` configuration).
 
 ### 🔍 1. AI Vision Cover Scanning (Metadata Extraction)
+
 When a user scans an antique book or a vinyl sleeve that has no barcode, they can snap a photo of the front cover in the Scanner.
+
 * **How it works:** If AI Vision is enabled, iqoqo sends the cover image to your configured vision model—supporting **Local AI (Ollama / LLaVA)** for 100% offline privacy, **Google Gemini**, or **OpenAI**.
+
 * **The Result:** The vision model reads the typography and layout on the cover, automatically extracting the Title, Author/Artist, Publisher, and Edition clues, pre-filling the manual entry pipeline.
 
 ### 🎨 2. AI Bespoke Cover Generation
+
 What about Works that have *never* had a cover—like a digital-only fan translation or a classical symphony recording?
+
 * **How it works:** In the Admin Cover Editor, administrators can enable LLM Cover Generation powered by Local AI, Google Gemini, or OpenAI.
+
 * **The Result:** Using the Work's title, author, genre tags, and synopsis, iqoqo synthesizes a tasteful, high-resolution cover illustration—complete with automatic provenance metadata so users always know whether a cover is an original publisher scan, a user photo, or an AI-generated artwork!
 `,
       pl: `# Od aparatu do katalogu: Skanowanie, ręczne dodawanie i pomoc kustoszy
@@ -275,11 +323,17 @@ Gdy otwierasz Skaner, na górnym pasku zobaczysz dwa przełączniki jeszcze prze
 ![Przebieg skanowania, wybór trybu i obsługa wyników](/images/help/scanner-workflow.jpg)
 
 ### Tryb pojedynczy a Tryb seryjny (Batch)
+
+
 * **Tryb pojedynczy:** Idealny, gdy kupujesz jedną nową książkę lub grę. Skanujesz kod, oglądasz kartę sukcesu i przechodzisz od razu do strony nowego egzemplarza.
+
 * **Tryb seryjny (Batch):** Stworzony do katalogowania całego regału naraz. Trzymaj telefon w jednej ręce i zdejmuj książki z półki drugą — za każdym razem, gdy iqoqo rozpozna kod, wyda dźwięk potwierdzenia, wyświetli dyskretne powiadomienie na dole ekranu i **pozostawi aktywny podgląd kamery**, by od razu skanować kolejną pozycję.
 
 ### Intencja dodania: Półka czy Lista Życzeń
+
+
 * **Dodaj do kolekcji (Na półkę):** Tworzy fizyczny **Egzemplarz (F4)** w Twoim inwentarzu i łączy go z wybraną Manifestacją.
+
 * **Dodaj do Listy Życzeń:** Pomija tworzenie fizycznego przedmiotu i rejestruje chęć nabycia danej **Manifestacji (F3)** lub **Dzieła (F1)** na Twojej Liście Życzeń — idealne rozwiązanie, gdy przeglądasz półki w księgarni stacjonarnej!
 
 ---
@@ -289,11 +343,15 @@ Gdy otwierasz Skaner, na górnym pasku zobaczysz dwa przełączniki jeszcze prze
 Kody kreskowe bywają niejednoznaczne. Czasami wydawca używa tego samego kodu EAN dla trzech różnych dodruków gry planszowej, a starsze książki wydano przed wprowadzeniem systemu ISBN w 1970 roku.
 
 ### Krok A: Arkusz ujednoznaczniania (Disambiguation Sheet)
+
 Jeśli skanowanie lub wyszukiwanie po tytule zwróci kilka prawdopodobnych dopasowań z zewnętrznych źródeł (OpenLibrary, Google Books, Allegro, BGG, Discogs, MusicBrainz, IGDB, TMDB), iqoqo wysunie **Arkusz ujednoznaczniania**.
+
 * Porównaj miniatury okładek, lata wydania, wydawców i etykiety mediów (\`Książka\`, \`Gra planszowa\`, \`Winyl\`, \`Gra wideo\`).
+
 * Dotknij dokładnie tego wydania, które trzymasz w dłoni, aby dołączyć je do swojej kolekcji.
 
 ### Krok B: Ręczne wprowadzanie danych
+
 Jeśli pozycja jest zupełnie nieznana globalnym bazom — jak lokalny zin, tomik poezji wydany własnym sumptem czy unikatowe puzzle — kliknij **Wprowadź ręcznie** w dolnym panelu skanera:
 1. **Wybierz rodzaj nośnika:** Określ, czy dodajesz \`Książkę\`, \`Muzykę\`, \`Wideo\`, \`Grę planszową\`, \`Grę wideo\` czy \`Puzzle\`. Formularz dynamicznie dopasuje pola do Twojego wyboru!
 2. **Wprowadź podstawowe dane bibliograficzne:** Podaj tytuł, autora/twórcę, wydawcę, rok wydania i język.
@@ -311,11 +369,16 @@ Wynika to z **modelu FRBR!** Pamiętaj, że o ile Twój **Egzemplarz (F4)** nale
 Dlatego iqoqo stosuje **System Zgłoszeń do Kustoszy**:
 
 ### Co możesz zrobić samodzielnie (natychmiast)
+
+
 * Edytować prywatne notatki, półkę/lokalizację, stan zachowania, cenę zakupu, status wypożyczenia i widoczność **Egzemplarza**.
+
 * Dodać brakujące zdjęcie okładki do Manifestacji.
+
 * Dodawać i usuwać pozycje ze swojej Listy Życzeń oraz Planów czytania.
 
 ### Kiedy poprosić Kustosza o pomoc
+
 Na stronie dowolnego Egzemplarza, Manifestacji, Ekspresji lub Dzieła kliknij przycisk **Zgłoś problem / Poproś kustosza**, gdy chcesz:
 1. **Usunąć rekord lub błędny skan:** Chcesz skasować błędnie dodany rekord? Wyślij prośbę — Kustosz zweryfikuje, czy usunąć tylko Twój egzemplarz, czy także osieroconą Manifestację.
 2. **Poprawić metadane bibliograficzne:** Zauważyłeś literówkę w tytule, brakującego tłumacza lub błędny rok wydania? Zgłoś to Kustoszowi, który poprawi wpis w Edytorze FRBR lub pobierze świeże dane od dostawców.
@@ -330,13 +393,19 @@ Na stronie dowolnego Egzemplarza, Manifestacji, Ekspresji lub Dzieła kliknij pr
 Jako **Administrator instancji** możesz wzbogacić Skaner oraz Edytor okładek o opcjonalne integracje sztucznej inteligencji w Ustawieniach instancji.
 
 ### 🔍 1. Skanowanie okładek za pomocą AI Vision
+
 Gdy użytkownik skanuje starodruk lub płytę winylową bez kodu kreskowego, może zrobić zdjęcie samej okładki.
+
 * **Jak to działa:** Jeśli AI Vision jest włączone, iqoqo przesyła obraz do skonfigurowanego modelu wizyjnego — obsługując **Lokalne AI (Ollama / LLaVA)** z gwarancją 100% prywatności offline, **Google Gemini** lub **OpenAI**.
+
 * **Efekt:** Model odczytuje typografię z okładki, automatycznie wyodrębniając tytuł, autora, wydawcę oraz wskazówki dotyczące wydania, oszczędzając ręcznego wpisywania.
 
 ### 🎨 2. Generowanie dedykowanych okładek AI
+
 A co z dziełami, które nigdy nie miały fizycznej okładki — jak cyfrowe tłumaczenia fanowskie czy nagrania archiwalne?
+
 * **Jak to działa:** W Edytorze okładek administrator może włączyć generator okładek oparty o modele LLM.
+
 * **Efekt:** Na podstawie tytułu, autora, gatunku i opisu iqoqo generuje estetyczną ilustrację okładkową w wysokiej rozdzielczości — z pełną metadaną proweniencji, dzięki czemu użytkownicy zawsze wiedzą, czy okładka pochodzi od wydawcy, ze zdjęcia użytkownika, czy z generacji AI!
 `,
     },
@@ -365,14 +434,19 @@ Because iqoqo is built on a **"Privacy by Default"** philosophy, many of these c
 
 In iqoqo, visibility is never an all-or-nothing switch. We separate **who you are** from **what you own**, using three visibility levels:
 * 🔒 **PRIVATE:** Visible only to you (and instance Custody Admins for inventory maintenance).
+
 * 👥 **FRIENDS_ONLY:** Visible to accepted followers/friends (both local and federated, if you opted into federation).
+
 * 🌍 **PUBLIC:** Visible to anyone visiting your instance or querying the public Semantic Web endpoints.
 
 ![Three-Tier Privacy and Cascading Visibility Gate](/images/help/privacy-cascading-model.jpg)
 
 ### 💡 Non-Obvious Detail: Default vs. Per-Item Overrides
+
 In your Profile Settings, you set your **Default Item Visibility** (which defaults to \`PRIVATE\`). Every time you scan a batch of books in the Scanner, they inherit this default.
+
 * **The Hidden Gem:** What if your collection is mostly \`PUBLIC\`, but you just bought a rare, expensive first-edition comic—or a guilty-pleasure book—that you don't want anyone to see? Or what if your collection is \`PRIVATE\`, but you want to show off *one specific* board game to your friends?
+
 * **How to do it:** Open that specific Item's detail page, click **Edit Item**, and change its individual **Visibility** dropdown. Per-item visibility always overrides your account default!
 
 ---
@@ -382,6 +456,7 @@ In your Profile Settings, you set your **Default Item Visibility** (which defaul
 You don't have to make your entire profile public just to show a friend which board games you can bring to game night!
 
 ### How Snapshot / Filter Sharing Works
+
 When you are browsing your Collection, every filter you apply in the sidebar—such as \`Media: Board Games\`, \`Players: 4\`, \`Tag: Co-op\`, and \`On Shelf: Yes\`—is synchronized in real time with the page URL.
 
 If you click the **Share Collection** button in the top toolbar:
@@ -397,12 +472,16 @@ If you click the **Share Collection** button in the top toolbar:
 In most apps, a "comment" or "note" box is just a single text field. In iqoqo, where you leave a note determines **what it means** and **who can see it**:
 
 ### ⭐ Star Ratings & Public Reviews (Work / Expression / Manifestation)
+
 When you rate or review a **Work**, **Expression**, or **Manifestation**:
 * You are contributing to the **community critical reception** of that creation.
+
 * **Non-Obvious Nuance:** Rate the **Work** to judge the author's story or the game designer's rules. Rate the **Expression** to judge the translator or audiobook narrator. Rate the **Manifestation** to judge the physical build quality (e.g., *"The binding on this 2021 hardcover falls apart!"*).
 
 ### 📝 Private & Social Notes
+
 Every FRBR page features a dedicated **Notes** section. Unlike public reviews, Notes are designed for your personal marginalia—reading quotes, house rules for a board game, or reminders about who recommended a record to you.
+
 * You can toggle individual notes between **Private** (strictly for your eyes only) and **Shared**, allowing you to keep personal study notes right alongside public discussions without mixing them up.
 
 ---
@@ -411,8 +490,11 @@ Every FRBR page features a dedicated **Notes** section. Unlike public reviews, N
 
 If you use iqoqo with your partner, family, or a local club on the same instance, you might wonder: *"Do we already own a copy of this book in the house?"*
 
+
 * **The Hidden Gem:** On any public Work or Manifestation page, look for the **Check Inventory / Custody & Owners** panel.
+
 * **How it works:** Instead of duplicating the bibliographic record, iqoqo links every household member's physical copy (F4 Item) to the same Manifestation (F3). At a glance, you can see that **2 copies** exist on the instance: one owned by you (*On Shelf*), and one owned by your partner (*Lent Out*).
+
 * **Self-Borrowing & Custody:** If an item is owned by a shared household or club account, you can use the **Borrow / Lending** action on the Item sidebar to check it out to yourself, updating its real-time custody without changing its legal owner!
 
 ---
@@ -437,14 +519,19 @@ Ponieważ iqoqo opiera się na filozofii **„Domyślnej ochrony prywatności”
 
 W iqoqo widoczność nigdy nie jest prostym przełącznikiem „wszystko albo nic”. Rozdzielamy **to, kim jesteś** od **tego, co posiadasz**, stosując trzy poziomy widoczności:
 * 🔒 **PRYWATNY (PRIVATE):** Widoczny wyłącznie dla Ciebie (oraz administratorów instancji w celach inwentarzowych).
+
 * 👥 **DLA ZNAJOMYCH (FRIENDS_ONLY):** Widoczny dla zaakceptowanych znajomych (zarówno lokalnych, jak i w federacji, jeśli włączono zgodę federacyjną).
+
 * 🌍 **PUBLICZNY (PUBLIC):** Widoczny dla każdego odwiedzającego Twoją instancję oraz dostępny przez publiczne punkty Semantic Web.
 
 ![Trójstopniowy model prywatności i kaskadowa bramka uprawnień](/images/help/privacy-cascading-model.jpg)
 
 ### 💡 Nieoczywisty detal: Domyślna widoczność a nadpisywanie dla pojedynczego egzemplarza
+
 W Ustawieniach profilu określasz **Domyślną widoczność egzemplarzy** (domyślnie: \`PRYWATNY\`). Każda nowo zeskanowana partia książek w Skanerze dziedziczy to ustawienie.
+
 * **Ukryta perełka:** Co jeśli Twoja kolekcja jest w większości publiczna, ale kupiłeś właśnie rzadki, drogi komiks lub książkę, którą wolisz zachować tylko dla siebie? Albo Twoja kolekcja jest prywatna, lecz chcesz pochwalić się znajomym *tą jedną konkretną* grą planszową?
+
 * **Jak to zrobić:** Otwórz stronę danego Egzemplarza, kliknij **Edytuj egzemplarz** i zmień pole **Widoczność**. Ustawienie konkretnego egzemplarza zawsze ma pierwszeństwo przed domyślnym ustawieniem konta!
 
 ---
@@ -454,6 +541,7 @@ W Ustawieniach profilu określasz **Domyślną widoczność egzemplarzy** (domy�
 Nie musisz upubliczniać całego profilu tylko po to, by pokazać znajomym, jakie gry planszowe możesz zabrać na piątkowe spotkanie!
 
 ### Jak działa udostępnianie przefiltrowanych widoków
+
 Gdy przeglądasz Kolekcję, każdy filtr zastosowany w panelu bocznym — np. \`Media: Gry planszowe\`, \`Liczba graczy: 4\`, \`Tag: Kooperacja\`, \`Na półce: Tak\` — synchronizuje się w czasie rzeczywistym z adresem URL.
 
 Klikając przycisk **Udostępnij kolekcję** na górnym pasku:
@@ -469,12 +557,16 @@ Klikając przycisk **Udostępnij kolekcję** na górnym pasku:
 W typowych aplikacjach pole na notatkę to po prostu zwykły edytor tekstu. W iqoqo to, gdzie zostawiasz wpis, decyduje o **jego znaczeniu** i **odbiorcach**:
 
 ### ⭐ Oceny gwiazdkowe i publiczne recenzje (Dzieło / Ekspresja / Manifestacja)
+
 Gdy oceniasz lub recenzujesz **Dzieło**, **Ekspresję** lub **Manifestację**:
 * Współtworzysz **społecznościowy odbiór krytyczny** danego utworu.
+
 * **Ważny niuans:** Oceń **Dzieło**, by docenić kunszt pisarza lub mechanikę projektanta gry. Oceń **Ekspresję**, by ocenić pracę tłumacza lub lektora audiobooka. Oceń **Manifestację**, by ocenić jakość wydania (np. *„W tym wydaniu z 2021 roku klej w grzbiecie puszcza po tygodniu!”*).
 
 ### 📝 Notatki prywatne i współdzielone
+
 Każda strona w modelu FRBR posiada dedykowaną sekcję **Notatki**. W przeciwieństwie do publicznych recenzji, notatki służą do zapisywania Twoich osobistych zapisków na marginesie — cytatów, zasad domowych w grze czy informacji, kto polecił Ci daną płytę.
+
 * Możesz oznaczać notatki jako **Prywatne** (tylko dla Ciebie) lub **Współdzielone**, co pozwala trzymać osobiste zapiski obok dyskusji bez ich przypadkowego wymieszania.
 
 ---
@@ -483,8 +575,11 @@ Każda strona w modelu FRBR posiada dedykowaną sekcję **Notatki**. W przeciwie
 
 Jeśli korzystasz z iqoqo z partnerem, rodziną lub klubem na tej samej instancji, zapewne nie raz padło pytanie: *„Czy my przypadkiem nie mamy już tej książki w domu?”*
 
+
 * **Ukryta perełka:** Na stronie dowolnego publicznego Dzieła lub Manifestacji spójrz na panel **Sprawdź zbiory / Posiadacze**.
+
 * **Jak to działa:** Zamiast duplikować rekord bibliograficzny, iqoqo łączy fizyczne egzemplarze (F4) wszystkich domowników z tą samą Manifestacją (F3). Od razu widzisz, że na instancji znajdują się **2 egzemplarze**: jeden Twój (*Na półce*), a drugi Twojego partnera (*Wypożyczony znajomemu*).
+
 * **Wypożyczenia wewnątrz instancji:** Jeśli egzemplarz należy do wspólnego konta domowego lub klubowego, możesz skorzystać z akcji wypożyczenia, aby przypisać sobie pieczę nad egzemplarzem bez zmiany jego właściciela prawnego!
 
 ---
@@ -515,6 +610,7 @@ Co zrobić z pozycjami, które nigdy nie miały fabrycznego kodu kreskowego — 
 
 Traditional cataloging platforms force you into a painful trade-off:
 * **Cloud Silos** (like Goodreads or BoardGameGeek) make it easy to see what your friends are reading and share community metadata, but they lock your data inside a corporate walled garden, track your habits, and can shut down or change their terms at any time.
+
 * **Self-Hosted Apps** give you total ownership of your database, but leave you on a lonely digital island—cut off from your friends' collections and forced to curate every piece of metadata alone.
 
 **iqoqo gives you both.** Through **Federation**, every independent iqoqo server (instance) can connect to a global, decentralized network of collectors, libraries, and curators—while you retain 100% sovereignty over your data.
@@ -528,28 +624,41 @@ Traditional cataloging platforms force you into a painful trade-off:
 Think of iqoqo Federation like email or Mastodon. Your account lives on your home instance (for example, \`@anna@books.gdansk.pl\`), while your friend might host their own family instance at \`@marek@home-shelf.org\`. Because both servers speak the same open federation protocol, you can interact as if you were on the same website.
 
 ### 1. Follow Friends Across Instances
+
 You can follow collectors on any trusted iqoqo instance. Once your follow request is accepted:
 * Browse their public and **Friends-Only** shelves right from your own dashboard.
+
 * Discover new books, vinyl records, and board games through their ratings and reviews.
+
 * Toggle your dashboard insights between **My Collection**, **Instance**, and **Friends** scopes.
 
 ### 2. Cross-Instance Book & Game Lending
+
 Have you ever lent a board game or a hardcover book to a friend who uses a different server, only for both of you to forget who has it six months later?
+
 * With iqoqo, you can initiate a **Federated Loan** directly to a remote friend (\`@user@remote-instance.org\`).
+
 * Your friend receives an interactive notification in their **Notification Center** to accept custody of the Item.
+
 * While the item is lent out, it appears on your friend's shelf as a borrowed item (so they can add it to their Reading Roadmap!) while remaining marked as **"Lent Out"** in your inventory until you both confirm its return.
 
 ### 3. Shared Curatorial Wisdom (Federated Metadata Sync)
+
 When a skilled curator on a trusted partner instance spends twenty minutes perfecting the FRBR tree for a rare sci-fi anthology or a multi-disc vinyl box set—linking it to Wikidata and uploading a crisp cover scan—your instance benefits automatically!
+
 * Connected instances share **public bibliographic metadata** (Works, Expressions, Manifestations, Series, and LOD links).
+
 * When you scan a barcode that your local server hasn't seen before, iqoqo can pull the richly curated FRBR record from the federation trust graph in seconds.
 
 ### 4. The Federation Directory (Index Instances)
+
 Not sure which instances are out there? Visit the [Federation Directory](/federation/directory) to browse known peer instances in the network, see their public catalog statistics, and discover communities dedicated to specific niches (like vintage RPGs, classical vinyl, or neighborhood book swaps).
 
 ### 5. Privacy-First: The Federation Consent Gate
+
 **Your data never leaves your server without your explicit permission.** 
 * Even if your instance administrator enables federation, your personal profile, collection, and social activity are **never** federated by default.
+
 * To participate in cross-instance social features or lending, you must explicitly opt in via your Profile Settings (**Federation Consent**). You can revoke this consent at any time.
 
 ---
@@ -561,38 +670,53 @@ For system administrators, self-hosters, and curious developers, iqoqo's federat
 ![ActivityPub S2S Discovery and Cryptographic Loan Handshake](/images/help/federation-s2s-handshake.jpg)
 
 ### 1. Actor Discovery & WebFinger
+
 Every federated user—and the instance itself—is represented as an **ActivityPub Actor** (\`Person\` or \`Application\`).
+
 * When you look up \`@user@domain.tld\`, iqoqo queries \`/.well-known/webfinger\` on the target domain to resolve the canonical Actor IRI.
+
 * Instance-level metadata and capabilities are exposed via \`/.well-known/nodeinfo\`.
 
 ### 2. Cryptographic Trust: RSA-2048 & HTTP Signatures
+
 Every Server-to-Server (S2S) POST request sent to a remote inbox is cryptographically signed using **HTTP Signatures (draft-cavage)** with **RSA-SHA256** (2048-bit keys managed per actor/instance):
 * Signed headers include \`(request-target)\`, \`host\`, \`date\`, and \`digest\` (SHA-256 hash of the JSON-LD body).
+
 * **Replay & Clock-Skew Protection:** Incoming requests with a \`Date\` header skewed by more than ±300 seconds (5 minutes) from UTC are automatically rejected.
+
 * **SSRF & DNS Rebinding Guard:** All outbound federation requests pass through a strict network guard (\`federation_guard\`) that blocks private IPv4/IPv6 ranges (\`127.0.0.0/8\`, \`10.0.0.0/8\`, \`169.254.0.0/16\`, \`::1\`, etc.) to prevent Server-Side Request Forgery.
 
 ### 3. Asynchronous Inbox / Outbox Pipeline
+
 Federation network traffic never blocks the main web application:
 * Outbound activities (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) are queued to **Celery workers** backed by Redis with exponential backoff retries.
+
 * Incoming activities hit \`/api/federation/inbox\`, where signatures and trust policies are verified before dispatching to domain handlers.
 
 ### 4. Canonical IRI Immutability & Tombstones
+
 In a decentralized graph, changing an entity's URL breaks links across the entire network.
+
 * Every FRBR entity (\`Work\`, \`Expression\`, \`Manifestation\`, \`Item\`) is assigned a **Canonical IRI** at creation time. Even if a local admin changes the instance's base domain name later, iqoqo preserves canonical IRI immutability and serves cryptographic domain-migration proofs.
+
 * When an entity is deleted or merged, iqoqo emits an ActivityStreams \`Tombstone\` object (\`410 Gone\` or \`301 Moved Permanently\` for merges) so remote instances can cleanly update their local caches.
 
 ### 5. Trust Graph & Federated Metadata Sync
+
 Instance administrators manage peer relationships in the Admin Federation Dashboard:
 * **Trust Policies:** Peers can be set to \`TRUSTED\`, \`LIMITED\`, or \`BLOCKED\` (defederated).
+
 * **Bibliographic Sync:** Trusted instances periodically exchange public F1/F2/F3 RDF graphs. To prevent remote spoofing, incoming graphs are validated against our **SHACL shapes**, and local curator locks always take precedence over remote updates.
 
 ### 6. Access-Controlled Federated SPARQL
+
 Each instance runs an isolated **Oxigraph-powered SPARQL Execution Service**. When federated queries are executed across instances, iqoqo enforces strict **Federated Access Rights**: public queries only ever see public triples (Works, Expressions, Manifestations, and explicitly public Items), ensuring private and friends-only items are never leaked through graph traversal.
 `,
       pl: `# Federacja iqoqo: Połączone biblioteki, suwerenne dane
 
 Tradycyjne platformy do katalogowania stawiają użytkowników przed bolesnym kompromisem:
 * **Silosy chmurowe** (jak Goodreads czy BoardGameGeek) ułatwiają podglądanie tego, co czytają znajomi i wymianę metadanych, ale zamykają Twoje dane w korporacyjnym ogrodzie, śledzą nawyki i mogą w każdej chwili zmienić regulamin lub zamknąć usługę.
+
 * **Aplikacje instalowane lokalnie (self-hosted)** dają pełną własność nad bazą danych, ale zostawiają Cię na samotnej cyfrowej wyspie — odciętym od zbiorów przyjaciół i zmuszonym do samodzielnego wpisywania każdej informacji.
 
 **iqoqo łączy zalety obu światów.** Dzięki **Federacji** każdy niezależny serwer (instancja) iqoqo może łączyć się w globalną, zdecentralizowaną sieć kolekcjonerów, bibliotek i kustoszy — podczas gdy Ty zachowujesz 100% suwerenności nad swoimi danymi.
@@ -606,28 +730,42 @@ Tradycyjne platformy do katalogowania stawiają użytkowników przed bolesnym ko
 Pomyśl o Federacji w iqoqo jak o poczcie e-mail lub sieci Mastodon. Twoje konto żyje na Twojej domowej instancji (na przykład \`@anna@ksiazki.gdansk.pl\`), podczas gdy Twój znajomy prowadzi własny serwer rodzinny pod adresem \`@marek@domowa-polka.pl\`. Ponieważ oba serwery posługują się tym samym protokołem, możecie wchodzić w interakcje tak, jakbyście korzystali z tej samej strony.
 
 ### 1. Obserwowanie znajomych między instancjami
+
 Możesz obserwować kolekcjonerów na dowolnej zaufanej instancji iqoqo. Gdy Twoja prośba o obserwację zostanie zaakceptowana:
 * Przeglądasz ich półki publiczne oraz **Tylko dla znajomych** bezpośrednio ze swojego pulpitu.
+
 * Odkrywasz nowe książki, płyty winylowe i gry planszowe dzięki ich ocenom i recenzjom.
+
 * Przełączasz statystyki na pulpicie między widokiem **Moja kolekcja**, **Instancja** oraz **Znajomi**.
 
 ### 2. Wypożyczanie książek i gier między serwerami
+
 Czy zdarzyło Ci się pożyczyć grę planszową lub książkę znajomemu, a po pół roku żaden z Was nie pamiętał, u kogo się znajduje?
+
 * W iqoqo możesz zainicjować **Wypożyczenie federacyjne** bezpośrednio do zdalnego znajomego (\`@user@zdalna-instancja.pl\`).
+
 * Znajomy otrzymuje interaktywne powiadomienie w swoim **Centrum Powiadomień**, aby potwierdzić odbiór przedmiotu.
+
 * Na czas wypożyczenia przedmiot pojawia się na półce znajomego jako pozycja pożyczona (może dodać ją do swojego Planu czytania!), pozostając jednocześnie oznaczona jako **„Pożyczona komuś”** w Twoim inwentarzu, dopóki oboje nie potwierdzicie zwrotu.
 
 ### 3. Wspólna wiedza kustoszy (Synchronizacja metadanych)
+
 Gdy zaangażowany kustosz na zaufanej partnerskiej instancji spędzi dwadzieścia minut na dopracowywaniu drzewa FRBR dla rzadkiej antologii science-fiction — łącząc ją z Wikidanymi i wgrywając skan okładki — Twoja instancja korzysta z tego automatycznie!
+
 * Połączone instancje wymieniają się **publicznymi metadanymi bibliograficznymi** (Dzieła, Ekspresje, Manifestacje, Serie).
+
 * Gdy skanujesz kod kreskowy, którego Twój lokalny serwer jeszcze nie widział, iqoqo może w kilka sekund pobrać dopracowany rekord z sieci zaufanych instancji.
 
 ### 4. Katalog instancji (Federation Directory)
+
 Nie wiesz, jakie biblioteki działają w sieci? Odwiedź [Katalog połączonych bibliotek](/federation/directory), aby przejrzeć zarejestrowane węzły, sprawdzić ich statystyki publiczne i odkryć społeczności poświęcone niszowym zbiorom (jak klasyczne RPG czy płyty winylowe).
 
 ### 5. Zgoda na federację (Federation Consent Gate)
+
 **Twoje dane nigdy nie opuszczają Twojego serwera bez Twojej wyraźnej zgody.**
+
 * Nawet jeśli administrator włączy federację na serwerze, Twój profil, kolekcja i aktywność społecznościowa są **domyślnie całkowicie prywatne**.
+
 * Aby uczestniczyć w wymianie czy wypożyczeniach między instancjami, musisz świadomie wyrazić zgodę w Ustawieniach profilu (**Zgoda na federację**). Możesz ją wycofać w dowolnej chwili.
 
 ---
@@ -639,32 +777,46 @@ Dla administratorów i ciekawskich programistów: federacja w iqoqo opiera się 
 ![Odkrywanie aktorów ActivityPub i kryptograficzny uścisk dłoni przy wypożyczeniu](/images/help/federation-s2s-handshake.jpg)
 
 ### 1. Odkrywanie tożsamości (WebFinger)
+
 Każdy użytkownik w federacji jest reprezentowany jako **Aktor ActivityPub** (\`Person\` lub \`Application\`).
+
 * Gdy wyszukujesz adres \`@user@domena.pl\`, iqoqo odpytuje endpoint \`/.well-known/webfinger\` na docelowej domenie, uzyskując kanoniczny identyfikator IRI Aktora.
+
 * Metadane instancji i obsługiwane wersje protokołów są udostępniane przez \`/.well-known/nodeinfo\`.
 
 ### 2. Zaufanie kryptograficzne: RSA-2048 i HTTP Signatures
+
 Każde zapytanie POST przesyłane między serwerami (S2S) jest podpisywane kryptograficznie przy użyciu **HTTP Signatures (draft-cavage)** z kluczem **RSA-SHA256** (2048-bitowe klucze zarządzane dla każdego aktora):
 * Podpisywane nagłówki obejmują \`(request-target)\`, \`host\`, \`date\` oraz \`digest\` (skrót SHA-256 z treści JSON-LD).
+
 * **Ochrona przed atakami powtórzeniowymi:** Zapytania z nagłówkiem \`Date\` różniącym się od czasu UTC o więcej niż ±300 sekund (5 minut) są natychmiast odrzucane.
+
 * **Ochrona przed SSRF i DNS Rebinding:** Cały wychodzący ruch federacyjny przechodzi przez moduł \`federation_guard\`, który blokuje prywatne zakresy adresów IP (\`127.0.0.0/8\`, \`10.0.0.0/8\`, \`::1\` itd.).
 
 ### 3. Asynchroniczny potok Inbox / Outbox
+
 Ruch sieciowy federacji nigdy nie blokuje głównej aplikacji internetowej:
 * Wychodzące aktywności (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) trafiają do **kolejki Celery** opartej na Redis z automatycznym ponawianiem prób.
+
 * Przychodzące komunikaty trafiają na endpoint \`/api/federation/inbox\`, gdzie po weryfikacji podpisu są przekazywane do odpowiednich procesorów domenowych.
 
 ### 4. Niezmienne kanoniczne identyfikatory IRI i Tombstones
+
 W grafie zdecentralizowanym zmiana adresu encji zrywa relacje w całej sieci.
+
 * Każda encja FRBR otrzymuje **niezmienny kanoniczny IRI** w momencie utworzenia. Nawet jeśli administrator zmieni w przyszłości domenę serwera, iqoqo zachowuje tożsamość encji.
+
 * Po usunięciu lub scaleniu encji iqoqo emituje obiekt ActivityStreams \`Tombstone\` (\`410 Gone\` lub \`301 Moved Permanently\`), dzięki czemu zdalne instancje aktualizują swoje lokalne pamięci podręczne.
 
 ### 5. Reguły zaufania i ochrona kształtów SHACL
+
 Administratorzy zarządzają partnerami w Panelu Administracyjnym Federacji:
 * Instancje mogą mieć status \`TRUSTED\` (zaufana), \`LIMITED\` (ograniczona) lub \`BLOCKED\` (zablokowana).
+
 * Przychodzące grafy RDF od zaufanych partnerów są walidowane pod kątem zgodności z **kształtami SHACL**, a lokalne blokady kustoszy zawsze mają pierwszeństwo przed zdalnymi aktualizacjami.
 
 ### 6. Kontrola dostępu w SPARQL
+
 Każda instancja uruchamia wyizolowany silnik SPARQL oparty o Oxigraph. Podczas zapytań federacyjnych iqoqo egzekwuje rygorystyczne **prawa dostępu federacyjnego**: zapytania publiczne widzą wyłącznie trójki jawnie publiczne, co gwarantuje, że prywatne zbiory nigdy nie wyciekną przez trawersowanie grafu.
 `,
     },
@@ -694,11 +846,14 @@ As a Curator (Custodian) or Admin, you have access to the Content & FRBR Editor,
 In the real world, creative works rarely exist in isolation—and they almost never follow a neat, single-line numbering system.
 
 ### The Golden Rule: Series Live at the Work (F1) Level
+
 A literary series, trilogy, or board game line is an abstract grouping of **Works**, *not* Manifestations. Why? Because *The Two Towers* is Book 2 of *The Lord of the Rings* regardless of whether it is published in English or Polish, or printed in hardcover or paperback.
 
 ### Handling Multi-Series Membership
+
 Many Works belong to **more than one series simultaneously**, often with different volume numbers:
 * **Sub-series vs. Chronological Universe:** Terry Pratchett's *Guards! Guards!* is **Book 8** in the overarching *Discworld* series, but **Book 1** in the *City Watch* sub-series.
+
 * **Publication Order vs. Internal Chronology:** C.S. Lewis's *The Magician's Nephew* is **Book 1** chronologically in *The Chronicles of Narnia*, but **Book 6** by original publication order.
 
 **How to curate this in iqoqo:**
@@ -708,8 +863,11 @@ Many Works belong to **more than one series simultaneously**, often with differe
 4. You can attach a single Work to **multiple Series entities**, assigning a distinct \`Series Number / Position\` (which supports decimals like \`1.5\` for novellas) to each membership.
 
 ### Omnibus Editions and Box Sets
+
 What happens when a single physical book contains all three volumes of a trilogy (e.g., *The Lord of the Rings* single-volume omnibus)?
+
 * **If the omnibus is a recognized canonical work of its own:** Model it as a container **Work** linked via whole/part relationships (\`hasPart\`) to the individual Works.
+
 * **If it is purely a publisher's bundling:** Keep the omnibus as a **Manifestation** that embodies the combined Expressions of those Works, and clearly note the included volumes in the Manifestation subtitle or description.
 
 ---
@@ -721,6 +879,7 @@ Collectors frequently encounter hybrid packages: a "Deluxe Edition" album that i
 ![Multi-Carrier and Hybrid Box Set Modeling](/images/help/curator-hybrid-sets.jpg)
 
 ### How to Model Hybrid Packages
+
 Do **not** split a single retail box set into separate Manifestations unless the components are sold separately with their own distinct retail barcodes.
 1. **Single Manifestation (F3):** Create one Manifestation representing the retail package as released by the publisher/label (tied to the box's EAN/UPC barcode).
 2. **Dynamic Format Normalization:** In the Manifestation editor, select the primary \`Physical Kind\` (\`audio\`, \`video\`, \`book\`, \`boardgame\`) that best represents the core nature of the release, and use the **Format** and **Extended Metadata** fields to record the hybrid carriers (e.g., \`2xLP + CD + Blu-ray\`, number of discs, or accompanying booklet details).
@@ -736,10 +895,15 @@ In iqoqo, we solve this by separating **conceptual dependency** from **physical 
 
 * **At the Work Level (F1 — Conceptual):** 
   * The Base Game and each Expansion are **separate Works**.
+
   * Link the Expansion Work to the Base Game Work using the \`isExpansionOf\` (\`requiresBaseGame\`) semantic relation in the FRBR Editor.
+
   * Assign standardized **BGG Mechanics** vocabulary tags at the Work level.
+
 * **At the Item Level (F4 — Physical Container Aggregation):**
+
   * Each owned expansion still exists as an **Item** in the user's catalog (so iqoqo knows they own the expansion!), but its physical custody/location is aggregated into the Base Game's physical container.
+
   * When a user views the Base Game Item in their collection, iqoqo automatically aggregates player counts and displays the stored expansions right inside the parent box view!
 
 ---
@@ -757,9 +921,12 @@ One of the most common curatorial mistakes is creating a new **Work** when you s
 | **A novel is adapted into a movie or a board game** | **No! (New Work)** | Yes | Yes | A movie or board game is an entirely new artistic creation. Link via \`isAdaptationOf\`! |
 
 ### Pro-Tip: Contributor Roles Belong to Their Tier!
+
 When curating contributors in the FRBR Editor, always attach the person to the tier where their labor actually happened:
 * **Work (F1) Contributors:** Author, Composer, Game Designer, Director, Original Artist.
+
 * **Expression (F2) Contributors:** Translator, Narrator, Illustrator (if specific to an illustrated edition), Remastering Engineer, Conductor/Performer.
+
 * **Manifestation (F3) Contributors:** Cover Designer, Typesetter, Publisher, Vinyl Mastering/Lacquer Cutting Engineer.
 
 ---
@@ -771,15 +938,18 @@ When users scan obscure barcodes or add items manually, duplicate Works, Express
 ![Multi-Tier Deduplication and Tombstone Redirects](/images/help/curator-deduplication.jpg)
 
 ### Resolving Duplicates Safely
+
 Navigate to the Duplicate Reviewer to inspect system-flagged candidates across all three tiers:
 1. **Select the Surviving Target:** Always choose the entity with the richest semantic links (Wikidata/VIAF URIs) and cleanest history as your primary target.
 2. **Non-Destructive Consolidation:** When you merge two Manifestations, iqoqo **never orphans a user's physical Item**. All Items (F4), lending histories, wishlists, roadmaps, and social ratings attached to the duplicate are atomically re-parented to the surviving entity.
 3. **Immutable Tombstones:** For federation and Semantic Web integrity, the merged-away entity's URI is converted into a **Tombstone** that permanently redirects to the surviving URI.
 
 ### Multi-Provider Metadata Gap-Filling
+
 If a Manifestation has a valid ISBN/Barcode but is missing cover art, page counts, or descriptions, open it in the Content Editor and trigger **Provider Merge / Refetch**. iqoqo will query multiple upstream providers in parallel, allowing you to cherry-pick the best cover from one provider and the richest synopsis from another without overwriting your manual curatorial fixes.
 
 ### Linked Open Data (LOD) Reconciliation
+
 Finally, visit the LOD Reconciliation Dashboard to link local Works and Contributors to global Semantic Web authorities (**Wikidata**, **VIAF**, **MusicBrainz**, **GeoNames**). Establishing an \`owl:sameAs\` link at the Work level allows iqoqo to automatically federated-match your catalog with other iqoqo instances around the world!
 `,
       pl: `# Podręcznik Kustosza: Zaawansowane przypadki modelowania FRBR
@@ -795,11 +965,14 @@ Jako Kustosz lub Administrator masz dostęp do Edytora Treści i FRBR, Modułu D
 W świecie rzeczywistym dzieła rzadko istnieją w próżni — i niemal nigdy nie poddają się prostemu, jednoliniowemu numerowaniu.
 
 ### Złota zasada: Serie żyją na poziomie Dzieła (F1)
+
 Cykl literacki, trylogia filmowa czy seria gier to abstrakcyjne grupowanie **Dzieł**, a *nie* Manifestacji. Dlaczego? Ponieważ *Dwie Wieże* są 2. tomem *Władcy Pierścieni* niezależnie od tego, czy wydano je po polsku czy po angielsku, w twardej czy w miękkiej oprawie.
 
 ### Obsługa wielokrotnej przynależności do serii
+
 Wiele Dzieł należy do **więcej niż jednej serii jednocześnie**, często z inną numeracją:
 * **Podseria a Chronologia uniwersum:** Powieść Terry'ego Pratchetta *Straż! Straż!* to **8. tom** cyklu *Świat Dysku*, ale jednocześnie **1. tom** podserii *Straż Miejska*.
+
 * **Kolejność publikacji a Chronologia wewnętrzna:** *Siostrzeniec czarodzieja* C.S. Lewisa to tom 1. pod względem chronologii wydarzeń w *Opowieściach z Narnii*, ale tom 6. według kolejności powstawania.
 
 **Jak zamodelować to w iqoqo:**
@@ -809,8 +982,11 @@ Wiele Dzieł należy do **więcej niż jednej serii jednocześnie**, często z i
 4. Możesz przypisać jedno Dzieło do **wielu obiektów Serii**, określając osobną pozycję/numer (z obsługą wartości dziesiętnych, np. \`1.5\` dla nowel).
 
 ### Wydania zbiorcze (Omnibus) i pakiety
+
 Co zrobić, gdy pojedyncza fizyczna książka zawiera wszystkie trzy tomy trylogii?
+
 * **Jeśli omnibus jest powszechnie uznanym, odrębnym bytem:** Utwórz dla niego kontenerowe **Dzieło** połączone relacjami części (\`hasPart\`) z poszczególnymi Dziełami składowymi.
+
 * **Jeśli to wyłącznie zabieg wydawcy pakującego kilka tomów pod jeden ISBN:** Pozostaw omnibus jako **Manifestację**, która ucieleśnia połączone Ekspresje tych tomów, podając zawarte części w podtytule lub opisie.
 
 ---
@@ -822,6 +998,7 @@ Kolekcjonerzy często spotykają wydania hybrydowe: album „Deluxe Edition” z
 ![Modelowanie wydań hybrydowych i wielonośnikowych box setów](/images/help/curator-hybrid-sets.jpg)
 
 ### Jak modelować wydania hybrydowe
+
 **Nie rozbijaj** pojedynczego zestawu sklepowego na osobne Manifestacje, chyba że jego elementy były sprzedawane osobno z własnymi kodami kreskowymi.
 1. **Pojedyncza Manifestacja (F3):** Utwórz jedną Manifestację reprezentującą całe pudełko wydane przez wytwórnię (powiązaną z kodem kreskowym zestawu).
 2. **Normalizacja formatów:** W edytorze wybierz wiodący rodzaj nośnika (\`audio\`, \`wideo\`, \`książka\`, \`planszówka\`), a w polach formatu i metadanych rozszerzonych opisz nośniki składowe (np. \`2xLP + CD + Blu-ray\`, liczba płyt, dołączona książeczka).
@@ -836,11 +1013,17 @@ Fani gier planszowych stają przed dylematem: kupują grę podstawową (*Catan*)
 W iqoqo rozwiązujemy to poprzez rozdzielenie **zależności koncepcyjnej** od **fizycznego przechowywania**:
 
 * **Na poziomie Dzieła (F1 — koncepcja):**
+
   * Gra podstawowa oraz każdy dodatek to **osobne Dzieła**.
+
   * Połącz Dzieło dodatku z Dziełem gry podstawowej za pomocą relacji \`isExpansionOf\` (\`requiresBaseGame\`) w Edytorze FRBR.
+
   * Przypisz ustandaryzowane tagi mechanik z serwisu BGG na poziomie Dzieła.
+
 * **Na poziomie Egzemplarza (F4 — fizyczny kontener):**
+
   * Każdy posiadany dodatek nadal istnieje jako **Egzemplarz** w katalogu użytkownika, lecz jego lokalizacja fizyczna jest zagregowana w pojemniku gry podstawowej.
+
   * Gdy użytkownik przegląda grę podstawową, iqoqo automatycznie sumuje liczbę graczy i wyświetla przechowywane dodatki wewnątrz karty głównego pudełka!
 
 ---
@@ -858,9 +1041,12 @@ Jednym z najczęstszych błędów kustoszy jest tworzenie nowego **Dzieła** tam
 | **Powieść zaadaptowana na film lub grę planszową** | **Nie! (Nowe Dzieło)** | Tak | Tak | Film to całkowicie nowa kreacja artystyczna. Połącz relacją \`isAdaptationOf\`! |
 
 ### Wskazówka: Role twórców należą do właściwego poziomu!
+
 W Edytorze FRBR zawsze przypisuj twórcę do poziomu, na którym faktycznie powstała jego praca:
 * **Twórcy Dzieła (F1):** Pisarz, Kompozytor, Projektant gry, Reżyser, Pierwotny autor.
+
 * **Twórcy Ekspresji (F2):** Tłumacz, Lektor, Ilustrator (dla wydania ilustrowanego), Inżynier masteringu, Dyrygent/Wykonawca.
+
 * **Twórcy Manifestacji (F3):** Projektant okładki, Składacz tekstu, Wydawnictwo, Tłocznia płyt.
 
 ---
@@ -872,15 +1058,18 @@ Gdy użytkownicy skanują nietypowe kody lub dodają pozycje ręcznie, w grafie 
 ![Wielopoziomowe scalanie duplikatów i przekierowania Tombstone](/images/help/curator-deduplication.jpg)
 
 ### Bezpieczne scalanie rekordów
+
 Przejdź do Modułu Deduplikacji, aby przejrzeć kandydatów na wszystkich trzech poziomach:
 1. **Wybierz encję przetrwałą:** Zawsze wybieraj jako cel encję z najbogatszymi linkami semantycznymi (Wikidane, VIAF) i najczystszą historią.
 2. **Niedestrukcyjna konsolidacja:** Gdy scalasz dwie Manifestacje, iqoqo **nigdy nie usuwa fizycznych Egzemplarzy użytkowników**. Wszystkie Egzemplarze (F4), historie wypożyczeń, listy życzeń i plany są atomowo przepinane do encji przetrwałej.
 3. **Niezmienne nagrobki (Tombstones):** Dla zachowania spójności w sieci federacyjnej identyfikator scalonej encji staje się nagrobkiem (\`Tombstone\`), który trwale przekierowuje do encji przetrwałej.
 
 ### Uzupełnianie braków z wielu źródeł
+
 Jeśli Manifestacja posiada poprawny kod kreskowy, ale brakuje jej okładki lub opisu, otwórz ją w Edytorze Treści i uruchom funkcję **Wzbogać od dostawców**. iqoqo odpyta równolegle wiele serwisów, pozwalając Ci wybrać najlepszą okładkę z jednego źródła i bogaty opis z drugiego.
 
 ### Uzgadnianie z Otwartymi Danymi Powiązanymi (LOD)
+
 Wreszcie odwiedź Panel Uzgadniania LOD, aby powiązać lokalne Dzieła i Twórców z globalnymi autorytetami Semantic Web (**Wikidane**, **VIAF**, **MusicBrainz**, **GeoNames**). Relacja \`owl:sameAs\` pozwala iqoqo na automatyczne dopasowywanie zbiorów z innymi bibliotekami na całym świecie!
 `,
     },

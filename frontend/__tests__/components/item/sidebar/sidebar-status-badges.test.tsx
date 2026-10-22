@@ -32,6 +32,35 @@ describe("SidebarStatusBadges Unit Test (Plain Props)", () => {
     expect(screen.getByText("HIDDEN")).toBeInTheDocument();
   });
 
+  it("renders friends only badge and suppresses hidden badge when visibility is friends_only", () => {
+    render(
+      <SidebarStatusBadges
+        collectionStatusInfo={{ label: "On Shelf", class: "bg-emerald-50 text-emerald-700" }}
+        progressStatusInfo={{ label: "Reading...", class: "bg-accent/10 text-accent" }}
+        isHidden={true}
+        visibility="friends_only"
+      />
+    );
+
+    expect(screen.getByText("ON SHELF")).toBeInTheDocument();
+    expect(screen.getByText("READING...")).toBeInTheDocument();
+    expect(screen.getByText("FRIENDS ONLY")).toBeInTheDocument();
+    expect(screen.queryByText("HIDDEN")).toBeNull();
+  });
+
+  it("renders friends only badge when item.visibility is friends_only", () => {
+    render(
+      <SidebarStatusBadges
+        collectionStatusInfo={{ label: "On Shelf", class: "bg-emerald-50 text-emerald-700" }}
+        progressStatusInfo={{ label: "Reading...", class: "bg-accent/10 text-accent" }}
+        item={{ id: 2045, visibility: "friends_only", is_hidden: true } as any}
+      />
+    );
+
+    expect(screen.getByText("FRIENDS ONLY")).toBeInTheDocument();
+    expect(screen.queryByText("HIDDEN")).toBeNull();
+  });
+
   it("does not render hidden badge when isHidden is false", () => {
     render(
       <SidebarStatusBadges

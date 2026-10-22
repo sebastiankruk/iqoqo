@@ -211,6 +211,8 @@ def test_friends_crud_and_notifications_flow(client, app, collector_a, headers_a
         notif = Notification.query.filter_by(user_id=collector_b, type="friend_request").first()
         assert notif is not None
         assert notif.payload_json["username"] in ("alice", "alice@iqoqo.local")
+        assert notif.target_iri == "/profile?tab=incoming#friends"
+        assert notif.payload_json["target_iri"] == "/profile?tab=incoming#friends"
 
         fs = db.session.get(UserFriendship, friendship_id)
         assert fs.status == "pending"
@@ -225,6 +227,11 @@ def test_friends_crud_and_notifications_flow(client, app, collector_a, headers_a
     assert accept_res.status_code == 200
 
     with app.app_context():
+        accept_notif = Notification.query.filter_by(user_id=collector_a, type="friend_accepted").first()
+        assert accept_notif is not None
+        assert accept_notif.target_iri == "/profile?tab=accepted#friends"
+        assert accept_notif.payload_json["target_iri"] == "/profile?tab=accepted#friends"
+
         assert is_friend_of(collector_a, collector_b) is True
         assert is_friend_of(collector_b, collector_a) is True
         assert collector_b in get_friend_user_ids(collector_a)
