@@ -9,7 +9,7 @@
     "profileSettings": "Profile Settings",
     "manageCollections": "Manage Collections",
     "helpDocs": "Help & Guides",
-    "helpAndFeedback": "Help & Feedback",
+    "helpAndFeedback": "Requests",
     "adminConfiguration": "Admin Configuration",
     "adminSettings": "Admin Settings",
     "administration": "Administration",
@@ -674,15 +674,18 @@
     "unknownSoftware": "iqoqo peer node"
   },
   "HelpHub": {
-    "title": "Help & Documentation",
+    "title": "Help & Guides",
     "description": "Guides and reference manuals for cataloging physical media, understanding FRBR bibliographic models, and navigating federated lending.",
     "searchPlaceholder": "Search documentation articles...",
     "noArticlesFound": "No documentation articles found matching your query.",
-    "backToHub": "Back to Help & Documentation",
+    "backToHub": "Back to Help & Guides",
+    "filterAll": "All Guides",
     "categories": {
       "cataloging": "Cataloging & FRBR",
       "tools": "Tools & Scanning",
-      "federation": "Federation & Privacy"
+      "federation": "Federation & Lending",
+      "curation": "Curator's Handbook",
+      "privacy": "Privacy & Sharing"
     }
   }
 }

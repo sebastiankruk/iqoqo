@@ -24,6 +24,8 @@ import { Footer } from "@/components/dashboard/footer";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
 import { FeedbackDetailModal, type FeedbackItemDetail } from "@/components/feedback/feedback-detail-modal";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { MyEscalations } from "@/components/escalation/my-escalations";
+import { useMyEscalations } from "@/lib/api/escalations";
 import {
   Bug,
   Lightbulb,
@@ -37,6 +39,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  Headphones,
+  LifeBuoy,
 } from "lucide-react";
 
 type PaginationData = {
@@ -77,6 +81,10 @@ const statusStyles: Record<string, { bg: string; text: string; border: string; l
 export default function FeedbackPage() {
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
+
+  const [activeTab, setActiveTab] = useState<"tickets" | "escalations">("tickets");
+  const { data: escalations } = useMyEscalations();
+  const pendingEscalationsCount = escalations?.filter(e => e.status === "pending").length ?? 0;
 
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
@@ -284,199 +292,244 @@ export default function FeedbackPage() {
           <div>
             <h1 className="font-serif text-3xl font-bold tracking-tight">Help & Feedback</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Submit feature ideas, report bugs, and track the status of support tickets.
+              Submit feature ideas, report bugs, and track the status of support tickets and curator requests.
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity self-start sm:self-auto"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Request</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Selector: Platform Tickets vs Curator Escalations */}
+        <div className="flex items-center gap-2 border-b border-border">
           <button
             type="button"
-            onClick={() => setCreateModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity self-start sm:self-auto"
+            onClick={() => setActiveTab("tickets")}
+            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === "tickets"
+                ? "border-primary text-primary font-semibold"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            <span>New Request</span>
+            <LifeBuoy className="h-4 w-4" />
+            <span>Platform Tickets</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("escalations")}
+            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === "escalations"
+                ? "border-primary text-primary font-semibold"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            }`}
+          >
+            <Headphones className="h-4 w-4" />
+            <span>Curator Escalations</span>
+            {pendingEscalationsCount > 0 && (
+              <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
+                {pendingEscalationsCount}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Mobile Filter Drawer Trigger */}
-        <div className="md:hidden flex items-center justify-between">
-          <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                data-testid="mobile-filters-trigger"
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-xs hover:bg-muted transition-colors"
-              >
-                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                <span>Filters</span>
-                {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-primary" />}
-              </button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl p-6">
-              <SheetHeader className="pb-2">
-                <SheetTitle className="sr-only">Filters</SheetTitle>
-                <SheetDescription className="sr-only">Filter feedback tickets</SheetDescription>
-              </SheetHeader>
-              {renderFilterControls(true)}
-            </SheetContent>
-          </Sheet>
-        </div>
-
-        {/* Layout Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Desktop Left Sidebar Filters */}
-          <aside className="hidden md:block md:col-span-1 space-y-6">
-            <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-6">
-              {renderFilterControls(false)}
-            </div>
-          </aside>
-
-          {/* Right Ticket List Area */}
-          <section className="md:col-span-3 space-y-4">
-            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-              <span>
-                Showing {filteredItems.length} {filteredItems.length === 1 ? "ticket" : "tickets"}
-                {pagination.total > 0 && ` of ${pagination.total}`}
-              </span>
-              {isAdmin && <span className="font-semibold text-primary">Admin View Enabled</span>}
+        {activeTab === "escalations" ? (
+          <div className="max-w-4xl mx-auto">
+            <MyEscalations />
+          </div>
+        ) : (
+          <>
+            {/* Mobile Filter Drawer Trigger */}
+            <div className="md:hidden flex items-center justify-between">
+              <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+                <SheetTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="mobile-filters-trigger"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-xs hover:bg-muted transition-colors"
+                  >
+                    <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                    <span>Filters</span>
+                    {hasActiveFilters && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl p-6">
+                  <SheetHeader className="pb-2">
+                    <SheetTitle className="sr-only">Filters</SheetTitle>
+                    <SheetDescription className="sr-only">Filter feedback tickets</SheetDescription>
+                  </SheetHeader>
+                  {renderFilterControls(true)}
+                </SheetContent>
+              </Sheet>
             </div>
 
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, idx) => (
-                  <div key={idx} className="h-28 rounded-xl border border-border bg-card p-5 animate-pulse" />
-                ))}
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-12 text-center bg-card/40 space-y-3">
-                <div className="rounded-full bg-muted p-3 text-muted-foreground">
-                  <Lightbulb className="h-6 w-6" />
+            {/* Layout Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              {/* Desktop Left Sidebar Filters */}
+              <aside className="hidden md:block md:col-span-1 space-y-6">
+                <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-6">
+                  {renderFilterControls(false)}
                 </div>
-                <h3 className="text-base font-semibold">No feedback tickets found</h3>
-                <p className="text-xs text-muted-foreground max-w-sm">
-                  {hasActiveFilters
-                    ? "No tickets match your current filters. Try resetting the filters."
-                    : "No feedback or bug reports have been submitted yet."}
-                </p>
-                {hasActiveFilters ? (
-                  <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
-                  >
-                    Clear Filters
-                  </button>
+              </aside>
+
+              {/* Right Ticket List Area */}
+              <section className="md:col-span-3 space-y-4">
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                  <span>
+                    Showing {filteredItems.length} {filteredItems.length === 1 ? "ticket" : "tickets"}
+                    {pagination.total > 0 && ` of ${pagination.total}`}
+                  </span>
+                  {isAdmin && <span className="font-semibold text-primary">Admin View Enabled</span>}
+                </div>
+
+                {loading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 4 }).map((_, idx) => (
+                      <div key={idx} className="h-28 rounded-xl border border-border bg-card p-5 animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-12 text-center bg-card/40 space-y-3">
+                    <div className="rounded-full bg-muted p-3 text-muted-foreground">
+                      <Lightbulb className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-semibold">No feedback tickets found</h3>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      {hasActiveFilters
+                        ? "No tickets match your current filters. Try resetting the filters."
+                        : "No feedback or bug reports have been submitted yet."}
+                    </p>
+                    {hasActiveFilters ? (
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
+                      >
+                        Clear Filters
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCreateModalOpen(true)}
+                        className="rounded-md bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                      >
+                        Submit First Request
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCreateModalOpen(true)}
-                    className="rounded-md bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
-                  >
-                    Submit First Request
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredItems.map(item => {
-                  const statusInfo = statusStyles[item.status] || {
-                    bg: "bg-muted",
-                    text: "text-foreground",
-                    border: "border-border",
-                    label: item.status,
-                  };
+                  <div className="space-y-3">
+                    {filteredItems.map(item => {
+                      const statusInfo = statusStyles[item.status] || {
+                        bg: "bg-muted",
+                        text: "text-foreground",
+                        border: "border-border",
+                        label: item.status,
+                      };
 
-                  return (
-                    <article
-                      key={item.id}
-                      onClick={() => handleCardClick(item)}
-                      className="group cursor-pointer rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}
-                          >
-                            {statusInfo.label}
-                          </span>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            {item.feedback_type === "bug" ? (
-                              <Bug className="h-3.5 w-3.5 text-rose-500" />
-                            ) : (
-                              <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
-                            )}
-                            <span className="capitalize">{item.feedback_type.replace("_", " ")}</span>
+                      return (
+                        <article
+                          key={item.id}
+                          onClick={() => handleCardClick(item)}
+                          className="group cursor-pointer rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}
+                              >
+                                {statusInfo.label}
+                              </span>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                {item.feedback_type === "bug" ? (
+                                  <Bug className="h-3.5 w-3.5 text-rose-500" />
+                                ) : (
+                                  <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
+                                )}
+                                <span className="capitalize">{item.feedback_type.replace("_", " ")}</span>
+                              </div>
+                            </div>
+
+                            <span className="text-[11px] text-muted-foreground">#{item.id}</span>
                           </div>
-                        </div>
 
-                        <span className="text-[11px] text-muted-foreground">#{item.id}</span>
-                      </div>
+                          {/* Description truncated safely */}
+                          <p className="mt-3 text-sm text-foreground line-clamp-2 leading-relaxed">
+                            {item.description}
+                          </p>
 
-                      {/* Description truncated safely */}
-                      <p className="mt-3 text-sm text-foreground line-clamp-2 leading-relaxed">{item.description}</p>
+                          {/* Footer metadata */}
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-3 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-4">
+                              <span className="flex items-center gap-1.5 font-medium text-foreground/80">
+                                <UserIcon className="h-3 w-3" />
+                                {item.user_display_name}
+                                {isAdmin && item.user_email && (
+                                  <span className="text-muted-foreground font-normal">({item.user_email})</span>
+                                )}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {new Date(item.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
 
-                      {/* Footer metadata */}
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-3 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1.5 font-medium text-foreground/80">
-                            <UserIcon className="h-3 w-3" />
-                            {item.user_display_name}
-                            {isAdmin && item.user_email && (
-                              <span className="text-muted-foreground font-normal">({item.user_email})</span>
-                            )}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(item.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
+                            <div className="flex items-center gap-3">
+                              {item.attachments && item.attachments.length > 0 && (
+                                <span className="flex items-center gap-1 text-muted-foreground">
+                                  <Paperclip className="h-3.5 w-3.5" />
+                                  {item.attachments.length}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <MessageSquare className="h-3.5 w-3.5" />
+                                {item.comments_count ?? item.comments?.length ?? 0}
+                              </span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
 
-                        <div className="flex items-center gap-3">
-                          {item.attachments && item.attachments.length > 0 && (
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <Paperclip className="h-3.5 w-3.5" />
-                              {item.attachments.length}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <MessageSquare className="h-3.5 w-3.5" />
-                            {item.comments_count ?? item.comments?.length ?? 0}
-                          </span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Pagination Controls */}
-            {pagination.pages > 1 && (
-              <div className="flex items-center justify-between border-t border-border pt-4 text-xs">
-                <button
-                  type="button"
-                  disabled={currentPage <= 1}
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 font-semibold text-foreground hover:bg-muted disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Previous
-                </button>
-                <span className="text-muted-foreground">
-                  Page {currentPage} of {pagination.pages}
-                </span>
-                <button
-                  type="button"
-                  disabled={currentPage >= pagination.pages}
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.pages))}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 font-semibold text-foreground hover:bg-muted disabled:opacity-40"
-                >
-                  Next
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-          </section>
-        </div>
+                {/* Pagination Controls */}
+                {pagination.pages > 1 && (
+                  <div className="flex items-center justify-between border-t border-border pt-4 text-xs">
+                    <button
+                      type="button"
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 font-semibold text-foreground hover:bg-muted disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Previous
+                    </button>
+                    <span className="text-muted-foreground">
+                      Page {currentPage} of {pagination.pages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentPage >= pagination.pages}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.pages))}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 font-semibold text-foreground hover:bg-muted disabled:opacity-40"
+                    >
+                      Next
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </section>
+            </div>
+          </>
+        )}
       </main>
 
       <Footer />

@@ -18,6 +18,7 @@
 import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 export interface RichTextProps {
@@ -44,6 +45,15 @@ const ALLOWED_TAGS = [
   "h2",
   "h3",
   "h4",
+  "h5",
+  "h6",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "hr",
 ];
 
 const ALLOWED_ATTR = ["href", "target", "rel", "title"];
@@ -76,6 +86,9 @@ function getPurifier() {
 /**
  * Safely decodes HTML entities (e.g., &lt; to <, &amp; to &), handling up to
  * two decoding passes for double-encoded entities delivered by external APIs.
+ *
+ * @param raw - The raw text containing encoded HTML entities.
+ * @returns Decoded text string.
  */
 export function decodeHtmlEntities(raw: string): string {
   let decoded = raw;
@@ -107,6 +120,9 @@ export function decodeHtmlEntities(raw: string): string {
 /**
  * Sanitizes an HTML string using DOMPurify with strict tag and attribute whitelists.
  * When window or DOMPurify context is unavailable (SSR), strips all HTML tags to prevent XSS.
+ *
+ * @param dirty - Unsanitized HTML string.
+ * @returns Sanitized safe HTML string.
  */
 export function sanitizeRichHtml(dirty: string): string {
   const purify = getPurifier();
@@ -130,6 +146,9 @@ export function sanitizeRichHtml(dirty: string): string {
 
 /**
  * Checks whether text contains HTML tags.
+ *
+ * @param text - Input text string.
+ * @returns True if text contains HTML elements.
  */
 export function containsHtmlTags(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(text);
@@ -138,6 +157,11 @@ export function containsHtmlTags(text: string): boolean {
 /**
  * Unified component for rendering rich descriptions across iqoqo views.
  * Handles entity-decoded HTML, DOMPurify sanitization, and Markdown formatting.
+ *
+ * @param props - Component properties.
+ * @param props.content - Markdown or HTML string content.
+ * @param props.className - Additional CSS classes.
+ * @returns Rendered JSX Element.
  */
 export function RichText({ content, className }: RichTextProps) {
   const processed = useMemo(() => {
@@ -164,7 +188,35 @@ export function RichText({ content, className }: RichTextProps) {
 
   return (
     <div className={baseClassName}>
-      <ReactMarkdown>{processed.value}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          img: ({ ...imgProps }) => (
+            <span className="my-6 block overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img {...imgProps} alt={imgProps.alt || "Guide illustration"} className="w-full object-cover" />
+              {imgProps.alt && (
+                <span className="block border-t border-border/40 px-3 py-2 text-center text-xs text-muted-foreground italic">
+                  {imgProps.alt}
+                </span>
+              )}
+            </span>
+          ),
+          table: ({ ...tableProps }) => (
+            <div className="my-6 w-full overflow-x-auto rounded-lg border border-border">
+              <table {...tableProps} className="w-full border-collapse text-left text-xs sm:text-sm" />
+            </div>
+          ),
+          th: ({ ...thProps }) => (
+            <th {...thProps} className="bg-muted px-4 py-2.5 font-semibold text-foreground border-b border-border" />
+          ),
+          td: ({ ...tdProps }) => (
+            <td {...tdProps} className="px-4 py-2 border-b border-border/60 text-muted-foreground" />
+          ),
+        }}
+      >
+        {processed.value}
+      </ReactMarkdown>
     </div>
   );
 }

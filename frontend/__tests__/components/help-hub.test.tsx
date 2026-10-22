@@ -36,7 +36,8 @@ describe("HelpHubPage", () => {
 
     expect(screen.getByTestId("navbar")).toBeInTheDocument();
     expect(screen.getByTestId("footer")).toBeInTheDocument();
-    expect(screen.getByText("FRBR Hierarchy: Work, Expression, Manifestation, and Item")).toBeInTheDocument();
-    expect(screen.getByText("Barcode Scanning & Metadata Ingestion")).toBeInTheDocument();
+    expect(screen.getByText("Beyond the Bookshelf: How iqoqo Organizes Your World")).toBeInTheDocument();
+    expect(screen.getByText("From Camera to Catalog: Scanning, Manual Entry & Curatorial Help")).toBeInTheDocument();
+    expect(screen.getByText("The iqoqo Federation: Connected Libraries, Sovereign Data")).toBeInTheDocument();
   });
 });

@@ -22,7 +22,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { HELP_ARTICLES, HelpArticle } from "@/lib/help-articles";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Search, ArrowRight, Layers, ScanLine, Share2 } from "lucide-react";
+import { BookOpen, Search, ArrowRight, Layers, ScanLine, Share2, Shield, Wrench } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
 /**
@@ -35,22 +35,31 @@ export default function HelpHubPage() {
   const rawLocale = useLocale();
   const locale = (rawLocale === "pl" ? "pl" : "en") as "en" | "pl";
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  const categories: Array<HelpArticle["category"]> = ["cataloging", "tools", "privacy", "federation", "curation"];
 
   const filteredArticles = HELP_ARTICLES.filter(article => {
+    const matchesCategory = selectedCategory === "all" || article.category === selectedCategory;
     const title = article.title[locale].toLowerCase();
     const desc = article.description[locale].toLowerCase();
     const query = searchTerm.toLowerCase();
-    return title.includes(query) || desc.includes(query);
+    const matchesSearch = title.includes(query) || desc.includes(query);
+    return matchesCategory && matchesSearch;
   });
 
   const getCategoryIcon = (category: HelpArticle["category"]) => {
     switch (category) {
       case "cataloging":
-        return <Layers className="h-4 w-4 text-primary" />;
+        return <Layers className="h-3.5 w-3.5 text-primary" />;
       case "tools":
-        return <ScanLine className="h-4 w-4 text-emerald-500" />;
+        return <ScanLine className="h-3.5 w-3.5 text-emerald-500" />;
+      case "privacy":
+        return <Shield className="h-3.5 w-3.5 text-amber-500" />;
       case "federation":
-        return <Share2 className="h-4 w-4 text-indigo-500" />;
+        return <Share2 className="h-3.5 w-3.5 text-indigo-500" />;
+      case "curation":
+        return <Wrench className="h-3.5 w-3.5 text-purple-500" />;
     }
   };
 
@@ -66,16 +75,48 @@ export default function HelpHubPage() {
           <p className="text-muted-foreground mt-2 max-w-2xl">{t("description")}</p>
         </div>
 
-        {/* Search Input */}
-        <div className="relative mb-8 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder={t("searchPlaceholder")}
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
+        {/* Search & Category Filter Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-8">
+          <div className="relative max-w-md w-full">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder={t("searchPlaceholder")}
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("all")}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${
+                selectedCategory === "all"
+                  ? "bg-primary text-primary-foreground border-primary font-medium"
+                  : "bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {t("filterAll")}
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border transition-colors ${
+                  selectedCategory === cat
+                    ? "bg-primary text-primary-foreground border-primary font-medium"
+                    : "bg-muted/50 text-muted-foreground border-border hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {getCategoryIcon(cat)}
+                <span>{t(`categories.${cat}`)}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Articles Grid */}

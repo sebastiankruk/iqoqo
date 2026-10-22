@@ -9,7 +9,7 @@
     "profileSettings": "Ustawienia profilu",
     "manageCollections": "Zarządzaj kolekcjami",
     "helpDocs": "Pomoc i poradniki",
-    "helpAndFeedback": "Pomoc i opinie",
+    "helpAndFeedback": "Zgłoszenia",
     "adminConfiguration": "Konfiguracja administratora",
     "adminSettings": "Ustawienia administratora",
     "administration": "Administracja",
@@ -674,15 +674,18 @@
     "unknownSoftware": "Węzeł iqoqo"
   },
   "HelpHub": {
-    "title": "Pomoc i dokumentacja",
+    "title": "Pomoc i poradniki",
     "description": "Przewodniki i dokumentacja dotyczące katalogowania zbiorów fizycznych, modeli bibliograficznych FRBR oraz wypożyczeń w sieci federacyjnej.",
-    "searchPlaceholder": "Szukaj w artykułach pomocy...",
-    "noArticlesFound": "Nie znaleziono artykułów odpowiadających zapytaniu.",
-    "backToHub": "Powrót do pomocy i dokumentacji",
+    "searchPlaceholder": "Szukaj w poradnikach...",
+    "noArticlesFound": "Nie znaleziono poradników odpowiadających zapytaniu.",
+    "backToHub": "Powrót do pomocy i poradników",
+    "filterAll": "Wszystkie poradniki",
     "categories": {
       "cataloging": "Katalogowanie i FRBR",
       "tools": "Narzędzia i skanowanie",
-      "federation": "Federacja i prywatność"
+      "federation": "Federacja i wypożyczenia",
+      "curation": "Podręcznik Kustosza",
+      "privacy": "Prywatność i udostępnianie"
     }
   }
 }
