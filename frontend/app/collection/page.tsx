@@ -23,6 +23,7 @@ import {
   BookOpen,
   Layers,
   Type,
+  User,
   Users,
   Loader2,
 } from "lucide-react";
@@ -118,6 +119,8 @@ function CollectionContent() {
   } = useMemo(() => parseCollectionUrlScalars(urlSearch), [urlSearch]);
 
   const initialViewMode = parsedViewMode as "items" | "manifestations" | "works" | "expressions" | "roadmap";
+
+  const currentScope = (searchParams?.get("scope") as "personal" | "friends" | "global") || "personal";
 
   const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
     initialViewMode
@@ -271,7 +274,8 @@ function CollectionContent() {
     publisherFilters,
     false,
     lodAuthorityFilter,
-    lodStatusFilter
+    lodStatusFilter,
+    currentScope
   );
 
   const {
@@ -649,6 +653,49 @@ function CollectionContent() {
                     <span className="hidden sm:inline">{t("tabRoadmaps")}</span>
                   </button>
                 </div>
+
+                {viewMode === "items" && isLoggedIn && (
+                  <div
+                    role="group"
+                    aria-label="Items scope"
+                    className="flex rounded-lg border border-border bg-card p-1 shadow-sm text-xs font-medium"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams?.toString() ?? "");
+                        params.delete("scope");
+                        router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
+                          scroll: false,
+                        });
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors ${
+                        currentScope !== "friends"
+                          ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      }`}
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{t("tabMyItems")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams?.toString() ?? "");
+                        params.set("scope", "friends");
+                        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors ${
+                        currentScope === "friends"
+                          ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      }`}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{t("scopeFriends") || "Friends"}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Curation filters moved to sidebar curation facet */}
               </div>

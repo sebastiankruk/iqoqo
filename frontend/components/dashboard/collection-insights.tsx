@@ -35,7 +35,7 @@ export function CollectionInsights({
   scope = "personal",
 }: {
   showTitle?: boolean;
-  scope?: "personal" | "global";
+  scope?: "personal" | "friends" | "global";
 } = {}) {
   const t = useTranslations("CollectionInsights");
   const { data: stats } = useStats(scope);

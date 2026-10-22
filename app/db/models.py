@@ -42,6 +42,7 @@ from app.db.auth import (  # noqa: F401
     Role,
     TokenBlocklist,
     User,
+    UserFriendship,
     role_permissions,
     user_roles,
 )
@@ -62,6 +63,7 @@ from app.db.core import (  # noqa: F401
     DUPLICATE_STATUS_MERGED,
     DUPLICATE_STATUS_PENDING,
     ITEM_STATUSES,
+    ITEM_VISIBILITIES,
     PROGRESS_STATUSES,
     BoardgameMechanic,
     DuplicateCandidate,

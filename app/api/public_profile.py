@@ -18,27 +18,47 @@
 Handles public profile retrieval and "check if I have it" inventory search.
 """
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
+from app.api.decorators import optional_auth
 from app.api.public_rdf import public_bp
 from app.core.limiter import limiter
 from app.db.models import Item, Manifestation, User, Work, db
 
 
 @public_bp.route("/u/<string:username>", methods=["GET"])
+@optional_auth
 @limiter.limit("60 per minute")
 def get_public_profile(username: str):
     """Retrieve a user's public profile stats and basic info."""
-    stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
-    user = db.session.execute(stmt).scalar_one_or_none()
+    user = db.session.execute(select(User).where(func.lower(User.public_username) == username.lower())).scalar_one_or_none()
 
     if not user:
         return jsonify({"error": "Public profile not found or user has disabled public sharing."}), 404
 
-    count_stmt = select(func.count(Item.id)).where(Item.owner_id == user.id, Item.is_hidden.is_(False))  # pylint: disable=not-callable
-    item_count = db.session.execute(count_stmt).scalar()
+    viewer_id = getattr(g, "user_id", None)
+    is_owner = bool(viewer_id and str(viewer_id) == str(user.id))
+
+    from app.core.friend_service import is_friend_of
+
+    is_friend = is_friend_of(viewer_id, user.id) if viewer_id else False
+
+    if user.visibility == "private" and not is_owner:
+        return jsonify({"error": "Public profile not found or user has disabled public sharing."}), 404
+    if user.visibility == "friends_only" and not (is_owner or is_friend):
+        return jsonify({"error": "Public profile not found or user has disabled public sharing."}), 404
+
+    if is_owner or is_friend:
+        count_stmt = select(func.count(Item.id)).where(  # pylint: disable=not-callable
+            Item.owner_id == user.id,
+            or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+        )
+    else:
+        count_stmt = select(func.count(Item.id)).where(Item.owner_id == user.id, Item.is_hidden.is_(False))  # pylint: disable=not-callable
+
+    item_count = db.session.execute(count_stmt).scalar() or 0
 
     return jsonify(
         {
@@ -49,6 +69,7 @@ def get_public_profile(username: str):
                 "avatar_url": user.avatar_url,
                 "bio": user.bio,
                 "public_item_count": item_count,
+                "is_friend": is_friend,
             },
         }
     )
@@ -94,6 +115,44 @@ def check_inventory(username: str):
 
     friend_items = []
     if data.get("include_friends"):
+        from app.core.friend_service import get_friend_user_ids
+
+        local_friend_ids = list(get_friend_user_ids(user.id))
+        if local_friend_ids:
+            local_friend_stmt = (
+                select(Item)
+                .join(Manifestation)
+                .join(Manifestation.expression)
+                .join(Work)
+                .where(
+                    Item.owner_id.in_(local_friend_ids),
+                    or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+                    or_(
+                        Work.title.ilike(f"%{query_term}%"),
+                        Manifestation.isbn13 == query_term,
+                        Manifestation.upc == query_term,
+                        db.cast(Manifestation.meta, db.String).ilike(f"%{query_term}%"),
+                    ),
+                )
+                .limit(5)
+            )
+            local_friend_items = db.session.execute(local_friend_stmt.options(selectinload(Item.manifestation))).scalars().all()
+            for lfi in local_friend_items:
+                owner_obj = db.session.get(User, lfi.owner_id)
+                handle = (owner_obj.public_username or owner_obj.email) if owner_obj else "friend"
+                friend_items.append(
+                    {
+                        "type": "friend_item",
+                        "id": lfi.id,
+                        "title": lfi.manifestation.title if lfi.manifestation else "",
+                        "status": lfi.status,
+                        "collection_status": lfi.collection_status,
+                        "cover_url": lfi.manifestation.cover_url if lfi.manifestation else None,
+                        "owner_handle": f"@{handle}",
+                        "owner_actor_uri": None,
+                    }
+                )
+
         from app.core.federation_client import FederationClient
         from app.db.federation import FederationActor, FederationFollower, FollowStatus
 

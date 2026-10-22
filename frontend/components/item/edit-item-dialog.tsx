@@ -54,6 +54,10 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
   const t = useTranslations("EditItemDialog");
   const [localBarcode, setLocalBarcode] = useState<string>(item.local_barcode ?? "");
   const [condition, setCondition] = useState<string>(item.condition ?? "");
+  const [visibility, setVisibility] = useState<"private" | "friends_only" | "public">(
+    (item as { visibility?: "private" | "friends_only" | "public" }).visibility ??
+      (item.is_hidden ? "private" : "public")
+  );
   const updateItem = useUpdateItem(item.id);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +66,7 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
       await updateItem.mutateAsync({
         local_barcode: localBarcode.trim() ? localBarcode.trim() : null,
         condition: condition.trim() ? condition.trim() : null,
+        visibility,
       });
       toast.success(t("success"));
       onOpenChange(false);
@@ -106,6 +111,29 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           placeholder={t("conditionPlaceholder")}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
+      </div>
+
+      <div className="space-y-2">
+        <label
+          htmlFor="item-visibility"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          {t("visibility") || "Visibility Tier"}
+        </label>
+        <select
+          id="item-visibility"
+          name="visibility"
+          value={visibility}
+          onChange={e => setVisibility(e.target.value as "private" | "friends_only" | "public")}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <option value="private">{t("visibilityPrivate") || "Private"}</option>
+          <option value="friends_only">{t("visibilityFriendsOnly") || "Friends Only"}</option>
+          <option value="public">{t("visibilityPublic") || "Public"}</option>
+        </select>
+        <p className="text-[11px] text-muted-foreground">
+          {t("visibilityHint") || "Controls who can see this physical item in your library."}
+        </p>
       </div>
 
       <DialogFooter className="pt-2">

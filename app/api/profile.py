@@ -307,18 +307,94 @@ def update_profile_settings():
     if "visibility" in data:
         # User feedback: reuse visibility to value == public
         val = data["visibility"]
-        if val in ["public", "private"]:
+        if val in ["public", "friends_only", "shared", "private"]:
             user.visibility = val
+        else:
+            return jsonify({"error": "Invalid visibility. Must be 'public', 'friends_only', or 'private'", "code": 400}), 400
 
     if "default_item_visibility" in data:
         val = data["default_item_visibility"]
-        if val in ["public", "private"]:
+        if val in ["public", "friends_only", "shared", "private"]:
             user.default_item_visibility = val
         else:
-            return jsonify({"error": "Invalid default_item_visibility. Must be 'public' or 'private'", "code": 400}), 400
+            return jsonify({"error": "Invalid default_item_visibility. Must be 'public', 'friends_only', or 'private'", "code": 400}), 400
 
     db.session.commit()
     return jsonify({"success": True, "message": "Profile updated successfully.", "data": user.to_dict()})
+
+
+@profile_bp.route("/friends", methods=["GET"])
+@require_auth
+def get_user_friends():
+    """List current user's accepted friends and pending requests."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    from app.core.friend_service import list_friends
+
+    data = list_friends(user_id)
+    return jsonify({"success": True, "data": data})
+
+
+@profile_bp.route("/friends/request", methods=["POST"])
+@require_auth
+def send_user_friend_request():
+    """Send a friend request by username, email, or federated handle."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    identifier = payload.get("identifier") or payload.get("username") or payload.get("email")
+    if not identifier:
+        return jsonify({"error": "Target user identifier is required", "code": 400}), 400
+
+    from app.core.friend_service import send_friend_request
+
+    data, err, status_code = send_friend_request(user_id, identifier)
+    if err:
+        return jsonify({"error": err, "code": status_code}), status_code
+
+    return jsonify({"success": True, "data": data, "message": "Friend request sent successfully."}), status_code
+
+
+@profile_bp.route("/friends/<int:friendship_id>/respond", methods=["POST"])
+@require_auth
+def respond_user_friend_request(friendship_id: int):
+    """Accept or reject an incoming friend request."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    action = payload.get("action")
+    if not action or action not in ("accept", "reject"):
+        return jsonify({"error": "Invalid action. Must be 'accept' or 'reject'", "code": 400}), 400
+
+    from app.core.friend_service import respond_friend_request
+
+    data, err, status_code = respond_friend_request(user_id, friendship_id, action)
+    if err:
+        return jsonify({"error": err, "code": status_code}), status_code
+
+    return jsonify({"success": True, "data": data}), status_code
+
+
+@profile_bp.route("/friends/<int:friendship_id>", methods=["DELETE"])
+@require_auth
+def delete_user_friend(friendship_id: int):
+    """Remove a friend or cancel a pending request."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    from app.core.friend_service import remove_friend
+
+    ok, err, status_code = remove_friend(user_id, friendship_id)
+    if err:
+        return jsonify({"error": err, "code": status_code}), status_code
+
+    return jsonify({"success": True, "message": "Friendship removed."}), status_code
 
 
 @profile_bp.route("/insights/velocity", methods=["GET"], strict_slashes=False)

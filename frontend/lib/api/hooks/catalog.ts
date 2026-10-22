@@ -159,7 +159,8 @@ export function useInfiniteItems(
   publishers?: string[],
   includePublic = false,
   lodAuthority?: string,
-  lodStatus?: string
+  lodStatus?: string,
+  scope?: "personal" | "friends" | "global"
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -183,6 +184,7 @@ export function useInfiniteItems(
       includePublic,
       lodAuthority,
       lodStatus,
+      scope,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -202,6 +204,7 @@ export function useInfiniteItems(
       if (includePublic) params.include_public = true;
       if (lodAuthority) params.lod_authority = lodAuthority;
       if (lodStatus) params.lod_status = lodStatus;
+      if (scope) params.scope = scope;
       const res = await apiClient.get<ApiResponse<Item[]>>("/items", { params });
       return res.data;
     },

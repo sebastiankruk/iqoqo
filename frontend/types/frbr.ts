@@ -231,7 +231,9 @@ export interface Item {
   lent_to_user_id?: string | null;
   lent_to_name?: string | null;
   is_borrowed?: boolean;
+  is_friend?: boolean;
   is_hidden?: boolean;
+  visibility?: "private" | "friends_only" | "shared" | "public";
   meta: Record<string, unknown>;
   added_at?: string;
   updated_at?: string;

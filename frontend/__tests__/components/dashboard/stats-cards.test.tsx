@@ -164,7 +164,7 @@ describe("StatsCards", () => {
     expect(screen.getByText("Reading")).toBeInTheDocument();
   });
 
-  it("toggles between Personal and Global scope with dynamic labels via icon-toggle", () => {
+  it("cycles between Personal, Friends, and Global scope with dynamic labels via icon-toggle", () => {
     mockUseStats.mockReturnValue({ data: FULL_STATS, isLoading: false, isError: false } as unknown as ReturnType<
       typeof useStats
     >);
@@ -178,6 +178,12 @@ describe("StatsCards", () => {
     const scopeToggle = screen.getByRole("button", { name: "Personal" });
     expect(scopeToggle).toHaveAttribute("title", "Personal");
     fireEvent.click(scopeToggle);
+
+    expect(mockUseStats).toHaveBeenCalledWith("friends");
+
+    const friendsToggle = screen.getByRole("button", { name: "Friends" });
+    expect(friendsToggle).toHaveAttribute("title", "Friends");
+    fireEvent.click(friendsToggle);
 
     expect(mockUseStats).toHaveBeenCalledWith("global");
     expect(screen.getByText("All Items")).toBeInTheDocument();
@@ -222,6 +228,11 @@ describe("StatsCards", () => {
 
     const scopeToggle = screen.getByRole("button", { name: "Personal" });
     fireEvent.click(scopeToggle);
+
+    expect(insightsMock).toHaveAttribute("data-scope", "friends");
+
+    const friendsToggle = screen.getByRole("button", { name: "Friends" });
+    fireEvent.click(friendsToggle);
 
     expect(insightsMock).toHaveAttribute("data-scope", "global");
   });

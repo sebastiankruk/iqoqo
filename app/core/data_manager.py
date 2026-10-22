@@ -687,7 +687,7 @@ class DataManager:
         }
 
     @staticmethod
-    def get_stats(owner_id: uuid.UUID | None = None) -> dict[str, int]:
+    def get_stats(owner_id: uuid.UUID | None = None, scope: str = "personal") -> dict[str, int]:
         """
         Get database statistics.
 
@@ -698,10 +698,14 @@ class DataManager:
         This ensures the response is fully user-scoped rather than mixing
         user-scoped item counts with global FRBR counts.
 
+        When ``scope="friends"``, counts are aggregated across items owned by the
+        user's accepted friends whose visibility is public or friends_only.
+
         When ``owner_id`` is ``None`` all counts reflect the full database.
 
         Args:
             owner_id: Optional ID of the owner to filter their specific collection.
+            scope: Data scope ('personal', 'friends', 'global').
 
         Returns:
             Dictionary with counts for each FRBR entity type plus UI-friendly
@@ -709,8 +713,22 @@ class DataManager:
             by the React dashboard, and per-status counts keyed as
             ``items_<status>`` for every value in ``ITEM_STATUSES``.
         """
-        # Group by Item.status (progress) and Item.collection_status
-        owner_filter = [Item.owner_id == owner_id] if owner_id else []
+        friend_ids: list[uuid.UUID] = []
+        if scope == "friends" and owner_id:
+            from app.core.friend_service import get_friend_user_ids
+
+            friend_ids = list(get_friend_user_ids(owner_id))
+            if friend_ids:
+                owner_filter = [
+                    Item.owner_id.in_(friend_ids),
+                    db.or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+                ]
+            else:
+                owner_filter = [db.false()]
+        elif owner_id:
+            owner_filter = [Item.owner_id == owner_id]
+        else:
+            owner_filter = []
         status_rows = db.session.execute(
             select(Item.status, func.count(Item.id).label("cnt")).where(*owner_filter).group_by(Item.status)  # pylint: disable=not-callable
         ).all()
@@ -757,14 +775,54 @@ class DataManager:
             if c_status in status_counts:
                 status_counts[c_status] += cnt
 
-        intent_filter = [UserWorkIntent.user_id == owner_id] if owner_id else []
-        intent_filter.append(UserWorkIntent.status != "fulfilled")
-        intent_count = (
-            db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar() or 0  # pylint: disable=not-callable
-        )
+        intent_count = 0
+        if scope != "friends" and owner_id:
+            intent_filter = [UserWorkIntent.user_id == owner_id, UserWorkIntent.status != "fulfilled"]
+            intent_count = (
+                db.session.execute(select(func.count(UserWorkIntent.id)).where(*intent_filter)).scalar()
+                or 0  # pylint: disable=not-callable
+            )
         status_counts["wish_list"] += intent_count
 
-        if owner_id:
+        if scope == "friends":
+            if friend_ids:
+                item_join = db.and_(
+                    Item.manifestation_id == Manifestation.id,
+                    Item.owner_id.in_(friend_ids),
+                    db.or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+                )
+                works_count = (
+                    db.session.execute(
+                        select(func.count(distinct(Work.id)))  # pylint: disable=not-callable
+                        .select_from(Work)
+                        .join(Expression, Expression.work_id == Work.id)
+                        .join(Manifestation, Manifestation.expression_id == Expression.id)
+                        .join(Item, item_join)
+                    ).scalar()
+                    or 0
+                )
+                expressions_count = (
+                    db.session.execute(
+                        select(func.count(distinct(Expression.id)))  # pylint: disable=not-callable
+                        .select_from(Expression)
+                        .join(Manifestation, Manifestation.expression_id == Expression.id)
+                        .join(Item, item_join)
+                    ).scalar()
+                    or 0
+                )
+                manifestations_count = (
+                    db.session.execute(
+                        select(func.count(distinct(Manifestation.id)))  # pylint: disable=not-callable
+                        .select_from(Manifestation)
+                        .join(Item, item_join)
+                    ).scalar()
+                    or 0
+                )
+            else:
+                works_count = 0
+                expressions_count = 0
+                manifestations_count = 0
+        elif owner_id:
             works_count = (
                 db.session.execute(
                     select(func.count(distinct(Work.id)))  # pylint: disable=not-callable

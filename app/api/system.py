@@ -169,10 +169,10 @@ def get_dashboard_stats():
     """Return aggregate counts for the caller's dashboard.
 
     ``scope=global`` switches to instance-wide totals and is restricted by the route's
-    permission; otherwise the counts are the caller's own."""
+    permission; ``scope=friends`` returns counts across caller's friends; otherwise the counts are the caller's own."""
     scope = request.args.get("scope", "personal")
     owner_id = getattr(g, "user_id", None) if scope != "global" else None
-    stats = DataManager.get_stats(owner_id=owner_id)
+    stats = DataManager.get_stats(owner_id=owner_id, scope=scope)
     return jsonify({"success": True, "data": stats, "error": None})
 
 

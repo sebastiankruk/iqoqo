@@ -66,6 +66,7 @@ describe("EditItemDialog", () => {
       expect(mockMutateAsync).toHaveBeenCalledWith({
         local_barcode: "NEW-SHELF-99",
         condition: "Good",
+        visibility: "public",
       });
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
@@ -84,6 +85,7 @@ describe("EditItemDialog", () => {
       expect(mockMutateAsync).toHaveBeenCalledWith({
         local_barcode: null,
         condition: "Good",
+        visibility: "public",
       });
     });
   });
@@ -101,6 +103,25 @@ describe("EditItemDialog", () => {
       expect(mockMutateAsync).toHaveBeenCalledWith({
         local_barcode: "TAG-456",
         condition: "Near Mint",
+        visibility: "public",
+      });
+    });
+  });
+
+  it("submits updated visibility to friends_only on save", async () => {
+    render(<EditItemDialog item={mockItem} isOpen={true} onOpenChange={vi.fn()} />);
+
+    const visibilitySelect = screen.getByLabelText(/Visibility Tier/i);
+    fireEvent.change(visibilitySelect, { target: { value: "friends_only" } });
+
+    const submitBtn = screen.getByRole("button", { name: /Save Changes/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledWith({
+        local_barcode: "TAG-456",
+        condition: "Good",
+        visibility: "friends_only",
       });
     });
   });
