@@ -74,15 +74,17 @@ def upgrade():
             schema=auth_schema,
         )
         op.create_index(
-            "ix_user_friendships_requester",
+            "ix_auth_user_friendships_requester_id" if is_pg else "ix_user_friendships_requester_id",
             "user_friendships",
             ["requester_id"],
+            unique=False,
             schema=auth_schema,
         )
         op.create_index(
-            "ix_user_friendships_addressee",
+            "ix_auth_user_friendships_addressee_id" if is_pg else "ix_user_friendships_addressee_id",
             "user_friendships",
             ["addressee_id"],
+            unique=False,
             schema=auth_schema,
         )
 
@@ -97,6 +99,16 @@ def downgrade():
     inventory_schema = "inventory" if is_pg else None
 
     if inspector.has_table("user_friendships", schema=auth_schema):
+        op.drop_index(
+            "ix_auth_user_friendships_addressee_id" if is_pg else "ix_user_friendships_addressee_id",
+            table_name="user_friendships",
+            schema=auth_schema,
+        )
+        op.drop_index(
+            "ix_auth_user_friendships_requester_id" if is_pg else "ix_user_friendships_requester_id",
+            table_name="user_friendships",
+            schema=auth_schema,
+        )
         op.drop_table("user_friendships", schema=auth_schema)
 
     items_cols = [c["name"] for c in inspector.get_columns("items", schema=inventory_schema)]

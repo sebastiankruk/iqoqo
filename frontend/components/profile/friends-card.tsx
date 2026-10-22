@@ -40,6 +40,11 @@ export interface FriendsResponse {
   outgoing: FriendEntry[];
 }
 
+/**
+ * Renders the Friends management card with tabs for accepted, incoming, and outgoing requests.
+ *
+ * @returns {JSX.Element} The component
+ */
 export function FriendsCard() {
   const t = useTranslations("Profile");
   const [data, setData] = useState<FriendsResponse>({ accepted: [], incoming: [], outgoing: [] });
@@ -60,8 +65,26 @@ export function FriendsCard() {
   }, []);
 
   useEffect(() => {
-    loadFriends();
-  }, [loadFriends]);
+    let ignore = false;
+    const fetchFriends = async () => {
+      try {
+        const res = await apiClient.get<{ success: boolean; data: FriendsResponse }>("/profile/friends");
+        if (!ignore) {
+          setData(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load friends", err);
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    };
+    void fetchFriends();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
