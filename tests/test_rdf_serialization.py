@@ -1016,3 +1016,64 @@ class TestSemanticLinksAndSeriesRdfSerialization:
             item_uri = URIRef(f"http://testserver/items/{item.id}")
             assert (item_uri, IQOQO.local_barcode, Literal("SHELF-STICKER-42")) in g
             assert (item_uri, IQOQO.condition, Literal("mint")) in g
+
+
+def test_export_service_export_rdf_social_and_custody(app):
+    """Verify ExportService.export_rdf emits foaf:knows and custodyHolder triples."""
+    from app.core.export_service import FOAF
+    from app.db.auth import UserFriendship
+
+    with app.app_context():
+        user1 = User(
+            email="export_u1@iqoqo.local",
+            display_name="User 1",
+            public_username="export_u1",
+            visibility="public",
+        )
+        user2 = User(
+            email="export_u2@iqoqo.local",
+            display_name="User 2",
+            public_username="export_u2",
+            visibility="public",
+        )
+        db.session.add_all([user1, user2])
+        db.session.flush()
+
+        friendship = UserFriendship(
+            requester_id=user1.id,
+            addressee_id=user2.id,
+            status="accepted",
+        )
+        db.session.add(friendship)
+
+        work = Work(title="Lent Book Work")
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+
+        mani = Manifestation(expression_id=expr.id)
+        db.session.add(mani)
+        db.session.flush()
+
+        item = Item(
+            owner_id=user1.id,
+            manifestation_id=mani.id,
+            status="lent",
+            lent_to_user_id=user2.id,
+        )
+        db.session.add(item)
+        db.session.commit()
+
+        ttl = ExportService.export_rdf(user1.id, export_format="turtle", base_url="http://testserver")
+        g = Graph()
+        g.parse(data=ttl, format="turtle")
+
+        u1_uri = URIRef("http://testserver/u/export_u1")
+        u2_uri = URIRef("http://testserver/u/export_u2")
+        item_uri = URIRef(f"http://testserver/item/{item.id}")
+
+        assert (u1_uri, FOAF.knows, u2_uri) in g
+        assert (item_uri, IQOQO.custodyHolder, u2_uri) in g

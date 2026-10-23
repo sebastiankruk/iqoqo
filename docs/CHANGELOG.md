@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Review Enhancements & Deferred Items (C83e)**:
+  - Friend-scoped facet statistics on `GET /api/stats/facets?scope=friends` aggregating confirmed friends' visible items (`public`, `friends_only`, `shared`, `is_hidden=False`).
+  - Graceful degradation banner and local instance metadata on `/federation/directory` when S2S federation is disabled (`FEDERATION_ENABLED=False`).
+  - Social and custody provenance serialization in `ExportService.export_rdf()` emitting `foaf:knows` for mutual friends and `iqoqo:custodyHolder` for public loans.
+  - Rate limiting on notification endpoints (`GET /api/v1/notifications`, `PATCH /api/v1/notifications/<id>/read`, `POST /api/v1/notifications/read-all`) via `@limiter.limit("60 per minute")`.
+  - Comprehensive English and Polish localization parity for `Notifications`, `FeedbackPage`, `Profile`, and `FederationDirectory`.
+
 ### Changed
 
 ### Fixed

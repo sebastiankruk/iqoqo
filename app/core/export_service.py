@@ -27,11 +27,13 @@ import uuid
 from collections.abc import Generator, Iterable
 from typing import Any
 
-from rdflib import Graph, Namespace
+from rdflib import Graph, Namespace, URIRef
+from rdflib.namespace import RDF
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.core.iri import get_lod_base_url as _get_lod_base_url
+from app.db.auth import User
 from app.db.core import Expression, Item, Manifestation, Work, db
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,7 @@ FRBR_IFLA = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
 SCHEMA = Namespace("https://schema.org/")
 DC = Namespace("http://purl.org/dc/terms/")
 IQOQO = Namespace("https://iqoqo.org/ontology#")
+FOAF = Namespace("http://xmlns.com/foaf/0.1/")
 
 # Canonical JSON-LD @context dictionary
 CANONICAL_JSONLD_CONTEXT: dict[str, Any] = {
@@ -111,8 +114,71 @@ class ExportService:
         graph.bind("schema", SCHEMA)
         graph.bind("dc", DC)
         graph.bind("iqoqo", IQOQO)
+        graph.bind("foaf", FOAF)
+
+        for item in items:
+            if getattr(item, "lent_to_user_id", None):
+                holder = getattr(item, "lent_to_user", None) or (
+                    db.session.get(User, item.lent_to_user_id) if hasattr(db, "session") else None
+                )
+                if holder and getattr(holder, "visibility", "private") != "private":
+                    holder_name = getattr(holder, "public_username", None) or str(holder.id)
+                    holder_uri = URIRef(f"{base_url}/u/{holder_name}")
+                    graph.add((URIRef(f"{base_url}/item/{item.id}"), IQOQO.custodyHolder, holder_uri))
 
         return graph
+
+    @classmethod
+    def export_rdf(
+        cls,
+        user_id: uuid.UUID | str,
+        export_format: str = "turtle",
+        base_url: str | None = None,
+        include_social: bool = True,
+    ) -> str:
+        """Export user collection with social relationships and custody status to RDF.
+
+        Emits:
+        - Items, Manifestations, Expressions, Works
+        - iqoqo:custodyHolder triples for active public loans
+        - foaf:knows triples for confirmed mutual friends when permitted by privacy settings
+        """
+        resolved_base_url = cls.get_lod_base_url(base_url)
+        resolved_uid = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+
+        stmt = (
+            select(Item)
+            .where(Item.owner_id == resolved_uid)
+            .options(
+                joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
+                joinedload(Item.manifestation)
+                .joinedload(Manifestation.expression)
+                .joinedload(Expression.work)
+                .selectinload(Work.series_memberships),
+            )
+            .order_by(Item.id.asc())
+        )
+        items = list(db.session.execute(stmt).scalars().all())
+        graph = cls.build_batch_rdf_graph(items, resolved_base_url)
+
+        if include_social:
+            user = db.session.get(User, resolved_uid)
+            if user:
+                u_name = user.public_username or str(user.id)
+                user_uri = URIRef(f"{resolved_base_url}/u/{u_name}")
+                graph.add((user_uri, RDF.type, IQOQO.User))
+
+                from app.core.friend_service import get_friend_user_ids
+
+                friend_ids = get_friend_user_ids(resolved_uid)
+                for f_id in friend_ids:
+                    f_user = db.session.get(User, f_id)
+                    if f_user:
+                        f_name = f_user.public_username or str(f_user.id)
+                        f_uri = URIRef(f"{resolved_base_url}/u/{f_name}")
+                        graph.add((user_uri, FOAF.knows, f_uri))
+
+        return graph.serialize(format=export_format)
 
     @classmethod
     def stream_jsonld(

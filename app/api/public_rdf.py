@@ -771,3 +771,36 @@ def get_public_user_followers(username: str) -> Response | tuple[Response, int]:
     )
     resp.headers["Cache-Control"] = "public, max-age=300"
     return resp
+
+
+@public_bp.route("/federation/instance-info", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_public_federation_instance_info() -> Response:
+    """Public endpoint returning local instance info and federation status."""
+    from urllib.parse import urlparse
+
+    from app.api.federation_guard import is_federation_enabled
+    from app.config import Config
+
+    fed_enabled = is_federation_enabled()
+    public_items_count = (
+        db.session.execute(select(func.count(Item.id)).where(Item.is_hidden.is_(False))).scalar() or 0  # pylint: disable=not-callable
+    )
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    local_domain = urlparse(base_url).netloc if base_url else "localhost"
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "domain": local_domain,
+                    "software_name": "iqoqo",
+                    "software_version": Config.VERSION,
+                    "public_items_count": public_items_count,
+                    "federation_enabled": fed_enabled,
+                },
+            }
+        ),
+        200,
+    )

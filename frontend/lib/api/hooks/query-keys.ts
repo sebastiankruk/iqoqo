@@ -180,7 +180,8 @@ export const queryKeys = {
   usersSearch: (query: string) => ["users", "search", query] as const,
   workIntent: (workId: number) => ["workIntent", workId] as const,
   globalStats: ["globalStats"] as const,
-  facetStats: (scope: "global" | "user", filters?: Record<string, string>) => ["facetStats", scope, filters] as const,
+  facetStats: (scope: "global" | "user" | "friends" | "own" | string, filters?: Record<string, string>) =>
+    ["facetStats", scope, filters] as const,
   velocityInsights: (scope: "personal" | "global" = "personal") => ["insights", "velocity", scope] as const,
   distributionInsights: (scope: "personal" | "global" = "personal") => ["insights", "distribution", scope] as const,
   collectionGrid: (viewMode: string, filters: Record<string, unknown>) =>

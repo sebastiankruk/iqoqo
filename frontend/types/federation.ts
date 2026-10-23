@@ -65,10 +65,12 @@ export interface LocalInstanceInfo {
   software_name: string;
   software_version: string;
   public_items_count: number;
+  federation_enabled?: boolean;
 }
 
 export interface FederationDirectoryData {
   local_instance: LocalInstanceInfo;
   peers: FederationInstance[];
   total_peers: number;
+  federation_enabled?: boolean;
 }

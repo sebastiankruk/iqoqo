@@ -54,12 +54,16 @@ export function useGlobalStats() {
 /**
  * Custom hook to fetch cross-filtered facet counts for the sidebar.
  *
- * @param scope - The scope to fetch stats for ("global" or "user")
+ * @param scope - The scope to fetch stats for ("global", "user", "friends", "own")
  * @param filters - Filter params to narrow counts
  * @param enabled - Whether the query is enabled
  * @returns React Query result with per-facet counts
  */
-export function useFacetStats(scope: "global" | "user", filters?: Record<string, string>, enabled = true) {
+export function useFacetStats(
+  scope: "global" | "user" | "friends" | "own" | string,
+  filters?: Record<string, string>,
+  enabled = true
+) {
   return useQuery({
     queryKey: queryKeys.facetStats(scope, filters),
     queryFn: async () => {
