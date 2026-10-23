@@ -701,7 +701,9 @@ def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int =
         _in_memory_fts_queue.add(key)
 
     try:
-        batch_fts_reindex.apply_async(countdown=countdown)
+        # retry=False prevents blocking the HTTP worker for ~20 s when the broker
+        # is unreachable (Celery default publish retry policy).
+        batch_fts_reindex.apply_async(countdown=countdown, retry=False)
     except Exception as exc:
         logger.debug("Celery task dispatch skipped or delayed: %s", exc)
 
