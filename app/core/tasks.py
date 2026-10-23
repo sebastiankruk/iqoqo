@@ -699,6 +699,11 @@ def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int =
             _in_memory_fts_queue.add(key)
     else:
         _in_memory_fts_queue.add(key)
+        if not celery.conf.task_always_eager:
+            # Broker/result backend unreachable: dispatching would block the HTTP
+            # worker for ~20 s on Celery's result-store reconnect loop.
+            logger.debug("Redis unavailable; FTS reindex for %s kept in local queue", key)
+            return
 
     try:
         # retry=False prevents blocking the HTTP worker for ~20 s when the broker
