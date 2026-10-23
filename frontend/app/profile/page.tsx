@@ -34,6 +34,7 @@ import { EmailVerificationCard } from "@/components/profile/email-verification-c
 import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog";
 import { DeletionPendingNotice } from "@/components/profile/deletion-pending-notice";
 import { FederationConsentSettings } from "@/components/settings/federation-consent";
+import { FriendsCard } from "@/components/profile/friends-card";
 
 /**
  * User consent record
@@ -57,8 +58,8 @@ interface UserProfile {
   public_username: string | null;
   bio: string | null;
   avatar_url: string | null;
-  visibility: "public" | "private";
-  default_item_visibility?: "public" | "private";
+  visibility: "public" | "friends_only" | "private";
+  default_item_visibility?: "public" | "friends_only" | "private";
   created_at: string;
   consents: ConsentRecord;
   /**
@@ -89,8 +90,8 @@ export default function ProfilePage() {
   const [publicUsername, setPublicUsername] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [visibility, setVisibility] = useState<"public" | "private">("private");
-  const [defaultItemVisibility, setDefaultItemVisibility] = useState<"public" | "private">("private");
+  const [visibility, setVisibility] = useState<"public" | "friends_only" | "private">("private");
+  const [defaultItemVisibility, setDefaultItemVisibility] = useState<"public" | "friends_only" | "private">("private");
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -330,7 +331,7 @@ export default function ProfilePage() {
 
             {/* Visibility */}
             <div>
-              <p className="text-sm font-medium mb-2">Profile Visibility</p>
+              <p className="text-sm font-medium mb-2">{t("profileVisibility") || "Profile Visibility"}</p>
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
@@ -344,6 +345,22 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-sm font-medium">Private</p>
                     <p className="text-xs text-muted-foreground">Only you can see your collection.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="friends_only"
+                    checked={visibility === "friends_only"}
+                    onChange={() => setVisibility("friends_only")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{t("friendsOnly") || "Friends Only"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("friendsOnlyDesc") || "Only accepted friends can see your profile and collection."}
+                    </p>
                   </div>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer group">
@@ -385,6 +402,22 @@ export default function ProfilePage() {
                   <input
                     type="radio"
                     name="default_item_visibility"
+                    value="friends_only"
+                    checked={defaultItemVisibility === "friends_only"}
+                    onChange={() => setDefaultItemVisibility("friends_only")}
+                    className="h-4 w-4 text-primary border-input bg-background focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{t("friendsOnly") || "Friends Only"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("itemFriendsOnlyDesc") || "New scanned or ingested items default to friends only."}
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="default_item_visibility"
                     value="public"
                     checked={defaultItemVisibility === "public"}
                     onChange={() => setDefaultItemVisibility("public")}
@@ -406,6 +439,9 @@ export default function ProfilePage() {
             </Button>
           </div>
         </div>
+
+        {/* ── Friends & Social Library ── */}
+        <FriendsCard />
 
         {/* ── Email Verification ── */}
         <EmailVerificationCard

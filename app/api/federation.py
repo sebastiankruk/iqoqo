@@ -21,8 +21,9 @@ import uuid
 from typing import Any
 from urllib.parse import urlparse
 
-from flask import Blueprint, Response, current_app, jsonify, redirect, request
+from flask import Blueprint, Response, current_app, g, jsonify, redirect, request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
@@ -43,6 +44,7 @@ from app.db.auth import User
 from app.db.federation import (
     ActivityStatus,
     FederationActivity,
+    FederationActor,
     FederationConsent,
     FederationFollower,
     FederationInstance,
@@ -706,9 +708,10 @@ def federation_lookup() -> Response | tuple[Response, int]:
 @limiter.limit(FEDERATION_FOLLOW_LIMIT)
 def federation_follow_remote() -> Response | tuple[Response, int]:
     """Initiate an outbound Follow activity to a remote Actor."""
-    from app.api.auth import get_current_user
-
-    current_user = get_current_user()
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+    current_user = db.session.get(User, user_id)
     if not current_user:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
 
@@ -762,6 +765,32 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
     try:
         resp = client.post_to_inbox(inbox_url, follow_activity, sender_user_id=str(current_user.id))
         if resp.status_code in (200, 201, 202):
+            # Ensure FederationActor exists in DB
+            actor_stmt = select(FederationActor).where(FederationActor.actor_uri == target_actor_uri)
+            remote_actor_rec = db.session.execute(actor_stmt).scalars().first()
+            if not remote_actor_rec:
+                from app.core.federation_handlers import _get_or_create_actor
+
+                remote_actor_rec = _get_or_create_actor(target_actor_uri)
+
+            if remote_actor_rec:
+                follower_stmt = select(FederationFollower).where(
+                    FederationFollower.local_user_id == current_user.id,
+                    FederationFollower.remote_actor_id == remote_actor_rec.id,
+                )
+                follower = db.session.execute(follower_stmt).scalars().first()
+                if not follower:
+                    follower = FederationFollower(
+                        local_user_id=current_user.id,
+                        remote_actor_id=remote_actor_rec.id,
+                        status=FollowStatus.PENDING,
+                    )
+                    db.session.add(follower)
+                    try:
+                        db.session.commit()
+                    except IntegrityError:
+                        db.session.rollback()
+
             return (
                 jsonify(
                     {
@@ -785,3 +814,122 @@ def federation_follow_remote() -> Response | tuple[Response, int]:
     except Exception as exc:
         current_app.logger.error("Outbound federation follow error: %s", exc)
         return jsonify({"error": "Outbound delivery failed", "code": 500}), 500
+
+
+@federation_bp.route("/friends", methods=["GET"])
+@require_auth
+@federation_required
+@limiter.limit("60 per minute")
+def get_federated_friends() -> Response | tuple[Response, int]:
+    """Retrieve accepted federated friends for current user."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+    current_user = db.session.get(User, user_id)
+    if not current_user:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    stmt = (
+        select(FederationFollower, FederationActor)
+        .join(FederationActor, FederationFollower.remote_actor_id == FederationActor.id)
+        .where(
+            FederationFollower.local_user_id == current_user.id,
+            FederationFollower.status == FollowStatus.ACCEPTED,
+        )
+    )
+    rows = db.session.execute(stmt).all()
+    friends = []
+    for follower, actor in rows:
+        instance_domain = actor.instance.domain if actor.instance else None
+        handle = f"@{actor.username}@{instance_domain}" if (actor.username and instance_domain) else actor.actor_uri
+        friends.append(
+            {
+                "follower_id": follower.id,
+                "actor_id": actor.id,
+                "actor_uri": actor.actor_uri,
+                "username": actor.username,
+                "display_name": actor.display_name,
+                "instance_domain": instance_domain,
+                "handle": handle,
+                "created_at": follower.created_at.isoformat() if follower.created_at else None,
+            }
+        )
+    return jsonify({"success": True, "data": friends}), 200
+
+
+@federation_bp.route("/friends/<int:actor_id>/collections", methods=["GET"])
+@require_auth
+@federation_required
+@limiter.limit("30 per minute")
+def get_friend_collections(actor_id: int) -> Response | tuple[Response, int]:
+    """Browse federated friend's collection and wishlist with local caching."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+    current_user = db.session.get(User, user_id)
+    if not current_user:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    # Verify friend relationship
+    stmt = (
+        select(FederationFollower, FederationActor)
+        .join(FederationActor, FederationFollower.remote_actor_id == FederationActor.id)
+        .where(
+            FederationFollower.local_user_id == current_user.id,
+            FederationFollower.remote_actor_id == actor_id,
+            FederationFollower.status == FollowStatus.ACCEPTED,
+        )
+    )
+    res = db.session.execute(stmt).first()
+    if not res:
+        return jsonify({"error": "Friend not found or not accepted", "code": 404}), 404
+
+    _, actor = res
+    force_refresh = request.args.get("refresh", "").lower() in {"true", "1", "yes"}
+
+    client = FederationClient()
+    try:
+        collections = client.fetch_actor_collections(actor.actor_uri, force_refresh=force_refresh)
+        return jsonify({"success": True, "data": collections or {}}), 200
+    except Exception as exc:
+        current_app.logger.warning("Error fetching collections for friend %s: %s", actor.actor_uri, exc)
+        return jsonify({"error": "Failed to fetch friend collections", "code": 502}), 502
+
+
+@federation_bp.route("/directory", methods=["GET"])
+@federation_required
+@limiter.limit("60 per minute")
+def get_federation_directory() -> Response:
+    """Return public directory listing of connected, verified peer libraries and instance overview."""
+    from app.config import Config
+    from app.core.iri import get_federation_base_url
+    from app.db.core import Item
+
+    # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
+    stmt = (
+        select(FederationInstance)
+        .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
+        .order_by(FederationInstance.last_seen_at.desc().nullslast())
+    )
+    peers = db.session.execute(stmt).scalars().all()
+
+    # 2. Local public items stats
+    public_items_count = (
+        db.session.execute(select(func.count(Item.id)).where(Item.is_hidden.is_(False))).scalar() or 0  # pylint: disable=not-callable
+    )
+
+    base_url = get_federation_base_url()
+    local_domain = urlparse(base_url).netloc if base_url else "localhost"
+
+    directory_data = {
+        "local_instance": {
+            "domain": local_domain,
+            "software_name": "iqoqo",
+            "software_version": Config.VERSION,
+            "public_items_count": public_items_count,
+        },
+        "peers": [peer.to_dict() for peer in peers],
+        "total_peers": len(peers),
+    }
+
+    return jsonify({"success": True, "data": directory_data}), 200

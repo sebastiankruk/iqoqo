@@ -18,6 +18,7 @@
 import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 export interface RichTextProps {
@@ -44,6 +45,15 @@ const ALLOWED_TAGS = [
   "h2",
   "h3",
   "h4",
+  "h5",
+  "h6",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "hr",
 ];
 
 const ALLOWED_ATTR = ["href", "target", "rel", "title"];
@@ -76,6 +86,9 @@ function getPurifier() {
 /**
  * Safely decodes HTML entities (e.g., &lt; to <, &amp; to &), handling up to
  * two decoding passes for double-encoded entities delivered by external APIs.
+ *
+ * @param raw - The raw text containing encoded HTML entities.
+ * @returns Decoded text string.
  */
 export function decodeHtmlEntities(raw: string): string {
   let decoded = raw;
@@ -107,6 +120,9 @@ export function decodeHtmlEntities(raw: string): string {
 /**
  * Sanitizes an HTML string using DOMPurify with strict tag and attribute whitelists.
  * When window or DOMPurify context is unavailable (SSR), strips all HTML tags to prevent XSS.
+ *
+ * @param dirty - Unsanitized HTML string.
+ * @returns Sanitized safe HTML string.
  */
 export function sanitizeRichHtml(dirty: string): string {
   const purify = getPurifier();
@@ -130,6 +146,9 @@ export function sanitizeRichHtml(dirty: string): string {
 
 /**
  * Checks whether text contains HTML tags.
+ *
+ * @param text - Input text string.
+ * @returns True if text contains HTML elements.
  */
 export function containsHtmlTags(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(text);
@@ -138,6 +157,11 @@ export function containsHtmlTags(text: string): boolean {
 /**
  * Unified component for rendering rich descriptions across iqoqo views.
  * Handles entity-decoded HTML, DOMPurify sanitization, and Markdown formatting.
+ *
+ * @param props - Component properties.
+ * @param props.content - Markdown or HTML string content.
+ * @param props.className - Additional CSS classes.
+ * @returns Rendered JSX Element.
  */
 export function RichText({ content, className }: RichTextProps) {
   const processed = useMemo(() => {
@@ -164,7 +188,87 @@ export function RichText({ content, className }: RichTextProps) {
 
   return (
     <div className={baseClassName}>
-      <ReactMarkdown>{processed.value}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ ...props }) => (
+            <h1
+              {...props}
+              className="mt-8 mb-4 text-2xl sm:text-3xl font-serif font-bold tracking-tight text-foreground"
+            />
+          ),
+          h2: ({ ...props }) => (
+            <h2
+              {...props}
+              className="mt-8 mb-3 text-xl sm:text-2xl font-serif font-bold tracking-tight text-foreground border-b border-border/50 pb-2"
+            />
+          ),
+          h3: ({ ...props }) => (
+            <h3 {...props} className="mt-6 mb-2 text-lg sm:text-xl font-serif font-semibold text-foreground" />
+          ),
+          h4: ({ ...props }) => <h4 {...props} className="mt-4 mb-2 text-base font-semibold text-foreground" />,
+          p: ({ ...props }) => (
+            <p {...props} className="mb-4 leading-relaxed text-foreground/90 text-sm sm:text-base" />
+          ),
+          ul: ({ ...props }) => (
+            <ul {...props} className="my-4 ml-6 list-disc space-y-2 text-foreground/90 text-sm sm:text-base" />
+          ),
+          ol: ({ ...props }) => (
+            <ol {...props} className="my-4 ml-6 list-decimal space-y-2 text-foreground/90 text-sm sm:text-base" />
+          ),
+          li: ({ ...props }) => <li {...props} className="leading-relaxed" />,
+          blockquote: ({ ...props }) => (
+            <blockquote
+              {...props}
+              className="my-6 border-l-4 border-primary/50 pl-4 italic text-muted-foreground bg-muted/20 py-2 rounded-r-md text-sm sm:text-base"
+            />
+          ),
+          hr: ({ ...props }) => <hr {...props} className="my-8 border-border" />,
+          strong: ({ ...props }) => <strong {...props} className="font-semibold text-foreground" />,
+          a: ({ ...props }) => (
+            <a {...props} className="text-primary underline hover:text-primary/80 transition-colors" />
+          ),
+          code: ({ className, children, ...props }: React.ComponentPropsWithoutRef<"code">) => {
+            const match = /language-(\w+)/.exec(className || "");
+            const isInline = !match && typeof children === "string" && !children.includes("\n");
+            return isInline ? (
+              <code {...props} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                {children}
+              </code>
+            ) : (
+              <pre className="my-4 overflow-x-auto rounded-lg border border-border bg-muted/60 p-4 font-mono text-xs">
+                <code {...props} className={className}>
+                  {children}
+                </code>
+              </pre>
+            );
+          },
+          img: ({ ...imgProps }) => (
+            <span className="my-6 block overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img {...imgProps} alt={imgProps.alt || "Guide illustration"} className="w-full object-cover" />
+              {imgProps.alt && (
+                <span className="block border-t border-border/40 px-3 py-2 text-center text-xs text-muted-foreground italic">
+                  {imgProps.alt}
+                </span>
+              )}
+            </span>
+          ),
+          table: ({ ...tableProps }) => (
+            <div className="my-6 w-full overflow-x-auto rounded-lg border border-border">
+              <table {...tableProps} className="w-full border-collapse text-left text-xs sm:text-sm" />
+            </div>
+          ),
+          th: ({ ...thProps }) => (
+            <th {...thProps} className="bg-muted px-4 py-2.5 font-semibold text-foreground border-b border-border" />
+          ),
+          td: ({ ...tdProps }) => (
+            <td {...tdProps} className="px-4 py-2 border-b border-border/60 text-muted-foreground" />
+          ),
+        }}
+      >
+        {processed.value}
+      </ReactMarkdown>
     </div>
   );
 }

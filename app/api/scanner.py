@@ -629,12 +629,18 @@ def _scan_to_library(
     user_id = context.user_id
     user = db.session.get(User, user_id) if user_id else None
     user_default_visibility = getattr(user, "default_item_visibility", "private") if user else "private"
-    if payload.is_public is not None:
+    if payload.visibility is not None:
+        visibility = payload.visibility
+        is_hidden = visibility != "public"
+    elif payload.is_public is not None:
         is_hidden = not payload.is_public
+        visibility = "public" if payload.is_public else "private"
     elif payload.is_hidden is not None:
         is_hidden = payload.is_hidden
+        visibility = "private" if payload.is_hidden else "public"
     else:
-        is_hidden = user_default_visibility == "private"
+        visibility = user_default_visibility or "private"
+        is_hidden = visibility != "public"
 
     # Assign dynamically passed collection_status (Library vs Wishlist)
     new_item = Item(
@@ -644,6 +650,7 @@ def _scan_to_library(
         collection_status=collection_status,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
+        visibility=visibility,
         is_hidden=is_hidden,
     )
     db.session.add(new_item)

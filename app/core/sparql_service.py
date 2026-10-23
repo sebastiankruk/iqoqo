@@ -633,21 +633,42 @@ def build_graph(
             items = items[:MAX_GRAPH_ITEMS]
 
         entities_to_serialize = []
+        from app.core.friend_service import is_friend_of
+        from app.core.item_access import is_item_publicly_visible
+
         for it in items:
             if isinstance(it, dict):
-                is_hidden = it.get("is_hidden")
-                is_public = it.get("is_public", not is_hidden if is_hidden is not None else True)
                 owner = it.get("owner_id")
-                if owner is not None and not is_public:
-                    if user_id is None or str(owner) != str(user_id):
-                        continue
+                vis = it.get("visibility", "public")
+                if owner is not None and user_id is not None and str(owner) == str(user_id):
+                    # Owner can always query their own item
+                    pass
+                elif (
+                    owner is not None
+                    and user_id is not None
+                    and vis in ("public", "friends_only", "shared")
+                    and is_friend_of(user_id, owner)
+                ):
+                    # Confirmed friend can see friends_only/shared items
+                    pass
+                elif not is_item_publicly_visible(it):
+                    continue
             elif hasattr(it, "owner_id"):
-                is_hidden = getattr(it, "is_hidden", False)
-                is_public = getattr(it, "is_public", not is_hidden)
                 owner = getattr(it, "owner_id", None)
-                if owner is not None and not is_public:
-                    if user_id is None or str(owner) != str(user_id):
-                        continue
+                vis = getattr(it, "visibility", "public")
+                if owner is not None and user_id is not None and str(owner) == str(user_id):
+                    # Owner can always query their own item
+                    pass
+                elif (
+                    owner is not None
+                    and user_id is not None
+                    and vis in ("public", "friends_only", "shared")
+                    and is_friend_of(user_id, owner)
+                ):
+                    # Confirmed friend can see friends_only/shared items
+                    pass
+                elif not is_item_publicly_visible(it):
+                    continue
             entities_to_serialize.append(it)
 
     try:

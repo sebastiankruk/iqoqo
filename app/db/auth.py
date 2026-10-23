@@ -321,8 +321,10 @@ class User(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "users"
     __table_args__ = (
-        db.CheckConstraint("visibility IN ('private', 'shared', 'public')", name="check_user_visibility"),
-        db.CheckConstraint("default_item_visibility IN ('private', 'public')", name="check_user_default_item_visibility"),
+        db.CheckConstraint("visibility IN ('private', 'friends_only', 'shared', 'public')", name="check_user_visibility"),
+        db.CheckConstraint(
+            "default_item_visibility IN ('private', 'friends_only', 'shared', 'public')", name="check_user_default_item_visibility"
+        ),
         db.CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL", name="check_user_auth_method"),
         *(({"schema": _AUTH},) if _AUTH else ()),
     )
@@ -487,3 +489,39 @@ class ConsentRecord(db.Model):  # type: ignore[name-defined]
     is_granted = db.Column(db.Boolean, nullable=False)
     policy_version = db.Column(db.String(50), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+
+class UserFriendship(db.Model):  # type: ignore[name-defined]
+    """Bi-directional friendship / contact relation between two local users."""
+
+    __tablename__ = "user_friendships"
+    __table_args__ = (
+        db.UniqueConstraint("requester_id", "addressee_id", name="uq_user_friendships_pair"),
+        db.CheckConstraint("status IN ('pending', 'accepted', 'rejected')", name="check_friendship_status"),
+        *(({"schema": _AUTH},) if _AUTH else ()),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    addressee_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+
+    requester = relationship(
+        "User", foreign_keys=[requester_id], backref=db.backref("sent_friendships", cascade="all, delete-orphan", lazy="dynamic")
+    )
+    addressee = relationship(
+        "User", foreign_keys=[addressee_id], backref=db.backref("received_friendships", cascade="all, delete-orphan", lazy="dynamic")
+    )
+
+    def to_dict(self) -> dict:
+        """Serialize friendship entity to dictionary."""
+        return {
+            "id": self.id,
+            "requester_id": str(self.requester_id),
+            "addressee_id": str(self.addressee_id),
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

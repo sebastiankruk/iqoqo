@@ -22,7 +22,7 @@ export const queryKeys = {
    * @param scope - Data scope ('personal' | 'global')
    * @returns The query key for dashboard statistics.
    */
-  stats: (scope?: "personal" | "global") => (scope ? (["stats", scope] as const) : (["stats"] as const)),
+  stats: (scope?: "personal" | "friends" | "global") => (scope ? (["stats", scope] as const) : (["stats"] as const)),
   /**
    * Query key for items.
    *

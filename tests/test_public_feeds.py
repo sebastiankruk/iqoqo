@@ -188,7 +188,7 @@ class TestContentNegotiation:
         json_data = response.get_json()
         assert json_data["success"] is True
 
-    def test_user_items_json_ld(self, client, monkeypatch, mock_manifestation_data):
+    def test_user_items_json_ld(self, client, monkeypatch, public_user, mock_manifestation_data):
         """Enforces application/ld+json negotiation and checks semantic graph structures."""
         monkeypatch.setattr("app.api.public_items.fetch_user_public_collection", lambda *args, **kwargs: mock_manifestation_data)
 

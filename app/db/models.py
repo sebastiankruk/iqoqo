@@ -42,6 +42,7 @@ from app.db.auth import (  # noqa: F401
     Role,
     TokenBlocklist,
     User,
+    UserFriendship,
     role_permissions,
     user_roles,
 )
@@ -62,6 +63,7 @@ from app.db.core import (  # noqa: F401
     DUPLICATE_STATUS_MERGED,
     DUPLICATE_STATUS_PENDING,
     ITEM_STATUSES,
+    ITEM_VISIBILITIES,
     PROGRESS_STATUSES,
     BoardgameMechanic,
     DuplicateCandidate,
@@ -99,7 +101,15 @@ from app.db.lending import LoanRequest  # noqa: F401
 from app.db.puzzle import MANIFESTATION_PUZZLE_META_KEYS  # noqa: F401
 from app.db.roadmap import ReadingRoadmap, RoadmapItem  # noqa: F401
 from app.db.settings import InstanceSettings, LLMTelemetry, ScanTelemetry  # noqa: F401
-from app.db.social import EscalationRequest, FeedbackComment, FeedbackItem, SharedCollection, SocialFeedback, SocialNote  # noqa: F401
+from app.db.social import (  # noqa: F401
+    EscalationRequest,
+    FeedbackComment,
+    FeedbackItem,
+    Notification,
+    SharedCollection,
+    SocialFeedback,
+    SocialNote,
+)
 from app.db.video import (  # noqa: F401
     EXPRESSION_VIDEO_ROLES,
     MANIFESTATION_VIDEO_META_KEYS,

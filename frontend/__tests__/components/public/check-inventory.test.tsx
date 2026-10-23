@@ -112,4 +112,23 @@ describe("CheckInventory", () => {
     await user.click(screen.getByRole("button"));
     expect(post).not.toHaveBeenCalled();
   });
+
+  it("passes include_friends when checked", async () => {
+    post.mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ type: "friend_item", id: 99, title: "Solaris", owner_handle: "@alice@remote.library" }],
+      },
+    });
+
+    const user = userEvent.setup();
+    render(<CheckInventory username="jane" />);
+    await user.click(screen.getByTestId("check-inventory-friends-toggle"));
+    await user.type(screen.getByTestId("check-inventory-input"), "Solaris");
+    await user.click(screen.getByRole("button"));
+
+    await waitFor(() => expect(screen.getByText("Solaris")).toBeInTheDocument());
+    expect(post).toHaveBeenCalledWith("/public/u/jane/check", { query: "Solaris", include_friends: true });
+    expect(screen.getByText("@alice@remote.library")).toBeInTheDocument();
+  });
 });

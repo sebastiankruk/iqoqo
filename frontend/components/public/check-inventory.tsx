@@ -31,13 +31,16 @@ interface CheckInventoryProps {
 }
 
 interface CheckResultData {
-  type: "item" | "manifestation";
-  id: number;
+  type: "item" | "manifestation" | "friend_item";
+  id: number | string;
   manifestation_id?: number;
   title: string;
   cover_url?: string;
   status?: string;
+  collection_status?: string;
   publisher?: string;
+  owner_handle?: string;
+  owner_actor_uri?: string;
 }
 
 /**
@@ -49,6 +52,7 @@ interface CheckResultData {
 export function CheckInventory({ username }: CheckInventoryProps) {
   const t = useTranslations("Public");
   const [query, setQuery] = React.useState("");
+  const [includeFriends, setIncludeFriends] = React.useState(false);
   const [result, setResult] = React.useState<CheckResultData[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -62,9 +66,14 @@ export function CheckInventory({ username }: CheckInventoryProps) {
     setError(null);
 
     try {
-      const res = await apiClient.post<{ success: boolean; data: CheckResultData[] }>(`/public/u/${username}/check`, {
-        query: query.trim(),
-      });
+      const payload: { query: string; include_friends?: boolean } = { query: query.trim() };
+      if (includeFriends) {
+        payload.include_friends = true;
+      }
+      const res = await apiClient.post<{ success: boolean; data: CheckResultData[] }>(
+        `/public/u/${username}/check`,
+        payload
+      );
       // An empty `data` is a real answer ("not in this collection") and must
       // render as such; only a missing/failed request is an error.
       if (!res.data?.success || !Array.isArray(res.data.data)) {
@@ -84,21 +93,35 @@ export function CheckInventory({ username }: CheckInventoryProps) {
 
   return (
     <div className="w-full space-y-4">
-      <form onSubmit={handleCheck} className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            data-testid="check-inventory-input"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={t("checkPlaceholder")}
-            className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+      <form onSubmit={handleCheck} className="space-y-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              data-testid="check-inventory-input"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={t("checkPlaceholder")}
+              className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <Button type="submit" disabled={loading} className="shrink-0">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t("checkInventory")}
+          </Button>
         </div>
-        <Button type="submit" disabled={loading} className="shrink-0">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t("checkInventory")}
-        </Button>
+        <div className="flex items-center gap-2 px-1">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              data-testid="check-inventory-friends-toggle"
+              checked={includeFriends}
+              onChange={e => setIncludeFriends(e.target.checked)}
+              className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5"
+            />
+            <span>Check federated friends</span>
+          </label>
+        </div>
       </form>
 
       {error && (
@@ -126,7 +149,13 @@ export function CheckInventory({ username }: CheckInventoryProps) {
               <div className="flex flex-wrap justify-center gap-4">
                 {result.map(item => (
                   <Link
-                    href={`/manifestation/${item.type === "item" ? item.manifestation_id : item.id}`}
+                    href={
+                      item.type === "item"
+                        ? `/manifestation/${item.manifestation_id}`
+                        : item.type === "manifestation"
+                          ? `/manifestation/${item.id}`
+                          : "#"
+                    }
                     key={`${item.type}-${item.id}`}
                     className="block group w-[130px]"
                   >
@@ -144,6 +173,8 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                           <div className="h-28 w-20 bg-muted rounded shadow-sm flex items-center justify-center">
                             {item.type === "item" ? (
                               <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
+                            ) : item.type === "friend_item" ? (
+                              <CheckCircle2 className="h-8 w-8 text-blue-500/50" />
                             ) : (
                               <Info className="h-8 w-8 text-muted-foreground/30" />
                             )}
@@ -156,6 +187,10 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                             <div className="bg-green-600 dark:bg-green-500 rounded-full p-1 shadow-md border-2 border-background">
                               <CheckCircle2 className="h-3 w-3 text-white" />
                             </div>
+                          ) : item.type === "friend_item" ? (
+                            <div className="bg-blue-600 dark:bg-blue-500 rounded-full p-1 shadow-md border-2 border-background">
+                              <CheckCircle2 className="h-3 w-3 text-white" />
+                            </div>
                           ) : (
                             <div className="bg-amber-600 dark:bg-amber-500 rounded-full p-1 shadow-md border-2 border-background">
                               <Info className="h-3 w-3 text-white" />
@@ -165,8 +200,12 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                       </div>
 
                       <div className="w-full text-center space-y-1">
-                        <p className="text-[10px] font-semibold text-primary uppercase tracking-tighter">
-                          {item.type === "item" ? t("foundItem") : t("foundManifestation")}
+                        <p className="text-[10px] font-semibold text-primary uppercase tracking-tighter truncate">
+                          {item.type === "item"
+                            ? t("foundItem")
+                            : item.type === "friend_item"
+                              ? item.owner_handle || "Friend"
+                              : t("foundManifestation")}
                         </p>
                         <p className="text-[11px] font-bold leading-tight group-hover:underline line-clamp-2">
                           {item.title}
@@ -174,6 +213,10 @@ export function CheckInventory({ username }: CheckInventoryProps) {
                         {item.type === "item" ? (
                           <p className="text-[9px] text-muted-foreground capitalize truncate">
                             {item.status?.replace(/_/g, " ")}
+                          </p>
+                        ) : item.type === "friend_item" ? (
+                          <p className="text-[9px] text-blue-600 dark:text-blue-400 font-medium truncate">
+                            {item.collection_status || "available"}
                           </p>
                         ) : (
                           <p className="text-[9px] text-muted-foreground truncate">{item.publisher}</p>

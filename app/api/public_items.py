@@ -22,10 +22,11 @@ import datetime
 from typing import Any
 
 import sqlalchemy as sa
-from flask import Response, current_app, jsonify, request, stream_with_context
+from flask import Response, current_app, g, jsonify, request, stream_with_context
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.api.decorators import optional_auth
 from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
@@ -380,6 +381,7 @@ def shared_collection_feed(token: str):
 
 
 @public_bp.route("/u/<string:username>/items", methods=["GET"])
+@optional_auth
 @limiter.limit("60 per minute")
 def get_public_items(username: str):
     """Retrieve public items for a user."""
@@ -387,6 +389,23 @@ def get_public_items(username: str):
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     format_arg = request.args.get("format", "").lower()
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
+
+    user_stmt = select(User).where(func.lower(User.public_username) == username.lower())
+    user = db.session.execute(user_stmt).scalar_one_or_none()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    viewer_id = getattr(g, "user_id", None)
+    is_owner = bool(viewer_id and str(viewer_id) == str(user.id))
+
+    from app.core.friend_service import is_friend_of
+
+    is_friend = is_friend_of(viewer_id, user.id) if viewer_id else False
+
+    if user.visibility == "private" and not is_owner:
+        return jsonify({"error": "User not found"}), 404
+    if user.visibility == "friends_only" and not (is_owner or is_friend):
+        return jsonify({"error": "User not found"}), 404
 
     # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
     rdf_format: str | None = None
@@ -418,25 +437,25 @@ def get_public_items(username: str):
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
         return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
 
-    user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
-    user = db.session.execute(user_stmt).scalar_one_or_none()
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
     page = request.args.get("page", 1, type=int)
     per_page = min(request.args.get("per_page", 24, type=int), 100)
+
+    if is_owner or is_friend:
+        visibility_cond = or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"]))
+    else:
+        visibility_cond = Item.is_hidden.is_(False)
 
     stmt = (
         select(Item)
         .options(selectinload(Item.manifestation))
-        .where(Item.owner_id == user.id, Item.is_hidden.is_(False))
+        .where(Item.owner_id == user.id, visibility_cond)
         .order_by(Item.updated_at.desc())
         .limit(per_page)
         .offset((page - 1) * per_page)
     )
     items = list(db.session.execute(stmt).scalars().all())
 
-    total_stmt = select(func.count(Item.id)).where(Item.owner_id == user.id, Item.is_hidden.is_(False))  # pylint: disable=not-callable
+    total_stmt = select(func.count(Item.id)).where(Item.owner_id == user.id, visibility_cond)  # pylint: disable=not-callable
     total = db.session.execute(total_stmt).scalar()
 
     return jsonify(

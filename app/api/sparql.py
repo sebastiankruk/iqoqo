@@ -21,7 +21,7 @@ from typing import Any
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from rdflib import Graph
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -57,20 +57,50 @@ sparql_bp = Blueprint("sparql", __name__, url_prefix="/sparql")
 def _get_sparql_items(user: User | None) -> list[Item]:
     """Fetch items for SPARQL querying with eager-loaded FRBR entities.
 
-    Strictly filters Item entities to public records and items owned by user,
-    preventing disclosure of other users' private collection records.
+    Strictly filters Item entities to public records, items owned by user,
+    or items owned by accepted friends of the user, preventing unauthorized disclosure.
     """
+    from app.core.friend_service import get_friend_user_ids
     from app.core.sparql_service import MAX_GRAPH_ITEMS
+    from app.db.federation import FederationConsent
 
     stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+
+    friend_user_ids: set[Any] = set()
     if user and user.id:
-        stmt = stmt.where(or_(Item.is_hidden.is_(False), Item.owner_id == user.id))
-    else:
-        stmt = stmt.where(Item.is_hidden.is_(False))
+        friend_user_ids = get_friend_user_ids(user.id)
 
-    # Apply item count limit
-    stmt = stmt.limit(MAX_GRAPH_ITEMS)
+    # Base visibility: item is not hidden
+    # 1. Owned by current user
+    # 2. Owned by friend, not hidden, visibility in ("public", "friends_only", "shared")
+    # 3. Public item: not hidden, visibility in ("public", "shared"), and owner consent allows
+    from sqlalchemy import and_, or_
 
+    conditions = []
+    if user and user.id:
+        # Own items
+        conditions.append(Item.owner_id == user.id)
+        if friend_user_ids:
+            # Friends' items
+            conditions.append(
+                and_(
+                    Item.owner_id.in_(friend_user_ids),
+                    Item.visibility.in_(["public", "friends_only", "shared"]),
+                )
+            )
+
+    # Non-consented users who opted out of federated collection
+    opted_out_user_ids = select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))
+
+    # Public items:
+    public_condition = and_(
+        Item.is_hidden.is_(False),
+        Item.visibility.in_(["public", "shared"]),
+        Item.owner_id.not_in(opted_out_user_ids),
+    )
+    conditions.append(public_condition)
+
+    stmt = stmt.where(or_(*conditions)).limit(MAX_GRAPH_ITEMS)
     return list(db.session.execute(stmt).scalars().all())
 
 

@@ -127,4 +127,41 @@ describe("RichText component", () => {
     expect(b).not.toBeNull();
     expect(b?.textContent).toBe("dziejach sztuki");
   });
+
+  it("renders markdown headings, paragraphs, and lists with typography styling classes", () => {
+    const markdown = `# Main Title
+
+Paragraph one with text.
+
+## Section Two
+
+* Item alpha
+* Item beta
+
+### Subsection Three
+`;
+
+    const { container } = render(<RichText content={markdown} />);
+
+    const h1 = container.querySelector("h1");
+    expect(h1).not.toBeNull();
+    expect(h1?.textContent).toBe("Main Title");
+    expect(h1?.className).toContain("font-serif");
+
+    const h2 = container.querySelector("h2");
+    expect(h2).not.toBeNull();
+    expect(h2?.textContent).toBe("Section Two");
+
+    const h3 = container.querySelector("h3");
+    expect(h3).not.toBeNull();
+    expect(h3?.textContent).toBe("Subsection Three");
+
+    const p = container.querySelector("p");
+    expect(p).not.toBeNull();
+    expect(p?.className).toContain("mb-4");
+
+    const ul = container.querySelector("ul");
+    expect(ul).not.toBeNull();
+    expect(ul?.className).toContain("list-disc");
+  });
 });

@@ -16,6 +16,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useProfile } from "@/lib/api/hooks";
 import { Activity, Building2, Loader2, Settings, ShieldAlert } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -34,6 +35,7 @@ import { Button } from "@/components/ui/button";
  * @returns Federation administration page component.
  */
 export default function FederationAdminPage() {
+  const t = useTranslations("AdminFederation");
   const { data: profile, isLoading } = useProfile();
   const [activeTab, setActiveTab] = useState<"instances" | "activity" | "settings">("instances");
 
@@ -58,11 +60,8 @@ export default function FederationAdminPage() {
           <div className="flex-1 min-w-0 pb-20">
             <div className="p-8 border border-destructive/20 rounded-xl bg-destructive/5 text-center space-y-3">
               <ShieldAlert className="h-8 w-8 text-destructive mx-auto" />
-              <h2 className="text-lg font-semibold">Access Restricted</h2>
-              <p className="text-sm text-muted-foreground">
-                You do not have the <code className="font-mono text-xs">config:federation</code> permission required to
-                manage ActivityPub federation settings.
-              </p>
+              <h2 className="text-lg font-semibold">{t("accessRestricted")}</h2>
+              <p className="text-sm text-muted-foreground">{t("accessRestrictedDesc")}</p>
             </div>
           </div>
         </main>
@@ -83,10 +82,8 @@ export default function FederationAdminPage() {
         <div className="flex-1 min-w-0 pb-20">
           <div className="flex flex-col gap-6">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Federation Management</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Oversee connected Fediverse library peers, trust policies, and the ActivityPub activity pipeline.
-              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{t("description")}</p>
             </div>
 
             {/* Navigation Tabs */}
@@ -98,7 +95,7 @@ export default function FederationAdminPage() {
                 className="flex items-center gap-2"
               >
                 <Building2 className="h-4 w-4" />
-                Peer Instances
+                {t("tabInstances")}
               </Button>
               <Button
                 variant={activeTab === "activity" ? "secondary" : "ghost"}
@@ -107,7 +104,7 @@ export default function FederationAdminPage() {
                 className="flex items-center gap-2"
               >
                 <Activity className="h-4 w-4" />
-                Activity Pipeline Log
+                {t("tabActivity")}
               </Button>
               <Button
                 variant={activeTab === "settings" ? "secondary" : "ghost"}
@@ -116,7 +113,7 @@ export default function FederationAdminPage() {
                 className="flex items-center gap-2"
               >
                 <Settings className="h-4 w-4" />
-                Federation Settings
+                {t("tabSettings")}
               </Button>
             </div>
 

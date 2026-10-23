@@ -492,3 +492,136 @@ class TestActivityPubInboxSyncIntegration:
             assert manif.publisher == "Vintage Books"
             assert manif.format == "Hardcover"
             assert manif.cover_url is None  # javascript: rejected
+
+    def test_resolve_local_manifestation_matches_mbid_and_bgg_id(self, app):
+        """resolve_local_manifestation correctly resolves by MBID and BGG ID in Manifestation or Work meta."""
+        with app.app_context():
+            # Create music work/expr/manif with MBID
+            music_work = Work(title="Abbey Road", sort_title="Abbey Road", meta={"mbid": "mbid-work-123"})
+            db.session.add(music_work)
+            db.session.flush()
+
+            music_expr = Expression(work_id=music_work.id, language="en", content_type="audio")
+            db.session.add(music_expr)
+            db.session.flush()
+
+            music_manif = Manifestation(
+                expression_id=music_expr.id,
+                meta={"mbid": "mbid-release-456"},
+            )
+            db.session.add(music_manif)
+
+            # Create board game work/expr/manif with BGG ID
+            bg_work = Work(title="Catan", sort_title="Catan", meta={"bgg_id": 13})
+            db.session.add(bg_work)
+            db.session.flush()
+
+            bg_expr = Expression(work_id=bg_work.id, language="en", content_type="boardgame")
+            db.session.add(bg_expr)
+            db.session.flush()
+
+            bg_manif = Manifestation(
+                expression_id=bg_expr.id,
+                meta={"bgg_id": "13"},
+            )
+            db.session.add(bg_manif)
+            db.session.commit()
+
+            # Match manifestation by MBID
+            res1 = federation_sync.resolve_local_manifestation({"mbid": "mbid-release-456"})
+            assert res1 is not None
+            assert res1.id == music_manif.id
+
+            # Match work by MBID
+            res2 = federation_sync.resolve_local_manifestation({"mbid": "mbid-work-123"})
+            assert res2 is not None
+            assert res2.id == music_manif.id
+
+            # Match manifestation by BGG ID
+            res3 = federation_sync.resolve_local_manifestation({"bgg_id": "13"})
+            assert res3 is not None
+            assert res3.id == bg_manif.id
+
+            # Match work by integer BGG ID
+            res4 = federation_sync.resolve_local_manifestation({"bgg_id": 13})
+            assert res4 is not None
+            assert res4.id == bg_manif.id
+
+    def test_sync_manifestation_autofills_expression_and_work_fields(self, app, frbr_catalog):
+        """sync_manifestation fills empty Expression.language and Work.description with provenance."""
+        with app.app_context():
+            manif = db.session.get(Manifestation, frbr_catalog["manifestation_id"])
+            expr = manif.expression
+            work = expr.work
+
+            expr.language = None
+            work.description = None
+            work.original_release_year = None
+            db.session.commit()
+
+            remote_data = {
+                "language": "en",
+                "description": "A science fiction masterpiece by Frank Herbert.",
+                "original_release_year": 1965,
+            }
+
+            res = federation_sync.sync_manifestation(
+                manifestation=manif,
+                remote_data=remote_data,
+                domain="library.trusted.org",
+                trust_level=TrustLevel.TRUSTED,
+            )
+            assert res.get("status") == "merged"
+            assert "expression.language" in res["updated_fields"]
+            assert "work.description" in res["updated_fields"]
+            assert "work.original_release_year" in res["updated_fields"]
+
+            db.session.refresh(expr)
+            db.session.refresh(work)
+
+            assert expr.language == "en"
+            assert expr.meta["_provenance"]["language"] == "federation:library.trusted.org"
+            assert "federation:library.trusted.org" in expr.meta["prov:wasDerivedFrom"]
+
+            assert work.description == "A science fiction masterpiece by Frank Herbert."
+            assert work.original_release_year == 1965
+            assert work.meta["_provenance"]["description"] == "federation:library.trusted.org"
+            assert "federation:library.trusted.org" in work.meta["prov:wasDerivedFrom"]
+
+    def test_pending_peer_consolidates_duplicate_storage(self, app, frbr_catalog):
+        """Repeated pending updates with identical payloads do not duplicate review queue entries."""
+        with app.app_context():
+            manif = db.session.get(Manifestation, frbr_catalog["manifestation_id"])
+            remote_data = {
+                "isbn13": "9780441172719",
+                "publisher": "Candidate Press",
+                "page_count": 500,
+            }
+
+            # First submission queues for review
+            res1 = federation_sync.sync_manifestation(
+                manifestation=manif,
+                remote_data=remote_data,
+                domain="pending-peer.org",
+                trust_level=TrustLevel.PENDING,
+            )
+            assert res1["status"] == "queued_for_review"
+
+            # Count audit logs
+            count_stmt = select(EntityAuditLog).where(
+                EntityAuditLog.entity_id == manif.id,
+                EntityAuditLog.change_type == "federation_merge_proposed",
+            )
+            audits_before = len(db.session.execute(count_stmt).scalars().all())
+
+            # Second identical submission returns already_queued without extra audit log
+            res2 = federation_sync.sync_manifestation(
+                manifestation=manif,
+                remote_data=remote_data,
+                domain="pending-peer.org",
+                trust_level=TrustLevel.PENDING,
+            )
+            assert res2["status"] == "already_queued"
+
+            audits_after = len(db.session.execute(count_stmt).scalars().all())
+            assert audits_after == audits_before

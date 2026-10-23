@@ -49,13 +49,21 @@ async function setupAuthenticatedUser(page: import("@playwright/test").Page) {
 
   await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
 
-  await page.route("**/api/profile**", route =>
-    route.fulfill({
+  await page.route("**/api/profile**", route => {
+    const url = route.request().url();
+    if (url.includes("/friends")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        json: { success: true, data: { accepted: [], incoming: [], outgoing: [] } },
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       json: mockProfile,
-    })
-  );
+    });
+  });
 
   await page.route("**/api/escalations/mine", route =>
     route.fulfill({

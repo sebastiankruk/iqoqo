@@ -29,6 +29,11 @@ vi.mock("@/components/collection/manage-collections-modal", () => ({
   ManageCollectionsModal: () => null,
 }));
 
+// Mock NotificationCenter to avoid QueryClientProvider dependency in isolated unit tests
+vi.mock("@/components/dashboard/notification-center", () => ({
+  NotificationCenter: () => <button data-testid="notification-bell">Notifications</button>,
+}));
+
 // Mock the language toggle to isolate Navbar routing tests
 vi.mock("@/components/language-toggle", () => ({
   LanguageToggle: () => <button data-testid="language-toggle">EN</button>,

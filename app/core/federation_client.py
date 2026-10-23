@@ -231,3 +231,56 @@ class FederationClient:
         except Exception:
             self._record_delivery_failure(target_inbox_url, "network_error")
             raise
+
+    def fetch_actor_collections(self, actor_uri: str, force_refresh: bool = False) -> dict[str, Any] | None:
+        """Fetch and cache remote actor collections/outbox.
+
+        Args:
+            actor_uri: Fully qualified URI of remote actor.
+            force_refresh: If True, bypass cached collections.
+
+        Returns:
+            Dictionary containing items and collections or None.
+        """
+        from app.core.cache import cache
+
+        cache_key = f"fed_collection:{actor_uri}"
+        if not force_refresh:
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return cached
+            except Exception as exc:
+                logger.debug("Cache read failed for %s: %s", cache_key, exc)
+
+        actor_doc = self.fetch_actor(actor_uri)
+        if not actor_doc or not isinstance(actor_doc, dict):
+            return None
+
+        collection_url = actor_doc.get("collections") or actor_doc.get("outbox") or f"{actor_uri.rstrip('/')}/outbox"
+
+        headers = {
+            "Accept": 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+            "User-Agent": "iqoqo-federation/0.9.0",
+        }
+        record_outbound_telemetry("Federation", headers, url=collection_url)
+
+        try:
+            resp = safe_get(collection_url, headers=headers, timeout=self.timeout)
+            if resp.status_code != 200:
+                self._record_delivery_failure(collection_url, f"http_{resp.status_code}")
+                logger.warning("Failed to fetch collection at %s: HTTP %d", collection_url, resp.status_code)
+                return None
+            data = resp.json()
+            try:
+                cache.set(cache_key, data, timeout=3600)
+            except Exception as exc:
+                logger.debug("Cache write failed for %s: %s", cache_key, exc)
+            return data
+        except SSRFError:
+            self._record_delivery_failure(collection_url, "ssrf_blocked")
+            raise
+        except Exception as exc:
+            self._record_delivery_failure(collection_url, "network_error")
+            logger.error("Error fetching collections for actor %s: %s", actor_uri, exc)
+            return None

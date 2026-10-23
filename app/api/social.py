@@ -15,6 +15,7 @@
 
 """API routes for social feedback (ratings and comments) on FRBR levels."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -29,6 +30,8 @@ from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.frbr_service import update_frbr_entity_type
 from app.core.permissions import PermissionName
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, User, Work, db
+
+logger = logging.getLogger(__name__)
 
 VALID_LEVELS = {"work", "expression", "manifestation", "item"}
 
@@ -702,6 +705,25 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
         escalation.resolution_note = resolution_note
         resp_data = escalation.to_dict()
         db.session.commit()
+
+        try:
+            from app.core.notifications import create_notification
+
+            if escalation.user_id:
+                create_notification(
+                    user_id=escalation.user_id,
+                    notification_type="escalation_resolved",
+                    payload={
+                        "escalation_id": escalation.id,
+                        "status": new_status,
+                        "resolution_note": resolution_note,
+                        "message": f"Your escalation request #{escalation.id} was {new_status}",
+                    },
+                    target_iri="/feedback?tab=my-escalations",
+                )
+        except Exception as notif_err:
+            logger.warning("Failed to emit escalation resolution notification: %s", notif_err)
+
         return jsonify({"success": True, "data": resp_data})
     except SQLAlchemyError:
         db.session.rollback()

@@ -1,0 +1,51 @@
+## Why
+
+Before merging PR #366 (`release/0.9.2 -> main`), the pre-release multi-agent code review (Principal Code Reviewer + Gemini Argon in `.context/notes/review/0.9.2/`) identified **6 Critical** and **4 high-impact Moderate** issues that will cause runtime crashes (`AttributeError`, `IntegrityError`, thread-unsafe SQLAlchemy session corruption), broken notification deep-links, or privacy/authorization leaks in production if merged as-is:
+
+1. **Runtime `AttributeError` on `FederationActor` & Cross-Table PK Collision in `friend_service.py`**: `list_friends` and `send_friend_request` access non-existent `FederationActor` attributes (`.preferred_username`, `.uri`, `.name` instead of `.username`, `.actor_uri`, `.display_name`), crashing `/api/v1/profile/friends*` whenever federated followers exist or an `@` identifier is submitted. Furthermore, `remove_friend` and `respond_friend_request` query `UserFriendship` unconditionally by integer PK even for federated entries (`FederationFollower`), risking deletion/mutation of unrelated local friendships, and `send_friend_request` matches remote actors without verifying the instance domain or setting `FollowStatus.PENDING`.
+2. **Broken Loan Notifications (`item.user_id` `AttributeError`), Broken `/items/<id>` Deep-Links & Shadow User `check_user_auth_method` Crash (`lending.py`, `federation_handlers.py`)**: `request_loan` and `handle_offer` access `item.user_id` (`Item.owner_id` is the column), failing with `AttributeError` inside `try/except` and never emitting `loan_request` notifications; loan notifications also point to `/items/<id>` (404) instead of `/item/<id>`. Additionally, `handle_offer` creates a shadow `User` with `password_hash=None` and `google_id=None`, violating `check_user_auth_method` (`IntegrityError`), and neither `handle_offer` nor `request_loan` checks item visibility/friend authorization before creating a `LoanRequest` (nor does `resolve_loan_request` verify `requester.email.endswith("@federated.local")` before parsing federated `notes` metadata, nor do `handle_accept`/`handle_reject` emit notifications on inbound `Offer` responses).
+3. **Broken SPARQL Friend Scoping, Missing `friends_only` Support in `build_graph` & 4,000-Query N+1 Storm (`sparql.py`, `sparql_service.py`, `item_access.py`)**: `_get_sparql_items` puts `FederationFollower.remote_actor_id` (`int`) into `allowed_owner_ids` and compares it against `Item.owner_id` (`UUID` — never matches!), never calls `get_friend_user_ids(user.id)`, does not filter out `private` items of friends, and runs an unfiltered `select(Item).limit(MAX_GRAPH_ITEMS * 2)` followed by 2 synchronous SQL queries per item in `is_item_publicly_visible`. Meanwhile, `build_graph` strips out all `friends_only` items of accepted friends.
+4. **Thread-Unsafe SQLAlchemy Session Mutation in `probe_registered_instances` (`federation_discovery.py`)**: `probe_registered_instances` passes ORM `FederationInstance` objects attached to the main thread's `db.session` into `ThreadPoolExecutor` worker threads that mutate ORM attributes and call `db.session.commit()` without a Flask `app_context()`.
+5. **`Item(is_hidden=True)` Default Visibility Drift Leaking Private Items to Friends (`core.py`, `items.py`, `public_*.py`, `data_manager.py`)**: `Item.visibility` defaults to `"public"` while `is_hidden` defaults to `False`. Any `Item(..., is_hidden=True)` instantiated without explicit `visibility="private"` gets `visibility="public"` and satisfies the second branch of `or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"]))`, leaking hidden items to friends. Additionally, `get_items` with a search query `q` ignores `scope=friends`.
+6. **Unauthenticated Friend Inventory Enumeration in `check_inventory`, RDF Privacy Bypass & Release Hygiene (`public_profile.py`, `public_items.py`, `public_rdf.py`, `feedback/page.tsx`, `CHANGELOG.md`)**: `POST /public/u/<username>/check` allows any unauthenticated caller to pass `include_friends=True` to enumerate a user's friends' `friends_only` items and trigger synchronous federated HTTP fetches; `get_public_items` runs the `if rdf_format:` branch before checking `user.visibility` and `is_friend`; `serialize_user_collection_to_rdf` includes hidden items; `get_public_user_followers` passes `[]` for local friends; `FeedbackPage` ignores `?tab=my-escalations` / `?tab=escalations` on mount; and `docs/CHANGELOG.md` has `TBD` date and omits `C83c`.
+
+## What Changes
+
+- **Friendship Service Attribute & Table Routing Fixes (`app/core/friend_service.py`, `app/api/profile.py`, `frontend/components/profile/friends-card.tsx`)**:
+  - Replace `act.preferred_username`, `act.uri`, `act.name`, `FederationActor.uri`, and `FederationActor.preferred_username` with `act.username`, `act.actor_uri`, `act.display_name`, `FederationActor.actor_uri`, and `FederationActor.username`.
+  - Distinguish local `UserFriendship` records from federated `FederationFollower` records in `remove_friend`, `respond_friend_request`, and `FriendsCard` (via `is_federated` parameter or typed identifier) so federated operations target `FederationFollower`.
+  - Validate `@user@domain` domain matching in `send_friend_request` and set `FollowStatus.PENDING` on outbound federated follows.
+- **Loan Notifications, Shadow User Constraint & Authorization Hardening (`app/api/lending.py`, `app/core/federation_handlers.py`)**:
+  - Replace `item.user_id` with `item.owner_id` in `request_loan` and `handle_offer`, and fix notification `target_iri` from `/items/{item.id}` to `/item/{item.id}`.
+  - Set `password_hash="!federated_shadow_user"` on shadow `User` records created in `handle_offer` to satisfy `check_user_auth_method`.
+  - Enforce item visibility and friend authorization (`not item.is_hidden` or `is_friend_of` when `item.visibility in ("friends_only", "shared")`) in both `request_loan` and `handle_offer`, verify `requester.email.endswith("@federated.local")` before dispatching federated `Accept`/`Reject` in `resolve_loan_request`, and emit `loan_approved`/`loan_rejected` notifications in `handle_accept`/`handle_reject`.
+- **SPARQL Friend Scoping, `build_graph` Authorization & SQL Pushdown (`app/api/sparql.py`, `app/core/sparql_service.py`, `app/core/item_access.py`)**:
+  - Use `get_friend_user_ids(user.id)` (UUIDs) in `_get_sparql_items`, push owner/friend/public visibility predicates into the SQL `WHERE` clause before `.limit(MAX_GRAPH_ITEMS)`, ensure friends only see `public`/`friends_only`/`shared` items (never `private`), and batch-check `FederationConsent` without N+1 queries.
+  - Update `build_graph` to accept authorized friend owner IDs (or pre-authorized items) so accepted friends' `friends_only` items are preserved in the RDF snapshot.
+- **Thread-Safe Instance Health Probing (`app/core/federation_discovery.py`)**:
+  - Perform only pure HTTP NodeInfo/root probing inside `ThreadPoolExecutor` workers, return plain result dictionaries to the main thread, and apply ORM mutations + `db.session.commit()` on the main thread; shut down executors with `shutdown(wait=False, cancel_futures=True)` on timeout.
+- **`Item` Visibility/Hidden Sync & Friend Scope Search (`app/db/core.py`, `app/api/items.py`, `app/api/public_*.py`, `app/core/data_manager.py`, `app/core/search_service.py`)**:
+  - Add `__init__` synchronization on `Item` so `Item(..., is_hidden=True)` sets `visibility="private"` (and `visibility != "public"` sets `is_hidden=True`), tighten friend SQL predicates to `or_(Item.is_hidden.is_(False), Item.visibility.in_(["friends_only", "shared"]))`, and support `scope="friends"` in `get_items` when searching with `q`.
+- **Public Inventory Check Auth, RDF Privacy Guards, Escalation Deep-Link & Release Hygiene (`app/api/public_profile.py`, `app/api/public_items.py`, `app/api/public_rdf.py`, `frontend/app/feedback/page.tsx`, `docs/CHANGELOG.md`)**:
+  - Gate `include_friends=True` in `check_inventory` with `@optional_auth` (requiring caller to be `user` or an accepted friend of `user`, checking viewer-to-friend authorization for `friends_only` items, and capping federated friend lookups).
+  - Move `user.visibility` and `is_friend` checks in `get_public_items` above `if rdf_format:`, filter hidden items in `serialize_user_collection_to_rdf`, use `is_item_publicly_visible` in `get_public_item_custody`, and pass accepted local friends into `serialize_user_followers_to_rdf`.
+  - Initialize `activeTab` from `?tab=` (`escalations` / `my-escalations`) in `FeedbackPage`, update `docs/CHANGELOG.md` with release date `2026-10-22` and `C83c`, and sync/archive `friends-only-visibility-and-social-library-v092`.
+
+## Capabilities
+
+### Modified Capabilities
+- `federated-friends-and-loans`: Fix `FederationActor` attribute names, federated vs. local friend removal/response routing, `item.owner_id` and `/item/<id>` loan notifications, shadow user `password_hash` constraint, loan visibility authorization, and authenticated `include_friends` inventory checks.
+- `sparql-federated-access-rights`: Fix UUID friend scoping, SQL predicate pushdown (eliminating N+1 queries), and `friends_only` friend item inclusion in `_get_sparql_items` and `build_graph`; enforce RDF visibility gates in `public_items.py` and `public_rdf.py`.
+- `federation-trust-graph-sync`: Refactor `probe_registered_instances` worker threads to perform HTTP-only probing and commit ORM updates on the main thread.
+- `in-app-notifications`: Support `?tab=escalations` / `?tab=my-escalations` deep-linking in `FeedbackPage` and emit notifications on inbound federated loan `Accept`/`Reject`.
+- `social-activitystreams-ontology`: Emit `foaf:knows` / `iqoqo:knowsFriend` triples for accepted local friends in `get_public_user_followers`.
+
+## Impact
+
+- `app/core/friend_service.py`, `app/api/profile.py`, `frontend/components/profile/friends-card.tsx`
+- `app/api/lending.py`, `app/core/federation_handlers.py`
+- `app/api/sparql.py`, `app/core/sparql_service.py`, `app/core/item_access.py`
+- `app/core/federation_discovery.py`
+- `app/db/core.py`, `app/api/items.py`, `app/core/data_manager.py`, `app/core/search_service.py`
+- `app/api/public_profile.py`, `app/api/public_items.py`, `app/api/public_rdf.py`
+- `frontend/app/feedback/page.tsx`, `docs/CHANGELOG.md`

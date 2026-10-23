@@ -258,6 +258,7 @@ def get_items():
     format_list = expand_format_filter(format_list_raw)
     q = request.args.get("q", request.args.get("search", "")).strip()
     sort_by = request.args.get("sort", "updated")
+    scope = request.args.get("scope", "personal").lower()
     borrowed_only = request.args.get("borrowed", "false").lower() == "true"
     owner_only = request.args.get("owner_only", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
@@ -290,9 +291,11 @@ def get_items():
     combined_items_data = []
 
     if q:
+        from app.core.friend_service import get_friend_user_ids
         from app.core.search_service import SearchService
 
         statuses_list = parse_csv_param(statuses_filter)
+        friend_ids_list = list(get_friend_user_ids(user_id)) if scope == "friends" else None
         total_count, results = SearchService.search_items(
             q,
             user_id,
@@ -311,6 +314,8 @@ def get_items():
             publishers=publishers_list,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            scope=scope,
+            friend_ids=friend_ids_list,
         )
 
         for row in results:
@@ -348,7 +353,18 @@ def get_items():
     else:
         query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
 
-        if borrowed_only:
+        if scope == "friends":
+            from app.core.friend_service import get_friend_user_ids
+
+            friend_ids = list(get_friend_user_ids(user_id))
+            if friend_ids:
+                query = query.filter(
+                    Item.owner_id.in_(friend_ids),
+                    db.or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+                )
+            else:
+                query = query.filter(db.false())
+        elif borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
         elif owner_only:
             query = query.filter(Item.owner_id == user_id)
@@ -437,6 +453,8 @@ def get_items():
                     "owner_id": item.owner_id,
                     "status": item.status,
                     "collection_status": item.collection_status,
+                    "visibility": item.visibility,
+                    "is_hidden": item.is_hidden,
                     "local_barcode": item.local_barcode,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
@@ -488,6 +506,10 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     is_admin = False
     has_read_owners = False
 
+    from app.core.friend_service import is_friend_of
+
+    is_friend = is_friend_of(user_id, item.owner_id) if user_id else False
+
     if user_id:
         user = db.session.get(User, user_id)
         if user and any(role.name == "admin" for role in getattr(user, "roles", [])):
@@ -495,7 +517,11 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         if user:
             has_read_owners = user.has_permission(PermissionName.READ_OWNERS)
 
-    if item.is_hidden and not (is_owner or is_admin or is_borrowed or has_read_owners):
+    is_authorized = (
+        is_owner or is_admin or is_borrowed or has_read_owners or (is_friend and item.visibility in ("friends_only", "shared", "public"))
+    )
+
+    if item.is_hidden and not is_authorized:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
     manifestation = item.manifestation
@@ -506,15 +532,17 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     item_data = {
         "id": item.id,
-        "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed) else "Unavailable",
+        "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed or is_friend) else "Unavailable",
         "is_owner": is_owner,
         "is_borrowed": is_borrowed,
+        "is_friend": is_friend,
         "owner_name": None,
         "owner_count": owner_count,
         "status": item.status,
         "collection_status": item.collection_status,
         "condition": item.condition,
         "local_barcode": item.local_barcode,
+        "visibility": item.visibility,
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
@@ -525,7 +553,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         item_data["lent_to_user_id"] = item.lent_to_user_id
         item_data["lent_to_name"] = item.lent_to_name
 
-    if is_owner or is_admin or has_read_owners or is_borrowed:
+    if is_owner or is_admin or has_read_owners or is_borrowed or is_friend:
         owner = db.session.get(User, item.owner_id)
         if owner:
             item_data["owner_name"] = owner.display_name or owner.email
@@ -648,8 +676,11 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         item.local_barcode = payload.local_barcode.strip() if (payload.local_barcode and payload.local_barcode.strip()) else None
     if "condition" in payload.model_fields_set:
         item.condition = payload.condition.strip() if (payload.condition and payload.condition.strip()) else None
-    if payload.is_hidden is not None:
+    if payload.visibility is not None:
+        item.set_visibility(payload.visibility)
+    elif payload.is_hidden is not None:
         item.is_hidden = payload.is_hidden
+        item.visibility = "private" if payload.is_hidden else "public"
 
     # Optional metadata update from extra fields or meta field
     metadata = payload.model_extra or {}
@@ -677,14 +708,24 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         # Tag/status changes alter this user's facet counts.
         invalidate_facets_cache(user_id)
         return jsonify(
-            {"success": True, "data": {"id": item.id, "local_barcode": item.local_barcode, "condition": item.condition}, "error": None}
+            {
+                "success": True,
+                "data": {
+                    "id": item.id,
+                    "local_barcode": item.local_barcode,
+                    "condition": item.condition,
+                    "visibility": item.visibility,
+                    "is_hidden": item.is_hidden,
+                },
+                "error": None,
+            }
         )
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
         return jsonify({"success": False, "data": None, "error": str(e)}), 500
 
 
-@api_bp.route("/items/<int:item_id>", methods=["PUT"])
+@api_bp.route("/items/<int:item_id>", methods=["PUT", "PATCH"])
 @require_auth
 @require_physical_item
 def update_item(item_id: int):
@@ -912,30 +953,61 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     return jsonify({"ids": [item.id for item in items]})
 
 
+def _resolve_item_visibility_and_hidden(
+    user_id: uuid.UUID | str | None,
+    payload_json: dict | None,
+    schema_is_hidden: bool | None = None,
+    schema_visibility: str | None = None,
+) -> tuple[str, bool]:
+    """Determine (visibility, is_hidden) for an item based on payload and user defaults.
+
+    Priority:
+    1. Explicit `visibility` in payload JSON or schema.
+    2. Explicit `is_public` boolean in the payload JSON.
+    3. Explicit `is_hidden` boolean in the payload JSON or schema.
+    4. User's configured `default_item_visibility` (defaults to 'private').
+    """
+    raw_vis = None
+    if payload_json and "visibility" in payload_json and payload_json["visibility"]:
+        raw_vis = payload_json["visibility"]
+    elif schema_visibility:
+        raw_vis = schema_visibility
+
+    from app.db.core import ITEM_VISIBILITIES
+
+    if raw_vis in ITEM_VISIBILITIES:
+        return raw_vis, (raw_vis != "public")
+
+    if payload_json and "is_public" in payload_json:
+        is_pub = bool(payload_json["is_public"])
+        return ("public" if is_pub else "private"), not is_pub
+
+    if payload_json and "is_hidden" in payload_json:
+        is_hid = bool(payload_json["is_hidden"])
+        return ("private" if is_hid else "public"), is_hid
+
+    if schema_is_hidden is not None:
+        is_hid = bool(schema_is_hidden)
+        return ("private" if is_hid else "public"), is_hid
+
+    if user_id:
+        u_id = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
+        user = db.session.get(User, u_id)
+        if user and getattr(user, "default_item_visibility", None):
+            vis = user.default_item_visibility
+            return vis, (vis != "public")
+
+    return "private", True
+
+
 def _resolve_item_hidden_state(
     user_id: uuid.UUID | str | None,
     payload_json: dict | None,
     schema_is_hidden: bool | None,
 ) -> bool:
-    """Determine whether an item should be hidden (private) or visible (public).
-
-    Priority:
-    1. Explicit `is_public` boolean in the payload JSON.
-    2. Explicit `is_hidden` boolean in the payload JSON or schema.
-    3. User's configured `default_item_visibility` (defaults to 'private' -> is_hidden=True).
-    """
-    if payload_json and "is_public" in payload_json:
-        return not bool(payload_json["is_public"])
-    if payload_json and "is_hidden" in payload_json:
-        return bool(payload_json["is_hidden"])
-    if schema_is_hidden is not None:
-        return bool(schema_is_hidden)
-    if user_id:
-        u_id = uuid.UUID(str(user_id)) if not isinstance(user_id, uuid.UUID) else user_id
-        user = db.session.get(User, u_id)
-        if user and getattr(user, "default_item_visibility", None) == "public":
-            return False
-    return True
+    """Determine whether an item should be hidden (private) or visible (public)."""
+    _, is_hidden = _resolve_item_visibility_and_hidden(user_id, payload_json, schema_is_hidden)
+    return is_hidden
 
 
 @api_bp.route("/item/<isbn>", methods=["POST"])
@@ -1011,6 +1083,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
+    visibility, is_hidden = _resolve_item_visibility_and_hidden(user_id, payload_json, payload.is_hidden, payload.visibility)
     item = Item(
         manifestation_id=manifestation.id,
         owner_id=user_id,
@@ -1019,7 +1092,8 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
-        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
+        visibility=visibility,
+        is_hidden=is_hidden,
         meta={},
     )
     db.session.add(item)
@@ -1121,6 +1195,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     if payload.collection_status == "wish_list":
         return _add_wishlist_by_manifestation(user_id, manifestation, payload)
 
+    visibility, is_hidden = _resolve_item_visibility_and_hidden(user_id, payload_json, payload.is_hidden, payload.visibility)
     item = Item(
         manifestation_id=manifestation.id,
         owner_id=user_id,
@@ -1129,7 +1204,8 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
-        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
+        visibility=visibility,
+        is_hidden=is_hidden,
         meta={},
     )
     db.session.add(item)
@@ -1197,6 +1273,9 @@ def add_items_bulk() -> Response | tuple[Response, int]:
     if not manifestations:
         return jsonify({"success": False, "data": None, "error": "No valid manifestations found"}), 404
 
+    bulk_visibility, bulk_is_hidden = _resolve_item_visibility_and_hidden(
+        user_id, payload_json, schema_is_hidden=payload.is_hidden, schema_visibility=payload.visibility
+    )
     created_items = []
     for man in manifestations:
         status = payload.status
@@ -1217,7 +1296,8 @@ def add_items_bulk() -> Response | tuple[Response, int]:
             owner_id=user_id,
             status=status,
             collection_status=payload.collection_status,
-            is_hidden=payload.is_hidden or False,
+            visibility=bulk_visibility,
+            is_hidden=bulk_is_hidden,
             meta={},
         )
         db.session.add(item)
@@ -1324,6 +1404,9 @@ def add_item_manual() -> Response | tuple[Response, int]:
             if not payload.lent_to_user_id and not (lent_to_name and lent_to_name.strip()):
                 return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
+        visibility, is_hidden = _resolve_item_visibility_and_hidden(
+            user_id, data, getattr(payload, "is_hidden", None), getattr(payload, "visibility", None)
+        )
         item = Item(
             manifestation_id=manifestation.id,
             owner_id=user_id,
@@ -1332,7 +1415,8 @@ def add_item_manual() -> Response | tuple[Response, int]:
             local_barcode=payload.local_barcode,
             lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
             lent_to_name=payload.lent_to_name,
-            is_hidden=_resolve_item_hidden_state(user_id, data, getattr(payload, "is_hidden", None)),
+            visibility=visibility,
+            is_hidden=is_hidden,
             meta={},
         )
         db.session.add(item)
@@ -1389,6 +1473,7 @@ def create_item() -> Response | tuple[Response, int]:
         if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():
             return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
+    visibility, is_hidden = _resolve_item_visibility_and_hidden(user_id, payload_json, payload.is_hidden, payload.visibility)
     item = Item(
         manifestation_id=manifestation.id,
         owner_id=user_id,
@@ -1397,7 +1482,8 @@ def create_item() -> Response | tuple[Response, int]:
         local_barcode=payload.local_barcode,
         lent_to_user_id=uuid.UUID(payload.lent_to_user_id) if payload.lent_to_user_id else None,
         lent_to_name=payload.lent_to_name,
-        is_hidden=_resolve_item_hidden_state(user_id, payload_json, payload.is_hidden),
+        visibility=visibility,
+        is_hidden=is_hidden,
         meta=payload.meta or {},
     )
     db.session.add(item)

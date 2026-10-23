@@ -21,6 +21,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.taxonomy import COLLECTION_STATUSES, PROGRESS_STATUSES
+from app.db.core import ITEM_VISIBILITIES
 
 
 def _validate_uuid_str(v: str | None) -> str | None:
@@ -45,6 +46,7 @@ class ItemCreateSchema(BaseModel):
 
     status: str | None = Field(default=None, description="The progress status of the item")
     collection_status: str | None = Field(default="available", description="The physical status of the item")
+    visibility: str | None = Field(default=None, description="The visibility tier of the item ('public', 'friends_only', 'private')")
     is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
     tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
@@ -91,6 +93,14 @@ class ItemCreateSchema(BaseModel):
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str | None) -> str | None:
+        """Constrain item visibility to controlled vocabulary."""
+        if v is not None and v not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility: '{v}'. Must be one of {ITEM_VISIBILITIES}")
+        return v
+
 
 class ItemBulkCreateSchema(BaseModel):
     """Request body for adding several manifestations to the library at once.
@@ -104,7 +114,8 @@ class ItemBulkCreateSchema(BaseModel):
     manifestation_ids: list[int] = Field(..., min_length=1, description="List of manifestation IDs to add")
     status: str | None = Field(default=None, description="The progress status of the items")
     collection_status: str | None = Field(default="available", description="The physical status of the items")
-    is_hidden: bool | None = Field(default=False, description="Whether the items are hidden from public profiles")
+    visibility: str | None = Field(default=None, description="The visibility tier of the items ('public', 'friends_only', 'private')")
+    is_hidden: bool | None = Field(default=None, description="Whether the items are hidden from public profiles")
 
     @field_validator("status")
     @classmethod
@@ -120,6 +131,14 @@ class ItemBulkCreateSchema(BaseModel):
         """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str | None) -> str | None:
+        """Constrain item visibility to controlled vocabulary."""
+        if v is not None and v not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility: '{v}'. Must be one of {ITEM_VISIBILITIES}")
         return v
 
 
@@ -138,6 +157,7 @@ class ItemUpdateSchema(BaseModel):
     local_barcode: str | None = Field(default=None, max_length=64, description="Local barcode or inventory asset tag")
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
+    visibility: str | None = None
     is_hidden: bool | None = None
     tags: list[str] | None = None
     meta: dict[str, Any] | None = None
@@ -178,6 +198,14 @@ class ItemUpdateSchema(BaseModel):
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
         return v
 
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str | None) -> str | None:
+        """Constrain item visibility to controlled vocabulary."""
+        if v is not None and v not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility: '{v}'. Must be one of {ITEM_VISIBILITIES}")
+        return v
+
 
 class ItemManualCreateSchema(BaseModel):
     """Request body for creating an item by hand, without a scanned barcode.
@@ -200,6 +228,7 @@ class ItemManualCreateSchema(BaseModel):
     tags: list[str] | None = None
     lent_to_user_id: str | None = Field(default=None, description="The user ID who borrowed the item")
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
+    visibility: str | None = Field(default=None, description="The visibility tier of the item ('public', 'friends_only', 'private')")
     is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
 
     @field_validator("lent_to_user_id")
@@ -222,6 +251,14 @@ class ItemManualCreateSchema(BaseModel):
         """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str | None) -> str | None:
+        """Constrain item visibility to controlled vocabulary."""
+        if v is not None and v not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility: '{v}'. Must be one of {ITEM_VISIBILITIES}")
         return v
 
 
@@ -261,6 +298,7 @@ class ScanBarcodeSchema(BaseModel):
     lent_to_user_id: str | None = None
     lent_to_name: str | None = None
     meta: dict[str, Any] | None = None
+    visibility: str | None = None
     is_hidden: bool | None = None
     is_public: bool | None = None
 
@@ -285,6 +323,14 @@ class ScanBarcodeSchema(BaseModel):
         """Constrain the physical status to the controlled vocabulary."""
         if v is not None and v not in COLLECTION_STATUSES:
             raise ValueError(f"Invalid collection status: '{v}'. Must be one of {COLLECTION_STATUSES}")
+        return v
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str | None) -> str | None:
+        """Constrain item visibility to controlled vocabulary."""
+        if v is not None and v not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility: '{v}'. Must be one of {ITEM_VISIBILITIES}")
         return v
 
 

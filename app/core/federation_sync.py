@@ -23,12 +23,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 import bleach
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core import frbr_service
 from app.db import db
-from app.db.core import EntityAuditLog, Expression, Manifestation
+from app.db.core import EntityAuditLog, Expression, Manifestation, Work
 from app.db.federation import FederationInstance, TrustLevel
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,80 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
         if val:
             stmt = select(Manifestation).where(getattr(Manifestation, id_field) == str(val).strip())
             manif = db.session.execute(stmt).scalars().first()
+            if manif:
+                return manif
+
+    # MusicBrainz identifier matching (mbid)
+    raw_mbid = remote_data.get("mbid") or remote_data.get("musicbrainz_id") or remote_data.get("musicbrainz_release_id")
+    if raw_mbid:
+        clean_mbid = str(raw_mbid).strip()
+        if clean_mbid:
+            # 1. Match Manifestation.meta
+            mbid_stmt = select(Manifestation).where(
+                or_(
+                    Manifestation.meta["mbid"].as_string() == clean_mbid,
+                    cast(Manifestation.meta["mbid"], String) == clean_mbid,
+                    Manifestation.meta["musicbrainz_id"].as_string() == clean_mbid,
+                    cast(Manifestation.meta["musicbrainz_id"], String) == clean_mbid,
+                    Manifestation.meta["musicbrainz_release_id"].as_string() == clean_mbid,
+                    cast(Manifestation.meta["musicbrainz_release_id"], String) == clean_mbid,
+                )
+            )
+            manif = db.session.execute(mbid_stmt).scalars().first()
+            if manif:
+                return manif
+
+            # 2. Match parent Work.meta
+            work_mbid_stmt = (
+                select(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(
+                    or_(
+                        Work.meta["mbid"].as_string() == clean_mbid,
+                        cast(Work.meta["mbid"], String) == clean_mbid,
+                        Work.meta["musicbrainz_id"].as_string() == clean_mbid,
+                        cast(Work.meta["musicbrainz_id"], String) == clean_mbid,
+                    )
+                )
+            )
+            manif = db.session.execute(work_mbid_stmt).scalars().first()
+            if manif:
+                return manif
+
+    # BoardGameGeek identifier matching (bgg_id)
+    raw_bgg = remote_data.get("bgg_id") or remote_data.get("boardgamegeek_id")
+    if raw_bgg:
+        clean_bgg = str(raw_bgg).strip()
+        if clean_bgg:
+            # 1. Match Manifestation.meta
+            bgg_stmt = select(Manifestation).where(
+                or_(
+                    Manifestation.meta["bgg_id"].as_string() == clean_bgg,
+                    cast(Manifestation.meta["bgg_id"], String) == clean_bgg,
+                    Manifestation.meta["boardgamegeek_id"].as_string() == clean_bgg,
+                    cast(Manifestation.meta["boardgamegeek_id"], String) == clean_bgg,
+                )
+            )
+            manif = db.session.execute(bgg_stmt).scalars().first()
+            if manif:
+                return manif
+
+            # 2. Match parent Work.meta
+            work_bgg_stmt = (
+                select(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .join(Work, Expression.work_id == Work.id)
+                .where(
+                    or_(
+                        Work.meta["bgg_id"].as_string() == clean_bgg,
+                        cast(Work.meta["bgg_id"], String) == clean_bgg,
+                        Work.meta["boardgamegeek_id"].as_string() == clean_bgg,
+                        cast(Work.meta["boardgamegeek_id"], String) == clean_bgg,
+                    )
+                )
+            )
+            manif = db.session.execute(work_bgg_stmt).scalars().first()
             if manif:
                 return manif
 
@@ -120,8 +194,13 @@ def sync_manifestation(
     provenance_key = f"federation:{domain}"
 
     if trust_level == TrustLevel.PENDING:
-        # Route into Custodian Provider Merge Queue
+        # Check if already queued with identical payload to consolidate duplicate storage
         raw = dict(manifestation.raw_payload or {})
+        existing = raw.get(provenance_key)
+        if existing and existing == remote_data:
+            return {"status": "already_queued", "provider": provenance_key}
+
+        # Route into Custodian Provider Merge Queue
         raw[provenance_key] = remote_data
         manifestation.raw_payload = raw
 
@@ -200,6 +279,61 @@ def sync_manifestation(
             manifestation.format = clean_format
             manif_prov["format"] = provenance_key
             updated_fields["format"] = manifestation.format
+
+    # 6. expression.language (Expression tier)
+    expr = manifestation.expression
+    remote_lang = remote_data.get("language") or remote_data.get("inLanguage")
+    if remote_lang and expr and not expr.language:
+        clean_lang = bleach.clean(str(remote_lang), tags=[], strip=True).strip()[:10]
+        if clean_lang:
+            expr.language = clean_lang
+            expr_meta = dict(expr.meta or {})
+            expr_prov = dict(expr_meta.get("_provenance") or {})
+            expr_prov["language"] = provenance_key
+            expr_meta["_provenance"] = expr_prov
+
+            expr_derived = list(expr_meta.get("prov:wasDerivedFrom") or [])
+            if provenance_key not in expr_derived:
+                expr_derived.append(provenance_key)
+            expr_meta["prov:wasDerivedFrom"] = expr_derived
+            expr.meta = expr_meta
+            flag_modified(expr, "meta")
+            updated_fields["expression.language"] = expr.language
+
+    # 7. work.description & original_release_year (Work tier)
+    work = expr.work if expr else None
+    if work:
+        remote_desc = remote_data.get("description") or remote_data.get("summary")
+        work_meta = dict(work.meta or {})
+        work_prov = dict(work_meta.get("_provenance") or {})
+        work_modified = False
+
+        if remote_desc and not work.description:
+            clean_desc = bleach.clean(str(remote_desc), tags=[], strip=True).strip()
+            if clean_desc:
+                work.description = clean_desc
+                work_prov["description"] = provenance_key
+                updated_fields["work.description"] = work.description
+                work_modified = True
+
+        remote_year = remote_data.get("original_release_year") or remote_data.get("year")
+        if remote_year is not None and not work.original_release_year:
+            try:
+                work.original_release_year = int(remote_year)
+                work_prov["original_release_year"] = provenance_key
+                updated_fields["work.original_release_year"] = work.original_release_year
+                work_modified = True
+            except (ValueError, TypeError):
+                pass
+
+        if work_modified:
+            work_meta["_provenance"] = work_prov
+            work_derived = list(work_meta.get("prov:wasDerivedFrom") or [])
+            if provenance_key not in work_derived:
+                work_derived.append(provenance_key)
+            work_meta["prov:wasDerivedFrom"] = work_derived
+            work.meta = work_meta
+            flag_modified(work, "meta")
 
     if not updated_fields:
         return {"status": "no_changes"}

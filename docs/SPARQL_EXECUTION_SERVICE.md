@@ -155,6 +155,28 @@ If the execution service encounters critical operational issues:
 
    The web worker executes queries using local process boundaries until the service issue is resolved.
 
+## Architectural Decision Record (ADR): Custom Runner vs Apache Fuseki
+
+### Context
+In v0.8.x - v0.9.x planning, an evaluation was conducted on whether to adopt Apache Jena Fuseki / Blazegraph as an external SPARQL endpoint or maintain the custom isolated Python `sparql-runner`.
+
+### Decision
+iqoqo retains the lightweight custom `sparql-runner` container architecture instead of deploying Apache Jena Fuseki.
+
+### Rationale & Trade-offs
+
+1. **Memory Ceiling & Footprint**:
+   - Jena Fuseki requires a Java Virtual Machine (JVM) runtime with baseline heap allocation typically exceeding 1 GB - 2 GB RAM.
+   - iqoqo is explicitly designed for lean, local-first, self-hosted deployments, including Oracle Cloud Infrastructure (OCI) Always-Free VM instances (1 GB RAM shapes) and home NAS appliances.
+   - `sparql-runner` operates within a hardened 512 MB cgroup ceiling, idling under 60 MB RAM.
+2. **Dynamic Per-Caller Privacy Scoping**:
+   - FRBR catalog items are subject to user-level privacy boundaries (`default_item_visibility`, `is_hidden`, `FederationConsent`, and friend graph visibility).
+   - In Fuseki, enforcing fine-grained, per-caller Graph Access Control Lists (GACL) across federated cross-user queries requires complex security plugins or multi-dataset partitioning.
+   - `sparql-runner` consumes dynamic in-memory RDF snapshots serialized on demand by Flask web workers with strict caller-level authorization filters.
+3. **Attack Surface & Process Isolation**:
+   - JVM-based quadstores expose broad attack surfaces (e.g. Java deserialization vulnerabilities, JNDI lookups).
+   - `sparql-runner` uses Linux `rlimit` controls, cgroup limits, dropped Linux capabilities (`cap_drop: [ALL]`), non-root user UID 10002, read-only root filesystems, and strict child worker fork/kill mechanisms to terminate runaway or adversarial SPARQL execution.
+
 ## Observability & Incident Runbook
 
 ### OpenObserve Diagnostics (SQL)

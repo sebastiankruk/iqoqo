@@ -125,6 +125,26 @@ vi.mock("@tanstack/react-query", async importOriginal => {
   };
 });
 
+/* ── In-App Notifications Hook Mock (prevents No QueryClient set in tests rendering Navbar) ── */
+vi.mock("@/lib/api/notifications", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/lib/api/notifications")>();
+  return {
+    ...actual,
+    useNotifications: vi.fn().mockReturnValue({
+      data: { notifications: [], total: 0, unread_count: 0, limit: 20, offset: 0 },
+      isLoading: false,
+    }),
+    useMarkNotificationsRead: vi.fn().mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useMarkAllNotificationsRead: vi.fn().mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+  };
+});
+
 /* ── Axios ───────────────────────────────────────────────────────────────── */
 vi.mock("axios", async importOriginal => {
   const actual = await importOriginal<typeof import("axios")>();

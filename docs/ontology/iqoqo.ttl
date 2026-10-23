@@ -22,6 +22,10 @@
 @prefix frbroo: <http://iflastandards.info/ns/fr/frbr/frbroo/> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix as: <https://www.w3.org/ns/activitystreams#> .
+@prefix crm: <http://www.cidoc-crm.org/cidoc-crm/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix schema: <https://schema.org/> .
 
 : a owl:Ontology ;
     rdfs:label "iqoqo Ontology" ;
@@ -257,8 +261,51 @@ iqoqo:FeedbackComment a owl:Class ;
     rdfs:comment "A registered user account in the system (auth.users)." .
 
 :UserCollection a owl:Class ;
+    rdfs:subClassOf as:OrderedCollection ;
     rdfs:label "UserCollection" ;
     rdfs:comment "A curated collection of items organized by a user (inventory.user_collections)." .
+
+:collectionOwner a owl:ObjectProperty ;
+    rdfs:label "collection owner" ;
+    rdfs:comment "The User who owns the collection." ;
+    rdfs:domain :UserCollection ;
+    rdfs:range :User .
+
+:collectionName a owl:DatatypeProperty ;
+    rdfs:label "collection name" ;
+    rdfs:comment "Name of the user collection." ;
+    rdfs:domain :UserCollection ;
+    rdfs:range xsd:string .
+
+:collectionItem a owl:ObjectProperty ;
+    rdfs:label "collection item" ;
+    rdfs:comment "An item included in the collection." ;
+    rdfs:domain :UserCollection ;
+    rdfs:range :Item .
+
+:FederationFollower a owl:Class ;
+    rdfs:subClassOf as:Follow ;
+    rdfs:label "FederationFollower" ;
+    rdfs:comment "Follow relationship between remote actors and local users (federation.federation_followers)." .
+
+:followerLocalUser a owl:ObjectProperty ;
+    rdfs:label "follower local user" ;
+    rdfs:comment "The local user followed or following." ;
+    rdfs:domain :FederationFollower ;
+    rdfs:range :User .
+
+:followerStatus a owl:DatatypeProperty ;
+    rdfs:label "follower status" ;
+    rdfs:comment "Status of the federation follow relationship." ;
+    rdfs:domain :FederationFollower ;
+    rdfs:range xsd:string .
+
+:knowsFriend a owl:ObjectProperty ;
+    rdfs:subPropertyOf foaf:knows ;
+    rdfs:label "knows friend" ;
+    rdfs:comment "Mutual friend relationship between users." ;
+    rdfs:domain :User ;
+    rdfs:range :User .
 
 :ImageScan a owl:Class ;
     rdfs:label "ImageScan" ;
@@ -269,6 +316,7 @@ iqoqo:FeedbackComment a owl:Class ;
 # ---------------------------------------------------------------------------
 
 :UserWorkIntent a owl:Class ;
+    rdfs:subClassOf schema:WantAction , as:Collection ;
     rdfs:label "UserWorkIntent" ;
     rdfs:comment "User intent toward a Conceptual Work (e.g. want_to_read) (inventory.user_work_intents)." .
 
@@ -301,6 +349,7 @@ iqoqo:FeedbackComment a owl:Class ;
 # ---------------------------------------------------------------------------
 
 :ItemCustodyEvent a owl:Class ;
+    rdfs:subClassOf crm:E10_Transfer_of_Custody ;
     rdfs:label "ItemCustodyEvent" ;
     rdfs:comment "CIDOC CRM-compliant immutable event log for item custody and provenance changes (inventory.item_custody_events)." .
 
@@ -339,6 +388,7 @@ iqoqo:FeedbackComment a owl:Class ;
 # ---------------------------------------------------------------------------
 
 :LoanRequest a owl:Class ;
+    rdfs:subClassOf as:Offer ;
     rdfs:label "LoanRequest" ;
     rdfs:comment "Circulation loan request from a borrower to loan an Item from its owner (inventory.loan_requests)." .
 

@@ -265,6 +265,82 @@
     @apply flex items-center gap-2 text-xs font-medium transition-colors border border-dashed border-destructive/30 rounded-sm pl-[5px] pr-[5px] py-0.5;
     @apply text-destructive/70 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50;
   }
+
+  /* ── Prose Typography Spacing ── */
+  .prose {
+    color: var(--foreground);
+  }
+
+  .prose p {
+    margin-top: 0;
+    margin-bottom: 1.25rem;
+    line-height: 1.75;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4 {
+    color: var(--foreground);
+    font-family: var(--font-serif, serif);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .prose h1 {
+    font-size: 1.875rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .prose h2 {
+    font-size: 1.5rem;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+
+  .prose h3 {
+    font-size: 1.25rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .prose ul,
+  .prose ol {
+    margin-top: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding-left: 1.5rem;
+  }
+
+  .prose ul {
+    list-style-type: disc;
+  }
+
+  .prose ol {
+    list-style-type: decimal;
+  }
+
+  .prose li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+  }
+
+  .prose hr {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .prose blockquote {
+    border-left: 4px solid var(--primary);
+    padding-left: 1rem;
+    font-style: italic;
+    margin: 1.5rem 0;
+    color: var(--muted-foreground);
+  }
 }
 
 @media (max-width: 640px) {

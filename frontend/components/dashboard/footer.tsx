@@ -15,6 +15,7 @@
 //
 "use client";
 
+import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { useTranslations } from "next-intl";
 
@@ -52,7 +53,17 @@ export function Footer() {
             {t("buyMeACoffee")}
           </a>
         </p>
-        <p className="text-xs text-muted-foreground">{t("rules")}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-3">
+          <Link href="/help" className="hover:text-foreground underline transition-colors">
+            Help
+          </Link>
+          &middot;
+          <Link href="/federation/directory" className="hover:text-foreground underline transition-colors">
+            Libraries
+          </Link>
+          &middot;
+          <span>{t("rules")}</span>
+        </p>
       </div>
     </footer>
   );

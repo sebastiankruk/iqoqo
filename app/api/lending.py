@@ -25,6 +25,7 @@ import hmac
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import select
@@ -69,6 +70,16 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     if not item:
         return jsonify({"error": "Item not found", "code": 404}), 404
 
+    # Verify authorization / visibility for borrower
+    from app.core.friend_service import is_friend_of
+
+    item_visibility = getattr(item, "visibility", "public")
+    if item_visibility == "private" or (getattr(item, "is_hidden", False) and item_visibility not in ("friends_only", "shared")):
+        return jsonify({"error": "Item not found or not available", "code": 404}), 404
+
+    if item_visibility == "friends_only" and not is_friend_of(user_id, item.owner_id):
+        return jsonify({"error": "Forbidden: item is visible only to confirmed friends", "code": 403}), 403
+
     # Validate borrowing constraints
     error_msg = None
     status_code = 400
@@ -100,6 +111,25 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     try:
         db.session.add(loan_request)
         db.session.commit()
+        try:
+            from app.core.notifications import create_notification
+
+            target_owner_id = item.owner_id
+            if target_owner_id:
+                create_notification(
+                    user_id=target_owner_id,
+                    notification_type="loan_request",
+                    payload={
+                        "item_id": item.id,
+                        "loan_request_id": loan_request.id,
+                        "requester_id": str(user_id),
+                        "message": f"Loan request received for item #{item.id}",
+                    },
+                    target_iri=f"/item/{item.id}",
+                )
+        except Exception as notif_err:
+            logger.warning("Failed to emit local loan_request notification: %s", notif_err)
+
         return jsonify({"success": True, "data": loan_request.to_dict()}), 201
     except IntegrityError as e:
         db.session.rollback()
@@ -211,10 +241,83 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
                 new_status="lent",
             )
             db.session.add(log)
+
+            # Record immutable ItemCustodyEvent
+            from app.db.core import ItemCustodyEvent
+
+            custody_event = ItemCustodyEvent(
+                item_id=item.id,
+                actor_id=user_id,
+                from_owner_id=item.owner_id,
+                to_owner_id=loan_request.requester_id,
+                event_type="transfer",
+                notes=f"Loan approved for request #{loan_request.id}",
+            )
+            db.session.add(custody_event)
         else:
             loan_request.status = "rejected"
 
+        # Check if loan_request has federated metadata in notes to dispatch Accept/Reject activity
+        is_federated_requester = False
+        if loan_request.requester and loan_request.requester.email and loan_request.requester.email.endswith("@federated.local"):
+            is_federated_requester = True
+
+        if is_federated_requester and loan_request.notes and "[Federated Offer from" in loan_request.notes:
+            try:
+                import json
+                import uuid
+
+                lines = loan_request.notes.split("\n", 1)
+                if len(lines) > 1:
+                    fed_meta = json.loads(lines[1])
+                    inbox_url = fed_meta.get("inbox_url")
+                    orig_activity_id = fed_meta.get("remote_activity_id")
+                    target_actor_uri = fed_meta.get("remote_actor_uri")
+                    if inbox_url:
+                        from app.core.federation_client import FederationClient
+                        from app.core.iri import canonical_actor_iri, get_federation_base_url
+
+                        base_url = get_federation_base_url()
+                        local_actor_uri = canonical_actor_iri(user_id, base_url)
+                        activity_type = "Accept" if action == "approve" else "Reject"
+                        resp_activity = {
+                            "@context": "https://www.w3.org/ns/activitystreams",
+                            "id": f"{base_url}/activities/{activity_type.lower()}-{uuid.uuid4()}",
+                            "type": activity_type,
+                            "actor": local_actor_uri,
+                            "object": {
+                                "id": orig_activity_id,
+                                "type": "Offer",
+                                "actor": target_actor_uri,
+                                "object": f"{base_url}/item/{item.id}",
+                            },
+                        }
+                        client = FederationClient()
+                        client.post_to_inbox(inbox_url, resp_activity, sender_user_id=str(user_id))
+            except Exception as exc:
+                logger.warning("Could not dispatch federated %s response: %s", action, exc)
+
         db.session.commit()
+
+        try:
+            from app.core.notifications import create_notification
+
+            if loan_request.requester_id:
+                notif_type = "loan_approved" if action == "approve" else "loan_rejected"
+                create_notification(
+                    user_id=loan_request.requester_id,
+                    notification_type=notif_type,
+                    payload={
+                        "item_id": item.id,
+                        "loan_request_id": loan_request.id,
+                        "action": action,
+                        "message": f"Your loan request for item #{item.id} was {loan_request.status}",
+                    },
+                    target_iri=f"/item/{item.id}",
+                )
+        except Exception as notif_err:
+            logger.warning("Failed to emit loan resolution notification: %s", notif_err)
+
         return jsonify({"success": True, "data": loan_request.to_dict()}), 200
     except SQLAlchemyError as e:
         logger.error("Error resolving loan request %s: %s", request_id, e)
@@ -247,6 +350,136 @@ def get_loan_status(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": True, "data": None}), 200
 
     return jsonify({"success": True, "data": loan_request.to_dict()}), 200
+
+
+@lending_bp.route("/items/<int:item_id>/return", methods=["POST"])
+@limiter.limit("30 per minute")
+@require_auth
+def return_loaned_item(item_id: int) -> Response | tuple[Response, int]:
+    """Owner or borrower marks a lent item as returned to custody."""
+    from app.db.auth import User
+    from app.db.core import Item, ItemCustodyEvent, ItemStatusLog, db
+
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Authentication required", "code": 401}), 401
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"error": "Item not found", "code": 404}), 404
+
+    user = db.session.get(User, user_id)
+    is_admin = user and any(role.name == "admin" for role in getattr(user, "roles", []))
+    is_owner = str(item.owner_id) == str(user_id)
+    is_borrower = str(item.lent_to_user_id) == str(user_id)
+
+    if not (is_owner or is_borrower or is_admin):
+        return jsonify({"error": "Forbidden", "code": 403}), 403
+
+    if item.collection_status != "lent":
+        return jsonify({"error": "Item is not currently marked as lent", "code": 400}), 400
+
+    old_borrower_id = item.lent_to_user_id
+    item.collection_status = "available"
+    item.lent_to_user_id = None
+
+    status_log = ItemStatusLog(
+        item_id=item.id,
+        user_id=user_id,
+        old_status="lent",
+        new_status="available",
+    )
+    db.session.add(status_log)
+
+    custody_event = ItemCustodyEvent(
+        item_id=item.id,
+        actor_id=user_id,
+        from_owner_id=old_borrower_id,
+        to_owner_id=item.owner_id,
+        event_type="return",
+        notes=f"Item returned from loan by user {user_id}",
+    )
+    db.session.add(custody_event)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": item.to_dict()}), 200
+
+
+@lending_bp.route("/federated-request", methods=["POST"])
+@limiter.limit("30 per minute")
+@require_auth
+def request_federated_loan() -> Response | tuple[Response, int]:
+    """Send an outbound ActivityPub Offer (loan request) to a remote friend."""
+    import uuid
+
+    from app.core.federation_client import FederationClient
+    from app.core.iri import canonical_actor_iri, get_federation_base_url
+    from app.db.auth import User
+    from app.db.core import db
+
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Authentication required", "code": 401}), 401
+    current_user = db.session.get(User, user_id)
+    if not current_user:
+        return jsonify({"error": "Authentication required", "code": 401}), 401
+
+    data = request.get_json() or {}
+    target_item_uri = data.get("target_item_uri")
+    target_actor_uri = data.get("target_actor_uri")
+    notes = data.get("notes") or "Requesting loan of item"
+
+    if not target_item_uri or not target_actor_uri:
+        return jsonify({"error": "target_item_uri and target_actor_uri are required", "code": 400}), 400
+
+    client = FederationClient()
+    actor_doc = client.fetch_actor(target_actor_uri)
+    if not actor_doc or not isinstance(actor_doc, dict):
+        return jsonify({"error": f"Failed to resolve remote actor {target_actor_uri}", "code": 502}), 502
+
+    inbox_url = actor_doc.get("inbox")
+    if not inbox_url:
+        return jsonify({"error": "Remote actor lacks inbox endpoint", "code": 400}), 400
+
+    base_url = get_federation_base_url()
+    local_actor_uri = canonical_actor_iri(current_user.id, base_url)
+    activity_id = f"{base_url}/activities/offer-{uuid.uuid4()}"
+
+    offer_activity: dict[str, Any] = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": activity_id,
+        "type": "Offer",
+        "actor": local_actor_uri,
+        "object": target_item_uri,
+        "target": target_actor_uri,
+        "notes": notes,
+    }
+
+    try:
+        resp = client.post_to_inbox(inbox_url, offer_activity, sender_user_id=str(current_user.id))
+        if resp.status_code in (200, 201, 202):
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "status": "delivered",
+                        "activity": offer_activity,
+                    }
+                ),
+                201,
+            )
+        return (
+            jsonify(
+                {
+                    "error": f"Remote inbox returned HTTP {resp.status_code}",
+                    "code": resp.status_code,
+                }
+            ),
+            resp.status_code,
+        )
+    except Exception as exc:
+        logger.error("Failed to dispatch outbound Offer to %s: %s", inbox_url, exc)
+        return jsonify({"error": "Failed to deliver loan Offer", "code": 500}), 500
 
 
 @lending_bp.route("/test/reset", methods=["POST"])

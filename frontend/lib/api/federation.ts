@@ -19,6 +19,7 @@ import type {
   FederationActivity,
   FederationActivityFilters,
   FederationConsent,
+  FederationDirectoryData,
   FederationInstance,
   PaginationMeta,
   TrustLevel,
@@ -81,6 +82,11 @@ export async function removeFederationInstance(instanceId: number): Promise<void
   }
 }
 
+/** Aliases for federation instance administration */
+export const listFederationInstances = getFederationInstances;
+export const updateFederationInstance = updateInstanceTrust;
+export const deleteFederationInstance = removeFederationInstance;
+
 /**
  * Fetch instance actor public key fingerprint.
  * @returns Promise resolving to the key fingerprint
@@ -124,6 +130,9 @@ export async function getFederationActivities(
   }
   return { data: res.data.data, pagination: res.data.pagination };
 }
+
+/** Alias for federation activities listing */
+export const listFederationActivities = getFederationActivities;
 
 // ---------------------------------------------------------------------------
 // Federation Consent (User-facing)
@@ -202,6 +211,18 @@ export async function followRemoteActor(params: {
   const res = await apiClient.post<ApiResponse<RemoteFollowResult>>("/federation/follow", params);
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to follow remote actor");
+  }
+  return res.data.data;
+}
+
+/**
+ * Fetch connected federated library directory and instance stats.
+ * @returns Promise resolving to directory overview
+ */
+export async function getFederationDirectory(): Promise<FederationDirectoryData> {
+  const res = await apiClient.get<ApiResponse<FederationDirectoryData>>("/federation/directory");
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to fetch federation directory");
   }
   return res.data.data;
 }

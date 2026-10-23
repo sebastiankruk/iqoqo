@@ -145,6 +145,8 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         collectionStatusInfo={collectionStatusInfo}
         progressStatusInfo={progressStatusInfo}
         isHidden={item.is_hidden}
+        visibility={item.visibility}
+        item={item}
       />
 
       {/* Lending info */}

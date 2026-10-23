@@ -31,6 +31,7 @@ import {
   SunMoon,
   Globe,
   HelpCircle,
+  BookOpen,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -56,6 +57,7 @@ import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
 import { ManageCollectionsModal } from "@/components/collection/manage-collections-modal";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
+import { NotificationCenter } from "@/components/dashboard/notification-center";
 import { setLocaleCookie } from "@/lib/locale-cookie";
 
 /**
@@ -204,142 +206,150 @@ export function Navbar() {
             {!mounted || isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             ) : profile ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden outline-none"
-                    aria-label="User menu"
-                  >
-                    <Avatar
-                      src={profile.avatar_url}
-                      alt={`${profile.display_name || profile.email}'s profile picture`}
-                      size={36}
-                      className="rounded-full"
-                      fallback={(profile.display_name?.charAt(0) || profile.email?.charAt(0) || "?").toUpperCase()}
-                    />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-60 p-2 dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl"
-                >
-                  <div className="px-2 py-2.5">
-                    <p className="text-sm font-medium leading-none">{profile.display_name || "User"}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 truncate">{profile.email}</p>
-                  </div>
-                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                  <DropdownMenuGroup>
-                    {profile.public_username && (
-                      <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <Link href={`/u/${profile.public_username}`}>
-                          <User className="mr-2 h-4 w-4" /> {t("publicProfile")}
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                      <Link href="/profile">
-                        <User className="mr-2 h-4 w-4" /> {t("profile")}
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setManageCollOpen(true)}
-                      className="cursor-pointer rounded-md py-2 px-3 text-sm"
+              <div className="flex items-center gap-2">
+                <NotificationCenter enabled={!!profile} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 overflow-hidden outline-none"
+                      aria-label="User menu"
                     >
-                      <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                      <Link href="/feedback">
-                        <HelpCircle className="mr-2 h-4 w-4" /> {t("helpAndFeedback")}
-                        {pendingCount > 0 && (
-                          <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            {pendingCount}
-                          </span>
-                        )}
-                      </Link>
-                    </DropdownMenuItem>
-                    {(profile.roles?.includes("admin") ||
-                      profile.roles?.includes("contributor") ||
-                      profile.roles?.includes("custodian") ||
-                      profile.permissions?.some(p =>
-                        ["write:metadata", "edit:cover", "escalate:resolve", "read:metadata"].includes(p)
-                      )) && (
+                      <Avatar
+                        src={profile.avatar_url}
+                        alt={`${profile.display_name || profile.email}'s profile picture`}
+                        size={36}
+                        className="rounded-full"
+                        fallback={(profile.display_name?.charAt(0) || profile.email?.charAt(0) || "?").toUpperCase()}
+                      />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-60 p-2 dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl"
+                  >
+                    <div className="px-2 py-2.5">
+                      <p className="text-sm font-medium leading-none">{profile.display_name || "User"}</p>
+                      <p className="text-xs text-muted-foreground mt-1.5 truncate">{profile.email}</p>
+                    </div>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuGroup>
+                      {profile.public_username && (
+                        <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                          <Link href={`/u/${profile.public_username}`}>
+                            <User className="mr-2 h-4 w-4" /> {t("publicProfile")}
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <Link href="/admin/settings">
-                          <Settings className="mr-2 h-4 w-4" /> {t("administration")}
+                        <Link href="/profile">
+                          <User className="mr-2 h-4 w-4" /> {t("profile")}
                         </Link>
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator className="dark:bg-white/10 md:hidden" />
-                  <DropdownMenuGroup className="md:hidden">
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <Globe className="mr-2 h-4 w-4" />
-                        <span>{t("languageSubmenu")}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem
-                            onClick={() => setLanguage("en")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>English</span>
-                            {locale === "en" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setLanguage("pl")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>Polski</span>
-                            {locale === "pl" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
+                      <DropdownMenuItem
+                        onClick={() => setManageCollOpen(true)}
+                        className="cursor-pointer rounded-md py-2 px-3 text-sm"
+                      >
+                        <Folder className="mr-2 h-4 w-4" /> {t("manageCollections")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <Link href="/help">
+                          <BookOpen className="mr-2 h-4 w-4" /> {t("helpDocs")}
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                        <Link href="/feedback">
+                          <HelpCircle className="mr-2 h-4 w-4" /> {t("helpAndFeedback")}
+                          {pendingCount > 0 && (
+                            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                              {pendingCount}
+                            </span>
+                          )}
+                        </Link>
+                      </DropdownMenuItem>
+                      {(profile.roles?.includes("admin") ||
+                        profile.roles?.includes("contributor") ||
+                        profile.roles?.includes("custodian") ||
+                        profile.permissions?.some(p =>
+                          ["write:metadata", "edit:cover", "escalate:resolve", "read:metadata"].includes(p)
+                        )) && (
+                        <DropdownMenuItem asChild className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                          <Link href="/admin/settings">
+                            <Settings className="mr-2 h-4 w-4" /> {t("administration")}
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator className="dark:bg-white/10 md:hidden" />
+                    <DropdownMenuGroup className="md:hidden">
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                          <Globe className="mr-2 h-4 w-4" />
+                          <span>{t("languageSubmenu")}</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                            <DropdownMenuItem
+                              onClick={() => setLanguage("en")}
+                              className="cursor-pointer flex items-center justify-between gap-2"
+                            >
+                              <span>English</span>
+                              {locale === "en" && <Check className="h-4 w-4" />}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setLanguage("pl")}
+                              className="cursor-pointer flex items-center justify-between gap-2"
+                            >
+                              <span>Polski</span>
+                              {locale === "pl" && <Check className="h-4 w-4" />}
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
 
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
-                        <SunMoon className="mr-2 h-4 w-4" />
-                        <span>{t("themeSubmenu")}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
-                          <DropdownMenuItem
-                            onClick={() => setTheme("light")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>{t("themeLight")}</span>
-                            {theme === "light" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setTheme("dark")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>{t("themeDark")}</span>
-                            {theme === "dark" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setTheme("system")}
-                            className="cursor-pointer flex items-center justify-between gap-2"
-                          >
-                            <span>{t("themeSystem")}</span>
-                            {theme === "system" && <Check className="h-4 w-4" />}
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                  <DropdownMenuItem
-                    asChild
-                    className="cursor-pointer rounded-md py-2 px-3 text-sm text-red-500 focus:text-red-500 focus:bg-red-500/10"
-                  >
-                    <button onClick={handleLogout} className="w-full flex items-center">
-                      <LogOut className="mr-2 h-4 w-4" /> {t("logOut")}
-                    </button>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="cursor-pointer rounded-md py-2 px-3 text-sm">
+                          <SunMoon className="mr-2 h-4 w-4" />
+                          <span>{t("themeSubmenu")}</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="dark:bg-[#0a0c10] dark:border-white/10 shadow-xl rounded-xl">
+                            <DropdownMenuItem
+                              onClick={() => setTheme("light")}
+                              className="cursor-pointer flex items-center justify-between gap-2"
+                            >
+                              <span>{t("themeLight")}</span>
+                              {theme === "light" && <Check className="h-4 w-4" />}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setTheme("dark")}
+                              className="cursor-pointer flex items-center justify-between gap-2"
+                            >
+                              <span>{t("themeDark")}</span>
+                              {theme === "dark" && <Check className="h-4 w-4" />}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setTheme("system")}
+                              className="cursor-pointer flex items-center justify-between gap-2"
+                            >
+                              <span>{t("themeSystem")}</span>
+                              {theme === "system" && <Check className="h-4 w-4" />}
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      asChild
+                      className="cursor-pointer rounded-md py-2 px-3 text-sm text-red-500 focus:text-red-500 focus:bg-red-500/10"
+                    >
+                      <button onClick={handleLogout} className="w-full flex items-center">
+                        <LogOut className="mr-2 h-4 w-4" /> {t("logOut")}
+                      </button>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/login" className="text-sm font-medium hover:underline">

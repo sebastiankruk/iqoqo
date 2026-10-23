@@ -173,8 +173,9 @@ test.describe("v0.7.15 UX Hotfixes", () => {
     await expect(page.getByText("My Items")).toBeVisible();
     await expect(page.getByText("2").first()).toBeVisible();
 
-    // Initially Personal scope: click the icon-toggle to switch to Global scope
+    // Cycle scope: Personal -> Friends -> Global
     await page.getByRole("button", { name: /personal/i }).click();
+    await page.getByRole("button", { name: /friends/i }).click();
     await expect(page.getByText("All Items")).toBeVisible();
     await expect(page.getByText("99").first()).toBeVisible();
 

@@ -30,7 +30,7 @@ import { queryKeys } from "./query-keys";
  * @param scope - Data scope ('personal' | 'global')
  * @returns {import('@tanstack/react-query').UseQueryResult<DashboardStats>} Query result
  */
-export function useStats(scope: "personal" | "global" = "personal") {
+export function useStats(scope: "personal" | "friends" | "global" = "personal") {
   return useQuery({
     queryKey: queryKeys.stats(scope),
     queryFn: () => apiFetch<DashboardStats>(`/stats?scope=${scope}`),

@@ -16,34 +16,39 @@
 "use client";
 
 import { useState } from "react";
-import { BookMarked, BookOpen, Globe, HandHelping, Target, User } from "lucide-react";
+import { BookMarked, BookOpen, Globe, HandHelping, Target, User, Users } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Toggle } from "@/components/ui/toggle";
 import { CollectionInsights } from "./collection-insights";
 
 /**
- * Top-row stat cards pulled from the Flask /api/stats endpoint with view (Stats / Insights) and scope (Personal / Global) toggles.
+ * Top-row stat cards pulled from the Flask /api/stats endpoint with view (Stats / Insights) and scope (Personal / Friends / Global) toggles.
  *
  * @returns {JSX.Element} The component
  */
 export function StatsCards() {
   const t = useTranslations("StatsCards");
   const [viewMode, setViewMode] = useState<"stats" | "insights">("stats");
-  const [scope, setScope] = useState<"personal" | "global">("personal");
+  const [scope, setScope] = useState<"personal" | "friends" | "global">("personal");
   const { data: stats, isLoading, isError } = useStats(scope);
 
   const topCards = [
     {
-      label: scope === "global" ? t("itemsGlobal") : t("items"),
+      label:
+        scope === "global" ? t("itemsGlobal") : scope === "friends" ? t("scopeFriends") || "Friends Items" : t("items"),
       value: stats?.total_items ?? 0,
       icon: BookOpen,
       borderColor: "border-l-primary",
       iconBg: "bg-primary/8",
       iconColor: "text-primary",
-      description: scope === "global" ? t("itemsDescGlobal") : t("itemsDesc"),
-      href: "/collection",
+      description:
+        scope === "global"
+          ? t("itemsDescGlobal")
+          : scope === "friends"
+            ? t("itemsDescFriends") || "Total in friends' collections"
+            : t("itemsDesc"),
+      href: scope === "friends" ? "/collection?scope=friends" : "/collection",
     },
     {
       label: scope === "global" ? t("readingGlobal") : t("reading"),
@@ -53,7 +58,7 @@ export function StatsCards() {
       iconBg: "bg-green-500/10",
       iconColor: "text-green-600",
       description: scope === "global" ? t("readingDescGlobal") : t("readingDesc"),
-      href: "/collection?statuses=reading",
+      href: scope === "friends" ? "/collection?scope=friends&statuses=reading" : "/collection?statuses=reading",
     },
     {
       label: scope === "global" ? t("wishListGlobal") : t("wishList"),
@@ -63,7 +68,7 @@ export function StatsCards() {
       iconBg: "bg-chart-3/10",
       iconColor: "text-chart-3",
       description: scope === "global" ? t("wishListDescGlobal") : t("wishListDesc"),
-      href: "/collection?statuses=wish_list",
+      href: scope === "friends" ? "/collection?scope=friends&statuses=wish_list" : "/collection?statuses=wish_list",
     },
     {
       label: t("lentOut"),
@@ -122,17 +127,27 @@ export function StatsCards() {
         </div>
 
         <div className="flex items-center gap-1">
-          <Toggle
-            aria-label={scope === "personal" ? t("scopePersonal") : t("scopeGlobal")}
-            title={scope === "personal" ? t("scopePersonal") : t("scopeGlobal")}
-            pressed={scope === "global"}
-            onPressedChange={pressed => setScope(pressed ? "global" : "personal")}
-            variant="outline"
-            size="sm"
-            className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground border-border/80"
+          <button
+            type="button"
+            aria-label={
+              scope === "personal" ? t("scopePersonal") : scope === "friends" ? t("scopeFriends") : t("scopeGlobal")
+            }
+            title={
+              scope === "personal" ? t("scopePersonal") : scope === "friends" ? t("scopeFriends") : t("scopeGlobal")
+            }
+            onClick={() => {
+              setScope(prev => (prev === "personal" ? "friends" : prev === "friends" ? "global" : "personal"));
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:text-foreground transition-colors"
           >
-            {scope === "personal" ? <User className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
-          </Toggle>
+            {scope === "personal" ? (
+              <User className="h-4 w-4" />
+            ) : scope === "friends" ? (
+              <Users className="h-4 w-4" />
+            ) : (
+              <Globe className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </div>
 

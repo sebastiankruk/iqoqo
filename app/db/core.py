@@ -66,6 +66,7 @@ _AUTH_PFX: str = f"{_AUTH}." if _AUTH else ""
 
 #: Unified list of all possible item statuses.
 ITEM_STATUSES: tuple[str, ...] = COLLECTION_STATUSES + PROGRESS_STATUSES
+ITEM_VISIBILITIES: tuple[str, ...] = ("public", "friends_only", "shared", "private")
 
 #: Allowed statuses for UserWorkIntent (progress statuses plus fulfilled).
 WORK_INTENT_STATUSES: tuple[str, ...] = (*PROGRESS_STATUSES, "fulfilled")
@@ -581,6 +582,10 @@ class Item(db.Model):  # type: ignore[name-defined]
             f"collection_status IN ({', '.join(repr(s) for s in COLLECTION_STATUSES)})",
             name="ck_items_collection_status",
         ),
+        db.CheckConstraint(
+            f"visibility IN ({', '.join(repr(s) for s in ITEM_VISIBILITIES)})",
+            name="ck_items_visibility",
+        ),
         *(({"schema": _INVENTORY},) if _INVENTORY else ()),
     )
 
@@ -609,6 +614,7 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
     lent_to_name = db.Column(db.String(255), nullable=True)
 
+    visibility = db.Column(db.String(20), default="public", nullable=False)
     is_hidden = db.Column(db.Boolean, default=False, nullable=False)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
@@ -620,6 +626,48 @@ class Item(db.Model):  # type: ignore[name-defined]
     )
     notes = db.relationship("SocialNote", foreign_keys="SocialNote.item_id", backref="item", lazy="dynamic", cascade="all, delete-orphan")
 
+    def set_visibility(self, vis: str) -> None:
+        """Update visibility tier and keep is_hidden in sync."""
+        if vis not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility {vis!r}")
+        self.visibility = vis
+        self.is_hidden = vis != "public"
+
+    from sqlalchemy.orm import validates
+
+    @validates("is_hidden")
+    def _validate_is_hidden(self, key: str, value: bool) -> bool:
+        """Ensure is_hidden=True keeps visibility from defaulting to public."""
+        if getattr(self, "_in_validation", False):
+            return value
+        self._in_validation = True
+        try:
+            if value is True:
+                current_vis = self.__dict__.get("visibility")
+                if current_vis is None or current_vis == "public":
+                    self.visibility = "private"
+            elif value is False:
+                current_vis = self.__dict__.get("visibility")
+                if current_vis == "private":
+                    self.visibility = "public"
+        finally:
+            self._in_validation = False
+        return value
+
+    @validates("visibility")
+    def _validate_visibility(self, key: str, value: str) -> str:
+        """Ensure visibility updates keep is_hidden in sync."""
+        if value not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility {value!r}")
+        if getattr(self, "_in_validation", False):
+            return value
+        self._in_validation = True
+        try:
+            self.is_hidden = value != "public"
+        finally:
+            self._in_validation = False
+        return value
+
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Item."""
@@ -628,15 +676,17 @@ class Item(db.Model):  # type: ignore[name-defined]
     @property
     def is_public(self) -> bool:
         """Return whether this Item is publicly visible."""
-        return not self.is_hidden
+        return (self.visibility or ("private" if self.is_hidden else "public")) == "public" and not self.is_hidden
 
     @is_public.setter
     def is_public(self, value: bool) -> None:
         """Set whether this Item is publicly visible by toggling is_hidden."""
         self.is_hidden = not value
+        self.visibility = "public" if value else "private"
 
     def to_dict(self) -> dict:
         """Serialize Item entity to dictionary."""
+        effective_visibility = self.visibility or ("private" if self.is_hidden else "public")
         return {
             "id": self.id,
             "manifestation_id": self.manifestation_id,
@@ -647,8 +697,9 @@ class Item(db.Model):  # type: ignore[name-defined]
             "local_barcode": self.local_barcode,
             "lent_to_user_id": str(self.lent_to_user_id) if self.lent_to_user_id else None,
             "lent_to_name": self.lent_to_name,
+            "visibility": effective_visibility,
             "is_hidden": self.is_hidden,
-            "is_public": not self.is_hidden,
+            "is_public": not self.is_hidden and effective_visibility == "public",
             "added_at": self.added_at.isoformat() if self.added_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "meta": self.meta or {},

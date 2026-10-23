@@ -19,7 +19,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ProviderMergeDialog,
   buildFieldComparisonsFromTree,
-  getProviderLabel,
   type FieldComparison,
 } from "@/components/admin/provider-merge-dialog";
 import * as adminApi from "@/lib/api/admin";

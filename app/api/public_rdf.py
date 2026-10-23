@@ -22,14 +22,34 @@ for Work, Expression, Manifestation, and Item entities.
 from typing import Any, cast
 
 from flask import Blueprint, Response, current_app, jsonify, redirect, request, url_for
-from sqlalchemy import select
+from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib.namespace import RDF, XSD
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.frbr_merge import get_entity_tombstone
 from app.core.frbr_service import serialize_collection_to_rdf
 from app.core.iri import canonical_frbr_iri, get_lod_base_url
 from app.core.limiter import limiter
-from app.db.models import Expression, Item, Manifestation, Work, db
+from app.db.federation import FederationFollower, FollowStatus
+from app.db.models import (
+    Expression,
+    Item,
+    ItemCustodyEvent,
+    Manifestation,
+    User,
+    UserCollection,
+    UserWorkIntent,
+    Work,
+    db,
+)
+
+IQOQO = Namespace("https://iqoqo.org/ontology#")
+AS = Namespace("https://www.w3.org/ns/activitystreams#")
+CRM = Namespace("http://www.cidoc-crm.org/cidoc-crm/")
+FOAF = Namespace("http://xmlns.com/foaf/0.1/")
+SCHEMA = Namespace("https://schema.org/")
+FRBR = Namespace("http://purl.org/vocab/frbr/core#")
 
 public_bp = Blueprint("public", __name__, url_prefix="/public")
 lod_bp = Blueprint("lod", __name__)
@@ -387,6 +407,363 @@ def get_public_item(item_id: int) -> Response | tuple[Response, int]:
         output_format=rdf_format,
         collection_uri=collection_uri,
     )
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+def _serialize_graph_output(g: Graph, output_format: str) -> str:
+    """Serializes an rdflib Graph to string according to format."""
+    if output_format in ("nt", "n-triples", "ntriples"):
+        return g.serialize(format="nt")
+    if output_format == "json-ld":
+        context = {
+            "iqoqo": str(IQOQO),
+            "as": str(AS),
+            "crm": str(CRM),
+            "foaf": str(FOAF),
+            "schema": str(SCHEMA),
+            "frbr": str(FRBR),
+            "xsd": str(XSD),
+        }
+        return g.serialize(format="json-ld", context=context, indent=2)
+    return g.serialize(format="turtle")
+
+
+def serialize_custody_events_to_rdf(
+    custody_events: list[Any],
+    base_url: str,
+    output_format: str = "json-ld",
+) -> str:
+    """Serializes ItemCustodyEvents to RDF (CIDOC CRM E10 + ActivityStreams)."""
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("as", AS)
+    g.bind("crm", CRM)
+    g.bind("xsd", XSD)
+
+    for event in custody_events:
+        e_uri = URIRef(f"{base_url}/custody/{event.id}")
+        g.add((e_uri, RDF.type, IQOQO.ItemCustodyEvent))
+        g.add((e_uri, RDF.type, CRM.E10_Transfer_of_Custody))
+
+        ev_type = str(getattr(event, "event_type", "transfer"))
+        if ev_type in ("loan", "loan_accepted", "loan_dispatched", "acquisition", "transfer"):
+            g.add((e_uri, RDF.type, AS.Accept))
+
+        item_id = getattr(event, "item_id", None)
+        if item_id:
+            i_uri = URIRef(f"{base_url}/item/{item_id}")
+            g.add((i_uri, RDF.type, IQOQO.Item))
+            g.add((e_uri, IQOQO.custodyItem, i_uri))
+
+        g.add((e_uri, IQOQO.eventType, Literal(ev_type, datatype=XSD.string)))
+
+        rec_at = getattr(event, "recorded_at", None)
+        if rec_at:
+            rec_str = rec_at.isoformat() if hasattr(rec_at, "isoformat") else str(rec_at)
+            g.add((e_uri, IQOQO.recordedAt, Literal(rec_str, datatype=XSD.dateTime)))
+
+        notes = getattr(event, "notes", None)
+        if notes:
+            g.add((e_uri, IQOQO.eventNotes, Literal(str(notes), datatype=XSD.string)))
+
+        actor = getattr(event, "actor", None)
+        actor_id = getattr(event, "actor_id", None)
+        if actor or actor_id:
+            actor_name = actor.public_username if actor and getattr(actor, "public_username", None) else str(actor_id)
+            a_uri = URIRef(f"{base_url}/u/{actor_name}")
+            g.add((a_uri, RDF.type, IQOQO.User))
+            g.add((e_uri, IQOQO.custodyActor, a_uri))
+
+    return _serialize_graph_output(g, output_format)
+
+
+def serialize_user_collection_to_rdf(
+    collection: Any,
+    base_url: str,
+    output_format: str = "json-ld",
+) -> str:
+    """Serializes UserCollection to RDF (ActivityStreams OrderedCollection)."""
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("as", AS)
+    g.bind("xsd", XSD)
+
+    c_uri = URIRef(f"{base_url}/collections/{collection.id}")
+    g.add((c_uri, RDF.type, IQOQO.UserCollection))
+    g.add((c_uri, RDF.type, AS.OrderedCollection))
+
+    owner = getattr(collection, "owner", None)
+    owner_id = getattr(collection, "owner_id", None)
+    owner_name = owner.public_username if owner and getattr(owner, "public_username", None) else str(owner_id)
+    o_uri = URIRef(f"{base_url}/u/{owner_name}")
+    g.add((o_uri, RDF.type, IQOQO.User))
+    g.add((c_uri, IQOQO.collectionOwner, o_uri))
+
+    name = str(getattr(collection, "name", "Collection"))
+    g.add((c_uri, IQOQO.collectionName, Literal(name, datatype=XSD.string)))
+
+    for item_link in getattr(collection, "items", None) or []:
+        it = getattr(item_link, "item", None)
+        it_id = getattr(item_link, "item_id", None) or getattr(item_link, "id", None)
+        if it is not None and getattr(it, "is_hidden", False):
+            continue
+        if it_id:
+            it_uri = URIRef(f"{base_url}/item/{it_id}")
+            g.add((it_uri, RDF.type, IQOQO.Item))
+            g.add((c_uri, IQOQO.collectionItem, it_uri))
+            g.add((c_uri, AS.orderedItems, it_uri))
+
+    return _serialize_graph_output(g, output_format)
+
+
+def serialize_user_intents_to_rdf(
+    intents: list[Any],
+    base_url: str,
+    username: str,
+    output_format: str = "json-ld",
+) -> str:
+    """Serializes UserWorkIntents wishlist to RDF (Schema.org WantAction + AS Collection)."""
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("as", AS)
+    g.bind("schema", SCHEMA)
+    g.bind("xsd", XSD)
+
+    coll_uri = URIRef(f"{base_url}/u/{username}/wishlist")
+    g.add((coll_uri, RDF.type, AS.Collection))
+
+    u_uri = URIRef(f"{base_url}/u/{username}")
+    g.add((u_uri, RDF.type, IQOQO.User))
+
+    for intent in intents:
+        i_uri = URIRef(f"{base_url}/intent/{intent.id}")
+        g.add((i_uri, RDF.type, IQOQO.UserWorkIntent))
+        g.add((i_uri, RDF.type, SCHEMA.WantAction))
+        g.add((coll_uri, AS.items, i_uri))
+        g.add((i_uri, IQOQO.intentUser, u_uri))
+
+        w_id = getattr(intent, "work_id", None)
+        if w_id:
+            w_uri = URIRef(f"{base_url}/work/{w_id}")
+            g.add((w_uri, RDF.type, IQOQO.Work))
+            g.add((i_uri, IQOQO.intentWork, w_uri))
+
+        status = str(getattr(intent, "status", "want_to_read"))
+        g.add((i_uri, IQOQO.intentStatus, Literal(status, datatype=XSD.string)))
+
+    return _serialize_graph_output(g, output_format)
+
+
+def serialize_user_followers_to_rdf(
+    user: Any,
+    followers: list[Any],
+    friends: list[Any],
+    base_url: str,
+    output_format: str = "json-ld",
+) -> str:
+    """Serializes User followers and friends to RDF (ActivityStreams Follow + FOAF knows)."""
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("as", AS)
+    g.bind("foaf", FOAF)
+    g.bind("xsd", XSD)
+
+    username = getattr(user, "public_username", None) or str(getattr(user, "id", "unknown"))
+    u_uri = URIRef(f"{base_url}/u/{username}")
+    g.add((u_uri, RDF.type, IQOQO.User))
+    g.add((u_uri, RDF.type, FOAF.Person))
+
+    for f in followers:
+        f_uri = URIRef(f"{base_url}/followers/{f.id}")
+        g.add((f_uri, RDF.type, IQOQO.FederationFollower))
+        g.add((f_uri, RDF.type, AS.Follow))
+        g.add((f_uri, IQOQO.followerLocalUser, u_uri))
+        status = str(getattr(f, "status", "accepted"))
+        g.add((f_uri, IQOQO.followerStatus, Literal(status, datatype=XSD.string)))
+        g.add((f_uri, AS.object, u_uri))
+
+        remote_actor = getattr(f, "remote_actor", None)
+        actor_uri = getattr(remote_actor, "actor_uri", None) if remote_actor else None
+        if actor_uri:
+            g.add((f_uri, AS.actor, URIRef(str(actor_uri))))
+
+    for friend in friends:
+        fr_name = getattr(friend, "public_username", None) or str(getattr(friend, "id", "friend"))
+        fr_uri = URIRef(f"{base_url}/u/{fr_name}")
+        g.add((fr_uri, RDF.type, IQOQO.User))
+        g.add((fr_uri, RDF.type, FOAF.Person))
+        g.add((u_uri, FOAF.knows, fr_uri))
+        g.add((u_uri, IQOQO.knowsFriend, fr_uri))
+
+    return _serialize_graph_output(g, output_format)
+
+
+def serialize_loan_request_to_rdf(
+    loan_request: Any,
+    base_url: str,
+    output_format: str = "json-ld",
+) -> str:
+    """Serializes LoanRequest to RDF (ActivityStreams Offer)."""
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("as", AS)
+    g.bind("xsd", XSD)
+
+    req_uri = URIRef(f"{base_url}/loans/{loan_request.id}")
+    g.add((req_uri, RDF.type, IQOQO.LoanRequest))
+    g.add((req_uri, RDF.type, AS.Offer))
+
+    item_id = getattr(loan_request, "item_id", None)
+    if item_id:
+        i_uri = URIRef(f"{base_url}/item/{item_id}")
+        g.add((i_uri, RDF.type, IQOQO.Item))
+        g.add((req_uri, IQOQO.loanItem, i_uri))
+
+    requester = getattr(loan_request, "requester", None)
+    requester_id = getattr(loan_request, "requester_id", None)
+    req_name = requester.public_username if requester and getattr(requester, "public_username", None) else str(requester_id)
+    r_uri = URIRef(f"{base_url}/u/{req_name}")
+    g.add((r_uri, RDF.type, IQOQO.User))
+    g.add((req_uri, IQOQO.loanRequester, r_uri))
+
+    status = str(getattr(loan_request, "status", "pending"))
+    g.add((req_uri, IQOQO.loanStatus, Literal(status, datatype=XSD.string)))
+
+    return _serialize_graph_output(g, output_format)
+
+
+@public_bp.route("/items/<int:item_id>/custody", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_item_custody(item_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for an Item's custody provenance history.
+
+    Serves CIDOC CRM (E10_Transfer_of_Custody) and ActivityStreams semantic RDF.
+    Only non-hidden items are accessible publicly.
+    """
+    stmt = select(Item).where(Item.id == item_id, Item.is_hidden.is_(False))
+    item = db.session.execute(stmt).scalars().first()
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    events_stmt = (
+        select(ItemCustodyEvent)
+        .options(selectinload(ItemCustodyEvent.actor))
+        .where(ItemCustodyEvent.item_id == item_id)
+        .order_by(ItemCustodyEvent.recorded_at.asc())
+    )
+    events = list(db.session.execute(events_stmt).scalars().all())
+
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+    rdf_payload = serialize_custody_events_to_rdf(events, base_url, output_format=rdf_format)
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/collections/<int:collection_id>", methods=["GET"])
+@limiter.limit("120 per minute")
+def get_public_collection(collection_id: int) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a UserCollection entity.
+
+    Serves ActivityStreams OrderedCollection semantic RDF.
+    Only collections belonging to public users are accessible publicly.
+    """
+    stmt = (
+        select(UserCollection)
+        .options(
+            selectinload(UserCollection.owner),
+        )
+        .where(UserCollection.id == collection_id)
+    )
+    collection = db.session.execute(stmt).scalars().first()
+    if not collection or not collection.owner or collection.owner.visibility != "public":
+        return jsonify({"error": "Collection not found"}), 404
+
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+    rdf_payload = serialize_user_collection_to_rdf(collection, base_url, output_format=rdf_format)
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/u/<string:username>/wishlist", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_public_user_wishlist(username: str) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a User's wishlist intents.
+
+    Serves Schema.org WantAction and ActivityStreams Collection RDF.
+    """
+    user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
+    user = db.session.execute(user_stmt).scalars().first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    intents_stmt = (
+        select(UserWorkIntent)
+        .options(selectinload(UserWorkIntent.work))
+        .where(UserWorkIntent.user_id == user.id, UserWorkIntent.is_hidden.is_(False))
+        .order_by(UserWorkIntent.created_at.desc())
+    )
+    intents = list(db.session.execute(intents_stmt).scalars().all())
+
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+    rdf_payload = serialize_user_intents_to_rdf(intents, base_url, username=user.public_username or username, output_format=rdf_format)
+    resp = Response(
+        rdf_payload,
+        mimetype=rdf_mimetype,
+        headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+    )
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
+@public_bp.route("/u/<string:username>/followers", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_public_user_followers(username: str) -> Response | tuple[Response, int]:
+    """Public semantic endpoint for a User's followers and friends.
+
+    Serves ActivityStreams Follow and FOAF knows RDF.
+    """
+    user_stmt = select(User).where(func.lower(User.public_username) == username.lower(), User.visibility == "public")
+    user = db.session.execute(user_stmt).scalars().first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    followers_stmt = (
+        select(FederationFollower)
+        .options(selectinload(FederationFollower.remote_actor))
+        .where(FederationFollower.local_user_id == user.id, FederationFollower.status == FollowStatus.ACCEPTED)
+    )
+    followers = list(db.session.execute(followers_stmt).scalars().all())
+
+    from app.core.friend_service import get_friend_user_ids
+
+    local_friend_ids = get_friend_user_ids(user.id)
+    friends: list[User] = []
+    if local_friend_ids:
+        friends_stmt = select(User).where(User.id.in_(local_friend_ids))
+        friends = list(db.session.execute(friends_stmt).scalars().all())
+
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
+    rdf_payload = serialize_user_followers_to_rdf(user, followers, friends, base_url, output_format=rdf_format)
     resp = Response(
         rdf_payload,
         mimetype=rdf_mimetype,

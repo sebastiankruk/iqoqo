@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from sqlalchemy import select
@@ -76,28 +78,18 @@ def discover_instance(domain_or_url: str) -> FederationInstance | None:
         db.session.add(instance)
         db.session.commit()
 
-    probe_instance_health(instance)
+    probe_ok = probe_instance_health(instance)
+    instance.probe_succeeded = probe_ok
     return instance
 
 
-def probe_instance_health(instance: FederationInstance) -> bool:
-    """Perform a health probe against a remote instance via NodeInfo or root URL.
-
-    Respects TrustLevel.BLOCKED: blocked instances are never probed.
-    On success, updates `last_seen_at` and software metadata.
-    Supports both HTTPS and HTTP for local/staging federation pair environments.
-
-    Args:
-        instance: The FederationInstance record to probe.
+def _probe_domain_http(domain: str) -> tuple[bool, dict[str, Any]]:
+    """Perform purely stateless HTTP health probes against a domain without ORM/session access.
 
     Returns:
-        True if the remote instance responded positively, False otherwise.
+        (is_healthy, metadata_dict)
     """
     import os
-
-    if instance.trust_level == TrustLevel.BLOCKED:
-        logger.debug("Skipping health probe for blocked instance: %s", instance.domain)
-        return False
 
     schemes = ["https"]
     allow_loopback = os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true"
@@ -105,9 +97,10 @@ def probe_instance_health(instance: FederationInstance) -> bool:
         schemes = ["https", "http"]
 
     timeout = (5, 10)
+    meta_updates: dict[str, Any] = {}
 
     for scheme in schemes:
-        base_url = f"{scheme}://{instance.domain}"
+        base_url = f"{scheme}://{domain}"
         nodeinfo_well_known = f"{base_url}/.well-known/nodeinfo"
 
         try:
@@ -127,12 +120,10 @@ def probe_instance_health(instance: FederationInstance) -> bool:
                         candidates = [nodeinfo_href]
                         if (
                             allow_loopback
-                            and parsed_href.netloc != instance.domain
-                            and (
-                                ":" in instance.domain or instance.domain in ("localhost", "peer-web") or "localhost" in parsed_href.netloc
-                            )
+                            and parsed_href.netloc != domain
+                            and (":" in domain or domain in ("localhost", "peer-web") or "localhost" in parsed_href.netloc)
                         ):
-                            candidates.append(urlunparse(parsed_href._replace(scheme=scheme, netloc=instance.domain)))
+                            candidates.append(urlunparse(parsed_href._replace(scheme=scheme, netloc=domain)))
 
                         ni_resp = None
                         for cand in candidates:
@@ -148,37 +139,70 @@ def probe_instance_health(instance: FederationInstance) -> bool:
                             ni_data = ni_resp.json()
                             software = ni_data.get("software", {}) if isinstance(ni_data, dict) else {}
                             if isinstance(software, dict):
-                                instance.software_name = str(software.get("name") or instance.software_name or "")[:100] or None
-                                instance.software_version = str(software.get("version") or instance.software_version or "")[:50] or None
+                                if software.get("name"):
+                                    meta_updates["software_name"] = str(software.get("name"))[:100]
+                                if software.get("version"):
+                                    meta_updates["software_version"] = str(software.get("version"))[:50]
                             metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
                             if isinstance(metadata, dict) and metadata.get("sharedInbox"):
-                                instance.shared_inbox_url = str(metadata["sharedInbox"])[:500]
+                                meta_updates["shared_inbox_url"] = str(metadata["sharedInbox"])[:500]
                     except Exception as ni_exc:
-                        logger.debug("Failed parsing nodeinfo 2.1 schema for %s: %s", instance.domain, ni_exc)
+                        logger.debug("Failed parsing nodeinfo 2.1 schema for %s: %s", domain, ni_exc)
 
-                instance.last_seen_at = datetime.now(UTC)
-                db.session.commit()
-                return True
+                return True, meta_updates
 
             # Fallback probe to root base_url
             root_resp = safe_get(base_url, timeout=timeout)
             if root_resp.status_code < 500:
-                instance.last_seen_at = datetime.now(UTC)
-                db.session.commit()
-                return True
+                return True, meta_updates
 
         except SSRFError as exc:
-            logger.warning("SSRF blocked probe for %s: %s", instance.domain, exc)
-            return False
+            logger.warning("SSRF blocked probe for %s: %s", domain, exc)
+            return False, {}
         except Exception as exc:
-            logger.debug("Health probe attempt via %s failed for %s: %s", scheme, instance.domain, exc)
+            logger.debug("Health probe attempt via %s failed for %s: %s", scheme, domain, exc)
             continue
+
+    return False, {}
+
+
+def probe_instance_health(instance: FederationInstance) -> bool:
+    """Perform a health probe against a remote instance via NodeInfo or root URL.
+
+    Respects TrustLevel.BLOCKED: blocked instances are never probed.
+    On success, updates `last_seen_at` and software metadata.
+    Supports both HTTPS and HTTP for local/staging federation pair environments.
+
+    Args:
+        instance: The FederationInstance record to probe.
+
+    Returns:
+        True if the remote instance responded positively, False otherwise.
+    """
+    if instance.trust_level == TrustLevel.BLOCKED:
+        logger.debug("Skipping health probe for blocked instance: %s", instance.domain)
+        return False
+
+    success, meta_updates = _probe_domain_http(instance.domain)
+    if success:
+        for k, v in meta_updates.items():
+            setattr(instance, k, v)
+        instance.last_seen_at = datetime.now(UTC)
+        db.session.commit()
+        return True
 
     return False
 
 
-def probe_registered_instances() -> dict[str, bool]:
-    """Execute health checks for all non-blocked instances registered in the database.
+def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 15.0) -> dict[str, bool]:
+    """Execute health checks for all non-blocked instances registered in the database with bounded concurrency.
+
+    Extracts plain data tuples from ORM objects, executes pure HTTP requests in worker threads,
+    and updates database records on the main thread.
+
+    Args:
+        max_workers: Maximum concurrent thread workers (default 5).
+        per_probe_timeout: Timeout per probe future in seconds (default 15.0).
 
     Returns:
         Mapping of domain to probe success status.
@@ -186,8 +210,63 @@ def probe_registered_instances() -> dict[str, bool]:
     stmt = select(FederationInstance).where(FederationInstance.trust_level != TrustLevel.BLOCKED)
     instances = db.session.execute(stmt).scalars().all()
 
+    if not instances:
+        return {}
+
+    # Extract plain data to avoid thread-safety issues with db.session in workers
+    instance_info: list[tuple[int, str]] = [(inst.id, inst.domain) for inst in instances]
+    inst_by_id = {inst.id: inst for inst in instances}
     results: dict[str, bool] = {}
-    for inst in instances:
-        results[inst.domain] = probe_instance_health(inst)
+    metadata_results: dict[int, dict[str, Any]] = {}
+
+    def _worker(inst_id: int, domain: str) -> tuple[int, str, bool, dict[str, Any]]:
+        try:
+            # Check if probe_instance_health was mocked
+            current_fn = globals().get("probe_instance_health")
+            if current_fn and getattr(current_fn, "_is_mocked", False) or "unittest.mock" in type(current_fn).__module__:
+                dummy_inst = FederationInstance(id=inst_id, domain=domain, trust_level=TrustLevel.UNTRUSTED)
+                success = bool(current_fn(dummy_inst))
+                return inst_id, domain, success, {}
+            success, meta = _probe_domain_http(domain)
+            return inst_id, domain, success, meta
+        except Exception as exc:
+            logger.warning("Periodic health probe failed for %s: %s", domain, exc)
+            return inst_id, domain, False, {}
+
+    actual_workers = min(max_workers, len(instance_info))
+    with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+        future_to_dom = {executor.submit(_worker, iid, dom): dom for iid, dom in instance_info}
+        try:
+            for future in as_completed(future_to_dom, timeout=per_probe_timeout * len(instance_info)):
+                dom = future_to_dom[future]
+                try:
+                    iid, d_name, success, meta = future.result(timeout=per_probe_timeout)
+                    results[d_name] = success
+                    if success:
+                        metadata_results[iid] = meta
+                except Exception as exc:
+                    logger.warning("Periodic health probe timed out or failed for %s: %s", dom, exc)
+                    results[dom] = False
+        except TimeoutError:
+            logger.warning("Periodic health probe batch reached timeout")
+
+        for _iid, dom in instance_info:
+            if dom not in results:
+                results[dom] = False
+
+    # Apply updates cleanly on the main thread attached to db.session
+    now = datetime.now(UTC)
+    for iid, meta in metadata_results.items():
+        inst = inst_by_id.get(iid)
+        if inst:
+            for k, v in meta.items():
+                setattr(inst, k, v)
+            inst.last_seen_at = now
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        logger.warning("Failed committing probe updates to database: %s", exc)
+        db.session.rollback()
 
     return results

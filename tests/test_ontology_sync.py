@@ -353,8 +353,8 @@ class TestSyncOntologyScript:
         """Required shapes must target the exact expected entity class."""
         shapes = (ROOT_DIR / "docs" / "ontology" / "iqoqo-shapes.ttl").read_text(encoding="utf-8")
         original = """iqoqo:UserWorkIntentShape a sh:NodeShape ;
-    sh:targetClass iqoqo:UserWorkIntent ;"""
-        changed = original.replace("sh:targetClass iqoqo:UserWorkIntent", "sh:targetClass iqoqo:LoanRequest")
+    sh:targetClass iqoqo:UserWorkIntent , schema:WantAction ;"""
+        changed = original.replace("sh:targetClass iqoqo:UserWorkIntent , schema:WantAction", "sh:targetClass iqoqo:LoanRequest")
         drift_path = tmp_path / "changed-shape-target.ttl"
         drift_path.write_text(shapes.replace(original, changed), encoding="utf-8")
 

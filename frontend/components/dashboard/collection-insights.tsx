@@ -35,10 +35,11 @@ export function CollectionInsights({
   scope = "personal",
 }: {
   showTitle?: boolean;
-  scope?: "personal" | "global";
+  scope?: "personal" | "friends" | "global";
 } = {}) {
   const t = useTranslations("CollectionInsights");
   const { data: stats } = useStats(scope);
+  const chartScope: "personal" | "global" = scope === "global" ? "global" : "personal";
 
   if (stats && stats.total_items === 0) {
     return null;
@@ -55,10 +56,10 @@ export function CollectionInsights({
 
       <div className="flex gap-6 overflow-x-auto flex-nowrap pb-2 sm:grid sm:grid-cols-1 lg:grid-cols-2 sm:pb-0 sm:overflow-visible">
         <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
-          <VelocityChart scope={scope} />
+          <VelocityChart scope={chartScope} />
         </div>
         <div className="min-w-[85vw] max-w-[90vw] sm:min-w-0 sm:max-w-none shrink-0 sm:shrink">
-          <TypeDistributionChart scope={scope} />
+          <TypeDistributionChart scope={chartScope} />
         </div>
       </div>
     </section>
