@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.api.auth import generate_internal_jwt
 from app.core.friend_service import get_friend_user_ids, is_friend_of
@@ -344,3 +345,95 @@ def test_scope_friends_collection_and_stats(client, app, collector_a, headers_a,
     assert stats["total_items"] == 2
     assert stats["items_reading"] == 1
     assert stats["items_read"] == 1
+
+
+def test_federated_friend_request_and_prefixed_id_disambiguation(app, client, collector_a, headers_a):
+    """Verifies sending friend request to @user@domain, PENDING follow creation, and fed: prefixed ID response."""
+    from app.db.federation import FederationActor, FederationFollower, FederationInstance, FollowStatus
+
+    with app.app_context():
+        inst = FederationInstance(domain="remote.social", trust_level="trusted")
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            actor_uri="https://remote.social/users/charlie",
+            inbox_url="https://remote.social/users/charlie/inbox",
+            instance_id=inst.id,
+            username="charlie",
+            display_name="Charlie Remote",
+        )
+        db.session.add(actor)
+        db.session.commit()
+        actor_id = actor.id
+
+    # Send request to @charlie@remote.social
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.core.federation_dispatch.dispatch_follow", lambda u, a: True)
+        res = client.post(
+            "/api/profile/friends/request",
+            headers=headers_a,
+            json={"identifier": "@charlie@remote.social"},
+        )
+        assert res.status_code == 201
+        data = res.get_json()["data"]
+        assert data["id"].startswith("fed:")
+
+    # Verify friend list returns federated entry with fed: prefix and username
+    list_res = client.get("/api/profile/friends", headers=headers_a)
+    assert list_res.status_code == 200
+    list_data = list_res.get_json()["data"]
+    incoming_or_accepted = list_data["incoming"] + list_data["accepted"]
+    assert any(str(entry.get("friendship_id", "")).startswith("fed:") for entry in incoming_or_accepted)
+
+    # Now verify incoming federated request acceptance using fed: prefix
+    with app.app_context():
+        fol = db.session.execute(
+            select(FederationFollower).where(
+                FederationFollower.local_user_id == collector_a,
+                FederationFollower.remote_actor_id == actor_id,
+            )
+        ).scalar_one()
+        fol.status = FollowStatus.PENDING
+        db.session.commit()
+        fol_id = fol.id
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.core.federation_dispatch.dispatch_accept_follow", lambda u, a, o: None)
+        resp_res = client.post(
+            f"/api/profile/friends/fed:{fol_id}/respond",
+            headers=headers_a,
+            json={"action": "accept"},
+        )
+        assert resp_res.status_code == 200
+
+        with app.app_context():
+            fol_after = db.session.get(FederationFollower, fol_id)
+            assert fol_after.status == FollowStatus.ACCEPTED
+
+        # Remove federated friend
+        del_res = client.delete(f"/api/profile/friends/fed:{fol_id}", headers=headers_a)
+        assert del_res.status_code == 200
+        with app.app_context():
+            assert db.session.get(FederationFollower, fol_id) is None
+
+
+def test_item_is_hidden_and_visibility_synchronization(app, collector_a):
+    """Verifies Item(is_hidden=True) synchronizes with visibility='private' without infinite recursion."""
+    with app.app_context():
+        item1 = Item(owner_id=collector_a, manifestation_id=1, is_hidden=True)
+        assert item1.is_hidden is True
+        assert item1.visibility == "private"
+
+        item2 = Item(owner_id=collector_a, manifestation_id=1, visibility="private")
+        assert item2.is_hidden is True
+        assert item2.visibility == "private"
+
+        item3 = Item(owner_id=collector_a, manifestation_id=1, visibility="public")
+        assert item3.is_hidden is False
+        assert item3.visibility == "public"
+
+        # Explicit set_visibility
+        item3.set_visibility("friends_only")
+        assert item3.visibility == "friends_only"
+        assert item3.is_hidden is True
