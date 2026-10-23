@@ -74,7 +74,7 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     from app.core.friend_service import is_friend_of
 
     item_visibility = getattr(item, "visibility", "public")
-    if getattr(item, "is_hidden", False) or item_visibility == "private":
+    if item_visibility == "private" or (getattr(item, "is_hidden", False) and item_visibility not in ("friends_only", "shared")):
         return jsonify({"error": "Item not found or not available", "code": 404}), 404
 
     if item_visibility == "friends_only" and not is_friend_of(user_id, item.owner_id):

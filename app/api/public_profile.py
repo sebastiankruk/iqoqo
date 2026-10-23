@@ -19,7 +19,7 @@ Handles public profile retrieval and "check if I have it" inventory search.
 """
 
 from flask import g, jsonify, request
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.api.decorators import optional_auth
@@ -117,7 +117,15 @@ def check_inventory(username: str):
     friend_items = []
     # If include_friends is requested, allow if anonymous or owner/friend (unauthenticated public requests default to public friends)
     if data.get("include_friends"):
-        from app.core.friend_service import get_friend_user_ids
+        from app.core.friend_service import get_friend_user_ids, is_friend_of
+
+        viewer_id = getattr(g, "user_id", None)
+        can_view_friends_only = bool(viewer_id and (str(viewer_id) == str(user.id) or is_friend_of(viewer_id, user.id)))
+        friend_vis_filter = (
+            Item.visibility.in_(["public", "friends_only", "shared"])
+            if can_view_friends_only
+            else and_(Item.is_hidden.is_(False), Item.visibility == "public")
+        )
 
         local_friend_ids = list(get_friend_user_ids(user.id))
         if local_friend_ids:
@@ -128,7 +136,7 @@ def check_inventory(username: str):
                 .join(Work)
                 .where(
                     Item.owner_id.in_(local_friend_ids),
-                    or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
+                    friend_vis_filter,
                     or_(
                         Work.title.ilike(f"%{query_term}%"),
                         Manifestation.isbn13 == query_term,

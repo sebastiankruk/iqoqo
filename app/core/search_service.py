@@ -492,9 +492,7 @@ class SearchService:
         if filters.scope == "friends":
             if filters.friend_ids:
                 params["friend_ids"] = tuple(str(fid) for fid in filters.friend_ids)
-                extra_filters_sql = (
-                    " AND i.owner_id IN :friend_ids AND i.is_hidden = false AND i.visibility IN ('public', 'friends_only', 'shared')"
-                )
+                extra_filters_sql = " AND i.owner_id IN :friend_ids AND i.visibility IN ('public', 'friends_only', 'shared')"
             else:
                 extra_filters_sql = " AND 1=0"
         elif borrowed_only:
@@ -622,7 +620,6 @@ class SearchService:
             if friend_ids:
                 query = query.filter(
                     Item.owner_id.in_(friend_ids),
-                    Item.is_hidden.is_(False),
                     Item.visibility.in_(["public", "friends_only", "shared"]),
                 )
             else:

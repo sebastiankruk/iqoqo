@@ -85,7 +85,6 @@ def _get_sparql_items(user: User | None) -> list[Item]:
             conditions.append(
                 and_(
                     Item.owner_id.in_(friend_user_ids),
-                    Item.is_hidden.is_(False),
                     Item.visibility.in_(["public", "friends_only", "shared"]),
                 )
             )

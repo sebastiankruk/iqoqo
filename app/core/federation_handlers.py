@@ -491,7 +491,7 @@ def handle_offer(activity: dict[str, Any]) -> bool:
     from app.core.friend_service import is_friend_of
 
     item_visibility = getattr(item, "visibility", "public")
-    if getattr(item, "is_hidden", False) or item_visibility == "private":
+    if item_visibility == "private" or (getattr(item, "is_hidden", False) and item_visibility not in ("friends_only", "shared")):
         logger.warning("Offer rejected: item %s is private/hidden", item.id)
         return False
 

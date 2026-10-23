@@ -663,10 +663,7 @@ class Item(db.Model):  # type: ignore[name-defined]
             return value
         self._in_validation = True
         try:
-            if value == "private":
-                self.is_hidden = True
-            elif value == "public":
-                self.is_hidden = False
+            self.is_hidden = value != "public"
         finally:
             self._in_validation = False
         return value

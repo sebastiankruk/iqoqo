@@ -437,3 +437,131 @@ def test_item_is_hidden_and_visibility_synchronization(app, collector_a):
         item3.set_visibility("friends_only")
         assert item3.visibility == "friends_only"
         assert item3.is_hidden is True
+
+        # Direct property assignment
+        item4 = Item(owner_id=collector_a, manifestation_id=1)
+        item4.visibility = "friends_only"
+        assert item4.visibility == "friends_only"
+        assert item4.is_hidden is True
+
+
+def test_loan_request_on_friends_only_item(app, client, collector_a, collector_b, headers_b, book_manifestation):
+    """Test loan request on friends_only item succeeds for confirmed friends and rejects for non-friends."""
+    with app.app_context():
+        # Item owned by Alice with friends_only visibility
+        item = Item(
+            owner_id=collector_a,
+            manifestation_id=book_manifestation,
+            visibility="friends_only",
+            collection_status="available",
+        )
+        db.session.add(item)
+        db.session.commit()
+        item_id = item.id
+
+    # Bob is not yet friends with Alice -> 403 Forbidden
+    res_non_friend = client.post(
+        f"/api/lending/items/{item_id}/loan-request",
+        headers=headers_b,
+        json={"notes": "Can I borrow this?"},
+    )
+    assert res_non_friend.status_code == 403
+
+    # Now make Alice and Bob friends
+    with app.app_context():
+        friendship = UserFriendship(
+            requester_id=collector_a,
+            addressee_id=collector_b,
+            status="accepted",
+        )
+        db.session.add(friendship)
+        db.session.commit()
+
+    # Now Bob requests loan -> 201 Created
+    res_friend = client.post(
+        f"/api/lending/items/{item_id}/loan-request",
+        headers=headers_b,
+        json={"notes": "Can I borrow this now, friend?"},
+    )
+    assert res_friend.status_code == 201
+
+
+def test_sparql_and_search_friends_only_visibility(app, client, collector_a, collector_b, headers_b, book_manifestation):
+    """Test that SPARQL queries and search with scope=friends include friends_only items for confirmed friends."""
+    with app.app_context():
+        # Item owned by Alice with friends_only visibility
+        item = Item(
+            owner_id=collector_a,
+            manifestation_id=book_manifestation,
+            visibility="friends_only",
+            collection_status="available",
+        )
+        db.session.add(item)
+        friendship = UserFriendship(
+            requester_id=collector_a,
+            addressee_id=collector_b,
+            status="accepted",
+        )
+        db.session.add(friendship)
+        db.session.commit()
+        item_id = item.id
+
+    # 1. Search with scope=friends
+    res_search = client.get(
+        "/api/items?scope=friends&q=Hobbit",
+        headers=headers_b,
+    )
+    assert res_search.status_code == 200
+    search_data = res_search.get_json()["data"]
+    found_ids = [it["id"] for it in search_data]
+    assert item_id in found_ids
+
+    # 2. SPARQL _get_sparql_items includes friends_only item for Bob
+    with app.app_context():
+        from app.api.sparql import _get_sparql_items
+
+        user_b = db.session.get(User, collector_b)
+        sparql_items = _get_sparql_items(user_b)
+        sparql_item_ids = [it.id for it in sparql_items]
+        assert item_id in sparql_item_ids
+
+
+def test_check_inventory_friends_only_gate(app, client, collector_a, collector_b, headers_b, book_manifestation):
+    """Test check_inventory only exposes friends_only items to confirmed friends, not anonymous callers."""
+    with app.app_context():
+        item = Item(
+            owner_id=collector_a,
+            manifestation_id=book_manifestation,
+            visibility="friends_only",
+            collection_status="available",
+        )
+        db.session.add(item)
+        friendship = UserFriendship(
+            requester_id=collector_a,
+            addressee_id=collector_b,
+            status="accepted",
+        )
+        db.session.add(friendship)
+        db.session.commit()
+        item_id = item.id
+
+    # Unauthenticated user checks Bob's friend inventory -> friend's friends_only item NOT returned
+    unauth_res = client.post(
+        "/api/public/u/bob/check",
+        json={"query": "Hobbit", "include_friends": True},
+    )
+    assert unauth_res.status_code == 200
+    unauth_data = unauth_res.get_json()["data"]
+    assert not any(it.get("type") == "friend_item" for it in unauth_data)
+
+    # Authenticated friend (Bob) checks Bob's friend inventory -> Alice's friends_only item IS returned
+    auth_res = client.post(
+        "/api/public/u/bob/check",
+        headers=headers_b,
+        json={"query": "Hobbit", "include_friends": True},
+    )
+    assert auth_res.status_code == 200
+    auth_data = auth_res.get_json()["data"]
+    friend_items = [it for it in auth_data if it.get("type") == "friend_item"]
+    assert len(friend_items) == 1
+    assert friend_items[0]["id"] == item_id
