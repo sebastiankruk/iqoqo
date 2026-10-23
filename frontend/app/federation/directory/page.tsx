@@ -95,6 +95,23 @@ export default function FederationDirectoryPage() {
           </Card>
         )}
 
+        {/* Federation Disabled Notice */}
+        {data?.federation_enabled === false && (
+          <div
+            data-testid="federation-disabled-banner"
+            className="mb-8 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-3"
+          >
+            <ShieldCheck className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="font-semibold">{t("disabledTitle") || "Federation disabled on this instance"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t("disabledBanner") ||
+                  "Server-to-server federation is currently disabled. You can still explore the local library collection."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Search Input */}
         <div className="relative mb-6 max-w-md">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />

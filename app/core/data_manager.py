@@ -953,6 +953,8 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        scope: str = "own",
+        friend_ids: list[uuid.UUID] | None = None,
     ):
         """Build a subquery of entity IDs matching the given filters.
 
@@ -979,9 +981,13 @@ class DataManager:
         }
         target_cls, target_id_col = _target_map.get(target_entity, (Item, Item.id))
 
-        _has_user_filters = owner_id is not None and (tags is not None or collections is not None or statuses is not None or borrowed_only)
+        _has_user_filters = (
+            scope != "friends"
+            and owner_id is not None
+            and (tags is not None or collections is not None or statuses is not None or borrowed_only)
+        )
 
-        _needs_item_join = _has_user_filters or (missing_cover is True) or (missing_id is True)
+        _needs_item_join = _has_user_filters or (missing_cover is True) or (missing_id is True) or (scope == "friends")
 
         # Build base query starting from the target entity and joining down
         if target_entity == "works":
@@ -1027,9 +1033,21 @@ class DataManager:
                 .join(Work, Expression.work_id == Work.id)
             )
 
-        _apply_owner_filter = owner_id is not None and (target_entity == "items" or _has_user_filters)
+        _apply_owner_filter = scope != "friends" and owner_id is not None and (target_entity == "items" or _has_user_filters)
 
-        if _apply_owner_filter:
+        if scope == "friends":
+            if friend_ids:
+                base_query = base_query.where(
+                    Item.owner_id.in_(friend_ids),
+                    or_(
+                        Item.is_hidden.is_(False),
+                        Item.visibility.in_(["public", "friends_only", "shared"]),
+                    ),
+                    Item.visibility != "private",
+                )
+            else:
+                base_query = base_query.where(db.false())
+        elif _apply_owner_filter:
             base_query = base_query.where(Item.owner_id == owner_id)
 
         if borrowed_only and owner_id:
@@ -1175,6 +1193,8 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        scope: str = "own",
+        friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
         """Return cross-filtered per-facet counts for sidebar faceted navigation.
 
@@ -1197,31 +1217,39 @@ class DataManager:
         since their facet calculation issues the largest number of correlated
         subqueries.
         """
-        cache_key = normalize_facet_cache_key(
-            {
-                "borrowed_only": borrowed_only,
-                "category": category,
-                "collections": collections,
-                "fmt": fmt,
-                "genres": genres,
-                "lod_authority": lod_authority,
-                "lod_status": lod_status,
-                "missing_cover": missing_cover,
-                "missing_id": missing_id,
-                "ownership": ownership,
-                "publishers": publishers,
-                "statuses": statuses,
-                "tags": tags,
-                "view": view,
-            },
-            owner_id,
-        )
+        cache_params = {
+            "borrowed_only": borrowed_only,
+            "category": category,
+            "collections": collections,
+            "fmt": fmt,
+            "genres": genres,
+            "lod_authority": lod_authority,
+            "lod_status": lod_status,
+            "missing_cover": missing_cover,
+            "missing_id": missing_id,
+            "ownership": ownership,
+            "publishers": publishers,
+            "statuses": statuses,
+            "tags": tags,
+            "view": view,
+        }
+        if scope != "own":
+            cache_params["scope"] = scope
+        cache_key = normalize_facet_cache_key(cache_params, owner_id)
 
         from app.core.cache import cache
 
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
+
+        if scope == "friends":
+            if friend_ids is None and owner_id:
+                from app.core.friend_service import get_friend_user_ids
+
+                friend_ids = list(get_friend_user_ids(owner_id))
+            elif friend_ids is None:
+                friend_ids = []
 
         stats = DataManager._compute_faceted_stats(
             owner_id=owner_id,
@@ -1239,6 +1267,8 @@ class DataManager:
             ownership=ownership,
             lod_authority=lod_authority,
             lod_status=lod_status,
+            scope=scope,
+            friend_ids=friend_ids,
         )
         cache.set(cache_key, stats, timeout=FACETS_CACHE_TTL_SECONDS)
         return stats
@@ -1261,6 +1291,8 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        scope: str = "own",
+        friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
         """Uncached implementation behind :meth:`get_faceted_stats`."""
         sa_distinct = distinct
@@ -1351,6 +1383,8 @@ class DataManager:
                 ownership=ownership,
                 lod_authority=None if exclude_lod else lod_authority,
                 lod_status=None if exclude_lod else lod_status,
+                scope=scope,
+                friend_ids=friend_ids,
             )
 
         cat_subq = _subq(exclude_category=True)
@@ -1430,7 +1464,19 @@ class DataManager:
                 res = q.join(Item, Item.manifestation_id == Manifestation.id)
             else:
                 res = q.join(Manifestation, Item.manifestation_id == Manifestation.id)
-            if owner_id:
+            if scope == "friends":
+                if friend_ids:
+                    res = res.where(
+                        Item.owner_id.in_(friend_ids),
+                        or_(
+                            Item.is_hidden.is_(False),
+                            Item.visibility.in_(["public", "friends_only", "shared"]),
+                        ),
+                        Item.visibility != "private",
+                    )
+                else:
+                    res = res.where(db.false())
+            elif owner_id:
                 res = res.where(Item.owner_id == owner_id)
             return res
 
@@ -1485,7 +1531,7 @@ class DataManager:
 
         # ── Status counts (grouped by Item.status + collection_status) ────
         db_statuses = dict.fromkeys(ITEM_STATUSES, 0)
-        if owner_id:
+        if owner_id or scope == "friends":
             status_query = (
                 select(Item.status, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
@@ -1511,7 +1557,7 @@ class DataManager:
                     db_statuses[cs] += cnt
 
         borrowed_count = 0
-        if owner_id:
+        if owner_id and scope != "friends":
             borrowed_query = (
                 select(func.count(sa_distinct(cfg["target_clause"])))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
@@ -1523,7 +1569,7 @@ class DataManager:
 
         # ── Collection counts ─────────────────────────────────────────────
         collection_counts: dict[str, int] = {}
-        if owner_id:
+        if owner_id and scope != "friends":
             coll_query = (
                 select(UserCollection.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])
@@ -1539,7 +1585,7 @@ class DataManager:
 
         # ── Tag counts ────────────────────────────────────────────────────
         tag_counts: dict[str, int] = {}
-        if owner_id:
+        if owner_id and scope != "friends":
             tag_query = (
                 select(Tag.name, func.count(sa_distinct(cfg["target_clause"])).label("cnt"))  # pylint: disable=not-callable
                 .select_from(cfg["from_clause"])

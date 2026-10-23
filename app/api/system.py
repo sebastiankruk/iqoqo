@@ -195,9 +195,18 @@ def get_faceted_stats():
     the view layer instead would key on raw query strings and could not be
     invalidated when an item is created, deleted or transferred.
     """
-    scope = request.args.get("scope", "user")
+    scope_param = request.args.get("scope", "user").strip().lower()
+    if scope_param in ("all", "global"):
+        resolved_scope = "all"
+        owner_id = None
+    elif scope_param == "friends":
+        resolved_scope = "friends"
+        owner_id = getattr(g, "user_id", None)
+    else:
+        resolved_scope = "own"
+        owner_id = getattr(g, "user_id", None)
+
     view = request.args.get("view", "items")
-    owner_id = getattr(g, "user_id", None) if scope == "user" else None
     category_str = request.args.get("category")
     fmt_str = request.args.get("format")
     tags_str = request.args.get("tags")
@@ -241,6 +250,7 @@ def get_faceted_stats():
         ownership=ownership_list,
         lod_authority=lod_authority,
         lod_status=lod_status,
+        scope=resolved_scope,
     )
     return jsonify({"success": True, "data": stats, "error": None})
 

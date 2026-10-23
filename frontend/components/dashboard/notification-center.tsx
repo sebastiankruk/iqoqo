@@ -17,6 +17,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Bell, Check, Loader2, UserPlus, UserCheck, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ interface NotificationCenterProps {
  * @returns {JSX.Element} The NotificationCenter component.
  */
 export function NotificationCenter({ enabled = true }: NotificationCenterProps) {
+  const t = useTranslations("Notifications");
   const { data, isLoading } = useNotifications(false, enabled);
   const markReadMutation = useMarkNotificationsRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
@@ -83,7 +85,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
       <DropdownMenuTrigger asChild>
         <button
           className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10 dark:hover:bg-white/5 transition-colors outline-none"
-          aria-label="Notification center"
+          aria-label={t("ariaLabel")}
           data-testid="notification-bell"
         >
           <Bell className="h-4 w-4 text-foreground/80 dark:text-foreground" />
@@ -103,8 +105,10 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
       >
         <div className="flex items-center justify-between px-3 py-2 border-b dark:border-white/10">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">Notifications</span>
-            {unreadCount > 0 && <span className="text-xs text-muted-foreground">({unreadCount} unread)</span>}
+            <span className="font-semibold text-sm">{t("title")}</span>
+            {unreadCount > 0 && (
+              <span className="text-xs text-muted-foreground">{t("unreadCount", { count: String(unreadCount) })}</span>
+            )}
           </div>
           {unreadCount > 0 && (
             <Button
@@ -115,7 +119,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
               disabled={markAllReadMutation.isPending}
             >
               <Check className="h-3 w-3 mr-1" />
-              Mark all read
+              {t("markAllRead")}
             </Button>
           )}
         </div>
@@ -127,7 +131,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
             </div>
           ) : notifications.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground" data-testid="notification-empty">
-              No notifications yet
+              {t("empty")}
             </div>
           ) : (
             notifications.map(notif => {
