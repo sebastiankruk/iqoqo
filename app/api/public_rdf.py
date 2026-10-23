@@ -509,7 +509,10 @@ def serialize_user_collection_to_rdf(
     g.add((c_uri, IQOQO.collectionName, Literal(name, datatype=XSD.string)))
 
     for item_link in getattr(collection, "items", None) or []:
+        it = getattr(item_link, "item", None)
         it_id = getattr(item_link, "item_id", None) or getattr(item_link, "id", None)
+        if it is not None and getattr(it, "is_hidden", False):
+            continue
         if it_id:
             it_uri = URIRef(f"{base_url}/item/{it_id}")
             g.add((it_uri, RDF.type, IQOQO.Item))
@@ -750,9 +753,17 @@ def get_public_user_followers(username: str) -> Response | tuple[Response, int]:
     )
     followers = list(db.session.execute(followers_stmt).scalars().all())
 
+    from app.core.friend_service import get_friend_user_ids
+
+    local_friend_ids = get_friend_user_ids(user.id)
+    friends: list[User] = []
+    if local_friend_ids:
+        friends_stmt = select(User).where(User.id.in_(local_friend_ids))
+        friends = list(db.session.execute(friends_stmt).scalars().all())
+
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rdf_format, rdf_mimetype = _negotiate_rdf_format(default_format="json-ld")
-    rdf_payload = serialize_user_followers_to_rdf(user, followers, [], base_url, output_format=rdf_format)
+    rdf_payload = serialize_user_followers_to_rdf(user, followers, friends, base_url, output_format=rdf_format)
     resp = Response(
         rdf_payload,
         mimetype=rdf_mimetype,

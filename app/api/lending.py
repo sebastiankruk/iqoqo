@@ -70,6 +70,16 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
     if not item:
         return jsonify({"error": "Item not found", "code": 404}), 404
 
+    # Verify authorization / visibility for borrower
+    from app.core.friend_service import is_friend_of
+
+    item_visibility = getattr(item, "visibility", "public")
+    if getattr(item, "is_hidden", False) or item_visibility == "private":
+        return jsonify({"error": "Item not found or not available", "code": 404}), 404
+
+    if item_visibility == "friends_only" and not is_friend_of(user_id, item.owner_id):
+        return jsonify({"error": "Forbidden: item is visible only to confirmed friends", "code": 403}), 403
+
     # Validate borrowing constraints
     error_msg = None
     status_code = 400
@@ -104,7 +114,7 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
         try:
             from app.core.notifications import create_notification
 
-            target_owner_id = item.user_id or item.owner_id
+            target_owner_id = item.owner_id
             if target_owner_id:
                 create_notification(
                     user_id=target_owner_id,
@@ -115,7 +125,7 @@ def request_loan(item_id: int) -> Response | tuple[Response, int]:
                         "requester_id": str(user_id),
                         "message": f"Loan request received for item #{item.id}",
                     },
-                    target_iri=f"/items/{item.id}",
+                    target_iri=f"/item/{item.id}",
                 )
         except Exception as notif_err:
             logger.warning("Failed to emit local loan_request notification: %s", notif_err)
@@ -248,7 +258,11 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
             loan_request.status = "rejected"
 
         # Check if loan_request has federated metadata in notes to dispatch Accept/Reject activity
-        if loan_request.notes and "[Federated Offer from" in loan_request.notes:
+        is_federated_requester = False
+        if loan_request.requester and loan_request.requester.email and loan_request.requester.email.endswith("@federated.local"):
+            is_federated_requester = True
+
+        if is_federated_requester and loan_request.notes and "[Federated Offer from" in loan_request.notes:
             try:
                 import json
                 import uuid
@@ -275,7 +289,7 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
                                 "id": orig_activity_id,
                                 "type": "Offer",
                                 "actor": target_actor_uri,
-                                "object": f"{base_url}/items/{item.id}",
+                                "object": f"{base_url}/item/{item.id}",
                             },
                         }
                         client = FederationClient()
@@ -299,7 +313,7 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
                         "action": action,
                         "message": f"Your loan request for item #{item.id} was {loan_request.status}",
                     },
-                    target_iri=f"/items/{item.id}",
+                    target_iri=f"/item/{item.id}",
                 )
         except Exception as notif_err:
             logger.warning("Failed to emit loan resolution notification: %s", notif_err)

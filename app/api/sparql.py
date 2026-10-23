@@ -60,37 +60,49 @@ def _get_sparql_items(user: User | None) -> list[Item]:
     Strictly filters Item entities to public records, items owned by user,
     or items owned by accepted friends of the user, preventing unauthorized disclosure.
     """
-    from app.core.item_access import is_item_publicly_visible
+    from app.core.friend_service import get_friend_user_ids
     from app.core.sparql_service import MAX_GRAPH_ITEMS
-    from app.db.federation import FederationFollower, FollowStatus
+    from app.db.federation import FederationConsent
 
     stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
 
-    allowed_owner_ids: set[Any] = set()
+    friend_user_ids: set[Any] = set()
     if user and user.id:
-        allowed_owner_ids.add(user.id)
-        # Fetch accepted friends
-        friend_stmt = select(FederationFollower.remote_actor_id).where(
-            FederationFollower.local_user_id == user.id,
-            FederationFollower.status == FollowStatus.ACCEPTED,
-        )
-        friend_ids = db.session.execute(friend_stmt).scalars().all()
-        for fid in friend_ids:
-            allowed_owner_ids.add(fid)
+        friend_user_ids = get_friend_user_ids(user.id)
 
-    all_items = list(db.session.execute(stmt.limit(MAX_GRAPH_ITEMS * 2)).scalars().all())
+    # Base visibility: item is not hidden
+    # 1. Owned by current user
+    # 2. Owned by friend, not hidden, visibility in ("public", "friends_only", "shared")
+    # 3. Public item: not hidden, visibility in ("public", "shared"), and owner consent allows
+    from sqlalchemy import and_, or_
 
-    filtered_items: list[Item] = []
-    for item in all_items:
-        if item.owner_id and item.owner_id in allowed_owner_ids:
-            filtered_items.append(item)
-        elif is_item_publicly_visible(item):
-            filtered_items.append(item)
+    conditions = []
+    if user and user.id:
+        # Own items
+        conditions.append(Item.owner_id == user.id)
+        if friend_user_ids:
+            # Friends' items
+            conditions.append(
+                and_(
+                    Item.owner_id.in_(friend_user_ids),
+                    Item.is_hidden.is_(False),
+                    Item.visibility.in_(["public", "friends_only", "shared"]),
+                )
+            )
 
-        if len(filtered_items) >= MAX_GRAPH_ITEMS:
-            break
+    # Non-consented users who opted out of federated collection
+    opted_out_user_ids = select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))
 
-    return filtered_items
+    # Public items:
+    public_condition = and_(
+        Item.is_hidden.is_(False),
+        Item.visibility.in_(["public", "shared"]),
+        Item.owner_id.not_in(opted_out_user_ids),
+    )
+    conditions.append(public_condition)
+
+    stmt = stmt.where(or_(*conditions)).limit(MAX_GRAPH_ITEMS)
+    return list(db.session.execute(stmt).scalars().all())
 
 
 def _format_select_ask(result: Any, accept: str) -> tuple[bytes | str, str]:

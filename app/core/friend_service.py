@@ -178,15 +178,15 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
     fed_results = db.session.execute(fed_stmt).all()
     for fol, act in fed_results:
         fed_data = {
-            "friendship_id": fol.id,
+            "friendship_id": f"fed:{fol.id}",
             "user_id": str(fol.remote_actor_id),
-            "username": act.preferred_username or act.uri,
-            "display_name": act.name or act.preferred_username,
+            "username": act.username or act.actor_uri,
+            "display_name": act.display_name or act.username,
             "avatar_url": None,
             "status": fol.status,
             "created_at": fol.created_at.isoformat() if fol.created_at else None,
             "is_federated": True,
-            "actor_uri": act.uri,
+            "actor_uri": act.actor_uri,
         }
         if fol.status == FollowStatus.ACCEPTED:
             accepted.append(fed_data)
@@ -299,18 +299,62 @@ def send_friend_request(
 
     # Check if handle represents a federated actor (@user@domain)
     if "@" in clean_id:
-        actor = (
-            db.session.execute(
-                select(FederationActor).where(
-                    or_(
-                        FederationActor.uri == clean_id,
-                        FederationActor.preferred_username == clean_id.lstrip("@").split("@")[0],
+        handle_parts = clean_id.lstrip("@").split("@", 1)
+        if len(handle_parts) == 2:
+            target_username, target_domain = handle_parts[0], handle_parts[1]
+        else:
+            target_username, target_domain = handle_parts[0], None
+
+        actor = None
+        if target_domain:
+            actor = (
+                db.session.execute(
+                    select(FederationActor).where(
+                        FederationActor.username == target_username,
+                        FederationActor.actor_uri.ilike(f"%{target_domain}%"),
                     )
                 )
+                .scalars()
+                .first()
             )
-            .scalars()
-            .first()
-        )
+
+        if not actor:
+            actor = (
+                db.session.execute(
+                    select(FederationActor).where(
+                        or_(
+                            FederationActor.actor_uri == clean_id,
+                            FederationActor.username == target_username,
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+
+        # If not cached locally, try webfinger / remote actor lookup
+        if not actor and target_domain:
+            try:
+                from app.core.federation_handlers import _get_or_create_actor
+                from app.utils.http_client import safe_get
+
+                scheme = (
+                    "http"
+                    if ("localhost" in target_domain or "127.0.0.1" in target_domain or target_domain.startswith("peer-web"))
+                    else "https"
+                )
+                wf_url = f"{scheme}://{target_domain}/.well-known/webfinger?resource=acct:{target_username}@{target_domain}"
+                wf_resp = safe_get(wf_url, headers={"Accept": "application/jrd+json, application/json"}, timeout=5.0)
+                if wf_resp.status_code == 200:
+                    for link in wf_resp.json().get("links", []):
+                        if link.get("rel") == "self":
+                            remote_actor_uri = link.get("href")
+                            if remote_actor_uri:
+                                actor = _get_or_create_actor(remote_actor_uri)
+                                break
+            except Exception as exc:
+                logger.warning("Failed WebFinger lookup for %s: %s", clean_id, exc)
+
         if actor:
             existing_fol = (
                 db.session.execute(
@@ -323,29 +367,43 @@ def send_friend_request(
                 .first()
             )
             if existing_fol:
-                return existing_fol.to_dict(), None, 200
+                res_dict = existing_fol.to_dict()
+                res_dict["id"] = f"fed:{existing_fol.id}"
+                return res_dict, None, 200
+
             fol = FederationFollower(
                 local_user_id=req_uuid,
                 remote_actor_id=actor.id,
-                status=FollowStatus.ACCEPTED,
+                status=FollowStatus.PENDING,
             )
             db.session.add(fol)
             db.session.commit()
-            return fol.to_dict(), None, 201
+
+            # Dispatch outbound Follow activity via Celery / federation dispatcher
+            try:
+                from app.core.federation_dispatch import dispatch_follow
+
+                dispatch_follow(requester, actor)
+            except Exception as exc:
+                logger.warning("Failed dispatching outbound Follow for %s: %s", actor.actor_uri, exc)
+
+            res_dict = fol.to_dict()
+            res_dict["id"] = f"fed:{fol.id}"
+            return res_dict, None, 201
 
     return None, f"User '{clean_id}' not found", 404
 
 
 def respond_friend_request(
     user_id: uuid.UUID | str,
-    friendship_id: int,
+    friendship_id: int | str,
     action: str,
 ) -> tuple[dict[str, Any] | None, str | None, int]:
     """Accept or reject an incoming friend request.
 
     Args:
         user_id: UUID of recipient (must match addressee_id).
-        friendship_id: Primary key of UserFriendship.
+        friendship_id: Primary key of UserFriendship or prefixed federated ID (e.g. 'fed:123').
         action: 'accept' or 'reject'.
 
     Returns:
@@ -356,7 +414,53 @@ def respond_friend_request(
     except ValueError:
         return None, "Invalid user ID", 400
 
-    friendship = db.session.get(UserFriendship, friendship_id)
+    str_fid = str(friendship_id)
+    if str_fid.startswith("fed:"):
+        try:
+            fed_fol_id = int(str_fid.split(":", 1)[1])
+        except ValueError:
+            return None, "Invalid federated friendship ID", 400
+
+        fol = db.session.get(FederationFollower, fed_fol_id)
+        if not fol or fol.local_user_id != u_uuid:
+            return None, "Federated friend request not found", 404
+
+        if action == "accept":
+            fol.status = FollowStatus.ACCEPTED
+            db.session.commit()
+
+            # Send ActivityPub Accept
+            try:
+                from app.core.federation_dispatch import dispatch_accept_follow
+
+                user = db.session.get(User, u_uuid)
+                remote_act = fol.remote_actor
+                if user and remote_act:
+                    dummy_follow = {
+                        "type": "Follow",
+                        "actor": remote_act.actor_uri,
+                        "object": f"local:{user.id}",
+                    }
+                    dispatch_accept_follow(user, remote_act, dummy_follow)
+            except Exception as exc:
+                logger.warning("Failed dispatching Accept for federated follow: %s", exc)
+
+            res = fol.to_dict()
+            res["id"] = f"fed:{fol.id}"
+            return res, None, 200
+        elif action == "reject":
+            db.session.delete(fol)
+            db.session.commit()
+            return {"id": str_fid, "status": "rejected"}, None, 200
+        else:
+            return None, "Invalid action. Must be 'accept' or 'reject'", 400
+
+    try:
+        numeric_fid = int(str_fid)
+    except ValueError:
+        return None, "Invalid friendship ID", 400
+
+    friendship = db.session.get(UserFriendship, numeric_fid)
     if not friendship:
         return None, "Friend request not found", 404
 
@@ -383,20 +487,20 @@ def respond_friend_request(
         friendship.status = "rejected"
         db.session.delete(friendship)
         db.session.commit()
-        return {"id": friendship_id, "status": "rejected"}, None, 200
+        return {"id": numeric_fid, "status": "rejected"}, None, 200
     else:
         return None, "Invalid action. Must be 'accept' or 'reject'", 400
 
 
 def remove_friend(
     user_id: uuid.UUID | str,
-    friendship_id: int,
+    friendship_id: int | str,
 ) -> tuple[bool, str | None, int]:
     """Remove an existing friendship or cancel a request.
 
     Args:
         user_id: UUID of caller.
-        friendship_id: Primary key of UserFriendship.
+        friendship_id: Primary key of UserFriendship or prefixed federated ID (e.g. 'fed:123').
 
     Returns:
         (success, error_message, http_code)
@@ -406,7 +510,27 @@ def remove_friend(
     except ValueError:
         return False, "Invalid user ID", 400
 
-    friendship = db.session.get(UserFriendship, friendship_id)
+    str_fid = str(friendship_id)
+    if str_fid.startswith("fed:"):
+        try:
+            fed_fol_id = int(str_fid.split(":", 1)[1])
+        except ValueError:
+            return False, "Invalid federated friendship ID", 400
+
+        fol = db.session.get(FederationFollower, fed_fol_id)
+        if not fol or fol.local_user_id != u_uuid:
+            return False, "Federated friendship not found", 404
+
+        db.session.delete(fol)
+        db.session.commit()
+        return True, None, 200
+
+    try:
+        numeric_fid = int(str_fid)
+    except ValueError:
+        return False, "Invalid friendship ID", 400
+
+    friendship = db.session.get(UserFriendship, numeric_fid)
     if not friendship:
         return False, "Friendship not found", 404
 

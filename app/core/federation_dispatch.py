@@ -178,6 +178,67 @@ def dispatch_accept_follow(user: User, remote_actor: FederationActor, original_a
         )
 
 
+def dispatch_follow(user: User, remote_actor: FederationActor) -> bool:
+    """Dispatch an outbound Follow activity to a remote Actor.
+
+    Args:
+        user: The local user initiating the follow.
+        remote_actor: The remote actor being followed.
+
+    Returns:
+        True if queued or delivered successfully, False otherwise.
+    """
+    import uuid
+
+    from app.core.federation_tasks import deliver_activity
+    from app.core.tasks import submit_task
+
+    if not remote_actor or not remote_actor.inbox_url:
+        return False
+
+    base_url = get_federation_base_url()
+    actor_url = canonical_actor_iri(user.id, base_url)
+
+    follow_activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"{base_url}/activities/{uuid.uuid4()}",
+        "type": "Follow",
+        "actor": actor_url,
+        "object": remote_actor.actor_uri,
+    }
+
+    fed_activity = FederationActivity(
+        actor_uri=actor_url,
+        activity_type="Follow",
+        object_json=follow_activity,
+        target_uri=remote_actor.inbox_url,
+        direction="outbound",
+        status=ActivityStatus.QUEUED,
+    )
+    db.session.add(fed_activity)
+    db.session.commit()
+
+    key_id = f"{actor_url}#main-key"
+    task_id = submit_task(
+        deliver_activity,
+        str(fed_activity.id),
+        remote_actor.inbox_url,
+        follow_activity,
+        str(user.id),
+        key_id,
+        queue="federation",
+    )
+    if not task_id:
+        deliver_activity(
+            str(fed_activity.id),
+            remote_actor.inbox_url,
+            follow_activity,
+            str(user.id),
+            key_id,
+        )
+    return True
+
+
 def _queue_and_deliver(user: User, actor_url: str, activity: dict[str, Any]) -> None:
     """Queue an activity for fan-out delivery to all followers."""
     from app.core.federation_tasks import deliver_activity

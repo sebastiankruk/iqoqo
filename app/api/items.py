@@ -291,9 +291,11 @@ def get_items():
     combined_items_data = []
 
     if q:
+        from app.core.friend_service import get_friend_user_ids
         from app.core.search_service import SearchService
 
         statuses_list = parse_csv_param(statuses_filter)
+        friend_ids_list = list(get_friend_user_ids(user_id)) if scope == "friends" else None
         total_count, results = SearchService.search_items(
             q,
             user_id,
@@ -312,6 +314,8 @@ def get_items():
             publishers=publishers_list,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            scope=scope,
+            friend_ids=friend_ids_list,
         )
 
         for row in results:

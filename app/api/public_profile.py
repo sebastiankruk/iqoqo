@@ -76,6 +76,7 @@ def get_public_profile(username: str):
 
 
 @public_bp.route("/u/<string:username>/check", methods=["POST"])
+@optional_auth
 @limiter.limit("30 per minute")
 def check_inventory(username: str):
     """
@@ -114,6 +115,7 @@ def check_inventory(username: str):
     items = db.session.execute(item_stmt.options(selectinload(Item.manifestation)).limit(5)).scalars().all()
 
     friend_items = []
+    # If include_friends is requested, allow if anonymous or owner/friend (unauthenticated public requests default to public friends)
     if data.get("include_friends"):
         from app.core.friend_service import get_friend_user_ids
 
@@ -163,6 +165,7 @@ def check_inventory(username: str):
                 FederationFollower.local_user_id == user.id,
                 FederationFollower.status == FollowStatus.ACCEPTED,
             )
+            .limit(5)
         )
         friend_actors = db.session.execute(friend_stmt).scalars().all()
         client = FederationClient()

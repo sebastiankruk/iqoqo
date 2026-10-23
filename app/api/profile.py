@@ -358,9 +358,9 @@ def send_user_friend_request():
     return jsonify({"success": True, "data": data, "message": "Friend request sent successfully."}), status_code
 
 
-@profile_bp.route("/friends/<int:friendship_id>/respond", methods=["POST"])
+@profile_bp.route("/friends/<friendship_id>/respond", methods=["POST"])
 @require_auth
-def respond_user_friend_request(friendship_id: int):
+def respond_user_friend_request(friendship_id: str):
     """Accept or reject an incoming friend request."""
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -380,9 +380,9 @@ def respond_user_friend_request(friendship_id: int):
     return jsonify({"success": True, "data": data}), status_code
 
 
-@profile_bp.route("/friends/<int:friendship_id>", methods=["DELETE"])
+@profile_bp.route("/friends/<friendship_id>", methods=["DELETE"])
 @require_auth
-def delete_user_friend(friendship_id: int):
+def delete_user_friend(friendship_id: str):
     """Remove a friend or cancel a pending request."""
     user_id = getattr(g, "user_id", None)
     if not user_id:

@@ -159,7 +159,7 @@ def build_ilike_search_clause(q: str) -> Any:
 class ItemSearchFilters:
     """The filter set shared by the item-search backends.
 
-    These fourteen parameters were previously passed individually to
+    These parameters were previously passed individually to
     ``_pg_item_fts`` and ``_ilike_item_search``. A sixteen-parameter positional
     run is where a call site stops being readable: ``borrowed_only`` and
     ``missing_cover`` are both ``bool``, so passing one where the other belongs
@@ -185,6 +185,8 @@ class ItemSearchFilters:
     lod_authority: str | None = None
     lod_status: str | None = None
     owner_only: bool = False
+    scope: str = "personal"
+    friend_ids: list[Any] | None = None
 
 
 class SearchService:
@@ -487,7 +489,15 @@ class SearchService:
         """
 
         params = {"q": q, "limit": limit, "offset": offset, "user_id": user_id}
-        if borrowed_only:
+        if filters.scope == "friends":
+            if filters.friend_ids:
+                params["friend_ids"] = tuple(str(fid) for fid in filters.friend_ids)
+                extra_filters_sql = (
+                    " AND i.owner_id IN :friend_ids AND i.is_hidden = false AND i.visibility IN ('public', 'friends_only', 'shared')"
+                )
+            else:
+                extra_filters_sql = " AND 1=0"
+        elif borrowed_only:
             extra_filters_sql = " AND i.lent_to_user_id = :user_id"
         elif filters.owner_only:
             extra_filters_sql = " AND i.owner_id = :user_id"
@@ -587,6 +597,8 @@ class SearchService:
             lod_authority,
             lod_status,
             owner_only,
+            scope,
+            friend_ids,
         ) = dataclasses.astuple(filters)
 
         # Subquery to get matching item IDs. Contributor matching lives inside the
@@ -606,7 +618,16 @@ class SearchService:
             .join(Work, Expression.work_id == Work.id)
         )
 
-        if borrowed_only:
+        if scope == "friends":
+            if friend_ids:
+                query = query.filter(
+                    Item.owner_id.in_(friend_ids),
+                    Item.is_hidden.is_(False),
+                    Item.visibility.in_(["public", "friends_only", "shared"]),
+                )
+            else:
+                query = query.filter(db.false())
+        elif borrowed_only:
             query = query.filter(Item.lent_to_user_id == user_id)
         elif owner_only:
             query = query.filter(Item.owner_id == user_id)

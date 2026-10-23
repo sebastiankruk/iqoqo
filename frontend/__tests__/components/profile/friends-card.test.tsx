@@ -166,6 +166,25 @@ describe("FriendsCard", () => {
     });
   });
 
+  it("handles federated string-prefixed friendship IDs when removing", async () => {
+    (apiClient.delete as any).mockResolvedValue({
+      data: { success: true },
+    });
+
+    render(<FriendsCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Carol Remote")).toBeInTheDocument();
+    });
+
+    const removeBtns = screen.getAllByRole("button", { name: /Remove/i });
+    fireEvent.click(removeBtns[1]);
+
+    await waitFor(() => {
+      expect(apiClient.delete).toHaveBeenCalledWith("/profile/friends/2");
+    });
+  });
+
   it("activates incoming tab automatically when URL search contains tab=incoming", async () => {
     delete (window as any).location;
     window.location = new URL("http://localhost/profile?tab=incoming#friends") as any;

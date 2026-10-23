@@ -331,6 +331,28 @@ def handle_accept(activity: dict[str, Any]) -> bool:
         follower_actor_uri = inner.get("actor", "")  # Who initiated the follow
     elif isinstance(inner, dict) and inner.get("type") == "Offer":
         logger.info("Remote actor %s accepted our loan Offer %s", actor_uri, inner.get("id"))
+        # Emit in-app notification to the local user who requested the loan
+        try:
+            from app.core.notifications import create_notification
+
+            follower_actor_uri = inner.get("actor", "")
+            user = _resolve_target_user(follower_actor_uri)
+            item_uri = inner.get("object", "")
+            item_id_str = item_uri.rstrip("/").split("/")[-1] if item_uri else ""
+            if user:
+                create_notification(
+                    user_id=user.id,
+                    notification_type="loan_approved",
+                    payload={
+                        "message": f"Remote friend {actor_uri} approved your loan request",
+                        "actor_uri": actor_uri,
+                        "offer_id": inner.get("id"),
+                    },
+                    actor_uri=actor_uri,
+                    target_iri=f"/item/{item_id_str}" if item_id_str else "/collection",
+                )
+        except Exception as exc:
+            logger.warning("Failed emitting loan_approved notification on Accept: %s", exc)
         return True
     else:
         logger.info("Received Accept without recognized inner object from %s", actor_uri)
@@ -374,6 +396,27 @@ def handle_reject(activity: dict[str, Any]) -> bool:
         follower_actor_uri = inner.get("actor", "")
     elif isinstance(inner, dict) and inner.get("type") == "Offer":
         logger.info("Remote actor %s rejected our loan Offer %s", actor_uri, inner.get("id"))
+        try:
+            from app.core.notifications import create_notification
+
+            follower_actor_uri = inner.get("actor", "")
+            user = _resolve_target_user(follower_actor_uri)
+            item_uri = inner.get("object", "")
+            item_id_str = item_uri.rstrip("/").split("/")[-1] if item_uri else ""
+            if user:
+                create_notification(
+                    user_id=user.id,
+                    notification_type="loan_rejected",
+                    payload={
+                        "message": f"Remote friend {actor_uri} rejected your loan request",
+                        "actor_uri": actor_uri,
+                        "offer_id": inner.get("id"),
+                    },
+                    actor_uri=actor_uri,
+                    target_iri=f"/item/{item_id_str}" if item_id_str else "/collection",
+                )
+        except Exception as exc:
+            logger.warning("Failed emitting loan_rejected notification on Reject: %s", exc)
         return True
     else:
         logger.info("Received Reject without recognized inner object from %s", actor_uri)
@@ -444,6 +487,22 @@ def handle_offer(activity: dict[str, Any]) -> bool:
         logger.warning("Offer from blocked instance %s rejected", remote_actor.instance.domain)
         return False
 
+    # Verify item visibility authorization for remote actor
+    from app.core.friend_service import is_friend_of
+
+    item_visibility = getattr(item, "visibility", "public")
+    if getattr(item, "is_hidden", False) or item_visibility == "private":
+        logger.warning("Offer rejected: item %s is private/hidden", item.id)
+        return False
+
+    if item_visibility == "friends_only" and not is_friend_of(
+        viewer_user_id=None,
+        owner_user_id=item.owner_id,
+        remote_actor_id=remote_actor.id,
+    ):
+        logger.warning("Offer rejected: item %s is friends_only and actor %s is not an accepted friend", item.id, actor_uri)
+        return False
+
     shadow_email = f"fed_actor_{remote_actor.id}@federated.local"
     shadow_stmt = select(User).where(User.email == shadow_email)
     requester_user = db.session.execute(shadow_stmt).scalars().first()
@@ -452,6 +511,7 @@ def handle_offer(activity: dict[str, Any]) -> bool:
             email=shadow_email,
             public_username=f"fed_{remote_actor.username or 'actor'}_{remote_actor.id}",
             display_name=f"{remote_actor.display_name or remote_actor.username or 'Remote Friend'} ({remote_actor.instance.domain if remote_actor.instance else 'federated'})",
+            password_hash="!federated-shadow-account",
             is_active=False,
             visibility="public",
         )
@@ -493,9 +553,10 @@ def handle_offer(activity: dict[str, Any]) -> bool:
     try:
         from app.core.notifications import create_notification
 
-        if item.user_id:
+        target_owner_id = item.owner_id
+        if target_owner_id:
             create_notification(
-                user_id=item.user_id,
+                user_id=target_owner_id,
                 notification_type="loan_request",
                 payload={
                     "item_id": item.id,
@@ -505,7 +566,7 @@ def handle_offer(activity: dict[str, Any]) -> bool:
                     "message": f"Loan request received for item #{item.id}",
                 },
                 actor_uri=actor_uri,
-                target_iri=f"/items/{item.id}",
+                target_iri=f"/item/{item.id}",
             )
     except Exception as notif_err:
         logger.warning("Failed to emit loan_request notification: %s", notif_err)

@@ -633,6 +633,44 @@ class Item(db.Model):  # type: ignore[name-defined]
         self.visibility = vis
         self.is_hidden = vis != "public"
 
+    from sqlalchemy.orm import validates
+
+    @validates("is_hidden")
+    def _validate_is_hidden(self, key: str, value: bool) -> bool:
+        """Ensure is_hidden=True keeps visibility from defaulting to public."""
+        if getattr(self, "_in_validation", False):
+            return value
+        self._in_validation = True
+        try:
+            if value is True:
+                current_vis = self.__dict__.get("visibility")
+                if current_vis is None or current_vis == "public":
+                    self.visibility = "private"
+            elif value is False:
+                current_vis = self.__dict__.get("visibility")
+                if current_vis == "private":
+                    self.visibility = "public"
+        finally:
+            self._in_validation = False
+        return value
+
+    @validates("visibility")
+    def _validate_visibility(self, key: str, value: str) -> str:
+        """Ensure visibility updates keep is_hidden in sync."""
+        if value not in ITEM_VISIBILITIES:
+            raise ValueError(f"Invalid visibility {value!r}")
+        if getattr(self, "_in_validation", False):
+            return value
+        self._in_validation = True
+        try:
+            if value == "private":
+                self.is_hidden = True
+            elif value == "public":
+                self.is_hidden = False
+        finally:
+            self._in_validation = False
+        return value
+
     @property
     def iri(self) -> str:
         """Return the canonical Linked Data IRI for this Item."""

@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 
 export interface FriendEntry {
-  friendship_id: number;
+  friendship_id: number | string;
   user_id: string;
   username: string;
   display_name?: string | null;
@@ -128,9 +128,9 @@ export function FriendsCard() {
     }
   };
 
-  const handleRespond = async (friendshipId: number, action: "accept" | "reject") => {
+  const handleRespond = async (friendshipId: number | string, action: "accept" | "reject") => {
     try {
-      await apiClient.post(`/profile/friends/${friendshipId}/respond`, { action });
+      await apiClient.post(`/profile/friends/${encodeURIComponent(String(friendshipId))}/respond`, { action });
       toast.success(
         action === "accept"
           ? t("friendAccepted") || "Friend request accepted"
@@ -143,9 +143,9 @@ export function FriendsCard() {
     }
   };
 
-  const handleRemove = async (friendshipId: number) => {
+  const handleRemove = async (friendshipId: number | string) => {
     try {
-      await apiClient.delete(`/profile/friends/${friendshipId}`);
+      await apiClient.delete(`/profile/friends/${encodeURIComponent(String(friendshipId))}`);
       toast.success(t("friendRemoved") || "Friendship removed");
       await loadFriends();
     } catch (err) {
