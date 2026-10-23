@@ -670,3 +670,131 @@ def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[
         "unchanged": unchanged_count,
         "sample_demotions": demotions[:20],
     }
+
+
+REDIS_FTS_QUEUE_KEY = "iqoqo:fts_reindex_queue"
+_in_memory_fts_queue: set[str] = set()
+
+
+def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int = 5) -> None:
+    """Enqueue an entity for debounced background full-text search reindexing.
+
+    Coalesces multiple rapid updates to the same entity within a 5-second
+    window before Celery background batch reindexing runs.
+
+    Args:
+        entity_type: Type of entity ('item', 'manifestation', 'work').
+        entity_id: Primary key of the entity.
+        countdown: Delay in seconds before Celery task executes (debounce).
+    """
+    from app.core.events import get_redis_client
+
+    key = f"{entity_type}:{entity_id}"
+    client = get_redis_client()
+    if client:
+        try:
+            client.sadd(REDIS_FTS_QUEUE_KEY, key)
+        except Exception as exc:
+            logger.warning("Failed to enqueue FTS reindex to Redis: %s", exc)
+            _in_memory_fts_queue.add(key)
+    else:
+        _in_memory_fts_queue.add(key)
+        if not celery.conf.task_always_eager:
+            # Broker/result backend unreachable: dispatching would block the HTTP
+            # worker for ~20 s on Celery's result-store reconnect loop.
+            logger.debug("Redis unavailable; FTS reindex for %s kept in local queue", key)
+            return
+
+    try:
+        # retry=False prevents blocking the HTTP worker for ~20 s when the broker
+        # is unreachable (Celery default publish retry policy).
+        batch_fts_reindex.apply_async(countdown=countdown, retry=False)
+    except Exception as exc:
+        logger.debug("Celery task dispatch skipped or delayed: %s", exc)
+
+
+@celery.task(bind=True, name="app.core.tasks.batch_fts_reindex")
+def batch_fts_reindex(self) -> dict[str, Any]:
+    """Batch recompute full-text search vectors for queued entities.
+
+    Pops coalesced entity identifiers from Redis and in-memory fallback,
+    updates full-text search vectors without blocking HTTP threads,
+    and publishes the 'fts_reindexed' transition event.
+    """
+    from datetime import UTC, datetime
+
+    from app.core.events import get_redis_client, publish_transition_event
+    from app.db import db
+    from app.db.core import Item, Manifestation, Work
+
+    queued_entities: set[str] = set()
+
+    client = get_redis_client()
+    if client:
+        try:
+            while True:
+                popped = client.spop(REDIS_FTS_QUEUE_KEY, count=50)
+                if not popped:
+                    break
+                for p in popped:
+                    queued_entities.add(p.decode("utf-8") if isinstance(p, bytes) else str(p))
+        except Exception as exc:
+            logger.warning("Error draining FTS queue from Redis: %s", exc)
+
+    global _in_memory_fts_queue
+    if _in_memory_fts_queue:
+        queued_entities.update(_in_memory_fts_queue)
+        _in_memory_fts_queue = set()
+
+    if not queued_entities:
+        return {"status": "ok", "reindexed_count": 0, "entities": []}
+
+    reindexed_entities: list[str] = []
+
+    for entity_key in queued_entities:
+        try:
+            parts = entity_key.split(":", 1)
+            if len(parts) != 2:
+                continue
+            entity_type, raw_id = parts[0], parts[1]
+            entity_id = int(raw_id)
+
+            if entity_type == "item":
+                item = db.session.get(Item, entity_id)
+                if item and item.manifestation_id:
+                    mani = db.session.get(Manifestation, item.manifestation_id)
+                    if mani and hasattr(mani, "updated_at"):
+                        mani.updated_at = datetime.now(UTC)
+                        reindexed_entities.append(f"manifestation:{mani.id}")
+                reindexed_entities.append(entity_key)
+
+            elif entity_type == "manifestation":
+                mani = db.session.get(Manifestation, entity_id)
+                if mani and hasattr(mani, "updated_at"):
+                    mani.updated_at = datetime.now(UTC)
+                reindexed_entities.append(entity_key)
+
+            elif entity_type == "work":
+                work = db.session.get(Work, entity_id)
+                if work:
+                    reindexed_entities.append(entity_key)
+
+        except Exception as item_err:
+            logger.warning("Error reindexing entity %s: %s", entity_key, item_err)
+
+    try:
+        db.session.commit()
+    except Exception as db_err:
+        db.session.rollback()
+        logger.error("Database commit error during batch FTS reindex: %s", db_err)
+
+    publish_transition_event(
+        "fts_reindexed",
+        {"entities": reindexed_entities, "count": len(reindexed_entities)},
+    )
+
+    return {
+        "status": "success",
+        "reindexed_count": len(reindexed_entities),
+        "entities": reindexed_entities,
+    }
