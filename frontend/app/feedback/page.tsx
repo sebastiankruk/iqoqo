@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
@@ -84,22 +84,22 @@ export default function FeedbackPage() {
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
   const searchParams = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<"tickets" | "escalations">(() => {
-    const tab = searchParams?.get("tab");
-    if (tab === "my-escalations" || tab === "escalations") {
+  const tabParam = searchParams?.get("tab");
+  const [userTab, setUserTab] = useState<"tickets" | "escalations" | null>(null);
+
+  const activeTab = useMemo<"tickets" | "escalations">(() => {
+    if (userTab !== null) {
+      return userTab;
+    }
+    if (tabParam === "my-escalations" || tabParam === "escalations") {
       return "escalations";
     }
     return "tickets";
-  });
+  }, [userTab, tabParam]);
 
-  useEffect(() => {
-    const tab = searchParams?.get("tab");
-    if (tab === "my-escalations" || tab === "escalations") {
-      setActiveTab("escalations");
-    } else if (tab === "tickets" || tab === "platform") {
-      setActiveTab("tickets");
-    }
-  }, [searchParams]);
+  const setActiveTab = (tab: "tickets" | "escalations") => {
+    setUserTab(tab);
+  };
   const { data: escalations } = useMyEscalations();
   const pendingEscalationsCount = escalations?.filter(e => e.status === "pending").length ?? 0;
 

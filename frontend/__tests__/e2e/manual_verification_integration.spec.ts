@@ -38,6 +38,14 @@ test.describe("Manual Verification Integration E2E", () => {
 
     // 2. Mock default profile endpoint (real login step above already provides iqoqo_session cookie)
     await page.route("**/api/profile**", async route => {
+      const url = route.request().url();
+      if (url.includes("/friends")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: { accepted: [], incoming: [], outgoing: [] } }),
+        });
+      }
       if (route.request().method() === "PUT") {
         const data = route.request().postDataJSON();
         // Handle mocked 409 conflict
@@ -155,7 +163,7 @@ test.describe("Manual Verification Integration E2E", () => {
     let itemState: any = null;
 
     // Intercept GET and PUT requests to track visibility in memory
-    await page.route(/\/api\/items\/\d+/, async route => {
+    await page.route(/\/api\/items\/\d+(?:[?#].*)?$/, async route => {
       if (route.request().method() === "PUT") {
         const body = route.request().postDataJSON();
         itemState = { ...itemState, ...body };
@@ -191,8 +199,17 @@ test.describe("Manual Verification Integration E2E", () => {
     // Toggle the hidden setting
     const visibilityBtn = page.getByRole("button", { name: /hide from public|make public/i });
     await expect(visibilityBtn).toBeVisible();
+    const btnText = (await visibilityBtn.innerText()).trim();
     await visibilityBtn.click();
-    await expect(page.getByText(/item is now hidden/i)).toBeVisible();
+    if (/make public/i.test(btnText)) {
+      await expect(page.getByText(/item is now public/i)).toBeVisible();
+      // Click again to hide
+      const hideBtn = page.getByRole("button", { name: /hide from public/i });
+      await hideBtn.click();
+      await expect(page.getByText(/item is now hidden/i)).toBeVisible();
+    } else {
+      await expect(page.getByText(/item is now hidden/i)).toBeVisible();
+    }
   });
 
   test("Filtered Collection Sharing & i18n", async ({ page }) => {

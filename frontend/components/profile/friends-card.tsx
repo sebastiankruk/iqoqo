@@ -65,7 +65,11 @@ export function FriendsCard() {
   const loadFriends = useCallback(async () => {
     try {
       const res = await apiClient.get<{ success: boolean; data: FriendsResponse }>("/profile/friends");
-      setData(res.data.data);
+      setData({
+        accepted: Array.isArray(res.data?.data?.accepted) ? res.data.data.accepted : [],
+        incoming: Array.isArray(res.data?.data?.incoming) ? res.data.data.incoming : [],
+        outgoing: Array.isArray(res.data?.data?.outgoing) ? res.data.data.outgoing : [],
+      });
     } catch (err) {
       console.error("Failed to load friends", err);
     } finally {
@@ -79,7 +83,11 @@ export function FriendsCard() {
       try {
         const res = await apiClient.get<{ success: boolean; data: FriendsResponse }>("/profile/friends");
         if (!ignore) {
-          setData(res.data.data);
+          setData({
+            accepted: Array.isArray(res.data?.data?.accepted) ? res.data.data.accepted : [],
+            incoming: Array.isArray(res.data?.data?.incoming) ? res.data.data.incoming : [],
+            outgoing: Array.isArray(res.data?.data?.outgoing) ? res.data.data.outgoing : [],
+          });
         }
       } catch (err) {
         console.error("Failed to load friends", err);
@@ -154,6 +162,10 @@ export function FriendsCard() {
     }
   };
 
+  const accepted = Array.isArray(data?.accepted) ? data.accepted : [];
+  const incoming = Array.isArray(data?.incoming) ? data.incoming : [];
+  const outgoing = Array.isArray(data?.outgoing) ? data.outgoing : [];
+
   return (
     <div id="friends" data-testid="friends-card" className="rounded-xl border border-border/80 bg-card p-6 shadow-sm">
       <div className="flex items-center gap-3 mb-2">
@@ -190,7 +202,7 @@ export function FriendsCard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          {t("friendsTab") || "Friends"} ({data.accepted.length})
+          {t("friendsTab") || "Friends"} ({accepted.length})
         </button>
         <button
           type="button"
@@ -201,7 +213,7 @@ export function FriendsCard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          {t("incomingRequests") || "Incoming"} ({data.incoming.length})
+          {t("incomingRequests") || "Incoming"} ({incoming.length})
         </button>
         <button
           type="button"
@@ -212,7 +224,7 @@ export function FriendsCard() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          {t("outgoingRequests") || "Outgoing"} ({data.outgoing.length})
+          {t("outgoingRequests") || "Outgoing"} ({outgoing.length})
         </button>
       </div>
 
@@ -221,13 +233,13 @@ export function FriendsCard() {
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : activeTab === "accepted" ? (
-        data.accepted.length === 0 ? (
+        accepted.length === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
             {t("noFriends") || "No friends connected yet."}
           </p>
         ) : (
           <ul className="space-y-3">
-            {data.accepted.map(friend => (
+            {accepted.map(friend => (
               <li
                 key={friend.friendship_id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/40"
@@ -262,13 +274,13 @@ export function FriendsCard() {
           </ul>
         )
       ) : activeTab === "incoming" ? (
-        data.incoming.length === 0 ? (
+        incoming.length === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
             {t("noRequests") || "No pending incoming requests."}
           </p>
         ) : (
           <ul className="space-y-3">
-            {data.incoming.map(req => (
+            {incoming.map(req => (
               <li
                 key={req.friendship_id}
                 className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/40"
@@ -312,11 +324,11 @@ export function FriendsCard() {
             ))}
           </ul>
         )
-      ) : data.outgoing.length === 0 ? (
+      ) : outgoing.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">{t("noRequests") || "No outgoing requests."}</p>
       ) : (
         <ul className="space-y-3">
-          {data.outgoing.map(req => (
+          {outgoing.map(req => (
             <li
               key={req.friendship_id}
               className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/40"
