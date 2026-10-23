@@ -78,6 +78,9 @@ def _extract_bearer_token() -> tuple[str | None, bool]:
     cookie = request.cookies.get("iqoqo_session")
     if cookie:
         return cookie, True
+    token_query = request.args.get("token")
+    if token_query and token_query.strip():
+        return token_query.strip(), False
     return None, False
 
 

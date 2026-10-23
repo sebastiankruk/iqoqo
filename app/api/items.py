@@ -707,6 +707,20 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         db.session.commit()
         # Tag/status changes alter this user's facet counts.
         invalidate_facets_cache(user_id)
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("item", item.id)
+        publish_transition_event(
+            "item_updated",
+            {
+                "item_id": item.id,
+                "manifestation_id": item.manifestation_id,
+                "user_id": str(user_id) if user_id else None,
+                "status": item.status,
+                "collection_status": item.collection_status,
+            },
+        )
         return jsonify(
             {
                 "success": True,
@@ -754,6 +768,18 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
     db.session.commit()
     # Facet counts for this user changed; drop the cached entries.
     invalidate_facets_cache(user_id)
+    from app.core.events import publish_transition_event
+    from app.core.tasks import enqueue_fts_reindex
+
+    enqueue_fts_reindex("item", item_id)
+    publish_transition_event(
+        "item_deleted",
+        {
+            "item_id": item_id,
+            "manifestation_id": item_clone.manifestation_id,
+            "user_id": str(user_id) if user_id else None,
+        },
+    )
 
     try:
         from app.core.federation_dispatch import dispatch_collection_update
@@ -1229,6 +1255,20 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
     invalidate_facets_cache(user_id)
+    from app.core.events import publish_transition_event
+    from app.core.tasks import enqueue_fts_reindex
+
+    enqueue_fts_reindex("item", item.id)
+    publish_transition_event(
+        "item_created",
+        {
+            "item_id": item.id,
+            "manifestation_id": manifestation.id,
+            "user_id": str(user_id) if user_id else None,
+            "status": item.status,
+            "collection_status": item.collection_status,
+        },
+    )
 
     return jsonify(
         {
@@ -1507,6 +1547,20 @@ def create_item() -> Response | tuple[Response, int]:
     sync_tags(item.id, user_id, payload.tags)
     db.session.commit()
     invalidate_facets_cache(user_id)
+    from app.core.events import publish_transition_event
+    from app.core.tasks import enqueue_fts_reindex
+
+    enqueue_fts_reindex("item", item.id)
+    publish_transition_event(
+        "item_created",
+        {
+            "item_id": item.id,
+            "manifestation_id": manifestation.id,
+            "user_id": str(user_id) if user_id else None,
+            "status": item.status,
+            "collection_status": item.collection_status,
+        },
+    )
 
     try:
         from app.core.federation_dispatch import dispatch_collection_update

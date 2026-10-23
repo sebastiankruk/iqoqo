@@ -299,6 +299,20 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
 
         db.session.commit()
 
+        if action == "approve":
+            from app.core.events import publish_transition_event
+            from app.core.tasks import enqueue_fts_reindex
+
+            enqueue_fts_reindex("item", item.id)
+            publish_transition_event(
+                "custody_lent",
+                {
+                    "item_id": item.id,
+                    "status": "lent",
+                    "borrower_id": str(loan_request.requester_id) if loan_request.requester_id else None,
+                },
+            )
+
         try:
             from app.core.notifications import create_notification
 
@@ -401,6 +415,18 @@ def return_loaned_item(item_id: int) -> Response | tuple[Response, int]:
     )
     db.session.add(custody_event)
     db.session.commit()
+
+    from app.core.events import publish_transition_event
+    from app.core.tasks import enqueue_fts_reindex
+
+    enqueue_fts_reindex("item", item.id)
+    publish_transition_event(
+        "custody_returned",
+        {
+            "item_id": item.id,
+            "status": "available",
+        },
+    )
 
     return jsonify({"success": True, "data": item.to_dict()}), 200
 
