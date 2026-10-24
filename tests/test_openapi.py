@@ -42,7 +42,7 @@ def test_openapi_spec_generation(client):
 
     # Assert structural conformity
     assert "openapi" in data
-    assert data["openapi"] == "3.0.3"
+    assert data["openapi"] == "3.1.0"
 
     # Assert semantic constraints
     assert "info" in data
