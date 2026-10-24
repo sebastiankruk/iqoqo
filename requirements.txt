@@ -14,6 +14,7 @@ psycopg2-binary==2.9.*
 psycopg[binary]>=3.2,<4
 requests
 defusedxml>=0.7.1
+boardgamegeek>=0.13.0
 rdflib==7.*
 pyshacl>=0.26.0
 boto3
@@ -22,6 +23,7 @@ flask-sqlalchemy
 flask-migrate
 Pillow>=12.3.0
 qrcode>=8.2
+pyotp>=2.9.0
 openai>=2.53.0
 google-genai>=2.17.0
 Authlib>=1.7.2
@@ -80,6 +82,3 @@ mypy
 pylint
 types-requests  # Type stubs for mypy
 types-PyYAML
-
-# BoardGameGeek client library
-boardgamegeek>=0.13.0
