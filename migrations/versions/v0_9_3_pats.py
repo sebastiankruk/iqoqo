@@ -81,21 +81,21 @@ def upgrade():
             schema=auth_schema,
         )
         op.create_index(
-            "ix_auth_pats_user_id" if is_pg else "ix_pats_user_id",
+            "ix_auth_personal_access_tokens_user_id" if is_pg else "ix_personal_access_tokens_user_id",
             "personal_access_tokens",
             ["user_id"],
             unique=False,
             schema=auth_schema,
         )
         op.create_index(
-            "ix_auth_pats_token_prefix" if is_pg else "ix_pats_token_prefix",
+            "ix_auth_personal_access_tokens_token_prefix" if is_pg else "ix_personal_access_tokens_token_prefix",
             "personal_access_tokens",
             ["token_prefix"],
             unique=False,
             schema=auth_schema,
         )
         op.create_index(
-            "ix_auth_pats_token_hash" if is_pg else "ix_pats_token_hash",
+            "ix_auth_personal_access_tokens_token_hash" if is_pg else "ix_personal_access_tokens_token_hash",
             "personal_access_tokens",
             ["token_hash"],
             unique=False,
@@ -113,17 +113,17 @@ def downgrade():
 
     if inspector.has_table("personal_access_tokens", schema=auth_schema):
         op.drop_index(
-            "ix_auth_pats_token_hash" if is_pg else "ix_pats_token_hash",
+            "ix_auth_personal_access_tokens_token_hash" if is_pg else "ix_personal_access_tokens_token_hash",
             table_name="personal_access_tokens",
             schema=auth_schema,
         )
         op.drop_index(
-            "ix_auth_pats_token_prefix" if is_pg else "ix_pats_token_prefix",
+            "ix_auth_personal_access_tokens_token_prefix" if is_pg else "ix_personal_access_tokens_token_prefix",
             table_name="personal_access_tokens",
             schema=auth_schema,
         )
         op.drop_index(
-            "ix_auth_pats_user_id" if is_pg else "ix_pats_user_id",
+            "ix_auth_personal_access_tokens_user_id" if is_pg else "ix_personal_access_tokens_user_id",
             table_name="personal_access_tokens",
             schema=auth_schema,
         )
