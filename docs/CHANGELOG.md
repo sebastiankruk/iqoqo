@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Social and custody provenance serialization in `ExportService.export_rdf()` emitting `foaf:knows` for mutual friends and `iqoqo:custodyHolder` for public loans.
   - Rate limiting on notification endpoints (`GET /api/v1/notifications`, `PATCH /api/v1/notifications/<id>/read`, `POST /api/v1/notifications/read-all`) via `@limiter.limit("60 per minute")`.
   - Comprehensive English and Polish localization parity for `Notifications`, `FeedbackPage`, `Profile`, and `FederationDirectory`.
+- **Async Transition Ingestion & Background FTS Re-indexing (C84)**: Decoupled PostgreSQL full-text search `tsvector` recomputations from synchronous HTTP writes by enqueuing entity updates into a Redis debounce queue coalesced across 5-second windows and processed via Celery background task `batch_fts_reindex`. Implemented Server-Sent Events (SSE) transition stream on `GET /api/v1/events/stream` and wired frontend `TransitionEventsListener` to invalidate TanStack Query caches reactively on transition completion without client polling (`async-transitions-and-fts-reindexing-v093`).
 
 ### Changed
 

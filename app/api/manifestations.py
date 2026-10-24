@@ -524,6 +524,12 @@ def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) ->
                 manifestation.expression.work.meta = {}
             manifestation.expression.work.meta["authors"] = normalize_authors_list(metadata.get("Authors"))
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manifestation.id)
+        publish_transition_event("manifestation_updated", {"manifestation_id": manifestation.id})
         return manifestation
 
     from app.core.ingest import _extract_genres
@@ -634,6 +640,12 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
                 work_meta["authors"] = metadata["Authors"]
                 manifestation.expression.work.meta = work_meta
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manifestation.id)
+        publish_transition_event("manifestation_updated", {"manifestation_id": manifestation.id})
 
         try:
             from app.core.federation_dispatch import dispatch_metadata_update
@@ -761,6 +773,12 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
         # the user or admin can trigger regeneration once the queue recovers.
         manifestation.update_meta(cover_status="pending")
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manifestation.id)
+        publish_transition_event("manifestation_updated", {"manifestation_id": manifestation.id})
         return (
             jsonify(
                 {
@@ -900,6 +918,12 @@ def regenerate_cover(manifestation_id: int) -> tuple[Response, int]:
         # Queue unavailable: reset cover_status so the user can retry later.
         manif.update_meta(cover_status="failed")
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manif.id)
+        publish_transition_event("manifestation_updated", {"manifestation_id": manif.id})
         return (
             jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}),
             503,
@@ -958,6 +982,12 @@ def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
     if task_id is None:
         manif.update_meta(cover_status="failed")
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manif.id)
+        publish_transition_event("manifestation_updated", {"manifestation_id": manif.id})
         return (
             jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}),
             503,
@@ -1057,6 +1087,12 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
 
         db.session.delete(manif)
         db.session.commit()
+
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("manifestation", manifestation_id)
+        publish_transition_event("manifestation_deleted", {"manifestation_id": manifestation_id})
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:
         db.session.rollback()
