@@ -16,8 +16,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useTranslations } from "next-intl";
-import { Key, Plus, Trash2, Copy, Check, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, Trash2, Copy, Check, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,8 +67,6 @@ const AVAILABLE_SCOPES = [
  * @returns {JSX.Element} The component
  */
 export function PatManagement() {
-  const t = useTranslations("Profile");
-
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,7 +86,6 @@ export function PatManagement() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
 
   const fetchTokens = useCallback(async () => {
-    setIsLoading(true);
     try {
       const res = await apiClient.get<TokensListResponse>("/auth/tokens?limit=50&offset=0");
       setTokens(res.data.items || []);
@@ -102,8 +98,26 @@ export function PatManagement() {
   }, []);
 
   useEffect(() => {
-    fetchTokens();
-  }, [fetchTokens]);
+    let active = true;
+    apiClient
+      .get<TokensListResponse>("/auth/tokens?limit=50&offset=0")
+      .then(res => {
+        if (!active) return;
+        setTokens(res.data.items || []);
+        setTotal(res.data.total || 0);
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error("Failed to load personal access tokens", err);
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleScopeToggle = (scopeId: string) => {
     setSelectedScopes(prev => (prev.includes(scopeId) ? prev.filter(s => s !== scopeId) : [...prev, scopeId]));

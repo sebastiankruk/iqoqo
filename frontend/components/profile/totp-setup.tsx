@@ -16,7 +16,6 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
 import { ShieldCheck, ShieldAlert, Key, Copy, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,8 +51,6 @@ interface EnrollResponse {
  * @returns {JSX.Element} The component
  */
 export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
-  const t = useTranslations("Profile");
-
   // Enrollment state
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [enrollData, setEnrollData] = useState<EnrollResponse | null>(null);
