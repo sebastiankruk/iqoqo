@@ -608,7 +608,11 @@
     "public": "Public",
     "publicDesc": "New scanned or ingested items default to public.",
     "saveProfile": "Save Profile",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "twoFactorAuth": "Two-Factor Authentication (2FA)",
+    "twoFactorAuthDesc": "Protect your account with a time-based one-time password (TOTP) from an authenticator app.",
+    "personalAccessTokens": "Personal Access Tokens",
+    "personalAccessTokensDesc": "Generate personal access tokens for programmatic API access."
   },
   "EditItemDialog": {
     "title": "Edit Item Details",

@@ -17,11 +17,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID
@@ -364,6 +367,11 @@ class User(db.Model):  # type: ignore[name-defined]
     federation_key_id = db.Column(db.String(255), nullable=True)
     federation_public_key = db.Column(db.Text, nullable=True)
 
+    # -- Two-Factor Authentication (TOTP) ----------------------------------
+    totp_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default=db.text("false"))
+    totp_secret = db.Column(db.Text, nullable=True)
+    totp_recovery_codes = db.Column(db.JSON, nullable=True)
+
     roles: Mapped[list[Role]] = relationship("Role", secondary=user_roles, lazy="selectin", backref=db.backref("users", lazy="dynamic"))
     items = db.relationship("Item", foreign_keys="Item.owner_id", backref="owner", lazy="dynamic", cascade="all, delete-orphan")
     lent_items = db.relationship("Item", foreign_keys="Item.lent_to_user_id", backref="borrower", lazy="dynamic")
@@ -440,6 +448,55 @@ class User(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
+    def get_totp_secret(self) -> str | None:
+        """Decrypt and return base32 TOTP secret if set."""
+        if not self.totp_secret:
+            return None
+        from app.db.settings import _get_fernet_cipher
+
+        cipher = _get_fernet_cipher()
+        try:
+            return cipher.decrypt(self.totp_secret.encode("utf-8")).decode("utf-8")
+        except Exception:
+            return None
+
+    def set_totp_secret(self, secret: str | None) -> None:
+        """Encrypt and store base32 TOTP secret using symmetric Fernet encryption."""
+        if not secret:
+            self.totp_secret = None
+            return
+        from app.db.settings import _get_fernet_cipher
+
+        cipher = _get_fernet_cipher()
+        self.totp_secret = cipher.encrypt(secret.encode("utf-8")).decode("utf-8")
+
+    def set_recovery_codes(self, raw_codes: list[str]) -> None:
+        """Store SHA-256 hashes of recovery codes."""
+        self.totp_recovery_codes = [hashlib.sha256(c.strip().upper().encode("utf-8")).hexdigest() for c in raw_codes]
+
+    def verify_and_consume_recovery_code(self, raw_code: str) -> bool:
+        """Verify candidate code against stored hashes and burn it if valid."""
+        if not self.totp_recovery_codes or not raw_code:
+            return False
+        code_hash = hashlib.sha256(raw_code.strip().upper().encode("utf-8")).hexdigest()
+        codes = list(self.totp_recovery_codes)
+        for i, h in enumerate(codes):
+            if hmac.compare_digest(h, code_hash):
+                codes.pop(i)
+                self.totp_recovery_codes = codes
+                return True
+        return False
+
+    def verify_totp(self, code: str) -> bool:
+        """Verify a 6-digit TOTP code against the decrypted secret."""
+        secret = self.get_totp_secret()
+        if not secret or not code:
+            return False
+        import pyotp
+
+        totp = pyotp.TOTP(secret)
+        return bool(totp.verify(code.strip(), valid_window=1))
+
     def to_private_dict(self) -> dict:
         """Serialize fields only the account owner may read.
 
@@ -454,6 +511,7 @@ class User(db.Model):  # type: ignore[name-defined]
                 "email_verified": self.is_email_verified,
                 "email_verified_at": self.email_verified_at.isoformat() if self.email_verified_at else None,
                 "email_verified_source": self.email_verified_source,
+                "totp_enabled": bool(self.totp_enabled),
             }
         )
         return data
@@ -525,3 +583,57 @@ class UserFriendship(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class PersonalAccessToken(db.Model):  # type: ignore[name-defined]
+    """Personal Access Token for API programmatic authentication."""
+
+    __tablename__ = "personal_access_tokens"
+    __table_args__ = ({"schema": _AUTH},) if _AUTH else ()
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    token_prefix = db.Column(db.String(16), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, index=True)
+    scopes = db.Column(db.JSON, nullable=False, default=list)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+
+    user = relationship("User", backref=db.backref("personal_access_tokens", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize personal access token metadata without sensitive hash."""
+        now = datetime.now(UTC)
+        is_expired = False
+        if self.expires_at is not None:
+            exp = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=UTC)
+            is_expired = exp < now
+
+        return {
+            "id": self.id,
+            "name": self.name,
+            "token_prefix": self.token_prefix,
+            "scopes": self.scopes or [],
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
+            "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "is_active": self.revoked_at is None and not is_expired,
+        }
+
+
+def generate_pat_token() -> tuple[str, str, str]:
+    """Generate a new personal access token.
+
+    Returns:
+        (raw_token, token_prefix, token_hash)
+        raw_token starts with 'iqo_' and is returned only once to the user.
+    """
+    raw_secret = secrets.token_urlsafe(32)
+    raw_token = f"iqo_{raw_secret}"
+    token_prefix = raw_token[:10]  # 'iqo_' + 6 chars
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    return raw_token, token_prefix, token_hash

@@ -608,7 +608,11 @@
     "public": "Publiczny",
     "publicDesc": "Nowe zeskanowane lub dodane egzemplarze będą domyślnie publiczne.",
     "saveProfile": "Zapisz profil",
-    "saving": "Zapisywanie..."
+    "saving": "Zapisywanie...",
+    "twoFactorAuth": "Uwierzytelnianie dwuskładnikowe (2FA)",
+    "twoFactorAuthDesc": "Chroń swoje konto za pomocą jednorazowych kodów TOTP z aplikacji uwierzytelniającej.",
+    "personalAccessTokens": "Osobiste tokeny dostępu (PAT)",
+    "personalAccessTokensDesc": "Generuj osobiste tokeny dostępu do programistycznego korzystania z API."
   },
   "EditItemDialog": {
     "title": "Edycja szczegółów egzemplarza",
