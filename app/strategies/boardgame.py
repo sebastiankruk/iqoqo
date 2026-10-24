@@ -15,17 +15,23 @@
 #
 """Board game metadata lookup via BoardGameGeek and UPC/EAN resolution."""
 
+import logging
+from typing import Any
+
 import requests
+from boardgamegeek.exceptions import BoardGameGeekError
 
 from app.strategies.base import LookupStrategy
 from app.utils.bgg import fetch_bgg_metadata
 from app.utils.upc import resolve_physical_media
 
+logger = logging.getLogger(__name__)
+
 
 class BoardGameLookupStrategy(LookupStrategy):
     """Board game lookup via BoardGameGeek and UPC/EAN."""
 
-    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict | None, str | None]:
+    def lookup(self, barcode: str, query: str | None = None) -> tuple[dict[str, Any] | None, str | None]:
         meta, provider = None, None
         try:
             is_short_numeric = barcode.isdigit() and len(barcode) <= 7
@@ -70,9 +76,31 @@ class BoardGameLookupStrategy(LookupStrategy):
                         if meta:
                             meta["data_source"] = "igdb"
                             provider = "igdb"
-        except (requests.RequestException, ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as exc:
-            import logging
 
-            logging.getLogger(__name__).error(f"BoardGame Strategy lookup failed: {exc}")
+            if not meta and query:
+                meta = fetch_bgg_metadata(query)
+                if meta:
+                    meta["data_source"] = "bgg"
+                    provider = "bgg"
+                else:
+                    from app.utils.igdb import fetch_game_metadata
+
+                    meta = fetch_game_metadata(query)
+                    if meta:
+                        meta["data_source"] = "igdb"
+                        provider = "igdb"
+
+        except (
+            requests.RequestException,
+            BoardGameGeekError,
+            ValueError,
+            KeyError,
+            IndexError,
+            AttributeError,
+            TypeError,
+            OSError,
+            RuntimeError,
+        ) as exc:
+            logger.error("BoardGame Strategy lookup failed: %s", exc)
 
         return meta, provider

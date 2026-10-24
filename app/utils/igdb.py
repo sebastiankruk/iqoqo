@@ -94,6 +94,144 @@ def get_igdb_token() -> str | None:
         return None
 
 
+def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
+    """Check IGDB/Twitch configuration, token freshness, and health status.
+
+    Returns a dict with 4-state health status:
+    - DISABLED: credentials not set in environment or database.
+    - CONFIGURED_VALID: credentials configured and cached token is valid.
+    - EXPIRED_NEEDS_REFRESH: credentials configured but cached token is expired or absent.
+    - AUTH_ERROR: Twitch OAuth returned 401/400 (invalid client credentials).
+    """
+    from app.db.models import InstanceSettings
+
+    try:
+        client_id = (
+            os.getenv("IGDB_CLIENT_ID")
+            or os.getenv("TWITCH_CLIENT_ID")
+            or InstanceSettings.get_value("IGDB_CLIENT_ID")
+            or InstanceSettings.get_value("TWITCH_CLIENT_ID")
+        )
+        client_secret = (
+            os.getenv("IGDB_CLIENT_SECRET")
+            or os.getenv("TWITCH_CLIENT_SECRET")
+            or InstanceSettings.get_value("IGDB_CLIENT_SECRET")
+            or InstanceSettings.get_value("TWITCH_CLIENT_SECRET")
+        )
+    except Exception as e:
+        return {
+            "status": "DISABLED",
+            "configured": False,
+            "active": False,
+            "reason": "probe_error",
+            "error": str(e),
+        }
+
+    if not client_id or not client_secret:
+        return {
+            "status": "DISABLED",
+            "configured": False,
+            "active": False,
+            "reason": "missing_credentials",
+        }
+
+    cached_token = None
+    is_expired = True
+    token_age_hours: float | None = None
+
+    if os.path.isfile(_TOKEN_FILE):
+        try:
+            with open(_TOKEN_FILE, encoding="utf-8") as f:
+                tokens = json.load(f)
+            file_mtime = os.path.getmtime(_TOKEN_FILE)
+            expires_in = tokens.get("expires_in", 3600)
+            age_sec = time.time() - file_mtime
+            token_age_hours = round(age_sec / 3600.0, 1) if age_sec >= 0 else 0.0
+            is_expired = age_sec >= expires_in
+            cached_token = tokens.get("access_token")
+        except (json.JSONDecodeError, OSError, KeyError):
+            is_expired = True
+
+    if not is_expired and cached_token:
+        return {
+            "status": "CONFIGURED_VALID",
+            "configured": True,
+            "active": True,
+            "token_age_hours": token_age_hours,
+            "reason": "token_valid",
+        }
+
+    if probe_remote:
+        try:
+            url = "https://id.twitch.tv/oauth2/token"
+            data = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "client_credentials",
+            }
+            response = requests.post(url, data=data, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
+            if response.status_code in (400, 401, 403):
+                return {
+                    "status": "AUTH_ERROR",
+                    "configured": True,
+                    "active": False,
+                    "reason": f"auth_failure_{response.status_code}",
+                    "error": response.text,
+                }
+            response.raise_for_status()
+            new_tokens = response.json()
+            token_fd = os.open(
+                _TOKEN_FILE,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            with os.fdopen(token_fd, "w", encoding="utf-8") as wf:
+                os.fchmod(wf.fileno(), 0o600)
+                json.dump(new_tokens, wf)
+
+            return {
+                "status": "CONFIGURED_VALID",
+                "configured": True,
+                "active": True,
+                "token_age_hours": 0.0,
+                "reason": "token_refreshed",
+            }
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code in (400, 401, 403):
+                return {
+                    "status": "AUTH_ERROR",
+                    "configured": True,
+                    "active": False,
+                    "reason": "invalid_credentials",
+                    "error": str(e),
+                }
+            return {
+                "status": "EXPIRED_NEEDS_REFRESH",
+                "configured": True,
+                "active": False,
+                "token_age_hours": token_age_hours,
+                "reason": "network_error_on_refresh",
+                "error": str(e),
+            }
+        except requests.RequestException as e:
+            return {
+                "status": "EXPIRED_NEEDS_REFRESH",
+                "configured": True,
+                "active": False,
+                "token_age_hours": token_age_hours,
+                "reason": "network_error_on_refresh",
+                "error": str(e),
+            }
+
+    return {
+        "status": "EXPIRED_NEEDS_REFRESH",
+        "configured": True,
+        "active": False,
+        "token_age_hours": token_age_hours,
+        "reason": "token_expired" if cached_token else "token_missing",
+    }
+
+
 def fetch_game_metadata(query: str) -> dict[str, Any] | None:
     """Fetch video game metadata from IGDB using a title search."""
     if not query:
