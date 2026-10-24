@@ -150,15 +150,28 @@ def get_config():
 @api_bp.route("/system/status", methods=["GET"])
 @require_auth
 def get_system_status():
-    """Return system health and integration status (e.g., Allegro token freshness)."""
+    """Return system health and integration status (e.g., Allegro, Twitch/IGDB, BGG)."""
     from app.utils.allegro import get_allegro_token_status
+    from app.utils.igdb import get_igdb_token_status
+
+    probe_remote = request.args.get("probe", "false").lower() in ("1", "true", "yes")
 
     allegro_status = get_allegro_token_status()
+    igdb_status = get_igdb_token_status(probe_remote=probe_remote)
+    bgg_configured = bool(os.getenv("BGG_API_TOKEN"))
+    bgg_status = {
+        "configured": bgg_configured,
+        "status": "CONFIGURED_VALID" if bgg_configured else "DISABLED",
+    }
+
     payload = {
         "status": "ok",
         "version": Config.VERSION,
         "allegro_token_active": allegro_status.get("allegro_token_active", False),
         "allegro": allegro_status,
+        "igdb": igdb_status,
+        "twitch_igdb_status": igdb_status.get("status"),
+        "bgg": bgg_status,
     }
     return jsonify({"success": True, "data": payload, "error": None}), 200
 
