@@ -88,8 +88,10 @@ export function PatManagement() {
   const fetchTokens = useCallback(async () => {
     try {
       const res = await apiClient.get<TokensListResponse>("/auth/tokens?limit=50&offset=0");
-      setTokens(res.data.items || []);
-      setTotal(res.data.total || 0);
+      if (res && res.data) {
+        setTokens(res.data.items || []);
+        setTotal(res.data.total || 0);
+      }
     } catch (err: unknown) {
       console.error("Failed to load personal access tokens", err);
     } finally {
@@ -99,21 +101,22 @@ export function PatManagement() {
 
   useEffect(() => {
     let active = true;
-    apiClient
-      .get<TokensListResponse>("/auth/tokens?limit=50&offset=0")
-      .then(res => {
-        if (!active) return;
+    const load = async () => {
+      try {
+        const res = await apiClient.get<TokensListResponse>("/auth/tokens?limit=50&offset=0");
+        if (!active || !res || !res.data) return;
         setTokens(res.data.items || []);
         setTotal(res.data.total || 0);
-      })
-      .catch(err => {
+      } catch (err: unknown) {
         if (!active) return;
         console.error("Failed to load personal access tokens", err);
-      })
-      .finally(() => {
-        if (!active) return;
-        setIsLoading(false);
-      });
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+    load();
     return () => {
       active = false;
     };
