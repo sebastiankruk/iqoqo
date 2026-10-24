@@ -3,7 +3,9 @@
 ## Purpose
 
 This specification locks in the behavioral requirements, cross-filtering rules, and empty-state handling for iqoqo's multi-faceted library navigation interface.
+
 ## Requirements
+
 ### Requirement: Intra-Facet Selection (OR)
 
 Multiple selections within a single facet category (e.g., Category: `text` and `music`, or Format: `book` and `vinyl`) MUST behave as an `OR` operation. The system SHALL display records that match ANY of the selected values within that facet. This rule applies uniformly to ALL facet types: Media Category, Physical Kind (Format), Status, Genre, Publisher, Tag, and Collection. No facet type may use radio-button (single-select) semantics.
@@ -157,7 +159,7 @@ If a facet group has zero selectable options AND no currently active selections 
 
 ### Requirement: Facet counts reflect the FRBR level of the current view
 
-Facet counts shown next to facet values MUST accurately reflect the number of records at the FRBR level currently being browsed, regardless of whether the user is authenticated. Counts MUST NOT hardcode or default to Item-scoped counts when browsing higher-level entities.
+Facet counts shown next to facet values MUST accurately reflect the number of records at the FRBR level AND ownership scope (`scope="own"` vs. `scope="friends"` vs. `scope="all"`) currently being browsed, regardless of whether the user is authenticated. Counts MUST NOT hardcode or default to personal-only Item counts when browsing the "Friends' Items" (`scope="friends"`) view.
 
 #### Scenario: Global view shows Manifestation-scoped counts
 
@@ -171,8 +173,13 @@ Facet counts shown next to facet values MUST accurately reflect the number of re
 
 #### Scenario: Private view shows Item-scoped counts
 
-- **WHEN** the user is in the private library view (items scope)
+- **WHEN** the user is in the private library view (items scope, `scope="own"`)
 - **THEN** facet counts SHALL reflect the number of Item records the logged-in user owns per facet value
+
+#### Scenario: Friends' Items view shows friend-scoped Item counts
+
+- **WHEN** the user selects the "Friends' Items" scope (`scope="friends"`) in the collection view
+- **THEN** `useFacetStats` (`/api/stats/facets?scope=friends`) SHALL compute facet counts across confirmed friends' visible items (`public`, `friends_only`, `shared`, `is_hidden=False`) rather than the caller's personal inventory
 
 ### Requirement: No N+1 Queries
 
