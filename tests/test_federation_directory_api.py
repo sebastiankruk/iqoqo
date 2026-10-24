@@ -88,3 +88,30 @@ def test_get_federation_directory(client, app, directory_seed):
     assert "library.alderaan.example" in peer_domains
     assert "books.naboo.example" in peer_domains
     assert "shady.tatooine.example" not in peer_domains
+
+
+def test_get_federation_directory_disabled(client, app, directory_seed):
+    """Verify directory returns 200 with empty peers and federation_enabled=False when disabled."""
+    original = app.config.get("FEDERATION_ENABLED")
+    app.config["FEDERATION_ENABLED"] = False
+    try:
+        res = client.get("/api/federation/directory")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["success"] is True
+        payload = data["data"]
+        assert payload["local_instance"]["federation_enabled"] is False
+        assert payload["peers"] == []
+        assert payload["total_peers"] == 0
+    finally:
+        app.config["FEDERATION_ENABLED"] = original
+
+
+def test_get_federation_instance_info(client, app):
+    """Verify instance-info returns 200 with local instance metadata."""
+    res = client.get("/api/federation/instance-info")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    assert "local_instance" in data["data"]
+    assert "federation_enabled" in data["data"]["local_instance"]

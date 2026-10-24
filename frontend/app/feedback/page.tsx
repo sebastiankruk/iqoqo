@@ -17,6 +17,7 @@
 
 import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useProfile } from "@/lib/api/hooks";
@@ -80,6 +81,7 @@ const statusStyles: Record<string, { bg: string; text: string; border: string; l
  * @returns {JSX.Element} The FeedbackPage component.
  */
 export default function FeedbackPage() {
+  const t = useTranslations("FeedbackPage");
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
   const searchParams = useSearchParams();
@@ -195,7 +197,7 @@ export default function FeedbackPage() {
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Filter by keyword..."
+          placeholder={t("searchPlaceholder") || "Filter by keyword..."}
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
@@ -204,12 +206,14 @@ export default function FeedbackPage() {
 
       {/* Type filter */}
       <div className="space-y-2 border-t border-border pt-4">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Request Type</label>
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t("type") || "Request Type"}
+        </label>
         <div className="space-y-1">
           {[
-            { value: "", label: "All Types" },
-            { value: "bug", label: "Bugs", icon: Bug },
-            { value: "feature_request", label: "Feature Requests", icon: Lightbulb },
+            { value: "", label: t("allTypes") || "All Types" },
+            { value: "bug", label: t("typeBug") || "Bugs", icon: Bug },
+            { value: "feature_request", label: t("typeFeature") || "Feature Requests", icon: Lightbulb },
           ].map(opt => {
             const active = typeFilter === opt.value;
             const Icon = opt.icon;
@@ -238,15 +242,17 @@ export default function FeedbackPage() {
 
       {/* Status filter */}
       <div className="space-y-2 border-t border-border pt-4">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t("status") || "Status"}
+        </label>
         <div className="space-y-1">
           {[
-            { value: "", label: "All Statuses" },
-            { value: "new", label: "New" },
-            { value: "accepted", label: "Accepted" },
-            { value: "in_progress", label: "In Progress" },
-            { value: "in_validation", label: "In Validation" },
-            { value: "closed", label: "Closed" },
+            { value: "", label: t("allStatuses") || "All Statuses" },
+            { value: "new", label: t("statusNew") || "New" },
+            { value: "accepted", label: t("statusAccepted") || "Accepted" },
+            { value: "in_progress", label: t("statusInProgress") || "In Progress" },
+            { value: "in_validation", label: t("statusInValidation") || "In Validation" },
+            { value: "closed", label: t("statusClosed") || "Closed" },
           ].map(opt => {
             const active = statusFilter === opt.value;
             return (
@@ -293,7 +299,7 @@ export default function FeedbackPage() {
             onClick={() => setMobileFiltersOpen(false)}
             className="w-full rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
           >
-            Apply Filters
+            {t("applyFilters") || "Apply Filters"}
           </button>
         </div>
       )}
@@ -307,9 +313,10 @@ export default function FeedbackPage() {
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-6">
           <div>
-            <h1 className="font-serif text-3xl font-bold tracking-tight">Help & Feedback</h1>
+            <h1 className="font-serif text-3xl font-bold tracking-tight">{t("title") || "Help & Feedback"}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Submit feature ideas, report bugs, and track the status of support tickets and curator requests.
+              {t("description") ||
+                "Submit feature ideas, report bugs, and track the status of support tickets and curator requests."}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -319,7 +326,7 @@ export default function FeedbackPage() {
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity self-start sm:self-auto"
             >
               <Plus className="h-4 w-4" />
-              <span>New Request</span>
+              <span>{t("newRequest") || "New Request"}</span>
             </button>
           </div>
         </div>
@@ -336,7 +343,7 @@ export default function FeedbackPage() {
             }`}
           >
             <LifeBuoy className="h-4 w-4" />
-            <span>Platform Tickets</span>
+            <span>{t("platformTickets") || "Platform Tickets"}</span>
           </button>
           <button
             type="button"
@@ -348,7 +355,7 @@ export default function FeedbackPage() {
             }`}
           >
             <Headphones className="h-4 w-4" />
-            <span>Curator Escalations</span>
+            <span>{t("curatorEscalations") || "Curator Escalations"}</span>
             {pendingEscalationsCount > 0 && (
               <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
                 {pendingEscalationsCount}

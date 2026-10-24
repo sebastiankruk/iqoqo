@@ -897,21 +897,26 @@ def get_friend_collections(actor_id: int) -> Response | tuple[Response, int]:
 
 
 @federation_bp.route("/directory", methods=["GET"])
-@federation_required
+@federation_bp.route("/instance-info", methods=["GET"])
 @limiter.limit("60 per minute")
 def get_federation_directory() -> Response:
     """Return public directory listing of connected, verified peer libraries and instance overview."""
+    from app.api.federation_guard import is_federation_enabled
     from app.config import Config
     from app.core.iri import get_federation_base_url
     from app.db.core import Item
 
-    # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
-    stmt = (
-        select(FederationInstance)
-        .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
-        .order_by(FederationInstance.last_seen_at.desc().nullslast())
-    )
-    peers = db.session.execute(stmt).scalars().all()
+    fed_enabled = is_federation_enabled()
+    if fed_enabled:
+        # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
+        stmt = (
+            select(FederationInstance)
+            .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
+            .order_by(FederationInstance.last_seen_at.desc().nullslast())
+        )
+        peers = db.session.execute(stmt).scalars().all()
+    else:
+        peers = []
 
     # 2. Local public items stats
     public_items_count = (
@@ -927,9 +932,11 @@ def get_federation_directory() -> Response:
             "software_name": "iqoqo",
             "software_version": Config.VERSION,
             "public_items_count": public_items_count,
+            "federation_enabled": fed_enabled,
         },
         "peers": [peer.to_dict() for peer in peers],
         "total_peers": len(peers),
+        "federation_enabled": fed_enabled,
     }
 
     return jsonify({"success": True, "data": directory_data}), 200

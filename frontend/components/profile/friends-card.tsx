@@ -230,7 +230,7 @@ export function FriendsCard() {
 
       {isLoading ? (
         <div className="py-6 text-center text-sm text-muted-foreground flex justify-center items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+          <Loader2 className="h-4 w-4 animate-spin" /> {t("loading") || "Loading..."}
         </div>
       ) : activeTab === "accepted" ? (
         accepted.length === 0 ? (
@@ -253,7 +253,7 @@ export function FriendsCard() {
                       <p className="text-sm font-medium leading-none">{friend.display_name || friend.username}</p>
                       {friend.is_federated && (
                         <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] bg-secondary text-secondary-foreground">
-                          <Globe className="h-2.5 w-2.5" /> Fediverse
+                          <Globe className="h-2.5 w-2.5" /> {t("fediverse") || "Fediverse"}
                         </span>
                       )}
                     </div>
@@ -294,7 +294,7 @@ export function FriendsCard() {
                       <p className="text-sm font-medium leading-none">{req.display_name || req.username}</p>
                       {req.is_federated && (
                         <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] bg-secondary text-secondary-foreground">
-                          <Globe className="h-2.5 w-2.5" /> Fediverse
+                          <Globe className="h-2.5 w-2.5" /> {t("fediverse") || "Fediverse"}
                         </span>
                       )}
                     </div>
@@ -325,7 +325,9 @@ export function FriendsCard() {
           </ul>
         )
       ) : outgoing.length === 0 ? (
-        <p className="py-6 text-center text-xs text-muted-foreground">{t("noRequests") || "No outgoing requests."}</p>
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          {t("noOutgoingRequests") || t("noRequests") || "No outgoing requests."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {outgoing.map(req => (
