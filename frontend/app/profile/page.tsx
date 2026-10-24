@@ -35,6 +35,8 @@ import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { DeletionPendingNotice } from "@/components/profile/deletion-pending-notice";
 import { FederationConsentSettings } from "@/components/settings/federation-consent";
 import { FriendsCard } from "@/components/profile/friends-card";
+import { TotpSetup } from "@/components/profile/totp-setup";
+import { PatManagement } from "@/components/profile/pat-management";
 
 /**
  * User consent record
@@ -68,6 +70,7 @@ interface UserProfile {
    */
   email_verified?: boolean;
   email_verified_source?: string | null;
+  totp_enabled?: boolean;
   /** Whether a deletion request is awaiting email confirmation. */
   deletion?: { pending: boolean; expires_at: string | null };
 }
@@ -449,6 +452,12 @@ export default function ProfilePage() {
           verified={profile.email_verified ?? false}
           onChanged={refreshProfile}
         />
+
+        {/* ── Two-Factor Authentication (TOTP 2FA) ── */}
+        <TotpSetup totpEnabled={profile.totp_enabled ?? false} onStatusChanged={refreshProfile} />
+
+        {/* ── Personal Access Tokens (PATs) ── */}
+        <PatManagement />
 
         {/* ── Pending Deletion Notice ── */}
         <DeletionPendingNotice expiresAt={profile.deletion?.pending ? (profile.deletion.expires_at ?? null) : null} />

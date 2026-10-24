@@ -406,6 +406,7 @@ export interface UserProfile {
   consents?: Record<string, boolean>;
   roles?: string[];
   permissions?: string[];
+  totp_enabled?: boolean;
   created_at?: string;
 }
 

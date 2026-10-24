@@ -39,6 +39,7 @@ from app.db.auth import (  # noqa: F401
     ConsentRecord,
     OAuthExchangeCode,
     Permission,
+    PersonalAccessToken,
     Role,
     TokenBlocklist,
     User,

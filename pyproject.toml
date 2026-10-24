@@ -25,6 +25,7 @@ dependencies = [
     "flask-limiter",
     "Flask-Caching",
     "bleach",
+    "pyotp>=2.9.0",
 ]
 
 [project.optional-dependencies]
