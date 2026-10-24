@@ -80,7 +80,7 @@ def _get_route_tag(path: str) -> str:
 
 def create_spec() -> APISpec:
     """Build the base OpenAPI 3.1 schema context with security and component definitions."""
-    version = getattr(Config, "VERSION", "0.9.3")
+    version = current_app.config.get("APP_VERSION") or getattr(Config, "VERSION", "0.9.3")
     spec = APISpec(
         title="iqoqo API",
         version=version,
