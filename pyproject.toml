@@ -26,6 +26,7 @@ dependencies = [
     "Flask-Caching",
     "bleach",
     "pyotp>=2.9.0",
+    "boardgamegeek>=0.13.0",
 ]
 
 [project.optional-dependencies]
