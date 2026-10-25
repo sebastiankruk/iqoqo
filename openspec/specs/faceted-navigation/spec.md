@@ -283,3 +283,12 @@ The faceted navigation SHALL allow users to filter manifestations by their owner
 
 - **WHEN** a user navigates to the Items view
 - **THEN** the Ownership facet is hidden or removed, as ownership filtering only applies to higher-level entities (Manifestations, Expressions, Works) whose ownership is inferred from personal Item holdings.
+
+### Requirement: Global Scope Preservation on Collection Facet Counts
+
+When an authenticated user selects the `"all"` or `"global"` ("Whole Library") scope on `/collection`, the frontend SHALL pass `"global"` (rather than `"user"`) to `useFacetStats` and `GET /api/stats/facets` so sidebar facet counts reflect the entire library catalog.
+
+#### Scenario: Authenticated user switches Collection scope to Whole Library
+
+- **WHEN** a logged-in user switches `currentScope` on `/collection` to `"all"` or `"global"`
+- **THEN** `useFacetStats` requests `GET /api/stats/facets?scope=global` (or `scope=all`) instead of coercing the scope to `"user"`
