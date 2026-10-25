@@ -53,6 +53,9 @@ export function TransitionEventsListener() {
             queryClient.invalidateQueries({ queryKey: ["stats"] });
             queryClient.invalidateQueries({ queryKey: ["items"] });
             queryClient.invalidateQueries({ queryKey: ["manifestations"] });
+            queryClient.invalidateQueries({ queryKey: ["facetStats"] });
+            queryClient.invalidateQueries({ queryKey: ["globalStats"] });
+            queryClient.invalidateQueries({ queryKey: ["collectionGrid"] });
           }
         } catch {
           // Ignore ping or malformed event payloads

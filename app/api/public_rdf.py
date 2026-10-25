@@ -758,7 +758,7 @@ def get_public_user_followers(username: str) -> Response | tuple[Response, int]:
     local_friend_ids = get_friend_user_ids(user.id)
     friends: list[User] = []
     if local_friend_ids:
-        friends_stmt = select(User).where(User.id.in_(local_friend_ids))
+        friends_stmt = select(User).where(User.id.in_(local_friend_ids), User.visibility == "public")
         friends = list(db.session.execute(friends_stmt).scalars().all())
 
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()

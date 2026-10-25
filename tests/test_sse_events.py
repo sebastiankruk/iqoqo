@@ -93,3 +93,41 @@ def test_publish_transition_event_delivers_to_subscriber(app):
         parsed = json.loads(chunk.replace("data: ", "").strip())
         assert parsed["event"] == "item_updated"
         assert parsed["data"]["item_id"] == 999
+
+
+def test_sse_user_isolation_and_timeout_bounds(app, client, auth_user):
+    """Verify user-scoped events are filtered to owner/borrower and timeout is clamped."""
+    from app.core.events import subscribe_events
+
+    with app.app_context():
+        stream_a = subscribe_events(timeout_seconds=2.0, user_id="user-a")
+        stream_b = subscribe_events(timeout_seconds=2.0, user_id="user-b")
+
+        assert ": connected" in next(stream_a)
+        assert ": connected" in next(stream_b)
+
+        # 1. Publish private item event for user-a
+        publish_transition_event("item_created", {"item_id": 101, "user_id": "user-a"})
+
+        chunk_a = next(stream_a)
+        assert "data: " in chunk_a
+        parsed_a = json.loads(chunk_a.replace("data: ", "").strip())
+        assert parsed_a["event"] == "item_created"
+        assert parsed_a["data"]["user_id"] == "user-a"
+
+        # 2. Publish global event
+        publish_transition_event("fts_reindexed", {"entity_type": "item", "id": 101})
+
+        chunk_b = next(stream_b)
+        assert "data: " in chunk_b
+        parsed_b = json.loads(chunk_b.replace("data: ", "").strip())
+        # user-b must receive fts_reindexed directly, skipping user-a's private item_created
+        assert parsed_b["event"] == "fts_reindexed"
+
+    # 3. Requesting unbounded / non-finite timeout via HTTP endpoint is handled safely
+    headers = {"Authorization": f"Bearer {auth_user['token']}"}
+    res_inf = client.get("/api/v1/events/stream?timeout=inf", headers=headers)
+    assert res_inf.status_code == 200
+
+    res_huge = client.get("/api/v1/events/stream?timeout=999999", headers=headers)
+    assert res_huge.status_code == 200

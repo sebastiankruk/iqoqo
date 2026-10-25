@@ -309,6 +309,8 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
                 {
                     "item_id": item.id,
                     "status": "lent",
+                    "owner_id": str(item.owner_id) if item.owner_id else None,
+                    "user_id": str(item.owner_id) if item.owner_id else None,
                     "borrower_id": str(loan_request.requester_id) if loan_request.requester_id else None,
                 },
             )
@@ -425,6 +427,9 @@ def return_loaned_item(item_id: int) -> Response | tuple[Response, int]:
         {
             "item_id": item.id,
             "status": "available",
+            "owner_id": str(item.owner_id) if item.owner_id else None,
+            "user_id": str(item.owner_id) if item.owner_id else None,
+            "borrower_id": str(old_borrower_id) if old_borrower_id else None,
         },
     )
 

@@ -112,7 +112,13 @@
     "user_setup_failed": "Failed to create your account. Please try again or contact support.",
     "jwt_generation_failed": "Session creation failed. Please try again.",
     "MissingToken": "Authentication token was missing. Please try signing in again.",
-    "oauth_not_configured": "Google sign-in is not configured on this instance. Please use email and password."
+    "oauth_not_configured": "Google sign-in is not configured on this instance. Please use email and password.",
+    "twoFactorTitle": "Two-Factor Authentication",
+    "twoFactorDescription": "Enter the 6-digit verification code from your authenticator app or an 8-character recovery code.",
+    "otpPlaceholder": "123456 or recovery code",
+    "verifyButton": "Verify & Sign In",
+    "cancel": "Cancel",
+    "invalidOtp": "Invalid two-factor authentication code"
   },
   "Register": {
     "title": "Create an account",

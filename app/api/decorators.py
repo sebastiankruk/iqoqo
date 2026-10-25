@@ -79,9 +79,10 @@ def _extract_bearer_token() -> tuple[str | None, bool]:
     cookie = request.cookies.get("iqoqo_session")
     if cookie:
         return cookie, True
-    token_query = request.args.get("token")
-    if token_query and token_query.strip():
-        return token_query.strip(), False
+    if request.path == "/api/v1/events/stream":
+        token_query = request.args.get("token")
+        if token_query and token_query.strip():
+            return token_query.strip(), False
     return None, False
 
 
@@ -198,6 +199,8 @@ def require_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
+        g.pat = None
+        g.pat_scopes = None
         token, from_cookie = _extract_bearer_token()
 
         if not token:
@@ -229,8 +232,13 @@ def require_auth(f):
                     if "write:catalog" not in scopes and not any(s.startswith("write:") for s in scopes):
                         return jsonify({"error": "Forbidden", "message": "Scope write:catalog required"}), 403
 
-            pat.last_used_at = datetime.now(UTC)
-            db.session.commit()
+            now = datetime.now(UTC)
+            last_used = pat.last_used_at
+            if last_used is not None and last_used.tzinfo is None:
+                last_used = last_used.replace(tzinfo=UTC)
+            if last_used is None or (now - last_used).total_seconds() >= 60:
+                pat.last_used_at = now
+                db.session.commit()
 
             g.user_id = user_id
             g.authenticated_via_cookie = False
@@ -280,6 +288,8 @@ def optional_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
+        g.pat = None
+        g.pat_scopes = None
         token, from_cookie = _extract_bearer_token()
 
         g.user_id = None
@@ -597,6 +607,10 @@ def admin_required(f):
         if not user_id:
             return jsonify({"success": False, "error": "Authentication required"}), 401
 
+        pat_scopes = getattr(g, "pat_scopes", None)
+        if pat_scopes is not None and not any(s in {"admin", "*"} for s in pat_scopes):
+            return jsonify({"success": False, "error": "Admin privileges required"}), 403
+
         user = db.session.get(User, user_id)
         is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
         if not is_admin:
@@ -617,6 +631,10 @@ def admin_or_custodian_required(f):
         user_id = getattr(g, "user_id", None)
         if not user_id:
             return jsonify({"success": False, "error": "Authentication required"}), 401
+
+        pat_scopes = getattr(g, "pat_scopes", None)
+        if pat_scopes is not None and not any(s in {"admin", "*", "curator"} for s in pat_scopes):
+            return jsonify({"success": False, "error": "Admin or curator privileges required"}), 403
 
         user = db.session.get(User, user_id)
         is_authorized = any(role.name in {"admin", "contributor", "custodian"} for role in getattr(user, "roles", [])) if user else False

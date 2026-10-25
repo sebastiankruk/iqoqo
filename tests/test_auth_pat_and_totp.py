@@ -86,7 +86,11 @@ def test_pat_create_and_bearer_auth(client, auth_user):
 def test_pat_pagination_and_revocation(client, auth_user):
     """Verify listing PATs with limit/offset and revoking tokens."""
     # Create two PATs
-    res1 = client.post("/api/auth/tokens", headers=auth_user["headers"], json={"name": "Token 1", "scopes": ["*"]})
+    res1 = client.post(
+        "/api/auth/tokens",
+        headers=auth_user["headers"],
+        json={"name": "Token 1", "scopes": ["read:catalog", "write:catalog"]},
+    )
     token1_data = json.loads(res1.data)
     token1_raw = token1_data["token"]
     token1_id = token1_data["data"]["id"]
@@ -153,6 +157,11 @@ def test_totp_enrollment_verify_and_login_challenge(client, auth_user):
     status_res2 = client.get("/api/auth/2fa/status", headers=auth_user["headers"])
     assert json.loads(status_res2.data)["enabled"] is True
 
+    # Re-enrolling while 2FA is already enabled must return 400 Bad Request
+    re_enroll = client.post("/api/auth/2fa/enroll", headers=auth_user["headers"])
+    assert re_enroll.status_code == 400
+    assert b"2FA is already enabled" in re_enroll.data
+
     # 3. Test Login Challenge
     # Attempt login without OTP code -> should trigger mfa_required
     login_step1 = client.post(
@@ -210,3 +219,108 @@ def test_totp_enrollment_verify_and_login_challenge(client, auth_user):
     assert direct_login.status_code == 200
     assert "token" in json.loads(direct_login.data)
     assert "mfa_required" not in json.loads(direct_login.data)
+
+
+def test_pat_cannot_manage_tokens_or_2fa(client, auth_user):
+    """Verify Personal Access Tokens cannot access token management or 2FA endpoints."""
+    # Create a PAT
+    res = client.post(
+        "/api/auth/tokens",
+        headers=auth_user["headers"],
+        json={"name": "Sub-agent Token", "scopes": ["read:catalog", "write:catalog"]},
+    )
+    assert res.status_code == 201
+    pat_token = json.loads(res.data)["token"]
+    pat_headers = {"Authorization": f"Bearer {pat_token}"}
+
+    # Attempting to list tokens with PAT -> 403
+    assert client.get("/api/auth/tokens", headers=pat_headers).status_code == 403
+
+    # Attempting to create tokens with PAT -> 403
+    assert client.post("/api/auth/tokens", headers=pat_headers, json={"name": "Nested"}).status_code == 403
+
+    # Attempting to access 2FA status with PAT -> 403
+    assert client.get("/api/auth/2fa/status", headers=pat_headers).status_code == 403
+
+    # Attempting to enroll 2FA with PAT -> 403
+    assert client.post("/api/auth/2fa/enroll", headers=pat_headers).status_code == 403
+
+
+def test_pat_scope_validation_and_admin_bypass_prevention(client, app, auth_user):
+    """Verify non-admin cannot mint admin scopes and read:catalog PAT cannot bypass @admin_required."""
+    # 1. Non-admin requesting 'admin' or '*' scope -> 403
+    res_admin = client.post(
+        "/api/auth/tokens",
+        headers=auth_user["headers"],
+        json={"name": "Hacker Token", "scopes": ["admin"]},
+    )
+    assert res_admin.status_code == 403
+    assert b"Admin scope requires admin role" in res_admin.data
+
+    res_star = client.post(
+        "/api/auth/tokens",
+        headers=auth_user["headers"],
+        json={"name": "Hacker Token Star", "scopes": ["*"]},
+    )
+    assert res_star.status_code == 403
+
+    # 2. Invalid expires_in_days (0 or negative) -> 400
+    res_exp = client.post(
+        "/api/auth/tokens",
+        headers=auth_user["headers"],
+        json={"name": "Bad Expiry", "expires_in_days": 0},
+    )
+    assert res_exp.status_code == 400
+
+    # 3. Create an admin user and mint both read:catalog and admin PATs
+    with app.app_context():
+        admin_role = Role.query.filter_by(name="admin").first()
+        if not admin_role:
+            admin_role = Role(name="admin")
+            db.session.add(admin_role)
+        admin_user = User(
+            email="admin_pat_test@iqoqo.local",
+            display_name="Admin PAT User",
+            public_username="adminpat",
+            is_active=True,
+        )
+        admin_user.roles.append(admin_role)
+        admin_user.set_password("AdminPass1234!")
+        db.session.add(admin_user)
+        db.session.commit()
+
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"email": "admin_pat_test@iqoqo.local", "password": "AdminPass1234!"},
+    )
+    admin_jwt = json.loads(admin_login.data)["token"]
+    admin_jwt_headers = {"Authorization": f"Bearer {admin_jwt}"}
+
+    # Admin mints read:catalog PAT
+    res_read_pat = client.post(
+        "/api/auth/tokens",
+        headers=admin_jwt_headers,
+        json={"name": "Gemini Reader", "scopes": ["read:catalog"]},
+    )
+    assert res_read_pat.status_code == 201
+    read_pat = json.loads(res_read_pat.data)["token"]
+    read_pat_headers = {"Authorization": f"Bearer {read_pat}"}
+
+    # read:catalog PAT on GET /api/admin/stats MUST BE 403
+    admin_route_res = client.get("/api/admin/stats", headers=read_pat_headers)
+    assert admin_route_res.status_code == 403
+    assert b"Admin privileges required" in admin_route_res.data
+
+    # Admin mints admin PAT
+    res_admin_pat = client.post(
+        "/api/auth/tokens",
+        headers=admin_jwt_headers,
+        json={"name": "Admin CLI", "scopes": ["admin"]},
+    )
+    assert res_admin_pat.status_code == 201
+    admin_pat = json.loads(res_admin_pat.data)["token"]
+    admin_pat_headers = {"Authorization": f"Bearer {admin_pat}"}
+
+    # admin PAT on GET /api/admin/stats MUST BE 200
+    admin_route_ok = client.get("/api/admin/stats", headers=admin_pat_headers)
+    assert admin_route_ok.status_code == 200

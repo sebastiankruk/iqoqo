@@ -176,7 +176,7 @@ def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
                     "configured": True,
                     "active": False,
                     "reason": f"auth_failure_{response.status_code}",
-                    "error": response.text,
+                    "error": response.text[:200] if response.text else "Twitch authentication failure",
                 }
             response.raise_for_status()
             new_tokens = response.json()

@@ -587,10 +587,20 @@ def allegro_device_token():
 # ---------------------------------------------------------------------------
 
 
+def _reject_pat_auth():
+    """Reject requests authenticated via Personal Access Tokens for token/2FA management."""
+    if getattr(g, "pat", None) is not None:
+        return jsonify({"error": "Personal access tokens cannot manage tokens or 2FA settings"}), 403
+    return None
+
+
 @auth_bp.route("/2fa/status", methods=["GET"])
 @require_auth
 def get_2fa_status():
     """Return whether 2FA is enabled for the authenticated user."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
     user = db.session.get(User, g.user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -607,9 +617,16 @@ def enroll_2fa():
     import pyotp
     import qrcode
 
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
     user = db.session.get(User, g.user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
+
+    if user.totp_enabled:
+        return jsonify({"error": "2FA is already enabled. Disable 2FA before re-enrolling."}), 400
 
     secret = pyotp.random_base32()
     totp = pyotp.TOTP(secret)
@@ -647,9 +664,14 @@ def enroll_2fa():
 
 
 @auth_bp.route("/2fa/verify", methods=["POST"])
+@limiter.limit("10 per minute")
 @require_auth
 def verify_2fa():
     """Verify a TOTP code and finalize enabling 2FA."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
     user = db.session.get(User, g.user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -668,9 +690,14 @@ def verify_2fa():
 
 
 @auth_bp.route("/2fa/disable", methods=["POST"])
+@limiter.limit("10 per minute")
 @require_auth
 def disable_2fa():
     """Disable 2FA after validating user password or a valid 2FA/recovery code."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
     user = db.session.get(User, g.user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -704,8 +731,21 @@ def disable_2fa():
 @require_auth
 def list_tokens():
     """List personal access tokens for the authenticated user with SQL pagination."""
-    limit = min(int(request.args.get("limit", 20)), 100)
-    offset = max(int(request.args.get("offset", 0)), 0)
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    try:
+        raw_limit = int(request.args.get("limit", 20))
+        raw_offset = int(request.args.get("offset", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Limit and offset must be integers"}), 400
+
+    if raw_limit < 1 or raw_offset < 0:
+        return jsonify({"error": "Limit must be >= 1 and offset must be >= 0"}), 400
+
+    limit = min(raw_limit, 100)
+    offset = raw_offset
 
     stmt = (
         db.select(PersonalAccessToken)
@@ -736,6 +776,10 @@ def list_tokens():
 @require_auth
 def create_token():
     """Create a new personal access token and return plaintext token once."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     if not name:
@@ -747,18 +791,29 @@ def create_token():
     if not isinstance(scopes, list) or not all(isinstance(s, str) for s in scopes):
         return jsonify({"error": "Scopes must be a list of strings"}), 400
 
-    valid_standard = {"read:catalog", "write:catalog", "admin", "*"}
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    is_admin = any(role.name == "admin" for role in getattr(user, "roles", []))
+
+    valid_standard = {"read:catalog", "write:catalog", "write:inventory", "sparql:query", "admin", "*"}
     for s in scopes:
         if s not in valid_standard and not any(s == p.value for p in PermissionName):
             return jsonify({"error": f"Invalid scope: {s}"}), 400
+        if s in {"admin", "*"} and not is_admin:
+            return jsonify({"error": "Admin scope requires admin role"}), 403
+        if any(s == p.value for p in PermissionName) and not (is_admin or user.has_permission(s)):
+            return jsonify({"error": f"Caller lacks permission for scope {s}"}), 403
 
     expires_in_days = data.get("expires_in_days")
     expires_at = None
     if expires_in_days is not None:
         try:
             days = int(expires_in_days)
-            if days > 0:
-                expires_at = datetime.now(UTC) + timedelta(days=days)
+            if days <= 0:
+                return jsonify({"error": "expires_in_days must be a positive integer"}), 400
+            expires_at = datetime.now(UTC) + timedelta(days=days)
         except (ValueError, TypeError):
             return jsonify({"error": "Invalid expires_in_days"}), 400
 
@@ -789,6 +844,10 @@ def create_token():
 @require_auth
 def revoke_token(token_id: int):
     """Revoke an active personal access token."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
     pat = db.session.execute(db.select(PersonalAccessToken).filter_by(id=token_id, user_id=g.user_id)).scalar_one_or_none()
 
     if not pat:

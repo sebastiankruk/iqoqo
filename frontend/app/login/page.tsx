@@ -49,6 +49,10 @@ function LoginPageContent() {
   const isGoogleEnabled = providers?.google ?? false;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
   const errorCode = searchParams.get("error");
   let errorMessage: string | null = null;
@@ -70,29 +74,48 @@ function LoginPageContent() {
    */
   const handleLocalLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    setFormError(null);
+    setIsLoading(true);
 
-    if (res.ok) {
-      const data = await res.json();
-      const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-      // Exchange token in BFF via POST body — sets httpOnly session cookie
-      const exchangeRes = await fetch(`/api/auth-exchange`, {
+    try {
+      const payload: Record<string, string> = { email, password };
+      if (mfaRequired && otpCode.trim()) {
+        payload.otp_code = otpCode.trim();
+      }
+
+      const res = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: data.token, callbackUrl }),
+        body: JSON.stringify(payload),
       });
-      if (exchangeRes?.ok) {
-        const result = await exchangeRes.json().catch(() => ({}));
-        router.push(result.redirectUrl || callbackUrl || "/");
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        if (data.mfa_required) {
+          setMfaRequired(true);
+          return;
+        }
+
+        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+        // Exchange token in BFF via POST body — sets httpOnly session cookie
+        const exchangeRes = await fetch(`/api/auth-exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: data.token, callbackUrl }),
+        });
+        if (exchangeRes?.ok) {
+          const result = await exchangeRes.json().catch(() => ({}));
+          router.push(result.redirectUrl || callbackUrl || "/");
+        } else {
+          router.push(callbackUrl || "/");
+        }
       } else {
-        router.push(callbackUrl || "/");
+        setFormError(data?.error || (mfaRequired ? t("invalidOtp") : t("loginFailed")));
+        alert(mfaRequired ? data?.error || t("invalidOtp") : t("loginFailed"));
       }
-    } else {
-      alert(t("loginFailed"));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -101,60 +124,102 @@ function LoginPageContent() {
       <Navbar />
       <main className="flex min-h-screen items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-sm bg-card text-card-foreground">
-          <h1 className="text-2xl font-bold">{t("title")}</h1>
-          {errorMessage && (
-            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{errorMessage}</div>
-          )}
-          {isGoogleEnabled && (
+          {mfaRequired ? (
             <>
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => {
-                  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-                  const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
-                  // OAuth flow requires full page navigation to API endpoint
-                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                  window.location.href = `/api/auth/login/google${cbQuery}`;
-                }}
-              >
-                {t("googleSignIn")}
-              </Button>
-              <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
-                <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
-              </div>
+              <h1 className="text-2xl font-bold">{t("twoFactorTitle")}</h1>
+              <p className="text-sm text-muted-foreground">{t("twoFactorDescription")}</p>
+              {formError && (
+                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{formError}</div>
+              )}
+              <form onSubmit={handleLocalLogin} className="space-y-4">
+                <input
+                  type="text"
+                  name="otpCode"
+                  autoComplete="one-time-code"
+                  placeholder={t("otpPlaceholder")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value)}
+                  autoFocus
+                />
+                <Button type="submit" className="w-full" disabled={isLoading || !otpCode.trim()}>
+                  {isLoading ? "..." : t("verifyButton")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setMfaRequired(false);
+                    setOtpCode("");
+                    setFormError(null);
+                  }}
+                >
+                  {t("cancel")}
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold">{t("title")}</h1>
+              {errorMessage && (
+                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{errorMessage}</div>
+              )}
+              {formError && (
+                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{formError}</div>
+              )}
+              {isGoogleEnabled && (
+                <>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => {
+                      const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+                      const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
+                      // OAuth flow requires full page navigation to API endpoint
+                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                      window.location.href = `/api/auth/login/google${cbQuery}`;
+                    }}
+                  >
+                    {t("googleSignIn")}
+                  </Button>
+                  <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
+                    <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
+                  </div>
+                </>
+              )}
+              <form onSubmit={handleLocalLogin} className="space-y-4">
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  placeholder={t("emailPlaceholder")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+                <input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  placeholder={t("passwordPlaceholder")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+                <Button type="submit" className="w-full" variant="ghost" disabled={isLoading}>
+                  {isLoading ? "..." : t("signInButton")}
+                </Button>
+
+                <div className="text-center text-sm pt-4">
+                  {t("noAccount")}
+                  <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+                    {t("signUp")}
+                  </Link>
+                </div>
+              </form>
             </>
           )}
-          <form onSubmit={handleLocalLogin} className="space-y-4">
-            <input
-              type="email"
-              name="email"
-              autoComplete="email"
-              placeholder={t("emailPlaceholder")}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              placeholder={t("passwordPlaceholder")}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-            <Button type="submit" className="w-full" variant="ghost">
-              {t("signInButton")}
-            </Button>
-
-            <div className="text-center text-sm pt-4">
-              {t("noAccount")}
-              <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-                {t("signUp")}
-              </Link>
-            </div>
-          </form>
         </div>
       </main>
       <Footer />

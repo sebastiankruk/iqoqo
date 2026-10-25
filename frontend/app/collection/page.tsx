@@ -356,7 +356,13 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
-    f.scope = isLoggedIn ? (currentScope === "friends" ? "friends" : "user") : "global";
+    f.scope = isLoggedIn
+      ? currentScope === "all" || currentScope === "global"
+        ? "global"
+        : currentScope === "friends"
+          ? "friends"
+          : "user"
+      : "global";
     f.view = viewMode;
     return f;
   }, [
@@ -378,7 +384,13 @@ function CollectionContent() {
     currentScope,
   ]);
 
-  const facetStatsScope = isLoggedIn ? (currentScope === "friends" ? "friends" : "user") : "global";
+  const facetStatsScope = isLoggedIn
+    ? currentScope === "all" || currentScope === "global"
+      ? "global"
+      : currentScope === "friends"
+        ? "friends"
+        : "user"
+    : "global";
   const {
     data: facetStatsData,
     isError: facetStatsError,

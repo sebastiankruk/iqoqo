@@ -98,7 +98,7 @@ def upgrade():
             "ix_auth_personal_access_tokens_token_hash" if is_pg else "ix_personal_access_tokens_token_hash",
             "personal_access_tokens",
             ["token_hash"],
-            unique=False,
+            unique=True,
             schema=auth_schema,
         )
 

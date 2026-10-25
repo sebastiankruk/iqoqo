@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Pre-Release Critical Fixes & Security Hardening (C87b)**:
+  - Blocked `read:catalog` Personal Access Tokens from accessing `@admin_required` and `@admin_or_custodian_required` routes; required session tokens (`iqo_*` PATs rejected with 403) for token and 2FA management (`/api/auth/tokens*`, `/api/auth/2fa/*`).
+  - Prevented 2FA secret overwrites in `POST /api/auth/2fa/enroll` when 2FA is already active (`400 Bad Request`), and enforced role verification on `"admin"` / `"*"` scope requests in `create_token`.
+  - Added MFA challenge step to `frontend/app/login/page.tsx` with English/Polish translations and Playwright E2E coverage (`pat_and_totp_workflow.spec.ts`).
+  - Isolated Server-Sent Events (SSE) transition stream (`GET /api/v1/events/stream`) by `user_id` to prevent cross-tenant leakage of private item/custody events; clamped timeout bounds; ensured Redis cleanup; and expanded frontend `TransitionEventsListener` invalidations.
+  - Aligned Linked Open Data Item IRIs to `/items/{id}` (plural), repaired `borrower` lookups and visibility guards in `ExportService.build_batch_rdf_graph`, and filtered `User.visibility == "public"` in `get_public_user_followers`.
+  - Preserved `"all"` / `"global"` scope in Collection faceted navigation (`frontend/app/collection/page.tsx`), and restricted active Twitch OAuth probing (`GET /api/system/status?probe=true`) to administrators.
+
 ## [0.9.2] - 2026-10-23
 
 ### Added

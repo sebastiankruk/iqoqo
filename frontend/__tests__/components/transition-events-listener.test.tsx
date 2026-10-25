@@ -94,5 +94,8 @@ describe("TransitionEventsListener", () => {
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["stats"] });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["items"] });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["manifestations"] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["facetStats"] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["globalStats"] });
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["collectionGrid"] });
   });
 });

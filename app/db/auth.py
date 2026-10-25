@@ -595,7 +595,7 @@ class PersonalAccessToken(db.Model):  # type: ignore[name-defined]
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey(f"{_AUTH_PFX}users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     token_prefix = db.Column(db.String(16), nullable=False, index=True)
-    token_hash = db.Column(db.String(64), nullable=False, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
     scopes = db.Column(db.JSON, nullable=False, default=list)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)

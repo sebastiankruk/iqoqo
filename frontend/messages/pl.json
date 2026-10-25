@@ -112,7 +112,13 @@
     "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
     "jwt_generation_failed": "Tworzenie sesji nie powiodło się. Spróbuj ponownie.",
     "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie.",
-    "oauth_not_configured": "Logowanie przez Google nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło."
+    "oauth_not_configured": "Logowanie przez Google nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło.",
+    "twoFactorTitle": "Uwierzytelnianie dwuskładnikowe (2FA)",
+    "twoFactorDescription": "Wprowadź 6-cyfrowy kod z aplikacji uwierzytelniającej lub 8-znakowy kod zapasowy.",
+    "otpPlaceholder": "123456 lub kod zapasowy",
+    "verifyButton": "Zweryfikuj i zaloguj się",
+    "cancel": "Anuluj",
+    "invalidOtp": "Nieprawidłowy kod uwierzytelniania dwuskładnikowego"
   },
   "Register": {
     "title": "Utwórz konto",

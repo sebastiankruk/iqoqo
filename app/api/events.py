@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from collections.abc import Generator
 
-from flask import Blueprint, Response, request, stream_with_context
+from flask import Blueprint, Response, current_app, g, request, stream_with_context
 
 from app.api.decorators import require_auth
 from app.core.events import subscribe_events
@@ -43,11 +44,21 @@ def stream_events() -> Response:
     Clients receive real-time JSON payloads upon entity transitions (status, custody,
     FTS reindexing completion) to invalidate local client caches without polling.
     """
-    timeout = request.args.get("timeout", default=30.0, type=float)
+    try:
+        raw_timeout = float(request.args.get("timeout", 30.0))
+        if not math.isfinite(raw_timeout):
+            timeout = 30.0
+        else:
+            min_bound = 0.1 if current_app and current_app.testing else 1.0
+            timeout = max(min_bound, min(raw_timeout, 60.0))
+    except (ValueError, TypeError):
+        timeout = 30.0
+
+    user_id = str(g.user_id) if getattr(g, "user_id", None) else None
 
     def generate() -> Generator[str, None, None]:
         yield f"data: {json.dumps({'event': 'connected', 'status': 'connected'})}\n\n"
-        yield from subscribe_events(timeout_seconds=timeout)
+        yield from subscribe_events(timeout_seconds=timeout, user_id=user_id)
 
     return Response(
         stream_with_context(generate()),

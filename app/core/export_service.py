@@ -118,13 +118,17 @@ class ExportService:
 
         for item in items:
             if getattr(item, "lent_to_user_id", None):
-                holder = getattr(item, "lent_to_user", None) or (
-                    db.session.get(User, item.lent_to_user_id) if hasattr(db, "session") else None
-                )
-                if holder and getattr(holder, "visibility", "private") != "private":
-                    holder_name = getattr(holder, "public_username", None) or str(holder.id)
-                    holder_uri = URIRef(f"{base_url}/u/{holder_name}")
-                    graph.add((URIRef(f"{base_url}/item/{item.id}"), IQOQO.custodyHolder, holder_uri))
+                is_item_public = not getattr(item, "is_hidden", False) and getattr(item, "visibility", "private") != "private"
+                if is_item_public:
+                    holder = (
+                        getattr(item, "borrower", None)
+                        or getattr(item, "lent_to_user", None)
+                        or (db.session.get(User, item.lent_to_user_id) if hasattr(db, "session") else None)
+                    )
+                    if holder and getattr(holder, "visibility", "private") == "public":
+                        holder_name = getattr(holder, "public_username", None) or str(holder.id)
+                        holder_uri = URIRef(f"{base_url}/u/{holder_name}")
+                        graph.add((URIRef(f"{base_url}/items/{item.id}"), IQOQO.custodyHolder, holder_uri))
 
         return graph
 
@@ -171,9 +175,10 @@ class ExportService:
                 from app.core.friend_service import get_friend_user_ids
 
                 friend_ids = get_friend_user_ids(resolved_uid)
-                for f_id in friend_ids:
-                    f_user = db.session.get(User, f_id)
-                    if f_user:
+                if friend_ids:
+                    friends_stmt = select(User).where(User.id.in_(friend_ids), User.visibility != "private")
+                    friends = db.session.execute(friends_stmt).scalars().all()
+                    for f_user in friends:
                         f_name = f_user.public_username or str(f_user.id)
                         f_uri = URIRef(f"{resolved_base_url}/u/{f_name}")
                         graph.add((user_uri, FOAF.knows, f_uri))

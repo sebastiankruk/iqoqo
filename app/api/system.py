@@ -155,6 +155,11 @@ def get_system_status():
     from app.utils.igdb import get_igdb_token_status
 
     probe_remote = request.args.get("probe", "false").lower() in ("1", "true", "yes")
+    if probe_remote:
+        user = db.session.get(User, g.user_id) if getattr(g, "user_id", None) else None
+        is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
+        if not is_admin:
+            probe_remote = False
 
     allegro_status = get_allegro_token_status()
     igdb_status = get_igdb_token_status(probe_remote=probe_remote)

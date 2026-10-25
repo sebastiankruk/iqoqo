@@ -1130,6 +1130,20 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         db.session.commit()
         # A new item changes this user's facet counts.
         invalidate_facets_cache(user_id)
+        from app.core.events import publish_transition_event
+        from app.core.tasks import enqueue_fts_reindex
+
+        enqueue_fts_reindex("item", item.id)
+        publish_transition_event(
+            "item_created",
+            {
+                "item_id": item.id,
+                "manifestation_id": manifestation.id,
+                "user_id": str(user_id) if user_id else None,
+                "status": item.status,
+                "collection_status": item.collection_status,
+            },
+        )
         return jsonify(
             {
                 "success": True,

@@ -1062,6 +1062,7 @@ def test_export_service_export_rdf_social_and_custody(app):
             owner_id=user1.id,
             manifestation_id=mani.id,
             status="lent",
+            visibility="public",
             lent_to_user_id=user2.id,
         )
         db.session.add(item)
@@ -1073,7 +1074,7 @@ def test_export_service_export_rdf_social_and_custody(app):
 
         u1_uri = URIRef("http://testserver/u/export_u1")
         u2_uri = URIRef("http://testserver/u/export_u2")
-        item_uri = URIRef(f"http://testserver/item/{item.id}")
+        item_uri = URIRef(f"http://testserver/items/{item.id}")
 
         assert (u1_uri, FOAF.knows, u2_uri) in g
         assert (item_uri, IQOQO.custodyHolder, u2_uri) in g
