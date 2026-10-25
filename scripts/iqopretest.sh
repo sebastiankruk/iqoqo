@@ -137,6 +137,8 @@ make preview-down
 make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version
+echo "waiting 30 seconds for iqoqo to start"
+sleep 30
 make status preview
 
 # 6. Run automated federation verification if federation pair is active
