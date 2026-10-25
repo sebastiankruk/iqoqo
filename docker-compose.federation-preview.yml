@@ -85,7 +85,9 @@ services:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-preview}
     restart: always
     environment:
-      - NEXT_PUBLIC_API_URL=${PEER_BASE_URL:-http://localhost:5005}/api
+      - FLASK_API_URL=http://peer-web:5000/api
+      - NEXT_PUBLIC_API_URL=${PEER_NEXT_PUBLIC_API_URL:-/api}
+      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-http://localhost:3001}
       - PORT=3000
     ports:
       - "${PEER_FRONTEND_PORT:-3001}:3000"
