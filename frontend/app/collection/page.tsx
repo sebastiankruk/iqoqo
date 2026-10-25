@@ -120,7 +120,9 @@ function CollectionContent() {
 
   const initialViewMode = parsedViewMode as "items" | "manifestations" | "works" | "expressions" | "roadmap";
 
-  const currentScope = (searchParams?.get("scope") as "personal" | "friends" | "global") || "personal";
+  const rawScope = searchParams?.get("scope");
+  const currentScope: "personal" | "friends" | "global" =
+    rawScope === "global" || rawScope === "all" ? "global" : rawScope === "friends" ? "friends" : "personal";
 
   const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
     initialViewMode
@@ -357,7 +359,7 @@ function CollectionContent() {
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
     f.scope = isLoggedIn
-      ? currentScope === "all" || currentScope === "global"
+      ? currentScope === "global"
         ? "global"
         : currentScope === "friends"
           ? "friends"
@@ -385,7 +387,7 @@ function CollectionContent() {
   ]);
 
   const facetStatsScope = isLoggedIn
-    ? currentScope === "all" || currentScope === "global"
+    ? currentScope === "global"
       ? "global"
       : currentScope === "friends"
         ? "friends"
