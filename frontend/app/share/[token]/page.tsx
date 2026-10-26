@@ -52,9 +52,7 @@ interface SharedCollectionResponse {
 }
 
 type SharedCollectionResult =
-  | { kind: "success"; response: SharedCollectionResponse }
-  | { kind: "not-found" }
-  | { kind: "error" };
+  { kind: "success"; response: SharedCollectionResponse } | { kind: "not-found" } | { kind: "error" };
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;

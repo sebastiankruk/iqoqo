@@ -102,8 +102,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
   const isPuzzle = isPuzzleFormat(format);
 
   const trackList = meta["track_list"] as
-    | Array<{ position: string; title: string; duration_seconds: number }>
-    | undefined;
+    Array<{ position: string; title: string; duration_seconds: number }> | undefined;
 
   // Fallback extra entries using stage-1 filter when no server display projection is present
   const fallbackEntries = Object.entries(meta)

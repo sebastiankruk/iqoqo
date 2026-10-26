@@ -44,6 +44,10 @@ export default function HelpArticleDetailPage() {
     notFound();
   }
 
+  const rawContent = article.content[locale];
+  // Strip redundant leading H1 title if present in markdown content
+  const content = rawContent.replace(/^#\s+[^\n]+\n+/, "");
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar />
@@ -67,7 +71,7 @@ export default function HelpArticleDetailPage() {
 
         <div className="border-t border-border pt-6">
           <article className="prose dark:prose-invert max-w-none">
-            <RichText content={article.content[locale]} />
+            <RichText content={content} />
           </article>
         </div>
       </main>

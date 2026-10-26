@@ -14,6 +14,28 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Auth Hardening, PAT Scoping & SSE Stream Isolation (Release 0.9.3 - October 2026)
+
+#### Personal Access Token (PAT) Security Model
+
+- **One-Way Cryptographic Hashing at Rest**: Personal Access Tokens use an `iqo_` prefix for gitleaks detection and high-entropy random generation (`secrets.token_urlsafe(32)`). Only the SHA-256 hash is persisted in `auth.personal_access_tokens`; the plaintext token is shown only once upon creation and cannot be recovered if lost.
+- **Session-Only Token Route Protection**: PATs (`iqo_*`) are strictly rejected on token and 2FA management routes (`/api/auth/tokens*` and `/api/auth/2fa/*`). Attempting to manage tokens or 2FA using a PAT results in an immediate `403 Forbidden` (`"Personal access tokens cannot be used to manage tokens"`).
+- **Administrative Scope Verification**: Tokens requesting `admin` or wildcard `*` scopes require the calling user to hold the `admin` role, and standard catalog tokens are rejected when accessing `@admin_required` or `@admin_or_custodian_required` endpoints.
+
+#### Two-Factor Authentication (TOTP 2FA) & Recovery Codes
+
+- **Symmetric Encryption of TOTP Secrets**: In accordance with the iqoqo cryptographic standard, TOTP base32 secrets are encrypted at rest using symmetric Fernet encryption keyed from `SECRET_KEY`.
+- **Single-Use Recovery Codes**: Enrollment generates 8 cryptographic single-use recovery codes stored as SHA-256 hashes. Used recovery codes are immediately consumed and removed from storage.
+- **Re-Enrollment Protection**: `POST /api/auth/2fa/enroll` rejects attempts to re-enroll an account that already has active 2FA (`400 Bad Request`), preventing unauthorized overwrite of active credentials.
+
+#### Server-Sent Events (SSE) Multi-Tenant Stream Isolation
+
+- **Per-User Event Stream Scoping**: The real-time transition stream (`GET /api/v1/events/stream`) strictly scopes Redis event fan-out to the authenticated `g.user_id`. Private catalog transitions, lending events, and custody changes are never broadcast across tenants.
+
+#### Supply Chain & Dependency Hardening
+
+- **Upgraded Next.js and Transitive Dependencies**: Resolved 18 Dependabot alerts across root and frontend workspaces: updated Next.js (16.3.8 -> 16.4.3, addressing SVG image optimization and cache RCE advisories), Zod (^4.3.6 -> ^4.6.6), Happy-DOM (^20.8.9 -> ^21.0.4), and locked secure revisions for `fast-uri` (>= 3.1.9) and `undici` (>= 7.30.1).
+
 ### Federation S2S & Catalog Access Hardening (Release 0.9.1 - October 2026)
 
 #### ActivityPub S2S Spoofing & Replay Mitigation

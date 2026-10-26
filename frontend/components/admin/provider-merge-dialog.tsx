@@ -123,8 +123,7 @@ function extractProviderField(providerData: unknown, fieldKey: string): string |
   if (!providerData || typeof providerData !== "object") return undefined;
   const pData = providerData as Record<string, unknown>;
   const volumeInfo = (pData.volumeInfo && typeof pData.volumeInfo === "object" ? pData.volumeInfo : undefined) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
 
   switch (fieldKey) {
     case "title":

@@ -47,6 +47,109 @@ JWT in the cookie stays cryptographically valid until it expires unless the
 backend adds its `jti` to the blocklist, so clearing the cookie alone leaves any
 copy of it working.
 
+### Personal Access Tokens (PATs)
+
+For external integrations, developer tools, and AI agents (such as Gemini Custom Gems or custom scripts), users can generate scoped **Personal Access Tokens (PATs)** on their Profile page or via the API:
+
+```http
+POST /api/auth/tokens
+Authorization: Bearer <session_jwt>
+Content-Type: application/json
+
+{
+  "name": "Library Sync Script",
+  "scopes": ["read:catalog", "write:catalog"],
+  "expires_in_days": 90
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "iqo_YOUR_NEW_TOKEN_STRING",
+  "data": {
+    "id": 12,
+    "name": "Library Sync Script",
+    "token_prefix": "iqo_abcd",
+    "scopes": ["read:catalog", "write:catalog"],
+    "created_at": "2026-10-26T12:00:00Z",
+    "expires_at": "2027-01-24T12:00:00Z",
+    "last_used_at": null,
+    "is_active": true
+  }
+}
+```
+
+> [!IMPORTANT]
+> The plaintext token (`iqo_...`) is returned **only once** upon creation. iqoqo stores only a SHA-256 hash of the token at rest.
+
+Use PATs in HTTP requests exactly like session JWTs:
+
+```http
+Authorization: Bearer iqo_YOUR_NEW_TOKEN_STRING
+```
+
+#### PAT Scope Hierarchy & Constraints
+
+| Scope | Allowed Capabilities |
+| :--- | :--- |
+| `read:catalog` | Read-only access to catalog, collections, works, manifestations, and items |
+| `write:catalog` | Create and modify catalog items, manifestations, and works |
+| `write:inventory` | Update physical item holdings, condition, notes, and local barcodes |
+| `sparql:query` | Execute SPARQL queries against public and friend-scoped knowledge graph |
+| `admin` | Full administrative API access (restricted to users holding the `admin` role) |
+| `*` | Superuser wildcard scope (restricted to users holding the `admin` role) |
+
+> [!WARNING]
+> Personal Access Tokens are strictly rejected on session-only management endpoints (such as `/api/auth/tokens*` and `/api/auth/2fa/*`) and require an active user session token (`403 Forbidden`).
+
+### Two-Factor Authentication (TOTP 2FA)
+
+iqoqo supports RFC 6238 TOTP two-factor authentication (compatible with Google Authenticator, Aegis, 1Password, and Bitwarden):
+
+- `GET /api/auth/2fa/status` — Check whether TOTP is enabled and retrieve remaining recovery code count.
+- `POST /api/auth/2fa/enroll` — Begin TOTP setup; returns base32 secret, provisioning URI, and SVG QR code.
+- `POST /api/auth/2fa/verify` — Verify the 6-digit TOTP code and activate 2FA; returns 8 single-use recovery codes.
+- `DELETE /api/auth/2fa/disable` — Disable TOTP (requires current password or valid TOTP code).
+
+When 2FA is enabled on an account, `POST /api/auth/login` returns:
+
+```json
+{
+  "success": true,
+  "mfa_required": true,
+  "user_id": "018f...-uuid"
+}
+```
+
+The client must submit the second factor to `POST /api/auth/login/challenge` with the 6-digit `code` (or a recovery code) to obtain the JWT session tokens.
+
+### Real-Time Transition Events (SSE Stream)
+
+Asynchronous entity transitions and background full-text search indexing updates are streamed in real time via Server-Sent Events (SSE):
+
+```http
+GET /api/v1/events/stream
+Authorization: Bearer <session_jwt>
+Accept: text/event-stream
+```
+
+Streams emit typed transition events:
+
+```text
+event: transition
+data: {"event": "item_transition", "entity_type": "item", "entity_id": 42, "user_id": 1, "timestamp": 1729940400}
+```
+
+Events are strictly isolated by `user_id` to prevent cross-tenant event leakage. Clients disconnect cleanly using standard EventSource lifecycles.
+
+### OpenAPI 3.1 & Interactive Documentation
+
+- **OpenAPI 3.1 Spec (JSON):** `GET /api/docs/openapi.json`
+- **Interactive Swagger UI:** `GET /api/docs/swagger`
+- Covers 100% of application routes, security schemes (`BearerAuth`, `PersonalAccessToken`, `DeployToken`), and FRBR component schemas.
+
 ### Permission Requirements
 
 Access is granted by **permission**, not by role. The `contributor` role holds
