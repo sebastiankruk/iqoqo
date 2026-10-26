@@ -16,10 +16,12 @@
 """Tests for Personal Access Tokens (PATs) and TOTP 2FA authentication."""
 
 import json
+import time
 from datetime import UTC, datetime, timedelta
 
 import pyotp
 import pytest
+from sqlalchemy import select
 
 from app.db.models import PersonalAccessToken, Role, User, db
 
@@ -144,14 +146,18 @@ def test_totp_enrollment_verify_and_login_challenge(client, auth_user):
     fail_res = client.post("/api/auth/2fa/verify", headers=auth_user["headers"], json={"code": "000000"})
     assert fail_res.status_code == 400
 
-    # Generate valid TOTP code
+    # Generate valid TOTP code for enrollment
     totp = pyotp.TOTP(secret)
-    current_code = totp.now()
+    enrollment_code = totp.at(int(time.time()) - 30)
 
     # Verify and enable
-    enable_res = client.post("/api/auth/2fa/verify", headers=auth_user["headers"], json={"code": current_code})
+    enable_res = client.post("/api/auth/2fa/verify", headers=auth_user["headers"], json={"code": enrollment_code})
     assert enable_res.status_code == 200
     assert json.loads(enable_res.data)["enabled"] is True
+
+    # Replay of the enrollment code must fail
+    replay_enable = client.post("/api/auth/2fa/verify", headers=auth_user["headers"], json={"code": enrollment_code})
+    assert replay_enable.status_code == 400
 
     # Check status is now enabled
     status_res2 = client.get("/api/auth/2fa/status", headers=auth_user["headers"])
@@ -195,12 +201,20 @@ def test_totp_enrollment_verify_and_login_challenge(client, auth_user):
     assert used_recovery_res.status_code == 401
 
     # Login with valid TOTP code -> 200
+    valid_code = totp.now()
     valid_totp_login = client.post(
         "/api/auth/login",
-        json={"email": auth_user["email"], "password": auth_user["password"], "otp_code": totp.now()},
+        json={"email": auth_user["email"], "password": auth_user["password"], "otp_code": valid_code},
     )
     assert valid_totp_login.status_code == 200
     new_token = json.loads(valid_totp_login.data)["token"]
+
+    # Replay of valid TOTP code within window must fail (anti-replay)
+    replay_totp_login = client.post(
+        "/api/auth/login",
+        json={"email": auth_user["email"], "password": auth_user["password"], "otp_code": valid_code},
+    )
+    assert replay_totp_login.status_code == 401
 
     # 4. Disable 2FA with password
     disable_res = client.post(

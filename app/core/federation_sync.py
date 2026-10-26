@@ -27,6 +27,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core import frbr_service
+from app.core.federation_discovery import clean_instance_domain
 from app.db import db
 from app.db.core import EntityAuditLog, Expression, Manifestation, Work
 from app.db.federation import FederationInstance, TrustLevel
@@ -361,7 +362,7 @@ def reconcile_activity(activity: dict[str, Any]) -> dict[str, Any]:
         Summary dict of synchronization result.
     """
     actor_uri = activity.get("actor", "")
-    domain = urlparse(actor_uri).hostname or ""
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return {"status": "ignored", "reason": "missing_actor_domain"}
 

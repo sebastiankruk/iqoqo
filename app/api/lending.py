@@ -32,7 +32,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.decorators import require_auth
+from app.core.events import publish_transition_event
 from app.core.limiter import limiter
+from app.core.tasks import enqueue_fts_reindex
 from app.db.auth import User
 from app.db.core import Item, ItemStatusLog
 from app.db.lending import LoanRequest
@@ -300,9 +302,6 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
         db.session.commit()
 
         if action == "approve":
-            from app.core.events import publish_transition_event
-            from app.core.tasks import enqueue_fts_reindex
-
             enqueue_fts_reindex("item", item.id)
             publish_transition_event(
                 "custody_lent",
@@ -417,9 +416,6 @@ def return_loaned_item(item_id: int) -> Response | tuple[Response, int]:
     )
     db.session.add(custody_event)
     db.session.commit()
-
-    from app.core.events import publish_transition_event
-    from app.core.tasks import enqueue_fts_reindex
 
     enqueue_fts_reindex("item", item.id)
     publish_transition_event(

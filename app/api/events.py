@@ -45,14 +45,14 @@ def stream_events() -> Response:
     FTS reindexing completion) to invalidate local client caches without polling.
     """
     try:
-        raw_timeout = float(request.args.get("timeout", 30.0))
+        raw_timeout = float(request.args.get("timeout", 20.0))
         if not math.isfinite(raw_timeout):
-            timeout = 30.0
+            timeout = 20.0
         else:
             min_bound = 0.1 if current_app and current_app.testing else 1.0
-            timeout = max(min_bound, min(raw_timeout, 60.0))
+            timeout = max(min_bound, min(raw_timeout, 20.0))
     except (ValueError, TypeError):
-        timeout = 30.0
+        timeout = 20.0
 
     user_id = str(g.user_id) if getattr(g, "user_id", None) else None
 

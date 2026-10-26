@@ -14,7 +14,7 @@ psycopg2-binary==2.9.*
 psycopg[binary]>=3.2,<4
 requests
 defusedxml>=0.7.1
-boardgamegeek>=0.13.0
+boardgamegeek2>=1.0.1
 rdflib==7.*
 pyshacl>=0.26.0
 boto3

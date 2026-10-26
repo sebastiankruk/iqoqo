@@ -21,6 +21,8 @@ import hashlib
 import hmac
 import os
 import secrets
+import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -317,6 +319,38 @@ class Role(db.Model):  # type: ignore[name-defined]
     permissions: Mapped[list[Permission]] = relationship("Permission", secondary=role_permissions, lazy="selectin")
 
 
+_local_used_totp: dict[str, float] = {}
+_local_used_totp_lock = threading.Lock()
+
+
+def _is_totp_replayed(user_id: uuid.UUID, code: str) -> bool:
+    clean_code = code.strip()
+    cache_key = f"totp_used:{user_id}:{clean_code}"
+    now = time.time()
+
+    # Try Flask-Caching if available
+    try:
+        from app.core.cache import cache
+
+        if cache and cache.get(cache_key):
+            return True
+        if cache:
+            cache.set(cache_key, "1", timeout=120)
+    except Exception:
+        pass
+
+    # Thread-safe in-memory fallback
+    with _local_used_totp_lock:
+        expired = [k for k, exp in _local_used_totp.items() if exp < now]
+        for k in expired:
+            _local_used_totp.pop(k, None)
+
+        if cache_key in _local_used_totp:
+            return True
+        _local_used_totp[cache_key] = now + 120.0
+        return False
+
+
 class User(db.Model):  # type: ignore[name-defined]
     """
     Application user.  Supports local password auth as well as Google OAuth.
@@ -488,14 +522,24 @@ class User(db.Model):  # type: ignore[name-defined]
         return False
 
     def verify_totp(self, code: str) -> bool:
-        """Verify a 6-digit TOTP code against the decrypted secret."""
+        """Verify a 6-digit TOTP code against the decrypted secret.
+
+        Rejects replayed codes within the active 90-second acceptance window per RFC 6238 §5.2.
+        """
         secret = self.get_totp_secret()
         if not secret or not code:
             return False
         import pyotp
 
         totp = pyotp.TOTP(secret)
-        return bool(totp.verify(code.strip(), valid_window=1))
+        is_valid = bool(totp.verify(code.strip(), valid_window=1))
+        if not is_valid:
+            return False
+
+        if _is_totp_replayed(self.id, code):
+            return False
+
+        return True
 
     def to_private_dict(self) -> dict:
         """Serialize fields only the account owner may read.

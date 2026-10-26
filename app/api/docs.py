@@ -78,6 +78,64 @@ def _get_route_tag(path: str) -> str:
     return "System"
 
 
+def _infer_param_schema(rule, var: str) -> dict[str, Any]:
+    """Derive accurate OpenAPI schema for path parameter from Werkzeug routing converters."""
+    converters = getattr(rule, "_converters", {})
+    converter = converters.get(var)
+    conv_class = converter.__class__.__name__ if converter else ""
+
+    if conv_class == "IntegerConverter":
+        return {"type": "integer"}
+    if conv_class == "UUIDConverter":
+        return {"type": "string", "format": "uuid"}
+    if conv_class in ("FloatConverter", "NumberConverter"):
+        return {"type": "number"}
+    if conv_class in ("UnicodeConverter", "StringConverter", "PathConverter", "AnyConverter"):
+        if "uuid" in var.lower():
+            return {"type": "string", "format": "uuid"}
+        return {"type": "string"}
+
+    if "uuid" in var.lower():
+        return {"type": "string", "format": "uuid"}
+    if "id" in var.lower() and not any(k in var.lower() for k in ("actor", "guid", "uuid", "identifier", "task", "token")):
+        return {"type": "integer"}
+    return {"type": "string"}
+
+
+def _endpoint_requires_auth(view_func, openapi_path: str) -> bool:
+    """Determine whether an endpoint requires authentication based on function metadata and decorators."""
+    if (
+        openapi_path.startswith("/api/docs")
+        or openapi_path.startswith("/api/public")
+        or openapi_path.startswith("/api/login")
+        or openapi_path.startswith("/api/auth/login")
+        or openapi_path.startswith("/api/auth/register")
+        or openapi_path.startswith("/api/auth/exchange")
+        or openapi_path.startswith("/api/auth/providers")
+        or openapi_path.startswith("/api/auth/callback")
+        or openapi_path.startswith("/api/federation/actor")
+        or openapi_path.startswith("/api/federation/directory")
+        or openapi_path.startswith("/api/federation/instance-info")
+        or openapi_path.startswith("/api/federation/nodeinfo")
+        or openapi_path.startswith("/api/federation/webfinger")
+        or openapi_path.startswith("/health")
+        or openapi_path.startswith("/api/health")
+        or openapi_path.startswith("/.well-known")
+    ):
+        return False
+
+    fn = view_func
+    while fn is not None:
+        if getattr(fn, "_requires_auth", False):
+            return True
+        name = getattr(fn, "__name__", "")
+        if "require_auth" in name or "require_admin" in name or "admin_required" in name or "require_permission" in name:
+            return True
+        fn = getattr(fn, "__wrapped__", None)
+
+    return False
+
+
 def create_spec() -> APISpec:
     """Build the base OpenAPI 3.1 schema context with security and component definitions."""
     version = current_app.config.get("APP_VERSION") or getattr(Config, "VERSION", "0.9.3")
@@ -158,10 +216,10 @@ def create_spec() -> APISpec:
         {
             "type": "object",
             "properties": {
-                "id": {"type": "integer", "description": "Unique user identifier."},
+                "id": {"type": "string", "format": "uuid", "description": "Unique user UUID identifier."},
                 "email": {"type": "string", "format": "email", "description": "User email address."},
                 "username": {"type": ["string", "null"], "description": "Local Fediverse username handle."},
-                "role": {"type": "string", "enum": ["user", "custodian", "admin"], "description": "RBAC permission role."},
+                "role": {"type": "string", "enum": ["user", "custodian", "admin", "contributor"], "description": "RBAC permission role."},
                 "totp_enabled": {"type": "boolean", "description": "True if TOTP two-factor authentication is active."},
                 "default_item_visibility": {
                     "type": "string",
@@ -197,7 +255,18 @@ def create_spec() -> APISpec:
                 "work_id": {"type": "integer", "description": "Parent Work identifier."},
                 "content_type": {
                     "type": "string",
-                    "enum": ["text", "movie", "music", "game", "boardgame"],
+                    "enum": [
+                        "text",
+                        "movie",
+                        "music",
+                        "game",
+                        "boardgame",
+                        "sound",
+                        "video",
+                        "notated_music",
+                        "book",
+                        "audiobook",
+                    ],
                     "description": "Media domain tier.",
                 },
                 "language": {"type": ["string", "null"], "description": "ISO 639 language code."},
@@ -233,7 +302,7 @@ def create_spec() -> APISpec:
             "properties": {
                 "id": {"type": "integer", "description": "Physical collection item identifier."},
                 "manifestation_id": {"type": "integer", "description": "Linked Manifestation identifier."},
-                "owner_id": {"type": "integer", "description": "User identifier of the item owner."},
+                "owner_id": {"type": "string", "format": "uuid", "description": "User UUID identifier of the item owner."},
                 "local_barcode": {"type": ["string", "null"], "description": "Local asset tag or shelf barcode."},
                 "status": {"type": "string", "description": "Progress consumption status (unread, reading, completed, etc.)."},
                 "collection_status": {"type": "string", "description": "Inventory status (available, lent, lost, wish_list)."},
@@ -260,9 +329,10 @@ def create_spec() -> APISpec:
                 "created_at": {"type": "string", "format": "date-time", "description": "Token creation timestamp."},
                 "expires_at": {"type": ["string", "null"], "format": "date-time", "description": "Optional expiration date."},
                 "last_used_at": {"type": ["string", "null"], "format": "date-time", "description": "Last authenticated usage timestamp."},
-                "revoked": {"type": "boolean", "description": "True if token has been revoked."},
+                "revoked_at": {"type": ["string", "null"], "format": "date-time", "description": "Revocation timestamp or null if active."},
+                "is_active": {"type": "boolean", "description": "True if token is active and unexpired."},
             },
-            "required": ["id", "name", "token_prefix", "scopes", "created_at", "revoked"],
+            "required": ["id", "name", "token_prefix", "scopes", "created_at", "is_active"],
         },
     )
 
@@ -272,12 +342,17 @@ def create_spec() -> APISpec:
             "type": "object",
             "properties": {
                 "id": {"type": "integer", "description": "Notification identifier."},
-                "recipient_id": {"type": "integer", "description": "Recipient user ID."},
+                "recipient_id": {"type": "string", "format": "uuid", "description": "Recipient user UUID identifier."},
+                "user_id": {"type": "string", "format": "uuid", "description": "Recipient user UUID identifier alias."},
                 "notification_type": {"type": "string", "description": "Event classification category."},
+                "type": {"type": "string", "description": "Notification type alias."},
                 "title": {"type": "string", "description": "Notification header."},
                 "body": {"type": ["string", "null"], "description": "Detailed notification text message."},
                 "is_read": {"type": "boolean", "description": "True if notification has been acknowledged."},
+                "actor_uri": {"type": ["string", "null"], "description": "Federation actor or system URI that triggered the notification."},
+                "payload": {"type": "object", "description": "Arbitrary notification payload data."},
                 "created_at": {"type": "string", "format": "date-time", "description": "Timestamp event was recorded."},
+                "read_at": {"type": ["string", "null"], "format": "date-time", "description": "Timestamp event was acknowledged."},
             },
             "required": ["id", "recipient_id", "notification_type", "title", "is_read", "created_at"],
         },
@@ -324,7 +399,7 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         "name": var,
                         "in": "path",
                         "required": True,
-                        "schema": {"type": "integer" if "id" in var.lower() else "string"},
+                        "schema": _infer_param_schema(rule, var),
                         "description": f"Unique {var} identifier.",
                     }
                 )
@@ -377,18 +452,7 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)
-                func_name = getattr(view_func, "__name__", "")
-                requires_auth = (
-                    "require_auth" in func_name
-                    or "require_admin" in func_name
-                    or not (
-                        openapi_path.startswith("/api/docs")
-                        or openapi_path.startswith("/api/public")
-                        or openapi_path.startswith("/api/login")
-                        or openapi_path.startswith("/health")
-                        or openapi_path.startswith("/.well-known")
-                    )
-                )
+                requires_auth = _endpoint_requires_auth(view_func, openapi_path)
 
                 if requires_auth and not operation.get("security"):
                     operation["security"] = [{"BearerAuth": []}, {"PersonalAccessToken": []}]

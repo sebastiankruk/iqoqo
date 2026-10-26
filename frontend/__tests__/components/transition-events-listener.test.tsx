@@ -18,13 +18,30 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { useProfile } from "@/lib/api/hooks";
 import { TransitionEventsListener } from "@/components/providers";
+
+vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(),
+}));
+
+vi.mock("@/lib/api/hooks", () => ({
+  useProfile: vi.fn(),
+}));
+
+const mockUsePathname = vi.mocked(usePathname);
+const mockUseProfile = vi.mocked(useProfile);
 
 describe("TransitionEventsListener", () => {
   let mockEventSourceInstances: any[] = [];
 
   beforeEach(() => {
     mockEventSourceInstances = [];
+    mockUsePathname.mockReturnValue("/collection");
+    mockUseProfile.mockReturnValue({
+      data: { id: "user-123", username: "collector" },
+    } as any);
 
     // Mock global EventSource
     class MockEventSource {
@@ -97,5 +114,31 @@ describe("TransitionEventsListener", () => {
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["facetStats"] });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["globalStats"] });
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["collectionGrid"] });
+  });
+
+  it("does not connect EventSource when user is unauthenticated", () => {
+    mockUseProfile.mockReturnValue({ data: null } as any);
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TransitionEventsListener />
+      </QueryClientProvider>
+    );
+
+    expect(mockEventSourceInstances).toHaveLength(0);
+  });
+
+  it("does not connect EventSource when on public routes", () => {
+    mockUsePathname.mockReturnValue("/login");
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TransitionEventsListener />
+      </QueryClientProvider>
+    );
+
+    expect(mockEventSourceInstances).toHaveLength(0);
   });
 });

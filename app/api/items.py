@@ -36,12 +36,14 @@ from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
 from app.core.data_manager import invalidate_facets_cache
+from app.core.events import publish_transition_event
 from app.core.export_service import ExportService
 from app.core.iri import get_lod_base_url
 from app.core.item_access import require_item_access, verify_item_ownership
 from app.core.limiter import limiter
 from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
+from app.core.tasks import enqueue_fts_reindex
 from app.db.models import (
     Expression,
     Item,
@@ -707,9 +709,6 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         db.session.commit()
         # Tag/status changes alter this user's facet counts.
         invalidate_facets_cache(user_id)
-        from app.core.events import publish_transition_event
-        from app.core.tasks import enqueue_fts_reindex
-
         enqueue_fts_reindex("item", item.id)
         publish_transition_event(
             "item_updated",
@@ -768,10 +767,9 @@ def _delete_physical_item(item_id: int, user_id: uuid.UUID | None) -> tuple[Resp
     db.session.commit()
     # Facet counts for this user changed; drop the cached entries.
     invalidate_facets_cache(user_id)
-    from app.core.events import publish_transition_event
-    from app.core.tasks import enqueue_fts_reindex
 
-    enqueue_fts_reindex("item", item_id)
+    if item_clone.manifestation_id:
+        enqueue_fts_reindex("manifestation", item_clone.manifestation_id)
     publish_transition_event(
         "item_deleted",
         {

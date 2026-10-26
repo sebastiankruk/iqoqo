@@ -65,32 +65,29 @@ def test_sse_endpoint_headers_and_connected_event(client, auth_user):
         res.close()
 
 
-def test_sse_endpoint_accepts_token_query_parameter(client, auth_user):
-    """Verify SSE endpoint accepts token in query string for EventSource compatibility."""
+def test_sse_endpoint_rejects_token_query_parameter(client, auth_user):
+    """Verify SSE endpoint rejects token in query string to prevent credential leaking in URLs."""
     res = client.get(f"/api/v1/events/stream?token={auth_user['token']}&timeout=0.1")
     try:
-        assert res.status_code == 200
-        assert "text/event-stream" in res.content_type
-        data = res.get_data(as_text=True)
-        assert "connected" in data
+        assert res.status_code == 401
     finally:
         res.close()
 
 
 def test_publish_transition_event_delivers_to_subscriber(app):
-    """Verify publish_transition_event broadcasts to in-process subscribers."""
+    """Verify publish_transition_event broadcasts to in-process subscribers and respects user isolation."""
     from app.core.events import subscribe_events
 
     with app.app_context():
-        # Generator subscription
-        stream = subscribe_events(timeout_seconds=2.0)
+        # Generator subscription with authenticated user
+        stream = subscribe_events(timeout_seconds=2.0, user_id="user-999")
         try:
             # Advance to initial yield so subscription is active
             init_chunk = next(stream)
             assert ": connected" in init_chunk
 
             # Publish event
-            publish_transition_event("item_updated", {"item_id": 999, "status": "read"})
+            publish_transition_event("item_updated", {"item_id": 999, "user_id": "user-999", "status": "read"})
 
             # Next item yielded should be the published event
             chunk = next(stream)

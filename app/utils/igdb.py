@@ -30,6 +30,30 @@ _READ_TIMEOUT: int = 7
 _TOKEN_FILE: str = os.path.join(os.path.dirname(__file__), "..", "..", ".igdb_token.json")
 
 
+def _write_token_file_atomically(new_tokens: dict[str, Any]) -> None:
+    """Write token JSON payload atomically using a PID-specific temporary file and os.replace."""
+    tmp_path = f"{_TOKEN_FILE}.{os.getpid()}.tmp"
+    token_fd = os.open(
+        tmp_path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    with os.fdopen(token_fd, "w", encoding="utf-8") as wf:
+        os.fchmod(wf.fileno(), 0o600)
+        json.dump(new_tokens, wf)
+        wf.flush()
+        os.fsync(wf.fileno())
+    os.replace(tmp_path, _TOKEN_FILE)
+
+
+def _sanitize_error_message(err: Any) -> str:
+    """Sanitize error messages to prevent leaking client secrets or auth credentials."""
+    msg = str(err)
+    if any(k in msg for k in ("client_secret", "access_token", "Bearer", "secret")):
+        return "Authentication request failed"
+    return msg[:200]
+
+
 def get_igdb_token() -> str | None:
     """Obtains a client credentials OAuth token from Twitch and caches it locally."""
     from app.db.models import InstanceSettings
@@ -77,16 +101,7 @@ def get_igdb_token() -> str | None:
         response = requests.post(url, data=data, timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT))
         response.raise_for_status()
         new_tokens = response.json()
-        token_fd = os.open(
-            _TOKEN_FILE,
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
-            0o600,
-        )
-        with os.fdopen(token_fd, "w", encoding="utf-8") as wf:
-            # os.open's mode only applies to new files; also tighten an existing
-            # cache file before writing a newly fetched credential.
-            os.fchmod(wf.fileno(), 0o600)
-            json.dump(new_tokens, wf)
+        _write_token_file_atomically(new_tokens)
         access_token = new_tokens.get("access_token")
         return str(access_token) if isinstance(access_token, str) else None
     except requests.RequestException as e:
@@ -180,14 +195,7 @@ def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
                 }
             response.raise_for_status()
             new_tokens = response.json()
-            token_fd = os.open(
-                _TOKEN_FILE,
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-            )
-            with os.fdopen(token_fd, "w", encoding="utf-8") as wf:
-                os.fchmod(wf.fileno(), 0o600)
-                json.dump(new_tokens, wf)
+            _write_token_file_atomically(new_tokens)
 
             return {
                 "status": "CONFIGURED_VALID",
@@ -203,7 +211,7 @@ def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
                     "configured": True,
                     "active": False,
                     "reason": "invalid_credentials",
-                    "error": str(e),
+                    "error": _sanitize_error_message(e),
                 }
             return {
                 "status": "EXPIRED_NEEDS_REFRESH",
@@ -211,7 +219,7 @@ def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
                 "active": False,
                 "token_age_hours": token_age_hours,
                 "reason": "network_error_on_refresh",
-                "error": str(e),
+                "error": _sanitize_error_message(e),
             }
         except requests.RequestException as e:
             return {
@@ -220,7 +228,7 @@ def get_igdb_token_status(probe_remote: bool = False) -> dict[str, Any]:
                 "active": False,
                 "token_age_hours": token_age_hours,
                 "reason": "network_error_on_refresh",
-                "error": str(e),
+                "error": _sanitize_error_message(e),
             }
 
     return {

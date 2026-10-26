@@ -21,6 +21,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import select
 
 from app.api.auth import generate_internal_jwt
 from app.core.tasks import _in_memory_fts_queue, batch_fts_reindex, enqueue_fts_reindex
@@ -32,12 +33,12 @@ from app.db.models import Expression, Item, Manifestation, Permission, Role, Use
 def test_user_and_item(app):
     """Seed test user and item for transition tests."""
     with app.app_context():
-        role = Role.query.filter_by(name="user").first()
+        role = db.session.execute(select(Role).where(Role.name == "user")).scalars().first()
         if not role:
             role = Role(name="user")
             db.session.add(role)
 
-        perm = Permission.query.filter_by(name="write:item").first()
+        perm = db.session.execute(select(Permission).where(Permission.name == "write:item")).scalars().first()
         if not perm:
             perm = Permission(name="write:item")
             db.session.add(perm)
@@ -86,7 +87,7 @@ def test_user_and_item(app):
 
 
 def test_enqueue_fts_reindex_coalesces_duplicate_entity_keys(app):
-    """Verify that multiple rapid enqueue calls for the same entity coalesce."""
+    """Verify that multiple rapid enqueue calls for the same entity coalesce and debounce dispatch."""
     with app.app_context():
         import app.core.tasks as tasks_module
         from app.core.events import get_redis_client
@@ -94,7 +95,9 @@ def test_enqueue_fts_reindex_coalesces_duplicate_entity_keys(app):
         client = get_redis_client()
         if client:
             client.delete(tasks_module.REDIS_FTS_QUEUE_KEY)
+            client.delete(tasks_module.REDIS_FTS_SCHEDULED_KEY)
         tasks_module._in_memory_fts_queue.clear()
+        tasks_module._in_memory_debounce_time = 0.0
 
         # Patch apply_async to isolate enqueueing and prevent eager test execution
         with patch.object(tasks_module.batch_fts_reindex, "apply_async") as mock_apply:
@@ -107,14 +110,15 @@ def test_enqueue_fts_reindex_coalesces_duplicate_entity_keys(app):
                 assert "item:42" in members
                 assert len(members) == 1
                 client.delete(tasks_module.REDIS_FTS_QUEUE_KEY)
+                client.delete(tasks_module.REDIS_FTS_SCHEDULED_KEY)
             else:
                 assert "item:42" in tasks_module._in_memory_fts_queue
                 assert len(tasks_module._in_memory_fts_queue) == 1
-            assert mock_apply.call_count == 3
+            assert mock_apply.call_count == 1
 
 
 def test_batch_fts_reindex_task_drains_queue_and_updates_entities(app, test_user_and_item):
-    """Verify that batch_fts_reindex drains the queue and processes entities."""
+    """Verify that batch_fts_reindex drains the queue, updates entities, and updates Work.search_vector."""
     with app.app_context():
         import app.core.tasks as tasks_module
 
@@ -131,13 +135,17 @@ def test_batch_fts_reindex_task_drains_queue_and_updates_entities(app, test_user
         assert f"item:{item_id}" in result["entities"]
         assert len(tasks_module._in_memory_fts_queue) == 0
 
+        work = db.session.get(Work, test_user_and_item["work_id"])
+        assert work.search_vector is not None
+        assert "Dune Messiah" in work.search_vector
+
 
 def test_item_update_transition_enqueues_fts_reindex(client, test_user_and_item):
     """Verify that PUT/PATCH /api/items/<id> triggers enqueue_fts_reindex."""
     item_id = test_user_and_item["item_id"]
     headers = {"Authorization": f"Bearer {test_user_and_item['token']}"}
 
-    with patch("app.core.tasks.enqueue_fts_reindex") as mock_enqueue:
+    with patch("app.api.items.enqueue_fts_reindex") as mock_enqueue:
         res = client.patch(
             f"/api/items/{item_id}",
             json={"status": "reading"},

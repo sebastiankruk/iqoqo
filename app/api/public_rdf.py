@@ -388,7 +388,7 @@ def get_public_item(item_id: int) -> Response | tuple[Response, int]:
         .options(
             joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
         )
-        .where(Item.id == item_id, Item.is_hidden.is_(False))
+        .where(Item.id == item_id, Item.is_hidden.is_(False), Item.visibility == "public")
     )
     item = db.session.execute(stmt).scalars().first()
     if not item:
@@ -777,17 +777,16 @@ def get_public_user_followers(username: str) -> Response | tuple[Response, int]:
 @limiter.limit("60 per minute")
 def get_public_federation_instance_info() -> Response:
     """Public endpoint returning local instance info and federation status."""
-    from urllib.parse import urlparse
-
     from app.api.federation_guard import is_federation_enabled
     from app.config import Config
+    from app.core.federation_keys import clean_instance_domain
 
     fed_enabled = is_federation_enabled()
     public_items_count = (
-        db.session.execute(select(func.count(Item.id)).where(Item.is_hidden.is_(False))).scalar() or 0  # pylint: disable=not-callable
-    )
+        db.session.execute(select(func.count(Item.id)).where(Item.is_hidden.is_(False), Item.visibility == "public")).scalar() or 0
+    )  # pylint: disable=not-callable
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
-    local_domain = urlparse(base_url).netloc if base_url else "localhost"
+    local_domain = clean_instance_domain(base_url) if base_url else "localhost"
 
     return (
         jsonify(

@@ -29,6 +29,7 @@ from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
 from app.core.federation_client import FederationClient
+from app.core.federation_discovery import clean_instance_domain
 from app.core.http_signatures import SignatureVerificationError, verify_request
 from app.core.iri import canonical_actor_iri, get_federation_base_url, legacy_actor_iri
 from app.core.limiter import (
@@ -469,8 +470,7 @@ def receive_inbox(user_uuid: str | None = None, username: str | None = None) -> 
     activity_id = str(payload.get("id") or uuid.uuid4())
 
     # Check if sending instance is blocked
-    parsed_sender = urlparse(verified_actor)
-    sender_domain = parsed_sender.hostname
+    sender_domain = clean_instance_domain(verified_actor)
     if sender_domain:
         inst_stmt = select(FederationInstance).where(FederationInstance.domain == sender_domain)
         sender_instance = db.session.execute(inst_stmt).scalars().first()

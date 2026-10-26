@@ -16,6 +16,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ShieldCheck, ShieldAlert, Key, Copy, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,8 @@ interface EnrollResponse {
  * @returns {JSX.Element} The component
  */
 export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
+  const t = useTranslations("Profile");
+
   // Enrollment state
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [enrollData, setEnrollData] = useState<EnrollResponse | null>(null);
@@ -74,7 +77,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
       setVerificationCode("");
       setIsEnrollModalOpen(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to initiate 2FA enrollment";
+      const msg = err instanceof Error ? err.message : t("disableFailed");
       toast.error(msg);
     } finally {
       setIsLoadingEnroll(false);
@@ -84,19 +87,19 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
   const verifyAndEnable = async () => {
     const code = verificationCode.trim();
     if (!code || code.length !== 6) {
-      toast.error("Please enter a valid 6-digit verification code");
+      toast.error(t("validCodeRequired"));
       return;
     }
 
     setIsVerifying(true);
     try {
       await apiClient.post("/auth/2fa/verify", { code });
-      toast.success("Two-factor authentication enabled successfully");
+      toast.success(t("totpEnabledSuccess"));
       setIsEnrollModalOpen(false);
       setEnrollData(null);
       await onStatusChanged();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Invalid verification code";
+      const msg = err instanceof Error ? err.message : t("invalidCode");
       toast.error(msg);
     } finally {
       setIsVerifying(false);
@@ -105,7 +108,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
 
   const handleDisable = async () => {
     if (!disablePassword && !disableCode) {
-      toast.error("Please provide your password or an authentication code to disable 2FA");
+      toast.error(t("disableCredentialsRequired"));
       return;
     }
 
@@ -115,13 +118,13 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
         password: disablePassword.trim() || undefined,
         code: disableCode.trim() || undefined,
       });
-      toast.success("Two-factor authentication disabled");
+      toast.success(t("totpDisabledSuccess"));
       setIsDisableDialogOpen(false);
       setDisablePassword("");
       setDisableCode("");
       await onStatusChanged();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to disable 2FA";
+      const msg = err instanceof Error ? err.message : t("disableFailed");
       toast.error(msg);
     } finally {
       setIsDisabling(false);
@@ -132,7 +135,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
     if (!enrollData?.secret) return;
     navigator.clipboard.writeText(enrollData.secret);
     setCopiedSecret(true);
-    toast.success("Secret copied to clipboard");
+    toast.success(t("copiedToClipboard"));
     setTimeout(() => setCopiedSecret(false), 2000);
   };
 
@@ -140,7 +143,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
     if (!enrollData?.recovery_codes) return;
     navigator.clipboard.writeText(enrollData.recovery_codes.join("\n"));
     setCopiedCodes(true);
-    toast.success("Recovery codes copied to clipboard");
+    toast.success(t("copiedToClipboard"));
     setTimeout(() => setCopiedCodes(false), 2000);
   };
 
@@ -149,22 +152,21 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
       <div className="flex justify-between items-start">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">Two-Factor Authentication (2FA)</h2>
+            <h2 className="text-xl font-semibold">{t("twoFactorAuth")}</h2>
             {totpEnabled ? (
               <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Enabled
+                {t("enabled")}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-muted-foreground flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5" />
-                Disabled
+                {t("disabled")}
               </Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            Protect your account with a time-based one-time password (TOTP) from an authenticator app like Google
-            Authenticator, 1Password, or Bitwarden.
+            {t("twoFactorAuthDesc")}
           </p>
         </div>
 
@@ -175,7 +177,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
             onClick={() => setIsDisableDialogOpen(true)}
             data-testid="disable-2fa-button"
           >
-            Disable 2FA
+            {t("disable2FA")}
           </Button>
         ) : (
           <Button
@@ -186,7 +188,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
             data-testid="enable-2fa-button"
           >
             {isLoadingEnroll ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
-            Enable 2FA
+            {t("enable2FA")}
           </Button>
         )}
       </div>
@@ -195,9 +197,9 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
       <Dialog open={isEnrollModalOpen} onOpenChange={setIsEnrollModalOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" data-testid="totp-enroll-dialog">
           <DialogHeader>
-            <DialogTitle>Set Up Two-Factor Authentication</DialogTitle>
+            <DialogTitle>{t("setupTwoFactorAuth")}</DialogTitle>
             <DialogDescription>
-              Scan the QR code with your authenticator app, or enter the secret key manually.
+              {t("scanQrCodeDesc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -211,7 +213,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
 
               {/* Secret Key */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Secret Key (Manual Entry)</label>
+                <label className="text-xs font-medium text-muted-foreground">{t("secretKeyManual")}</label>
                 <div className="flex items-center gap-2">
                   <code className="text-xs bg-muted px-2 py-1.5 rounded flex-1 font-mono break-all select-all">
                     {enrollData.secret}
@@ -231,7 +233,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               {/* Recovery Codes */}
               <div className="space-y-1.5 border-t pt-3">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-foreground">Backup Recovery Codes</label>
+                  <label className="text-xs font-semibold text-foreground">{t("recoveryCodes")}</label>
                   <Button
                     type="button"
                     variant="ghost"
@@ -244,12 +246,11 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
                     ) : (
                       <Copy className="w-3 h-3 mr-1" />
                     )}
-                    Copy All
+                    {t("copyAll")}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Save these 8 single-use codes in a secure location. They allow you to regain access if you lose your
-                  authenticator device.
+                  {t("recoveryCodesDesc")}
                 </p>
                 <div className="grid grid-cols-2 gap-1.5 p-2 bg-muted/60 rounded text-xs font-mono text-center">
                   {enrollData.recovery_codes.map((code, idx) => (
@@ -263,7 +264,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               {/* Verification Code Input */}
               <div className="space-y-1.5 border-t pt-3">
                 <label htmlFor="totp-code-input" className="text-sm font-medium">
-                  Enter 6-digit Code from Authenticator
+                  {t("enter6DigitCode")}
                 </label>
                 <input
                   id="totp-code-input"
@@ -283,7 +284,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
 
           <DialogFooter className="sm:justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsEnrollModalOpen(false)} disabled={isVerifying}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               type="button"
@@ -292,7 +293,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               data-testid="verify-and-enable-button"
             >
               {isVerifying && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Verify &amp; Activate
+              {t("verifyAndEnable")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -302,21 +303,21 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
       <Dialog open={isDisableDialogOpen} onOpenChange={setIsDisableDialogOpen}>
         <DialogContent className="sm:max-w-md" data-testid="disable-2fa-dialog">
           <DialogHeader>
-            <DialogTitle>Disable Two-Factor Authentication</DialogTitle>
+            <DialogTitle>{t("disable2FATitle")}</DialogTitle>
             <DialogDescription>
-              Disabling 2FA lowers your account security. Confirm your password or enter a 6-digit code to proceed.
+              {t("disable2FADesc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
             <div className="space-y-1">
               <label htmlFor="disable-password" className="text-sm font-medium">
-                Account Password
+                {t("accountPassword")}
               </label>
               <input
                 id="disable-password"
                 type="password"
-                placeholder="Current password"
+                placeholder={t("currentPassword")}
                 value={disablePassword}
                 onChange={e => setDisablePassword(e.target.value)}
                 className="w-full h-9 px-3 py-2 text-sm rounded-md border border-input bg-background"
@@ -324,16 +325,16 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               />
             </div>
 
-            <div className="text-xs text-center text-muted-foreground">— OR —</div>
+            <div className="text-xs text-center text-muted-foreground">— {t("or")} —</div>
 
             <div className="space-y-1">
               <label htmlFor="disable-code" className="text-sm font-medium">
-                Authenticator / Recovery Code
+                {t("orEnterOtpCode")}
               </label>
               <input
                 id="disable-code"
                 type="text"
-                placeholder="6-digit TOTP or 8-char recovery code"
+                placeholder={t("otpOrRecoveryPlaceholder")}
                 value={disableCode}
                 onChange={e => setDisableCode(e.target.value)}
                 className="w-full h-9 px-3 py-2 text-sm rounded-md border border-input bg-background font-mono"
@@ -349,7 +350,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               onClick={() => setIsDisableDialogOpen(false)}
               disabled={isDisabling}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               type="button"
@@ -359,7 +360,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               data-testid="confirm-disable-2fa-button"
             >
               {isDisabling && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Disable 2FA
+              {t("confirmDisable")}
             </Button>
           </DialogFooter>
         </DialogContent>
