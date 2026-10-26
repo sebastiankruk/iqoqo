@@ -22,9 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Dependency Security Updates**: Resolved 18 open Dependabot alerts across root and frontend workspaces: updated `next` (16.3.8 -> 16.4.3, addressing SVG image optimization and cache RCEs), `zod` (^4.3.6 -> ^4.6.6), `happy-dom` (^20.8.9 -> ^21.0.4), `markdownlint-cli2` (^0.23.3 -> ^0.24.0, resolving transitive `markdown-it` 15.0.3), and refreshed lockfiles for `fast-uri` (>= 3.1.9) and `undici` (>= 7.30.1).
+
 ### Fixed
 
 - **Pre-Release Critical Fixes & Security Hardening (C87b)**:
+  - Wrapped Server-Sent Events (SSE) generators and test client responses in `tests/test_sse_events.py` with explicit `.close()` calls in `try...finally` blocks to prevent unhandled Flask context tear-downs and `LookupError: <ContextVar name='flask.app_ctx'>` across subsequent test setups.
   - Blocked `read:catalog` Personal Access Tokens from accessing `@admin_required` and `@admin_or_custodian_required` routes; required session tokens (`iqo_*` PATs rejected with 403) for token and 2FA management (`/api/auth/tokens*`, `/api/auth/2fa/*`).
   - Prevented 2FA secret overwrites in `POST /api/auth/2fa/enroll` when 2FA is already active (`400 Bad Request`), and enforced role verification on `"admin"` / `"*"` scope requests in `create_token`.
   - Added MFA challenge step to `frontend/app/login/page.tsx` with English/Polish translations and Playwright E2E coverage (`pat_and_totp_workflow.spec.ts`).
