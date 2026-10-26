@@ -106,7 +106,10 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
         if "@" in account_part:
             username, req_domain = account_part.split("@", 1)
             req_host = request.host.split(":")[0].strip().lower() if request.host else ""
-            if req_domain.strip().lower() not in (domain.lower(), req_host):
+            clean_req_domain = req_domain.strip().lower()
+            req_domain_host = clean_req_domain.split(":")[0]
+            allowed_domains = {domain.lower(), domain.split(":")[0].lower(), req_host}
+            if clean_req_domain not in allowed_domains and req_domain_host not in allowed_domains:
                 return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
         else:
             username = account_part
