@@ -53,24 +53,28 @@ def test_sse_endpoint_headers_and_connected_event(client, auth_user):
     """Verify SSE endpoint returns text/event-stream headers and initial connected event."""
     headers = {"Authorization": f"Bearer {auth_user['token']}"}
     res = client.get("/api/v1/events/stream?timeout=0.1", headers=headers)
+    try:
+        assert res.status_code == 200
+        assert "text/event-stream" in res.content_type
+        assert res.headers.get("Cache-Control") == "no-cache"
 
-    assert res.status_code == 200
-    assert "text/event-stream" in res.content_type
-    assert res.headers.get("Cache-Control") == "no-cache"
-
-    data = res.get_data(as_text=True)
-    assert "data: " in data
-    assert "connected" in data
+        data = res.get_data(as_text=True)
+        assert "data: " in data
+        assert "connected" in data
+    finally:
+        res.close()
 
 
 def test_sse_endpoint_accepts_token_query_parameter(client, auth_user):
     """Verify SSE endpoint accepts token in query string for EventSource compatibility."""
     res = client.get(f"/api/v1/events/stream?token={auth_user['token']}&timeout=0.1")
-
-    assert res.status_code == 200
-    assert "text/event-stream" in res.content_type
-    data = res.get_data(as_text=True)
-    assert "connected" in data
+    try:
+        assert res.status_code == 200
+        assert "text/event-stream" in res.content_type
+        data = res.get_data(as_text=True)
+        assert "connected" in data
+    finally:
+        res.close()
 
 
 def test_publish_transition_event_delivers_to_subscriber(app):
@@ -80,19 +84,22 @@ def test_publish_transition_event_delivers_to_subscriber(app):
     with app.app_context():
         # Generator subscription
         stream = subscribe_events(timeout_seconds=2.0)
-        # Advance to initial yield so subscription is active
-        init_chunk = next(stream)
-        assert ": connected" in init_chunk
+        try:
+            # Advance to initial yield so subscription is active
+            init_chunk = next(stream)
+            assert ": connected" in init_chunk
 
-        # Publish event
-        publish_transition_event("item_updated", {"item_id": 999, "status": "read"})
+            # Publish event
+            publish_transition_event("item_updated", {"item_id": 999, "status": "read"})
 
-        # Next item yielded should be the published event
-        chunk = next(stream)
-        assert "data: " in chunk
-        parsed = json.loads(chunk.replace("data: ", "").strip())
-        assert parsed["event"] == "item_updated"
-        assert parsed["data"]["item_id"] == 999
+            # Next item yielded should be the published event
+            chunk = next(stream)
+            assert "data: " in chunk
+            parsed = json.loads(chunk.replace("data: ", "").strip())
+            assert parsed["event"] == "item_updated"
+            assert parsed["data"]["item_id"] == 999
+        finally:
+            stream.close()
 
 
 def test_sse_user_isolation_and_timeout_bounds(app, client, auth_user):
@@ -102,32 +109,41 @@ def test_sse_user_isolation_and_timeout_bounds(app, client, auth_user):
     with app.app_context():
         stream_a = subscribe_events(timeout_seconds=2.0, user_id="user-a")
         stream_b = subscribe_events(timeout_seconds=2.0, user_id="user-b")
+        try:
+            assert ": connected" in next(stream_a)
+            assert ": connected" in next(stream_b)
 
-        assert ": connected" in next(stream_a)
-        assert ": connected" in next(stream_b)
+            # 1. Publish private item event for user-a
+            publish_transition_event("item_created", {"item_id": 101, "user_id": "user-a"})
 
-        # 1. Publish private item event for user-a
-        publish_transition_event("item_created", {"item_id": 101, "user_id": "user-a"})
+            chunk_a = next(stream_a)
+            assert "data: " in chunk_a
+            parsed_a = json.loads(chunk_a.replace("data: ", "").strip())
+            assert parsed_a["event"] == "item_created"
+            assert parsed_a["data"]["user_id"] == "user-a"
 
-        chunk_a = next(stream_a)
-        assert "data: " in chunk_a
-        parsed_a = json.loads(chunk_a.replace("data: ", "").strip())
-        assert parsed_a["event"] == "item_created"
-        assert parsed_a["data"]["user_id"] == "user-a"
+            # 2. Publish global event
+            publish_transition_event("fts_reindexed", {"entity_type": "item", "id": 101})
 
-        # 2. Publish global event
-        publish_transition_event("fts_reindexed", {"entity_type": "item", "id": 101})
-
-        chunk_b = next(stream_b)
-        assert "data: " in chunk_b
-        parsed_b = json.loads(chunk_b.replace("data: ", "").strip())
-        # user-b must receive fts_reindexed directly, skipping user-a's private item_created
-        assert parsed_b["event"] == "fts_reindexed"
+            chunk_b = next(stream_b)
+            assert "data: " in chunk_b
+            parsed_b = json.loads(chunk_b.replace("data: ", "").strip())
+            # user-b must receive fts_reindexed directly, skipping user-a's private item_created
+            assert parsed_b["event"] == "fts_reindexed"
+        finally:
+            stream_a.close()
+            stream_b.close()
 
     # 3. Requesting unbounded / non-finite timeout via HTTP endpoint is handled safely
     headers = {"Authorization": f"Bearer {auth_user['token']}"}
     res_inf = client.get("/api/v1/events/stream?timeout=inf", headers=headers)
-    assert res_inf.status_code == 200
+    try:
+        assert res_inf.status_code == 200
+    finally:
+        res_inf.close()
 
     res_huge = client.get("/api/v1/events/stream?timeout=999999", headers=headers)
-    assert res_huge.status_code == 200
+    try:
+        assert res_huge.status_code == 200
+    finally:
+        res_huge.close()
