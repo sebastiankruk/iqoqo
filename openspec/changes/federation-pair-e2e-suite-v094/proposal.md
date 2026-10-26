@@ -15,17 +15,19 @@ Currently, multi-instance federation between two live iQoQo stacks (primary and 
   - Remote custodian approval in `/admin/lending`, asserting item status change to `lent` and `ItemCustodyEvent` (`crm:E10_Transfer_of_Custody`) logging.
   - Item return flow and custody timeline event logging.
 - Add `make test-e2e-federation` Makefile target to orchestrate pairing setup, database seeding, health preflight, Playwright execution, and teardown.
+- Author dedicated BATS suite `tests/bash/verify_federation_preview.bats` testing `scripts/verify_federation_preview.sh` preflight arguments, health probes, fixture seeding, and exit codes.
+- Author `frontend/__tests__/e2e/help_hub_workflow.spec.ts` testing `/help` and `/help/[slug]` article navigation and i18n switching.
 - Integrate `test-federation-pair-e2e` job into GitHub Actions CI (`.github/workflows/quality.yml`).
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `federation-multi-instance-e2e`: Add requirements for automated CI execution of live dual-origin browser click-throughs (without mock route fallbacks) and standardized Makefile/CI orchestration targets.
+- `federation-multi-instance-e2e`: Add requirements for automated CI execution of live dual-origin browser click-throughs (without mock route fallbacks), Help Hub E2E navigation, preflight runner BATS testing, and standardized Makefile/CI orchestration targets.
 
 ## Impact
 
-- **Test Infrastructure**: New Playwright spec `frontend/__tests__/e2e/federation_pair_live.spec.ts`.
+- **Test Infrastructure**: New Playwright specs `frontend/__tests__/e2e/federation_pair_live.spec.ts` and `frontend/__tests__/e2e/help_hub_workflow.spec.ts`; new BATS test `tests/bash/verify_federation_preview.bats`.
 - **Build & CI**: New Makefile target `test-e2e-federation` and new CI job in `.github/workflows/quality.yml`.
 - **Docker Compose**: Uses existing `docker-compose.federation-preview.yml` and prebuilt stack overlay.
 - **Runtime Code**: Zero production runtime regressions; purely additive testing and CI verification hardening.

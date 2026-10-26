@@ -18,3 +18,19 @@ The system SHALL emit a valid OpenAPI 3.1 document covering all registered API r
 
 - **WHEN** A collector configures the Gemini Gem using `docs/gems/iqoqo-librarian-gem.md`
 - **THEN** The `/api/v1/catalog/search` operation documents the `q` query parameter supported by the backend endpoint.
+
+## ADDED Requirements
+
+### Requirement: ActivityPub HTTP Signature Verification CLI
+
+The system SHALL provide a CLI utility (`scripts/verify_http_signature.py`) to verify incoming HTTP Signatures, covered by a dedicated test suite verifying Digest header matching, signing string assembly, clock skew enforcement, and RSA signature validity.
+
+#### Scenario: Verify HTTP signature with valid digest and signature
+
+- **WHEN** `verify_http_signature.py` is invoked with valid headers, body, and matching public key
+- **THEN** it outputs verification success and exits with code 0.
+
+#### Scenario: Verify HTTP signature with clock skew exceeding 300 seconds
+
+- **WHEN** `verify_http_signature.py` verifies a request with Date header skewed > 300 seconds from current time
+- **THEN** it reports clock skew failure and exits with non-zero code.

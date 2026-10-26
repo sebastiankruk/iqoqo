@@ -2,17 +2,17 @@
 
 During the PR #376 (`release/0.9.3` → `main`) code review, several non-blocking `MODERATE` and `LOW` polish items were identified across `C84`, `C85`, `C86`, and `C87`:
 1. `requirements.txt` and `pyproject.toml` pin `boardgamegeek>=0.13.0` instead of `boardgamegeek2>=1.3`, `BGGBackoffAdapter.send` in `app/utils/bgg.py` sleeps for raw `Retry-After` headers without an upper bound and stacks retries with `BoardGameGeek(..., retries=3)`, and `scripts/iqoqo-status.sh` interpolates bash variables directly into `python3 -c` strings.
-2. `enqueue_fts_reindex` in `app/core/tasks.py` calls `batch_fts_reindex.apply_async` on every single write rather than coalescing scheduling via a Redis `SET ... NX EX` debounce lock, mutates `_in_memory_fts_queue` without a lock, and does not touch `Work` rows in `batch_fts_reindex`.
-3. `app/api/docs.py` types `User.id`, `Item.owner_id`, and `Notification.recipient_id` as `integer` instead of UUID strings, defines `revoked` instead of `is_active`/`revoked_at` on `PersonalAccessToken`, uses a brittle path-prefix heuristic for `requires_auth`, and `docs/gems/iqoqo-librarian-gem.md` references `/api/scanner/lookup` instead of `/api/scanner/preview/{barcode}`.
-4. `TotpSetup` and `PatManagement` on `/profile` contain hardcoded English strings instead of using `useTranslations("Profile")`.
+2. `enqueue_fts_reindex` in `app/core/tasks.py` calls `batch_fts_reindex.apply_async` on every single write rather than coalescing scheduling via a Redis `SET ... NX EX` debounce lock, mutates `_in_memory_fts_queue` without a lock, does not touch `Work` rows in `batch_fts_reindex`, and `publish_transition_event` / `enqueue_fts_reindex` / `batch_fts_reindex` create short-lived Redis connections via `get_redis_client()` without `finally: client.close()`.
+3. `app/api/docs.py` types `User.id`, `Item.owner_id`, and `Notification.recipient_id` as `integer` instead of UUID strings, defines `revoked` instead of `is_active`/`revoked_at` on `PersonalAccessToken`, uses a brittle path-prefix heuristic for `requires_auth`, `docs/gems/iqoqo-librarian-gem.md` references `/api/scanner/lookup` instead of `/api/scanner/preview/{barcode}`, and `scripts/verify_http_signature.py` lacks a dedicated test suite.
+4. `app/api/decorators.py` does not map `"sparql:query"` (for `POST /api/sparql`) or `"write:inventory"` (accepted by `create_token` in `app/api/auth.py`) in `require_auth` and `require_permission`, `TotpSetup` and `PatManagement` on `/profile` contain hardcoded English strings instead of using `useTranslations("Profile")`, `CookieConsent` and `ModeToggle` have no component tests, and `scripts_syntax.bats` omits `iqopretest.sh`, `verify_federation_preview.sh`, and `wait-for-postgres.sh`.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Upgrade `boardgamegeek2>=1.3`, cap `Retry-After` sleep at `10.0` seconds, avoid stacked retries, and harden `scripts/iqoqo-status.sh` variable passing.
-- Coalesce `batch_fts_reindex` Celery task dispatches via a Redis `NX EX` debounce lock, protect `_in_memory_fts_queue` with a lock, and refresh `Work` FTS state.
-- Align OpenAPI 3.1 component schemas (`User`, `Item`, `Notification`, `PersonalAccessToken`, `Expression`) and decorator-based `_requires_auth` detection in `app/api/docs.py`, and sync `docs/gems/iqoqo-librarian-gem.md`.
-- Localize `TotpSetup` and `PatManagement` in `en.json` and `pl.json` via `useTranslations("Profile")`.
+- Upgrade `boardgamegeek2>=1.3`, cap `Retry-After` sleep at `10.0` seconds, avoid stacked retries, harden `scripts/iqoqo-status.sh` variable passing, and add omitted scripts to `tests/bash/scripts_syntax.bats`.
+- Coalesce `batch_fts_reindex` Celery task dispatches via a Redis `NX EX` debounce lock, protect `_in_memory_fts_queue` with a lock, refresh `Work` FTS state, and ensure `client.close()` in `finally` blocks across `publish_transition_event`, `enqueue_fts_reindex`, and `batch_fts_reindex`.
+- Align OpenAPI 3.1 component schemas (`User`, `Item`, `Notification`, `PersonalAccessToken`, `Expression`) and decorator-based `_requires_auth` detection in `app/api/docs.py`, sync `docs/gems/iqoqo-librarian-gem.md`, and author `tests/test_verify_http_signature.py`.
+- Align `"sparql:query"` and `"write:inventory"` PAT scope checks in `app/api/decorators.py`, localize `TotpSetup` and `PatManagement` in `en.json` and `pl.json` via `useTranslations("Profile")`, clean up `PATCH /api/v1/notifications/read` in `docs/CHANGELOG.md`, and author component tests for `CookieConsent` and `ModeToggle`.
 
 **Non-Goals:**
 - Critical security and functional blockers for `v0.9.3` (handled immediately in `v093-pre-release-critical-fixes`).

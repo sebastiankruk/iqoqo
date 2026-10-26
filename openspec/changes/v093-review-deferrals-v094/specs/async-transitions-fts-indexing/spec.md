@@ -2,19 +2,19 @@
 
 ### Requirement: Background FTS Vector Recomputation
 
-The system SHALL queue and batch-update full-text search vectors asynchronously without blocking transition writes, using a shared dialect-aware helper (`build_fts_tsvector_expr`) that wraps text columns in `func.unaccent(...)` on PostgreSQL and omits `unaccent` on SQLite. Downward Alembic migrations (`v0_8_4_fts_unaccent`) SHALL NOT drop the PostgreSQL `unaccent` extension required by earlier migrations (`v0_8_2`).
+The system SHALL queue and batch-update full-text search vectors asynchronously without blocking transition writes, coalescing rapid updates via a Redis `SET iqoqo:fts_reindex_scheduled 1 NX EX <countdown>` debounce lock, protecting `_in_memory_fts_queue` with a `threading.Lock`, refreshing `Work` entities in `batch_fts_reindex`, and closing short-lived Redis clients (`finally: client.close()`) in `publish_transition_event`, `enqueue_fts_reindex`, and `batch_fts_reindex`.
 
 #### Scenario: Transition writes return immediately
 
 - **WHEN** An item status or custody changes
 - **THEN** The HTTP response returns 200 immediately, enqueuing Celery FTS re-indexing in background.
 
-#### Scenario: Shared dialect-aware FTS expression builder
+#### Scenario: Rapid writes within debounce window schedule a single Celery task
 
-- **WHEN** `SearchService.reindex_manifestations_batch`, `reindex_items_batch`, or `update_search_vector` constructs a `tsvector` update expression
-- **THEN** It uses `build_fts_tsvector_expr` to apply `unaccent` only when the active database dialect is `postgresql`.
+- **WHEN** Multiple item or manifestation updates occur within the 5-second debounce window
+- **THEN** `enqueue_fts_reindex` adds all entity keys to `iqoqo:fts_reindex_queue` and schedules `batch_fts_reindex` only once while `iqoqo:fts_reindex_scheduled` is held.
 
-#### Scenario: Downgrading v0_8_4 preserves unaccent extension
+#### Scenario: Short-lived Redis clients are closed on publish and queue operations
 
-- **WHEN** `alembic downgrade` executes `v0_8_4_fts_unaccent.downgrade()`
-- **THEN** The `unaccent` PostgreSQL extension remains installed so `v0_8_2` indexes continue to function.
+- **WHEN** `publish_transition_event`, `enqueue_fts_reindex`, or `batch_fts_reindex` acquires a Redis client via `get_redis_client()`
+- **THEN** The client is closed inside a `finally` block after the operation completes or raises an exception.

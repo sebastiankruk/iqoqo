@@ -28,8 +28,17 @@ The Playwright E2E testing framework MUST execute a multi-instance federation te
 - **THEN** the item collection status resets to `available`
 - **AND** a return custody event is recorded in the immutable custody ledger
 
+#### Scenario: In-app Help Hub navigation and bilingual article display
+- **WHEN** a user navigates to `/help`
+- **THEN** topic cards and quick-start guides render with accessible links
+- **AND** navigating to `/help/[slug]` renders the localized article content in the user's active locale
+
 ### Requirement: Standardized Federation Pair CI Test Runner
-The build and test orchestration system MUST provide automated Makefile and continuous integration targets that boot an isolated dual-instance paired stack, perform automated preflight connectivity probes, execute the dual-origin Playwright suite, and cleanly tear down resources.
+The build and test orchestration system MUST provide automated Makefile and continuous integration targets that boot an isolated dual-instance paired stack, perform automated preflight connectivity probes, execute the dual-origin Playwright suite, and cleanly tear down resources, covered by a dedicated BATS test suite for preflight runner reliability.
+
+#### Scenario: Preflight runner argument and health verification
+- **WHEN** `tests/bash/verify_federation_preview.bats` executes
+- **THEN** it validates CLI argument parsing, health check timeouts, fixture seeding, and non-zero exit codes on unresponsive instances.
 
 #### Scenario: Automated CI execution of federation pair tests
 - **WHEN** the continuous integration runner triggers `make test-e2e-federation`
