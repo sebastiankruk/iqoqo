@@ -115,3 +115,34 @@ def test_get_federation_instance_info(client, app):
     assert data["success"] is True
     assert "local_instance" in data["data"]
     assert "federation_enabled" in data["data"]["local_instance"]
+
+
+def test_get_federation_directory_filters_non_routable_internal_hostnames(client, app, directory_seed):
+    """Verify internal Docker, loopback, or non-FQDN hostnames are excluded from directory."""
+    with app.app_context():
+        # Seed trusted internal instances (e.g. from smoke testing)
+        internal_peers = [
+            FederationInstance(domain="web:5000", trust_level=TrustLevel.TRUSTED),
+            FederationInstance(domain="peer-web:5000", trust_level=TrustLevel.TRUSTED),
+            FederationInstance(domain="localhost:5005", trust_level=TrustLevel.TRUSTED),
+            FederationInstance(domain="127.0.0.1:8000", trust_level=TrustLevel.TRUSTED),
+            FederationInstance(domain="node.local", trust_level=TrustLevel.TRUSTED),
+        ]
+        db.session.add_all(internal_peers)
+        db.session.commit()
+
+    res = client.get("/api/federation/directory")
+    assert res.status_code == 200
+    payload = res.get_json()["data"]
+    peer_domains = [p["domain"] for p in payload["peers"]]
+
+    # Public FQDNs must be present
+    assert "library.alderaan.example" in peer_domains
+    assert "books.naboo.example" in peer_domains
+
+    # Non-routable internal hostnames must NOT be exposed
+    assert "web:5000" not in peer_domains
+    assert "peer-web:5000" not in peer_domains
+    assert "localhost:5005" not in peer_domains
+    assert "127.0.0.1:8000" not in peer_domains
+    assert "node.local" not in peer_domains

@@ -18,7 +18,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Building2, Globe, Loader2, Plus, Shield, ShieldAlert, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import { Building2, Copy, Globe, Loader2, Plus, Shield, ShieldAlert, ShieldCheck, Trash2, XCircle } from "lucide-react";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -231,9 +231,35 @@ export function FederationInstancesManager() {
                 <tbody className="divide-y divide-border">
                   {instances.map(inst => (
                     <tr key={inst.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 font-medium flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{inst.domain}</span>
+                      <td className="px-4 py-3 font-medium">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span>{inst.domain}</span>
+                        </div>
+                        {inst.key_fingerprint ? (
+                          <div className="flex items-center gap-1.5 mt-1 font-normal">
+                            <code className="text-[11px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border select-all break-all">
+                              {inst.key_fingerprint}
+                            </code>
+                            <button
+                              type="button"
+                              aria-label={`Copy key fingerprint for ${inst.domain}`}
+                              onClick={() => {
+                                if (inst.key_fingerprint) {
+                                  navigator.clipboard?.writeText(inst.key_fingerprint);
+                                  toast.success(t("copiedFingerprint"));
+                                }
+                              }}
+                              className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] font-normal text-muted-foreground/60 mt-1">
+                            {t("noFingerprint")}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {inst.software_name ? (

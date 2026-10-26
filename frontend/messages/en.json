@@ -705,7 +705,16 @@
     "previous": "Previous",
     "next": "Next",
     "prevPageAria": "Previous page",
-    "nextPageAria": "Next page"
+    "nextPageAria": "Next page",
+    "keyFingerprint": "Instance Actor Key Fingerprint",
+    "keyFingerprintDesc": "SHA-256 fingerprint of the instance actor public key for Fediverse HTTP signature verification.",
+    "generateKey": "Generate Instance Key",
+    "rotateKey": "Rotate Key",
+    "keyProvisioned": "Instance actor key provisioned successfully",
+    "keyRotated": "Instance actor key rotated successfully",
+    "copyFingerprint": "Copy key fingerprint",
+    "copiedFingerprint": "Key fingerprint copied to clipboard",
+    "noFingerprint": "No key published"
   },
   "FederationDirectory": {
     "title": "Connected Libraries Directory",

@@ -68,6 +68,23 @@ class FederationClient:
             "Accept": 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
             "User-Agent": "iqoqo-federation/0.9.0",
         }
+        # Sign outbound GET with instance actor key if available for Authorized Fetch compatibility
+        try:
+            priv_key = federation_keys.get_actor_private_key("server")
+            if priv_key:
+                base_url = get_federation_base_url()
+                key_id = f"{base_url}/api/federation/actor#main-key"
+                headers = sign_request(
+                    method="GET",
+                    url=actor_uri,
+                    body=None,
+                    key_id=key_id,
+                    private_key=priv_key,
+                    headers=headers,
+                )
+        except Exception as exc:
+            logger.debug("Could not sign outbound fetch_actor GET: %s", exc)
+
         record_outbound_telemetry("Federation", headers, url=actor_uri)
 
         try:
@@ -95,10 +112,11 @@ class FederationClient:
 
     def _cache_actor_in_db(self, actor_uri: str, data: dict[str, Any]) -> None:
         """Store or update actor details in FederationActor and FederationInstance models."""
+        from app.core.federation_discovery import clean_instance_domain, get_safe_default_trust
         from app.db import db
-        from app.db.federation import FederationActor, FederationInstance, TrustLevel
+        from app.db.federation import FederationActor, FederationInstance
 
-        domain = urlparse(actor_uri).netloc.lower()
+        domain = clean_instance_domain(actor_uri)
         if not domain:
             return
 
@@ -110,7 +128,7 @@ class FederationClient:
             instance = FederationInstance(
                 domain=domain,
                 shared_inbox_url=shared_inbox,
-                trust_level=TrustLevel.UNTRUSTED,
+                trust_level=get_safe_default_trust(),
             )
             db.session.add(instance)
             db.session.flush()

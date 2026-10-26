@@ -25,6 +25,7 @@ export interface FederationInstance {
   last_seen_at: string | null;
   trust_level: TrustLevel;
   created_at: string | null;
+  key_fingerprint?: string | null;
 }
 
 export interface FederationActivity {

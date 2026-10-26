@@ -16,8 +16,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
-import { getFederationKeyFingerprint } from "@/lib/api/federation";
+import { getFederationKeyFingerprint, provisionFederationInstanceKey } from "@/lib/api/federation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle, Copy } from "lucide-react";
@@ -261,6 +262,7 @@ function CardWrapper({
  * @returns InstanceSettings element.
  */
 export function InstanceSettings({ category = "external_apis", showApiKeys = false }: InstanceSettingsProps) {
+  const tFed = useTranslations("AdminFederation");
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -272,6 +274,21 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [isAuthorizingAllegro, setIsAuthorizingAllegro] = useState(false);
   const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
   const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(category === "federation");
+  const [isProvisioningKey, setIsProvisioningKey] = useState(false);
+
+  const handleProvisionKey = async (rotate: boolean = false) => {
+    setIsProvisioningKey(true);
+    try {
+      const fp = await provisionFederationInstanceKey(rotate);
+      setKeyFingerprint(fp);
+      toast.success(rotate ? tFed("keyRotated") : tFed("keyProvisioned"));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to provision instance key";
+      toast.error(msg);
+    } finally {
+      setIsProvisioningKey(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -641,7 +658,6 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                     >
                       <option value="untrusted">Untrusted</option>
                       <option value="pending">Pending</option>
-                      <option value="trusted">Trusted</option>
                     </select>
                   ) : (
                     <input
@@ -660,22 +676,22 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
           {category === "federation" && (
             <div className="flex flex-col gap-1.5 pt-4 border-t border-border dark:border-white/10">
               <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
-                Instance Actor Key Fingerprint
+                {tFed("keyFingerprint")}
               </label>
               <div className="flex items-center gap-3">
                 <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono border border-border select-all break-all">
-                  {isLoadingFingerprint ? "Loading fingerprint..." : keyFingerprint || "Not configured"}
+                  {isLoadingFingerprint ? "Loading fingerprint..." : keyFingerprint || tFed("noFingerprint")}
                 </code>
                 {Boolean(keyFingerprint) && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    aria-label="Copy key fingerprint"
+                    aria-label={tFed("copyFingerprint")}
                     onClick={() => {
                       if (keyFingerprint) {
                         navigator.clipboard?.writeText(keyFingerprint);
-                        toast.success("Key fingerprint copied to clipboard");
+                        toast.success(tFed("copiedFingerprint"));
                       }
                     }}
                     className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
@@ -684,10 +700,24 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                     Copy
                   </Button>
                 )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isProvisioningKey}
+                  onClick={() => handleProvisionKey(Boolean(keyFingerprint))}
+                  aria-label={keyFingerprint ? tFed("rotateKey") : tFed("generateKey")}
+                  className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {isProvisioningKey ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {keyFingerprint ? tFed("rotateKey") : tFed("generateKey")}
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                SHA-256 fingerprint of the instance actor public key for Fediverse HTTP signature verification.
-              </p>
+              <p className="text-xs text-muted-foreground">{tFed("keyFingerprintDesc")}</p>
             </div>
           )}
         </div>

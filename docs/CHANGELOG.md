@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Federation Trust Graph, Settings RBAC & Instance Actor Hardening (C87d)**:
+  - Eliminated follow request auto-acceptance bypass: `handle_follow` strictly holds inbound `Follow` activities in `pending` status unless `FEDERATION_AUTO_ACCEPT_FOLLOWS` is explicitly enabled in configuration or environment.
+  - Hardened Federation Settings RBAC: `GET /api/v1/admin/settings?category=federation` surfaces authoritative values and origins; `PUT /api/v1/admin/settings` fails closed on unrecognized keys (HTTP 400), enforces `config:federation` permission (HTTP 403), rejects privileged `FEDERATION_DEFAULT_TRUST="trusted"` (HTTP 400), and records setting changes in `EntityAuditLog`.
+  - Closed domain normalization blocklist bypass: normalized domains with explicit ports (`domain:8443`) uniformly across discovery, actor caching, and handler lookups; clamped safe default trust strictly to non-privileged levels (`untrusted`, `pending`).
+  - Screened public directory: filtered non-routable hostnames (`web:5000`, `peer-web:5000`, loopbacks, RFC1918) from `GET /api/federation/directory`.
+  - Removed insecure hardcoded fallback Fernet secret from `app/core/federation_keys.py`, raising `RuntimeError` when `SECRET_KEY` is unconfigured.
+  - Implemented side-effect-free Instance Application Actor (`GET /api/federation/actor`, returning 404 when unprovisioned), provisioned idempotently via `scripts/init_auth.py` and authenticated `POST /api/v1/admin/federation/key-fingerprint/provision`.
+  - Added bodyless outbound HTTP Signature signing (`(request-target) host date`) for Authorized Fetch support, advertised `metadata.instance_actor` in NodeInfo 2.1, and cached remote peer `Application` actors in `FederationActor` to display DER-derived `SHA256:...` `key_fingerprint` strings in the Admin Federation UI without N+1 queries.
+  - SRE & preview hardening: mounted persistent `peer_data` volume in `docker-compose.federation-preview.yml`, cleaned up synthetic smoke test rows in `scripts/verify_federation_preview.sh` via `try ... finally`, and documented out-of-band fingerprint verification in `federation-manual-testing-walkthrough.md`.
 - **Pre-Release Critical Fixes & Security Hardening (C87b)**:
   - Wrapped Server-Sent Events (SSE) generators and test client responses in `tests/test_sse_events.py` with explicit `.close()` calls in `try...finally` blocks to prevent unhandled Flask context tear-downs and `LookupError: <ContextVar name='flask.app_ctx'>` across subsequent test setups.
   - Blocked `read:catalog` Personal Access Tokens from accessing `@admin_required` and `@admin_or_custodian_required` routes; required session tokens (`iqo_*` PATs rejected with 403) for token and 2FA management (`/api/auth/tokens*`, `/api/auth/2fa/*`).

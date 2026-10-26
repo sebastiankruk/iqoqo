@@ -258,3 +258,34 @@ class TestActorEndpoints:
         with app.app_context():
             assert db.session.get(FederationInstance, inst_id) is None
             assert db.session.execute(db.select(FederationActor).where(FederationActor.instance_id == inst_id)).scalars().first() is None
+
+    def test_instance_actor_lifecycle_and_nodeinfo(self, client, app, admin_headers, custom_keys_dir):
+        """Test GET /api/federation/actor, POST /api/v1/admin/federation/key-fingerprint/provision, and NodeInfo."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+
+        # 1. Unprovisioned actor GET returns 404 (and creates no key files)
+        res_404 = client.get("/api/federation/actor")
+        assert res_404.status_code == 404
+
+        # 2. NodeInfo includes metadata.instance_actor
+        ni_res = client.get("/api/federation/nodeinfo/2.1")
+        assert ni_res.status_code == 200
+        ni_data = ni_res.get_json()
+        assert "instance_actor" in ni_data["metadata"]
+        assert ni_data["metadata"]["instance_actor"].endswith("/api/federation/actor")
+
+        # 3. Explicit provision via Admin API
+        prov_res = client.post("/api/v1/admin/federation/key-fingerprint/provision", headers=admin_headers, json={})
+        assert prov_res.status_code == 200
+        prov_data = prov_res.get_json()["data"]
+        assert prov_data["provisioned"] is True
+        assert prov_data["fingerprint"].startswith("SHA256:")
+
+        # 4. Now GET /api/federation/actor returns 200 OK Application actor JSON-LD
+        actor_res = client.get("/api/federation/actor")
+        assert actor_res.status_code == 200
+        actor_data = actor_res.get_json()
+        assert actor_data["type"] == "Application"
+        assert actor_data["publicKey"]["id"].endswith("/api/federation/actor#main-key")
+        assert "BEGIN PUBLIC KEY" in actor_data["publicKey"]["publicKeyPem"]

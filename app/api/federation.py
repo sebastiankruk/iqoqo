@@ -227,6 +227,7 @@ def federation_nodeinfo_2_1() -> Response:
         db.session.execute(select(func.count(User.id)).where(User.is_active.is_(True))).scalar() or 0  # pylint: disable=not-callable
     )
 
+    base_url = _get_base_url()
     data: dict[str, Any] = {
         "version": "2.1",
         "software": {
@@ -252,6 +253,7 @@ def federation_nodeinfo_2_1() -> Response:
             "federation": {
                 "enabled": is_federation_enabled(),
             },
+            "instance_actor": f"{base_url}/api/federation/actor",
         },
     }
     resp = jsonify(data)
@@ -292,6 +294,48 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
             "sharedInbox": f"{base_url}/api/federation/inbox",
         },
     }
+
+
+@federation_bp.route("/actor", methods=["GET"])
+@federation_required
+@limiter.limit("120 per minute")
+def get_instance_actor() -> Response | tuple[Response, int]:
+    """Instance Application actor document publishing the server public key."""
+    public_key_pem = federation_keys.get_actor_public_key("server")
+    if not public_key_pem:
+        return jsonify({"error": "Instance actor not configured", "code": 404}), 404
+
+    base_url = _get_base_url()
+    actor_uri = f"{base_url}/api/federation/actor"
+    domain = _get_domain()
+
+    payload = {
+        "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ],
+        "id": actor_uri,
+        "type": "Application",
+        "preferredUsername": domain,
+        "name": f"iqoqo ({domain})",
+        "url": base_url,
+        "inbox": f"{base_url}/api/federation/inbox",
+        "outbox": f"{base_url}/api/federation/outbox",
+        "publicKey": {
+            "id": f"{actor_uri}#main-key",
+            "owner": actor_uri,
+            "publicKeyPem": public_key_pem,
+        },
+        "endpoints": {
+            "sharedInbox": f"{base_url}/api/federation/inbox",
+        },
+    }
+
+    resp = jsonify(payload)
+    resp.mimetype = "application/activity+json"
+    resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
 
 
 @federation_bp.route("/actor/u/<string:user_uuid>", methods=["GET"])
@@ -911,13 +955,16 @@ def get_federation_directory() -> Response:
 
     fed_enabled = is_federation_enabled()
     if fed_enabled:
+        from app.core.federation_discovery import is_publicly_routable_peer_domain
+
         # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
         stmt = (
             select(FederationInstance)
             .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
             .order_by(FederationInstance.last_seen_at.desc().nullslast())
         )
-        peers = db.session.execute(stmt).scalars().all()
+        all_peers = db.session.execute(stmt).scalars().all()
+        peers = [p for p in all_peers if is_publicly_routable_peer_domain(p.domain)]
     else:
         peers = []
 

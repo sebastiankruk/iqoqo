@@ -318,9 +318,14 @@ API_KEYS = {
     "GEONAMES_USERNAME",
 }
 
-FEDERATION_KEYS = {"FEDERATION_ENABLED", "FEDERATION_BASE_URL"}
+FEDERATION_KEYS = {
+    "FEDERATION_ENABLED",
+    "FEDERATION_BASE_URL",
+    "FEDERATION_AUTO_ACCEPT_FOLLOWS",
+    "FEDERATION_DEFAULT_TRUST",
+}
 
-AFFILIATE_KEYS = {"AFFILIATE_AMAZON", "AFFILIATE_ALLEGRO", "AFFILIATE_EMPIK"}
+AFFILIATE_KEYS = {"AFFILIATE_AMAZON", "AFFILIATE_ALLEGRO", "AFFILIATE_EMPIK", "amazon_affiliate_id"}
 
 INTERNAL_KEYS = {"instance_name", "IQOQO_KNOWN_JUNK_PHASHES", "MAINTENANCE_MODE"}
 
@@ -372,8 +377,19 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
 
     if can_federation:
         for key in FEDERATION_KEYS:
-            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) is not None else "missing"
+            if key in db_settings:
+                value = db_settings[key]
+            elif key in flask_config:
+                value = flask_config[key]
+            elif os.environ.get(key) is not None:
+                value = os.environ.get(key)
+            elif key == "FEDERATION_AUTO_ACCEPT_FOLLOWS":
+                value = "false"
+            elif key == "FEDERATION_DEFAULT_TRUST":
+                value = "untrusted"
+            else:
+                value = ""
             result[key] = {"value": normalize_val(value), "source": source}
 
     if can_affiliate:
@@ -391,7 +407,7 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
     return {"success": True, "data": result}
 
 
-def _put_settings(user: User, data: dict) -> dict:
+def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
     """Helper for PUT /settings."""
     can_external = _has_permission(user, PermissionName.CONFIG_EXTERNAL_APIS)
     can_federation = _has_permission(user, PermissionName.CONFIG_FEDERATION)
@@ -406,15 +422,52 @@ def _put_settings(user: User, data: dict) -> dict:
     }
 
     saved = {}
+    changes = {}
     for key, value in data.items():
-        if not key_permissions.get(key, True):
-            continue
+        if key not in key_permissions:
+            return jsonify({"success": False, "error": f"Unknown setting key: {key}", "code": 400}), 400
+
+        if not key_permissions[key]:
+            return jsonify({"success": False, "error": f"Permission denied for setting: {key}", "code": 403}), 403
 
         if isinstance(value, str) and value.startswith("***"):
             continue
 
+        if key == "FEDERATION_DEFAULT_TRUST":
+            norm_trust = str(value or "").lower()
+            if norm_trust not in {"untrusted", "pending"}:
+                return jsonify({"success": False, "error": "FEDERATION_DEFAULT_TRUST must be 'untrusted' or 'pending'", "code": 400}), 400
+            value = norm_trust
+
+        if key == "FEDERATION_AUTO_ACCEPT_FOLLOWS":
+            if isinstance(value, bool):
+                value = "true" if value else "false"
+            elif str(value).lower() in {"true", "1", "yes"}:
+                value = "true"
+            elif str(value).lower() in {"false", "0", "no"}:
+                value = "false"
+            else:
+                return jsonify({"success": False, "error": "FEDERATION_AUTO_ACCEPT_FOLLOWS must be a boolean", "code": 400}), 400
+
+        old_val = InstanceSettings.get_value(key)
         InstanceSettings.set_value(key, value)
         saved[key] = value
+        if key in FEDERATION_KEYS:
+            changes[key] = {"old": old_val, "new": value}
+
+    if changes:
+        try:
+            audit = EntityAuditLog(
+                entity_type="instance_settings",
+                entity_id=0,
+                change_type="federation_settings_updated",
+                actor_id=user.id,
+                diff=changes,
+            )
+            db.session.add(audit)
+            db.session.commit()
+        except Exception as exc:
+            current_app.logger.warning("Failed to record federation settings audit log: %s", exc)
 
     return {"success": True, "data": saved}
 
@@ -432,7 +485,8 @@ def manage_settings():
         res = _get_settings(user, request.args.get("category", "all"))
         return jsonify(res) if isinstance(res, dict) else res
 
-    return jsonify(_put_settings(user, request.json or {}))
+    res = _put_settings(user, request.json or {})
+    return jsonify(res) if isinstance(res, dict) else res
 
 
 @admin_bp.route("/settings/reveal", methods=["POST"])
@@ -1861,12 +1915,39 @@ def execute_item_reassignment():
 @require_auth
 @require_permission(PermissionName.CONFIG_FEDERATION)
 def get_federation_instances() -> tuple[Response, int] | Response:
-    """List all registered federation instances."""
-    from app.db.federation import FederationInstance
+    """List all registered federation instances with pinned key fingerprints."""
+    from app.core import federation_keys
+    from app.db.federation import FederationActor, FederationInstance
 
     stmt = select(FederationInstance).order_by(FederationInstance.domain.asc())
     instances = db.session.execute(stmt).scalars().all()
-    return jsonify({"success": True, "data": [inst.to_dict() for inst in instances]})
+    if not instances:
+        return jsonify({"success": True, "data": []})
+
+    instance_ids = [inst.id for inst in instances]
+    actors_stmt = select(FederationActor).where(
+        FederationActor.instance_id.in_(instance_ids),
+        FederationActor.public_key_pem.isnot(None),
+    )
+    actors = db.session.execute(actors_stmt).scalars().all()
+
+    fingerprint_map: dict[int, str] = {}
+    for actor in actors:
+        if not actor.public_key_pem:
+            continue
+        fp = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
+        if not fp:
+            continue
+        if actor.actor_uri.endswith("/actor") or actor.instance_id not in fingerprint_map:
+            fingerprint_map[actor.instance_id] = fp
+
+    data = []
+    for inst in instances:
+        item = inst.to_dict()
+        item["key_fingerprint"] = fingerprint_map.get(inst.id)
+        data.append(item)
+
+    return jsonify({"success": True, "data": data})
 
 
 @admin_bp.route("/federation/instances", methods=["POST"])
@@ -1885,10 +1966,39 @@ def add_federation_instance() -> tuple[Response, int] | Response:
     if not instance:
         return jsonify({"success": False, "error": f"Failed to discover or validate instance {domain}"}), 400
 
+    current_user_id = g.user.id if hasattr(g, "user") and g.user else getattr(g, "user_id", None)
+    audit = EntityAuditLog(
+        entity_type="federation_instance",
+        entity_id=instance.id,
+        actor_id=current_user_id,
+        change_type="instance_added",
+        diff={
+            "domain": instance.domain,
+            "trust_level": instance.trust_level,
+        },
+    )
+    db.session.add(audit)
     db.session.commit()
     data = instance.to_dict()
     probe_succeeded = bool(getattr(instance, "probe_succeeded", False))
     data["probe_succeeded"] = probe_succeeded
+    if probe_succeeded:
+        from app.core import federation_keys
+        from app.db.federation import FederationActor
+
+        actor = (
+            db.session.execute(
+                select(FederationActor).where(
+                    FederationActor.instance_id == instance.id,
+                    FederationActor.public_key_pem.isnot(None),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if actor and actor.public_key_pem:
+            data["key_fingerprint"] = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
+
     return jsonify({"success": True, "data": data, "probe_succeeded": probe_succeeded}), 201
 
 
@@ -2027,3 +2137,29 @@ def get_federation_key_fingerprint() -> tuple[Response, int] | Response:
 
     fingerprint = federation_keys.get_key_fingerprint()
     return jsonify({"success": True, "data": {"fingerprint": fingerprint}})
+
+
+@admin_bp.route("/federation/key-fingerprint/provision", methods=["POST"])
+@require_auth
+@require_permission(PermissionName.CONFIG_FEDERATION)
+def provision_federation_instance_key() -> tuple[Response, int] | Response:
+    """Explicitly provision or rotate the local instance actor keypair (server.pem)."""
+    from app.core import federation_keys
+
+    payload = request.get_json(silent=True) or {}
+    rotate = bool(payload.get("rotate", False))
+
+    fingerprint = federation_keys.ensure_instance_actor_key(rotate=rotate)
+
+    current_user_id = g.user.id if hasattr(g, "user") and g.user else getattr(g, "user_id", None)
+    audit = EntityAuditLog(
+        entity_type="instance_actor_key",
+        entity_id=0,
+        actor_id=current_user_id,
+        change_type="instance_key_provisioned" if not rotate else "instance_key_rotated",
+        diff={"fingerprint": fingerprint, "rotate": rotate},
+    )
+    db.session.add(audit)
+    db.session.commit()
+
+    return jsonify({"success": True, "data": {"fingerprint": fingerprint, "provisioned": True}}), 200

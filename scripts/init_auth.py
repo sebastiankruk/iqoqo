@@ -199,6 +199,15 @@ def run_init_auth(app: Flask | None = None) -> None:
         except (SQLAlchemyError, ValueError):
             db.session.rollback()
 
+        # 5. Provision instance actor keypair (server.pem) if SECRET_KEY is configured
+        try:
+            from app.core import federation_keys
+
+            fp = federation_keys.ensure_instance_actor_key()
+            print(f"Ensured instance actor key ({fp})")
+        except Exception as exc:
+            print(f"Note: Could not initialize instance actor key: {exc}")
+
 
 if __name__ == "__main__":
     run_init_auth()

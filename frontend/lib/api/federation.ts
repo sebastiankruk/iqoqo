@@ -99,6 +99,22 @@ export async function getFederationKeyFingerprint(): Promise<string> {
   return res.data.data.fingerprint;
 }
 
+/**
+ * Provision or rotate instance actor keypair.
+ * @param rotate - Whether to rotate an existing key
+ * @returns Promise resolving to the resulting key fingerprint
+ */
+export async function provisionFederationInstanceKey(rotate: boolean = false): Promise<string> {
+  const res = await apiClient.post<ApiResponse<{ fingerprint: string }>>(
+    "/v1/admin/federation/key-fingerprint/provision",
+    { rotate }
+  );
+  if (!res.data.success || !res.data.data) {
+    throw new Error(res.data.error ?? "Failed to provision instance key");
+  }
+  return res.data.data.fingerprint;
+}
+
 // ---------------------------------------------------------------------------
 // Federation Activities
 // ---------------------------------------------------------------------------

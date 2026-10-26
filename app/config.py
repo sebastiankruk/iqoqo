@@ -108,6 +108,8 @@ class Config:
 
     # OAuth
     FEDERATION_ENABLED = os.environ.get("FEDERATION_ENABLED", "false").lower() == "true"
+    FEDERATION_AUTO_ACCEPT_FOLLOWS = os.environ.get("FEDERATION_AUTO_ACCEPT_FOLLOWS", "false").lower() in {"true", "1", "yes"}
+    FEDERATION_DEFAULT_TRUST = os.environ.get("FEDERATION_DEFAULT_TRUST", "untrusted").lower()
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 

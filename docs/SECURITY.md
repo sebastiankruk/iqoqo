@@ -14,6 +14,26 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Federation Trust Graph, Settings RBAC & Instance Actor Hardening (Release 0.9.3 - October 2026)
+
+#### ActivityPub Trust Graph & Follow Request Hardening
+
+- **Strict Opt-In Follow Auto-Acceptance**: Inbound `Follow` activities are held in `pending` status unless `FEDERATION_AUTO_ACCEPT_FOLLOWS` is explicitly set to `true` in settings or environment. Follow requests from untrusted instances never auto-accept.
+- **Fail-Closed Default Trust Bounds**: Discovered peers strictly default to `untrusted` (or `pending`). Setting `FEDERATION_DEFAULT_TRUST="trusted"` is rejected with `400 Bad Request` to prevent accidental auto-trusting of unverified Fediverse peers.
+- **Domain & Port Normalization Protection**: Domain parsing consistently retains non-standard ports (e.g., `domain:8443`), preventing blocklist bypasses where an attacker appends a port to evade exact hostname block rules.
+- **Non-Routable Peer Filtering**: Internal Docker network names (`web:5000`, `peer-web:5000`), loopback addresses (`localhost`), and RFC1918 private IP ranges are strictly filtered from the public `GET /api/federation/directory` endpoint.
+
+#### Fail-Closed Settings RBAC & Cryptographic Secret Protection
+
+- **No Insecure Fallback Fernet Secret**: Removed the hardcoded fallback secret in `app/core/federation_keys.py`. Missing `SECRET_KEY` raises a hard `RuntimeError` rather than defaulting to an insecure known key.
+- **Fail-Closed Settings API**: `PUT /api/v1/admin/settings` rejects unrecognized setting keys with `400 Bad Request`, rejects federation settings if the caller lacks `config:federation` permission with `403 Forbidden`, and records all setting changes in `EntityAuditLog`.
+
+#### Instance Actor Key Lifecycle & Out-Of-Band Key Pinning
+
+- **Deterministic Instance Application Actor**: Disclosed at `GET /api/federation/actor` as an ActivityStreams `Application` actor JSON-LD document. Key generation occurs exclusively during deployment provisioning (`scripts/init_auth.py`) or via authenticated admin `POST /api/v1/admin/federation/key-fingerprint/provision`, preventing arbitrary key generation on unauthenticated `GET` requests.
+- **DER-Derived Key Fingerprint Verification**: Peer instance public keys are fingerprinted directly from DER-encoded ASN.1 bytes using `SHA256:...`. Fingerprints are surfaced in the Admin Federation UI so instance administrators can perform out-of-band verification before promoting peer trust.
+- **Authorized Fetch Bodyless GET Signing**: Outbound HTTP Signature signing (`(request-target) host date`) is applied to actor `GET` requests using the instance actor key, ensuring compatibility with Fediverse servers enforcing Authorized Fetch mode.
+
 ### Auth Hardening, PAT Scoping & SSE Stream Isolation (Release 0.9.3 - October 2026)
 
 #### Personal Access Token (PAT) Security Model

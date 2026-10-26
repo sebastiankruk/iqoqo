@@ -101,15 +101,19 @@ def sign_request(
         path = f"{path}?{parsed.query}"
 
     date_str = email.utils.formatdate(usegmt=True)
-    digest_val = compute_digest(body)
-
     out_headers = dict(headers or {})
     out_headers["Host"] = host
     out_headers["Date"] = date_str
-    out_headers["Digest"] = digest_val
 
-    # Construct draft-cavage-12 signing string
-    signing_string = f"(request-target): {method.lower()} {path}\n" f"host: {host}\n" f"date: {date_str}\n" f"digest: {digest_val}"
+    is_bodyless = body is None and method.upper() in {"GET", "HEAD", "DELETE"}
+    if is_bodyless:
+        headers_to_sign = "(request-target) host date"
+        signing_string = f"(request-target): {method.lower()} {path}\n" f"host: {host}\n" f"date: {date_str}"
+    else:
+        digest_val = compute_digest(body)
+        out_headers["Digest"] = digest_val
+        headers_to_sign = "(request-target) host date digest"
+        signing_string = f"(request-target): {method.lower()} {path}\n" f"host: {host}\n" f"date: {date_str}\n" f"digest: {digest_val}"
 
     # Ensure private key is RSAPrivateKey instance
     if isinstance(private_key, (bytes, str)):
@@ -128,7 +132,7 @@ def sign_request(
     )
     sig_b64 = base64.b64encode(sig_bytes).decode("ascii")
 
-    sig_header = f'keyId="{key_id}",' f'algorithm="rsa-sha256",' f'headers="(request-target) host date digest",' f'signature="{sig_b64}"'
+    sig_header = f'keyId="{key_id}",' f'algorithm="rsa-sha256",' f'headers="{headers_to_sign}",' f'signature="{sig_b64}"'
     out_headers["Signature"] = sig_header
 
     return out_headers

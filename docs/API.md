@@ -765,11 +765,35 @@ Retrieve the public ActivityStreams `OrderedCollection` representing the user's 
 
 ---
 
+### `GET /api/federation/actor`
+
+Retrieve the instance `Application` actor ActivityStreams JSON-LD document publishing the server's public key (`#main-key`) for Fediverse HTTP Signatures and Authorized Fetch.
+
+**Authentication:** Not required (Public). Returns `404 Not Found` if the instance key has not yet been provisioned.
+
+---
+
+### `GET /api/federation/directory`
+
+Public directory of federated library peers with pagination and search. Non-routable internal hostnames (`localhost`, Docker bridge networks, RFC1918) are excluded.
+
+**Authentication:** Not required (Public).
+
+---
+
 ### `GET /api/v1/admin/federation/instances` & `POST /api/v1/admin/federation/instances`
 
-List registered peer federation instances or discover and register a new peer via NodeInfo (`/.well-known/nodeinfo`).
+List registered peer federation instances (including pinned `key_fingerprint` SHA-256 strings) or discover and register a new peer via NodeInfo (`/.well-known/nodeinfo`).
 
-**Authentication:** Admin required (`role:admin`).
+**Authentication:** Admin required (`role:admin` / `config:federation`).
+
+---
+
+### `POST /api/v1/admin/federation/key-fingerprint/provision`
+
+Explicitly provision or rotate the local instance RSA-2048 keypair (`data/keys/server.pem`) and return the resulting `SHA256:...` fingerprint.
+
+**Authentication:** Admin required (`role:admin` / `config:federation`). Accepts `{ "rotate": true }` to rotate an existing keypair.
 
 ---
 

@@ -144,40 +144,42 @@ if [[ "$fetch_result" != *"SUCCESS"* ]]; then
 fi
 pass "Primary FederationClient successfully fetched and verified remote Actor over internal network."
 
-# 8. Register Peer in Primary Instance's Federation Trust Graph
-info "Registering peer instance in primary database for Admin Federation UI..."
+# 8. Test Peer Discovery in Primary Instance's Federation Trust Graph (with cleanup)
+info "Testing peer discovery across instance boundaries..."
 register_result=$(docker exec -i iqoqo-preview-web-1 python3 -c "
 from app import create_app, db
 from app.core import federation_discovery
-from app.db.federation import FederationInstance, TrustLevel
+from app.db.federation import FederationInstance
+from sqlalchemy import delete
 app = create_app()
 with app.app_context():
-    inst = federation_discovery.discover_instance('peer-web:5000')
-    if inst:
-        inst.trust_level = TrustLevel.TRUSTED
+    try:
+        inst = federation_discovery.discover_instance('peer-web:5000')
+        if inst:
+            print('SUCCESS')
+        else:
+            print('FAILED')
+    finally:
+        # Clean up synthetic smoke test row so preview database is not polluted with internal container names
+        db.session.execute(delete(FederationInstance).where(FederationInstance.domain == 'peer-web:5000'))
         db.session.commit()
-        print('SUCCESS')
-    else:
-        print('FAILED')
 " 2>&1 | tr -d '\r')
 
 if [[ "$register_result" == *"SUCCESS"* ]]; then
-    pass "Peer instance (peer-web:5000) registered and trusted in primary instance federation registry."
+    pass "Peer instance cross-container discovery smoke test succeeded (synthetic row cleaned up)."
 else
-    info "Note: Could not auto-register peer instance in primary database: ${register_result}"
+    info "Note: Could not discover peer instance across internal containers: ${register_result}"
 fi
 
-# Also register primary instance on peer
+# Clean up any synthetic primary instance row on peer as well
 docker exec -i iqoqo-preview-peer-web-1 python3 -c "
 from app import create_app, db
-from app.core import federation_discovery
-from app.db.federation import FederationInstance, TrustLevel
+from app.db.federation import FederationInstance
+from sqlalchemy import delete
 app = create_app()
 with app.app_context():
-    inst = federation_discovery.discover_instance('web:5000')
-    if inst:
-        inst.trust_level = TrustLevel.TRUSTED
-        db.session.commit()
+    db.session.execute(delete(FederationInstance).where(FederationInstance.domain == 'web:5000'))
+    db.session.commit()
 " 2>/dev/null || true
 
 echo "============================================================"
@@ -185,6 +187,6 @@ echo -e "${GREEN}All Multi-Instance Federation Preview checks PASSED!${NC}"
 echo "  * Primary Web UI:      http://localhost:${PRIMARY_WEB_PORT} (API: :${PRIMARY_API_PORT})"
 echo "  * Secondary Peer UI:   http://localhost:${PEER_WEB_PORT} (API: :${PEER_API_PORT})"
 echo "  * Federation stream:   http://localhost:${PRIMARY_WEB_PORT}/admin/federation"
-echo "  * Registered Peer:     peer-web:5000 (status: Trusted)"
+echo "  * Peer Discovery:      Verified clean (no synthetic internal rows left in database)"
 echo "============================================================"
 exit 0

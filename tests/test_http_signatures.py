@@ -305,3 +305,32 @@ class TestHttpSignatures:
         assert resolved_actor == actor_uri
         assert len(refetch_called) == 1
         assert refetch_called[0] == actor_uri
+
+    def test_sign_request_bodyless_get_omits_digest(self, rsa_keypair):
+        """Bodyless GET requests must sign (request-target) host date and omit Digest header."""
+        priv_key, pub_pem = rsa_keypair
+        actor_uri = "https://example.org/api/federation/actor"
+        key_id = f"{actor_uri}#main-key"
+
+        signed_headers = sign_request(
+            method="GET",
+            url=actor_uri,
+            body=None,
+            key_id=key_id,
+            private_key=priv_key,
+        )
+
+        assert "Signature" in signed_headers
+        assert "Digest" not in signed_headers
+        assert 'headers="(request-target) host date"' in signed_headers["Signature"]
+        assert "Digest" not in signed_headers["Signature"]
+
+        # Verify request can be parsed and verified
+        req = MockRequest(
+            method="GET",
+            path="/api/federation/actor",
+            headers=signed_headers,
+            body=b"",
+        )
+        resolved_actor = verify_request(req, key_resolver=lambda _: pub_pem)
+        assert resolved_actor == actor_uri

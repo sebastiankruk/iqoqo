@@ -425,6 +425,48 @@ class TestActivityHandlers:
             )
             assert follower_after is None
 
+    def test_handle_follow_defaults_to_pending_when_unset_or_disabled(self, app, fed_user, remote_peer_instance):
+        """Inbound Follow must default to PENDING (opt-in) without sending Accept unless explicitly enabled."""
+        with app.app_context():
+            # Ensure setting is unset in InstanceSettings and default False is evaluated
+            from app.db.settings import InstanceSettings
+
+            db.session.execute(db.delete(InstanceSettings).where(InstanceSettings.key == "FEDERATION_AUTO_ACCEPT_FOLLOWS"))
+            # Make the remote instance UNTRUSTED so trusted bypass does not auto-accept
+            inst = db.session.get(FederationInstance, remote_peer_instance["instance_id"])
+            inst.trust_level = TrustLevel.UNTRUSTED
+            db.session.commit()
+            if "FEDERATION_AUTO_ACCEPT_FOLLOWS" in app.config:
+                del app.config["FEDERATION_AUTO_ACCEPT_FOLLOWS"]
+
+            base_url = get_federation_base_url()
+            target_iri = canonical_actor_iri(uuid.UUID(fed_user["id"]), base_url)
+
+            follow_activity = {
+                "type": "Follow",
+                "actor": remote_peer_instance["actor_uri"],
+                "object": target_iri,
+            }
+            with patch("app.core.tasks.submit_task") as mock_submit:
+                handled = handle_activity(follow_activity)
+                assert handled is True
+                # Must NOT queue Celery delivery of Accept when auto-accept is disabled
+                mock_submit.assert_not_called()
+
+            # Verify follower record exists in PENDING status
+            follower = (
+                db.session.execute(
+                    select(FederationFollower).where(
+                        FederationFollower.local_user_id == uuid.UUID(fed_user["id"]),
+                        FederationFollower.remote_actor_id == remote_peer_instance["actor_id"],
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            assert follower is not None
+            assert follower.status == FollowStatus.PENDING
+
     def test_handle_accept_and_reject(self, app, fed_user, remote_peer_instance):
         """Accept sets status to accepted, Reject sets status to rejected."""
         with app.app_context():

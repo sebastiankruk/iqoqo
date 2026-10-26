@@ -705,7 +705,16 @@
     "previous": "Poprzednia",
     "next": "Następna",
     "prevPageAria": "Poprzednia strona",
-    "nextPageAria": "Następna strona"
+    "nextPageAria": "Następna strona",
+    "keyFingerprint": "Odcisk klucza aktora instancji",
+    "keyFingerprintDesc": "Odcisk SHA-256 klucza publicznego aktora instancji do weryfikacji podpisów HTTP Fediverse.",
+    "generateKey": "Wygeneruj klucz instancji",
+    "rotateKey": "Obróć klucz",
+    "keyProvisioned": "Klucz aktora instancji został pomyślnie wygenerowany",
+    "keyRotated": "Klucz aktora instancji został pomyślnie obrócony",
+    "copyFingerprint": "Kopiuj odcisk klucza",
+    "copiedFingerprint": "Odcisk klucza skopiowany do schowka",
+    "noFingerprint": "Brak opublikowanego klucza"
   },
   "FederationDirectory": {
     "title": "Katalog połączonych bibliotek",

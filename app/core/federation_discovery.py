@@ -32,6 +32,41 @@ from app.utils.http_client import SSRFError, safe_get
 logger = logging.getLogger(__name__)
 
 
+def is_publicly_routable_peer_domain(domain: str) -> bool:
+    """Check if domain is a publicly routable peer domain (not an internal/container/loopback host)."""
+    import ipaddress
+
+    if not domain:
+        return False
+    host = domain.split(":")[0].strip().lower()
+    if not host:
+        return False
+
+    # Block common local / container hostnames without dots
+    if host in {"localhost", "web", "peer-web", "nginx", "redis", "db", "peer-db"}:
+        return False
+    if host.endswith((".local", ".internal", ".test", ".invalid", ".localhost", ".docker")):
+        return False
+
+    # Block IP literals if private/loopback/link-local/reserved
+    try:
+        ip = ipaddress.ip_address(host)
+        return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified)
+    except ValueError:
+        pass
+
+    # Must contain at least one dot to be a valid public FQDN
+    return "." in host
+
+
+def get_safe_default_trust() -> str:
+    """Retrieve FEDERATION_DEFAULT_TRUST clamped strictly to UNTRUSTED or PENDING."""
+    from app.core.config_service import ConfigService
+
+    val = str(ConfigService.get("FEDERATION_DEFAULT_TRUST", TrustLevel.UNTRUSTED) or "").lower().strip()
+    return TrustLevel.PENDING if val == TrustLevel.PENDING else TrustLevel.UNTRUSTED
+
+
 def clean_instance_domain(domain_or_url: str) -> str:
     """Normalize input domain or URL to lowercase host.
 
@@ -72,7 +107,7 @@ def discover_instance(domain_or_url: str) -> FederationInstance | None:
     if not instance:
         instance = FederationInstance(
             domain=domain,
-            trust_level=TrustLevel.UNTRUSTED,
+            trust_level=get_safe_default_trust(),
             created_at=datetime.now(UTC),
         )
         db.session.add(instance)
@@ -144,8 +179,11 @@ def _probe_domain_http(domain: str) -> tuple[bool, dict[str, Any]]:
                                 if software.get("version"):
                                     meta_updates["software_version"] = str(software.get("version"))[:50]
                             metadata = ni_data.get("metadata", {}) if isinstance(ni_data, dict) else {}
-                            if isinstance(metadata, dict) and metadata.get("sharedInbox"):
-                                meta_updates["shared_inbox_url"] = str(metadata["sharedInbox"])[:500]
+                            if isinstance(metadata, dict):
+                                if metadata.get("sharedInbox"):
+                                    meta_updates["shared_inbox_url"] = str(metadata["sharedInbox"])[:500]
+                                if metadata.get("instance_actor"):
+                                    meta_updates["instance_actor_url"] = str(metadata["instance_actor"])[:500]
                     except Exception as ni_exc:
                         logger.debug("Failed parsing nodeinfo 2.1 schema for %s: %s", domain, ni_exc)
 
@@ -185,10 +223,27 @@ def probe_instance_health(instance: FederationInstance) -> bool:
 
     success, meta_updates = _probe_domain_http(instance.domain)
     if success:
+        instance_actor_url = meta_updates.pop("instance_actor_url", None)
         for k, v in meta_updates.items():
             setattr(instance, k, v)
         instance.last_seen_at = datetime.now(UTC)
         db.session.commit()
+
+        # If instance actor URL discovered or fallback, attempt to fetch and cache remote actor
+        if not instance_actor_url:
+            import os
+
+            allow_loopback = os.environ.get("FEDERATION_ALLOW_LOOPBACK") == "true"
+            scheme = "http" if allow_loopback and (":" in instance.domain or instance.domain in ("localhost", "peer-web")) else "https"
+            instance_actor_url = f"{scheme}://{instance.domain}/api/federation/actor"
+
+        try:
+            from app.core.federation_client import FederationClient
+
+            FederationClient().fetch_actor(instance_actor_url)
+        except Exception as exc:
+            logger.debug("Health probe could not fetch instance actor %s: %s", instance_actor_url, exc)
+
         return True
 
     return False
