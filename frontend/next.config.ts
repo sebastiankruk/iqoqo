@@ -86,8 +86,12 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format) or be relative "/api".
     // We favor FLASK_API_URL if available for the server-side proxy destination.
-    const apiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000/api";
-    const backendBase = apiUrl.replace(/\/api\/?$/, "");
+    const rawApiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000/api";
+    const rawBase = rawApiUrl.replace(/\/api\/?$/, "");
+    const backendBase =
+      rawBase.startsWith("http://") || rawBase.startsWith("https://")
+        ? rawBase
+        : process.env.FLASK_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:5000";
 
     return {
       afterFiles: [

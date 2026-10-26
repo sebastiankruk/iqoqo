@@ -38,6 +38,23 @@ function isAllowedHost(hostWithPort: string): boolean {
  */
 function resolveFrontendOrigin(request: Request): string {
   const url = new URL(request.url);
+  const rawForwardedHost = request.headers.get("x-forwarded-host");
+  const rawHost = request.headers.get("host") || "";
+  const trustedHost =
+    rawForwardedHost && isAllowedHost(rawForwardedHost) ? rawForwardedHost : isAllowedHost(rawHost) ? rawHost : null;
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const protocol =
+    forwardedProto === "https" || forwardedProto === "http"
+      ? forwardedProto
+      : url.protocol === "https:"
+        ? "https"
+        : "http";
+
+  if (trustedHost) {
+    return `${protocol}://${trustedHost}`;
+  }
+
   const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
   if (configuredFrontendUrl) {
     const configuredUrl = new URL(configuredFrontendUrl);
@@ -46,22 +63,7 @@ function resolveFrontendOrigin(request: Request): string {
     }
   }
 
-  const rawForwardedHost = request.headers.get("x-forwarded-host");
-  const rawHost = request.headers.get("host") || "";
-  const host =
-    rawForwardedHost && isAllowedHost(rawForwardedHost)
-      ? rawForwardedHost
-      : isAllowedHost(rawHost)
-        ? rawHost
-        : "localhost:3000";
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const protocol =
-    forwardedProto === "https" || forwardedProto === "http"
-      ? forwardedProto
-      : url.protocol === "https:"
-        ? "https"
-        : "http";
-  return `${protocol}://${host}`;
+  return `${protocol}://localhost:3000`;
 }
 
 /**

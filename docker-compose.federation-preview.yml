@@ -68,8 +68,9 @@ services:
       - SECRET_KEY=${PEER_SECRET_KEY:-peer-preview-secret-key-32-chars-ok}
       - JWT_SECRET_KEY=${PEER_JWT_SECRET_KEY:-peer-jwt-secret-preview-32-chars}
       - AUTH_SECRET=${PEER_AUTH_SECRET:-peer-auth-secret-preview-32-chars}
-      - BASE_URL=${PEER_BASE_URL:-http://localhost:5005}
-      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-http://localhost:3001}
+      - BASE_URL=${PEER_BASE_URL:-https://peer.iqoqo.cc}
+      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-https://peer.iqoqo.cc}
+      - CORS_ORIGINS=${PEER_CORS_ORIGINS:-https://peer.iqoqo.cc,http://localhost:3001,http://localhost:3000}
       - FEDERATION_ENABLED=true
       - FEDERATION_AUTO_ACCEPT_FOLLOWS=true
       - FEDERATION_ALLOW_LOOPBACK=true
@@ -84,10 +85,22 @@ services:
   peer-frontend:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-preview}
     restart: always
+    command: >-
+      sh -c "node -e '
+        const fs = require(\"fs\");
+        try {
+          const m = JSON.parse(fs.readFileSync(\".next/routes-manifest.json\"));
+          m.rewrites.afterFiles.forEach(r => {
+            if (r.source === \"/api/:path*\") r.destination = (process.env.FLASK_API_URL || \"http://peer-web:5000/api\").replace(/\\/api\\/?$$/, \"\") + \"/api/:path*\";
+            if (r.source === \"/.well-known/:path*\") r.destination = (process.env.FLASK_API_URL || \"http://peer-web:5000/api\").replace(/\\/api\\/?$$/, \"\") + \"/.well-known/:path*\";
+          });
+          fs.writeFileSync(\".next/routes-manifest.json\", JSON.stringify(m, null, 2));
+        } catch (e) { console.error(e); }
+      ' && node server.js"
     environment:
       - FLASK_API_URL=http://peer-web:5000/api
       - NEXT_PUBLIC_API_URL=${PEER_NEXT_PUBLIC_API_URL:-/api}
-      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-https://peer.iqoqo.cc}
       - PORT=3000
     ports:
       - "${PEER_FRONTEND_PORT:-3001}:3000"
