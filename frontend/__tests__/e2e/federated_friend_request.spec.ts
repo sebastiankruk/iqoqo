@@ -19,7 +19,10 @@ import packageJson from "../../package.json" assert { type: "json" };
 
 test.describe("Federated Friend Request Direction and Cancellation (C87f)", () => {
   test("outbound federated follow appears in Outgoing tab with Cancel and not in Incoming tab", async ({ page }) => {
-    // 1. Mock system config & authenticated profile
+    // 0. Ensure user has authenticated session cookie so Next.js proxy doesn't redirect to /login
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+
+    // 1. Mock system config & profile endpoints
     await page.route("**/api/config**", async route => {
       await route.fulfill({
         status: 200,
@@ -31,19 +34,92 @@ test.describe("Federated Friend Request Direction and Cancellation (C87f)", () =
       });
     });
 
-    await page.route("**/api/auth/profile**", async route => {
+    await page.route(
+      url => url.pathname === "/api/profile/" || url.pathname === "/api/profile",
+      async route => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            data: {
+              id: "11111111-1111-1111-1111-111111111111",
+              email: "bob@local.instance",
+              public_username: "bob",
+              display_name: "Bob Local",
+              bio: "",
+              avatar_url: "",
+              visibility: "private",
+              default_item_visibility: "private",
+              consents: {},
+            },
+          }),
+        });
+      }
+    );
+
+    await page.route("**/api/profile/consents**", async route => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          data: {
-            id: "11111111-1111-1111-1111-111111111111",
-            email: "bob@local.instance",
-            public_username: "bob",
-            display_name: "Bob Local",
-            default_item_visibility: "private",
-          },
+          data: { federated_profile: true, discoverable: true },
+        }),
+      });
+    });
+
+    await page.route("**/api/profile/pending-deletion**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { is_pending_deletion: false },
+        }),
+      });
+    });
+
+    await page.route("**/api/auth/2fa/status**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { totp_enabled: false },
+        }),
+      });
+    });
+
+    await page.route("**/api/auth/tokens**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
+        }),
+      });
+    });
+
+    await page.route("**/api/escalations/mine**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
+        }),
+      });
+    });
+
+    await page.route("**/api/v1/notifications**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: [],
         }),
       });
     });
