@@ -218,11 +218,12 @@ test.describe("Federated Friend Request Direction and Cancellation (C87f)", () =
     // 7. Check Outgoing tab -> must show Alice Remote with Fediverse badge and Cancel action
     const outgoingTab = page.getByRole("button", { name: /Outgoing \(/i });
     await outgoingTab.click();
-    await expect(page.getByText("Alice Remote")).toBeVisible();
-    await expect(page.getByText("Fediverse")).toBeVisible();
-    await expect(page.getByText("Pending")).toBeVisible();
+    const outgoingItem = page.locator("li").filter({ hasText: "Alice Remote" });
+    await expect(outgoingItem).toBeVisible();
+    await expect(outgoingItem.getByText("Fediverse", { exact: true })).toBeVisible();
+    await expect(outgoingItem.getByText("Pending", { exact: true })).toBeVisible();
 
-    const cancelButton = page.getByRole("button", { name: /Cancel/i });
+    const cancelButton = outgoingItem.getByRole("button", { name: /Cancel/i });
     await expect(cancelButton).toBeVisible();
 
     // 8. Cancel request
