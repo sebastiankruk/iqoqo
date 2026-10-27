@@ -72,9 +72,7 @@ export function PatManagement() {
   const t = useTranslations("Profile");
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin"));
-  const availableScopes = AVAILABLE_SCOPES.filter(
-    s => (s.id !== "admin" && s.id !== "*") || isAdmin
-  );
+  const availableScopes = AVAILABLE_SCOPES.filter(s => (s.id !== "admin" && s.id !== "*") || isAdmin);
 
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [total, setTotal] = useState(0);
@@ -201,9 +199,7 @@ export function PatManagement() {
               {total}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {t("personalAccessTokensDesc")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("personalAccessTokensDesc")}</p>
         </div>
 
         <Button
@@ -296,13 +292,17 @@ export function PatManagement() {
                   {token.last_used_at && (
                     <>
                       <span>•</span>
-                      <span>{t("lastUsed")}: {new Date(token.last_used_at).toLocaleDateString()}</span>
+                      <span>
+                        {t("lastUsed")}: {new Date(token.last_used_at).toLocaleDateString()}
+                      </span>
                     </>
                   )}
                   {token.expires_at && (
                     <>
                       <span>•</span>
-                      <span>{t("expires")}: {new Date(token.expires_at).toLocaleDateString()}</span>
+                      <span>
+                        {t("expires")}: {new Date(token.expires_at).toLocaleDateString()}
+                      </span>
                     </>
                   )}
                 </div>
@@ -335,9 +335,7 @@ export function PatManagement() {
         <DialogContent className="sm:max-w-lg" data-testid="generate-pat-dialog">
           <DialogHeader>
             <DialogTitle>{t("generateNewToken")}</DialogTitle>
-            <DialogDescription>
-              {t("personalAccessTokensDesc")}
-            </DialogDescription>
+            <DialogDescription>{t("personalAccessTokensDesc")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">

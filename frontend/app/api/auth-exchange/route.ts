@@ -57,10 +57,7 @@ export function sanitizeAllowedHost(hostCandidate: string): string | null {
 
     const hostname = parsed.hostname.toLowerCase();
     let isAllowed =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "iqoqo.cc" ||
-      hostname.endsWith(".iqoqo.cc");
+      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "iqoqo.cc" || hostname.endsWith(".iqoqo.cc");
 
     const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
     if (!isAllowed && configuredFrontendUrl) {

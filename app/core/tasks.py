@@ -696,7 +696,6 @@ def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int =
 
     key = f"{entity_type}:{entity_id}"
     client = get_redis_client()
-    dispatched = False
 
     if client:
         try:
@@ -810,7 +809,7 @@ def batch_fts_reindex(self=None) -> dict[str, Any]:
             .where(Item.id.in_(item_ids))
         ).all()
 
-        for item_id, owner_id, visibility, wid in item_rows:
+        for _item_id, owner_id, visibility, wid in item_rows:
             if wid:
                 work_ids.add(wid)
             if visibility in ("private", "friends_only"):
@@ -827,7 +826,7 @@ def batch_fts_reindex(self=None) -> dict[str, Any]:
             .where(Manifestation.id.in_(manifestation_ids))
         ).all()
 
-        for mid, wid in mani_rows:
+        for _mid, wid in mani_rows:
             if wid:
                 work_ids.add(wid)
 

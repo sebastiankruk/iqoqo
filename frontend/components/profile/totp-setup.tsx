@@ -165,9 +165,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
-            {t("twoFactorAuthDesc")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("twoFactorAuthDesc")}</p>
         </div>
 
         {totpEnabled ? (
@@ -198,9 +196,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" data-testid="totp-enroll-dialog">
           <DialogHeader>
             <DialogTitle>{t("setupTwoFactorAuth")}</DialogTitle>
-            <DialogDescription>
-              {t("scanQrCodeDesc")}
-            </DialogDescription>
+            <DialogDescription>{t("scanQrCodeDesc")}</DialogDescription>
           </DialogHeader>
 
           {enrollData && (
@@ -249,9 +245,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
                     {t("copyAll")}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("recoveryCodesDesc")}
-                </p>
+                <p className="text-xs text-muted-foreground">{t("recoveryCodesDesc")}</p>
                 <div className="grid grid-cols-2 gap-1.5 p-2 bg-muted/60 rounded text-xs font-mono text-center">
                   {enrollData.recovery_codes.map((code, idx) => (
                     <span key={idx} className="bg-background/80 py-1 rounded border border-border/50">
@@ -304,9 +298,7 @@ export function TotpSetup({ totpEnabled, onStatusChanged }: TotpSetupProps) {
         <DialogContent className="sm:max-w-md" data-testid="disable-2fa-dialog">
           <DialogHeader>
             <DialogTitle>{t("disable2FATitle")}</DialogTitle>
-            <DialogDescription>
-              {t("disable2FADesc")}
-            </DialogDescription>
+            <DialogDescription>{t("disable2FADesc")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">

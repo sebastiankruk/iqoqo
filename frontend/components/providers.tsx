@@ -34,16 +34,15 @@ export function TransitionEventsListener() {
   const { data: profile } = useProfile();
 
   const isPublicRoute = Boolean(
-    pathname && (
-      pathname === "/login" ||
+    pathname &&
+    (pathname === "/login" ||
       pathname.startsWith("/login/") ||
       pathname === "/register" ||
       pathname.startsWith("/register/") ||
       pathname.startsWith("/share/") ||
       pathname.startsWith("/verify-email") ||
       pathname.startsWith("/reset-password") ||
-      pathname.startsWith("/api/auth-exchange")
-    )
+      pathname.startsWith("/api/auth-exchange"))
   );
 
   const isAuthenticated = Boolean(profile && profile.id);

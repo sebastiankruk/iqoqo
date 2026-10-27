@@ -746,13 +746,12 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                   <AlertDialogHeader>
                     <AlertDialogTitle>{tFed("rotateKey")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Rotating the instance key invalidates the current cryptographic identity on all peered instances until they re-fetch or re-pin the new key. Are you sure you want to proceed?
+                      Rotating the instance key invalidates the current cryptographic identity on all peered instances
+                      until they re-fetch or re-pin the new key. Are you sure you want to proceed?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setShowRotateConfirm(false)}>
-                      Cancel
-                    </AlertDialogCancel>
+                    <AlertDialogCancel onClick={() => setShowRotateConfirm(false)}>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => {
                         setShowRotateConfirm(false);

@@ -108,22 +108,44 @@ Authorization: Bearer iqo_YOUR_NEW_TOKEN_STRING
 
 iqoqo supports RFC 6238 TOTP two-factor authentication (compatible with Google Authenticator, Aegis, 1Password, and Bitwarden):
 
-- `GET /api/auth/2fa/status` — Check whether TOTP is enabled and retrieve remaining recovery code count.
-- `POST /api/auth/2fa/enroll` — Begin TOTP setup; returns base32 secret, provisioning URI, and SVG QR code.
-- `POST /api/auth/2fa/verify` — Verify the 6-digit TOTP code and activate 2FA; returns 8 single-use recovery codes.
-- `DELETE /api/auth/2fa/disable` — Disable TOTP (requires current password or valid TOTP code).
+- `GET /api/auth/2fa/status` — Check whether TOTP is enabled (`{"enabled": true|false}`).
+- `POST /api/auth/2fa/enroll` — Begin TOTP setup; returns base32 secret, provisioning URI, 8 single-use recovery codes, and base64 PNG QR code data URI.
+- `POST /api/auth/2fa/verify` — Verify the 6-digit TOTP code (`{"code": "123456"}`) and activate 2FA (`{"success": true, "enabled": true}`).
+- `POST /api/auth/2fa/disable` — Disable TOTP (requires account `password` or a valid `code` / `otp_code`: `{"success": true, "enabled": false}`).
 
-When 2FA is enabled on an account, `POST /api/auth/login` returns:
+When 2FA is enabled on an account, initial authentication against `POST /api/auth/login` with email and password returns:
 
 ```json
 {
-  "success": true,
   "mfa_required": true,
-  "user_id": "018f...-uuid"
+  "message": "Two-factor authentication required"
 }
 ```
 
-The client must submit the second factor to `POST /api/auth/login/challenge` with the 6-digit `code` (or a recovery code) to obtain the JWT session tokens.
+The client must submit a second call to `POST /api/auth/login` containing the credentials alongside the 6-digit `otp_code` (or a recovery code) to complete authentication and receive session tokens:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "your_password",
+  "otp_code": "123456"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJ...",
+  "user": {
+    "id": "018f...-uuid",
+    "email": "you@example.com"
+  }
+}
+```
 
 ### Real-Time Transition Events (SSE Stream)
 
@@ -135,20 +157,22 @@ Authorization: Bearer <session_jwt>
 Accept: text/event-stream
 ```
 
-Streams emit typed transition events:
+Streams emit unnamed JSON data frames and periodic heartbeat comment frames:
 
 ```text
-event: transition
-data: {"event": "item_transition", "entity_type": "item", "entity_id": 42, "user_id": 1, "timestamp": 1729940400}
+: connected
+
+data: {"event": "item_updated", "data": {"item_id": 42, "user_id": "018f..."}, "timestamp": "2026-10-26T12:00:00Z"}
+
+: ping
 ```
 
 Events are strictly isolated by `user_id` to prevent cross-tenant event leakage. Clients disconnect cleanly using standard EventSource lifecycles.
 
-### OpenAPI 3.1 & Interactive Documentation
+### OpenAPI 3.1 Specification
 
 - **OpenAPI 3.1 Spec (JSON):** `GET /api/docs/openapi.json`
-- **Interactive Swagger UI:** `GET /api/docs/swagger`
-- Covers 100% of application routes, security schemes (`BearerAuth`, `PersonalAccessToken`, `DeployToken`), and FRBR component schemas.
+- Covers 100% of application routes, security schemes (`BearerAuth`, `PersonalAccessToken`, `DeployToken`), accurate UUID parameter and schema representations, and FRBR component schemas.
 
 ### Permission Requirements
 
