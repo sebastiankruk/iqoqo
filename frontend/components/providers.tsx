@@ -93,7 +93,7 @@ export function TransitionEventsListener() {
         eventSource.close();
       }
     };
-  }, [queryClient]);
+  }, [queryClient, isAuthenticated, isPublicRoute]);
 
   return null;
 }

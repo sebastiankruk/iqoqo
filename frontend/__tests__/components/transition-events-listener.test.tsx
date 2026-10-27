@@ -141,4 +141,43 @@ describe("TransitionEventsListener", () => {
 
     expect(mockEventSourceInstances).toHaveLength(0);
   });
+
+  it("connects when user becomes authenticated and closes on logout", () => {
+    mockUseProfile.mockReturnValue({ data: null } as any);
+    const queryClient = new QueryClient();
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <TransitionEventsListener />
+      </QueryClientProvider>
+    );
+
+    expect(mockEventSourceInstances).toHaveLength(0);
+
+    // User logs in
+    mockUseProfile.mockReturnValue({
+      data: { id: "user-123", username: "collector" },
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <TransitionEventsListener />
+      </QueryClientProvider>
+    );
+
+    expect(mockEventSourceInstances).toHaveLength(1);
+    const instance = mockEventSourceInstances[0];
+    expect(instance.close).not.toHaveBeenCalled();
+
+    // User logs out
+    mockUseProfile.mockReturnValue({ data: null } as any);
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <TransitionEventsListener />
+      </QueryClientProvider>
+    );
+
+    expect(instance.close).toHaveBeenCalledTimes(1);
+  });
 });
