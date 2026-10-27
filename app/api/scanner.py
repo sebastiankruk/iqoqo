@@ -164,6 +164,7 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
 
 @api_bp.route("/lookup/<query>", methods=["GET"])
+@api_bp.route("/scanner/preview/<query>", methods=["GET"])
 @require_auth
 @limiter.limit("30 per minute", override_defaults=True)
 def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:

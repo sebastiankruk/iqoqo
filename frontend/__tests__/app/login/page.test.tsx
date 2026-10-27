@@ -142,7 +142,7 @@ describe("LoginPage", () => {
     });
   });
 
-  it("handles failed local login and shows alert", async () => {
+  it("handles failed local login and shows error message", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: false,
       /**
@@ -159,7 +159,7 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
-      expect(alertMock).toHaveBeenCalledWith("Login failed");
+      expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
     });
   });
 

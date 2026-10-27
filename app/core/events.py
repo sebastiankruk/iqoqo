@@ -42,9 +42,25 @@ REDIS_EVENTS_CHANNEL = "iqoqo:events"
 _in_process_subscribers: list[queue.Queue[dict[str, Any]]] = []
 _subscribers_lock = threading.Lock()
 
+_redis_pool: Any = None
+_redis_pool_lock = threading.Lock()
+_redis_pool_url: str | None = None
+
+
+def get_redis_pool(redis_url: str) -> Any:
+    """Retrieve or create a thread-safe pooled Redis connection pool."""
+    global _redis_pool, _redis_pool_url
+    with _redis_pool_lock:
+        if _redis_pool is None or _redis_pool_url != redis_url:
+            import redis
+
+            _redis_pool = redis.ConnectionPool.from_url(redis_url, max_connections=20, socket_connect_timeout=1)
+            _redis_pool_url = redis_url
+        return _redis_pool
+
 
 def get_redis_client():
-    """Retrieve connected Redis client or return None on connection failure."""
+    """Retrieve connected Redis client using shared pool or return None on connection failure."""
     redis_url = None
     if current_app:
         redis_url = current_app.config.get("REDIS_URL")
@@ -54,7 +70,8 @@ def get_redis_client():
     try:
         import redis
 
-        client = redis.Redis.from_url(redis_url, socket_connect_timeout=1)
+        pool = get_redis_pool(redis_url)
+        client = redis.Redis(connection_pool=pool)
         client.ping()
         return client
     except Exception as exc:
@@ -102,15 +119,16 @@ def _should_deliver_event(event_dict: dict[str, Any], user_id: str | None) -> bo
 
     User-scoped events ('item_created', 'item_updated', 'item_deleted', 'custody_lent',
     'custody_returned') are delivered only to the owner or borrower. System and catalog
-    events are delivered to all subscribers. If user_id is None (e.g. in unit tests),
-    all events are delivered.
+    events are delivered to all subscribers. If user_id is None, user-scoped events
+    fail closed (return False) to prevent leaking private entity transitions.
     """
-    if user_id is None:
-        return True
     event_type = event_dict.get("event")
     user_scoped_events = {"item_created", "item_updated", "item_deleted", "custody_lent", "custody_returned"}
     if event_type not in user_scoped_events:
         return True
+
+    if user_id is None:
+        return False
 
     data = event_dict.get("data")
     if not isinstance(data, dict):

@@ -112,7 +112,6 @@ function LoginPageContent() {
         }
       } else {
         setFormError(data?.error || (mfaRequired ? t("invalidOtp") : t("loginFailed")));
-        alert(mfaRequired ? data?.error || t("invalidOtp") : t("loginFailed"));
       }
     } finally {
       setIsLoading(false);

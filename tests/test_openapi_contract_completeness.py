@@ -168,3 +168,80 @@ def test_openapi_json_endpoint_live(client):
     assert data["openapi"] == "3.1.0"
     assert "paths" in data
     assert len(data["paths"]) >= 30, f"Expected at least 30 paths, found {len(data['paths'])}"
+
+
+def test_openapi_schema_uuid_and_pat_notification_types(app):
+    """Verify UUID fields, PAT active/revoked schemas, Notification attributes, and Expression enums."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    schemas = spec.get("components", {}).get("schemas", {})
+
+    # User.id must declare uuid format
+    user_schema = schemas["User"]["properties"]
+    assert user_schema["id"]["type"] == "string"
+    assert user_schema["id"]["format"] == "uuid"
+
+    # Item.owner_id must declare uuid format
+    item_schema = schemas["Item"]["properties"]
+    assert item_schema["owner_id"]["type"] == "string"
+    assert item_schema["owner_id"]["format"] == "uuid"
+
+    # Notification.recipient_id must declare uuid format
+    notif_schema = schemas["Notification"]["properties"]
+    assert notif_schema["recipient_id"]["type"] == "string"
+    assert notif_schema["recipient_id"]["format"] == "uuid"
+    assert "payload" in notif_schema
+    assert notif_schema["payload"]["type"] == "object"
+    assert "actor_uri" in notif_schema
+
+    # PersonalAccessToken has is_active and revoked_at
+    pat_schema = schemas["PersonalAccessToken"]["properties"]
+    assert pat_schema["is_active"]["type"] == "boolean"
+    assert "revoked_at" in pat_schema
+
+    # Expression.content_type enum is expanded
+    expr_schema = schemas["Expression"]["properties"]
+    content_types = expr_schema["content_type"]["enum"]
+    for expected in ["text", "sound", "video", "notated_music", "movie", "music", "game", "boardgame", "book"]:
+        assert expected in content_types, f"Expected {expected} in Expression.content_type enum"
+
+
+def test_path_parameter_types_and_public_endpoint_security(app):
+    """Verify Werkzeug converters derive accurate param types and public routes omit Bearer auth."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    paths = spec.get("paths", {})
+
+    # Check /api/v1/admin/users/{user_id} path param is string/uuid, not integer
+    admin_user_path = paths.get("/api/v1/admin/users/{user_id}")
+    if admin_user_path:
+        for op in admin_user_path.values():
+            if isinstance(op, dict) and "parameters" in op:
+                for p in op["parameters"]:
+                    if p.get("name") == "user_id":
+                        assert p["schema"].get("format") == "uuid" or p["schema"].get("type") == "string"
+                        assert p["schema"].get("type") != "integer"
+
+    # Check /api/admin/lod/tasks/{task_id} is string, not integer
+    lod_task_path = paths.get("/api/admin/lod/tasks/{task_id}")
+    if lod_task_path:
+        for op in lod_task_path.values():
+            if isinstance(op, dict) and "parameters" in op:
+                for p in op["parameters"]:
+                    if p.get("name") == "task_id":
+                        assert p["schema"].get("type") == "string"
+
+    # Verify public endpoints do not require Bearer authentication
+    public_endpoints = [
+        "/api/auth/login",
+        "/api/federation/actor",
+        "/api/federation/directory",
+    ]
+    for endpoint in public_endpoints:
+        path_item = paths.get(endpoint, {})
+        for method, op in path_item.items():
+            if method in ("parameters", "summary", "description") or not isinstance(op, dict):
+                continue
+            assert "security" not in op, f"Public endpoint {method.upper()} {endpoint} should not have security requirement"

@@ -27,7 +27,7 @@ You are the personal Collector Librarian for the user's physical media collectio
   - Item: A single physical exemplar on the collector's shelf, identified by a local asset tag (`local_barcode`), condition, shelf location, and collection status (`available`, `lent`, `wish_list`, `lost`).
 
 ### Directives & Capabilities
-1. Inventory Check: When asked if the user owns a specific book, album, or game, query the `/api/items` or `/api/scanner/lookup` endpoint. Differentiate between copies currently on the shelf (`available`), items lent out to friends (`lent`), and items on the wishlist (`wish_list`).
+1. Inventory Check: When asked if the user owns a specific book, album, or game, query the `/api/items` or `/api/scanner/preview/{barcode}` endpoint. Differentiate between copies currently on the shelf (`available`), items lent out to friends (`lent`), and items on the wishlist (`wish_list`).
 2. Shelf Location & Barcodes: Reference physical identifiers (`local_barcode`, format, shelf location) to help the user find items physically.
 3. Recommendations: When the user asks "What should I read/play next?", search their inventory for unread items (`status: "unread"` or `"want_to_read"` / `"want_to_play"`) and offer tailored recommendations based on author or mechanics.
 4. Lending & Provenance: If an item is lent out, inform the user who currently holds custody and when the loan began.
@@ -42,7 +42,7 @@ You are the personal Collector Librarian for the user's physical media collectio
 1. In your iqoqo web app, navigate to **Profile > Personal Access Tokens**.
 2. Click **Create New Token**.
 3. Set the name to `Gemini Librarian Gem`.
-4. Select the `read:catalog` (or `*`) capability scope.
+4. Select the `read:catalog` and `write:catalog` (or `*`) capability scopes.
 5. Copy the generated token (`iqo_...`).
 6. In Gemini Gem Builder > **Actions > Authentication**:
    - **Authentication Type**: `API Key`
@@ -116,13 +116,13 @@ paths:
                     items:
                       $ref: '#/components/schemas/Item'
 
-  /api/scanner/lookup:
+  /api/scanner/preview/{barcode}:
     get:
       operationId: lookupBarcode
       summary: Look up an item by physical barcode or ISBN
       parameters:
         - name: barcode
-          in: query
+          in: path
           required: true
           schema:
             type: string

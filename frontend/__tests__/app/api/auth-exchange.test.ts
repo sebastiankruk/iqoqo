@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { GET, POST } from "@/app/api/auth-exchange/route";
+import { GET, POST, sanitizeAllowedHost } from "@/app/api/auth-exchange/route";
 
 const { mockCookieSet } = vi.hoisted(() => ({ mockCookieSet: vi.fn() }));
 const originalFlaskApiUrl = process.env.FLASK_API_URL;
@@ -154,5 +154,42 @@ describe("auth-exchange route handler", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://localhost:3000/");
     expect(response.headers.get("location")).not.toContain("evil.example");
+  });
+
+  it("strictly rejects userinfo, path suffixes, and commas in sanitizeAllowedHost", () => {
+    expect(sanitizeAllowedHost("iqoqo.cc:80@evil.com")).toBeNull();
+    expect(sanitizeAllowedHost("evil.com/.iqoqo.cc")).toBeNull();
+    expect(sanitizeAllowedHost("evil.com?.iqoqo.cc")).toBeNull();
+    expect(sanitizeAllowedHost("evil.com#.iqoqo.cc")).toBeNull();
+    expect(sanitizeAllowedHost("iqoqo.cc, evil.com")).toBeNull();
+    expect(sanitizeAllowedHost("evil.com/")).toBeNull();
+    expect(sanitizeAllowedHost("")).toBeNull();
+    expect(sanitizeAllowedHost("preview.iqoqo.cc")).toBe("preview.iqoqo.cc");
+    expect(sanitizeAllowedHost("peer.iqoqo.cc:3001")).toBe("peer.iqoqo.cc:3001");
+    expect(sanitizeAllowedHost("localhost:3000")).toBe("localhost:3000");
+  });
+
+  it("rejects open redirect attempts via authority userinfo or path suffix injection", async () => {
+    // 1. Authority userinfo injection
+    installExchangeResponse({ token: "internal-session-jwt", callbackUrl: "/" });
+    const resUserinfo = await GET(
+      new Request("http://localhost:3000/api/auth-exchange?code=ephemeral-code", {
+        headers: { "x-forwarded-host": "iqoqo.cc:80@evil.com", "x-forwarded-proto": "https" },
+      })
+    );
+    expect(resUserinfo.status).toBe(307);
+    expect(resUserinfo.headers.get("location")).toBe("https://localhost:3000/");
+    expect(resUserinfo.headers.get("location")).not.toContain("evil.com");
+
+    // 2. Path suffix injection
+    installExchangeResponse({ token: "internal-session-jwt", callbackUrl: "/" });
+    const resPath = await GET(
+      new Request("http://localhost:3000/api/auth-exchange?code=ephemeral-code", {
+        headers: { "x-forwarded-host": "evil.com/.iqoqo.cc", "x-forwarded-proto": "https" },
+      })
+    );
+    expect(resPath.status).toBe(307);
+    expect(resPath.headers.get("location")).toBe("https://localhost:3000/");
+    expect(resPath.headers.get("location")).not.toContain("evil.com");
   });
 });

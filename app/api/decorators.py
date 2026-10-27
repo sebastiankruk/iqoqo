@@ -79,10 +79,6 @@ def _extract_bearer_token() -> tuple[str | None, bool]:
     cookie = request.cookies.get("iqoqo_session")
     if cookie:
         return cookie, True
-    if request.path == "/api/v1/events/stream":
-        token_query = request.args.get("token")
-        if token_query and token_query.strip():
-            return token_query.strip(), False
     return None, False
 
 
@@ -225,11 +221,17 @@ def require_auth(f):
 
             scopes = pat.scopes or []
             if "*" not in scopes and "admin" not in scopes:
-                if request.method in ("GET", "HEAD", "OPTIONS"):
+                if request.path.startswith("/api/sparql") and "sparql:query" in scopes:
+                    pass
+                elif request.method in ("GET", "HEAD", "OPTIONS"):
                     if "read:catalog" not in scopes and not any(s.startswith("read:") for s in scopes):
                         return jsonify({"error": "Forbidden", "message": "Scope read:catalog required"}), 403
                 else:
-                    if "write:catalog" not in scopes and not any(s.startswith("write:") for s in scopes):
+                    if (
+                        "write:catalog" not in scopes
+                        and "write:inventory" not in scopes
+                        and not any(s.startswith("write:") for s in scopes)
+                    ):
                         return jsonify({"error": "Forbidden", "message": "Scope write:catalog required"}), 403
 
             now = datetime.now(UTC)
@@ -271,6 +273,7 @@ def require_auth(f):
         g.authenticated_via_cookie = from_cookie
         return f(*args, **kwargs)
 
+    decorated._requires_auth = True
     return decorated
 
 
@@ -302,12 +305,19 @@ def optional_auth(f):
                     exp = pat.expires_at if pat.expires_at is None or pat.expires_at.tzinfo else pat.expires_at.replace(tzinfo=UTC)
                     if exp is None or exp > datetime.now(UTC):
                         if _account_is_usable(pat.user_id):
-                            pat.last_used_at = datetime.now(UTC)
-                            db.session.commit()
-                            g.user_id = pat.user_id
-                            g.authenticated_via_cookie = False
-                            g.pat = pat
-                            g.pat_scopes = pat.scopes or []
+                            scopes = pat.scopes or []
+                            if "*" in scopes or "admin" in scopes or "read:catalog" in scopes or any(s.startswith("read:") for s in scopes):
+                                now = datetime.now(UTC)
+                                last_used = pat.last_used_at
+                                if last_used is not None and last_used.tzinfo is None:
+                                    last_used = last_used.replace(tzinfo=UTC)
+                                if last_used is None or (now - last_used).total_seconds() >= 60:
+                                    pat.last_used_at = now
+                                    db.session.commit()
+                                g.user_id = pat.user_id
+                                g.authenticated_via_cookie = False
+                                g.pat = pat
+                                g.pat_scopes = scopes
             else:
                 try:
                     payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
@@ -578,9 +588,9 @@ def require_permission(perm_name: PermissionName):
                     or "admin" in pat_scopes
                     or perm_val in pat_scopes
                     or (perm_val.startswith("read:") and "read:catalog" in pat_scopes)
-                    or (perm_val.startswith("write:") and "write:catalog" in pat_scopes)
-                    or (perm_val.startswith("delete:") and "write:catalog" in pat_scopes)
-                    or (perm_val.startswith("update:") and "write:catalog" in pat_scopes)
+                    or (perm_val.startswith("write:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
+                    or (perm_val.startswith("delete:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
+                    or (perm_val.startswith("update:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
                 )
                 if not has_scope:
                     return jsonify({"error": "Forbidden", "missing_permission": perm_val, "missing_scope": perm_val}), 403
@@ -590,6 +600,7 @@ def require_permission(perm_name: PermissionName):
                 return jsonify({"error": "Forbidden", "missing_permission": perm_name.value}), 403
             return f(*args, **kwargs)
 
+        decorated._requires_auth = True
         return decorated
 
     return decorator
@@ -618,6 +629,7 @@ def admin_required(f):
 
         return f(*args, **kwargs)
 
+    decorated_function._requires_auth = True
     return decorated_function
 
 
@@ -643,6 +655,7 @@ def admin_or_custodian_required(f):
 
         return f(*args, **kwargs)
 
+    decorated_function._requires_auth = True
     return decorated_function
 
 

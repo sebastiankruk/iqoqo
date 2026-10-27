@@ -16,6 +16,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Plus, Trash2, Copy, Check, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/hooks";
 
 export interface PersonalAccessToken {
   id: number;
@@ -67,6 +69,11 @@ const AVAILABLE_SCOPES = [
  * @returns {JSX.Element} The component
  */
 export function PatManagement() {
+  const t = useTranslations("Profile");
+  const { data: profile } = useProfile();
+  const isAdmin = Boolean(profile?.roles?.includes("admin"));
+  const availableScopes = AVAILABLE_SCOPES.filter(s => (s.id !== "admin" && s.id !== "*") || isAdmin);
+
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,16 +194,12 @@ export function PatManagement() {
       <div className="flex justify-between items-start">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">Personal Access Tokens</h2>
+            <h2 className="text-xl font-semibold">{t("personalAccessTokens")}</h2>
             <Badge variant="outline" className="font-mono text-xs">
               {total}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Generate personal access tokens with prefix{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">iqo_</code> for programmatic API access via CLI
-            scripts, external automations, or developer tools.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("personalAccessTokensDesc")}</p>
         </div>
 
         <Button
@@ -209,7 +212,7 @@ export function PatManagement() {
           data-testid="generate-pat-button"
         >
           <Plus className="w-4 h-4 mr-1.5" />
-          Generate New Token
+          {t("generateNewToken")}
         </Button>
       </div>
 
@@ -221,7 +224,7 @@ export function PatManagement() {
         >
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium text-sm">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            Make sure to copy your personal access token now. You won&apos;t be able to see it again!
+            {t("tokenCreatedDesc")}
           </div>
           <div className="flex items-center gap-2">
             <code className="text-xs bg-background/80 px-3 py-2 rounded border border-border flex-1 font-mono break-all select-all">
@@ -250,7 +253,7 @@ export function PatManagement() {
         </div>
       ) : tokens.length === 0 ? (
         <div className="text-center py-6 border border-dashed rounded-md text-sm text-muted-foreground">
-          No personal access tokens generated yet.
+          {t("noTokens")}
         </div>
       ) : (
         <div className="divide-y border rounded-md">
@@ -268,17 +271,17 @@ export function PatManagement() {
                   </code>
                   {token.is_active ? (
                     <Badge variant="outline" className="text-xs text-green-600 border-green-600/30">
-                      Active
+                      {t("active")}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-xs text-muted-foreground">
-                      {token.revoked_at ? "Revoked" : "Expired"}
+                      {token.revoked_at ? t("revoked") : "Expired"}
                     </Badge>
                   )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>Scopes:</span>
+                  <span>{t("scopes")}:</span>
                   {token.scopes.map(s => (
                     <span key={s} className="bg-muted/80 px-1.5 py-0.5 rounded text-[11px] font-mono">
                       {s}
@@ -289,13 +292,17 @@ export function PatManagement() {
                   {token.last_used_at && (
                     <>
                       <span>•</span>
-                      <span>Last used: {new Date(token.last_used_at).toLocaleDateString()}</span>
+                      <span>
+                        {t("lastUsed")}: {new Date(token.last_used_at).toLocaleDateString()}
+                      </span>
                     </>
                   )}
                   {token.expires_at && (
                     <>
                       <span>•</span>
-                      <span>Expires: {new Date(token.expires_at).toLocaleDateString()}</span>
+                      <span>
+                        {t("expires")}: {new Date(token.expires_at).toLocaleDateString()}
+                      </span>
                     </>
                   )}
                 </div>
@@ -315,7 +322,7 @@ export function PatManagement() {
                   ) : (
                     <Trash2 className="w-3.5 h-3.5 mr-1" />
                   )}
-                  Revoke
+                  {t("revoke")}
                 </Button>
               )}
             </div>
@@ -327,21 +334,19 @@ export function PatManagement() {
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-lg" data-testid="generate-pat-dialog">
           <DialogHeader>
-            <DialogTitle>Generate Personal Access Token</DialogTitle>
-            <DialogDescription>
-              Create a new token with specific API access scopes. The token will only be displayed once.
-            </DialogDescription>
+            <DialogTitle>{t("generateNewToken")}</DialogTitle>
+            <DialogDescription>{t("personalAccessTokensDesc")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <label htmlFor="pat-name-input" className="text-sm font-medium">
-                Token Name <span className="text-destructive">*</span>
+                {t("tokenName")} <span className="text-destructive">*</span>
               </label>
               <input
                 id="pat-name-input"
                 type="text"
-                placeholder="e.g. Home Assistant, Backup Script, CLI"
+                placeholder={t("tokenNamePlaceholder")}
                 value={tokenName}
                 onChange={e => setTokenName(e.target.value)}
                 maxLength={100}
@@ -352,9 +357,9 @@ export function PatManagement() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Select Scopes</label>
+              <label className="text-sm font-medium">{t("scopes")}</label>
               <div className="space-y-2 border rounded-md p-3">
-                {AVAILABLE_SCOPES.map(scope => (
+                {availableScopes.map(scope => (
                   <label key={scope.id} className="flex items-start gap-2.5 cursor-pointer text-xs">
                     <input
                       type="checkbox"
@@ -374,7 +379,7 @@ export function PatManagement() {
 
             <div className="space-y-1.5">
               <label htmlFor="pat-expiration-select" className="text-sm font-medium">
-                Expiration
+                {t("expiration")}
               </label>
               <select
                 id="pat-expiration-select"
@@ -383,17 +388,17 @@ export function PatManagement() {
                 className="w-full h-9 px-3 py-2 text-sm rounded-md border border-input bg-background"
                 data-testid="pat-expiration-select"
               >
-                <option value="30">30 days</option>
-                <option value="60">60 days</option>
-                <option value="90">90 days</option>
-                <option value="0">No expiration</option>
+                <option value="30">{t("days30")}</option>
+                <option value="60">{t("days60")}</option>
+                <option value="90">{t("days90")}</option>
+                <option value="0">{t("noExpiration")}</option>
               </select>
             </div>
           </div>
 
           <DialogFooter className="sm:justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button
               type="button"
@@ -402,7 +407,7 @@ export function PatManagement() {
               data-testid="confirm-generate-pat-button"
             >
               {isCreating && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Generate Token
+              {t("generateToken")}
             </Button>
           </DialogFooter>
         </DialogContent>

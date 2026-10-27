@@ -282,7 +282,7 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
             return default
 
     @classmethod
-    def set_value(cls, key: str, value: Any) -> None:
+    def set_value(cls, key: str, value: Any, commit: bool = True) -> None:
         """Set or update a setting value by key with transparent encryption for sensitive keys."""
         from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
@@ -298,9 +298,13 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
             else:
                 setting = cls(key=key, value=encrypted_val)
                 db.session.add(setting)
-            db.session.commit()
+            if commit:
+                db.session.commit()
+            else:
+                db.session.flush()
         except (SQLAlchemyError, DBAPIError, RuntimeError):
-            db.session.rollback()
+            if commit:
+                db.session.rollback()
             raise
 
 

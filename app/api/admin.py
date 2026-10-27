@@ -421,8 +421,7 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
         **dict.fromkeys(INTERNAL_KEYS, can_internal),
     }
 
-    saved = {}
-    changes = {}
+    to_save = {}
     for key, value in data.items():
         if key not in key_permissions:
             return jsonify({"success": False, "error": f"Unknown setting key: {key}", "code": 400}), 400
@@ -449,14 +448,19 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
             else:
                 return jsonify({"success": False, "error": "FEDERATION_AUTO_ACCEPT_FOLLOWS must be a boolean", "code": 400}), 400
 
-        old_val = InstanceSettings.get_value(key)
-        InstanceSettings.set_value(key, value)
-        saved[key] = value
-        if key in FEDERATION_KEYS:
-            changes[key] = {"old": old_val, "new": value}
+        to_save[key] = value
 
-    if changes:
-        try:
+    saved = {}
+    changes = {}
+    try:
+        for key, value in to_save.items():
+            old_val = InstanceSettings.get_value(key)
+            InstanceSettings.set_value(key, value, commit=False)
+            saved[key] = value
+            if key in FEDERATION_KEYS:
+                changes[key] = {"old": old_val, "new": value}
+
+        if changes:
             audit = EntityAuditLog(
                 entity_type="instance_settings",
                 entity_id=0,
@@ -465,9 +469,12 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
                 diff=changes,
             )
             db.session.add(audit)
-            db.session.commit()
-        except Exception as exc:
-            current_app.logger.warning("Failed to record federation settings audit log: %s", exc)
+
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.warning("Failed saving instance settings atomically: %s", exc)
+        return jsonify({"success": False, "error": "Failed to save settings", "code": 500}), 500
 
     return {"success": True, "data": saved}
 
@@ -1935,10 +1942,11 @@ def get_federation_instances() -> tuple[Response, int] | Response:
     for actor in actors:
         if not actor.public_key_pem:
             continue
-        fp = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
-        if not fp:
+        # Filter strictly to canonical instance Application actor URI
+        if not actor.actor_uri.rstrip("/").endswith("/api/federation/actor"):
             continue
-        if actor.actor_uri.endswith("/actor") or actor.instance_id not in fingerprint_map:
+        fp = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
+        if fp and fp != "Not configured":
             fingerprint_map[actor.instance_id] = fp
 
     data = []
@@ -1991,13 +1999,16 @@ def add_federation_instance() -> tuple[Response, int] | Response:
                 select(FederationActor).where(
                     FederationActor.instance_id == instance.id,
                     FederationActor.public_key_pem.isnot(None),
+                    FederationActor.actor_uri.like("%/api/federation/actor"),
                 )
             )
             .scalars()
             .first()
         )
         if actor and actor.public_key_pem:
-            data["key_fingerprint"] = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
+            fp = federation_keys.compute_pem_fingerprint(actor.public_key_pem)
+            if fp and fp != "Not configured":
+                data["key_fingerprint"] = fp
 
     return jsonify({"success": True, "data": data, "probe_succeeded": probe_succeeded}), 201
 

@@ -20,6 +20,16 @@ import { useTranslations } from "next-intl";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 import { getFederationKeyFingerprint, provisionFederationInstanceKey } from "@/lib/api/federation";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, Save, KeyRound, ExternalLink, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 
@@ -275,6 +285,9 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
   const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
   const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(category === "federation");
   const [isProvisioningKey, setIsProvisioningKey] = useState(false);
+  const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+
+  const isConfiguredKey = Boolean(keyFingerprint && keyFingerprint.startsWith("SHA256:"));
 
   const handleProvisionKey = async (rotate: boolean = false) => {
     setIsProvisioningKey(true);
@@ -680,9 +693,13 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
               </label>
               <div className="flex items-center gap-3">
                 <code className="text-xs bg-muted px-3 py-2 rounded-md font-mono border border-border select-all break-all">
-                  {isLoadingFingerprint ? "Loading fingerprint..." : keyFingerprint || tFed("noFingerprint")}
+                  {isLoadingFingerprint
+                    ? "Loading fingerprint..."
+                    : isConfiguredKey
+                      ? keyFingerprint
+                      : tFed("noFingerprint")}
                 </code>
-                {Boolean(keyFingerprint) && (
+                {isConfiguredKey && (
                   <Button
                     type="button"
                     variant="outline"
@@ -705,8 +722,14 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                   variant="outline"
                   size="sm"
                   disabled={isProvisioningKey}
-                  onClick={() => handleProvisionKey(Boolean(keyFingerprint))}
-                  aria-label={keyFingerprint ? tFed("rotateKey") : tFed("generateKey")}
+                  onClick={() => {
+                    if (isConfiguredKey) {
+                      setShowRotateConfirm(true);
+                    } else {
+                      handleProvisionKey(false);
+                    }
+                  }}
+                  aria-label={isConfiguredKey ? tFed("rotateKey") : tFed("generateKey")}
                   className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   {isProvisioningKey ? (
@@ -714,10 +737,32 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                   ) : (
                     <KeyRound className="h-3.5 w-3.5 mr-1" />
                   )}
-                  {keyFingerprint ? tFed("rotateKey") : tFed("generateKey")}
+                  {isConfiguredKey ? tFed("rotateKey") : tFed("generateKey")}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">{tFed("keyFingerprintDesc")}</p>
+              <AlertDialog open={showRotateConfirm} onOpenChange={setShowRotateConfirm}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{tFed("rotateKey")}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Rotating the instance key invalidates the current cryptographic identity on all peered instances
+                      until they re-fetch or re-pin the new key. Are you sure you want to proceed?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setShowRotateConfirm(false)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        setShowRotateConfirm(false);
+                        handleProvisionKey(true);
+                      }}
+                    >
+                      {tFed("rotateKey")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </div>

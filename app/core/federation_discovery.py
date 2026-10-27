@@ -35,17 +35,37 @@ logger = logging.getLogger(__name__)
 def is_publicly_routable_peer_domain(domain: str) -> bool:
     """Check if domain is a publicly routable peer domain (not an internal/container/loopback host)."""
     import ipaddress
+    from urllib.parse import urlparse
 
     if not domain:
         return False
-    host = domain.split(":")[0].strip().lower()
+
+    candidate = domain if "://" in domain else f"http://{domain}"
+    try:
+        parsed = urlparse(candidate)
+        host = (parsed.hostname or "").strip().lower()
+    except Exception:
+        host = domain.split(":")[0].strip().lower()
+
     if not host:
         return False
 
     # Block common local / container hostnames without dots
     if host in {"localhost", "web", "peer-web", "nginx", "redis", "db", "peer-db"}:
         return False
-    if host.endswith((".local", ".internal", ".test", ".invalid", ".localhost", ".docker")):
+    if host.endswith(
+        (
+            ".local",
+            ".localdomain",
+            ".home.arpa",
+            ".lan",
+            ".internal",
+            ".test",
+            ".invalid",
+            ".localhost",
+            ".docker",
+        )
+    ):
         return False
 
     # Block IP literals if private/loopback/link-local/reserved
@@ -224,6 +244,13 @@ def probe_instance_health(instance: FederationInstance) -> bool:
     success, meta_updates = _probe_domain_http(instance.domain)
     if success:
         instance_actor_url = meta_updates.pop("instance_actor_url", None)
+        if instance_actor_url and clean_instance_domain(instance_actor_url) != instance.domain:
+            logger.warning(
+                "Rejected cross-origin instance actor URL %s for instance domain %s",
+                instance_actor_url,
+                instance.domain,
+            )
+            instance_actor_url = None
         for k, v in meta_updates.items():
             setattr(instance, k, v)
         instance.last_seen_at = datetime.now(UTC)
@@ -311,9 +338,13 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
 
     # Apply updates cleanly on the main thread attached to db.session
     now = datetime.now(UTC)
+    actor_urls_to_refresh: list[str] = []
     for iid, meta in metadata_results.items():
         inst = inst_by_id.get(iid)
         if inst:
+            actor_url = meta.pop("instance_actor_url", None)
+            if actor_url and clean_instance_domain(actor_url) == inst.domain:
+                actor_urls_to_refresh.append(actor_url)
             for k, v in meta.items():
                 setattr(inst, k, v)
             inst.last_seen_at = now
@@ -323,5 +354,18 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
     except Exception as exc:
         logger.warning("Failed committing probe updates to database: %s", exc)
         db.session.rollback()
+
+    if actor_urls_to_refresh:
+        try:
+            from app.core.federation_client import FederationClient
+
+            client = FederationClient()
+            for a_url in actor_urls_to_refresh:
+                try:
+                    client.fetch_actor(a_url)
+                except Exception as actor_exc:
+                    logger.debug("Batch probe could not refresh actor %s: %s", a_url, actor_exc)
+        except Exception as client_exc:
+            logger.debug("Failed initializing client for batch actor refresh: %s", client_exc)
 
     return results

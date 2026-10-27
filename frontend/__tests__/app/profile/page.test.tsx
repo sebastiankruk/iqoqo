@@ -38,10 +38,15 @@ vi.mock("@/components/dashboard/footer", () => ({
   Footer: () => <div data-testid="footer">Footer</div>,
 }));
 
-// Mock useAppConfig so it doesn't compete with apiFetch mocks via useQuery
-vi.mock("@/lib/api/hooks", () => ({
-  useAppConfig: vi.fn(),
-}));
+// Mock useAppConfig and useProfile so they don't compete with apiFetch mocks via useQuery
+vi.mock("@/lib/api/hooks", async importOriginal => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    useAppConfig: vi.fn(),
+    useProfile: vi.fn().mockReturnValue({ data: { role: "admin", roles: ["admin"] }, isLoading: false }),
+  };
+});
 
 // Mock MyEscalations component to decouple profile page test
 vi.mock("@/components/escalation/my-escalations", () => ({

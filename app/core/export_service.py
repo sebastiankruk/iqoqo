@@ -97,7 +97,7 @@ class ExportService:
     @classmethod
     def build_batch_rdf_graph(
         cls,
-        items: list[Item],
+        items: Iterable[Item],
         base_url: str,
     ) -> Graph:
         """
@@ -108,7 +108,8 @@ class ExportService:
         """
         from app.core.frbr_service import build_collection_rdf_graph
 
-        graph = build_collection_rdf_graph(items, base_url, enrichment_profile="full")
+        items_list = list(items) if not isinstance(items, list) else items
+        graph = build_collection_rdf_graph(items_list, base_url, enrichment_profile="full")
         graph.bind("frbr", FRBR_PURL)
         graph.bind("frbrer", FRBR_IFLA)
         graph.bind("schema", SCHEMA)
@@ -116,9 +117,9 @@ class ExportService:
         graph.bind("iqoqo", IQOQO)
         graph.bind("foaf", FOAF)
 
-        for item in items:
+        for item in items_list:
             if getattr(item, "lent_to_user_id", None):
-                is_item_public = not getattr(item, "is_hidden", False) and getattr(item, "visibility", "private") != "private"
+                is_item_public = not getattr(item, "is_hidden", False) and getattr(item, "visibility", "private") == "public"
                 if is_item_public:
                     holder = (
                         getattr(item, "borrower", None)
@@ -154,16 +155,18 @@ class ExportService:
             select(Item)
             .where(Item.owner_id == resolved_uid)
             .options(
+                joinedload(Item.borrower),
                 joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work),
                 joinedload(Item.manifestation)
                 .joinedload(Manifestation.expression)
                 .joinedload(Expression.work)
                 .selectinload(Work.series_memberships),
             )
+            .execution_options(yield_per=500)
             .order_by(Item.id.asc())
         )
-        items = list(db.session.execute(stmt).scalars().all())
-        graph = cls.build_batch_rdf_graph(items, resolved_base_url)
+        items_iterable = db.session.execute(stmt).scalars()
+        graph = cls.build_batch_rdf_graph(items_iterable, resolved_base_url)
 
         if include_social:
             user = db.session.get(User, resolved_uid)

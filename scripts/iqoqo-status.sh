@@ -760,7 +760,7 @@ if [[ "$STACK" == "dev" ]]; then
     elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
         python_bin="$IQOQO_ROOT/.venv/bin/python"
     fi
-    allegro_status_json=$($python_bin -c "
+    allegro_status_json=$(ALLEGRO_CLIENT_ID="$client_id" IQOQO_ROOT="$IQOQO_ROOT" $python_bin -c "
 import urllib.request, json, os, sys
 for p in [${WEB_PORT}, 5000, 5001]:
     try:
@@ -774,20 +774,20 @@ for p in [${WEB_PORT}, 5000, 5001]:
         pass
 
 try:
-    sys.path.insert(0, '$IQOQO_ROOT')
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
     from app import create_app
     app = create_app()
     with app.app_context():
         from app.utils.allegro import get_allegro_token_status
         print(json.dumps(get_allegro_token_status()))
 except Exception as e:
-    cid = bool('$client_id')
+    cid = bool(os.environ.get('ALLEGRO_CLIENT_ID'))
     print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
 else
     web_cname=$(find_container "web")
     if [[ -n "$web_cname" ]]; then
-        allegro_status_json=$(docker exec "$web_cname" python3 -c "
+        allegro_status_json=$(docker exec -e ALLEGRO_CLIENT_ID="$client_id" "$web_cname" python3 -c "
 import urllib.request, json, os, sys
 try:
     req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
@@ -807,7 +807,7 @@ try:
         from app.utils.allegro import get_allegro_token_status
         print(json.dumps(get_allegro_token_status()))
 except Exception as e:
-    cid = bool('$client_id')
+    cid = bool(os.environ.get('ALLEGRO_CLIENT_ID'))
     print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
     fi
@@ -860,7 +860,7 @@ if [[ "$STACK" == "dev" ]]; then
     elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
         python_bin="$IQOQO_ROOT/.venv/bin/python"
     fi
-    igdb_status_json=$($python_bin -c "
+    igdb_status_json=$(IGDB_CLIENT_ID="$igdb_client_id" IQOQO_ROOT="$IQOQO_ROOT" $python_bin -c "
 import urllib.request, json, os, sys
 for p in [${WEB_PORT}, 5000, 5001]:
     try:
@@ -874,20 +874,20 @@ for p in [${WEB_PORT}, 5000, 5001]:
         pass
 
 try:
-    sys.path.insert(0, '$IQOQO_ROOT')
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
     from app import create_app
     app = create_app()
     with app.app_context():
         from app.utils.igdb import get_igdb_token_status
         print(json.dumps(get_igdb_token_status()))
 except Exception as e:
-    cid = bool('$igdb_client_id')
+    cid = bool(os.environ.get('IGDB_CLIENT_ID'))
     print(json.dumps({'status': 'DISABLED' if not cid else 'AUTH_ERROR', 'configured': cid, 'active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
 else
     web_cname=$(find_container "web")
     if [[ -n "$web_cname" ]]; then
-        igdb_status_json=$(docker exec "$web_cname" python3 -c "
+        igdb_status_json=$(docker exec -e IGDB_CLIENT_ID="$igdb_client_id" "$web_cname" python3 -c "
 import urllib.request, json, os, sys
 try:
     req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
@@ -907,7 +907,7 @@ try:
         from app.utils.igdb import get_igdb_token_status
         print(json.dumps(get_igdb_token_status()))
 except Exception as e:
-    cid = bool('$igdb_client_id')
+    cid = bool(os.environ.get('IGDB_CLIENT_ID'))
     print(json.dumps({'status': 'DISABLED' if not cid else 'AUTH_ERROR', 'configured': cid, 'active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
     fi

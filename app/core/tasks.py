@@ -20,6 +20,8 @@ Redis as a distributed broker to support multi-process Gunicorn scaling.
 """
 
 import logging
+import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -673,7 +675,10 @@ def cleanup_lod_links_task(dry_run: bool = True, batch_size: int = 100) -> dict[
 
 
 REDIS_FTS_QUEUE_KEY = "iqoqo:fts_reindex_queue"
+REDIS_FTS_SCHEDULED_KEY = "iqoqo:fts_reindex_scheduled"
 _in_memory_fts_queue: set[str] = set()
+_in_memory_fts_lock = threading.Lock()
+_in_memory_debounce_time: float = 0.0
 
 
 def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int = 5) -> None:
@@ -691,41 +696,57 @@ def enqueue_fts_reindex(entity_type: str, entity_id: int | str, countdown: int =
 
     key = f"{entity_type}:{entity_id}"
     client = get_redis_client()
+
     if client:
         try:
             client.sadd(REDIS_FTS_QUEUE_KEY, key)
+            # Debounce lock: only schedule batch_fts_reindex if not already scheduled in next 10s
+            if client.set(REDIS_FTS_SCHEDULED_KEY, "1", nx=True, ex=10):
+                batch_fts_reindex.apply_async(countdown=countdown, retry=False)
         except Exception as exc:
             logger.warning("Failed to enqueue FTS reindex to Redis: %s", exc)
-            _in_memory_fts_queue.add(key)
+            with _in_memory_fts_lock:
+                _in_memory_fts_queue.add(key)
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
     else:
-        _in_memory_fts_queue.add(key)
+        with _in_memory_fts_lock:
+            _in_memory_fts_queue.add(key)
         if not celery.conf.task_always_eager:
             # Broker/result backend unreachable: dispatching would block the HTTP
             # worker for ~20 s on Celery's result-store reconnect loop.
             logger.debug("Redis unavailable; FTS reindex for %s kept in local queue", key)
             return
 
-    try:
-        # retry=False prevents blocking the HTTP worker for ~20 s when the broker
-        # is unreachable (Celery default publish retry policy).
-        batch_fts_reindex.apply_async(countdown=countdown, retry=False)
-    except Exception as exc:
-        logger.debug("Celery task dispatch skipped or delayed: %s", exc)
+        global _in_memory_debounce_time
+        now = time.time()
+        should_dispatch = False
+        with _in_memory_fts_lock:
+            if (now - _in_memory_debounce_time) >= 10.0 or _in_memory_debounce_time == 0.0:
+                _in_memory_debounce_time = now
+                should_dispatch = True
+
+        if should_dispatch:
+            try:
+                batch_fts_reindex.apply_async(countdown=countdown, retry=False)
+            except Exception as exc:
+                logger.debug("Celery task dispatch skipped or delayed: %s", exc)
 
 
 @celery.task(bind=True, name="app.core.tasks.batch_fts_reindex")
-def batch_fts_reindex(self) -> dict[str, Any]:
+def batch_fts_reindex(self=None) -> dict[str, Any]:
     """Batch recompute full-text search vectors for queued entities.
 
     Pops coalesced entity identifiers from Redis and in-memory fallback,
-    updates full-text search vectors without blocking HTTP threads,
+    resolves affected Works, updates full-text search vectors without blocking HTTP threads,
     and publishes the 'fts_reindexed' transition event.
     """
-    from datetime import UTC, datetime
-
     from app.core.events import get_redis_client, publish_transition_event
     from app.db import db
-    from app.db.core import Item, Manifestation, Work
+    from app.db.core import Expression, Item, Manifestation, Work
 
     queued_entities: set[str] = set()
 
@@ -740,47 +761,100 @@ def batch_fts_reindex(self) -> dict[str, Any]:
                     queued_entities.add(p.decode("utf-8") if isinstance(p, bytes) else str(p))
         except Exception as exc:
             logger.warning("Error draining FTS queue from Redis: %s", exc)
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
 
-    global _in_memory_fts_queue
-    if _in_memory_fts_queue:
-        queued_entities.update(_in_memory_fts_queue)
-        _in_memory_fts_queue = set()
+    with _in_memory_fts_lock:
+        if _in_memory_fts_queue:
+            queued_entities.update(_in_memory_fts_queue)
+            _in_memory_fts_queue.clear()
 
     if not queued_entities:
         return {"status": "ok", "reindexed_count": 0, "entities": []}
 
-    reindexed_entities: list[str] = []
+    reindexed_entities: list[str] = list(queued_entities)
+    item_ids: set[int] = set()
+    manifestation_ids: set[int] = set()
+    work_ids: set[int] = set()
 
     for entity_key in queued_entities:
+        parts = entity_key.split(":", 1)
+        if len(parts) != 2:
+            continue
+        entity_type, raw_id = parts[0], parts[1]
         try:
-            parts = entity_key.split(":", 1)
-            if len(parts) != 2:
-                continue
-            entity_type, raw_id = parts[0], parts[1]
-            entity_id = int(raw_id)
+            eid = int(raw_id)
+        except ValueError:
+            continue
 
-            if entity_type == "item":
-                item = db.session.get(Item, entity_id)
-                if item and item.manifestation_id:
-                    mani = db.session.get(Manifestation, item.manifestation_id)
-                    if mani and hasattr(mani, "updated_at"):
-                        mani.updated_at = datetime.now(UTC)
-                        reindexed_entities.append(f"manifestation:{mani.id}")
-                reindexed_entities.append(entity_key)
+        if entity_type == "item":
+            item_ids.add(eid)
+        elif entity_type == "manifestation":
+            manifestation_ids.add(eid)
+        elif entity_type == "work":
+            work_ids.add(eid)
 
-            elif entity_type == "manifestation":
-                mani = db.session.get(Manifestation, entity_id)
-                if mani and hasattr(mani, "updated_at"):
-                    mani.updated_at = datetime.now(UTC)
-                reindexed_entities.append(entity_key)
+    affected_owner_ids: set[str] = set()
+    has_public_updates = bool(work_ids or manifestation_ids)
 
-            elif entity_type == "work":
-                work = db.session.get(Work, entity_id)
-                if work:
-                    reindexed_entities.append(entity_key)
+    # 1. Resolve item_ids to work_ids and record affected owners
+    if item_ids:
+        item_rows = db.session.execute(
+            select(Item.id, Item.owner_id, Item.visibility, Expression.work_id)
+            .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .where(Item.id.in_(item_ids))
+        ).all()
 
-        except Exception as item_err:
-            logger.warning("Error reindexing entity %s: %s", entity_key, item_err)
+        for _item_id, owner_id, visibility, wid in item_rows:
+            if wid:
+                work_ids.add(wid)
+            if visibility in ("private", "friends_only"):
+                if owner_id:
+                    affected_owner_ids.add(str(owner_id))
+            else:
+                has_public_updates = True
+
+    # 2. Resolve manifestation_ids to work_ids
+    if manifestation_ids:
+        mani_rows = db.session.execute(
+            select(Manifestation.id, Expression.work_id)
+            .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+            .where(Manifestation.id.in_(manifestation_ids))
+        ).all()
+
+        for _mid, wid in mani_rows:
+            if wid:
+                work_ids.add(wid)
+
+    # 3. Update search_vector on all affected Works
+    if work_ids:
+        bind = db.session.get_bind()
+        is_postgres = getattr(bind.dialect, "name", "") == "postgresql"
+
+        if is_postgres:
+            from sqlalchemy import text
+
+            for wid in work_ids:
+                db.session.execute(
+                    text(
+                        "UPDATE catalog.works SET search_vector = to_tsvector('simple'::regconfig, "
+                        "COALESCE(title, '') || ' ' || COALESCE((meta->>'authors'), '')) WHERE id = :wid"
+                    ),
+                    {"wid": wid},
+                )
+        else:
+            # SQLite / dialect-safe fallback
+            works = db.session.execute(select(Work).where(Work.id.in_(work_ids))).scalars().all()
+            for w in works:
+                authors = ""
+                if w.meta and isinstance(w.meta, dict):
+                    raw_a = w.meta.get("authors", "")
+                    authors = " ".join(raw_a) if isinstance(raw_a, list) else str(raw_a)
+                w.search_vector = f"{w.title or ''} {authors}".strip()
 
     try:
         db.session.commit()
@@ -788,10 +862,23 @@ def batch_fts_reindex(self) -> dict[str, Any]:
         db.session.rollback()
         logger.error("Database commit error during batch FTS reindex: %s", db_err)
 
-    publish_transition_event(
-        "fts_reindexed",
-        {"entities": reindexed_entities, "count": len(reindexed_entities)},
-    )
+    # 4. Scope fts_reindexed events appropriately
+    if affected_owner_ids and not has_public_updates:
+        for owner_id in affected_owner_ids:
+            publish_transition_event(
+                "fts_reindexed",
+                {
+                    "entities": reindexed_entities,
+                    "count": len(reindexed_entities),
+                    "user_id": owner_id,
+                    "owner_id": owner_id,
+                },
+            )
+    else:
+        publish_transition_event(
+            "fts_reindexed",
+            {"entities": reindexed_entities, "count": len(reindexed_entities)},
+        )
 
     return {
         "status": "success",

@@ -56,9 +56,9 @@ class BGGBackoffAdapter(RateLimitingAdapter):
             if response.status_code == 429 and attempt < self.max_429_retries:
                 retry_after = response.headers.get("Retry-After")
                 if retry_after and retry_after.isdigit():
-                    delay = float(retry_after)
+                    delay = min(float(retry_after), 10.0)
                 else:
-                    delay = self.backoff_factor * (2**attempt)
+                    delay = min(self.backoff_factor * (2**attempt), 10.0)
                 logger.warning(
                     "BGG API returned 429 Too Many Requests. Retrying in %.2fs (attempt %d/%d)...",
                     delay,
@@ -75,6 +75,13 @@ def get_bgg_headers() -> dict[str, str]:
     headers = {"User-Agent": f"iqoqo/{Config.VERSION} (https://github.com/sebastiankruk/iqoqo)", "Accept": "application/xml"}
 
     token = os.getenv("BGG_API_TOKEN")
+    if not token:
+        try:
+            from app.db.models import InstanceSettings
+
+            token = InstanceSettings.get_value("BGG_API_TOKEN")
+        except Exception:
+            token = None
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
@@ -91,16 +98,16 @@ def clean_bgg_query(query: str) -> str:
     return " ".join(cleaned.split()).strip()
 
 
-def get_bgg_client(timeout: int = 15, retries: int = 3, retry_delay: int = 2) -> BoardGameGeek:
+def get_bgg_client(timeout: int = 15, retries: int = 0, retry_delay: int = 2) -> BoardGameGeek:
     """Create a configured BoardGameGeek client with rate limiting and retry handling."""
     import boardgamegeek.utils
 
     # Enforce safe XML parsing inside boardgamegeek library
     boardgamegeek.utils.ET = ET
 
-    bgg = BoardGameGeek(cache=None, timeout=timeout, retries=retries, retry_delay=retry_delay)
+    bgg = BoardGameGeek(cache=None, timeout=timeout, retries=0, retry_delay=retry_delay)
     bgg.requests_session.headers.update(get_bgg_headers())
-    adapter = BGGBackoffAdapter(max_retries=retries, backoff_factor=1.0)
+    adapter = BGGBackoffAdapter(max_retries=retries if retries > 0 else 3, backoff_factor=1.0)
     bgg.requests_session.mount("https://", adapter)
     bgg.requests_session.mount("http://", adapter)
     return bgg

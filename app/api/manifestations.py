@@ -29,9 +29,11 @@ import app.utils.isbn as isbn_utils
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.core.events import publish_transition_event
 from app.core.frbr_service import normalize_authors_list
 from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
+from app.core.tasks import enqueue_fts_reindex
 from app.db.models import Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.images import save_upload_image, validate_upload_file
@@ -983,9 +985,6 @@ def refetch_cover(manifestation_id: int) -> tuple[Response, int]:
         manif.update_meta(cover_status="failed")
         db.session.commit()
 
-        from app.core.events import publish_transition_event
-        from app.core.tasks import enqueue_fts_reindex
-
         enqueue_fts_reindex("manifestation", manif.id)
         publish_transition_event("manifestation_updated", {"manifestation_id": manif.id})
         return (
@@ -1079,19 +1078,21 @@ def delete_manifestation(manifestation_id: int) -> tuple[Response, int]:
     if not manif:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
+    work_id = manif.expression.work_id if (manif.expression and manif.expression.work_id) else None
+
     try:
         # Manually nullify scan telemetry to avoid ForeignKeyViolation on delete
+        from sqlalchemy import update
+
         from app.db.models import ScanTelemetry
 
-        ScanTelemetry.query.filter_by(manifestation_id=manifestation_id).update({"manifestation_id": None})
+        db.session.execute(update(ScanTelemetry).where(ScanTelemetry.manifestation_id == manifestation_id).values(manifestation_id=None))
 
         db.session.delete(manif)
         db.session.commit()
 
-        from app.core.events import publish_transition_event
-        from app.core.tasks import enqueue_fts_reindex
-
-        enqueue_fts_reindex("manifestation", manifestation_id)
+        if work_id:
+            enqueue_fts_reindex("work", work_id)
         publish_transition_event("manifestation_deleted", {"manifestation_id": manifestation_id})
         return jsonify({"success": True, "data": {"id": manifestation_id}, "error": None}), 200
     except (db.exc.SQLAlchemyError, db.exc.DBAPIError) as e:

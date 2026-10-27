@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TotpSetup } from "@/components/profile/totp-setup";
 import { PatManagement } from "@/components/profile/pat-management";
 import { apiClient } from "@/lib/api/client";
+import { useProfile } from "@/lib/api/hooks";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: {
@@ -27,12 +28,18 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
+vi.mock("@/lib/api/hooks", () => ({
+  useProfile: vi.fn(),
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
   },
 }));
+
+const mockUseProfile = vi.mocked(useProfile);
 
 describe("TotpSetup Component", () => {
   beforeEach(() => {
@@ -114,6 +121,13 @@ describe("TotpSetup Component", () => {
 describe("PatManagement Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseProfile.mockReturnValue({
+      data: {
+        id: "user-1",
+        username: "adminuser",
+        roles: ["admin"],
+      },
+    } as any);
   });
 
   it("loads and displays tokens list, generates a token, and revokes", async () => {
@@ -227,5 +241,34 @@ describe("PatManagement Component", () => {
     await waitFor(() => {
       expect(apiClient.delete).toHaveBeenCalledWith("/auth/tokens/1");
     });
+  });
+
+  it("filters out admin and wildcard scopes when profile is not admin", async () => {
+    mockUseProfile.mockReturnValue({
+      data: {
+        id: "user-2",
+        username: "regularuser",
+        roles: ["contributor"],
+      },
+    } as any);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        items: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+      },
+    });
+
+    render(<PatManagement />);
+
+    fireEvent.click(screen.getByTestId("generate-pat-button"));
+    expect(screen.getByTestId("generate-pat-dialog")).toBeDefined();
+
+    // Verify non-admin cannot see admin or wildcard (*) scope options
+    expect(screen.queryByTestId("scope-checkbox-admin")).toBeNull();
+    expect(screen.queryByTestId("scope-checkbox-*")).toBeNull();
+    expect(screen.getByTestId("scope-checkbox-read:catalog")).toBeDefined();
   });
 });

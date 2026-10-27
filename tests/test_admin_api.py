@@ -398,3 +398,23 @@ def test_admin_settings_federation_keys_returned_and_fail_closed(client, admin_h
     # 3. PUT rejects FEDERATION_DEFAULT_TRUST='trusted' with 400
     bad_trust = client.put("/api/v1/admin/settings", json={"FEDERATION_DEFAULT_TRUST": "trusted"}, headers=admin_headers)
     assert bad_trust.status_code == 400
+
+
+def test_admin_settings_atomic_rollback_on_partial_failure(app, client, admin_headers):
+    """PUT /api/v1/admin/settings must roll back atomically if any key fails validation."""
+    with app.app_context():
+        # Ensure initial state
+        InstanceSettings.set_value("FEDERATION_ENABLED", "false")
+        assert InstanceSettings.get_value("FEDERATION_ENABLED") == "false"
+
+    # Multi-key payload with valid key first and invalid second
+    payload = {
+        "FEDERATION_ENABLED": "true",
+        "FEDERATION_DEFAULT_TRUST": "trusted",  # rejected
+    }
+    res = client.put("/api/v1/admin/settings", json=payload, headers=admin_headers)
+    assert res.status_code == 400
+
+    with app.app_context():
+        # FEDERATION_ENABLED must NOT have been changed to true
+        assert InstanceSettings.get_value("FEDERATION_ENABLED") == "false"

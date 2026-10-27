@@ -42,6 +42,7 @@ from app.config import Config
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.auth import PersonalAccessToken, generate_pat_token
+from app.db.core import EntityAuditLog
 from app.db.models import InstanceSettings, OAuthExchangeCode, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 from app.utils.http_client import is_safe_url
@@ -389,7 +390,7 @@ def exchange_oauth_code():
 
 
 @auth_bp.route("/login", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def local_login():
     """Authenticate with an email and password.
 
@@ -608,6 +609,7 @@ def get_2fa_status():
 
 
 @auth_bp.route("/2fa/enroll", methods=["POST"])
+@limiter.limit("10 per minute")
 @require_auth
 def enroll_2fa():
     """Initiate TOTP enrollment by generating secret, provisioning URI, recovery codes, and QR code."""
@@ -685,6 +687,14 @@ def verify_2fa():
         return jsonify({"error": "Invalid verification code"}), 400
 
     user.totp_enabled = True
+    audit = EntityAuditLog(
+        entity_type="user",
+        entity_id=0,
+        actor_id=user.id,
+        change_type="2fa_enabled",
+        diff={"totp_enabled": True},
+    )
+    db.session.add(audit)
     db.session.commit()
     return jsonify({"success": True, "enabled": True}), 200
 
@@ -718,6 +728,14 @@ def disable_2fa():
     user.totp_enabled = False
     user.set_totp_secret(None)
     user.totp_recovery_codes = None
+    audit = EntityAuditLog(
+        entity_type="user",
+        entity_id=0,
+        actor_id=user.id,
+        change_type="2fa_disabled",
+        diff={"totp_enabled": False},
+    )
+    db.session.add(audit)
     db.session.commit()
     return jsonify({"success": True, "enabled": False}), 200
 
@@ -796,13 +814,16 @@ def create_token():
         return jsonify({"error": "User not found"}), 404
 
     is_admin = any(role.name == "admin" for role in getattr(user, "roles", []))
+    is_curator = is_admin or any(role.name in {"contributor", "custodian"} for role in getattr(user, "roles", []))
 
-    valid_standard = {"read:catalog", "write:catalog", "write:inventory", "sparql:query", "admin", "*"}
+    valid_standard = {"read:catalog", "write:catalog", "write:inventory", "sparql:query", "curator", "admin", "*"}
     for s in scopes:
         if s not in valid_standard and not any(s == p.value for p in PermissionName):
             return jsonify({"error": f"Invalid scope: {s}"}), 400
         if s in {"admin", "*"} and not is_admin:
             return jsonify({"error": "Admin scope requires admin role"}), 403
+        if s == "curator" and not is_curator:
+            return jsonify({"error": "Curator scope requires contributor, custodian, or admin role"}), 403
         if any(s == p.value for p in PermissionName) and not (is_admin or user.has_permission(s)):
             return jsonify({"error": f"Caller lacks permission for scope {s}"}), 403
 
