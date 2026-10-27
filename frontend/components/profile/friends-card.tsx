@@ -177,7 +177,7 @@ export function FriendsCard() {
       </p>
 
       {/* Add Friend Form */}
-      <form onSubmit={handleSendRequest} className="mb-6 flex gap-2">
+      <form onSubmit={handleSendRequest} className="mb-2 flex gap-2">
         <input
           type="text"
           value={targetIdentifier}
@@ -190,6 +190,10 @@ export function FriendsCard() {
           {t("sendRequest") || "Send Request"}
         </Button>
       </form>
+      <p className="text-[11px] text-muted-foreground mb-6">
+        {t("federatedProfileConsentHint") ||
+          "For federated users (@user@domain), the remote user must have enabled 'Federated Profile' in their settings to receive requests."}
+      </p>
 
       {/* Sub-tabs */}
       <div className="flex border-b border-border mb-4 text-xs font-medium">
@@ -335,9 +339,21 @@ export function FriendsCard() {
               key={req.friendship_id}
               className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border/40"
             >
-              <div>
-                <p className="text-sm font-medium leading-none">{req.display_name || req.username}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">@{req.username}</p>
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-xs">
+                  {(req.display_name || req.username || "U")[0].toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium leading-none">{req.display_name || req.username}</p>
+                    {req.is_federated && (
+                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] bg-secondary text-secondary-foreground">
+                        <Globe className="h-2.5 w-2.5" /> {t("fediverse") || "Fediverse"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">@{req.username}</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground italic">{t("pending") || "Pending"}</span>

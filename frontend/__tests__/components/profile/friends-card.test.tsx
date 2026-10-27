@@ -73,6 +73,15 @@ describe("FriendsCard", () => {
         status: "pending",
         is_federated: false,
       },
+      {
+        friendship_id: "fed:99",
+        user_id: "user-fed-out",
+        username: "frank@remote.org",
+        display_name: "Frank Remote",
+        status: "pending",
+        is_federated: true,
+        actor_uri: "https://remote.org/users/frank",
+      },
     ],
   };
 
@@ -194,6 +203,38 @@ describe("FriendsCard", () => {
     await waitFor(() => {
       expect(screen.getByText("Dave Request")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Accept/i })).toBeInTheDocument();
+    });
+  });
+
+  it("renders federated profile consent hint and outgoing federated badges with cancel action", async () => {
+    (apiClient.delete as any).mockResolvedValue({
+      data: { success: true },
+    });
+
+    render(<FriendsCard />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/For federated users \(@user@domain\), the remote user must have enabled/i)
+      ).toBeInTheDocument();
+    });
+
+    const outgoingTab = screen.getByText(/Outgoing/i);
+    fireEvent.click(outgoingTab);
+
+    await waitFor(() => {
+      expect(screen.getByText("Eve Outgoing")).toBeInTheDocument();
+      expect(screen.getByText("Frank Remote")).toBeInTheDocument();
+      expect(screen.getByText("@frank@remote.org")).toBeInTheDocument();
+      const cancelBtns = screen.getAllByRole("button", { name: /Cancel/i });
+      expect(cancelBtns.length).toBe(2);
+    });
+
+    const cancelBtns = screen.getAllByRole("button", { name: /Cancel/i });
+    fireEvent.click(cancelBtns[1]);
+
+    await waitFor(() => {
+      expect(apiClient.delete).toHaveBeenCalledWith("/profile/friends/fed%3A99");
     });
   });
 });

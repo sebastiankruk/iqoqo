@@ -18,7 +18,19 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Building2, Copy, Globe, Loader2, Plus, Shield, ShieldAlert, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import {
+  Building2,
+  Copy,
+  Globe,
+  Info,
+  Loader2,
+  Plus,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -151,6 +163,18 @@ export function FederationInstancesManager() {
 
   return (
     <div className="space-y-6">
+      {/* Reciprocal Peering Notice Banner */}
+      <div
+        data-testid="peering-guidance-banner"
+        className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/10 text-foreground flex items-start gap-3"
+      >
+        <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+        <div className="space-y-1 text-xs">
+          <p className="font-semibold text-sm text-blue-900 dark:text-blue-200">{t("peeringNoticeTitle")}</p>
+          <p className="text-muted-foreground leading-relaxed">{t("peeringNoticeDesc")}</p>
+        </div>
+      </div>
+
       {/* Discovery & Add form */}
       <Card>
         <CardHeader>
@@ -186,6 +210,7 @@ export function FederationInstancesManager() {
               )}
             </Button>
           </form>
+          <p className="text-xs text-muted-foreground mt-3">{t("addPeerReciprocalNote")}</p>
         </CardContent>
       </Card>
 

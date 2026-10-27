@@ -27,10 +27,11 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 
+from app.core.iri import canonical_actor_iri
 from app.core.notifications import create_notification
 from app.db import db
 from app.db.auth import User, UserFriendship
-from app.db.federation import FederationActor, FederationFollower, FollowStatus
+from app.db.federation import FederationActivity, FederationActor, FederationFollower, FollowStatus
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +170,39 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
             else:
                 incoming.append(item_data)
 
-    # Also include accepted federated followers/actors
+    # Also include accepted and pending federated followers/actors
     fed_stmt = (
         select(FederationFollower, FederationActor)
         .join(FederationActor, FederationFollower.remote_actor_id == FederationActor.id)
         .where(FederationFollower.local_user_id == u_uuid)
     )
     fed_results = db.session.execute(fed_stmt).all()
+
+    # Pre-fetch outbound Follow activities initiated by this local user
+    outbound_acts = (
+        db.session.execute(
+            select(FederationActivity).where(
+                FederationActivity.direction == "outbound",
+                FederationActivity.activity_type == "Follow",
+                or_(
+                    FederationActivity.actor_uri.ilike(f"%{u_uuid}%"),
+                    FederationActivity.actor_uri == canonical_actor_iri(u_uuid),
+                ),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    outbound_targets: set[str] = set()
+    for o_act in outbound_acts:
+        if o_act.target_uri:
+            outbound_targets.add(o_act.target_uri)
+        if isinstance(o_act.object_json, dict):
+            obj = o_act.object_json.get("object")
+            if isinstance(obj, str):
+                outbound_targets.add(obj)
+
     for fol, act in fed_results:
         fed_data = {
             "friendship_id": f"fed:{fol.id}",
@@ -191,7 +218,13 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
         if fol.status == FollowStatus.ACCEPTED:
             accepted.append(fed_data)
         elif fol.status == FollowStatus.PENDING:
-            incoming.append(fed_data)
+            is_outbound = bool(
+                (act.actor_uri and act.actor_uri in outbound_targets) or (act.inbox_url and act.inbox_url in outbound_targets)
+            )
+            if is_outbound:
+                outgoing.append(fed_data)
+            else:
+                incoming.append(fed_data)
 
     return {"accepted": accepted, "incoming": incoming, "outgoing": outgoing}
 
@@ -425,6 +458,33 @@ def respond_friend_request(
         if not fol or fol.local_user_id != u_uuid:
             return None, "Federated friend request not found", 404
 
+        remote_act = db.session.get(FederationActor, fol.remote_actor_id)
+
+        # Disallow caller responding (accept/reject) to an outbound follow request they initiated
+        if remote_act:
+            outbound_acts = (
+                db.session.execute(
+                    select(FederationActivity).where(
+                        FederationActivity.direction == "outbound",
+                        FederationActivity.activity_type == "Follow",
+                        or_(
+                            FederationActivity.actor_uri.ilike(f"%{u_uuid}%"),
+                            FederationActivity.actor_uri == canonical_actor_iri(u_uuid),
+                        ),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for o_act in outbound_acts:
+                is_outbound_match = False
+                if o_act.target_uri and remote_act.inbox_url and o_act.target_uri == remote_act.inbox_url:
+                    is_outbound_match = True
+                elif isinstance(o_act.object_json, dict) and o_act.object_json.get("object") == remote_act.actor_uri:
+                    is_outbound_match = True
+                if is_outbound_match:
+                    return None, "Cannot respond to an outgoing request you initiated; use cancel instead", 400
+
         if action == "accept":
             fol.status = FollowStatus.ACCEPTED
             db.session.commit()
@@ -434,7 +494,6 @@ def respond_friend_request(
                 from app.core.federation_dispatch import dispatch_accept_follow
 
                 user = db.session.get(User, u_uuid)
-                remote_act = fol.remote_actor
                 if user and remote_act:
                     dummy_follow = {
                         "type": "Follow",
