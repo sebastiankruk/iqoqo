@@ -1,8 +1,8 @@
 ## MODIFIED Requirements
 
-### Requirement: BoardGameGeek2 Strategy Resilience
+### Requirement: BoardGameGeek Strategy Resilience
 
-The system SHALL query BoardGameGeek via `boardgamegeek2` (`>=1.0.1`) with defused XML parsing, single-layer rate-limiting backoff (`Retry-After` capped at `10.0` seconds without stacked client retries), and `InstanceSettings` fallback resolution for `BGG_API_TOKEN`, while persisting Twitch/IGDB OAuth token files atomically via `os.replace()` and passing operational status-check parameters via environment variables rather than inline shell-interpolated Python code.
+The system SHALL query BoardGameGeek via maintained `boardgamegeek` (`>=0.13.0`, retaining compatibility with `requests-cache >= 1.0` where legacy `boardgamegeek2` fails with `requests_cache.core` import errors) with defused XML parsing, single-layer rate-limiting backoff (`Retry-After` capped at `10.0` seconds without stacked client retries), and `InstanceSettings` fallback resolution for `BGG_API_TOKEN`, while persisting Twitch/IGDB OAuth token files atomically via `os.replace()` and passing operational status-check parameters via environment variables rather than inline shell-interpolated Python code.
 
 #### Scenario: BGG rate limit triggers backoff
 
