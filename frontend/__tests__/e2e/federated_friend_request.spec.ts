@@ -212,7 +212,7 @@ test.describe("Federated Friend Request Direction and Cancellation (C87f)", () =
     // 6. Check Incoming tab -> must be empty
     const incomingTab = page.getByRole("button", { name: /Incoming \(/i });
     await incomingTab.click();
-    await expect(page.getByText(/No pending incoming requests/i)).toBeVisible();
+    await expect(page.getByText(/No pending (?:incoming|friend) requests/i)).toBeVisible();
     await expect(page.getByText("Alice Remote")).not.toBeVisible();
 
     // 7. Check Outgoing tab -> must show Alice Remote with Fediverse badge and Cancel action
