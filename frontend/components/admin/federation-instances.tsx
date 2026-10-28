@@ -57,7 +57,7 @@ const TRUST_LEVELS: TrustLevel[] = ["trusted", "untrusted", "blocked"];
 /**
  * Render trust level badge component with associated icon and style.
  *
- * @param trust - Instance trust level ('untrusted' | 'pending' | 'trusted' | 'blocked').
+ * @param trust - Instance trust level ('untrusted' | 'trusted' | 'blocked').
  * @param t - Translator function for AdminFederation namespace.
  * @returns Badge element.
  */
@@ -69,18 +69,13 @@ function getTrustBadge(trust: TrustLevel, t: ReturnType<typeof useTranslations>)
           <ShieldCheck className="h-3 w-3" /> {t("trustTrusted")}
         </Badge>
       );
-    case "pending":
-      return (
-        <Badge variant="outline" className="text-yellow-600 border-yellow-500/40 flex items-center gap-1">
-          <Shield className="h-3 w-3" /> {t("trustPending")}
-        </Badge>
-      );
     case "blocked":
       return (
         <Badge variant="destructive" className="flex items-center gap-1">
           <ShieldAlert className="h-3 w-3" /> {t("trustBlocked")}
         </Badge>
       );
+    case "untrusted":
     default:
       return (
         <Badge variant="secondary" className="text-muted-foreground flex items-center gap-1">
