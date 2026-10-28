@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.3] - 2026-10-26
+## [0.9.3] - 2026-10-28
 
 ### Added
 
@@ -26,6 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Federated Friend Request Segregation & Peering Guidance (C87f)**:
+  - Fixed direction inversion in `app/core/friend_service.py` where outbound federated friend requests were listed as incoming requests with Accept/Reject actions; cross-referenced outbound `FederationActivity` logs (`direction="outbound"`, `activity_type="Follow"`) to correctly list outbound requests under `outgoing` with a Cancel button.
+  - Guarded `respond_friend_request` to reject self-responses to outbound follow requests with HTTP 400.
+  - Added reciprocal peering guidance callout banner and domain caption to `frontend/components/admin/federation-instances.tsx` explaining unilateral ActivityPub peering and auto-accept trust requirements.
+  - Added user hint to `frontend/components/profile/friends-card.tsx` on recipient federated profile consent requirements, with English and Polish translations.
+  - Guarded with unit tests in `tests/test_friend_service.py`, component tests in `friends-card.test.tsx` and `federation-instances.test.tsx`, and Playwright E2E coverage in `federated_friend_request.spec.ts`.
+- **Take 3 Principal Review Remediation & Concurrency Hardening (C87e)**:
+  - Switched Gunicorn to `gthread --threads 8` in `docker-compose.yml`, clamped SSE stream `timeout <= 20s`, reused pooled Redis connections, and gated `TransitionEventsListener` on authenticated sessions to prevent worker starvation and `SIGABRT` timeouts.
+  - Implemented real PostgreSQL `Work.search_vector` (`to_tsvector`) SQL recomputations in `batch_fts_reindex` with Redis `NX EX` debounce locks, `threading.Lock`, and owner-scoped `fts_reindexed` events.
+  - Hardened BFF `X-Forwarded-Host` parsing via strict WHATWG `URL` parsing in `/api/auth-exchange` to eliminate open redirect vectors.
+  - Enforced `clean_instance_domain` port-preserving lookups across ActivityPub inbox and mutation handlers; required conjunction of `FEDERATION_AUTO_ACCEPT_FOLLOWS=True` and `TrustLevel.TRUSTED` for follow auto-acceptance; and computed DER-derived `SubjectPublicKeyInfo` SHA-256 fingerprints in `compute_pem_fingerprint`.
+  - Removed raw `?token=` query-string credential extraction from `/api/v1/events/stream`; throttled `last_used_at` updates and enforced PAT scopes in `optional_auth`; and blocked RFC 6238 TOTP replay within 90-second windows with audit logging.
+  - Bounded `ExportService.export_rdf()` with `joinedload(Item.borrower)` and batch chunking; pinned `boardgamegeek>=0.13.0` with capped `Retry-After <= 10s`; and resolved OpenAPI 3.1 parameter and schema contract drift.
 - **Federation Trust Graph, Settings RBAC & Instance Actor Hardening (C87d)**:
   - Eliminated follow request auto-acceptance bypass: `handle_follow` strictly holds inbound `Follow` activities in `pending` status unless `FEDERATION_AUTO_ACCEPT_FOLLOWS` is explicitly enabled in configuration or environment.
   - Hardened Federation Settings RBAC: `GET /api/v1/admin/settings?category=federation` surfaces authoritative values and origins; `PUT /api/v1/admin/settings` fails closed on unrecognized keys (HTTP 400), enforces `config:federation` permission (HTTP 403), rejects privileged `FEDERATION_DEFAULT_TRUST="trusted"` (HTTP 400), and records setting changes in `EntityAuditLog`.
