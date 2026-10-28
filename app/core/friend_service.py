@@ -31,7 +31,14 @@ from app.core.iri import canonical_actor_iri
 from app.core.notifications import create_notification
 from app.db import db
 from app.db.auth import User, UserFriendship
-from app.db.federation import FederationActivity, FederationActor, FederationFollower, FollowStatus
+from app.db.federation import (
+    FederationActivity,
+    FederationActor,
+    FederationFollower,
+    FederationInstance,
+    FollowStatus,
+    TrustLevel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,18 +339,26 @@ def send_friend_request(
 
     # Check if handle represents a federated actor (@user@domain)
     if "@" in clean_id:
-        handle_parts = clean_id.lstrip("@").split("@", 1)
+        handle_parts = clean_id.lstrip("@").rsplit("@", 1)
         if len(handle_parts) == 2:
             target_username, target_domain = handle_parts[0], handle_parts[1]
         else:
             target_username, target_domain = handle_parts[0], None
+
+        if target_domain:
+            inst = db.session.execute(select(FederationInstance).where(FederationInstance.domain == target_domain)).scalars().first()
+            if inst and inst.trust_level == TrustLevel.BLOCKED:
+                return None, f"Cannot connect with user from blocked instance {target_domain}", 403
 
         actor = None
         if target_domain:
             actor = (
                 db.session.execute(
                     select(FederationActor).where(
-                        FederationActor.username == target_username,
+                        or_(
+                            FederationActor.username == target_username,
+                            FederationActor.actor_uri.ilike(f"%/{target_username}"),
+                        ),
                         FederationActor.actor_uri.ilike(f"%{target_domain}%"),
                     )
                 )
@@ -388,7 +403,40 @@ def send_friend_request(
             except Exception as exc:
                 logger.warning("Failed WebFinger lookup for %s: %s", clean_id, exc)
 
+        # Fallback for email-like handles across registered non-blocked peer instances
+        if not actor:
+            from app.core.federation_handlers import _get_or_create_actor
+            from app.utils.http_client import safe_get
+
+            registered_instances = (
+                db.session.execute(select(FederationInstance).where(FederationInstance.trust_level != TrustLevel.BLOCKED)).scalars().all()
+            )
+            for reg_inst in registered_instances:
+                if reg_inst.domain == target_domain:
+                    continue
+                try:
+                    scheme = (
+                        "http"
+                        if ("localhost" in reg_inst.domain or "127.0.0.1" in reg_inst.domain or reg_inst.domain.startswith("peer-web"))
+                        else "https"
+                    )
+                    wf_url = f"{scheme}://{reg_inst.domain}/.well-known/webfinger?resource=acct:{clean_id.lstrip('@')}"
+                    wf_resp = safe_get(wf_url, headers={"Accept": "application/jrd+json, application/json"}, timeout=5.0)
+                    if wf_resp.status_code == 200:
+                        for link in wf_resp.json().get("links", []):
+                            if link.get("rel") == "self":
+                                remote_actor_uri = link.get("href")
+                                if remote_actor_uri:
+                                    actor = _get_or_create_actor(remote_actor_uri)
+                                    break
+                    if actor:
+                        break
+                except Exception:
+                    pass
+
         if actor:
+            if actor.instance and actor.instance.trust_level == TrustLevel.BLOCKED:
+                return None, f"Cannot connect with user from blocked instance {actor.instance.domain}", 403
             existing_fol = (
                 db.session.execute(
                     select(FederationFollower).where(

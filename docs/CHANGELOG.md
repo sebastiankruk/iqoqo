@@ -9,9 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-User Follow Auto-Acceptance & Federation Consent (C89c)**:
+  - Added `auto_accept_follows` boolean column to `FederationConsent` model and schema via linear Alembic migration `v0_9_4_fed_trust_autoaccept`.
+  - Added user toggle "Auto-Accept Follow Requests from Trusted Peers" on `/profile` federation settings, deprecating instance-wide auto-acceptance.
+  - Added resilient Celery `RuntimeError` fallback in `submit_task` (`app/core/tasks.py`) so ActivityPub inbox operations gracefully execute synchronously if the task broker is unreachable.
+
 ### Changed
 
+- **Federation Peering Trust Simplification (C89c)**:
+  - Simplified instance trust model into 3 distinct tiers: `trusted`, `untrusted`, and `blocked` (merging legacy `pending` into `untrusted`).
+  - Removed redundant "Pending Review" badge in Admin Peering dashboard and replaced technical peering banner with a plain-language explanation of trust tiers across catalog synchronization, friend requests, and lending.
+
 ### Fixed
+
+- **Federated Friend Resolution & Profile Visibility (C89c)**:
+  - Fixed WebFinger lookup and friend request dispatch to parse `@user@instance` handles with `.rsplit("@", 1)` and support username, full email, or email local-part resolution.
+  - Fixed `PUT /api/profile/` rejecting `"friends_only"` and `"shared"` visibility options.
+  - Removed dead "Public Profile" link from navigation bar dropdown and forwarded authenticated cookies in `/u/[username]` SSR.
 
 ## [0.9.3] - 2026-10-28
 

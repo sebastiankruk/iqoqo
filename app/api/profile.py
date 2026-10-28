@@ -159,17 +159,23 @@ def update_profile():
         if err:
             return err
 
+    valid_visibilities = ["public", "friends_only", "shared", "private"]
     if "visibility" in data:
         val = data["visibility"]
-        if val in ["public", "private"]:
-            user.visibility = val
+        if val in valid_visibilities:
+            user.visibility = "friends_only" if val == "shared" else val
+        else:
+            return jsonify({"error": f"Invalid visibility. Must be one of {valid_visibilities}", "code": 400}), 400
 
     if "default_item_visibility" in data:
         val = data["default_item_visibility"]
-        if val in ["public", "private"]:
-            user.default_item_visibility = val
+        if val in valid_visibilities:
+            user.default_item_visibility = "friends_only" if val == "shared" else val
         else:
-            return jsonify({"error": "Invalid default_item_visibility. Must be 'public' or 'private'", "code": 400}), 400
+            return (
+                jsonify({"error": f"Invalid default_item_visibility. Must be one of {valid_visibilities}", "code": 400}),
+                400,
+            )
 
     if "avatar_url" in data:
         raw_avatar = data["avatar_url"]
@@ -443,6 +449,7 @@ def _handle_get_federation_consent() -> tuple[Response, int] | Response:
             "user_id": str(user.id),
             "federated_profile": False,
             "federated_collection": False,
+            "auto_accept_follows": False,
             "updated_at": None,
         }
     else:
@@ -471,6 +478,7 @@ def _handle_update_federation_consent() -> tuple[Response, int] | Response:
             user_id=user.id,
             federated_profile=bool(payload.get("federated_profile", False)),
             federated_collection=bool(payload.get("federated_collection", False)),
+            auto_accept_follows=bool(payload.get("auto_accept_follows", False)),
         )
         db.session.add(consent)
     else:
@@ -478,6 +486,8 @@ def _handle_update_federation_consent() -> tuple[Response, int] | Response:
             consent.federated_profile = bool(payload["federated_profile"])
         if "federated_collection" in payload:
             consent.federated_collection = bool(payload["federated_collection"])
+        if "auto_accept_follows" in payload:
+            consent.auto_accept_follows = bool(payload["auto_accept_follows"])
         consent.updated_at = datetime.now(UTC)
 
     # Trigger actor RSA keypair generation on initial opt-in

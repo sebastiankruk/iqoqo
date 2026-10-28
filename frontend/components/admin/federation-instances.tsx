@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { FederationInstance, TrustLevel } from "@/types/federation";
 
-const TRUST_LEVELS: TrustLevel[] = ["untrusted", "pending", "trusted", "blocked"];
+const TRUST_LEVELS: TrustLevel[] = ["trusted", "untrusted", "blocked"];
 
 /**
  * Render trust level badge component with associated icon and style.
@@ -297,17 +297,20 @@ export function FederationInstancesManager() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {getTrustBadge(inst.trust_level, t)}
                           <select
                             value={inst.trust_level}
                             onChange={e => handleTrustChange(inst, e.target.value as TrustLevel)}
                             disabled={updateTrust.isPending}
                             aria-label={`Change trust level for ${inst.domain}`}
-                            className="text-xs h-7 rounded border border-input bg-background px-2 py-0.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="text-xs h-7 rounded border border-input bg-background px-2 py-0.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-ring font-medium"
                           >
                             {TRUST_LEVELS.map(lvl => (
                               <option key={lvl} value={lvl}>
-                                {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                                {lvl === "trusted"
+                                  ? t("trustTrusted")
+                                  : lvl === "blocked"
+                                    ? t("trustBlocked")
+                                    : t("trustUntrusted")}
                               </option>
                             ))}
                           </select>

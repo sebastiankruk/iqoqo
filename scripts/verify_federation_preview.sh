@@ -69,7 +69,8 @@ info "Ensuring peer user federation consent in peer database..."
 docker exec -i iqoqo-preview-peer-web-1 python3 -c "
 from app import create_app, db
 from app.db.auth import User
-from app.db.federation import FederationConsent
+from app.db.federation import FederationConsent, FederationActivity, ActivityStatus
+from app.core.federation_tasks import process_inbound_activity
 app = create_app()
 with app.app_context():
     u = User.query.filter_by(email='peer-admin@iqoqo.cc').first()
@@ -77,13 +78,22 @@ with app.app_context():
         u.public_username = 'peeradmin'
         consent = FederationConsent.query.filter_by(user_id=u.id).first()
         if not consent:
-            consent = FederationConsent(user_id=u.id, federated_profile=True, federated_collection=True)
+            consent = FederationConsent(user_id=u.id, federated_profile=True, federated_collection=True, auto_accept_follows=True)
             db.session.add(consent)
         else:
             consent.federated_profile = True
+            consent.auto_accept_follows = True
         db.session.commit()
+
+    # Reconcile any queued inbound activities
+    queued = FederationActivity.query.filter_by(status=ActivityStatus.QUEUED, direction='inbound').all()
+    for act in queued:
+        try:
+            process_inbound_activity(str(act.id), act.object_json or {})
+        except Exception as exc:
+            print(f'Error processing {act.id}: {exc}')
 "
-pass "Peer admin user (peeradmin) configured with active federated profile consent."
+pass "Peer admin user (peeradmin) configured with active federated profile & auto-accept consent."
 
 # 4. Verify RFC 7033 WebFinger Discovery on Peer
 info "Testing WebFinger RFC 7033 discovery..."

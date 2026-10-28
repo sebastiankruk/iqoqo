@@ -22,7 +22,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from flask import Blueprint, Response, current_app, g, jsonify, redirect, request
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.decorators import require_auth
@@ -105,7 +105,7 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
     if resource.startswith("acct:"):
         account_part = resource[5:]
         if "@" in account_part:
-            username, req_domain = account_part.split("@", 1)
+            username, req_domain = account_part.rsplit("@", 1)
             req_host = request.host.split(":")[0].strip().lower() if request.host else ""
             clean_req_domain = req_domain.strip().lower()
             req_domain_host = clean_req_domain.split(":")[0]
@@ -114,8 +114,14 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
                 return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
         else:
             username = account_part
-        # Look up by public_username or UUID string
-        stmt = select(User).where(User.public_username == username)
+        # Look up by public_username, email, or email local-part
+        stmt = select(User).where(
+            or_(
+                User.public_username == username,
+                func.lower(User.email) == username.lower(),
+                User.email.ilike(f"{username}@%"),
+            )
+        )
         user = db.session.execute(stmt).scalars().first()
         if not user:
             try:
@@ -957,10 +963,10 @@ def get_federation_directory() -> Response:
     if fed_enabled:
         from app.core.federation_discovery import is_publicly_routable_peer_domain
 
-        # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
+        # 1. Fetch public peer libraries from Trust Graph (trusted or untrusted)
         stmt = (
             select(FederationInstance)
-            .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
+            .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.UNTRUSTED]))
             .order_by(FederationInstance.last_seen_at.desc().nullslast())
         )
         all_peers = db.session.execute(stmt).scalars().all()

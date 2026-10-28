@@ -184,7 +184,7 @@ class TestFederationDiscovery:
         with app.app_context():
             inst = FederationInstance(
                 domain="nodeinfo.peer.net",
-                trust_level=TrustLevel.PENDING,
+                trust_level=TrustLevel.UNTRUSTED,
             )
             db.session.add(inst)
             db.session.commit()
@@ -314,7 +314,7 @@ class TestFederationMetadataSync:
             assert manif.cover_url == "https://trusted-peer.org/cover.jpg"
             assert manif.meta["_provenance"].get("cover_url") == "federation:trusted-peer.org"
 
-    def test_pending_peer_queues_for_custodian_merge(self, app, frbr_catalog):
+    def test_pending_and_untrusted_peer_queues_for_custodian_merge(self, app, frbr_catalog):
         with app.app_context():
             manif_id = frbr_catalog["manifestation_id"]
             manif = db.session.get(Manifestation, manif_id)
@@ -328,15 +328,15 @@ class TestFederationMetadataSync:
             res = federation_sync.sync_manifestation(
                 manifestation=manif,
                 remote_data=remote_data,
-                domain="pending-peer.org",
-                trust_level=TrustLevel.PENDING,
+                domain="untrusted-peer.org",
+                trust_level=TrustLevel.UNTRUSTED,
             )
 
             assert res["status"] == "queued_for_review"
             assert manif.publisher is None
             assert manif.meta.get("page_count") is None
 
-            provider_key = "federation:pending-peer.org"
+            provider_key = "federation:untrusted-peer.org"
             assert manif.raw_payload[provider_key]["publisher"] == "Candidate Press"
             assert manif.meta["raw_payload"][provider_key]["page_count"] == 500
 
@@ -353,20 +353,12 @@ class TestFederationMetadataSync:
             assert audit is not None
             assert audit.diff["provider"] == provider_key
 
-    def test_untrusted_and_blocked_peers_ignored(self, app, frbr_catalog):
+    def test_blocked_peers_ignored(self, app, frbr_catalog):
         with app.app_context():
             manif_id = frbr_catalog["manifestation_id"]
             manif = db.session.get(Manifestation, manif_id)
 
             remote_data = {"isbn13": "9780441172719", "page_count": 777}
-
-            untrusted_res = federation_sync.sync_manifestation(
-                manifestation=manif,
-                remote_data=remote_data,
-                domain="unknown.org",
-                trust_level=TrustLevel.UNTRUSTED,
-            )
-            assert untrusted_res["status"] == "ignored"
 
             blocked_res = federation_sync.sync_manifestation(
                 manifestation=manif,
@@ -603,7 +595,7 @@ class TestActivityPubInboxSyncIntegration:
                 manifestation=manif,
                 remote_data=remote_data,
                 domain="pending-peer.org",
-                trust_level=TrustLevel.PENDING,
+                trust_level=TrustLevel.UNTRUSTED,
             )
             assert res1["status"] == "queued_for_review"
 
@@ -619,7 +611,7 @@ class TestActivityPubInboxSyncIntegration:
                 manifestation=manif,
                 remote_data=remote_data,
                 domain="pending-peer.org",
-                trust_level=TrustLevel.PENDING,
+                trust_level=TrustLevel.UNTRUSTED,
             )
             assert res2["status"] == "already_queued"
 

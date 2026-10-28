@@ -85,10 +85,8 @@ describe("FederationInstancesManager Component", () => {
     render(<FederationInstancesManager />);
 
     expect(screen.getByTestId("peering-guidance-banner")).toBeInTheDocument();
-    expect(screen.getByText("ActivityPub Peering is Unilateral")).toBeInTheDocument();
-    expect(
-      screen.getByText(/The remote peer administrator must also add your instance for reciprocal trust/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText("How Federation Peering Works")).toBeInTheDocument();
+    expect(screen.getByText(/Adding a peer sets how your server handles requests/i)).toBeInTheDocument();
     expect(screen.getByText("No peer instances registered yet")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("library.example.org")).toBeInTheDocument();
   });
@@ -109,7 +107,7 @@ describe("FederationInstancesManager Component", () => {
           domain: "bookwyrm.social",
           software_name: "BookWyrm",
           software_version: "0.7.0",
-          trust_level: "pending",
+          trust_level: "untrusted",
           last_seen_at: new Date(Date.now() - 120000).toISOString(),
         },
       ],
@@ -124,7 +122,7 @@ describe("FederationInstancesManager Component", () => {
     expect(screen.getByText("bookwyrm.social")).toBeInTheDocument();
     expect(screen.getByText("BookWyrm 0.7.0")).toBeInTheDocument();
     expect(screen.getAllByText("Trusted").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Pending Review")).toBeInTheDocument();
+    expect(screen.getAllByText("Untrusted").length).toBeGreaterThanOrEqual(1);
   });
 
   it("discovers and adds a peer instance", async () => {

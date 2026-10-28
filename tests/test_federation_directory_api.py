@@ -37,15 +37,15 @@ def directory_seed(app):
             domain="books.naboo.example",
             software_name="iqoqo",
             software_version="0.9.0",
-            trust_level=TrustLevel.PENDING,
+            trust_level=TrustLevel.UNTRUSTED,
         )
-        inst_untrusted = FederationInstance(
+        inst_blocked = FederationInstance(
             domain="shady.tatooine.example",
             software_name="suspicious",
             software_version="0.0.1",
-            trust_level=TrustLevel.UNTRUSTED,
+            trust_level=TrustLevel.BLOCKED,
         )
-        db.session.add_all([inst_trusted, inst_verified, inst_untrusted])
+        db.session.add_all([inst_trusted, inst_verified, inst_blocked])
 
         # Add public and private items
         from app.db.auth import User

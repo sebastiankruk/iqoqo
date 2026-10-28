@@ -230,4 +230,118 @@ test.describe("Federated Friend Request Direction and Cancellation (C87f)", () =
     await cancelButton.click();
     await expect(page.getByText(/No outgoing requests/i)).toBeVisible();
   });
+
+  test("allows sending friend request with double-at email handle and sets friends-only visibility", async ({
+    page,
+  }) => {
+    await page.context().addCookies([{ name: "iqoqo_session", value: "mock-session", domain: "localhost", path: "/" }]);
+
+    let savedVisibility = "private";
+    await page.route(
+      url => url.pathname === "/api/profile/" || url.pathname === "/api/profile",
+      async route => {
+        if (route.request().method() === "PUT") {
+          const body = JSON.parse(route.request().postData() || "{}");
+          if (body.visibility) savedVisibility = body.visibility;
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              message: "Profile updated successfully",
+              data: {
+                id: "11111111-1111-1111-1111-111111111111",
+                email: "bob@local.instance",
+                public_username: "bob",
+                display_name: "Bob Local",
+                visibility: savedVisibility,
+                default_item_visibility: savedVisibility,
+              },
+            }),
+          });
+        } else {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: true,
+              data: {
+                id: "11111111-1111-1111-1111-111111111111",
+                email: "bob@local.instance",
+                public_username: "bob",
+                display_name: "Bob Local",
+                visibility: savedVisibility,
+                default_item_visibility: savedVisibility,
+                consents: {},
+              },
+            }),
+          });
+        }
+      }
+    );
+
+    await page.route("**/api/config**", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, data: { federation_enabled: true, version: packageJson.version } }),
+      });
+    });
+
+    let requestedIdentifier = "";
+    await page.route("**/api/profile/friends/request", async route => {
+      const body = JSON.parse(route.request().postData() || "{}");
+      requestedIdentifier = body.identifier;
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            friendship_id: "fed:202",
+            user_id: "remote-peeradmin",
+            username: requestedIdentifier,
+            display_name: "Peer Admin",
+            status: "pending",
+            is_federated: true,
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/profile/friends", async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: {
+            accepted: [],
+            incoming: [],
+            outgoing: requestedIdentifier
+              ? [
+                  {
+                    friendship_id: "fed:202",
+                    user_id: "remote-peeradmin",
+                    username: requestedIdentifier,
+                    display_name: "Peer Admin",
+                    status: "pending",
+                    is_federated: true,
+                  },
+                ]
+              : [],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/profile");
+
+    // Submit friend request with double-@ handle
+    const handleInput = page.getByPlaceholder(/Username, email, or @user@domain handle/i);
+    await handleInput.fill("peer-admin@iqoqo.cc@peer.iqoqo.cc");
+    const sendButton = page.getByRole("button", { name: /Send Request/i });
+    await sendButton.click();
+
+    expect(requestedIdentifier).toBe("peer-admin@iqoqo.cc@peer.iqoqo.cc");
+  });
 });

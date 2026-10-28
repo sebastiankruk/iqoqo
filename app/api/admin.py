@@ -434,8 +434,10 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
 
         if key == "FEDERATION_DEFAULT_TRUST":
             norm_trust = str(value or "").lower()
-            if norm_trust not in {"untrusted", "pending"}:
-                return jsonify({"success": False, "error": "FEDERATION_DEFAULT_TRUST must be 'untrusted' or 'pending'", "code": 400}), 400
+            if norm_trust == "pending":
+                norm_trust = "untrusted"
+            if norm_trust != "untrusted":
+                return jsonify({"success": False, "error": "FEDERATION_DEFAULT_TRUST must be 'untrusted'", "code": 400}), 400
             value = norm_trust
 
         if key == "FEDERATION_AUTO_ACCEPT_FOLLOWS":
@@ -2026,6 +2028,8 @@ def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
 
     payload = request.get_json(silent=True) or {}
     trust_level = str(payload.get("trust_level", "")).lower().strip()
+    if trust_level == "pending":
+        trust_level = TrustLevel.UNTRUSTED
     if trust_level not in TrustLevel.ALL:
         return (
             jsonify({"success": False, "error": f"Invalid trust_level. Must be one of {TrustLevel.ALL}"}),

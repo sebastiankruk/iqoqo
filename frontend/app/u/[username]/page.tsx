@@ -16,6 +16,7 @@
 
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
+import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { Library } from "lucide-react";
 
@@ -40,14 +41,33 @@ interface PublicProfilePageProps {
 }
 
 /**
+ * Safely retrieve request cookies if within an active request context.
+ * Returns empty headers in unit test or static environments.
+ */
+async function getCookieHeader(): Promise<Record<string, string>> {
+  try {
+    const cookieStore = await cookies();
+    const cookieHeader = cookieStore?.toString();
+    if (cookieHeader) {
+      return { Cookie: cookieHeader };
+    }
+  } catch {
+    // RequestAsyncStorage not available outside active request
+  }
+  return {};
+}
+
+/**
  * Fetches user profile data for the public page.
  * @param username - The public username to fetch.
  * @returns The user profile data or null if not found.
  */
 async function getProfile(username: string) {
   try {
+    const headers = await getCookieHeader();
     const res = await fetch(resolveApiUrl(`/public/u/${username}`, true), {
-      next: { revalidate: 60 },
+      headers,
+      cache: "no-store",
     });
     if (!res.ok) return null;
     return await res.json();
@@ -70,9 +90,11 @@ async function getProfile(username: string) {
  */
 async function getItems(username: string, page = 1) {
   try {
+    const headers = await getCookieHeader();
     const qs = `?page=${encodeURIComponent(page)}&per_page=${ITEMS_PER_PAGE}`;
     const res = await fetch(resolveApiUrl(`/public/u/${username}/items${qs}`, true), {
-      next: { revalidate: 60 },
+      headers,
+      cache: "no-store",
     });
     if (!res.ok) return { data: { items: [] } };
     return await res.json();

@@ -46,11 +46,10 @@ class TrustLevel:
     """Trust level constants for federation instances."""
 
     UNTRUSTED = "untrusted"
-    PENDING = "pending"
     TRUSTED = "trusted"
     BLOCKED = "blocked"
 
-    ALL = (UNTRUSTED, PENDING, TRUSTED, BLOCKED)
+    ALL = (UNTRUSTED, TRUSTED, BLOCKED)
 
 
 class FollowStatus:
@@ -216,6 +215,7 @@ class FederationConsent(db.Model):  # type: ignore[name-defined]
     )
     federated_profile = db.Column(db.Boolean, nullable=False, default=False)
     federated_collection = db.Column(db.Boolean, nullable=False, default=False)
+    auto_accept_follows = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
@@ -224,5 +224,6 @@ class FederationConsent(db.Model):  # type: ignore[name-defined]
             "user_id": str(self.user_id),
             "federated_profile": self.federated_profile,
             "federated_collection": self.federated_collection,
+            "auto_accept_follows": self.auto_accept_follows,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

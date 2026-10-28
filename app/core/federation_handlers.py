@@ -25,7 +25,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.config_service import ConfigService
 from app.core.federation_discovery import clean_instance_domain, get_safe_default_trust
 from app.db import db
 from app.db.auth import User
@@ -207,7 +206,7 @@ def handle_follow(activity: dict[str, Any]) -> bool:
     )
     existing = db.session.execute(follower_stmt).scalars().first()
 
-    auto_accept = ConfigService.get_bool("FEDERATION_AUTO_ACCEPT_FOLLOWS", default=False)
+    auto_accept = getattr(consent, "auto_accept_follows", False)
     should_accept = bool(auto_accept and instance and instance.trust_level == TrustLevel.TRUSTED)
     follow_status = FollowStatus.ACCEPTED if should_accept else FollowStatus.PENDING
 
