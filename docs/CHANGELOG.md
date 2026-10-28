@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-10-28
+
+### Added
+
+- **Review Enhancements & Deferred Items (C83e)**:
+  - Friend-scoped facet statistics on `GET /api/stats/facets?scope=friends` aggregating confirmed friends' visible items (`public`, `friends_only`, `shared`, `is_hidden=False`).
+  - Graceful degradation banner and local instance metadata on `/federation/directory` when S2S federation is disabled (`FEDERATION_ENABLED=False`).
+  - Social and custody provenance serialization in `ExportService.export_rdf()` emitting `foaf:knows` for mutual friends and `iqoqo:custodyHolder` for public loans.
+  - Rate limiting on notification endpoints (`GET /api/v1/notifications`, `PATCH /api/v1/notifications/read`, `POST /api/v1/notifications/read-all`) via `@limiter.limit("60 per minute")`.
+  - Comprehensive English and Polish localization parity for `Notifications`, `FeedbackPage`, `Profile`, and `FederationDirectory`.
+- **Async Transition Ingestion & Background FTS Re-indexing (C84)**: Decoupled PostgreSQL full-text search `tsvector` recomputations from synchronous HTTP writes by enqueuing entity updates into a Redis debounce queue coalesced across 5-second windows and processed via Celery background task `batch_fts_reindex`. Implemented Server-Sent Events (SSE) transition stream on `GET /api/v1/events/stream` and wired frontend `TransitionEventsListener` to invalidate TanStack Query caches reactively on transition completion without client polling (`async-transitions-and-fts-reindexing-v093`).
+- **Personal Access Tokens (PATs) & TOTP 2FA Authentication (C85)**: Added Personal Access Tokens with `iqo_` prefix, SHA-256 one-way hashing, and scoped authorization (`read:catalog`, `write:catalog`, `admin`, `*`) across API endpoints with SQL pagination and revocation tracking. Added TOTP two-factor authentication via `pyotp` with Fernet-encrypted secret storage, 8 single-use recovery codes, QR code provisioning, login challenge validation with `mfa_required=True`, and management components (`PatManagement`, `TotpSetup`) on `/profile` (`auth-personal-access-tokens-and-totp-v093`).
+- **BoardGameGeek Migration & Twitch/IGDB Verification (C86)**: Migrated `app/utils/bgg.py` and `app/strategies/boardgame.py` to `boardgamegeek` client with safe `defusedxml` parsing, exponential backoff retries on HTTP 429 Too Many Requests, and OpenTelemetry outbound tracing spans. Added 4-state health reporting (`DISABLED`, `CONFIGURED_VALID`, `EXPIRED_NEEDS_REFRESH`, `AUTH_ERROR`) for Twitch/IGDB in `app/utils/igdb.py` and `GET /api/system/status`, and integrated Twitch/IGDB and BoardGameGeek status reporting into `scripts/iqoqo-status.sh` (`bgg2-migration-and-twitch-igdb-verification-v093`).
+- **OpenAPI 3.1 Complete Contract & AI Skills (C87)**: Upgraded `app/api/docs.py` to OpenAPI 3.1.0 standard covering 100% of application routes, with complete security schemes (`BearerAuth`, `PersonalAccessToken`, `DeployToken`) and FRBR entity component schemas. Added zero-drift parameter contract testing in `tests/test_openapi_contract_completeness.py`. Delivered `.agents/skills/federation-interop-tester/SKILL.md` (with `scripts/verify_http_signature.py`), `.agents/skills/openapi-contract-auditor/SKILL.md`, and published the Gemini Custom Gem template and Action schema in `docs/gems/iqoqo-librarian-gem.md` (`openapi-31-complete-contract-and-ai-skills-v093`).
+
+### Changed
+
+- **Dependency Security Updates**: Resolved 18 open Dependabot alerts across root and frontend workspaces: updated `next` (16.3.8 -> 16.4.3, addressing SVG image optimization and cache RCEs), `zod` (^4.3.6 -> ^4.6.6), `happy-dom` (^20.8.9 -> ^21.0.4), `markdownlint-cli2` (^0.23.3 -> ^0.24.0, resolving transitive `markdown-it` 15.0.3), and refreshed lockfiles for `fast-uri` (>= 3.1.9) and `undici` (>= 7.30.1).
+
+### Fixed
+
+- **Federated Friend Request Segregation & Peering Guidance (C87f)**:
+  - Fixed direction inversion in `app/core/friend_service.py` where outbound federated friend requests were listed as incoming requests with Accept/Reject actions; cross-referenced outbound `FederationActivity` logs (`direction="outbound"`, `activity_type="Follow"`) to correctly list outbound requests under `outgoing` with a Cancel button.
+  - Guarded `respond_friend_request` to reject self-responses to outbound follow requests with HTTP 400.
+  - Added reciprocal peering guidance callout banner and domain caption to `frontend/components/admin/federation-instances.tsx` explaining unilateral ActivityPub peering and auto-accept trust requirements.
+  - Added user hint to `frontend/components/profile/friends-card.tsx` on recipient federated profile consent requirements, with English and Polish translations.
+  - Guarded with unit tests in `tests/test_friend_service.py`, component tests in `friends-card.test.tsx` and `federation-instances.test.tsx`, and Playwright E2E coverage in `federated_friend_request.spec.ts`.
+- **Take 3 Principal Review Remediation & Concurrency Hardening (C87e)**:
+  - Switched Gunicorn to `gthread --threads 8` in `docker-compose.yml`, clamped SSE stream `timeout <= 20s`, reused pooled Redis connections, and gated `TransitionEventsListener` on authenticated sessions to prevent worker starvation and `SIGABRT` timeouts.
+  - Implemented real PostgreSQL `Work.search_vector` (`to_tsvector`) SQL recomputations in `batch_fts_reindex` with Redis `NX EX` debounce locks, `threading.Lock`, and owner-scoped `fts_reindexed` events.
+  - Hardened BFF `X-Forwarded-Host` parsing via strict WHATWG `URL` parsing in `/api/auth-exchange` to eliminate open redirect vectors.
+  - Enforced `clean_instance_domain` port-preserving lookups across ActivityPub inbox and mutation handlers; required conjunction of `FEDERATION_AUTO_ACCEPT_FOLLOWS=True` and `TrustLevel.TRUSTED` for follow auto-acceptance; and computed DER-derived `SubjectPublicKeyInfo` SHA-256 fingerprints in `compute_pem_fingerprint`.
+  - Removed raw `?token=` query-string credential extraction from `/api/v1/events/stream`; throttled `last_used_at` updates and enforced PAT scopes in `optional_auth`; and blocked RFC 6238 TOTP replay within 90-second windows with audit logging.
+  - Bounded `ExportService.export_rdf()` with `joinedload(Item.borrower)` and batch chunking; pinned `boardgamegeek>=0.13.0` with capped `Retry-After <= 10s`; and resolved OpenAPI 3.1 parameter and schema contract drift.
+- **Federation Trust Graph, Settings RBAC & Instance Actor Hardening (C87d)**:
+  - Eliminated follow request auto-acceptance bypass: `handle_follow` strictly holds inbound `Follow` activities in `pending` status unless `FEDERATION_AUTO_ACCEPT_FOLLOWS` is explicitly enabled in configuration or environment.
+  - Hardened Federation Settings RBAC: `GET /api/v1/admin/settings?category=federation` surfaces authoritative values and origins; `PUT /api/v1/admin/settings` fails closed on unrecognized keys (HTTP 400), enforces `config:federation` permission (HTTP 403), rejects privileged `FEDERATION_DEFAULT_TRUST="trusted"` (HTTP 400), and records setting changes in `EntityAuditLog`.
+  - Closed domain normalization blocklist bypass: normalized domains with explicit ports (`domain:8443`) uniformly across discovery, actor caching, and handler lookups; clamped safe default trust strictly to non-privileged levels (`untrusted`, `pending`).
+  - Screened public directory: filtered non-routable hostnames (`web:5000`, `peer-web:5000`, loopbacks, RFC1918) from `GET /api/federation/directory`.
+  - Removed insecure hardcoded fallback Fernet secret from `app/core/federation_keys.py`, raising `RuntimeError` when `SECRET_KEY` is unconfigured.
+  - Implemented side-effect-free Instance Application Actor (`GET /api/federation/actor`, returning 404 when unprovisioned), provisioned idempotently via `scripts/init_auth.py` and authenticated `POST /api/v1/admin/federation/key-fingerprint/provision`.
+  - Added bodyless outbound HTTP Signature signing (`(request-target) host date`) for Authorized Fetch support, advertised `metadata.instance_actor` in NodeInfo 2.1, and cached remote peer `Application` actors in `FederationActor` to display DER-derived `SHA256:...` `key_fingerprint` strings in the Admin Federation UI without N+1 queries.
+  - SRE & preview hardening: mounted persistent `peer_data` volume in `docker-compose.federation-preview.yml`, cleaned up synthetic smoke test rows in `scripts/verify_federation_preview.sh` via `try ... finally`, and documented out-of-band fingerprint verification in `federation-manual-testing-walkthrough.md`.
+- **Pre-Release Critical Fixes & Security Hardening (C87b)**:
+  - Wrapped Server-Sent Events (SSE) generators and test client responses in `tests/test_sse_events.py` with explicit `.close()` calls in `try...finally` blocks to prevent unhandled Flask context tear-downs and `LookupError: <ContextVar name='flask.app_ctx'>` across subsequent test setups.
+  - Blocked `read:catalog` Personal Access Tokens from accessing `@admin_required` and `@admin_or_custodian_required` routes; required session tokens (`iqo_*` PATs rejected with 403) for token and 2FA management (`/api/auth/tokens*`, `/api/auth/2fa/*`).
+  - Prevented 2FA secret overwrites in `POST /api/auth/2fa/enroll` when 2FA is already active (`400 Bad Request`), and enforced role verification on `"admin"` / `"*"` scope requests in `create_token`.
+  - Added MFA challenge step to `frontend/app/login/page.tsx` with English/Polish translations and Playwright E2E coverage (`pat_and_totp_workflow.spec.ts`).
+  - Isolated Server-Sent Events (SSE) transition stream (`GET /api/v1/events/stream`) by `user_id` to prevent cross-tenant leakage of private item/custody events; clamped timeout bounds; ensured Redis cleanup; and expanded frontend `TransitionEventsListener` invalidations.
+  - Aligned Linked Open Data Item IRIs to `/items/{id}` (plural), repaired `borrower` lookups and visibility guards in `ExportService.build_batch_rdf_graph`, and filtered `User.visibility == "public"` in `get_public_user_followers`.
+  - Preserved `"all"` / `"global"` scope in Collection faceted navigation (`frontend/app/collection/page.tsx`), and restricted active Twitch OAuth probing (`GET /api/system/status?probe=true`) to administrators.
+
 ## [0.9.2] - 2026-10-23
 
 ### Added

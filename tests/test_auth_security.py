@@ -236,7 +236,7 @@ class TestBarcodePreviewQueryValidation:
 
 
 def test_login_rate_limiting(app):
-    """POST /api/auth/login rejects requests beyond 5 per minute."""
+    """POST /api/auth/login rejects requests beyond 10 per minute."""
     from app.core.limiter import limiter
 
     app.config["RATELIMIT_ENABLED"] = True
@@ -249,7 +249,7 @@ def test_login_rate_limiting(app):
     test_client = app.test_client()
 
     try:
-        for _ in range(5):
+        for _ in range(10):
             res = test_client.post("/api/auth/login", json={"email": "nobody@iqoqo.local", "password": "wrong"})
             assert res.status_code == 401
 

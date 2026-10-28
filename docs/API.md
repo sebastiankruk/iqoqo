@@ -47,6 +47,133 @@ JWT in the cookie stays cryptographically valid until it expires unless the
 backend adds its `jti` to the blocklist, so clearing the cookie alone leaves any
 copy of it working.
 
+### Personal Access Tokens (PATs)
+
+For external integrations, developer tools, and AI agents (such as Gemini Custom Gems or custom scripts), users can generate scoped **Personal Access Tokens (PATs)** on their Profile page or via the API:
+
+```http
+POST /api/auth/tokens
+Authorization: Bearer <session_jwt>
+Content-Type: application/json
+
+{
+  "name": "Library Sync Script",
+  "scopes": ["read:catalog", "write:catalog"],
+  "expires_in_days": 90
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "iqo_YOUR_NEW_TOKEN_STRING",
+  "data": {
+    "id": 12,
+    "name": "Library Sync Script",
+    "token_prefix": "iqo_abcd",
+    "scopes": ["read:catalog", "write:catalog"],
+    "created_at": "2026-10-26T12:00:00Z",
+    "expires_at": "2027-01-24T12:00:00Z",
+    "last_used_at": null,
+    "is_active": true
+  }
+}
+```
+
+> [!IMPORTANT]
+> The plaintext token (`iqo_...`) is returned **only once** upon creation. iqoqo stores only a SHA-256 hash of the token at rest.
+
+Use PATs in HTTP requests exactly like session JWTs:
+
+```http
+Authorization: Bearer iqo_YOUR_NEW_TOKEN_STRING
+```
+
+#### PAT Scope Hierarchy & Constraints
+
+| Scope | Allowed Capabilities |
+| :--- | :--- |
+| `read:catalog` | Read-only access to catalog, collections, works, manifestations, and items |
+| `write:catalog` | Create and modify catalog items, manifestations, and works |
+| `write:inventory` | Update physical item holdings, condition, notes, and local barcodes |
+| `sparql:query` | Execute SPARQL queries against public and friend-scoped knowledge graph |
+| `admin` | Full administrative API access (restricted to users holding the `admin` role) |
+| `*` | Superuser wildcard scope (restricted to users holding the `admin` role) |
+
+> [!WARNING]
+> Personal Access Tokens are strictly rejected on session-only management endpoints (such as `/api/auth/tokens*` and `/api/auth/2fa/*`) and require an active user session token (`403 Forbidden`).
+
+### Two-Factor Authentication (TOTP 2FA)
+
+iqoqo supports RFC 6238 TOTP two-factor authentication (compatible with Google Authenticator, Aegis, 1Password, and Bitwarden):
+
+- `GET /api/auth/2fa/status` — Check whether TOTP is enabled (`{"enabled": true|false}`).
+- `POST /api/auth/2fa/enroll` — Begin TOTP setup; returns base32 secret, provisioning URI, 8 single-use recovery codes, and base64 PNG QR code data URI.
+- `POST /api/auth/2fa/verify` — Verify the 6-digit TOTP code (`{"code": "123456"}`) and activate 2FA (`{"success": true, "enabled": true}`).
+- `POST /api/auth/2fa/disable` — Disable TOTP (requires account `password` or a valid `code` / `otp_code`: `{"success": true, "enabled": false}`).
+
+When 2FA is enabled on an account, initial authentication against `POST /api/auth/login` with email and password returns:
+
+```json
+{
+  "mfa_required": true,
+  "message": "Two-factor authentication required"
+}
+```
+
+The client must submit a second call to `POST /api/auth/login` containing the credentials alongside the 6-digit `otp_code` (or a recovery code) to complete authentication and receive session tokens:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "your_password",
+  "otp_code": "123456"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJ...",
+  "user": {
+    "id": "018f...-uuid",
+    "email": "you@example.com"
+  }
+}
+```
+
+### Real-Time Transition Events (SSE Stream)
+
+Asynchronous entity transitions and background full-text search indexing updates are streamed in real time via Server-Sent Events (SSE):
+
+```http
+GET /api/v1/events/stream
+Authorization: Bearer <session_jwt>
+Accept: text/event-stream
+```
+
+Streams emit unnamed JSON data frames and periodic heartbeat comment frames:
+
+```text
+: connected
+
+data: {"event": "item_updated", "data": {"item_id": 42, "user_id": "018f..."}, "timestamp": "2026-10-26T12:00:00Z"}
+
+: ping
+```
+
+Events are strictly isolated by `user_id` to prevent cross-tenant event leakage. Clients disconnect cleanly using standard EventSource lifecycles.
+
+### OpenAPI 3.1 Specification
+
+- **OpenAPI 3.1 Spec (JSON):** `GET /api/docs/openapi.json`
+- Covers 100% of application routes, security schemes (`BearerAuth`, `PersonalAccessToken`, `DeployToken`), accurate UUID parameter and schema representations, and FRBR component schemas.
+
 ### Permission Requirements
 
 Access is granted by **permission**, not by role. The `contributor` role holds
@@ -662,11 +789,35 @@ Retrieve the public ActivityStreams `OrderedCollection` representing the user's 
 
 ---
 
+### `GET /api/federation/actor`
+
+Retrieve the instance `Application` actor ActivityStreams JSON-LD document publishing the server's public key (`#main-key`) for Fediverse HTTP Signatures and Authorized Fetch.
+
+**Authentication:** Not required (Public). Returns `404 Not Found` if the instance key has not yet been provisioned.
+
+---
+
+### `GET /api/federation/directory`
+
+Public directory of federated library peers with pagination and search. Non-routable internal hostnames (`localhost`, Docker bridge networks, RFC1918) are excluded.
+
+**Authentication:** Not required (Public).
+
+---
+
 ### `GET /api/v1/admin/federation/instances` & `POST /api/v1/admin/federation/instances`
 
-List registered peer federation instances or discover and register a new peer via NodeInfo (`/.well-known/nodeinfo`).
+List registered peer federation instances (including pinned `key_fingerprint` SHA-256 strings) or discover and register a new peer via NodeInfo (`/.well-known/nodeinfo`).
 
-**Authentication:** Admin required (`role:admin`).
+**Authentication:** Admin required (`role:admin` / `config:federation`).
+
+---
+
+### `POST /api/v1/admin/federation/key-fingerprint/provision`
+
+Explicitly provision or rotate the local instance RSA-2048 keypair (`data/keys/server.pem`) and return the resulting `SHA256:...` fingerprint.
+
+**Authentication:** Admin required (`role:admin` / `config:federation`). Accepts `{ "rotate": true }` to rotate an existing keypair.
 
 ---
 

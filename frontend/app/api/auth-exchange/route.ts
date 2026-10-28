@@ -18,10 +18,68 @@ import { NextResponse } from "next/server";
 
 type ExchangeResult = { token: string; callbackUrl: string } | null;
 
-/** Validate deployment hosts before using request forwarding headers. */
-function isAllowedHost(hostWithPort: string): boolean {
-  const host = hostWithPort.split(":")[0].toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || host === "iqoqo.cc" || host.endsWith(".iqoqo.cc");
+/**
+ * Validate and canonicalize deployment hosts before using request forwarding headers.
+ * Uses strict WHATWG URL parsing to reject userinfo credentials, paths, queries,
+ * fragments, commas, backslashes, and whitespace.
+ *
+ * @param hostCandidate - Untrusted host candidate string
+ * @returns Canonical host (with port if non-default) if allowed, or null if disallowed
+ */
+export function sanitizeAllowedHost(hostCandidate: string): string | null {
+  if (!hostCandidate) return null;
+  const trimmed = hostCandidate.trim();
+
+  // Reject multi-value headers, whitespace, or URL special delimiters
+  if (
+    trimmed.includes(",") ||
+    trimmed.includes(" ") ||
+    trimmed.includes("@") ||
+    trimmed.includes("/") ||
+    trimmed.includes("\\") ||
+    trimmed.includes("?") ||
+    trimmed.includes("#")
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(`https://${trimmed}`);
+    if (
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      parsed.pathname !== "/" ||
+      parsed.search !== "" ||
+      parsed.hash !== ""
+    ) {
+      return null;
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    let isAllowed =
+      hostname === "localhost" || hostname === "127.0.0.1" || hostname === "iqoqo.cc" || hostname.endsWith(".iqoqo.cc");
+
+    const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
+    if (!isAllowed && configuredFrontendUrl) {
+      try {
+        const configured = new URL(configuredFrontendUrl);
+        if (hostname === configured.hostname.toLowerCase()) {
+          isAllowed = true;
+        }
+      } catch {
+        // ignore invalid env URL
+      }
+    }
+
+    return isAllowed ? parsed.host : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Legacy boolean check delegating to sanitizeAllowedHost. */
+export function isAllowedHost(hostWithPort: string): boolean {
+  return sanitizeAllowedHost(hostWithPort) !== null;
 }
 
 /**
@@ -38,22 +96,12 @@ function isAllowedHost(hostWithPort: string): boolean {
  */
 function resolveFrontendOrigin(request: Request): string {
   const url = new URL(request.url);
-  const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
-  if (configuredFrontendUrl) {
-    const configuredUrl = new URL(configuredFrontendUrl);
-    if (configuredUrl.protocol === "https:" || configuredUrl.protocol === "http:") {
-      return configuredUrl.origin;
-    }
-  }
-
   const rawForwardedHost = request.headers.get("x-forwarded-host");
   const rawHost = request.headers.get("host") || "";
-  const host =
-    rawForwardedHost && isAllowedHost(rawForwardedHost)
-      ? rawForwardedHost
-      : isAllowedHost(rawHost)
-        ? rawHost
-        : "localhost:3000";
+  const trustedHost =
+    (rawForwardedHost ? sanitizeAllowedHost(rawForwardedHost) : null) ||
+    (rawHost ? sanitizeAllowedHost(rawHost) : null);
+
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const protocol =
     forwardedProto === "https" || forwardedProto === "http"
@@ -61,7 +109,24 @@ function resolveFrontendOrigin(request: Request): string {
       : url.protocol === "https:"
         ? "https"
         : "http";
-  return `${protocol}://${host}`;
+
+  if (trustedHost) {
+    return `${protocol}://${trustedHost}`;
+  }
+
+  const configuredFrontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL;
+  if (configuredFrontendUrl) {
+    try {
+      const configuredUrl = new URL(configuredFrontendUrl);
+      if (configuredUrl.protocol === "https:" || configuredUrl.protocol === "http:") {
+        return configuredUrl.origin;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return `${protocol}://localhost:3000`;
 }
 
 /**

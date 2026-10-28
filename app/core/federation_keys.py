@@ -58,7 +58,7 @@ def _get_fernet_cipher() -> Fernet:
 
         secret = getattr(Config, "SECRET_KEY", None)
     if not secret:
-        secret = "default-iqoqo-secret-key-for-dev-only"
+        raise RuntimeError("SECRET_KEY must be set to initialize cryptographic key storage")
 
     key_bytes = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
     return Fernet(key_bytes)
@@ -242,6 +242,35 @@ def delete_actor_keypair(user_id: str) -> bool:
     return False
 
 
+def compute_pem_fingerprint(public_pem: str | bytes | None) -> str:
+    """Compute SHA-256 fingerprint of a public key PEM string using DER SubjectPublicKeyInfo.
+
+    Args:
+        public_pem: Public key PEM bytes or string.
+
+    Returns:
+        Hex-encoded SHA-256 digest formatted with colons: e.g. "SHA256:xx:xx:...",
+        or "Not configured" if missing or invalid.
+    """
+    if not public_pem:
+        return "Not configured"
+    pem_bytes = public_pem.encode("utf-8") if isinstance(public_pem, str) else public_pem
+    if not pem_bytes.strip():
+        return "Not configured"
+    try:
+        pub_key = serialization.load_pem_public_key(pem_bytes)
+        der_bytes = pub_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        digest = hashlib.sha256(der_bytes).hexdigest()
+        coloned = ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
+        return f"SHA256:{coloned}"
+    except Exception as err:
+        logger.warning("Failed to parse public key PEM for fingerprinting: %s", err)
+        return "Not configured"
+
+
 def get_key_fingerprint(public_pem: str | bytes | None = None) -> str:
     """Compute SHA-256 fingerprint of a public key PEM string or server actor key.
 
@@ -251,11 +280,22 @@ def get_key_fingerprint(public_pem: str | bytes | None = None) -> str:
     Returns:
         Hex-encoded SHA-256 digest formatted with colons: e.g. "SHA256:xx:xx:...".
     """
-    if not public_pem:
-        public_pem = get_actor_public_key("server")
-    if not public_pem:
-        return "Not configured"
-    pem_bytes = public_pem.encode("utf-8") if isinstance(public_pem, str) else public_pem
-    digest = hashlib.sha256(pem_bytes).hexdigest()
-    coloned = ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
-    return f"SHA256:{coloned}"
+    target_pem = public_pem or get_actor_public_key("server")
+    return compute_pem_fingerprint(target_pem)
+
+
+def ensure_instance_actor_key(rotate: bool = False) -> str:
+    """Ensure instance-level RSA keypair (server.pem) exists; optionally rotate it.
+
+    Args:
+        rotate: If True, regenerates the keypair even if it exists.
+
+    Returns:
+        The SHA-256 colon-delimited fingerprint of the instance public key.
+    """
+    key_path = _get_key_path("server")
+    if rotate and key_path.exists():
+        key_path.unlink()
+    if not key_path.exists():
+        generate_actor_keypair("server")
+    return get_key_fingerprint()

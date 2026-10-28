@@ -84,6 +84,11 @@ describe("FederationInstancesManager Component", () => {
 
     render(<FederationInstancesManager />);
 
+    expect(screen.getByTestId("peering-guidance-banner")).toBeInTheDocument();
+    expect(screen.getByText("ActivityPub Peering is Unilateral")).toBeInTheDocument();
+    expect(
+      screen.getByText(/The remote peer administrator must also add your instance for reciprocal trust/i)
+    ).toBeInTheDocument();
     expect(screen.getByText("No peer instances registered yet")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("library.example.org")).toBeInTheDocument();
   });

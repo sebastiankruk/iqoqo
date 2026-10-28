@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -264,6 +265,32 @@ class TestFederationKeys:
 
         with pytest.raises(ValueError, match="Invalid user_id"):
             federation_keys.delete_actor_keypair("/var/log/syslog")
+
+    def test_ensure_instance_actor_key_and_fingerprint(self, custom_keys_dir):
+        """Instance actor key (server.pem) must be generated and fingerprint computed."""
+        server_key = custom_keys_dir / "server.pem"
+        assert not server_key.exists()
+
+        fp1 = federation_keys.ensure_instance_actor_key()
+        assert fp1.startswith("SHA256:")
+        assert server_key.exists()
+
+        # Idempotent call does not regenerate
+        fp2 = federation_keys.ensure_instance_actor_key()
+        assert fp2 == fp1
+
+        # Rotate key
+        fp3 = federation_keys.ensure_instance_actor_key(rotate=True)
+        assert fp3.startswith("SHA256:")
+        assert fp3 != fp1
+
+    def test_missing_secret_key_raises_runtime_error(self, monkeypatch):
+        """Missing SECRET_KEY must raise RuntimeError instead of falling back to insecure default."""
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        with patch("flask.current_app", None):
+            with patch("app.config.Config.SECRET_KEY", None):
+                with pytest.raises(RuntimeError, match="SECRET_KEY must be set"):
+                    federation_keys._get_fernet_cipher()
 
 
 class TestAccountLifecycleIntegration:

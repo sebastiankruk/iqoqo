@@ -35,9 +35,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       pl: "Dowiedz się, jak iqoqo organizuje nośniki, przekłady i wydania według bibliotecznego modelu FRBR.",
     },
     content: {
-      en: `# Beyond the Bookshelf: How iqoqo Organizes Your World
-
-Most cataloging apps were built with a simple, flat assumption: one barcode equals one entry in a database. If you scan a paperback copy of Frank Herbert's *Dune*, you get a row in a table. If you buy the hardcover 50th Anniversary edition, you get a second, completely disconnected row. If you also own the audiobook, the 2021 Denis Villeneuve Blu-ray, and the *Dune: Imperium* board game, a traditional app treats them as five unrelated strangers cluttering your shelf.
+      en: `Most cataloging apps were built with a simple, flat assumption: one barcode equals one entry in a database. If you scan a paperback copy of Frank Herbert's *Dune*, you get a row in a table. If you buy the hardcover 50th Anniversary edition, you get a second, completely disconnected row. If you also own the audiobook, the 2021 Denis Villeneuve Blu-ray, and the *Dune: Imperium* board game, a traditional app treats them as five unrelated strangers cluttering your shelf.
 
 **iqoqo is different.** Under the hood, iqoqo is powered by **FRBR** (*Functional Requirements for Bibliographic Records*)—a semantic philosophy developed by library scientists and ontologists to model how human creativity actually works in the real world. 
 
@@ -114,9 +112,7 @@ You don't need a degree in library science to use iqoqo—when you scan a barcod
 3. **Flexible Reading & Playing Roadmaps:** In your **Roadmaps** (accessible right from your Collection view), you can plan your next reading or gaming marathon by targeting abstract Works, specific translations, or even a specific physical Item you borrowed from a friend and need to return by Friday.
 4. **Targeted Ratings & Reviews:** Leave a 5-star review on a **Work** because the story or game mechanics are brilliant, while leaving a 2-star warning on a specific **Manifestation** because the publisher used thin, flimsy cardstock in that particular printing.
 `,
-      pl: `# Więcej niż półka z książkami: Jak iqoqo porządkuje Twój świat
-
-Większość aplikacji do katalogowania powstała na prostym, płaskim założeniu: jeden kod kreskowy to jeden wiersz w bazie danych. Jeśli zeskanujesz wydanie kieszonkowe *Diuny* Franka Herberta, dostajesz wiersz w tabeli. Jeśli kupisz jubileuszowe wydanie w twardej oprawie, otrzymujesz drugi, całkowicie odrębny wpis. A gdy posiadasz jeszcze audiobook, film na Blu-ray z 2021 roku oraz grę planszową *Dune: Imperium*, tradycyjna aplikacja traktuje je jako pięć obcych sobie pozycji zaśmiecających wirtualną półkę.
+      pl: `Większość aplikacji do katalogowania powstała na prostym, płaskim założeniu: jeden kod kreskowy to jeden wiersz w bazie danych. Jeśli zeskanujesz wydanie kieszonkowe *Diuny* Franka Herberta, dostajesz wiersz w tabeli. Jeśli kupisz jubileuszowe wydanie w twardej oprawie, otrzymujesz drugi, całkowicie odrębny wpis. A gdy posiadasz jeszcze audiobook, film na Blu-ray z 2021 roku oraz grę planszową *Dune: Imperium*, tradycyjna aplikacja traktuje je jako pięć obcych sobie pozycji zaśmiecających wirtualną półkę.
 
 **iqoqo działa inaczej.** Sercem systemu jest **FRBR** (*Functional Requirements for Bibliographic Records*) — koncepcja semantyczna opracowana przez bibliotekoznawców i ontologów, aby odzwierciedlać to, jak twórczość funkcjonuje w świecie rzeczywistym.
 
@@ -208,9 +204,7 @@ Nie musisz mieć doktoratu z bibliotekoznawstwa, aby korzystać z iqoqo — podc
       pl: "Dowiedz się, jak skaner, tryb seryjny, formularz ręczny i zgłoszenia kustoszy dbają o Twój katalog.",
     },
     content: {
-      en: `# From Camera to Catalog: Scanning, Manual Entry & Curatorial Help
-
-Adding items to iqoqo is designed to be effortless when a barcode is handy—and forgiving when it isn't. Whether you are cataloging a stack of modern novels with crisp ISBN barcodes, a 1970s vinyl record with no barcode at all, or a bruised flea-market find, the Scanner adapts to what you have in front of you.
+      en: `Adding items to iqoqo is designed to be effortless when a barcode is handy—and forgiving when it isn't. Whether you are cataloging a stack of modern novels with crisp ISBN barcodes, a 1970s vinyl record with no barcode at all, or a bruised flea-market find, the Scanner adapts to what you have in front of you.
 
 Here is the complete guide to how scanning works under the hood, how to handle edge cases manually, and how to summon Curators (or AI!) when you need a hand.
 
@@ -308,9 +302,7 @@ What about Works that have *never* had a cover—like a digital-only fan transla
 
 * **The Result:** Using the Work's title, author, genre tags, and synopsis, iqoqo synthesizes a tasteful, high-resolution cover illustration—complete with automatic provenance metadata so users always know whether a cover is an original publisher scan, a user photo, or an AI-generated artwork!
 `,
-      pl: `# Od aparatu do katalogu: Skanowanie, ręczne dodawanie i pomoc kustoszy
-
-Dodawanie pozycji do iqoqo zostało zaprojektowane tak, aby było błyskawiczne, gdy kod kreskowy jest pod ręką — i wyrozumiałe, gdy go brakuje. Niezależnie od tego, czy katalogujesz stos współczesnych powieści z czytelnymi kodami ISBN, płytę winylową z lat 70. bez żadnego kodu, czy książkę znalezioną na targu staroci, wbudowany Skaner dopasowuje się do tego, co trzymasz w rękach.
+      pl: `Dodawanie pozycji do iqoqo zostało zaprojektowane tak, aby było błyskawiczne, gdy kod kreskowy jest pod ręką — i wyrozumiałe, gdy go brakuje. Niezależnie od tego, czy katalogujesz stos współczesnych powieści z czytelnymi kodami ISBN, płytę winylową z lat 70. bez żadnego kodu, czy książkę znalezioną na targu staroci, wbudowany Skaner dopasowuje się do tego, co trzymasz w rękach.
 
 Oto kompletny przewodnik po działaniu skanowania, obsłudze nietypowych wydań oraz współpracy z Kustoszami (i modelami AI!).
 
@@ -422,9 +414,7 @@ A co z dziełami, które nigdy nie miały fizycznej okładki — jak cyfrowe tł
       pl: "Poznaj trójstopniową widoczność kaskadową, tokenizowane linki do kolekcji, notatki i lokalne kody.",
     },
     content: {
-      en: `# Privacy, Sharing & Social Interactions: The Hidden Gems
-
-At first glance, iqoqo looks like a serene, personal catalog for your media. Dig a little deeper, however, and you will find a rich layer of privacy controls, granular sharing tools, and multi-tier social interactions designed for families, collector clubs, and federated friends.
+      en: `At first glance, iqoqo looks like a serene, personal catalog for your media. Dig a little deeper, however, and you will find a rich layer of privacy controls, granular sharing tools, and multi-tier social interactions designed for families, collector clubs, and federated friends.
 
 Because iqoqo is built on a **"Privacy by Default"** philosophy, many of these capabilities stay politely out of your way until you need them. Here is your guide to the social and privacy features—especially the non-obvious ones tucked beneath the surface.
 
@@ -507,9 +497,7 @@ What do you do with items that never had a barcode in the first place—like a 1
 2. **Printable QR Labels:** Open any Item's detail page and click the **QR Code** button in the sidebar. iqoqo generates a high-contrast, printable QR label containing the item's canonical identifier and title.
 3. **Instant Scan-to-Item Resolution:** Stick that QR code inside the book cover or on the side of the board game box. Next time you open the Scanner and point your camera at that QR code, iqoqo bypasses external metadata lookups and jumps **directly to your exact physical copy**—ready for you to lend it out, mark it returned, or update its reading status!
 `,
-      pl: `# Prywatność, udostępnianie i funkcje społecznościowe: Ukryte perełki
-
-Na pierwszy rzut oka iqoqo wygląda jak spokojny, osobisty katalog Twoich zbiorów. Wystarczy jednak zajrzeć nieco głębiej, aby odkryć bogaty zestaw narzędzi ochrony prywatności, precyzyjne mechanizmy udostępniania oraz wielopoziomowe funkcje społecznościowe stworzone z myślą o rodzinach, klubach kolekcjonerskich i sieci znajomych w federacji.
+      pl: `Na pierwszy rzut oka iqoqo wygląda jak spokojny, osobisty katalog Twoich zbiorów. Wystarczy jednak zajrzeć nieco głębiej, aby odkryć bogaty zestaw narzędzi ochrony prywatności, precyzyjne mechanizmy udostępniania oraz wielopoziomowe funkcje społecznościowe stworzone z myślą o rodzinach, klubach kolekcjonerskich i sieci znajomych w federacji.
 
 Ponieważ iqoqo opiera się na filozofii **„Domyślnej ochrony prywatności” (Privacy by Default)**, wiele z tych możliwości pozostaje dyskretnie w tle, dopóki ich nie potrzebujesz. Oto przewodnik po funkcjach społecznościowych i ustawieniach prywatności — zwłaszcza tych mniej oczywistych.
 
@@ -606,9 +594,7 @@ Co zrobić z pozycjami, które nigdy nie miały fabrycznego kodu kreskowego — 
       pl: "Poznaj zasady łączenia niezależnych instancji przez ActivityPub S2S, zaufanie kryptograficzne i wypożyczenia.",
     },
     content: {
-      en: `# The iqoqo Federation: Connected Libraries, Sovereign Data
-
-Traditional cataloging platforms force you into a painful trade-off:
+      en: `Traditional cataloging platforms force you into a painful trade-off:
 * **Cloud Silos** (like Goodreads or BoardGameGeek) make it easy to see what your friends are reading and share community metadata, but they lock your data inside a corporate walled garden, track your habits, and can shut down or change their terms at any time.
 
 * **Self-Hosted Apps** give you total ownership of your database, but leave you on a lonely digital island—cut off from your friends' collections and forced to curate every piece of metadata alone.
@@ -712,9 +698,7 @@ Instance administrators manage peer relationships in the Admin Federation Dashbo
 
 Each instance runs an isolated **Oxigraph-powered SPARQL Execution Service**. When federated queries are executed across instances, iqoqo enforces strict **Federated Access Rights**: public queries only ever see public triples (Works, Expressions, Manifestations, and explicitly public Items), ensuring private and friends-only items are never leaked through graph traversal.
 `,
-      pl: `# Federacja iqoqo: Połączone biblioteki, suwerenne dane
-
-Tradycyjne platformy do katalogowania stawiają użytkowników przed bolesnym kompromisem:
+      pl: `Tradycyjne platformy do katalogowania stawiają użytkowników przed bolesnym kompromisem:
 * **Silosy chmurowe** (jak Goodreads czy BoardGameGeek) ułatwiają podglądanie tego, co czytają znajomi i wymianę metadanych, ale zamykają Twoje dane w korporacyjnym ogrodzie, śledzą nawyki i mogą w każdej chwili zmienić regulamin lub zamknąć usługę.
 
 * **Aplikacje instalowane lokalnie (self-hosted)** dają pełną własność nad bazą danych, ale zostawiają Cię na samotnej cyfrowej wyspie — odciętym od zbiorów przyjaciół i zmuszonym do samodzielnego wpisywania każdej informacji.
@@ -833,9 +817,7 @@ Każda instancja uruchamia wyizolowany silnik SPARQL oparty o Oxigraph. Podczas 
       pl: "Niezbędnik ontologa: numeracja serii, wielonośnikowe zestawy hybrydowe, dodatki i deduplikacja.",
     },
     content: {
-      en: `# The Curator's Handbook: Mastering Complex FRBR Cases
-
-Welcome to the Curatorial team! While iqoqo's automated ingestion pipeline handles 90% of everyday barcode scans by querying OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB, and TMDB, the real magic of a semantic catalog lies in how we model the **non-trivial 10%**.
+      en: `Welcome to the Curatorial team! While iqoqo's automated ingestion pipeline handles 90% of everyday barcode scans by querying OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB, and TMDB, the real magic of a semantic catalog lies in how we model the **non-trivial 10%**.
 
 As a Curator (Custodian) or Admin, you have access to the Content & FRBR Editor, the Duplicate Reviewer, and the Escalation Queue. This guide focuses not on which buttons to click, but on **how to think like an ontologist** when modeling complex, real-world media.
 
@@ -952,9 +934,7 @@ If a Manifestation has a valid ISBN/Barcode but is missing cover art, page count
 
 Finally, visit the LOD Reconciliation Dashboard to link local Works and Contributors to global Semantic Web authorities (**Wikidata**, **VIAF**, **MusicBrainz**, **GeoNames**). Establishing an \`owl:sameAs\` link at the Work level allows iqoqo to automatically federated-match your catalog with other iqoqo instances around the world!
 `,
-      pl: `# Podręcznik Kustosza: Zaawansowane przypadki modelowania FRBR
-
-Witaj w zespole Kustoszy! Choć automatyczny potok pobierania danych w iqoqo bez trudu radzi sobie z 90% codziennych skanów kodów kreskowych, odpytując OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB i TMDB, prawdziwa siła katalogu semantycznego tkwi w modelowaniu **nietrywialnych 10%**.
+      pl: `Witaj w zespole Kustoszy! Choć automatyczny potok pobierania danych w iqoqo bez trudu radzi sobie z 90% codziennych skanów kodów kreskowych, odpytując OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB i TMDB, prawdziwa siła katalogu semantycznego tkwi w modelowaniu **nietrywialnych 10%**.
 
 Jako Kustosz lub Administrator masz dostęp do Edytora Treści i FRBR, Modułu Deduplikacji oraz Kolejki Zgłoszeń. Ten podręcznik nie skupia się na klikaniu przycisków, lecz na **sposobie myślenia ontologa** podczas modelowania złożonych obiektów kultury.
 

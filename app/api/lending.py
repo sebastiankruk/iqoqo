@@ -32,7 +32,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.decorators import require_auth
+from app.core.events import publish_transition_event
 from app.core.limiter import limiter
+from app.core.tasks import enqueue_fts_reindex
 from app.db.auth import User
 from app.db.core import Item, ItemStatusLog
 from app.db.lending import LoanRequest
@@ -299,6 +301,19 @@ def resolve_loan_request(request_id: int) -> Response | tuple[Response, int]:
 
         db.session.commit()
 
+        if action == "approve":
+            enqueue_fts_reindex("item", item.id)
+            publish_transition_event(
+                "custody_lent",
+                {
+                    "item_id": item.id,
+                    "status": "lent",
+                    "owner_id": str(item.owner_id) if item.owner_id else None,
+                    "user_id": str(item.owner_id) if item.owner_id else None,
+                    "borrower_id": str(loan_request.requester_id) if loan_request.requester_id else None,
+                },
+            )
+
         try:
             from app.core.notifications import create_notification
 
@@ -401,6 +416,18 @@ def return_loaned_item(item_id: int) -> Response | tuple[Response, int]:
     )
     db.session.add(custody_event)
     db.session.commit()
+
+    enqueue_fts_reindex("item", item.id)
+    publish_transition_event(
+        "custody_returned",
+        {
+            "item_id": item.id,
+            "status": "available",
+            "owner_id": str(item.owner_id) if item.owner_id else None,
+            "user_id": str(item.owner_id) if item.owner_id else None,
+            "borrower_id": str(old_borrower_id) if old_borrower_id else None,
+        },
+    )
 
     return jsonify({"success": True, "data": item.to_dict()}), 200
 

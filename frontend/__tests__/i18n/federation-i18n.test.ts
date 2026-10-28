@@ -25,7 +25,13 @@ import enMessages from "@/messages/en.json";
 import plMessages from "@/messages/pl.json";
 
 describe("Federation i18n namespaces key parity", () => {
-  const namespaces = ["FederationConsent", "AdminFederation"] as const;
+  const namespaces = [
+    "FederationConsent",
+    "AdminFederation",
+    "FederationDirectory",
+    "Notifications",
+    "FeedbackPage",
+  ] as const;
 
   for (const ns of namespaces) {
     describe(`Namespace ${ns}`, () => {

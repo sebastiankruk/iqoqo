@@ -142,7 +142,7 @@ describe("LoginPage", () => {
     });
   });
 
-  it("handles failed local login and shows alert", async () => {
+  it("handles failed local login and shows error message", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: false,
       /**
@@ -159,7 +159,47 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
-      expect(alertMock).toHaveBeenCalledWith("Login failed");
+      expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
+    });
+  });
+
+  it("handles mfa_required by rendering 2FA challenge and submitting otp_code", async () => {
+    (global.fetch as Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ mfa_required: true, message: "Two-factor authentication required" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: "mfa-success-jwt-token" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ redirectUrl: "/collection" }),
+      });
+
+    renderWithQueryClient(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "mfa_user@iqoqo.local" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    // MFA challenge form is rendered
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("123456 or recovery code")).toBeDefined();
+    });
+
+    // Enter OTP code and submit
+    fireEvent.change(screen.getByPlaceholderText("123456 or recovery code"), { target: { value: "654321" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify & Sign In" }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/auth/login"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ email: "mfa_user@iqoqo.local", password: "password123", otp_code: "654321" }),
+        })
+      );
     });
   });
 });

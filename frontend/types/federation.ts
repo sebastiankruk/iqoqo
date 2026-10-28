@@ -25,6 +25,7 @@ export interface FederationInstance {
   last_seen_at: string | null;
   trust_level: TrustLevel;
   created_at: string | null;
+  key_fingerprint?: string | null;
 }
 
 export interface FederationActivity {
@@ -65,10 +66,12 @@ export interface LocalInstanceInfo {
   software_name: string;
   software_version: string;
   public_items_count: number;
+  federation_enabled?: boolean;
 }
 
 export interface FederationDirectoryData {
   local_instance: LocalInstanceInfo;
   peers: FederationInstance[];
   total_peers: number;
+  federation_enabled?: boolean;
 }

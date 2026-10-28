@@ -14,6 +14,48 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Federation Trust Graph, Settings RBAC & Instance Actor Hardening (Release 0.9.3 - October 2026)
+
+#### ActivityPub Trust Graph & Follow Request Hardening
+
+- **Strict Opt-In Follow Auto-Acceptance**: Inbound `Follow` activities are held in `pending` status unless `FEDERATION_AUTO_ACCEPT_FOLLOWS` is explicitly set to `true` in settings or environment. Follow requests from untrusted instances never auto-accept.
+- **Fail-Closed Default Trust Bounds**: Discovered peers strictly default to `untrusted` (or `pending`). Setting `FEDERATION_DEFAULT_TRUST="trusted"` is rejected with `400 Bad Request` to prevent accidental auto-trusting of unverified Fediverse peers.
+- **Domain & Port Normalization Protection**: Domain parsing consistently retains non-standard ports (e.g., `domain:8443`), preventing blocklist bypasses where an attacker appends a port to evade exact hostname block rules.
+- **Non-Routable Peer Filtering**: Internal Docker network names (`web:5000`, `peer-web:5000`), loopback addresses (`localhost`), and RFC1918 private IP ranges are strictly filtered from the public `GET /api/federation/directory` endpoint.
+
+#### Fail-Closed Settings RBAC & Cryptographic Secret Protection
+
+- **No Insecure Fallback Fernet Secret**: Removed the hardcoded fallback secret in `app/core/federation_keys.py`. Missing `SECRET_KEY` raises a hard `RuntimeError` rather than defaulting to an insecure known key.
+- **Fail-Closed Settings API**: `PUT /api/v1/admin/settings` rejects unrecognized setting keys with `400 Bad Request`, rejects federation settings if the caller lacks `config:federation` permission with `403 Forbidden`, and records all setting changes in `EntityAuditLog`.
+
+#### Instance Actor Key Lifecycle & Out-Of-Band Key Pinning
+
+- **Deterministic Instance Application Actor**: Disclosed at `GET /api/federation/actor` as an ActivityStreams `Application` actor JSON-LD document. Key generation occurs exclusively during deployment provisioning (`scripts/init_auth.py`) or via authenticated admin `POST /api/v1/admin/federation/key-fingerprint/provision`, preventing arbitrary key generation on unauthenticated `GET` requests.
+- **DER-Derived Key Fingerprint Verification**: Peer instance public keys are fingerprinted directly from DER-encoded ASN.1 bytes using `SHA256:...`. Fingerprints are surfaced in the Admin Federation UI so instance administrators can perform out-of-band verification before promoting peer trust.
+- **Authorized Fetch Bodyless GET Signing**: Outbound HTTP Signature signing (`(request-target) host date`) is applied to actor `GET` requests using the instance actor key, ensuring compatibility with Fediverse servers enforcing Authorized Fetch mode.
+
+### Auth Hardening, PAT Scoping & SSE Stream Isolation (Release 0.9.3 - October 2026)
+
+#### Personal Access Token (PAT) Security Model
+
+- **One-Way Cryptographic Hashing at Rest**: Personal Access Tokens use an `iqo_` prefix for gitleaks detection and high-entropy random generation (`secrets.token_urlsafe(32)`). Only the SHA-256 hash is persisted in `auth.personal_access_tokens`; the plaintext token is shown only once upon creation and cannot be recovered if lost.
+- **Session-Only Token Route Protection**: PATs (`iqo_*`) are strictly rejected on token and 2FA management routes (`/api/auth/tokens*` and `/api/auth/2fa/*`). Attempting to manage tokens or 2FA using a PAT results in an immediate `403 Forbidden` (`"Personal access tokens cannot be used to manage tokens"`).
+- **Administrative Scope Verification**: Tokens requesting `admin` or wildcard `*` scopes require the calling user to hold the `admin` role, and standard catalog tokens are rejected when accessing `@admin_required` or `@admin_or_custodian_required` endpoints.
+
+#### Two-Factor Authentication (TOTP 2FA) & Recovery Codes
+
+- **Symmetric Encryption of TOTP Secrets**: In accordance with the iqoqo cryptographic standard, TOTP base32 secrets are encrypted at rest using symmetric Fernet encryption keyed from `SECRET_KEY`.
+- **Single-Use Recovery Codes**: Enrollment generates 8 cryptographic single-use recovery codes stored as SHA-256 hashes. Used recovery codes are immediately consumed and removed from storage.
+- **Re-Enrollment Protection**: `POST /api/auth/2fa/enroll` rejects attempts to re-enroll an account that already has active 2FA (`400 Bad Request`), preventing unauthorized overwrite of active credentials.
+
+#### Server-Sent Events (SSE) Multi-Tenant Stream Isolation
+
+- **Per-User Event Stream Scoping**: The real-time transition stream (`GET /api/v1/events/stream`) strictly scopes Redis event fan-out to the authenticated `g.user_id`. Private catalog transitions, lending events, and custody changes are never broadcast across tenants.
+
+#### Supply Chain & Dependency Hardening
+
+- **Upgraded Next.js and Transitive Dependencies**: Resolved 18 Dependabot alerts across root and frontend workspaces: updated Next.js (16.3.8 -> 16.4.3, addressing SVG image optimization and cache RCE advisories), Zod (^4.3.6 -> ^4.6.6), Happy-DOM (^20.8.9 -> ^21.0.4), and locked secure revisions for `fast-uri` (>= 3.1.9) and `undici` (>= 7.30.1).
+
 ### Federation S2S & Catalog Access Hardening (Release 0.9.1 - October 2026)
 
 #### ActivityPub S2S Spoofing & Replay Mitigation

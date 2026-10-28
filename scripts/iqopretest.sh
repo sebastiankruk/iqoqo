@@ -137,6 +137,19 @@ make preview-down
 make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version
+echo "Waiting for preview backend (http://127.0.0.1:5002/health) to become healthy..."
+PREVIEW_READY=0
+for i in $(seq 1 30); do
+    if curl -s -f "http://127.0.0.1:5002/health" > /dev/null 2>&1; then
+        echo "✅ Preview backend healthy after ${i}s"
+        PREVIEW_READY=1
+        break
+    fi
+    sleep 1
+done
+if [ "$PREVIEW_READY" -ne 1 ]; then
+    echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
+fi
 make status preview
 
 # 6. Run automated federation verification if federation pair is active

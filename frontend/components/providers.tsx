@@ -16,10 +16,87 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { useProfile } from "@/lib/api/hooks";
 
 export const DEFAULT_QUERY_STALE_TIME = 60_000;
+
+/**
+ * Reactively listens to Server-Sent Events (SSE) from /api/v1/events/stream
+ * and invalidates TanStack Query keys on background transitions without polling.
+ * Only connects when the user is authenticated and not browsing public unauthenticated routes.
+ */
+export function TransitionEventsListener() {
+  const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const { data: profile } = useProfile();
+
+  const isPublicRoute = Boolean(
+    pathname &&
+    (pathname === "/login" ||
+      pathname.startsWith("/login/") ||
+      pathname === "/register" ||
+      pathname.startsWith("/register/") ||
+      pathname.startsWith("/share/") ||
+      pathname.startsWith("/verify-email") ||
+      pathname.startsWith("/reset-password") ||
+      pathname.startsWith("/api/auth-exchange"))
+  );
+
+  const isAuthenticated = Boolean(profile && profile.id);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("EventSource" in window) || !isAuthenticated || isPublicRoute) {
+      return;
+    }
+
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource("/api/v1/events/stream", { withCredentials: true });
+
+      eventSource.onmessage = event => {
+        try {
+          const payload = JSON.parse(event.data);
+          const ev = payload.event;
+          if (
+            ev === "fts_reindexed" ||
+            ev === "item_updated" ||
+            ev === "item_created" ||
+            ev === "item_deleted" ||
+            ev === "custody_lent" ||
+            ev === "custody_returned" ||
+            ev === "manifestation_updated"
+          ) {
+            queryClient.invalidateQueries({ queryKey: ["stats"] });
+            queryClient.invalidateQueries({ queryKey: ["items"] });
+            queryClient.invalidateQueries({ queryKey: ["manifestations"] });
+            queryClient.invalidateQueries({ queryKey: ["facetStats"] });
+            queryClient.invalidateQueries({ queryKey: ["globalStats"] });
+            queryClient.invalidateQueries({ queryKey: ["collectionGrid"] });
+          }
+        } catch {
+          // Ignore ping or malformed event payloads
+        }
+      };
+
+      eventSource.onerror = () => {
+        // EventSource handles reconnection natively
+      };
+    } catch {
+      // Ignore initial connection errors
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [queryClient, isAuthenticated, isPublicRoute]);
+
+  return null;
+}
 
 /**
  * Creates the app's query client with the shared cache defaults.
@@ -64,6 +141,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <TransitionEventsListener />
       {children}
       <Toaster
         richColors

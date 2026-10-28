@@ -191,3 +191,89 @@ class TestFederationDiscoveryAdmin:
                 )
                 assert "slow-peer.example.org" in results
                 assert results["slow-peer.example.org"] is False
+
+    def test_inbound_actor_preserves_port_and_respects_blocked_instance(self, app):
+        """_get_or_create_actor preserves non-standard port and attaches to blocked instance."""
+        with app.app_context():
+            # Block an instance on custom port 8443
+            blocked_inst = FederationInstance(
+                domain="malicious.example:8443",
+                trust_level=TrustLevel.BLOCKED,
+            )
+            db.session.add(blocked_inst)
+            db.session.commit()
+
+            actor_uri = "https://malicious.example:8443/u/attacker"
+            with patch("app.core.federation_client.FederationClient.fetch_actor", return_value=None):
+                actor = _get_or_create_actor(actor_uri)
+                assert actor is not None
+                # Must attach to blocked_inst (with port :8443), NOT create a new unblocked 'malicious.example' instance
+                assert actor.instance_id == blocked_inst.id
+                assert actor.instance.domain == "malicious.example:8443"
+                assert actor.instance.trust_level == TrustLevel.BLOCKED
+
+    def test_get_federation_instances_surfaces_key_fingerprint(self, client, admin_headers, app):
+        """GET /api/v1/admin/federation/instances includes DER-computed SHA256 key_fingerprint."""
+        from app.core import federation_keys
+
+        _, pub_pem = federation_keys.generate_actor_keypair("test-peer")
+        expected_fp = federation_keys.compute_pem_fingerprint(pub_pem)
+
+        with app.app_context():
+            inst = FederationInstance(domain="fingerprint.fed.org", trust_level=TrustLevel.UNTRUSTED)
+            db.session.add(inst)
+            db.session.flush()
+
+            actor = FederationActor(
+                actor_uri="https://fingerprint.fed.org/api/federation/actor",
+                inbox_url="https://fingerprint.fed.org/api/federation/inbox",
+                public_key_pem=pub_pem,
+                instance_id=inst.id,
+            )
+            db.session.add(actor)
+            db.session.commit()
+
+        resp = client.get("/api/v1/admin/federation/instances", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        inst_match = next((i for i in data if i["domain"] == "fingerprint.fed.org"), None)
+        assert inst_match is not None
+        assert inst_match["key_fingerprint"] == expected_fp
+
+    def test_discover_instance_fetches_and_caches_instance_actor(self, app):
+        """discover_instance invokes FederationClient to cache remote instance Application actor."""
+        from app.core import federation_keys
+
+        _, pub_pem = federation_keys.generate_actor_keypair("test-peer")
+        domain = "remote-peer.example.org"
+        actor_uri = f"https://{domain}/api/federation/actor"
+
+        mock_actor_doc = {
+            "id": actor_uri,
+            "type": "Application",
+            "inbox": f"https://{domain}/api/federation/inbox",
+            "publicKey": {
+                "id": f"{actor_uri}#main-key",
+                "owner": actor_uri,
+                "publicKeyPem": pub_pem,
+            },
+        }
+
+        with app.app_context():
+            with (
+                patch("app.core.federation_discovery._probe_domain_http") as mock_probe,
+                patch("app.core.federation_client.safe_get") as mock_safe_get,
+            ):
+                mock_probe.return_value = (True, {"software_name": "iqoqo", "instance_actor_url": actor_uri})
+                mock_safe_resp = MagicMock()
+                mock_safe_resp.status_code = 200
+                mock_safe_resp.json.return_value = mock_actor_doc
+                mock_safe_get.return_value = mock_safe_resp
+
+                instance = federation_discovery.discover_instance(domain)
+                assert instance is not None
+                assert instance.software_name == "iqoqo"
+
+                cached_actor = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
+                assert cached_actor is not None
+                assert cached_actor.public_key_pem == pub_pem

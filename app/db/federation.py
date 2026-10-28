@@ -106,6 +106,7 @@ class FederationInstance(db.Model):  # type: ignore[name-defined]
             "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
             "trust_level": self.trust_level,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "key_fingerprint": getattr(self, "key_fingerprint", None),
         }
 
 

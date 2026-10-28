@@ -760,7 +760,7 @@ if [[ "$STACK" == "dev" ]]; then
     elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
         python_bin="$IQOQO_ROOT/.venv/bin/python"
     fi
-    allegro_status_json=$($python_bin -c "
+    allegro_status_json=$(ALLEGRO_CLIENT_ID="$client_id" IQOQO_ROOT="$IQOQO_ROOT" $python_bin -c "
 import urllib.request, json, os, sys
 for p in [${WEB_PORT}, 5000, 5001]:
     try:
@@ -774,20 +774,20 @@ for p in [${WEB_PORT}, 5000, 5001]:
         pass
 
 try:
-    sys.path.insert(0, '$IQOQO_ROOT')
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
     from app import create_app
     app = create_app()
     with app.app_context():
         from app.utils.allegro import get_allegro_token_status
         print(json.dumps(get_allegro_token_status()))
 except Exception as e:
-    cid = bool('$client_id')
+    cid = bool(os.environ.get('ALLEGRO_CLIENT_ID'))
     print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
 else
     web_cname=$(find_container "web")
     if [[ -n "$web_cname" ]]; then
-        allegro_status_json=$(docker exec "$web_cname" python3 -c "
+        allegro_status_json=$(docker exec -e ALLEGRO_CLIENT_ID="$client_id" "$web_cname" python3 -c "
 import urllib.request, json, os, sys
 try:
     req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
@@ -807,7 +807,7 @@ try:
         from app.utils.allegro import get_allegro_token_status
         print(json.dumps(get_allegro_token_status()))
 except Exception as e:
-    cid = bool('$client_id')
+    cid = bool(os.environ.get('ALLEGRO_CLIENT_ID'))
     print(json.dumps({'configured': cid, 'allegro_token_active': False, 'reason': 'query_failed', 'error': str(e)}))
 " 2>/dev/null || echo "")
     fi
@@ -843,6 +843,113 @@ else
     else
         check "Status" warn "not active (OAuth handshake pending in Instance Settings)"
     fi
+fi
+
+# ─── Twitch / IGDB API ──────────────────────────────────────────
+header "Twitch / IGDB API"
+igdb_client_id=$(load_env "IGDB_CLIENT_ID")
+[[ -z "$igdb_client_id" ]] && igdb_client_id=$(load_env "TWITCH_CLIENT_ID")
+igdb_client_secret=$(load_env "IGDB_CLIENT_SECRET")
+[[ -z "$igdb_client_secret" ]] && igdb_client_secret=$(load_env "TWITCH_CLIENT_SECRET")
+
+igdb_status_json=""
+if [[ "$STACK" == "dev" ]]; then
+    python_bin="python3"
+    if [[ -x "$IQOQO_ROOT/.venv/bin/python3" ]]; then
+        python_bin="$IQOQO_ROOT/.venv/bin/python3"
+    elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
+        python_bin="$IQOQO_ROOT/.venv/bin/python"
+    fi
+    igdb_status_json=$(IGDB_CLIENT_ID="$igdb_client_id" IQOQO_ROOT="$IQOQO_ROOT" $python_bin -c "
+import urllib.request, json, os, sys
+for p in [${WEB_PORT}, 5000, 5001]:
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{p}/api/system/status')
+        r = urllib.request.urlopen(req, timeout=2)
+        res = json.loads(r.read().decode())
+        if res.get('success') and 'igdb' in res.get('data', {}):
+            print(json.dumps(res['data']['igdb']))
+            sys.exit(0)
+    except Exception:
+        pass
+
+try:
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.igdb import get_igdb_token_status
+        print(json.dumps(get_igdb_token_status()))
+except Exception as e:
+    cid = bool(os.environ.get('IGDB_CLIENT_ID'))
+    print(json.dumps({'status': 'DISABLED' if not cid else 'AUTH_ERROR', 'configured': cid, 'active': False, 'reason': 'query_failed', 'error': str(e)}))
+" 2>/dev/null || echo "")
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        igdb_status_json=$(docker exec -e IGDB_CLIENT_ID="$igdb_client_id" "$web_cname" python3 -c "
+import urllib.request, json, os, sys
+try:
+    req = urllib.request.Request('http://127.0.0.1:5000/api/system/status')
+    r = urllib.request.urlopen(req, timeout=2)
+    res = json.loads(r.read().decode())
+    if res.get('success') and 'igdb' in res.get('data', {}):
+        print(json.dumps(res['data']['igdb']))
+        sys.exit(0)
+except Exception:
+    pass
+
+try:
+    sys.path.insert(0, '/app')
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.igdb import get_igdb_token_status
+        print(json.dumps(get_igdb_token_status()))
+except Exception as e:
+    cid = bool(os.environ.get('IGDB_CLIENT_ID'))
+    print(json.dumps({'status': 'DISABLED' if not cid else 'AUTH_ERROR', 'configured': cid, 'active': False, 'reason': 'query_failed', 'error': str(e)}))
+" 2>/dev/null || echo "")
+    fi
+fi
+
+if [[ -z "$igdb_status_json" ]]; then
+    if [[ -z "$igdb_client_id" || -z "$igdb_client_secret" ]]; then
+        check "Status" info "not configured (missing credentials in .env)"
+    else
+        check "Status" warn "probe error (container unreachable or probe failed)"
+    fi
+else
+    igdb_health=$(echo "$igdb_status_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', 'DISABLED'))" 2>/dev/null || echo "DISABLED")
+    igdb_token_age=$(echo "$igdb_status_json" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('token_age_hours') if d.get('token_age_hours') is not None else '')" 2>/dev/null || echo "")
+
+    case "$igdb_health" in
+        "CONFIGURED_VALID")
+            if [[ -n "$igdb_token_age" ]]; then
+                check "Status" pass "configured and valid (token age: ${igdb_token_age}h)"
+            else
+                check "Status" pass "configured and valid"
+            fi
+            ;;
+        "EXPIRED_NEEDS_REFRESH")
+            check "Status" warn "token expired (needs refresh)"
+            ;;
+        "AUTH_ERROR")
+            check "Status" warn "authentication error (invalid Twitch credentials)"
+            ;;
+        "DISABLED"|*)
+            check "Status" info "not configured (missing credentials in .env or Instance Settings)"
+            ;;
+    esac
+fi
+
+# ─── BoardGameGeek API ──────────────────────────────────────────
+header "BoardGameGeek API"
+bgg_token=$(load_env "BGG_API_TOKEN")
+if [[ -n "$bgg_token" ]]; then
+    check "Status" pass "configured (BGG_API_TOKEN set)"
+else
+    check "Status" info "anonymous / optional (BGG_API_TOKEN not configured)"
 fi
 
 # ─── Linked Open Data & Gazetteer ────────────────────────────────

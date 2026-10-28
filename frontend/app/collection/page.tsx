@@ -120,7 +120,9 @@ function CollectionContent() {
 
   const initialViewMode = parsedViewMode as "items" | "manifestations" | "works" | "expressions" | "roadmap";
 
-  const currentScope = (searchParams?.get("scope") as "personal" | "friends" | "global") || "personal";
+  const rawScope = searchParams?.get("scope");
+  const currentScope: "personal" | "friends" | "global" =
+    rawScope === "global" || rawScope === "all" ? "global" : rawScope === "friends" ? "friends" : "personal";
 
   const [viewMode, setViewMode] = useState<"items" | "manifestations" | "works" | "expressions" | "roadmap">(
     initialViewMode
@@ -356,7 +358,13 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
-    f.scope = isLoggedIn ? "user" : "global";
+    f.scope = isLoggedIn
+      ? currentScope === "global"
+        ? "global"
+        : currentScope === "friends"
+          ? "friends"
+          : "user"
+      : "global";
     f.view = viewMode;
     return f;
   }, [
@@ -375,13 +383,21 @@ function CollectionContent() {
     missingIdOnly,
     viewMode,
     isLoggedIn,
+    currentScope,
   ]);
 
+  const facetStatsScope = isLoggedIn
+    ? currentScope === "global"
+      ? "global"
+      : currentScope === "friends"
+        ? "friends"
+        : "user"
+    : "global";
   const {
     data: facetStatsData,
     isError: facetStatsError,
     refetch: refetchFacetStats,
-  } = useFacetStats(isLoggedIn ? "user" : "global", filtersForFacets, true);
+  } = useFacetStats(facetStatsScope, filtersForFacets, true);
 
   const isLoading =
     viewMode === "roadmap"

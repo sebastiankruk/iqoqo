@@ -425,6 +425,48 @@ class TestActivityHandlers:
             )
             assert follower_after is None
 
+    def test_handle_follow_defaults_to_pending_when_unset_or_disabled(self, app, fed_user, remote_peer_instance):
+        """Inbound Follow must default to PENDING (opt-in) without sending Accept unless explicitly enabled."""
+        with app.app_context():
+            # Ensure setting is unset in InstanceSettings and default False is evaluated
+            from app.db.settings import InstanceSettings
+
+            db.session.execute(db.delete(InstanceSettings).where(InstanceSettings.key == "FEDERATION_AUTO_ACCEPT_FOLLOWS"))
+            # Make the remote instance UNTRUSTED so trusted bypass does not auto-accept
+            inst = db.session.get(FederationInstance, remote_peer_instance["instance_id"])
+            inst.trust_level = TrustLevel.UNTRUSTED
+            db.session.commit()
+            if "FEDERATION_AUTO_ACCEPT_FOLLOWS" in app.config:
+                del app.config["FEDERATION_AUTO_ACCEPT_FOLLOWS"]
+
+            base_url = get_federation_base_url()
+            target_iri = canonical_actor_iri(uuid.UUID(fed_user["id"]), base_url)
+
+            follow_activity = {
+                "type": "Follow",
+                "actor": remote_peer_instance["actor_uri"],
+                "object": target_iri,
+            }
+            with patch("app.core.tasks.submit_task") as mock_submit:
+                handled = handle_activity(follow_activity)
+                assert handled is True
+                # Must NOT queue Celery delivery of Accept when auto-accept is disabled
+                mock_submit.assert_not_called()
+
+            # Verify follower record exists in PENDING status
+            follower = (
+                db.session.execute(
+                    select(FederationFollower).where(
+                        FederationFollower.local_user_id == uuid.UUID(fed_user["id"]),
+                        FederationFollower.remote_actor_id == remote_peer_instance["actor_id"],
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            assert follower is not None
+            assert follower.status == FollowStatus.PENDING
+
     def test_handle_accept_and_reject(self, app, fed_user, remote_peer_instance):
         """Accept sets status to accepted, Reject sets status to rejected."""
         with app.app_context():
@@ -527,6 +569,113 @@ class TestActivityHandlers:
         """Unknown activity type logs warning and returns False without raising."""
         with app.app_context():
             assert handle_activity({"type": "NonExistentActivityType"}) is False
+
+    def test_receive_inbox_blocked_instance_with_port_rejected(self, client, app):
+        """Inbound inbox blocks peer registered with non-standard port."""
+        with app.app_context():
+            blocked_inst = FederationInstance(
+                domain="evil.example:8443",
+                trust_level=TrustLevel.BLOCKED,
+            )
+            db.session.add(blocked_inst)
+            db.session.commit()
+
+        with patch("app.api.federation.verify_request", return_value="https://evil.example:8443/u/attacker"):
+            res = client.post(
+                "/api/federation/inbox",
+                json={"type": "Create", "actor": "https://evil.example:8443/u/attacker"},
+                headers={"Signature": "keyId=...,signature=..."},
+            )
+            assert res.status_code == 403
+            assert "blocked" in res.get_json()["error"].lower()
+
+    def test_handle_follow_strict_opt_in_and_state_preservation(self, app, fed_user, remote_peer_instance):
+        """handle_follow requires both auto_accept and TRUSTED, and preserves REJECTED/ACCEPTED."""
+        with app.app_context():
+            user = db.session.get(User, uuid.UUID(fed_user["id"]))
+            actor_uri = remote_peer_instance["actor_uri"]
+            inst = db.session.get(FederationInstance, remote_peer_instance["instance_id"])
+
+            # 1. auto_accept=False, trust_level=TRUSTED -> must remain PENDING
+            inst.trust_level = TrustLevel.TRUSTED
+            db.session.commit()
+            with patch("app.core.config_service.ConfigService.get_bool", return_value=False):
+                assert (
+                    handle_activity(
+                        {
+                            "type": "Follow",
+                            "actor": actor_uri,
+                            "object": canonical_actor_iri(user.id),
+                        }
+                    )
+                    is True
+                )
+
+            f = (
+                db.session.execute(
+                    select(FederationFollower).where(
+                        FederationFollower.local_user_id == user.id,
+                        FederationFollower.remote_actor_id == remote_peer_instance["actor_id"],
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            assert f is not None
+            assert f.status == FollowStatus.PENDING
+
+            # 2. Existing is REJECTED -> duplicate Follow stays REJECTED
+            f.status = FollowStatus.REJECTED
+            db.session.commit()
+            with patch("app.core.config_service.ConfigService.get_bool", return_value=True):
+                assert (
+                    handle_activity(
+                        {
+                            "type": "Follow",
+                            "actor": actor_uri,
+                            "object": canonical_actor_iri(user.id),
+                        }
+                    )
+                    is True
+                )
+            db.session.refresh(f)
+            assert f.status == FollowStatus.REJECTED
+
+            # 3. Existing is ACCEPTED -> duplicate Follow stays ACCEPTED
+            f.status = FollowStatus.ACCEPTED
+            db.session.commit()
+            with patch("app.core.config_service.ConfigService.get_bool", return_value=False):
+                with patch("app.core.federation_handlers._accept_follow") as mock_accept:
+                    assert (
+                        handle_activity(
+                            {
+                                "type": "Follow",
+                                "actor": actor_uri,
+                                "object": canonical_actor_iri(user.id),
+                            }
+                        )
+                        is True
+                    )
+                    mock_accept.assert_called_once()
+            db.session.refresh(f)
+            assert f.status == FollowStatus.ACCEPTED
+
+    def test_handle_create_cross_port_isolation(self, app):
+        """Cross-port services do not inherit TrustLevel.TRUSTED from portless domain."""
+        with app.app_context():
+            # trusted on port 443
+            inst = FederationInstance(domain="trusted.example", trust_level=TrustLevel.TRUSTED)
+            db.session.add(inst)
+            db.session.commit()
+
+            # activity from port 8443 (not registered, or untrusted)
+            act = {
+                "type": "Create",
+                "actor": "https://trusted.example:8443/u/rogue",
+                "object": {"type": "Document", "title": "Untrusted Book"},
+            }
+            # handle_activity returns False because trusted.example:8443 is untrusted
+            assert handle_activity(act) is False
 
 
 class TestCeleryTaskAndQueueRouting:

@@ -21,13 +21,12 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlparse
 
-from flask import current_app
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config_service import ConfigService
+from app.core.federation_discovery import clean_instance_domain, get_safe_default_trust
 from app.db import db
 from app.db.auth import User
 from app.db.federation import (
@@ -85,16 +84,15 @@ def _get_or_create_actor(actor_uri: str) -> FederationActor | None:
     if actor:
         return actor
 
-    parsed = urlparse(actor_uri)
-    domain = parsed.hostname
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return None
 
     inst_stmt = select(FederationInstance).where(FederationInstance.domain == domain)
     instance = db.session.execute(inst_stmt).scalars().first()
     if not instance:
-        default_trust = ConfigService.get("FEDERATION_DEFAULT_TRUST", TrustLevel.UNTRUSTED)
-        instance = FederationInstance(domain=domain, trust_level=str(default_trust))
+        default_trust = get_safe_default_trust()
+        instance = FederationInstance(domain=domain, trust_level=default_trust)
         db.session.add(instance)
         try:
             db.session.flush()
@@ -209,22 +207,31 @@ def handle_follow(activity: dict[str, Any]) -> bool:
     )
     existing = db.session.execute(follower_stmt).scalars().first()
 
-    auto_accept = current_app.config.get("FEDERATION_AUTO_ACCEPT_FOLLOWS", True)
-    if isinstance(auto_accept, str):
-        auto_accept = auto_accept.lower() in {"true", "1", "yes"}
-
-    should_accept = bool(auto_accept or (instance and instance.trust_level == TrustLevel.TRUSTED))
+    auto_accept = ConfigService.get_bool("FEDERATION_AUTO_ACCEPT_FOLLOWS", default=False)
+    should_accept = bool(auto_accept and instance and instance.trust_level == TrustLevel.TRUSTED)
     follow_status = FollowStatus.ACCEPTED if should_accept else FollowStatus.PENDING
 
     if existing:
-        existing.status = follow_status
-    else:
-        follower = FederationFollower(
-            local_user_id=user.id,
-            remote_actor_id=remote_actor.id,
-            status=follow_status,
-        )
-        db.session.add(follower)
+        if existing.status == FollowStatus.REJECTED:
+            logger.info("Follow ignored — remote actor %s is rejected for user %s", actor_uri, user.id)
+            return True
+        if existing.status == FollowStatus.ACCEPTED:
+            logger.info("Follow already accepted for remote actor %s; resending Accept", actor_uri)
+            _accept_follow(user, remote_actor, activity)
+            return True
+        if should_accept:
+            existing.status = FollowStatus.ACCEPTED
+            db.session.commit()
+            _accept_follow(user, remote_actor, activity)
+            return True
+        return True
+
+    follower = FederationFollower(
+        local_user_id=user.id,
+        remote_actor_id=remote_actor.id,
+        status=follow_status,
+    )
+    db.session.add(follower)
 
     try:
         db.session.commit()
@@ -232,8 +239,9 @@ def handle_follow(activity: dict[str, Any]) -> bool:
         db.session.rollback()
         existing = db.session.execute(follower_stmt).scalars().first()
         if existing:
-            existing.status = follow_status
-            db.session.commit()
+            if existing.status == FollowStatus.ACCEPTED:
+                _accept_follow(user, remote_actor, activity)
+            return True
 
     if should_accept:
         _accept_follow(user, remote_actor, activity)
@@ -583,8 +591,7 @@ def handle_create(activity: dict[str, Any]) -> bool:
         logger.info("Create with URI reference — skipping: %s", obj)
         return True
 
-    parsed = urlparse(actor_uri)
-    domain = parsed.hostname
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return False
 
@@ -610,8 +617,7 @@ def handle_update(activity: dict[str, Any]) -> bool:
     if isinstance(obj, str):
         return True
 
-    parsed = urlparse(actor_uri)
-    domain = parsed.hostname
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return False
 
@@ -643,8 +649,7 @@ def handle_delete(activity: dict[str, Any]) -> bool:
         logger.warning("Delete spoofing attempt: actor %s tried to delete %s", actor_uri, object_uri)
         return False
 
-    parsed = urlparse(actor_uri)
-    domain = parsed.hostname
+    domain = clean_instance_domain(actor_uri)
     if domain:
         inst_stmt = select(FederationInstance).where(FederationInstance.domain == domain)
         instance = db.session.execute(inst_stmt).scalars().first()
@@ -670,8 +675,7 @@ def handle_delete(activity: dict[str, Any]) -> bool:
 def handle_announce(activity: dict[str, Any]) -> bool:
     """Handle Announce (boost) activity."""
     actor_uri = activity.get("actor", "")
-    parsed = urlparse(actor_uri)
-    domain = parsed.hostname
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return False
 

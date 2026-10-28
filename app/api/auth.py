@@ -31,7 +31,7 @@ import jwt as pyjwt
 import requests
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, current_app, jsonify, redirect, request, session
+from flask import Blueprint, current_app, g, jsonify, redirect, request, session
 from joserfc.errors import JoseError
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -40,6 +40,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.api.decorators import admin_required, cache_token_revoked, require_auth
 from app.config import Config
 from app.core.limiter import limiter
+from app.core.permissions import PermissionName
+from app.db.auth import PersonalAccessToken, generate_pat_token
+from app.db.core import EntityAuditLog
 from app.db.models import InstanceSettings, OAuthExchangeCode, Role, TokenBlocklist, User, db
 from app.utils.allegro import exchange_device_token, initiate_device_flow
 from app.utils.http_client import is_safe_url
@@ -387,7 +390,7 @@ def exchange_oauth_code():
 
 
 @auth_bp.route("/login", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def local_login():
     """Authenticate with an email and password.
 
@@ -406,6 +409,19 @@ def local_login():
         return jsonify({"error": "Invalid credentials"}), 401
     if not user.is_active:
         return jsonify({"error": "Account suspended", "suspended": True}), 401
+
+    if user.totp_enabled:
+        otp_code = data.get("otp_code") or data.get("totp_code") or data.get("code")
+        if not otp_code:
+            return jsonify({"mfa_required": True, "message": "Two-factor authentication required"}), 200
+
+        # Validate OTP or recovery code
+        is_valid = user.verify_totp(str(otp_code).strip())
+        if not is_valid:
+            is_valid = user.verify_and_consume_recovery_code(str(otp_code).strip())
+
+        if not is_valid:
+            return jsonify({"error": "Invalid two-factor authentication code"}), 401
 
     user.last_login = datetime.now(UTC)
     db.session.commit()
@@ -565,3 +581,299 @@ def allegro_device_token():
     except (requests.RequestException, OSError, ValueError) as e:
         logger.error("Failed to exchange Allegro device token: %s", e, exc_info=True)
         return jsonify({"error": "Failed to exchange device token"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Two-Factor Authentication (TOTP 2FA)
+# ---------------------------------------------------------------------------
+
+
+def _reject_pat_auth():
+    """Reject requests authenticated via Personal Access Tokens for token/2FA management."""
+    if getattr(g, "pat", None) is not None:
+        return jsonify({"error": "Personal access tokens cannot manage tokens or 2FA settings"}), 403
+    return None
+
+
+@auth_bp.route("/2fa/status", methods=["GET"])
+@require_auth
+def get_2fa_status():
+    """Return whether 2FA is enabled for the authenticated user."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"enabled": bool(user.totp_enabled)}), 200
+
+
+@auth_bp.route("/2fa/enroll", methods=["POST"])
+@limiter.limit("10 per minute")
+@require_auth
+def enroll_2fa():
+    """Initiate TOTP enrollment by generating secret, provisioning URI, recovery codes, and QR code."""
+    import base64
+    import io
+
+    import pyotp
+    import qrcode
+
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if user.totp_enabled:
+        return jsonify({"error": "2FA is already enabled. Disable 2FA before re-enrolling."}), 400
+
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    issuer = current_app.config.get("INSTANCE_NAME", "iqoqo")
+    provisioning_uri = totp.provisioning_uri(name=user.email, issuer_name=issuer)
+
+    # 8 single-use recovery codes
+    recovery_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+
+    # Store encrypted secret and hashed recovery codes, but leave totp_enabled=False until verified
+    user.set_totp_secret(secret)
+    user.set_recovery_codes(recovery_codes)
+    db.session.commit()
+
+    # Generate QR code PNG as data URI
+    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr.add_data(provisioning_uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
+
+    return (
+        jsonify(
+            {
+                "secret": secret,
+                "provisioning_uri": provisioning_uri,
+                "recovery_codes": recovery_codes,
+                "qr_code": qr_data_url,
+            }
+        ),
+        200,
+    )
+
+
+@auth_bp.route("/2fa/verify", methods=["POST"])
+@limiter.limit("10 per minute")
+@require_auth
+def verify_2fa():
+    """Verify a TOTP code and finalize enabling 2FA."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json() or {}
+    code = str(data.get("code") or data.get("otp_code") or "").strip()
+    if not code:
+        return jsonify({"error": "Verification code is required"}), 400
+
+    if not user.verify_totp(code):
+        return jsonify({"error": "Invalid verification code"}), 400
+
+    user.totp_enabled = True
+    audit = EntityAuditLog(
+        entity_type="user",
+        entity_id=0,
+        actor_id=user.id,
+        change_type="2fa_enabled",
+        diff={"totp_enabled": True},
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return jsonify({"success": True, "enabled": True}), 200
+
+
+@auth_bp.route("/2fa/disable", methods=["POST"])
+@limiter.limit("10 per minute")
+@require_auth
+def disable_2fa():
+    """Disable 2FA after validating user password or a valid 2FA/recovery code."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json() or {}
+    password = data.get("password")
+    code = str(data.get("code") or data.get("otp_code") or "").strip()
+
+    valid = False
+    if password and user.check_password(password):
+        valid = True
+    elif code and (user.verify_totp(code) or user.verify_and_consume_recovery_code(code)):
+        valid = True
+
+    if not valid:
+        return jsonify({"error": "Invalid password or verification code"}), 400
+
+    user.totp_enabled = False
+    user.set_totp_secret(None)
+    user.totp_recovery_codes = None
+    audit = EntityAuditLog(
+        entity_type="user",
+        entity_id=0,
+        actor_id=user.id,
+        change_type="2fa_disabled",
+        diff={"totp_enabled": False},
+    )
+    db.session.add(audit)
+    db.session.commit()
+    return jsonify({"success": True, "enabled": False}), 200
+
+
+# ---------------------------------------------------------------------------
+# Personal Access Tokens (PATs)
+# ---------------------------------------------------------------------------
+
+
+@auth_bp.route("/tokens", methods=["GET"])
+@require_auth
+def list_tokens():
+    """List personal access tokens for the authenticated user with SQL pagination."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    try:
+        raw_limit = int(request.args.get("limit", 20))
+        raw_offset = int(request.args.get("offset", 0))
+    except (ValueError, TypeError):
+        return jsonify({"error": "Limit and offset must be integers"}), 400
+
+    if raw_limit < 1 or raw_offset < 0:
+        return jsonify({"error": "Limit must be >= 1 and offset must be >= 0"}), 400
+
+    limit = min(raw_limit, 100)
+    offset = raw_offset
+
+    stmt = (
+        db.select(PersonalAccessToken)
+        .filter_by(user_id=g.user_id)
+        .order_by(PersonalAccessToken.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    tokens = db.session.execute(stmt).scalars().all()
+
+    count_stmt = db.select(func.count()).select_from(PersonalAccessToken).filter_by(user_id=g.user_id)  # pylint: disable=not-callable
+    total = db.session.execute(count_stmt).scalar() or 0
+
+    return (
+        jsonify(
+            {
+                "items": [t.to_dict() for t in tokens],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        ),
+        200,
+    )
+
+
+@auth_bp.route("/tokens", methods=["POST"])
+@require_auth
+def create_token():
+    """Create a new personal access token and return plaintext token once."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Token name is required"}), 400
+    if len(name) > 100:
+        return jsonify({"error": "Token name must not exceed 100 characters"}), 400
+
+    scopes = data.get("scopes") or ["read:catalog"]
+    if not isinstance(scopes, list) or not all(isinstance(s, str) for s in scopes):
+        return jsonify({"error": "Scopes must be a list of strings"}), 400
+
+    user = db.session.get(User, g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    is_admin = any(role.name == "admin" for role in getattr(user, "roles", []))
+    is_curator = is_admin or any(role.name in {"contributor", "custodian"} for role in getattr(user, "roles", []))
+
+    valid_standard = {"read:catalog", "write:catalog", "write:inventory", "sparql:query", "curator", "admin", "*"}
+    for s in scopes:
+        if s not in valid_standard and not any(s == p.value for p in PermissionName):
+            return jsonify({"error": f"Invalid scope: {s}"}), 400
+        if s in {"admin", "*"} and not is_admin:
+            return jsonify({"error": "Admin scope requires admin role"}), 403
+        if s == "curator" and not is_curator:
+            return jsonify({"error": "Curator scope requires contributor, custodian, or admin role"}), 403
+        if any(s == p.value for p in PermissionName) and not (is_admin or user.has_permission(s)):
+            return jsonify({"error": f"Caller lacks permission for scope {s}"}), 403
+
+    expires_in_days = data.get("expires_in_days")
+    expires_at = None
+    if expires_in_days is not None:
+        try:
+            days = int(expires_in_days)
+            if days <= 0:
+                return jsonify({"error": "expires_in_days must be a positive integer"}), 400
+            expires_at = datetime.now(UTC) + timedelta(days=days)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid expires_in_days"}), 400
+
+    raw_token, prefix, token_hash = generate_pat_token()
+    pat = PersonalAccessToken(
+        user_id=g.user_id,
+        name=name,
+        token_prefix=prefix,
+        token_hash=token_hash,
+        scopes=scopes,
+        expires_at=expires_at,
+    )
+    db.session.add(pat)
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "token": raw_token,
+                "data": pat.to_dict(),
+            }
+        ),
+        201,
+    )
+
+
+@auth_bp.route("/tokens/<int:token_id>", methods=["DELETE"])
+@require_auth
+def revoke_token(token_id: int):
+    """Revoke an active personal access token."""
+    pat_err = _reject_pat_auth()
+    if pat_err:
+        return pat_err
+
+    pat = db.session.execute(db.select(PersonalAccessToken).filter_by(id=token_id, user_id=g.user_id)).scalar_one_or_none()
+
+    if not pat:
+        return jsonify({"error": "Token not found"}), 404
+
+    pat.revoked_at = datetime.now(UTC)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Token revoked"}), 200

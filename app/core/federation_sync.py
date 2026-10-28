@@ -23,10 +23,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 import bleach
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core import frbr_service
+from app.core.federation_discovery import clean_instance_domain
 from app.db import db
 from app.db.core import EntityAuditLog, Expression, Manifestation, Work
 from app.db.federation import FederationInstance, TrustLevel
@@ -75,11 +76,8 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
             mbid_stmt = select(Manifestation).where(
                 or_(
                     Manifestation.meta["mbid"].as_string() == clean_mbid,
-                    cast(Manifestation.meta["mbid"], String) == clean_mbid,
                     Manifestation.meta["musicbrainz_id"].as_string() == clean_mbid,
-                    cast(Manifestation.meta["musicbrainz_id"], String) == clean_mbid,
                     Manifestation.meta["musicbrainz_release_id"].as_string() == clean_mbid,
-                    cast(Manifestation.meta["musicbrainz_release_id"], String) == clean_mbid,
                 )
             )
             manif = db.session.execute(mbid_stmt).scalars().first()
@@ -94,9 +92,7 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
                 .where(
                     or_(
                         Work.meta["mbid"].as_string() == clean_mbid,
-                        cast(Work.meta["mbid"], String) == clean_mbid,
                         Work.meta["musicbrainz_id"].as_string() == clean_mbid,
-                        cast(Work.meta["musicbrainz_id"], String) == clean_mbid,
                     )
                 )
             )
@@ -113,9 +109,7 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
             bgg_stmt = select(Manifestation).where(
                 or_(
                     Manifestation.meta["bgg_id"].as_string() == clean_bgg,
-                    cast(Manifestation.meta["bgg_id"], String) == clean_bgg,
                     Manifestation.meta["boardgamegeek_id"].as_string() == clean_bgg,
-                    cast(Manifestation.meta["boardgamegeek_id"], String) == clean_bgg,
                 )
             )
             manif = db.session.execute(bgg_stmt).scalars().first()
@@ -130,9 +124,7 @@ def resolve_local_manifestation(remote_data: dict[str, Any]) -> Manifestation | 
                 .where(
                     or_(
                         Work.meta["bgg_id"].as_string() == clean_bgg,
-                        cast(Work.meta["bgg_id"], String) == clean_bgg,
                         Work.meta["boardgamegeek_id"].as_string() == clean_bgg,
-                        cast(Work.meta["boardgamegeek_id"], String) == clean_bgg,
                     )
                 )
             )
@@ -370,7 +362,7 @@ def reconcile_activity(activity: dict[str, Any]) -> dict[str, Any]:
         Summary dict of synchronization result.
     """
     actor_uri = activity.get("actor", "")
-    domain = urlparse(actor_uri).hostname or ""
+    domain = clean_instance_domain(actor_uri)
     if not domain:
         return {"status": "ignored", "reason": "missing_actor_domain"}
 

@@ -24,6 +24,7 @@ import hmac
 import logging
 import time
 import uuid
+from datetime import UTC, datetime
 from functools import wraps
 
 import jwt
@@ -31,7 +32,7 @@ from flask import current_app, g, jsonify, request
 
 from app.core.cache import cache
 from app.core.permissions import PermissionName
-from app.db.models import TokenBlocklist, User, db
+from app.db.models import PersonalAccessToken, TokenBlocklist, User, db
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +195,59 @@ def require_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
+        g.pat = None
+        g.pat_scopes = None
         token, from_cookie = _extract_bearer_token()
 
         if not token:
             return jsonify({"error": "Token missing"}), 401
+
+        if token.startswith("iqo_"):
+            token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+            pat = db.session.execute(db.select(PersonalAccessToken).filter_by(token_hash=token_hash)).scalar_one_or_none()
+
+            if not pat:
+                return jsonify({"error": "Invalid token"}), 401
+            if pat.revoked_at is not None:
+                return jsonify({"error": "Token revoked"}), 401
+            if pat.expires_at is not None:
+                exp = pat.expires_at if pat.expires_at.tzinfo else pat.expires_at.replace(tzinfo=UTC)
+                if exp < datetime.now(UTC):
+                    return jsonify({"error": "Token expired"}), 401
+
+            user_id = pat.user_id
+            if not _account_is_usable(user_id):
+                return jsonify(_CREDENTIAL_NO_LONGER_VALID), 401
+
+            scopes = pat.scopes or []
+            if "*" not in scopes and "admin" not in scopes:
+                if request.path.startswith("/api/sparql") and "sparql:query" in scopes:
+                    pass
+                elif request.method in ("GET", "HEAD", "OPTIONS"):
+                    if "read:catalog" not in scopes and not any(s.startswith("read:") for s in scopes):
+                        return jsonify({"error": "Forbidden", "message": "Scope read:catalog required"}), 403
+                else:
+                    if (
+                        "write:catalog" not in scopes
+                        and "write:inventory" not in scopes
+                        and not any(s.startswith("write:") for s in scopes)
+                    ):
+                        return jsonify({"error": "Forbidden", "message": "Scope write:catalog required"}), 403
+
+            now = datetime.now(UTC)
+            last_used = pat.last_used_at
+            if last_used is not None and last_used.tzinfo is None:
+                last_used = last_used.replace(tzinfo=UTC)
+            if last_used is None or (now - last_used).total_seconds() >= 60:
+                pat.last_used_at = now
+                db.session.commit()
+
+            g.user_id = user_id
+            g.authenticated_via_cookie = False
+            g.pat = pat
+            g.pat_scopes = scopes
+            return f(*args, **kwargs)
+
         try:
             payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
 
@@ -223,6 +273,7 @@ def require_auth(f):
         g.authenticated_via_cookie = from_cookie
         return f(*args, **kwargs)
 
+    decorated._requires_auth = True
     return decorated
 
 
@@ -240,20 +291,43 @@ def optional_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
+        g.pat = None
+        g.pat_scopes = None
         token, from_cookie = _extract_bearer_token()
 
         g.user_id = None
         g.authenticated_via_cookie = False
         if token:
-            try:
-                payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-                if not _is_token_revoked(payload.get("jti"), payload.get("exp")):
-                    candidate = uuid.UUID(payload["sub"])
-                    if _account_is_usable(candidate):
-                        g.user_id = candidate
-                        g.authenticated_via_cookie = from_cookie
-            except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError, ValueError, TypeError):
-                pass
+            if token.startswith("iqo_"):
+                token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                pat = db.session.execute(db.select(PersonalAccessToken).filter_by(token_hash=token_hash)).scalar_one_or_none()
+                if pat and pat.revoked_at is None:
+                    exp = pat.expires_at if pat.expires_at is None or pat.expires_at.tzinfo else pat.expires_at.replace(tzinfo=UTC)
+                    if exp is None or exp > datetime.now(UTC):
+                        if _account_is_usable(pat.user_id):
+                            scopes = pat.scopes or []
+                            if "*" in scopes or "admin" in scopes or "read:catalog" in scopes or any(s.startswith("read:") for s in scopes):
+                                now = datetime.now(UTC)
+                                last_used = pat.last_used_at
+                                if last_used is not None and last_used.tzinfo is None:
+                                    last_used = last_used.replace(tzinfo=UTC)
+                                if last_used is None or (now - last_used).total_seconds() >= 60:
+                                    pat.last_used_at = now
+                                    db.session.commit()
+                                g.user_id = pat.user_id
+                                g.authenticated_via_cookie = False
+                                g.pat = pat
+                                g.pat_scopes = scopes
+            else:
+                try:
+                    payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+                    if not _is_token_revoked(payload.get("jti"), payload.get("exp")):
+                        candidate = uuid.UUID(payload["sub"])
+                        if _account_is_usable(candidate):
+                            g.user_id = candidate
+                            g.authenticated_via_cookie = from_cookie
+                except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError, KeyError, ValueError, TypeError):
+                    pass
 
         return f(*args, **kwargs)
 
@@ -506,11 +580,27 @@ def require_permission(perm_name: PermissionName):
             if not user_id:
                 return jsonify({"error": "Authentication required"}), 401
 
+            pat_scopes = getattr(g, "pat_scopes", None)
+            if pat_scopes is not None:
+                perm_val = perm_name.value if hasattr(perm_name, "value") else str(perm_name)
+                has_scope = (
+                    "*" in pat_scopes
+                    or "admin" in pat_scopes
+                    or perm_val in pat_scopes
+                    or (perm_val.startswith("read:") and "read:catalog" in pat_scopes)
+                    or (perm_val.startswith("write:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
+                    or (perm_val.startswith("delete:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
+                    or (perm_val.startswith("update:") and ("write:catalog" in pat_scopes or "write:inventory" in pat_scopes))
+                )
+                if not has_scope:
+                    return jsonify({"error": "Forbidden", "missing_permission": perm_val, "missing_scope": perm_val}), 403
+
             user = db.session.get(User, user_id)
             if not user or not user.has_permission(perm_name):
                 return jsonify({"error": "Forbidden", "missing_permission": perm_name.value}), 403
             return f(*args, **kwargs)
 
+        decorated._requires_auth = True
         return decorated
 
     return decorator
@@ -528,6 +618,10 @@ def admin_required(f):
         if not user_id:
             return jsonify({"success": False, "error": "Authentication required"}), 401
 
+        pat_scopes = getattr(g, "pat_scopes", None)
+        if pat_scopes is not None and not any(s in {"admin", "*"} for s in pat_scopes):
+            return jsonify({"success": False, "error": "Admin privileges required"}), 403
+
         user = db.session.get(User, user_id)
         is_admin = any(role.name == "admin" for role in getattr(user, "roles", [])) if user else False
         if not is_admin:
@@ -535,6 +629,7 @@ def admin_required(f):
 
         return f(*args, **kwargs)
 
+    decorated_function._requires_auth = True
     return decorated_function
 
 
@@ -549,6 +644,10 @@ def admin_or_custodian_required(f):
         if not user_id:
             return jsonify({"success": False, "error": "Authentication required"}), 401
 
+        pat_scopes = getattr(g, "pat_scopes", None)
+        if pat_scopes is not None and not any(s in {"admin", "*", "curator"} for s in pat_scopes):
+            return jsonify({"success": False, "error": "Admin or curator privileges required"}), 403
+
         user = db.session.get(User, user_id)
         is_authorized = any(role.name in {"admin", "contributor", "custodian"} for role in getattr(user, "roles", [])) if user else False
         if not is_authorized:
@@ -556,6 +655,7 @@ def admin_or_custodian_required(f):
 
         return f(*args, **kwargs)
 
+    decorated_function._requires_auth = True
     return decorated_function
 
 

@@ -24,6 +24,7 @@ from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import func, select, update
 
 from app.api.decorators import require_auth
+from app.core.limiter import limiter
 from app.db import db
 from app.db.social import Notification
 
@@ -34,6 +35,7 @@ notifications_bp = Blueprint("notifications", __name__, url_prefix="/api/v1/noti
 
 @notifications_bp.route("", methods=["GET"])
 @require_auth
+@limiter.limit("60 per minute")
 def list_notifications() -> Response | tuple[Response, int]:
     """List in-app notifications for authenticated user with pagination."""
     user_id = g.user_id
@@ -78,6 +80,7 @@ def list_notifications() -> Response | tuple[Response, int]:
 
 @notifications_bp.route("/read", methods=["PATCH"])
 @require_auth
+@limiter.limit("60 per minute")
 def mark_notifications_read() -> Response | tuple[Response, int]:
     """Mark specific notification ids as read."""
     user_id = g.user_id
@@ -110,6 +113,7 @@ def mark_notifications_read() -> Response | tuple[Response, int]:
 
 @notifications_bp.route("/read-all", methods=["POST"])
 @require_auth
+@limiter.limit("60 per minute")
 def mark_all_notifications_read() -> Response | tuple[Response, int]:
     """Mark all unread notifications for the user as read."""
     user_id = g.user_id

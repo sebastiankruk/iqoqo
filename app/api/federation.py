@@ -29,6 +29,7 @@ from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
 from app.core.federation_client import FederationClient
+from app.core.federation_discovery import clean_instance_domain
 from app.core.http_signatures import SignatureVerificationError, verify_request
 from app.core.iri import canonical_actor_iri, get_federation_base_url, legacy_actor_iri
 from app.core.limiter import (
@@ -106,7 +107,10 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
         if "@" in account_part:
             username, req_domain = account_part.split("@", 1)
             req_host = request.host.split(":")[0].strip().lower() if request.host else ""
-            if req_domain.strip().lower() not in (domain.lower(), req_host):
+            clean_req_domain = req_domain.strip().lower()
+            req_domain_host = clean_req_domain.split(":")[0]
+            allowed_domains = {domain.lower(), domain.split(":")[0].lower(), req_host}
+            if clean_req_domain not in allowed_domains and req_domain_host not in allowed_domains:
                 return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
         else:
             username = account_part
@@ -224,6 +228,7 @@ def federation_nodeinfo_2_1() -> Response:
         db.session.execute(select(func.count(User.id)).where(User.is_active.is_(True))).scalar() or 0  # pylint: disable=not-callable
     )
 
+    base_url = _get_base_url()
     data: dict[str, Any] = {
         "version": "2.1",
         "software": {
@@ -249,6 +254,7 @@ def federation_nodeinfo_2_1() -> Response:
             "federation": {
                 "enabled": is_federation_enabled(),
             },
+            "instance_actor": f"{base_url}/api/federation/actor",
         },
     }
     resp = jsonify(data)
@@ -289,6 +295,48 @@ def _build_actor_payload(user: User, base_url: str) -> dict[str, Any]:
             "sharedInbox": f"{base_url}/api/federation/inbox",
         },
     }
+
+
+@federation_bp.route("/actor", methods=["GET"])
+@federation_required
+@limiter.limit("120 per minute")
+def get_instance_actor() -> Response | tuple[Response, int]:
+    """Instance Application actor document publishing the server public key."""
+    public_key_pem = federation_keys.get_actor_public_key("server")
+    if not public_key_pem:
+        return jsonify({"error": "Instance actor not configured", "code": 404}), 404
+
+    base_url = _get_base_url()
+    actor_uri = f"{base_url}/api/federation/actor"
+    domain = _get_domain()
+
+    payload = {
+        "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ],
+        "id": actor_uri,
+        "type": "Application",
+        "preferredUsername": domain,
+        "name": f"iqoqo ({domain})",
+        "url": base_url,
+        "inbox": f"{base_url}/api/federation/inbox",
+        "outbox": f"{base_url}/api/federation/outbox",
+        "publicKey": {
+            "id": f"{actor_uri}#main-key",
+            "owner": actor_uri,
+            "publicKeyPem": public_key_pem,
+        },
+        "endpoints": {
+            "sharedInbox": f"{base_url}/api/federation/inbox",
+        },
+    }
+
+    resp = jsonify(payload)
+    resp.mimetype = "application/activity+json"
+    resp.headers["Content-Type"] = "application/activity+json; charset=utf-8"
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
 
 
 @federation_bp.route("/actor/u/<string:user_uuid>", methods=["GET"])
@@ -422,8 +470,7 @@ def receive_inbox(user_uuid: str | None = None, username: str | None = None) -> 
     activity_id = str(payload.get("id") or uuid.uuid4())
 
     # Check if sending instance is blocked
-    parsed_sender = urlparse(verified_actor)
-    sender_domain = parsed_sender.hostname
+    sender_domain = clean_instance_domain(verified_actor)
     if sender_domain:
         inst_stmt = select(FederationInstance).where(FederationInstance.domain == sender_domain)
         sender_instance = db.session.execute(inst_stmt).scalars().first()
@@ -897,21 +944,29 @@ def get_friend_collections(actor_id: int) -> Response | tuple[Response, int]:
 
 
 @federation_bp.route("/directory", methods=["GET"])
-@federation_required
+@federation_bp.route("/instance-info", methods=["GET"])
 @limiter.limit("60 per minute")
 def get_federation_directory() -> Response:
     """Return public directory listing of connected, verified peer libraries and instance overview."""
+    from app.api.federation_guard import is_federation_enabled
     from app.config import Config
     from app.core.iri import get_federation_base_url
     from app.db.core import Item
 
-    # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
-    stmt = (
-        select(FederationInstance)
-        .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
-        .order_by(FederationInstance.last_seen_at.desc().nullslast())
-    )
-    peers = db.session.execute(stmt).scalars().all()
+    fed_enabled = is_federation_enabled()
+    if fed_enabled:
+        from app.core.federation_discovery import is_publicly_routable_peer_domain
+
+        # 1. Fetch public peer libraries from Trust Graph (trusted or pending)
+        stmt = (
+            select(FederationInstance)
+            .where(FederationInstance.trust_level.in_([TrustLevel.TRUSTED, TrustLevel.PENDING]))
+            .order_by(FederationInstance.last_seen_at.desc().nullslast())
+        )
+        all_peers = db.session.execute(stmt).scalars().all()
+        peers = [p for p in all_peers if is_publicly_routable_peer_domain(p.domain)]
+    else:
+        peers = []
 
     # 2. Local public items stats
     public_items_count = (
@@ -927,9 +982,11 @@ def get_federation_directory() -> Response:
             "software_name": "iqoqo",
             "software_version": Config.VERSION,
             "public_items_count": public_items_count,
+            "federation_enabled": fed_enabled,
         },
         "peers": [peer.to_dict() for peer in peers],
         "total_peers": len(peers),
+        "federation_enabled": fed_enabled,
     }
 
     return jsonify({"success": True, "data": directory_data}), 200

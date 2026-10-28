@@ -146,6 +146,9 @@ def test_system_status(client, normal_user_headers):
     assert data["success"] is True
     assert "allegro_token_active" in data["data"]
     assert "allegro" in data["data"]
+    assert "igdb" in data["data"]
+    assert "twitch_igdb_status" in data["data"]
+    assert "bgg" in data["data"]
     assert "version" in data["data"]
     assert data["error"] is None
 
