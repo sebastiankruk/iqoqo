@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Domain Migration to iqoqo.kruk.cc & Cloudflare Agent Rules (C89)**:
+  - Migrated production deployment URLs and base entity IRI templates in `.env.example`, `docker-compose.yml`, and `deploy/otel-collector-*.yaml` to `iqoqo.kruk.cc`.
+  - Added WebFinger migration domain aliasing in `app/api/federation.py` supporting concurrent resolution of `@user@iqoqo.kruk.cc` and `@user@iqoqo.cc`.
+  - Codified Cloudflare WAF and Bot Management bypass rules in `deploy/cloudflare-semantic-federation-rules.md` allowing automated machine-to-machine traffic for ActivityPub, WebFinger, NodeInfo, and Linked Open Data crawlers.
+  - Authored automated rule verification script `scripts/verify_cloudflare_rules.sh` with BATS syntax testing in `tests/bash/scripts_syntax.bats`.
 - **Auxiliary Test Suites & Shell Script Syntax Guardrails (C87c)**:
   - Added BATS syntax validation (`bash -n`) in `tests/bash/scripts_syntax.bats` covering `scripts/iqopretest.sh`, `scripts/verify_federation_preview.sh`, and `deploy/wait-for-postgres.sh`.
   - Added unit test suite `tests/test_verify_http_signature.py` covering CLI argument parsing, SHA-256 Digest header verification, signing string assembly, clock-skew rejection, and RSA-SHA256 signature verification.

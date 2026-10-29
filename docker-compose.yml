@@ -157,15 +157,15 @@ services:
         NEXT_PUBLIC_API_URL: /api
         APP_VERSION: ${APP_VERSION:-prod}
         NEXT_PUBLIC_APP_VERSION: ${APP_VERSION:-prod}
-        NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.cc}
+        NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.kruk.cc}
     env_file:
       - ${ENV_FILE:-.env}
     environment:
       - FLASK_API_URL=${FLASK_API_URL:-http://web:5000/api}
       - NEXT_PUBLIC_APP_VERSION=${APP_VERSION:-prod}
-      - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.cc}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
-      - APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.cc}
+      - NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL:-https://iqoqo.kruk.cc}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.kruk.cc}
+      - APP_URL=${NEXT_PUBLIC_APP_URL:-https://iqoqo.kruk.cc}
       # Browser RUM/Logs. NOT a NEXT_PUBLIC_* build arg on purpose:
       # `NEXT_PUBLIC_*` values are inlined into the client bundle at build
       # time, and `--prebuilt` deployments pull this image from a registry

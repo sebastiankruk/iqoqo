@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 from urllib.parse import urlparse
@@ -110,6 +111,13 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
             clean_req_domain = req_domain.strip().lower()
             req_domain_host = clean_req_domain.split(":")[0]
             allowed_domains = {domain.lower(), domain.split(":")[0].lower(), req_host}
+            aliases_raw = current_app.config.get("FEDERATION_DOMAIN_ALIASES") or os.environ.get("FEDERATION_DOMAIN_ALIASES", "")
+            if aliases_raw:
+                allowed_domains |= {a.strip().lower() for a in aliases_raw.split(",") if a.strip()}
+            if "iqoqo.kruk.cc" in allowed_domains:
+                allowed_domains.add("iqoqo.cc")
+            elif "iqoqo.cc" in allowed_domains:
+                allowed_domains.add("iqoqo.kruk.cc")
             if clean_req_domain not in allowed_domains and req_domain_host not in allowed_domains:
                 return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
         else:

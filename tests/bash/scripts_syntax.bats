@@ -98,3 +98,8 @@
   [ "$status" -eq 0 ]
 }
 
+@test "scripts/verify_cloudflare_rules.sh syntax check" {
+  run bash -n scripts/verify_cloudflare_rules.sh
+  [ "$status" -eq 0 ]
+}
+
