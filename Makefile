@@ -734,16 +734,16 @@ test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite agains
 	echo "🚀 Orchestrating live federation pair test run..."; \
 	if ! docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		echo "Starting paired federation preview stack..."; \
-		trap '$(MAKE) preview-down' EXIT; \
+		trap '$(MAKE) -C $(ROOT_DIR) preview-down' EXIT; \
 		FEDERATION_PAIR=1 $(MAKE) preview-up || true; \
 	fi; \
 	if docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		bash scripts/verify_federation_preview.sh; \
-		cd frontend && FEDERATION_PAIR_LIVE=1 $(NPX) playwright test --project=chromium __tests__/e2e/federation_pair_live.spec.ts $(args); \
+		(cd frontend && FEDERATION_PAIR_LIVE=1 $(NPX) playwright test --project=chromium __tests__/e2e/federation_pair_live.spec.ts $(args)); \
 	else \
 		echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
 		npx bats tests/bash/verify_federation_preview.bats; \
-		cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/help_hub_workflow.spec.ts $(args); \
+		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/help_hub_workflow.spec.ts $(args)); \
 	fi
 
 # FRBR merge integrity against a real PostgreSQL instance.

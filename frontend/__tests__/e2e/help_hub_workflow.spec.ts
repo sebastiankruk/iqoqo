@@ -37,7 +37,7 @@ test.describe("Help Hub Workflow & Bilingual Documentation", () => {
     await expect(page.getByRole("button", { name: "Cataloging & FRBR" })).toBeVisible();
 
     // 3. Search for FRBR article
-    await searchInput.fill("Dune");
+    await searchInput.fill("Bookshelf");
     await expect(page.getByRole("link", { name: /Beyond the Bookshelf/i })).toBeVisible();
 
     // 4. Clear search and click the FRBR hierarchy guide card

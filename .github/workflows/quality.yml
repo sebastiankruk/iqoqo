@@ -458,6 +458,7 @@ jobs:
       POSTGRES_PASSWORD: changeme_strong_password
       ADMIN_EMAIL: ci-admin@iqoqo.cc
       ADMIN_PASSWORD: E2EBootstrapPassword123!
+      DATABASE_URL: sqlite:////tmp/e2e_federation.db
       SECRET_KEY: test-secret-key-not-for-production-min-32-chars
       JWT_SECRET_KEY: test-jwt-secret-not-for-production-min-32-chars
       AUTH_SECRET: test-auth-secret-not-for-production-min-32-chars
