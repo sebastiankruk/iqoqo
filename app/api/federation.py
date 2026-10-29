@@ -111,6 +111,12 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
             clean_req_domain = req_domain.strip().lower()
             req_domain_host = clean_req_domain.split(":")[0]
             allowed_domains = {domain.lower(), domain.split(":")[0].lower(), req_host}
+            if (
+                req_host in {"127.0.0.1", "localhost"}
+                or current_app.config.get("FEDERATION_ALLOW_LOOPBACK")
+                or os.environ.get("FEDERATION_ALLOW_LOOPBACK", "").lower() in ("true", "1")
+            ):
+                allowed_domains.update({"127.0.0.1", "localhost"})
             aliases_raw = current_app.config.get("FEDERATION_DOMAIN_ALIASES") or os.environ.get("FEDERATION_DOMAIN_ALIASES", "")
             if aliases_raw:
                 allowed_domains |= {a.strip().lower() for a in aliases_raw.split(",") if a.strip()}

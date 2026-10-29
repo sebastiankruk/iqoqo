@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live Dual-Origin Federation E2E Suite & Automation Harness (C89b)**:
+  - Added dual-origin live Playwright E2E suite `frontend/__tests__/e2e/federation_pair_live.spec.ts` exercising cross-instance trust graph peering, profile federation consent, social follow handshake, connected library directory, and ActivityPub loan/custody workflows across live paired application stacks.
+  - Added `frontend/__tests__/e2e/help_hub_workflow.spec.ts` testing Help Hub guide discovery, markdown article rendering, and bilingual English/Polish switching.
+  - Added `test-e2e-federation` target to `Makefile` and `test-federation-pair-e2e` CI job to `.github/workflows/quality.yml`.
+  - Added CLI argument parsing, fixture seeding, and health verification in `scripts/verify_federation_preview.sh` with dedicated BATS test suite `tests/bash/verify_federation_preview.bats`.
 - **Domain Migration to iqoqo.kruk.cc & Cloudflare Agent Rules (C89)**:
   - Migrated production deployment URLs and base entity IRI templates in `.env.example`, `docker-compose.yml`, and `deploy/otel-collector-*.yaml` to `iqoqo.kruk.cc`.
   - Added WebFinger migration domain aliasing in `app/api/federation.py` supporting concurrent resolution of `@user@iqoqo.kruk.cc` and `@user@iqoqo.cc`.
