@@ -51,7 +51,7 @@ test.describe("Help Hub Workflow & Bilingual Documentation", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Beyond the Bookshelf: How iqoqo Organizes Your World" })
     ).toBeVisible();
-    await expect(page.getByText("The Four Pillars of FRBR")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "The Four Pillars of FRBR" })).toBeVisible();
 
     // 6. Navigate back to Help Hub using breadcrumb / back button
     const backButton = page.getByRole("link", { name: /Back to Help & Guides/i });

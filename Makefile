@@ -732,10 +732,16 @@ test-e2e: test-e2e-db-up
 test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite against paired containers
 	@set -euo pipefail; \
 	echo "🚀 Orchestrating live federation pair test run..."; \
+	REPO_ROOT="$$(pwd)"; \
+	PREVIEW_STARTED=0; \
 	if ! docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		echo "Starting paired federation preview stack..."; \
-		trap '$(MAKE) -C $(ROOT_DIR) preview-down' EXIT; \
-		FEDERATION_PAIR=1 $(MAKE) preview-up || true; \
+		if FEDERATION_PAIR=1 $(MAKE) preview-up; then \
+			PREVIEW_STARTED=1; \
+			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then $(MAKE) -C "$$REPO_ROOT" preview-down; fi' EXIT; \
+		else \
+			echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
+		fi; \
 	fi; \
 	if docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		bash scripts/verify_federation_preview.sh; \
