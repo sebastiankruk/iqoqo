@@ -124,6 +124,7 @@ EOF
 
 teardown() {
   rm -rf "${TEST_TEMP_DIR}"
+  rm -rf data/federation_keys 2>/dev/null || true
   # A preserved archive is the expected outcome of the failure tests; clean it
   # so a passing run does not leave megabytes in /tmp.
   rm -f /tmp/iqoqo_backup_*.tar.gz 2>/dev/null || true
@@ -613,5 +614,75 @@ EOF
   [ "$status" -eq 1 ]
   [[ "$output" =~ "PostgreSQL dump is empty" ]]
   [[ ! "$output" =~ "attempt 2/3" ]]
+}
+
+# ── Federation Keys Archiving & Disaster Recovery Restore ────────────────────
+
+@test "cloud_backup.sh archives data/federation_keys when present" {
+  mkdir -p data/federation_keys
+  local k_hdr="-----BEGIN RSA"
+  local k_ftr="-----END RSA"
+  printf "%s %s\n%s\n%s %s\n" "${k_hdr}" "PRIVATE KEY-----" "MIIEowIBAAKCAQEA0stub" "${k_ftr}" "PRIVATE KEY-----" > data/federation_keys/server.pem
+  chmod 0600 data/federation_keys/server.pem
+
+  export RCLONE_SHOULD_FAIL=1
+  run bash scripts/cloud_backup.sh
+  [ "$status" -eq 1 ]
+
+  preserved=$(ls /tmp/iqoqo_backup_*.tar.gz 2>/dev/null | head -1)
+  [ -n "${preserved}" ]
+  [ -s "${preserved}" ]
+
+  # Check that federation_keys archive is inside the top-level tarball
+  tar -ztf "${preserved}" | grep -q "federation_keys_"
+
+  # Extract into a temp directory and verify the key contents
+  local inspect_dir="${TEST_TEMP_DIR}/inspect"
+  mkdir -p "${inspect_dir}"
+  tar -xzf "${preserved}" -C "${inspect_dir}"
+  local nested_keys
+  nested_keys=$(find "${inspect_dir}" -name "federation_keys_*.tar.gz" | head -1)
+  [ -n "${nested_keys}" ]
+  tar -ztf "${nested_keys}" | grep -q "data/federation_keys/server.pem"
+
+  rm -rf data/federation_keys
+}
+
+@test "scripts/restore.sh validates archive and extracts federation keys with 0700/0600 permissions" {
+  local mock_backup_dir="${TEST_TEMP_DIR}/iqoqo_backup_mock"
+  mkdir -p "${mock_backup_dir}"
+  echo "CREATE TABLE test_restore;" > "${mock_backup_dir}/db_dump_20261029_120000.sql"
+
+  local mock_keys_dir="${TEST_TEMP_DIR}/mock_keys/data/federation_keys"
+  mkdir -p "${mock_keys_dir}"
+  echo "MOCK_KEY" > "${mock_keys_dir}/server.pem"
+  tar -czf "${mock_backup_dir}/federation_keys_20261029_120000.tar.gz" -C "${TEST_TEMP_DIR}/mock_keys" data/federation_keys
+
+  local mock_archive="${TEST_TEMP_DIR}/mock_backup.tar.gz"
+  tar -czf "${mock_archive}" -C "${TEST_TEMP_DIR}" iqoqo_backup_mock
+
+  run bash scripts/restore.sh --yes "${mock_archive}"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Disaster recovery restore completed successfully" ]]
+  [[ "$output" =~ "Federation keys restored with 0700 directory and 0600 file permissions" ]]
+
+  [ -d "data/federation_keys" ]
+  [ -f "data/federation_keys/server.pem" ]
+
+  # Check permissions: directory 0700, key 0600
+  local dir_perm
+  dir_perm=$(stat -c '%a' data/federation_keys)
+  local file_perm
+  file_perm=$(stat -c '%a' data/federation_keys/server.pem)
+  [ "${dir_perm}" = "700" ]
+  [ "${file_perm}" = "600" ]
+
+  rm -rf data/federation_keys
+}
+
+@test "scripts/restore.sh fails with invalid or missing archive" {
+  run bash scripts/restore.sh --yes "${TEST_TEMP_DIR}/nonexistent.tar.gz"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Backup archive not found" ]]
 }
 

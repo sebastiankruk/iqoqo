@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dual-Backend Cloud Backup & Federation Key Preservation (C88)**:
+  - Preserved dual-backend `S3_BACKEND=auto|rclone|s3` host backups in `scripts/cloud_backup.sh` supporting 40+ storage providers via `rclone` (Dropbox, Google Drive, OneDrive, WebDAV, SFTP) alongside native `boto3` S3 object storage.
+  - Added `data/federation_keys` (`server.pem` instance RSA private key) to `ASSET_PATHS` in `scripts/cloud_backup.sh` so remote peer cryptographic pinning survives disaster recovery.
+  - Authored `scripts/restore.sh` disaster-recovery restore workflow verifying SQL dump integrity, restoring PostgreSQL database schemas, and enforcing `0700`/`0600` permissions on restored federation keys.
+  - Expanded `tests/bash/cloud_backup.bats` to 38 test cases covering federation key archiving, restore validation, and permissions enforcement.
+  - Updated `docs/BACKUPS.md` with disaster-recovery restore guide.
 - **v0.9.x Final Review & Mobile Readiness Gate (C90)**:
   - Authored `tests/test_ontology_validation.py` verifying runtime expansion guards (`validate_work_not_expansion_aggregated`, `validate_container_not_linked_as_expansion`) mirroring SHACL `ExpansionWorkShape`.
   - Authored `tests/test_federation_guard.py` verifying `@federation_required` and `is_federation_enabled`.

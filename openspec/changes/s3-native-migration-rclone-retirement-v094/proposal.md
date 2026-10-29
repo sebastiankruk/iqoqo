@@ -1,20 +1,20 @@
 ## Why
-Simplifies deployment, eliminates host binary dependencies, and guarantees that the `federation` database schema and encrypted keys are fully verified during cloud backups.
+Preserves dual-backend cloud backup flexibility (`rclone` for consumer clouds like Dropbox/Google Drive/WebDAV + native `boto3` S3 for object storage) while closing the federation disaster-recovery gap by archiving `data/federation_keys` (`server.pem`) and verifying the `federation` PostgreSQL schema during backups and restores.
+
 ## What Changes
 
-- Retire residual `rclone` container mounts and host dependencies.
-- Route cloud backup uploads directly through `app/core/s3_service.py` (`boto3`) and `S3_BACKEND` in `scripts/cloud_backup.sh`.
-- Include `federation` PostgreSQL schema in database dumps, restore verification, and preflight checks.
-- Update `tests/bash/cloud_backup.bats` and `docs/BACKUPS.md`.
+- Preserve host-side `S3_BACKEND=auto|rclone|s3` dual-backend support in `scripts/cloud_backup.sh` (in-container `rclone` was already retired in v0.8.4 in favor of `app/core/s3_service.py`).
+- Add `data/federation_keys` (`server.pem` instance actor RSA key) to `ASSET_PATHS` in `scripts/cloud_backup.sh` and restore extraction in `scripts/restore.sh` with strict file permissions.
+- Verify `federation` PostgreSQL schema (`pg_dumpall`) and `data/federation_keys` archive inclusion in `tests/bash/cloud_backup.bats` and `docs/BACKUPS.md`.
 
 ## Capabilities
 
 ### New Capabilities
-- `s3-native-backup-migration`: Retire residual rclone dependencies in favor of native S3 service and include federation schema in backups
+- `s3-native-backup-migration`: Preserve dual-mode (`rclone` + native S3) host backups and include `federation` schema and `data/federation_keys` (`server.pem`) in backup and restore workflows
 
 ### Modified Capabilities
 <!-- No existing capability requirements modified -->
 
 ## Impact
 
-Simplifies `docker-compose.yml`, modifies backup shell scripts and BATS test suites.
+Updates `scripts/cloud_backup.sh`, `scripts/restore.sh`, `tests/bash/cloud_backup.bats`, and `docs/BACKUPS.md` without removing host `rclone` support.
