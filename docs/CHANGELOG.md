@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Federation Notification Actions & Worker Hardening (C91)**:
+  - Added deep-link routing for `follow_request` notifications to `/profile?tab=incoming#friends` in `frontend/components/dashboard/notification-center.tsx`.
+  - Added requester username, display name, and origin domain formatting to in-app notification payloads in `app/core/federation_handlers.py`.
+  - Added inline Accept and Reject action buttons for incoming friend and follow requests directly inside `NotificationCenter` popover, resolving `fed:<id>` and local friendships via `/api/profile/friends/<id>/respond`.
+  - Added bilingual localization for inline notification actions in `frontend/messages/en.json` and `frontend/messages/pl.json`.
+  - Added `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables to `peer-worker` service in `docker-compose.federation-preview.yml`, preventing Celery worker startup crash loops.
+
 - **Dual-Backend Cloud Backup & Federation Key Preservation (C88)**:
   - Preserved dual-backend `S3_BACKEND=auto|rclone|s3` host backups in `scripts/cloud_backup.sh` supporting 40+ storage providers via `rclone` (Dropbox, Google Drive, OneDrive, WebDAV, SFTP) alongside native `boto3` S3 object storage.
   - Added `data/federation_keys` (`server.pem` instance RSA private key) to `ASSET_PATHS` in `scripts/cloud_backup.sh` so remote peer cryptographic pinning survives disaster recovery.

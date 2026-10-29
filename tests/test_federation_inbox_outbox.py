@@ -475,6 +475,27 @@ class TestActivityHandlers:
             assert follower is not None
             assert follower.status == FollowStatus.PENDING
 
+            # Verify notification was created with deep-link and actionable payload
+            from app.db.social import Notification
+
+            notif = (
+                db.session.execute(
+                    select(Notification)
+                    .where(
+                        Notification.user_id == uuid.UUID(fed_user["id"]),
+                        Notification.type == "follow_request",
+                    )
+                    .order_by(Notification.created_at.desc())
+                )
+                .scalars()
+                .first()
+            )
+            assert notif is not None
+            assert notif.target_iri == "/profile?tab=incoming#friends"
+            assert notif.payload_json.get("friendship_id") == f"fed:{follower.id}"
+            assert notif.payload_json.get("target_iri") == "/profile?tab=incoming#friends"
+            assert "New friend request from" in notif.payload_json.get("message", "")
+
     def test_handle_accept_and_reject(self, app, fed_user, remote_peer_instance):
         """Accept sets status to accepted, Reject sets status to rejected."""
         with app.app_context():

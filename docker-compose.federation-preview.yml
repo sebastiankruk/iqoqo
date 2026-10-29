@@ -91,6 +91,8 @@ services:
     command: celery -A app.core.tasks.celery_app worker --loglevel=info -Q celery,federation -c 2
     environment:
       - DATABASE_URL=postgresql://iqoqo_peer:iqoqo_peer_secret@peer-db:5432/iqoqo_peer
+      - ADMIN_EMAIL=${PEER_ADMIN_EMAIL:-peer-admin@iqoqo.cc}
+      - ADMIN_PASSWORD=${PEER_ADMIN_PASSWORD:-PeerBootstrapPassword123!}
       - REDIS_URL=redis://redis:6379/1
       - SECRET_KEY=${PEER_SECRET_KEY:-peer-preview-secret-key-32-chars-ok}
       - JWT_SECRET_KEY=${PEER_JWT_SECRET_KEY:-peer-jwt-secret-preview-32-chars}

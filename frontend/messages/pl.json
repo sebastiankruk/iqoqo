@@ -794,7 +794,13 @@
     "unreadCount": "({count} nieprzeczytanych)",
     "markAllRead": "Oznacz wszystkie jako przeczytane",
     "empty": "Brak powiadomień",
-    "loading": "Ładowanie..."
+    "loading": "Ładowanie...",
+    "accept": "Zaakceptuj",
+    "reject": "Odrzuć",
+    "reviewInFriends": "Przejdź do znajomych",
+    "friendAccepted": "Zaproszenie do znajomych zaakceptowane",
+    "friendRejected": "Zaproszenie do znajomych odrzucone",
+    "actionFailed": "Nie udało się przetworzyć zaproszenia"
   },
   "FeedbackPage": {
     "title": "Pomoc i opinie",

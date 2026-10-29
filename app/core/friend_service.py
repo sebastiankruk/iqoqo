@@ -327,6 +327,7 @@ def send_friend_request(
             user_id=target_user.id,
             notification_type="friend_request",
             payload={
+                "friendship_id": str(new_friendship.id),
                 "requester_id": str(requester.id),
                 "username": requester.public_username or requester.email,
                 "message": f"New friend request from {requester.public_username or requester.email}",

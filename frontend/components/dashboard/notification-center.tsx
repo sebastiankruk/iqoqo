@@ -15,16 +15,20 @@
 //
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bell, Check, Loader2, UserPlus, UserCheck, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
+import { Bell, Check, X, Loader2, UserPlus, UserCheck, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { apiClient } from "@/lib/api/client";
 import {
   useNotifications,
   useMarkNotificationsRead,
   useMarkAllNotificationsRead,
+  notificationQueryKeys,
   NotificationItem,
 } from "@/lib/api/notifications";
 
@@ -40,9 +44,11 @@ interface NotificationCenterProps {
  */
 export function NotificationCenter({ enabled = true }: NotificationCenterProps) {
   const t = useTranslations("Notifications");
+  const queryClient = useQueryClient();
   const { data, isLoading } = useNotifications(false, enabled);
   const markReadMutation = useMarkNotificationsRead();
   const markAllReadMutation = useMarkAllNotificationsRead();
+  const [respondingId, setRespondingId] = useState<string | number | null>(null);
 
   const notifications = data?.notifications || [];
   const unreadCount = data?.unread_count || 0;
@@ -56,9 +62,32 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
   const getNotificationTargetUrl = (notif: NotificationItem): string | null => {
     if (notif.target_iri) return notif.target_iri;
     if (typeof notif.payload?.target_iri === "string") return notif.payload.target_iri;
-    if (notif.type === "friend_request") return "/profile?tab=incoming#friends";
+    if (notif.type === "friend_request" || notif.type === "follow_request") return "/profile?tab=incoming#friends";
     if (notif.type === "friend_accepted") return "/profile?tab=accepted#friends";
     return null;
+  };
+
+  const handleRespondFriendship = async (
+    e: React.MouseEvent,
+    notif: NotificationItem,
+    friendshipId: string | number,
+    action: "accept" | "reject"
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setRespondingId(friendshipId);
+    try {
+      await apiClient.post(`/profile/friends/${encodeURIComponent(String(friendshipId))}/respond`, { action });
+      toast.success(action === "accept" ? t("friendAccepted") : t("friendRejected"));
+      markReadMutation.mutate([notif.id]);
+      await queryClient.invalidateQueries({ queryKey: notificationQueryKeys.all });
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("actionFailed");
+      toast.error(msg);
+    } finally {
+      setRespondingId(null);
+    }
   };
 
   const renderIcon = (type: string) => {
@@ -136,29 +165,61 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
           ) : (
             notifications.map(notif => {
               const targetUrl = getNotificationTargetUrl(notif);
+              const fid = notif.payload?.friendship_id as string | number | undefined;
+              const isFriendOrFollow = notif.type === "friend_request" || notif.type === "follow_request";
+              const showActions = isFriendOrFollow && Boolean(fid) && !notif.read_at;
+
               const content = (
                 <div
-                  className={`flex items-start gap-3 p-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                  className={`flex flex-col p-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
                     notif.read_at
                       ? "opacity-60 hover:opacity-100 hover:bg-muted/50"
                       : "bg-muted/40 font-medium hover:bg-muted/70"
                   }`}
-                  onClick={() => handleNotificationClick(notif)}
                   data-testid={`notification-item-${notif.id}`}
                 >
-                  <div className="mt-0.5 shrink-0">{renderIcon(notif.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs leading-snug break-words">{String(notif.payload?.message || notif.type)}</p>
-                    <span className="text-[10px] text-muted-foreground mt-1 block">
-                      {new Date(notif.created_at).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0">{renderIcon(notif.type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs leading-snug break-words">{String(notif.payload?.message || notif.type)}</p>
+                      <span className="text-[10px] text-muted-foreground mt-1 block">
+                        {new Date(notif.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    {targetUrl && <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />}
                   </div>
-                  {targetUrl && <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />}
+
+                  {showActions && fid && (
+                    <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-border/40">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 px-2.5 text-xs gap-1"
+                        disabled={respondingId === fid}
+                        onClick={e => handleRespondFriendship(e, notif, fid, "accept")}
+                        data-testid={`notification-accept-${notif.id}`}
+                      >
+                        <Check className="h-3 w-3" />
+                        {t("accept")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs gap-1 text-destructive hover:bg-destructive/10"
+                        disabled={respondingId === fid}
+                        onClick={e => handleRespondFriendship(e, notif, fid, "reject")}
+                        data-testid={`notification-reject-${notif.id}`}
+                      >
+                        <X className="h-3 w-3" />
+                        {t("reject")}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
 
@@ -174,7 +235,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
                       {content}
                     </Link>
                   ) : (
-                    content
+                    <div onClick={() => handleNotificationClick(notif)}>{content}</div>
                   )}
                 </div>
               );

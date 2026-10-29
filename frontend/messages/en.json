@@ -794,7 +794,13 @@
     "unreadCount": "({count} unread)",
     "markAllRead": "Mark all read",
     "empty": "No notifications yet",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "accept": "Accept",
+    "reject": "Reject",
+    "reviewInFriends": "Review in Friends",
+    "friendAccepted": "Friend request accepted",
+    "friendRejected": "Friend request rejected",
+    "actionFailed": "Failed to respond to request"
   },
   "FeedbackPage": {
     "title": "Help & Feedback",

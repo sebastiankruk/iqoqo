@@ -248,15 +248,27 @@ def handle_follow(activity: dict[str, Any]) -> bool:
     try:
         from app.core.notifications import create_notification
 
+        active_follower = existing if existing else follower
+        follower_fid = f"fed:{active_follower.id}" if active_follower and getattr(active_follower, "id", None) else None
+        actor_label = remote_actor.display_name or remote_actor.username or actor_uri
+        domain_label = remote_actor.instance.domain if remote_actor.instance else actor_uri
+        notification_msg = (
+            f"{actor_label} ({domain_label}) followed you" if should_accept else f"New friend request from {actor_label} ({domain_label})"
+        )
+
         create_notification(
             user_id=user.id,
             notification_type="follow_request",
             payload={
                 "actor_uri": actor_uri,
-                "actor_name": remote_actor.display_name or remote_actor.username or actor_uri,
+                "actor_name": actor_label,
+                "domain": domain_label,
+                "friendship_id": follower_fid,
                 "status": follow_status,
-                "message": f"New follower from {remote_actor.instance.domain if remote_actor.instance else actor_uri}",
+                "message": notification_msg,
+                "target_iri": "/profile?tab=incoming#friends",
             },
+            target_iri="/profile?tab=incoming#friends",
             actor_uri=actor_uri,
         )
     except Exception as notif_err:
