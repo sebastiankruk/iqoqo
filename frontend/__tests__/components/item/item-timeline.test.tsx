@@ -27,6 +27,12 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
+/**
+ * Render component wrapped with QueryClientProvider for tests.
+ *
+ * @param ui - React element to render.
+ * @returns Render result.
+ */
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {

@@ -35,6 +35,12 @@ vi.mock("sonner", () => ({
   },
 }));
 
+/**
+ * Render component wrapped with QueryClientProvider for tests.
+ *
+ * @param ui - React element to render.
+ * @returns Render result.
+ */
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -87,9 +93,9 @@ describe("RelationManagementDialog", () => {
 
   it("searches and reassigns to new parent entity", async () => {
     vi.mocked(adminApi.searchFrbrEntities).mockResolvedValueOnce([
-      { id: 25, title: "English Translation (Walker & Co)", entity_type: "expression" },
+      { id: 25, title: "English Translation (Walker & Co)", type: "expression" },
     ]);
-    vi.mocked(adminApi.reassignFrbrParent).mockResolvedValueOnce({} as unknown as adminApi.FrbrTree);
+    vi.mocked(adminApi.reassignFrbrParent).mockResolvedValueOnce({ id: 25 });
 
     renderWithClient(
       <RelationManagementDialog
@@ -132,9 +138,9 @@ describe("RelationManagementDialog", () => {
 
   it("switches to Merge tab and merges with target entity", async () => {
     vi.mocked(adminApi.searchFrbrEntities).mockResolvedValueOnce([
-      { id: 11, title: "Hardcover 2nd Printing", entity_type: "manifestation" },
+      { id: 11, title: "Hardcover 2nd Printing", type: "manifestation" },
     ]);
-    vi.mocked(adminApi.mergeFrbrEntities).mockResolvedValueOnce({} as unknown as adminApi.FrbrTree);
+    vi.mocked(adminApi.mergeFrbrEntities).mockResolvedValueOnce({ id: 11 });
 
     renderWithClient(
       <RelationManagementDialog
@@ -176,7 +182,7 @@ describe("RelationManagementDialog", () => {
   });
 
   it("switches to Split tab and splits out children into new entity", async () => {
-    vi.mocked(adminApi.splitFrbrEntity).mockResolvedValueOnce({} as unknown as adminApi.FrbrTree);
+    vi.mocked(adminApi.splitFrbrEntity).mockResolvedValueOnce({ id: 99 });
 
     renderWithClient(
       <RelationManagementDialog

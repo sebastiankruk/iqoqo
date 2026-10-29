@@ -18,19 +18,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import {
-  Building2,
-  Copy,
-  Globe,
-  Info,
-  Loader2,
-  Plus,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+import { Building2, Copy, Globe, Info, Loader2, Plus, Trash2 } from "lucide-react";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -39,7 +27,6 @@ import {
 } from "@/lib/api/hooks/federation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,37 +40,6 @@ import {
 import type { FederationInstance, TrustLevel } from "@/types/federation";
 
 const TRUST_LEVELS: TrustLevel[] = ["trusted", "untrusted", "blocked"];
-
-/**
- * Render trust level badge component with associated icon and style.
- *
- * @param trust - Instance trust level ('untrusted' | 'trusted' | 'blocked').
- * @param t - Translator function for AdminFederation namespace.
- * @returns Badge element.
- */
-function getTrustBadge(trust: TrustLevel, t: ReturnType<typeof useTranslations>) {
-  switch (trust) {
-    case "trusted":
-      return (
-        <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1">
-          <ShieldCheck className="h-3 w-3" /> {t("trustTrusted")}
-        </Badge>
-      );
-    case "blocked":
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <ShieldAlert className="h-3 w-3" /> {t("trustBlocked")}
-        </Badge>
-      );
-    case "untrusted":
-    default:
-      return (
-        <Badge variant="secondary" className="text-muted-foreground flex items-center gap-1">
-          <XCircle className="h-3 w-3" /> {t("trustUntrusted")}
-        </Badge>
-      );
-  }
-}
 
 /**
  * Format ISO date string into human-readable relative time.

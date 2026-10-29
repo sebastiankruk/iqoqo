@@ -49,7 +49,7 @@ describe("AdminLendingPage", () => {
       back: vi.fn(),
       forward: vi.fn(),
       refresh: vi.fn(),
-    });
+    } as unknown as ReturnType<typeof useRouter>);
     vi.mocked(useResolveLoan).mockReturnValue({
       mutateAsync: mockMutateAsync,
       isPending: false,
