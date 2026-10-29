@@ -19,6 +19,21 @@ The system SHALL authenticate API requests using hashed Personal Access Tokens b
 - **WHEN** A client authenticates with a PAT containing `["write:inventory"]` and calls an item creation or update route
 - **THEN** `require_auth` and `require_permission` allow the inventory mutation.
 
+#### Scenario: PAT lacking read scope does not authenticate optional-auth catalog queries
+
+- **WHEN** a request to an optional-authentication endpoint arrives with `Authorization: Bearer iqo_...` containing only `["sparql:query"]` (without `read:catalog`, `admin`, or `*`)
+- **THEN** the endpoint does not authenticate the caller as the token owner or expose the owner's private or friends-only items
+
+#### Scenario: Scoped PATs succeed on SPARQL, inventory, and curator endpoints
+
+- **WHEN** a user authenticates with a `"sparql:query"` PAT on `POST /api/sparql`, a `"write:inventory"` PAT on item mutation routes, or a `"curator"` PAT (minted by a custodian/contributor) on custodian endpoints
+- **THEN** each endpoint authorizes the request according to its matching scope while rejecting out-of-scope operations with `403 Forbidden`
+
+#### Scenario: Query-string token parameter is rejected on SSE stream
+
+- **WHEN** a client requests `GET /api/v1/events/stream?token=<jwt_or_pat>` without an `HttpOnly` session cookie or `Authorization: Bearer` header
+- **THEN** the endpoint rejects the query-string credential with `401 Unauthorized` so bearer secrets are not accepted in access-logged URLs
+
 ## ADDED Requirements
 
 ### Requirement: Bilingual Localization for Profile PAT and TOTP Components

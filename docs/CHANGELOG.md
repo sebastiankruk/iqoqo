@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auxiliary Test Suites & Shell Script Syntax Guardrails (C87c)**:
+  - Added BATS syntax validation (`bash -n`) in `tests/bash/scripts_syntax.bats` covering `scripts/iqopretest.sh`, `scripts/verify_federation_preview.sh`, and `deploy/wait-for-postgres.sh`.
+  - Added unit test suite `tests/test_verify_http_signature.py` covering CLI argument parsing, SHA-256 Digest header verification, signing string assembly, clock-skew rejection, and RSA-SHA256 signature verification.
+  - Added component unit tests `frontend/__tests__/components/cookie-consent.test.tsx` and `frontend/__tests__/components/mode-toggle.test.tsx` covering localStorage consent lifecycle and accessible theme switching.
 - **Per-User Follow Auto-Acceptance & Federation Consent (C89c)**:
   - Added `auto_accept_follows` boolean column to `FederationConsent` model and schema via linear Alembic migration `v0_9_4_fed_trust_autoaccept`.
   - Added user toggle "Auto-Accept Follow Requests from Trusted Peers" on `/profile` federation settings, deprecating instance-wide auto-acceptance.

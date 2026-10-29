@@ -19,6 +19,11 @@ The system SHALL emit a valid OpenAPI 3.1 document covering all registered API r
 - **WHEN** A collector configures the Gemini Gem using `docs/gems/iqoqo-librarian-gem.md`
 - **THEN** The `/api/v1/catalog/search` operation documents the `q` query parameter supported by the backend endpoint.
 
+#### Scenario: Developer API documentation matches runtime 2FA, SSE, and OpenAPI routes
+
+- **WHEN** a developer or AI agent consults `docs/API.md` and `docs/gems/iqoqo-librarian-gem.md`
+- **THEN** `docs/API.md` documents `POST /api/auth/2fa/disable`, the two-step `POST /api/auth/login` MFA payload, accurate `/2fa/*` responses, unnamed `data: {...}` SSE frames, and `GET /api/docs/openapi.json`, while `iqoqo-librarian-gem.md` references `/api/scanner/preview/{barcode}` with matching PAT scopes
+
 ## ADDED Requirements
 
 ### Requirement: ActivityPub HTTP Signature Verification CLI

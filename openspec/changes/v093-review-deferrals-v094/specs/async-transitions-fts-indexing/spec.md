@@ -18,3 +18,13 @@ The system SHALL queue and batch-update full-text search vectors asynchronously 
 
 - **WHEN** `publish_transition_event`, `enqueue_fts_reindex`, or `batch_fts_reindex` acquires a Redis client via `get_redis_client()`
 - **THEN** The client is closed inside a `finally` block after the operation completes or raises an exception.
+
+#### Scenario: Background FTS task recomputes search vectors for affected works
+
+- **WHEN** the background FTS re-indexing task drains queued `work`, `manifestation`, or `item` entries
+- **THEN** the worker resolves the parent Work records and executes a database update refreshing their full-text search vectors so updated titles and metadata become searchable
+
+#### Scenario: Private item re-index does not broadcast global cache invalidation to unrelated users
+
+- **WHEN** User A updates a private item and the background FTS task completes
+- **THEN** unrelated connected User B does not receive a cross-tenant `fts_reindexed` invalidation for User A's private item

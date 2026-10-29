@@ -83,3 +83,18 @@
   [ "$status" -eq 0 ]
 }
 
+@test "scripts/iqopretest.sh syntax check" {
+  run bash -n scripts/iqopretest.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "scripts/verify_federation_preview.sh syntax check" {
+  run bash -n scripts/verify_federation_preview.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "deploy/wait-for-postgres.sh syntax check" {
+  run bash -n deploy/wait-for-postgres.sh
+  [ "$status" -eq 0 ]
+}
+
