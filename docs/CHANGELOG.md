@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **v0.9.x Final Review & Mobile Readiness Gate (C90)**:
+  - Authored `tests/test_ontology_validation.py` verifying runtime expansion guards (`validate_work_not_expansion_aggregated`, `validate_container_not_linked_as_expansion`) mirroring SHACL `ExpansionWorkShape`.
+  - Authored `tests/test_federation_guard.py` verifying `@federation_required` and `is_federation_enabled`.
+  - Authored `tests/test_search_types.py` verifying dialect-aware `SearchVector` compilation on PostgreSQL (`TSVECTOR`) and SQLite (`TEXT`).
+  - Authored `frontend/__tests__/app/admin/lending.test.tsx` verifying custodian loan coordination and mutations on `/admin/lending`.
+  - Authored component unit tests for `frontend/components/item/item-timeline.tsx` (provenance events and virtual item boundary), `frontend/components/social/star-rating.tsx` (interactive star rating and hover preview), and `frontend/components/admin/relation-management-dialog.tsx` (reassign, merge, and split workflows).
+  - Authored operational script test suite `tests/test_operational_scripts.py` covering cover pipeline scheduling in `scripts/archive_orphans.py`, circuit-breaker batch processing in `scripts/generate_ai_covers.py`, and URL security/integrity verification in `scripts/init_geonames_db.py`.
+  - Authored `tests/test_mobile_readiness.py` verifying NodeInfo 2.1 protocol links, auth providers discovery, and CORS preflight for upcoming v1.0.0 Capacitor apps.
+  - Authored comprehensive federation architecture document `docs/FEDERATION.md` and finalized `docs/API.md`, `docs/SECURITY.md`, and `docs/OPERATIONS.md`.
 - **Live Dual-Origin Federation E2E Suite & Automation Harness (C89b)**:
   - Added dual-origin live Playwright E2E suite `frontend/__tests__/e2e/federation_pair_live.spec.ts` exercising cross-instance trust graph peering, profile federation consent, social follow handshake, connected library directory, and ActivityPub loan/custody workflows across live paired application stacks.
   - Added `frontend/__tests__/e2e/help_hub_workflow.spec.ts` testing Help Hub guide discovery, markdown article rendering, and bilingual English/Polish switching.

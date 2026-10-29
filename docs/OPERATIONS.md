@@ -522,6 +522,34 @@ See [BACKUPS.md](BACKUPS.md) for multi-tier backup configuration (daily sync + S
 
 ---
 
+## Federation Operations & Verification
+
+### Paired Federation Preview Stack
+To run and verify live server-to-server ActivityPub handshakes between two independent instances:
+
+```bash
+# Launch paired preview stack (Primary at port 8000, Peer at port 3001)
+FEDERATION_PAIR=1 make preview-up
+
+# Verify preflight discovery and social federation
+bash scripts/verify_federation_preview.sh
+
+# Run end-to-end dual-origin Playwright tests
+make test-e2e-federation
+
+# Tear down paired preview stack
+make preview-down
+```
+
+### GeoNames Offline Database Initialization
+To synchronize the local SQLite cities gazetteer (`cities15000`) for credential-free, sub-millisecond geographic resolutions:
+
+```bash
+python scripts/init_geonames_db.py
+```
+
+---
+
 ## Next.js Runtime & Proxy Architecture
 
 ### Node.js Runtime vs Deprecated Edge Runtime
