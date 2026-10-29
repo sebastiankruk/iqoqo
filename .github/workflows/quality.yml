@@ -455,6 +455,12 @@ jobs:
       PEER_API_PORT: "5005"
       PRIMARY_WEB_PORT: "8000"
       PEER_WEB_PORT: "3001"
+      POSTGRES_PASSWORD: changeme_strong_password
+      ADMIN_EMAIL: ci-admin@iqoqo.cc
+      ADMIN_PASSWORD: E2EBootstrapPassword123!
+      SECRET_KEY: test-secret-key-not-for-production-min-32-chars
+      JWT_SECRET_KEY: test-jwt-secret-not-for-production-min-32-chars
+      AUTH_SECRET: test-auth-secret-not-for-production-min-32-chars
     steps:
       - uses: actions/checkout@v7
 

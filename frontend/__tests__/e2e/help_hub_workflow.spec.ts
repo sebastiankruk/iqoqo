@@ -38,7 +38,7 @@ test.describe("Help Hub Workflow & Bilingual Documentation", () => {
 
     // 3. Search for FRBR article
     await searchInput.fill("Dune");
-    await expect(page.getByRole("heading", { name: /Beyond the Bookshelf/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Beyond the Bookshelf/i })).toBeVisible();
 
     // 4. Clear search and click the FRBR hierarchy guide card
     await searchInput.clear();
@@ -78,7 +78,7 @@ test.describe("Help Hub Workflow & Bilingual Documentation", () => {
     // Verify Polish translation updates on Help Hub
     await expect(page.getByRole("heading", { level: 1, name: "Pomoc i poradniki" })).toBeVisible();
     await expect(page.getByPlaceholder("Szukaj w poradnikach...")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Więcej niż półka z książkami/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Więcej niż półka z książkami/i })).toBeVisible();
 
     // Click into Polish article
     await page.getByRole("link", { name: /Więcej niż półka z książkami/i }).click();
