@@ -34,6 +34,7 @@ from app.db.auth import User, UserFriendship
 from app.db.federation import (
     FederationActivity,
     FederationActor,
+    FederationConsent,
     FederationFollower,
     FederationInstance,
     FollowStatus,
@@ -452,6 +453,34 @@ def send_friend_request(
                 res_dict = existing_fol.to_dict()
                 res_dict["id"] = f"fed:{existing_fol.id}"
                 return res_dict, None, 200
+
+            # Ensure requester has opted-in federated profile so remote instance can verify HTTP signature
+            from datetime import UTC, datetime
+
+            req_consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == req_uuid)).scalars().first()
+            if not req_consent:
+                req_consent = FederationConsent(
+                    user_id=req_uuid,
+                    federated_profile=True,
+                    federated_collection=False,
+                )
+                db.session.add(req_consent)
+            elif not req_consent.federated_profile:
+                req_consent.federated_profile = True
+                req_consent.updated_at = datetime.now(UTC)
+
+            if not requester.federation_public_key:
+                from app.core import federation_keys
+                from app.core.iri import canonical_actor_iri, get_federation_base_url
+
+                try:
+                    base_url = get_federation_base_url()
+                    _, public_key_pem = federation_keys.generate_actor_keypair(str(requester.id))
+                    canonical_uri = canonical_actor_iri(requester.id, base_url)
+                    requester.federation_public_key = public_key_pem
+                    requester.federation_key_id = f"{canonical_uri}#main-key"
+                except Exception as exc:
+                    logger.warning("Failed auto-generating actor keypair for outbound friend request: %s", exc)
 
             fol = FederationFollower(
                 local_user_id=req_uuid,

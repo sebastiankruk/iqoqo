@@ -88,7 +88,7 @@ services:
   peer-worker:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-preview}
     restart: always
-    command: celery -A app.core.tasks.celery_app worker --loglevel=info -Q celery,federation -c 2
+    command: celery -A app.core.celery_app:celery worker --loglevel=info -Q celery,federation -c 2
     environment:
       - DATABASE_URL=postgresql://iqoqo_peer:iqoqo_peer_secret@peer-db:5432/iqoqo_peer
       - ADMIN_EMAIL=${PEER_ADMIN_EMAIL:-peer-admin@iqoqo.cc}

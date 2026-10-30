@@ -123,6 +123,33 @@ def update_consent():
         new_consent = ConsentRecord(user_id=user.id, consent_type=consent_type, is_granted=is_granted, policy_version="v0.1.0")
         db.session.add(new_consent)
 
+    if consent_type == "federation":
+        fed_consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+        if not fed_consent:
+            fed_consent = FederationConsent(
+                user_id=user.id,
+                federated_profile=is_granted,
+                federated_collection=is_granted,
+            )
+            db.session.add(fed_consent)
+        else:
+            fed_consent.federated_profile = is_granted
+            fed_consent.federated_collection = is_granted
+            fed_consent.updated_at = datetime.now(UTC)
+
+        if is_granted and not user.federation_public_key:
+            from app.core import federation_keys
+            from app.core.iri import canonical_actor_iri, get_federation_base_url
+
+            try:
+                base_url = get_federation_base_url()
+                _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
+                canonical_uri = canonical_actor_iri(user.id, base_url)
+                user.federation_public_key = public_key_pem
+                user.federation_key_id = f"{canonical_uri}#main-key"
+            except Exception as exc:
+                current_app.logger.warning("Failed generating keypair during consent grant: %s", exc)
+
     db.session.commit()
     return jsonify({"message": "Consent updated successfully"})
 

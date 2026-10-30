@@ -315,3 +315,39 @@ def test_send_friend_request_handles_double_at_identifier(app, friend_users):
             assert code == 201
             assert res_data is not None
             mock_dispatch.assert_called_once()
+
+
+def test_send_friend_request_ensures_federation_consent_and_keys(app, friend_users):
+    """Sending friend request to remote federated actor auto-provisions FederationConsent and actor keys."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        from sqlalchemy import select
+
+        from app.db.federation import FederationConsent
+
+        inst = FederationInstance(domain="peer2.example.org", trust_level=TrustLevel.TRUSTED)
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            instance_id=inst.id,
+            actor_uri="https://peer2.example.org/api/federation/actor/u/bob",
+            inbox_url="https://peer2.example.org/api/federation/inbox",
+            username="bob",
+        )
+        db.session.add(actor)
+        db.session.commit()
+
+        consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == u1_id)).scalars().first()
+        assert consent is None
+
+        with patch("app.core.federation_dispatch.dispatch_follow") as mock_dispatch:
+            res_data, err, code = send_friend_request(u1_id, "@bob@peer2.example.org")
+            assert code == 201
+            mock_dispatch.assert_called_once()
+
+            consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == u1_id)).scalars().first()
+            assert consent is not None
+            assert consent.federated_profile is True
+            u1 = db.session.get(User, u1_id)
+            assert u1.federation_public_key is not None
