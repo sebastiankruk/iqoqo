@@ -23,15 +23,24 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import and_, or_, select
 
-from app.core.iri import canonical_actor_iri
+from app.core.iri import canonical_actor_iri, get_federation_base_url
 from app.core.notifications import create_notification
 from app.db import db
 from app.db.auth import User, UserFriendship
-from app.db.federation import FederationActivity, FederationActor, FederationFollower, FollowStatus
+from app.db.federation import (
+    FederationActivity,
+    FederationActor,
+    FederationConsent,
+    FederationFollower,
+    FederationInstance,
+    FollowStatus,
+    TrustLevel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +187,7 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
     )
     fed_results = db.session.execute(fed_stmt).all()
 
-    # Pre-fetch outbound Follow activities initiated by this local user
+    # Pre-fetch outbound and inbound Follow activities for accurate directional segregation
     outbound_acts = (
         db.session.execute(
             select(FederationActivity).where(
@@ -194,14 +203,50 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
         .all()
     )
 
-    outbound_targets: set[str] = set()
+    outbound_by_target: dict[str, datetime] = {}
     for o_act in outbound_acts:
+        if not o_act.created_at:
+            continue
         if o_act.target_uri:
-            outbound_targets.add(o_act.target_uri)
+            prev = outbound_by_target.get(o_act.target_uri)
+            if not prev or o_act.created_at > prev:
+                outbound_by_target[o_act.target_uri] = o_act.created_at
         if isinstance(o_act.object_json, dict):
             obj = o_act.object_json.get("object")
             if isinstance(obj, str):
-                outbound_targets.add(obj)
+                prev = outbound_by_target.get(obj)
+                if not prev or o_act.created_at > prev:
+                    outbound_by_target[obj] = o_act.created_at
+
+    pending_actor_uris = [act.actor_uri for fol, act in fed_results if fol.status == FollowStatus.PENDING and act.actor_uri]
+    inbound_by_actor: dict[str, datetime] = {}
+    if pending_actor_uris:
+        local_actor_iri = canonical_actor_iri(u_uuid)
+        inbound_acts = (
+            db.session.execute(
+                select(FederationActivity).where(
+                    FederationActivity.direction == "inbound",
+                    FederationActivity.activity_type == "Follow",
+                    FederationActivity.actor_uri.in_(pending_actor_uris),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for i_act in inbound_acts:
+            if not i_act.actor_uri or not i_act.created_at:
+                continue
+            target_match = False
+            if i_act.target_uri and (i_act.target_uri == local_actor_iri or str(u_uuid) in i_act.target_uri):
+                target_match = True
+            elif isinstance(i_act.object_json, dict):
+                obj = i_act.object_json.get("object")
+                if isinstance(obj, str) and (obj == local_actor_iri or str(u_uuid) in obj):
+                    target_match = True
+            if target_match:
+                prev = inbound_by_actor.get(i_act.actor_uri)
+                if not prev or i_act.created_at > prev:
+                    inbound_by_actor[i_act.actor_uri] = i_act.created_at
 
     for fol, act in fed_results:
         fed_data = {
@@ -218,10 +263,17 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
         if fol.status == FollowStatus.ACCEPTED:
             accepted.append(fed_data)
         elif fol.status == FollowStatus.PENDING:
-            is_outbound = bool(
-                (act.actor_uri and act.actor_uri in outbound_targets) or (act.inbox_url and act.inbox_url in outbound_targets)
-            )
-            if is_outbound:
+            latest_out = None
+            if act.actor_uri and act.actor_uri in outbound_by_target:
+                latest_out = outbound_by_target[act.actor_uri]
+            if act.inbox_url and act.inbox_url in outbound_by_target:
+                inbox_time = outbound_by_target[act.inbox_url]
+                if not latest_out or inbox_time > latest_out:
+                    latest_out = inbox_time
+
+            latest_in = inbound_by_actor.get(act.actor_uri) if act.actor_uri else None
+
+            if latest_out and (not latest_in or latest_out > latest_in):
                 outgoing.append(fed_data)
             else:
                 incoming.append(fed_data)
@@ -320,6 +372,7 @@ def send_friend_request(
             user_id=target_user.id,
             notification_type="friend_request",
             payload={
+                "friendship_id": str(new_friendship.id),
                 "requester_id": str(requester.id),
                 "username": requester.public_username or requester.email,
                 "message": f"New friend request from {requester.public_username or requester.email}",
@@ -332,18 +385,29 @@ def send_friend_request(
 
     # Check if handle represents a federated actor (@user@domain)
     if "@" in clean_id:
-        handle_parts = clean_id.lstrip("@").split("@", 1)
+        handle_parts = clean_id.lstrip("@").rsplit("@", 1)
         if len(handle_parts) == 2:
             target_username, target_domain = handle_parts[0], handle_parts[1]
         else:
             target_username, target_domain = handle_parts[0], None
+
+        if target_domain:
+            from app.core.federation_discovery import clean_instance_domain
+
+            target_domain = clean_instance_domain(target_domain)
+            inst = db.session.execute(select(FederationInstance).where(FederationInstance.domain == target_domain)).scalars().first()
+            if inst and inst.trust_level == TrustLevel.BLOCKED:
+                return None, f"Cannot connect with user from blocked instance {target_domain}", 403
 
         actor = None
         if target_domain:
             actor = (
                 db.session.execute(
                     select(FederationActor).where(
-                        FederationActor.username == target_username,
+                        or_(
+                            FederationActor.username == target_username,
+                            FederationActor.actor_uri.ilike(f"%/{target_username}"),
+                        ),
                         FederationActor.actor_uri.ilike(f"%{target_domain}%"),
                     )
                 )
@@ -388,7 +452,50 @@ def send_friend_request(
             except Exception as exc:
                 logger.warning("Failed WebFinger lookup for %s: %s", clean_id, exc)
 
+        # Fallback for email-like handles across registered non-blocked peer instances
+        if not actor:
+            from app.core.federation_handlers import _get_or_create_actor
+            from app.utils.http_client import safe_get
+
+            registered_instances = (
+                db.session.execute(
+                    select(FederationInstance)
+                    .where(FederationInstance.trust_level != TrustLevel.BLOCKED)
+                    .order_by(FederationInstance.last_seen_at.desc().nullslast())
+                    .limit(5)
+                )
+                .scalars()
+                .all()
+            )
+            for reg_inst in registered_instances:
+                if reg_inst.domain == target_domain:
+                    continue
+                try:
+                    scheme = (
+                        "http"
+                        if ("localhost" in reg_inst.domain or "127.0.0.1" in reg_inst.domain or reg_inst.domain.startswith("peer-web"))
+                        else "https"
+                    )
+                    handle_user = clean_id.lstrip("@")
+                    if "@" in handle_user:
+                        handle_user = handle_user.split("@", 1)[0]
+                    wf_url = f"{scheme}://{reg_inst.domain}/.well-known/webfinger?resource=acct:{handle_user}@{reg_inst.domain}"
+                    wf_resp = safe_get(wf_url, headers={"Accept": "application/jrd+json, application/json"}, timeout=5.0)
+                    if wf_resp.status_code == 200:
+                        for link in wf_resp.json().get("links", []):
+                            if link.get("rel") == "self":
+                                remote_actor_uri = link.get("href")
+                                if remote_actor_uri:
+                                    actor = _get_or_create_actor(remote_actor_uri)
+                                    break
+                    if actor:
+                        break
+                except Exception:
+                    pass
+
         if actor:
+            if actor.instance and actor.instance.trust_level == TrustLevel.BLOCKED:
+                return None, f"Cannot connect with user from blocked instance {actor.instance.domain}", 403
             existing_fol = (
                 db.session.execute(
                     select(FederationFollower).where(
@@ -400,9 +507,50 @@ def send_friend_request(
                 .first()
             )
             if existing_fol:
+                if existing_fol.status == FollowStatus.ACCEPTED:
+                    return None, "Already friends with this federated user", 409
+                if existing_fol.status == FollowStatus.PENDING:
+                    return None, "Friend request already sent", 409
+                existing_fol.status = FollowStatus.PENDING
+                db.session.commit()
+                try:
+                    from app.core.federation_dispatch import dispatch_follow
+
+                    dispatch_follow(requester, actor)
+                except Exception as exc:
+                    logger.warning("Failed dispatching follow activity for existing follower: %s", exc)
                 res_dict = existing_fol.to_dict()
                 res_dict["id"] = f"fed:{existing_fol.id}"
                 return res_dict, None, 200
+
+            # Ensure requester has opted-in federated profile so remote instance can verify HTTP signature
+            req_consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == req_uuid)).scalars().first()
+            if not req_consent:
+                req_consent = FederationConsent(
+                    user_id=req_uuid,
+                    federated_profile=True,
+                    federated_collection=False,
+                )
+                db.session.add(req_consent)
+            elif not req_consent.federated_profile:
+                req_consent.federated_profile = True
+                req_consent.updated_at = datetime.now(UTC)
+
+            if not requester.federation_public_key:
+                from app.core import federation_keys
+
+                try:
+                    base_url = get_federation_base_url()
+                    existing_pub = federation_keys.get_actor_public_key(str(requester.id))
+                    if existing_pub:
+                        public_key_pem = existing_pub
+                    else:
+                        _, public_key_pem = federation_keys.generate_actor_keypair(str(requester.id))
+                    canonical_uri = canonical_actor_iri(requester.id, base_url)
+                    requester.federation_public_key = public_key_pem
+                    requester.federation_key_id = f"{canonical_uri}#main-key"
+                except Exception as exc:
+                    logger.warning("Failed auto-generating actor keypair for outbound friend request: %s", exc)
 
             fol = FederationFollower(
                 local_user_id=req_uuid,
@@ -460,7 +608,8 @@ def respond_friend_request(
 
         remote_act = db.session.get(FederationActor, fol.remote_actor_id)
 
-        # Disallow caller responding (accept/reject) to an outbound follow request they initiated
+        # Disallow caller responding (accept/reject) to an outbound follow request they initiated,
+        # unless remote actor subsequently sent an inbound follow to the caller.
         if remote_act:
             outbound_acts = (
                 db.session.execute(
@@ -476,13 +625,46 @@ def respond_friend_request(
                 .scalars()
                 .all()
             )
+            matching_outbound = []
             for o_act in outbound_acts:
                 is_outbound_match = False
-                if o_act.target_uri and remote_act.inbox_url and o_act.target_uri == remote_act.inbox_url:
+                if o_act.target_uri and (o_act.target_uri == remote_act.inbox_url or o_act.target_uri == remote_act.actor_uri):
                     is_outbound_match = True
                 elif isinstance(o_act.object_json, dict) and o_act.object_json.get("object") == remote_act.actor_uri:
                     is_outbound_match = True
                 if is_outbound_match:
+                    matching_outbound.append(o_act)
+
+            if matching_outbound:
+                latest_outbound_time = max((o.created_at for o in matching_outbound if o.created_at), default=None)
+                base_url = get_federation_base_url()
+                local_actor_iri = canonical_actor_iri(u_uuid, base_url)
+                inbound_candidates = (
+                    db.session.execute(
+                        select(FederationActivity)
+                        .where(
+                            FederationActivity.direction == "inbound",
+                            FederationActivity.activity_type == "Follow",
+                            FederationActivity.actor_uri == remote_act.actor_uri,
+                        )
+                        .order_by(FederationActivity.created_at.desc())
+                    )
+                    .scalars()
+                    .all()
+                )
+                latest_inbound = None
+                for candidate in inbound_candidates:
+                    if candidate.target_uri and (candidate.target_uri == local_actor_iri or str(u_uuid) in candidate.target_uri):
+                        latest_inbound = candidate
+                        break
+                    if isinstance(candidate.object_json, dict):
+                        obj = candidate.object_json.get("object")
+                        if isinstance(obj, str) and (obj == local_actor_iri or str(u_uuid) in obj):
+                            latest_inbound = candidate
+                            break
+
+                latest_inbound_time = latest_inbound.created_at if latest_inbound else None
+                if latest_outbound_time and (not latest_inbound_time or latest_outbound_time > latest_inbound_time):
                     return None, "Cannot respond to an outgoing request you initiated; use cancel instead", 400
 
         if action == "accept":
@@ -495,10 +677,12 @@ def respond_friend_request(
 
                 user = db.session.get(User, u_uuid)
                 if user and remote_act:
+                    base_url = get_federation_base_url()
+                    local_actor_iri = canonical_actor_iri(user.id, base_url)
                     dummy_follow = {
                         "type": "Follow",
                         "actor": remote_act.actor_uri,
-                        "object": f"local:{user.id}",
+                        "object": local_actor_iri,
                     }
                     dispatch_accept_follow(user, remote_act, dummy_follow)
             except Exception as exc:
@@ -508,6 +692,23 @@ def respond_friend_request(
             res["id"] = f"fed:{fol.id}"
             return res, None, 200
         elif action == "reject":
+            # Send ActivityPub Reject
+            try:
+                from app.core.federation_dispatch import dispatch_reject_follow
+
+                user = db.session.get(User, u_uuid)
+                if user and remote_act:
+                    base_url = get_federation_base_url()
+                    local_actor_iri = canonical_actor_iri(user.id, base_url)
+                    dummy_follow = {
+                        "type": "Follow",
+                        "actor": remote_act.actor_uri,
+                        "object": local_actor_iri,
+                    }
+                    dispatch_reject_follow(user, remote_act, dummy_follow)
+            except Exception as exc:
+                logger.warning("Failed dispatching Reject for federated follow: %s", exc)
+
             db.session.delete(fol)
             db.session.commit()
             return {"id": str_fid, "status": "rejected"}, None, 200
@@ -580,8 +781,19 @@ def remove_friend(
         if not fol or fol.local_user_id != u_uuid:
             return False, "Federated friendship not found", 404
 
+        remote_act = db.session.get(FederationActor, fol.remote_actor_id)
+        user = db.session.get(User, u_uuid)
         db.session.delete(fol)
         db.session.commit()
+
+        if user and remote_act and remote_act.inbox_url:
+            try:
+                from app.core.federation_dispatch import dispatch_undo_follow
+
+                dispatch_undo_follow(user, remote_act)
+            except Exception as exc:
+                logger.warning("Failed dispatching Undo for federated follow removal: %s", exc)
+
         return True, None, 200
 
     try:

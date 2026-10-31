@@ -7,12 +7,22 @@ Personal Access Tokens (PATs) with scoped bearer authorization and TOTP 2FA enro
 
 ### Requirement: Personal Access Token Authentication
 
-The system SHALL authenticate API requests using hashed Personal Access Tokens bearing the `iqo_` prefix via the `Authorization: Bearer` header, throttle `last_used_at` database writes to at most once every 60 seconds across both required-authentication and optional-authentication endpoints, enforce `read:catalog` (or `read:*`, `admin`, `*`) scope validation before authenticating optional-auth read requests, support `"curator"` scope creation for `contributor`, `custodian`, and `admin` roles, honor `"sparql:query"` on `POST /api/sparql` and `"write:inventory"` on item inventory mutations, and reject bearer credentials supplied via `?token=` URL query parameters.
+The system SHALL authenticate API requests using hashed Personal Access Tokens bearing the `'iqo_'` prefix, permitting `"sparql:query"` scope on `POST /api/sparql` in `require_auth` and mapping `"write:inventory"` alongside `"write:catalog"` in `require_permission`.
 
 #### Scenario: Valid PAT grants scoped access
 
-- **WHEN** repeated requests arrive within 60 seconds carrying `Authorization: Bearer iqo_...` with `read:catalog` scope on either required-auth or optional-auth endpoints
-- **THEN** the requests succeed and `last_used_at` is committed at most once per 60-second window
+- **WHEN** A request arrives with Authorization: Bearer iqo_... possessing read:catalog scope
+- **THEN** The request succeeds and last_used_at is updated.
+
+#### Scenario: PAT with sparql:query scope executes POST /api/sparql
+
+- **WHEN** A client authenticates with a PAT containing `["sparql:query"]` and sends `POST /api/sparql`
+- **THEN** `require_auth` and `require_permission` allow the request without requiring `"write:catalog"`.
+
+#### Scenario: PAT with write:inventory scope mutates item inventory
+
+- **WHEN** A client authenticates with a PAT containing `["write:inventory"]` and calls an item creation or update route
+- **THEN** `require_auth` and `require_permission` allow the inventory mutation.
 
 #### Scenario: PAT lacking read scope does not authenticate optional-auth catalog queries
 
@@ -89,3 +99,12 @@ The Next.js BFF authentication exchange route (`/api/auth-exchange`) SHALL valid
 
 - **WHEN** a non-admin user views `/profile` in English (`en`) or Polish (`pl`)
 - **THEN** `PatManagement` and `TotpSetup` render localized text in the active locale and `PatManagement` omits the `admin` and `*` scope options
+
+### Requirement: Bilingual Localization for Profile PAT and TOTP Components
+
+The `TotpSetup` (`frontend/components/profile/totp-setup.tsx`) and `PatManagement` (`frontend/components/profile/pat-management.tsx`) components SHALL use `useTranslations("Profile")` so all headings, descriptions, buttons, table headers, badges, and dialog messages render in both English (`en.json`) and Polish (`pl.json`).
+
+#### Scenario: Polish locale user views Profile 2FA and PAT cards
+
+- **WHEN** an authenticated user with active locale `pl` navigates to `/profile`
+- **THEN** `TotpSetup` and `PatManagement` render all UI text using Polish translations from `frontend/messages/pl.json`

@@ -134,6 +134,12 @@ fi
 
 # 4. Restart preview stack cleanly (optionally with federation peer)
 make preview-down
+
+if [ "$SKIP_CLONE" != "1" ] && [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
+    echo "🧹 Resetting peer database volumes for clean paired federation preview..."
+    docker volume rm -f iqoqo-preview_peer_postgres_data iqoqo-preview_peer_data 2>/dev/null || true
+fi
+
 make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version

@@ -262,9 +262,39 @@ If using Dropbox for `RCLONE_REMOTE_FAST`:
 
 ---
 
+## 7. Disaster Recovery & Federation Keys Restore
+
+Starting in **v0.9.4**, `scripts/cloud_backup.sh` automatically archives:
+
+- **Full PostgreSQL Dump**: All schemas including `public`, `auth`, `social`, and `federation` (with Fernet-encrypted actor private keys in `federation.actors`).
+- **Asset Volumes**: `app/static/covers`, `app/static/gallery`, and `app/static/uploads/raw_covers`.
+- **Instance Actor Cryptographic Keys**: `data/federation_keys/` (`server.pem` instance RSA key). Preserving this key ensures remote ActivityPub peers do not reject instance HTTP signatures (`key_fingerprint` pinning) after a node recovery.
+
+### Restoring from Backup
+
+To restore an instance from a compressed backup archive:
+
+```bash
+./scripts/restore.sh /path/to/iqoqo_backup_YYYYMMDD_HHMMSS.tar.gz
+```
+
+For non-interactive or CI execution:
+
+```bash
+./scripts/restore.sh /path/to/iqoqo_backup_YYYYMMDD_HHMMSS.tar.gz --yes
+```
+
+The restore script automatically:
+
+1. Validates SQL dump integrity and restores all database schemas via `docker exec` or `docker compose`.
+2. Extracts uploaded cover art and gallery assets into place.
+3. Restores `data/federation_keys/` and enforces strict owner-only permissions (`chmod 0700 data/federation_keys` and `chmod 0600 data/federation_keys/*.pem`).
+
+---
+
 ## Supported Storage Providers
 
-Via `rclone`, iQoQo supports:
+Via `rclone` (default) and native `boto3` S3, iQoQo supports:
 
 - **AWS S3** (Standard, Standard-IA, Glacier, Deep Archive)
 - **Backblaze B2**
@@ -272,3 +302,4 @@ Via `rclone`, iQoQo supports:
 - **Dropbox**
 - **Google Drive / Google Cloud Storage**
 - **WebDAV** (Nextcloud, ownCloud, etc.)
+- **SFTP / Local NAS**

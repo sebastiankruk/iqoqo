@@ -183,18 +183,6 @@ const SETTING_GROUPS = {
   federation: [
     { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
     { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const, placeholder: "" },
-    {
-      key: "FEDERATION_AUTO_ACCEPT_FOLLOWS",
-      label: "Auto-Accept Follow Requests",
-      type: "boolean" as const,
-      placeholder: "",
-    },
-    {
-      key: "FEDERATION_DEFAULT_TRUST",
-      label: "Default Peer Trust Level",
-      type: "text" as const,
-      placeholder: "untrusted",
-    },
   ],
   affiliate: [
     { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
@@ -661,16 +649,6 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
                     >
                       <option value="true">Enabled</option>
                       <option value="false">Disabled</option>
-                    </select>
-                  ) : s.key === "FEDERATION_DEFAULT_TRUST" ? (
-                    <select
-                      aria-label={s.label}
-                      className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={value || "untrusted"}
-                      onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
-                    >
-                      <option value="untrusted">Untrusted</option>
-                      <option value="pending">Pending</option>
                     </select>
                   ) : (
                     <input

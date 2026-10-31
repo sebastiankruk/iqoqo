@@ -7,14 +7,38 @@ Complete 100% OpenAPI 3.1 specification, contract testing CI gate, AI skills, an
 
 ### Requirement: Complete OpenAPI 3.1 Contract Coverage
 
-The system SHALL emit a valid OpenAPI 3.1 document covering all registered API routes and schemas with accurate UUID field formats (`User.id`, `Item.owner_id`, `Notification.recipient_id`), faithful `PersonalAccessToken` (`is_active`, `revoked_at`) and `Notification` (`payload`, `actor_uri`) component schemas, Flask URL-converter-derived path parameter types, and decorator-backed authentication metadata (`_requires_auth`) so public routes are not falsely tagged as requiring Bearer authentication, and SHALL keep `docs/API.md`, `docs/CHANGELOG.md`, and `docs/gems/iqoqo-librarian-gem.md` synchronized with live route methods, paths, and wire payloads.
+The system SHALL emit a valid OpenAPI 3.1 document covering all registered API routes and schemas without duplicate path declarations, and its documented schemas for `/api/auth/tokens` and `/api/auth/2fa/*` SHALL match the actual runtime JSON request/response payloads and HTTP status codes (`raw_token`, `expires_in_days`, and `200 OK` on revocation).
 
 #### Scenario: CI validates zero contract drift
 
-- **WHEN** `GET /api/docs/openapi.json` is generated and validated in CI (including when new routes or schemas are added)
-- **THEN** unannotated routes fail CI validation, UUID fields declare `{"type": "string", "format": "uuid"}`, `PersonalAccessToken` and `Notification` schemas match their runtime `.to_dict()` representations, UUID/string path parameters are not mislabeled as integers, and public endpoints (`/api/auth/login`, `/api/federation/actor`, `/api/federation/directory`) omit mandatory Bearer security requirements
+- **WHEN** A new route is added without OpenAPI parameter annotations
+- **THEN** CI contract validation test fails.
+
+#### Scenario: OpenAPI schema matches PAT creation and revocation runtime contract
+
+- **WHEN** The OpenAPI 3.1 spec is generated at `/api/docs/openapi.json`
+- **THEN** `POST /api/auth/tokens` documents `expires_in_days` in its request body and `raw_token` in its `201` response schema, and `DELETE /api/auth/tokens/{token_id}` documents its `200` response without duplicate path key overwrites in `app/api/docs.py`.
+
+#### Scenario: Collector Gemini Gem uses valid catalog search parameters
+
+- **WHEN** A collector configures the Gemini Gem using `docs/gems/iqoqo-librarian-gem.md`
+- **THEN** The `/api/v1/catalog/search` operation documents the `q` query parameter supported by the backend endpoint.
 
 #### Scenario: Developer API documentation matches runtime 2FA, SSE, and OpenAPI routes
 
 - **WHEN** a developer or AI agent consults `docs/API.md` and `docs/gems/iqoqo-librarian-gem.md`
 - **THEN** `docs/API.md` documents `POST /api/auth/2fa/disable`, the two-step `POST /api/auth/login` MFA payload, accurate `/2fa/*` responses, unnamed `data: {...}` SSE frames, and `GET /api/docs/openapi.json`, while `iqoqo-librarian-gem.md` references `/api/scanner/preview/{barcode}` with matching PAT scopes
+
+### Requirement: ActivityPub HTTP Signature Verification CLI
+
+The system SHALL provide a CLI utility (`scripts/verify_http_signature.py`) to verify incoming HTTP Signatures, covered by a dedicated test suite verifying Digest header matching, signing string assembly, clock skew enforcement, and RSA signature validity.
+
+#### Scenario: Verify HTTP signature with valid digest and signature
+
+- **WHEN** `verify_http_signature.py` is invoked with valid headers, body, and matching public key
+- **THEN** it outputs verification success and exits with code 0.
+
+#### Scenario: Verify HTTP signature with clock skew exceeding 300 seconds
+
+- **WHEN** `verify_http_signature.py` verifies a request with Date header skewed > 300 seconds from current time
+- **THEN** it reports clock skew failure and exits with non-zero code.

@@ -14,6 +14,18 @@ If you discover a security vulnerability in this project, please email the maint
 
 ## Recent Security Updates
 
+### Simplified 3-Tier Federation Trust & User-Level Follow Consent (Release 0.9.4 - October 2026)
+
+#### Simplified 3-Tier Trust Model & Reciprocal Peering
+
+- **Collapsed Trust Tiers**: Replaced ambiguity between `pending` and `untrusted` by collapsing them into three crisp states: `trusted`, `untrusted`, and `blocked`.
+- **Per-User ActivityPub Follow Consent**: Transferred follow auto-acceptance from a global instance-level toggle to individual user sovereignty via `FederationConsent.auto_accept_follows`, ensuring instance custodians cannot globally compromise individual user follow lists.
+- **SSRF and Domain Normalization**: Pinned ActivityPub requests and discovery lookups to verified public addresses and WHATWG-compliant URL validation.
+
+#### Cloudflare WAF & Semantic Agent Rules
+
+- **ActivityPub & RDF Crawling Rules**: Express Cloudflare WAF rules permit Semantic Web, SPARQL, and ActivityPub federation agents to query `/.well-known/*`, `/api/federation/*`, and `/api/public/rdf/*` without CAPTCHA challenges or false-positive rate blocks.
+
 ### Federation Trust Graph, Settings RBAC & Instance Actor Hardening (Release 0.9.3 - October 2026)
 
 #### ActivityPub Trust Graph & Follow Request Hardening

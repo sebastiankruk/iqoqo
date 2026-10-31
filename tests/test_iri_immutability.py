@@ -181,3 +181,39 @@ def test_webfinger_error_cases(client):
     # Invalid UUID format
     resp_invalid_uuid = client.get("/api/federation/actor/u/not-a-valid-uuid")
     assert resp_invalid_uuid.status_code == 400
+
+
+def test_webfinger_wildcard_safety(client, app, test_user):
+    """Wildcard queries like % or _ do not match arbitrary users."""
+    from app.api.federation import _get_domain
+
+    domain = _get_domain()
+    # Query with % wildcard
+    resp_wildcard = client.get(f"/.well-known/webfinger?resource=acct:%25@{domain}")
+    assert resp_wildcard.status_code == 404
+
+    # Query with _ wildcard
+    resp_underscore = client.get(f"/.well-known/webfinger?resource=acct:_@{domain}")
+    assert resp_underscore.status_code == 404
+
+
+def test_get_actor_public_key_rollback_on_commit_error(app, test_user):
+    """Exception during session commit rolls back without leaving uncommitted transaction."""
+    from unittest.mock import patch
+
+    from app.core.federation_keys import get_actor_public_key
+
+    with app.app_context():
+        with (
+            patch("app.core.federation_keys.get_actor_private_key") as mock_priv,
+            patch("app.db.db.session.commit", side_effect=RuntimeError("DB Commit failed")),
+            patch("app.db.db.session.rollback") as mock_rollback,
+        ):
+            from cryptography.hazmat.primitives.asymmetric import rsa
+
+            priv_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            mock_priv.return_value = priv_key
+
+            pub_pem = get_actor_public_key(str(test_user))
+            assert pub_pem is not None
+            mock_rollback.assert_called_once()

@@ -80,11 +80,8 @@ def is_publicly_routable_peer_domain(domain: str) -> bool:
 
 
 def get_safe_default_trust() -> str:
-    """Retrieve FEDERATION_DEFAULT_TRUST clamped strictly to UNTRUSTED or PENDING."""
-    from app.core.config_service import ConfigService
-
-    val = str(ConfigService.get("FEDERATION_DEFAULT_TRUST", TrustLevel.UNTRUSTED) or "").lower().strip()
-    return TrustLevel.PENDING if val == TrustLevel.PENDING else TrustLevel.UNTRUSTED
+    """Retrieve default trust clamped strictly to UNTRUSTED."""
+    return TrustLevel.UNTRUSTED
 
 
 def clean_instance_domain(domain_or_url: str) -> str:

@@ -108,7 +108,7 @@ def update_consent():
     it, so a withdrawal is auditable after the fact."""
     data = request.get_json()
     consent_type = data.get("consent_type")
-    is_granted = data.get("is_granted", False)
+    is_granted = bool(data.get("is_granted", data.get("granted", False)))
 
     if not consent_type:
         return jsonify({"error": "Missing consent_type"}), 400
@@ -122,6 +122,38 @@ def update_consent():
     else:
         new_consent = ConsentRecord(user_id=user.id, consent_type=consent_type, is_granted=is_granted, policy_version="v0.1.0")
         db.session.add(new_consent)
+
+    if consent_type == "federation":
+        fed_consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+        if not fed_consent:
+            fed_consent = FederationConsent(
+                user_id=user.id,
+                federated_profile=is_granted,
+                federated_collection=is_granted,
+            )
+            db.session.add(fed_consent)
+        else:
+            fed_consent.federated_profile = is_granted
+            if not is_granted:
+                fed_consent.federated_collection = False
+            fed_consent.updated_at = datetime.now(UTC)
+
+        if is_granted and not user.federation_public_key:
+            from app.core import federation_keys
+            from app.core.iri import canonical_actor_iri, get_federation_base_url
+
+            try:
+                base_url = get_federation_base_url()
+                existing_pub = federation_keys.get_actor_public_key(str(user.id))
+                if existing_pub:
+                    public_key_pem = existing_pub
+                else:
+                    _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
+                canonical_uri = canonical_actor_iri(user.id, base_url)
+                user.federation_public_key = public_key_pem
+                user.federation_key_id = f"{canonical_uri}#main-key"
+            except Exception as exc:
+                current_app.logger.warning("Failed generating keypair during consent grant: %s", exc)
 
     db.session.commit()
     return jsonify({"message": "Consent updated successfully"})
@@ -159,17 +191,23 @@ def update_profile():
         if err:
             return err
 
+    valid_visibilities = ["public", "friends_only", "shared", "private"]
     if "visibility" in data:
         val = data["visibility"]
-        if val in ["public", "private"]:
-            user.visibility = val
+        if val in valid_visibilities:
+            user.visibility = "friends_only" if val == "shared" else val
+        else:
+            return jsonify({"error": f"Invalid visibility. Must be one of {valid_visibilities}", "code": 400}), 400
 
     if "default_item_visibility" in data:
         val = data["default_item_visibility"]
-        if val in ["public", "private"]:
-            user.default_item_visibility = val
+        if val in valid_visibilities:
+            user.default_item_visibility = "friends_only" if val == "shared" else val
         else:
-            return jsonify({"error": "Invalid default_item_visibility. Must be 'public' or 'private'", "code": 400}), 400
+            return (
+                jsonify({"error": f"Invalid default_item_visibility. Must be one of {valid_visibilities}", "code": 400}),
+                400,
+            )
 
     if "avatar_url" in data:
         raw_avatar = data["avatar_url"]
@@ -443,6 +481,7 @@ def _handle_get_federation_consent() -> tuple[Response, int] | Response:
             "user_id": str(user.id),
             "federated_profile": False,
             "federated_collection": False,
+            "auto_accept_follows": False,
             "updated_at": None,
         }
     else:
@@ -471,6 +510,7 @@ def _handle_update_federation_consent() -> tuple[Response, int] | Response:
             user_id=user.id,
             federated_profile=bool(payload.get("federated_profile", False)),
             federated_collection=bool(payload.get("federated_collection", False)),
+            auto_accept_follows=bool(payload.get("auto_accept_follows", False)),
         )
         db.session.add(consent)
     else:
@@ -478,6 +518,8 @@ def _handle_update_federation_consent() -> tuple[Response, int] | Response:
             consent.federated_profile = bool(payload["federated_profile"])
         if "federated_collection" in payload:
             consent.federated_collection = bool(payload["federated_collection"])
+        if "auto_accept_follows" in payload:
+            consent.auto_accept_follows = bool(payload["auto_accept_follows"])
         consent.updated_at = datetime.now(UTC)
 
     # Trigger actor RSA keypair generation on initial opt-in

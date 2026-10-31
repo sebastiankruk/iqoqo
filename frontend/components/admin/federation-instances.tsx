@@ -18,19 +18,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import {
-  Building2,
-  Copy,
-  Globe,
-  Info,
-  Loader2,
-  Plus,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+import { Building2, Copy, Globe, Info, Loader2, Plus, Trash2 } from "lucide-react";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -39,7 +27,6 @@ import {
 } from "@/lib/api/hooks/federation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,43 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { FederationInstance, TrustLevel } from "@/types/federation";
 
-const TRUST_LEVELS: TrustLevel[] = ["untrusted", "pending", "trusted", "blocked"];
-
-/**
- * Render trust level badge component with associated icon and style.
- *
- * @param trust - Instance trust level ('untrusted' | 'pending' | 'trusted' | 'blocked').
- * @param t - Translator function for AdminFederation namespace.
- * @returns Badge element.
- */
-function getTrustBadge(trust: TrustLevel, t: ReturnType<typeof useTranslations>) {
-  switch (trust) {
-    case "trusted":
-      return (
-        <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-1">
-          <ShieldCheck className="h-3 w-3" /> {t("trustTrusted")}
-        </Badge>
-      );
-    case "pending":
-      return (
-        <Badge variant="outline" className="text-yellow-600 border-yellow-500/40 flex items-center gap-1">
-          <Shield className="h-3 w-3" /> {t("trustPending")}
-        </Badge>
-      );
-    case "blocked":
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <ShieldAlert className="h-3 w-3" /> {t("trustBlocked")}
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="secondary" className="text-muted-foreground flex items-center gap-1">
-          <XCircle className="h-3 w-3" /> {t("trustUntrusted")}
-        </Badge>
-      );
-  }
-}
+const TRUST_LEVELS: TrustLevel[] = ["trusted", "untrusted", "blocked"];
 
 /**
  * Format ISO date string into human-readable relative time.
@@ -297,17 +248,20 @@ export function FederationInstancesManager() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {getTrustBadge(inst.trust_level, t)}
                           <select
                             value={inst.trust_level}
                             onChange={e => handleTrustChange(inst, e.target.value as TrustLevel)}
                             disabled={updateTrust.isPending}
                             aria-label={`Change trust level for ${inst.domain}`}
-                            className="text-xs h-7 rounded border border-input bg-background px-2 py-0.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="text-xs h-7 rounded border border-input bg-background px-2 py-0.5 shadow-sm focus:outline-none focus:ring-1 focus:ring-ring font-medium"
                           >
                             {TRUST_LEVELS.map(lvl => (
                               <option key={lvl} value={lvl}>
-                                {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                                {lvl === "trusted"
+                                  ? t("trustTrusted")
+                                  : lvl === "blocked"
+                                    ? t("trustBlocked")
+                                    : t("trustUntrusted")}
                               </option>
                             ))}
                           </select>

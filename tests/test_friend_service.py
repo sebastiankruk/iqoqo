@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -278,3 +279,206 @@ def test_api_profile_friends_endpoints(client, app, friend_users, remote_actor_s
     # 4. GET /api/profile/friends -> outgoing is now empty
     get_res2 = client.get("/api/profile/friends", headers=headers)
     assert len(get_res2.get_json()["data"]["outgoing"]) == 0
+
+
+def test_send_friend_request_rejects_blocked_peer(app, friend_users):
+    """Sending friend request to blocked instance returns 403."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        inst = FederationInstance(domain="blocked-instance.org", trust_level=TrustLevel.BLOCKED)
+        db.session.add(inst)
+        db.session.commit()
+
+        res_data, err, code = send_friend_request(u1_id, "alice@blocked-instance.org")
+        assert code == 403
+        assert "blocked" in err.lower()
+
+
+def test_send_friend_request_handles_double_at_identifier(app, friend_users):
+    """Double-@ handle like user@email-domain@instance-domain parses domain from rightmost @."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        inst = FederationInstance(domain="peer.example.org", trust_level=TrustLevel.TRUSTED)
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            instance_id=inst.id,
+            actor_uri="https://peer.example.org/api/federation/actor/u/alice",
+            inbox_url="https://peer.example.org/api/federation/inbox",
+            username="alice@iqoqo.cc",
+        )
+        db.session.add(actor)
+        db.session.commit()
+
+        with patch("app.core.federation_dispatch.dispatch_follow") as mock_dispatch:
+            res_data, err, code = send_friend_request(u1_id, "alice@iqoqo.cc@peer.example.org")
+            assert code == 201
+            assert res_data is not None
+            mock_dispatch.assert_called_once()
+
+
+def test_send_friend_request_ensures_federation_consent_and_keys(app, friend_users):
+    """Sending friend request to remote federated actor auto-provisions FederationConsent and actor keys."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        from sqlalchemy import select
+
+        from app.db.federation import FederationConsent
+
+        inst = FederationInstance(domain="peer2.example.org", trust_level=TrustLevel.TRUSTED)
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            instance_id=inst.id,
+            actor_uri="https://peer2.example.org/api/federation/actor/u/bob",
+            inbox_url="https://peer2.example.org/api/federation/inbox",
+            username="bob",
+        )
+        db.session.add(actor)
+        db.session.commit()
+
+        consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == u1_id)).scalars().first()
+        assert consent is None
+
+        with patch("app.core.federation_dispatch.dispatch_follow") as mock_dispatch:
+            res_data, err, code = send_friend_request(u1_id, "@bob@peer2.example.org")
+            assert code == 201
+            mock_dispatch.assert_called_once()
+
+            consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == u1_id)).scalars().first()
+            assert consent is not None
+            assert consent.federated_profile is True
+            u1 = db.session.get(User, u1_id)
+            assert u1.federation_public_key is not None
+
+
+def test_inbound_follow_scoped_to_target_user(app, friend_users):
+    """Inbound Follow intended for User 2 cannot be adopted or self-accepted by User 1."""
+    u1_id, u2_id = friend_users
+    with app.app_context():
+        inst = FederationInstance(domain="scoped-peer.example.org", trust_level=TrustLevel.TRUSTED)
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            instance_id=inst.id,
+            actor_uri="https://scoped-peer.example.org/api/federation/actor/u/remote-actor",
+            inbox_url="https://scoped-peer.example.org/api/federation/inbox",
+            username="remote-actor",
+        )
+        db.session.add(actor)
+        db.session.flush()
+
+        # Inbound follow from remote actor targeting User 2
+        inbound_act = FederationActivity(
+            actor_uri=actor.actor_uri,
+            activity_type="Follow",
+            target_uri=f"https://local.test/api/federation/actor/u/{u2_id}",
+            direction="inbound",
+            status=ActivityStatus.DELIVERED,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(inbound_act)
+
+        # User 1 has an outgoing pending follow to remote actor
+        fol1 = FederationFollower(
+            local_user_id=u1_id,
+            remote_actor_id=actor.id,
+            status=FollowStatus.PENDING,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(fol1)
+        outbound_act = FederationActivity(
+            actor_uri=f"https://local.test/api/federation/actor/u/{u1_id}",
+            activity_type="Follow",
+            target_uri=actor.actor_uri,
+            direction="outbound",
+            status=ActivityStatus.DELIVERED,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(outbound_act)
+        db.session.commit()
+
+        # User 1 listing friends should see fol1 as outgoing, not incoming!
+        friends_u1 = list_friends(u1_id)
+        assert len(friends_u1["incoming"]) == 0
+        assert len(friends_u1["outgoing"]) == 1
+
+        # User 1 attempting to accept should be rejected as self-accepting outgoing request
+        _, err, code = respond_friend_request(u1_id, f"fed:{fol1.id}", "accept")
+        assert code == 400
+        assert "Cannot respond to an outgoing request" in (err or "")
+
+
+def test_reject_and_remove_federated_friend_dispatches_activities(app, friend_users):
+    """Rejecting inbound federated follow and removing active friendship dispatch Reject and Undo."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        inst = FederationInstance(domain="dispatch-peer.example.org", trust_level=TrustLevel.TRUSTED)
+        db.session.add(inst)
+        db.session.flush()
+
+        actor = FederationActor(
+            instance_id=inst.id,
+            actor_uri="https://dispatch-peer.example.org/api/federation/actor/u/peer-user",
+            inbox_url="https://dispatch-peer.example.org/api/federation/inbox",
+            username="peer-user",
+        )
+        db.session.add(actor)
+        db.session.flush()
+
+        # 1. Inbound pending follow to be rejected
+        fol_reject = FederationFollower(
+            local_user_id=u1_id,
+            remote_actor_id=actor.id,
+            status=FollowStatus.PENDING,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(fol_reject)
+        inbound_act = FederationActivity(
+            actor_uri=actor.actor_uri,
+            activity_type="Follow",
+            target_uri=f"https://local.test/api/federation/actor/u/{u1_id}",
+            direction="inbound",
+            status=ActivityStatus.DELIVERED,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(inbound_act)
+        db.session.commit()
+
+        with patch("app.core.federation_dispatch.dispatch_reject_follow") as mock_reject:
+            res_data, err, code = respond_friend_request(u1_id, f"fed:{fol_reject.id}", "reject")
+            assert code == 200
+            mock_reject.assert_called_once()
+            assert res_data["status"] == "rejected"
+
+        # 2. Accepted follow to be removed
+        fol_remove = FederationFollower(
+            local_user_id=u1_id,
+            remote_actor_id=actor.id,
+            status=FollowStatus.ACCEPTED,
+            created_at=datetime.now(UTC),
+        )
+        db.session.add(fol_remove)
+        db.session.commit()
+
+        with patch("app.core.federation_dispatch.dispatch_undo_follow") as mock_undo:
+            success, err, code = remove_friend(u1_id, f"fed:{fol_remove.id}")
+            assert code == 200
+            assert success is True
+            mock_undo.assert_called_once()
+
+
+def test_send_friend_request_normalizes_domain_for_block_check(app, friend_users):
+    """Domain port and scheme are cleaned before evaluating TrustLevel.BLOCKED."""
+    u1_id, _ = friend_users
+    with app.app_context():
+        inst = FederationInstance(domain="blocked-domain.example.org", trust_level=TrustLevel.BLOCKED)
+        db.session.add(inst)
+        db.session.commit()
+
+        _, err, code = send_friend_request(u1_id, "@charlie@https://blocked-domain.example.org:443/")
+        assert code == 403
+        assert "Cannot connect with user from blocked instance" in (err or "")

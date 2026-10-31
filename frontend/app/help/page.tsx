@@ -43,8 +43,9 @@ export default function HelpHubPage() {
     const matchesCategory = selectedCategory === "all" || article.category === selectedCategory;
     const title = article.title[locale].toLowerCase();
     const desc = article.description[locale].toLowerCase();
+    const content = (article.content[locale] || "").toLowerCase();
     const query = searchTerm.toLowerCase();
-    const matchesSearch = title.includes(query) || desc.includes(query);
+    const matchesSearch = title.includes(query) || desc.includes(query) || content.includes(query);
     return matchesCategory && matchesSearch;
   });
 
