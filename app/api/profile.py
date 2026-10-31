@@ -108,7 +108,7 @@ def update_consent():
     it, so a withdrawal is auditable after the fact."""
     data = request.get_json()
     consent_type = data.get("consent_type")
-    is_granted = data.get("is_granted", False)
+    is_granted = bool(data.get("is_granted", data.get("granted", False)))
 
     if not consent_type:
         return jsonify({"error": "Missing consent_type"}), 400
