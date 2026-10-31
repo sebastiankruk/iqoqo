@@ -28,7 +28,7 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 
-from app.core.iri import canonical_actor_iri
+from app.core.iri import canonical_actor_iri, get_federation_base_url
 from app.core.notifications import create_notification
 from app.db import db
 from app.db.auth import User, UserFriendship
@@ -500,7 +500,6 @@ def send_friend_request(
 
             if not requester.federation_public_key:
                 from app.core import federation_keys
-                from app.core.iri import canonical_actor_iri, get_federation_base_url
 
                 try:
                     base_url = get_federation_base_url()
@@ -623,10 +622,12 @@ def respond_friend_request(
 
                 user = db.session.get(User, u_uuid)
                 if user and remote_act:
+                    base_url = get_federation_base_url()
+                    local_actor_iri = canonical_actor_iri(user.id, base_url)
                     dummy_follow = {
                         "type": "Follow",
                         "actor": remote_act.actor_uri,
-                        "object": f"local:{user.id}",
+                        "object": local_actor_iri,
                     }
                     dispatch_accept_follow(user, remote_act, dummy_follow)
             except Exception as exc:

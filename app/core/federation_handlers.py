@@ -379,8 +379,14 @@ def handle_accept(activity: dict[str, Any]) -> bool:
 
     # Remote actor accepting our follow must match the object being followed
     if followed_uri != actor_uri:
-        logger.warning("Accept spoofing attempt: actor %s accepted follow intended for %s", actor_uri, followed_uri)
-        return False
+        is_same_actor = False
+        if followed_uri.startswith("local:"):
+            target_id = followed_uri.split(":", 1)[1]
+            if target_id and target_id in actor_uri:
+                is_same_actor = True
+        if not is_same_actor:
+            logger.warning("Accept spoofing attempt: actor %s accepted follow intended for %s", actor_uri, followed_uri)
+            return False
 
     stmt = select(FederationActor).where(FederationActor.actor_uri == actor_uri)
     remote_actor = db.session.execute(stmt).scalars().first()
