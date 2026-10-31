@@ -577,7 +577,9 @@
     "makeProfileDiscoverable": "Make profile discoverable",
     "makeProfileDiscoverableHint": "Allow other instances to find your profile via federation",
     "shareCollectionUpdates": "Share collection updates",
-    "shareCollectionUpdatesHint": "Broadcast collection changes to federated followers"
+    "shareCollectionUpdatesHint": "Broadcast collection changes to federated followers",
+    "autoAcceptFollows": "Auto-Accept Follow Requests from Trusted Peers",
+    "autoAcceptFollowsHint": "Automatically accept friend and follow requests from instances marked as trusted by the administrator"
   },
   "Profile": {
     "profileVisibility": "Profile Visibility",
@@ -700,9 +702,9 @@
     "tabInstances": "Peer Instances",
     "tabActivity": "Activity Pipeline Log",
     "tabSettings": "Federation Settings",
-    "peeringNoticeTitle": "ActivityPub Peering is Unilateral",
-    "peeringNoticeDesc": "Connecting a peer here configures your instance's trust and outbound discovery. For mutual trust and automatic follow acceptance, the administrator of the remote instance must also register this instance in their federation settings.",
-    "addPeerReciprocalNote": "Peering is unilateral. The remote peer administrator must also add your instance for reciprocal trust.",
+    "peeringNoticeTitle": "How Federation Peering Works",
+    "peeringNoticeDesc": "Adding a peer sets how your server handles requests and data from that library. For mutual federation, the remote server's administrator must also add your domain. Trust levels: Trusted (catalog metadata auto-fills empty fields, users can auto-accept friend requests), Untrusted (default for new peers; friend and loan requests allowed with manual user approval, catalog edits held for review), and Blocked (all friend, loan, and metadata exchanges rejected).",
+    "addPeerReciprocalNote": "New peers start as Untrusted. The remote server administrator must also register your instance domain on their end.",
     "discoverTitle": "Discover & Connect Peer Instance",
     "discoverDesc": "Probe a remote ActivityPub Fediverse instance using NodeInfo to establish federation and sync metadata.",
     "domainPlaceholder": "library.example.org",
@@ -792,7 +794,13 @@
     "unreadCount": "({count} unread)",
     "markAllRead": "Mark all read",
     "empty": "No notifications yet",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "accept": "Accept",
+    "reject": "Reject",
+    "reviewInFriends": "Review in Friends",
+    "friendAccepted": "Friend request accepted",
+    "friendRejected": "Friend request rejected",
+    "actionFailed": "Failed to respond to request"
   },
   "FeedbackPage": {
     "title": "Help & Feedback",

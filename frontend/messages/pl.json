@@ -577,7 +577,9 @@
     "makeProfileDiscoverable": "Zezwól na odkrywanie profilu",
     "makeProfileDiscoverableHint": "Pozwól innym instancjom wyszukiwać Twój profil przez federację",
     "shareCollectionUpdates": "Udostępniaj aktualizacje kolekcji",
-    "shareCollectionUpdatesHint": "Przesyłaj zmiany w kolekcji do obserwujących w federacji"
+    "shareCollectionUpdatesHint": "Przesyłaj zmiany w kolekcji do obserwujących w federacji",
+    "autoAcceptFollows": "Automatycznie akceptuj zaproszenia od zaufanych instancji",
+    "autoAcceptFollowsHint": "Automatycznie przyjmuj prośby o znajomość i obserwację z instancji oznaczonych przez administratora jako zaufane"
   },
   "Profile": {
     "profileVisibility": "Widoczność profilu",
@@ -700,9 +702,9 @@
     "tabInstances": "Instancje partnerskie",
     "tabActivity": "Dziennik potoku aktywności",
     "tabSettings": "Ustawienia federacji",
-    "peeringNoticeTitle": "Federacja ActivityPub jest jednostronna",
-    "peeringNoticeDesc": "Dodanie węzła konfiguruje zaufanie i odkrywanie wychodzące Twojej instancji. Do wzajemnego zaufania i automatycznej akceptacji zapytań, administrator zdalnej instancji musi również zarejestrować tę instancję u siebie.",
-    "addPeerReciprocalNote": "Federacja jest jednostronna. Administrator zdalnego węzła musi również dodać Twoją instancję, aby uzyskać obustronne zaufanie.",
+    "peeringNoticeTitle": "Jak działa federacja i zaufanie",
+    "peeringNoticeDesc": "Dodanie węzła określa, jak Twój serwer traktuje dane i prośby z danej biblioteki. Aby federacja działała w obie strony, administrator zdalnego serwera musi również dodać Twoją domenę. Poziomy: Zaufana (metadane katalogowe uzupełniają puste pola, użytkownicy mogą automatycznie akceptować prośby), Niezaufana (domyślny dla nowych węzłów; prośby o znajomość i wypożyczenia wymagają ręcznej zgody, a zmiany w katalogu trafiają do weryfikacji), oraz Zablokowana (wszystkie prośby i synchronizacje są odrzucane).",
+    "addPeerReciprocalNote": "Nowe węzły zaczynają jako Niezaufane. Administrator zdalnego serwera musi również zarejestrować domenę Twojej instancji.",
     "discoverTitle": "Odkryj i połącz instancję partnerską",
     "discoverDesc": "Zbadaj zdalną instancję ActivityPub za pomocą NodeInfo, aby nawiązać federację i synchronizować metadane.",
     "domainPlaceholder": "biblioteka.example.org",
@@ -792,7 +794,13 @@
     "unreadCount": "({count} nieprzeczytanych)",
     "markAllRead": "Oznacz wszystkie jako przeczytane",
     "empty": "Brak powiadomień",
-    "loading": "Ładowanie..."
+    "loading": "Ładowanie...",
+    "accept": "Zaakceptuj",
+    "reject": "Odrzuć",
+    "reviewInFriends": "Przejdź do znajomych",
+    "friendAccepted": "Zaproszenie do znajomych zaakceptowane",
+    "friendRejected": "Zaproszenie do znajomych odrzucone",
+    "actionFailed": "Nie udało się przetworzyć zaproszenia"
   },
   "FeedbackPage": {
     "title": "Pomoc i opinie",

@@ -40,7 +40,10 @@ export function FederationConsentSettings() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleToggle = async (field: "federated_profile" | "federated_collection", value: boolean) => {
+  const handleToggle = async (
+    field: "federated_profile" | "federated_collection" | "auto_accept_follows",
+    value: boolean
+  ) => {
     setConsent(prev => (prev ? { ...prev, [field]: value } : prev));
     setSaving(true);
     setSaved(false);
@@ -108,6 +111,21 @@ export function FederationConsentSettings() {
               className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:opacity-50"
               checked={consent?.federated_collection ?? false}
               onChange={e => handleToggle("federated_collection", e.target.checked)}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label htmlFor="toggle-fed-auto-accept" className="space-y-0.5 cursor-pointer">
+              <p className="text-sm font-medium">{t("autoAcceptFollows")}</p>
+              <p className="text-xs text-muted-foreground">{t("autoAcceptFollowsHint")}</p>
+            </label>
+            <input
+              id="toggle-fed-auto-accept"
+              type="checkbox"
+              className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:opacity-50"
+              checked={consent?.auto_accept_follows ?? false}
+              onChange={e => handleToggle("auto_accept_follows", e.target.checked)}
               disabled={saving}
             />
           </div>

@@ -27,7 +27,6 @@ from typing import Any
 
 import requests
 from celery.result import AsyncResult
-from kombu.exceptions import KombuError
 from sqlalchemy import select
 
 from app.core.celery_app import celery
@@ -101,7 +100,7 @@ def submit_task(func: Callable, *args, user_id: str | None = None, queue: str | 
             apply_kwargs["queue"] = target_queue
         result = _task_wrapper.apply_async(**apply_kwargs)
         return str(result.id)
-    except (KombuError, OSError) as exc:
+    except Exception as exc:
         logger.warning("Background task queue unavailable for %s: %s", func.__name__, exc)
         return None
 

@@ -71,39 +71,45 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      command: "IS_E2E=true NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
-      url: "http://localhost:3002",
-      // Never reuse an unrelated dev/preview server during an E2E run.
-      reuseExistingServer: !process.env.IS_E2E,
-      timeout: 120000,
-    },
-    {
-      // When DATABASE_URL_TEST is set (i.e. running make test-e2e), forward it
-      // as DATABASE_URL so Flask connects to the dedicated test database instead
-      // of the production/dev one. reuseExistingServer is disabled in this case
-      // to ensure the server always starts fresh against the test DB.
-      command:
-        (process.env.DATABASE_URL_TEST ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} ` : "") +
-        // E2E_RESET_SECRET gates POST /lending/test/reset (C18 4.1). Playwright
-        // spawns this Flask process, so the secret the spec reads from
-        // process.env has to be forwarded into it -- otherwise the harness sends
-        // a secret the server never sees. Both sides read the same env var.
-        `E2E_RESET_SECRET=${process.env.E2E_RESET_SECRET ?? ""} ` +
-        // TESTING is what the /lending/test/reset helper gates on. Nothing set
-        // it before, so that call has always returned 403 and the spec discarded
-        // the response; it is forwarded here alongside the secret because the two
-        // are required together and forwarding one without the other is how the
-        // helper stays silently broken. Set only for this spawned process.
-        "FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False TESTING=true " +
-        "ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
-        pythonExecutable +
-        " -m flask run --port 5002",
-      url: "http://127.0.0.1:5002/api/health",
-      reuseExistingServer: !process.env.DATABASE_URL_TEST,
-      timeout: 60000,
-      cwd: "..",
-    },
-  ],
+  webServer: process.env.FEDERATION_PAIR_LIVE
+    ? undefined
+    : [
+        {
+          command: "IS_E2E=true NODE_OPTIONS='--no-warnings' npm run dev -- -p 3002",
+          url: "http://localhost:3002",
+          // Never reuse an unrelated dev/preview server during an E2E run.
+          reuseExistingServer: !process.env.IS_E2E,
+          timeout: 120000,
+        },
+        {
+          // When DATABASE_URL_TEST is set (i.e. running make test-e2e), forward it
+          // as DATABASE_URL so Flask connects to the dedicated test database instead
+          // of the production/dev one. reuseExistingServer is disabled in this case
+          // to ensure the server always starts fresh against the test DB.
+          command:
+            (process.env.DATABASE_URL_TEST
+              ? `DATABASE_URL=${process.env.DATABASE_URL_TEST} `
+              : process.env.DATABASE_URL
+                ? `DATABASE_URL=${process.env.DATABASE_URL} `
+                : "DATABASE_URL=sqlite:////tmp/e2e_fallback.db ") +
+            // E2E_RESET_SECRET gates POST /lending/test/reset (C18 4.1). Playwright
+            // spawns this Flask process, so the secret the spec reads from
+            // process.env has to be forwarded into it -- otherwise the harness sends
+            // a secret the server never sees. Both sides read the same env var.
+            `E2E_RESET_SECRET=${process.env.E2E_RESET_SECRET ?? ""} ` +
+            // TESTING is what the /lending/test/reset helper gates on. Nothing set
+            // it before, so that call has always returned 403 and the spec discarded
+            // the response; it is forwarded here alongside the secret because the two
+            // are required together and forwarding one without the other is how the
+            // helper stays silently broken. Set only for this spawned process.
+            "FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true PYTHONUNBUFFERED=1 RATELIMIT_ENABLED=False TESTING=true " +
+            "ADMIN_PASSWORD=${ADMIN_PASSWORD:-E2EBootstrapPassword123!} FLASK_DEBUG=1 FLASK_APP=app PYTHONPATH=. " +
+            pythonExecutable +
+            " -m flask run --port 5002",
+          url: "http://127.0.0.1:5002/api/health",
+          reuseExistingServer: !process.env.DATABASE_URL_TEST,
+          timeout: 60000,
+          cwd: "..",
+        },
+      ],
 });

@@ -36,7 +36,7 @@ class TestFederationDiscoveryAdmin:
     def test_admin_trust_mutation_records_audit_log(self, client, admin_headers, app):
         """Updating trust level emits EntityAuditLog with old and new levels."""
         with app.app_context():
-            inst = FederationInstance(domain="audit-test.fed.org", trust_level=TrustLevel.PENDING)
+            inst = FederationInstance(domain="audit-test.fed.org", trust_level=TrustLevel.UNTRUSTED)
             db.session.add(inst)
             db.session.commit()
             inst_id = inst.id
@@ -61,7 +61,7 @@ class TestFederationDiscoveryAdmin:
                 .first()
             )
             assert audit is not None
-            assert audit.diff["old_trust_level"] == "pending"
+            assert audit.diff["old_trust_level"] == "untrusted"
             assert audit.diff["new_trust_level"] == "trusted"
             assert audit.diff["domain"] == "audit-test.fed.org"
 
@@ -277,3 +277,23 @@ class TestFederationDiscoveryAdmin:
                 cached_actor = db.session.execute(select(FederationActor).where(FederationActor.actor_uri == actor_uri)).scalars().first()
                 assert cached_actor is not None
                 assert cached_actor.public_key_pem == pub_pem
+
+    def test_admin_trust_mutation_normalizes_pending_to_untrusted(self, client, admin_headers, app):
+        """Updating trust level with legacy 'pending' normalizes to 'untrusted'."""
+        with app.app_context():
+            inst = FederationInstance(domain="legacy-pending.fed.org", trust_level=TrustLevel.TRUSTED)
+            db.session.add(inst)
+            db.session.commit()
+            inst_id = inst.id
+
+        resp = client.put(
+            f"/api/v1/admin/federation/instances/{inst_id}/trust",
+            headers=admin_headers,
+            json={"trust_level": "pending"},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["trust_level"] == "untrusted"
+
+        with app.app_context():
+            updated = db.session.get(FederationInstance, inst_id)
+            assert updated.trust_level == TrustLevel.UNTRUSTED

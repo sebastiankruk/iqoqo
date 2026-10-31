@@ -41,7 +41,7 @@ class TestAdminFederationEndpoints:
     def test_get_instances_list(self, client, admin_headers, app):
         with app.app_context():
             inst1 = FederationInstance(domain="alpha.fed.org", trust_level=TrustLevel.TRUSTED)
-            inst2 = FederationInstance(domain="beta.fed.org", trust_level=TrustLevel.PENDING)
+            inst2 = FederationInstance(domain="beta.fed.org", trust_level=TrustLevel.UNTRUSTED)
             db.session.add_all([inst1, inst2])
             db.session.commit()
 
@@ -72,7 +72,7 @@ class TestAdminFederationEndpoints:
 
     def test_update_instance_trust_level(self, client, admin_headers, app):
         with app.app_context():
-            inst = FederationInstance(domain="gamma.fed.org", trust_level=TrustLevel.PENDING)
+            inst = FederationInstance(domain="gamma.fed.org", trust_level=TrustLevel.UNTRUSTED)
             db.session.add(inst)
             db.session.commit()
             inst_id = inst.id
@@ -93,7 +93,7 @@ class TestAdminFederationEndpoints:
 
     def test_update_instance_trust_invalid(self, client, admin_headers, app):
         with app.app_context():
-            inst = FederationInstance(domain="delta.fed.org", trust_level=TrustLevel.PENDING)
+            inst = FederationInstance(domain="delta.fed.org", trust_level=TrustLevel.UNTRUSTED)
             db.session.add(inst)
             db.session.commit()
             inst_id = inst.id

@@ -14,7 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-export type TrustLevel = "untrusted" | "pending" | "trusted" | "blocked";
+export type TrustLevel = "trusted" | "untrusted" | "blocked";
 
 export interface FederationInstance {
   id: number;
@@ -45,6 +45,7 @@ export interface FederationConsent {
   user_id: string;
   federated_profile: boolean;
   federated_collection: boolean;
+  auto_accept_follows?: boolean;
   updated_at: string | null;
 }
 

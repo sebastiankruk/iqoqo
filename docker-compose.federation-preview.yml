@@ -72,6 +72,7 @@ services:
       - BASE_URL=${PEER_BASE_URL:-https://peer.iqoqo.cc}
       - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-https://peer.iqoqo.cc}
       - CORS_ORIGINS=${PEER_CORS_ORIGINS:-https://peer.iqoqo.cc,http://localhost:3001,http://localhost:3000}
+      - REDIS_URL=redis://redis:6379/1
       - FEDERATION_ENABLED=true
       - FEDERATION_ALLOW_LOOPBACK=true
     volumes:
@@ -83,6 +84,29 @@ services:
         condition: service_healthy
       peer-migration:
         condition: service_completed_successfully
+
+  peer-worker:
+    image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-backend:${APP_VERSION:-preview}
+    restart: always
+    command: celery -A app.core.celery_app:celery worker --loglevel=info -Q celery,federation -c 2
+    environment:
+      - DATABASE_URL=postgresql://iqoqo_peer:iqoqo_peer_secret@peer-db:5432/iqoqo_peer
+      - ADMIN_EMAIL=${PEER_ADMIN_EMAIL:-peer-admin@iqoqo.cc}
+      - ADMIN_PASSWORD=${PEER_ADMIN_PASSWORD:-PeerBootstrapPassword123!}
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=${PEER_SECRET_KEY:-peer-preview-secret-key-32-chars-ok}
+      - JWT_SECRET_KEY=${PEER_JWT_SECRET_KEY:-peer-jwt-secret-preview-32-chars}
+      - AUTH_SECRET=${PEER_AUTH_SECRET:-peer-auth-secret-preview-32-chars}
+      - BASE_URL=${PEER_BASE_URL:-https://peer.iqoqo.cc}
+      - FEDERATION_ENABLED=true
+      - FEDERATION_ALLOW_LOOPBACK=true
+    volumes:
+      - peer_data:/usr/src/app/data
+    depends_on:
+      peer-db:
+        condition: service_healthy
+      peer-web:
+        condition: service_started
 
   peer-frontend:
     image: ${IMAGE_PREFIX-ghcr.io/sebastiankruk/}iqoqo-frontend:${APP_VERSION:-preview}

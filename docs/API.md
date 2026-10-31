@@ -775,7 +775,7 @@ Dispatch an outbound `Follow` request to a remote ActivityPub actor.
 
 ### `GET /api/federation/consent` & `PUT /api/federation/consent`
 
-Retrieve or update the authenticated user's federation discovery preferences (`federated_profile` and `federated_collection`).
+Retrieve or update the authenticated user's federation discovery and privacy preferences (`federated_profile`, `federated_collection`, and `auto_accept_follows`).
 
 **Authentication:** Required.
 

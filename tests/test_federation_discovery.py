@@ -148,6 +148,19 @@ class TestWebFingerDiscovery:
             data = resp.get_json()
             assert "domain mismatch" in data["error"].lower()
 
+    def test_webfinger_domain_aliasing(self, client, app, federated_user_data):
+        """Verify WebFinger resolution succeeds for both canonical and aliased migration domains."""
+        with app.app_context():
+            app.config["FEDERATION_ENABLED"] = True
+            app.config["FEDERATION_BASE_URL"] = "https://iqoqo.kruk.cc"
+            username = federated_user_data["public_username"]
+            # Canonical domain lookup
+            resp_primary = client.get(f"/.well-known/webfinger?resource=acct:{username}@iqoqo.kruk.cc")
+            assert resp_primary.status_code == 200
+            # Aliased legacy domain lookup
+            resp_alias = client.get(f"/.well-known/webfinger?resource=acct:{username}@iqoqo.cc")
+            assert resp_alias.status_code == 200
+
 
 class TestNodeInfoDiscovery:
     """Test suite for NodeInfo 2.1 endpoints."""

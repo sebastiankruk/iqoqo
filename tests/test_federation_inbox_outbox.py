@@ -377,7 +377,15 @@ class TestActivityHandlers:
     def test_handle_follow_and_undo_follow(self, app, fed_user, remote_peer_instance):
         """Follow creates relationship, Undo removes it."""
         with app.app_context():
-            app.config["FEDERATION_AUTO_ACCEPT_FOLLOWS"] = True
+            consent = (
+                db.session.execute(select(FederationConsent).where(FederationConsent.user_id == uuid.UUID(fed_user["id"])))
+                .scalars()
+                .first()
+            )
+            if consent:
+                consent.auto_accept_follows = True
+                db.session.commit()
+
             base_url = get_federation_base_url()
             target_iri = canonical_actor_iri(uuid.UUID(fed_user["id"]), base_url)
 
@@ -466,6 +474,27 @@ class TestActivityHandlers:
             )
             assert follower is not None
             assert follower.status == FollowStatus.PENDING
+
+            # Verify notification was created with deep-link and actionable payload
+            from app.db.social import Notification
+
+            notif = (
+                db.session.execute(
+                    select(Notification)
+                    .where(
+                        Notification.user_id == uuid.UUID(fed_user["id"]),
+                        Notification.type == "follow_request",
+                    )
+                    .order_by(Notification.created_at.desc())
+                )
+                .scalars()
+                .first()
+            )
+            assert notif is not None
+            assert notif.target_iri == "/profile?tab=incoming#friends"
+            assert notif.payload_json.get("friendship_id") == f"fed:{follower.id}"
+            assert notif.payload_json.get("target_iri") == "/profile?tab=incoming#friends"
+            assert "New friend request from" in notif.payload_json.get("message", "")
 
     def test_handle_accept_and_reject(self, app, fed_user, remote_peer_instance):
         """Accept sets status to accepted, Reject sets status to rejected."""
@@ -596,20 +625,22 @@ class TestActivityHandlers:
             actor_uri = remote_peer_instance["actor_uri"]
             inst = db.session.get(FederationInstance, remote_peer_instance["instance_id"])
 
-            # 1. auto_accept=False, trust_level=TRUSTED -> must remain PENDING
+            # 1. auto_accept_follows=False, trust_level=TRUSTED -> must remain PENDING
             inst.trust_level = TrustLevel.TRUSTED
+            consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+            if consent:
+                consent.auto_accept_follows = False
             db.session.commit()
-            with patch("app.core.config_service.ConfigService.get_bool", return_value=False):
-                assert (
-                    handle_activity(
-                        {
-                            "type": "Follow",
-                            "actor": actor_uri,
-                            "object": canonical_actor_iri(user.id),
-                        }
-                    )
-                    is True
+            assert (
+                handle_activity(
+                    {
+                        "type": "Follow",
+                        "actor": actor_uri,
+                        "object": canonical_actor_iri(user.id),
+                    }
                 )
+                is True
+            )
 
             f = (
                 db.session.execute(
@@ -626,8 +657,28 @@ class TestActivityHandlers:
 
             # 2. Existing is REJECTED -> duplicate Follow stays REJECTED
             f.status = FollowStatus.REJECTED
+            if consent:
+                consent.auto_accept_follows = True
             db.session.commit()
-            with patch("app.core.config_service.ConfigService.get_bool", return_value=True):
+            assert (
+                handle_activity(
+                    {
+                        "type": "Follow",
+                        "actor": actor_uri,
+                        "object": canonical_actor_iri(user.id),
+                    }
+                )
+                is True
+            )
+            db.session.refresh(f)
+            assert f.status == FollowStatus.REJECTED
+
+            # 3. Existing is ACCEPTED -> duplicate Follow stays ACCEPTED
+            f.status = FollowStatus.ACCEPTED
+            if consent:
+                consent.auto_accept_follows = False
+            db.session.commit()
+            with patch("app.core.federation_handlers._accept_follow") as mock_accept:
                 assert (
                     handle_activity(
                         {
@@ -638,25 +689,7 @@ class TestActivityHandlers:
                     )
                     is True
                 )
-            db.session.refresh(f)
-            assert f.status == FollowStatus.REJECTED
-
-            # 3. Existing is ACCEPTED -> duplicate Follow stays ACCEPTED
-            f.status = FollowStatus.ACCEPTED
-            db.session.commit()
-            with patch("app.core.config_service.ConfigService.get_bool", return_value=False):
-                with patch("app.core.federation_handlers._accept_follow") as mock_accept:
-                    assert (
-                        handle_activity(
-                            {
-                                "type": "Follow",
-                                "actor": actor_uri,
-                                "object": canonical_actor_iri(user.id),
-                            }
-                        )
-                        is True
-                    )
-                    mock_accept.assert_called_once()
+                mock_accept.assert_called_once()
             db.session.refresh(f)
             assert f.status == FollowStatus.ACCEPTED
 
@@ -689,3 +722,9 @@ class TestCeleryTaskAndQueueRouting:
             assert tid == "task-uuid-999"
             mock_apply.assert_called_once()
             assert mock_apply.call_args[1].get("queue") == "federation"
+
+    def test_submit_task_catches_runtime_error_and_returns_none(self):
+        """submit_task catches Celery RuntimeError and returns None for graceful sync fallback."""
+        with patch("app.core.tasks._task_wrapper.apply_async", side_effect=RuntimeError("Retry limit exceeded while trying to reconnect")):
+            tid = submit_task(process_inbound_activity, "act-id", {"type": "Follow"})
+            assert tid is None

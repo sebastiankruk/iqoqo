@@ -18,8 +18,8 @@
 # Usage: ./scripts/cloud_backup.sh [rclone_remote]
 #
 # Backs up:
-#   1. PostgreSQL full database dump (pg_dumpall)
-#   2. Uploaded asset volumes (covers/, data/)
+#   1. PostgreSQL full database dump (pg_dumpall - all schemas including public, auth, social, federation)
+#   2. Uploaded asset volumes (covers/, gallery/, raw_covers/) and instance keys (data/federation_keys/)
 # Then compresses and syncs to off-site storage.
 #
 # ── Two upload backends ────────────────────────────────────────────────────
@@ -415,9 +415,9 @@ if ! grep -q "CREATE\|INSERT\|ALTER\|SET" "${DB_DUMP_FILE}" 2>/dev/null; then
     exit 1
 fi
 
-# 2. Archive uploaded assets (non-fatal if missing)
-# Standard iQoQo asset paths relative to app root/volumes
-ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers")
+# 2. Archive uploaded assets and instance keys (non-fatal if missing)
+# Standard iQoQo asset and key paths relative to app root/volumes
+ASSET_PATHS=("app/static/covers" "app/static/gallery" "app/static/uploads/raw_covers" "data/federation_keys")
 for asset_dir in "${ASSET_PATHS[@]}"; do
     if [ -d "${asset_dir}" ]; then
         echo "📁 Archiving ${asset_dir}..."

@@ -163,29 +163,29 @@ def sync_manifestation(
 ) -> dict[str, Any]:
     """Reconcile remote manifestation metadata according to instance trust level.
 
-    - `blocked` or `untrusted`: ignored and discarded immediately.
+    - `blocked`: ignored and discarded immediately.
+    - `untrusted`: routes proposed changes into the Custodian Provider Merge queue
+      via `raw_payload` and `EntityAuditLog(change_type='federation_merge_proposed')`.
     - `trusted`: auto-fills empty local fields, preserving non-empty local data,
       and records field-level provenance (`meta['_provenance']`) and `prov:wasDerivedFrom`.
-    - `pending`: routes proposed changes into the Custodian Provider Merge queue
-      via `raw_payload` and `EntityAuditLog(change_type='federation_merge_proposed')`.
 
     Args:
         manifestation: Local Manifestation entity to update.
         remote_data: Dictionary containing incoming metadata fields.
         domain: Domain of the remote federation peer.
-        trust_level: TrustLevel string ('trusted', 'pending', 'untrusted', 'blocked').
+        trust_level: TrustLevel string ('trusted', 'untrusted', 'blocked').
         actor_uri: Optional URI of the sending remote actor.
 
     Returns:
         Summary dict of reconciliation result.
     """
-    if trust_level in (TrustLevel.BLOCKED, TrustLevel.UNTRUSTED):
+    if trust_level == TrustLevel.BLOCKED:
         logger.info("Dropping metadata sync from %s peer %s", trust_level, domain)
         return {"status": "ignored", "reason": f"trust_level_{trust_level}"}
 
     provenance_key = f"federation:{domain}"
 
-    if trust_level == TrustLevel.PENDING:
+    if trust_level in (TrustLevel.UNTRUSTED, "pending"):
         # Check if already queued with identical payload to consolidate duplicate storage
         raw = dict(manifestation.raw_payload or {})
         existing = raw.get(provenance_key)
