@@ -240,3 +240,51 @@ def test_federation_consent_auto_accept_follows(client):
     get_res2 = client.get("/api/v1/profile/federation-consent", headers=headers)
     assert get_res2.status_code == 200
     assert get_res2.get_json()["data"]["auto_accept_follows"] is True
+
+
+def test_update_consent_preserves_collection_and_idempotent_keys(client):
+    """POST /api/profile/consent preserves federated_collection on re-grant and reuses existing keys."""
+    from sqlalchemy import select
+
+    from app.db.federation import FederationConsent
+
+    client.post("/api/auth/register", json={"email": "consent_preserve@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "consent_preserve@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Initial consent grant
+    post_res = client.post(
+        "/api/profile/consent",
+        headers=headers,
+        json={"consent_type": "federation", "granted": True},
+    )
+    assert post_res.status_code == 200
+
+    user = db.session.execute(select(User).where(User.email == "consent_preserve@iqoqo.local")).scalars().first()
+    assert user is not None
+    initial_pub_key = user.federation_public_key
+    assert initial_pub_key is not None
+
+    # Set collection consent explicitly
+    consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == user.id)).scalars().first()
+    assert consent is not None
+    consent.federated_collection = True
+    db.session.commit()
+
+    # Re-grant profile consent
+    post_res2 = client.post(
+        "/api/profile/consent",
+        headers=headers,
+        json={"consent_type": "federation", "granted": True},
+    )
+    assert post_res2.status_code == 200
+
+    # Ensure collection consent was not clobbered back to False
+    db.session.refresh(consent)
+    assert consent.federated_collection is True
+    assert consent.federated_profile is True
+
+    # Ensure public key was not regenerated/clobbered
+    db.session.refresh(user)
+    assert user.federation_public_key == initial_pub_key

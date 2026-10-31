@@ -272,4 +272,37 @@ describe("NotificationCenter", () => {
     expect(apiClient.post).toHaveBeenCalledWith("/profile/friends/fed%3A42/respond", { action: "accept" });
     expect(mockMarkRead).toHaveBeenCalledWith([204]);
   });
+
+  it("does not render inline accept/reject buttons for follow_request when status is accepted", async () => {
+    const user = userEvent.setup();
+    vi.mocked(notificationsApi.useNotifications).mockReturnValue({
+      data: {
+        notifications: [
+          {
+            id: 205,
+            user_id: "user-1",
+            type: "follow_request",
+            payload: {
+              message: "skruk (preview.iqoqo.cc) followed you",
+              friendship_id: "fed:43",
+              status: "accepted",
+            },
+            read_at: null,
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        unread_count: 1,
+        limit: 20,
+        offset: 0,
+      },
+      isLoading: false,
+    } as any);
+
+    renderComponent();
+    await user.click(screen.getByTestId("notification-bell"));
+
+    expect(screen.queryByTestId("notification-accept-205")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("notification-reject-205")).not.toBeInTheDocument();
+  });
 });
