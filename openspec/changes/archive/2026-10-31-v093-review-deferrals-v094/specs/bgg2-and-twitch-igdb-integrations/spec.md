@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: BoardGameGeek2 Strategy Resilience
+### Requirement: BoardGameGeek Strategy Resilience
 
 The system SHALL query BoardGameGeek via `boardgamegeek2` with rate-limiting backoff (`Retry-After` header support and exponential backoff inside the retry loop), single-request game metadata extraction, and defused XML parsing, and SHALL restrict active external Twitch OAuth probing (`GET /api/system/status?probe=true`) to authenticated administrators.
 
@@ -13,6 +13,11 @@ The system SHALL query BoardGameGeek via `boardgamegeek2` with rate-limiting bac
 
 - **WHEN** `BGGClient._execute_with_backoff` encounters a rate-limit or `429` error with a `Retry-After` duration
 - **THEN** The client sleeps for the requested duration (or exponential backoff `base_backoff * (2 ** attempt)`) before the next retry attempt inside the loop.
+
+#### Scenario: Twitch/IGDB token cache updates atomically without partial reads
+
+- **WHEN** an administrator or lookup refreshes the Twitch OAuth token cache `.igdb_token.json` concurrently with status checks
+- **THEN** the token payload is written to a `0600` temporary sibling file and atomically replaced via `os.replace()` so concurrent readers never observe a truncated JSON file
 
 #### Scenario: Non-admin user requests system status with probe=true
 

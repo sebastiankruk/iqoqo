@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Orthogonal Federation Combinatorial Matrix & Multi-Origin E2E Suite (C92)**:
+  - Authored comprehensive parametrized two-instance pytest test suite `tests/test_federation_combinatorial_matrix.py` verifying 92 cases across 4 orthogonal dimensions: 16 bilateral/asymmetric peering topologies ($T_{A \to B} \times T_{B \to A}$), 24 user consent and auto-acceptance combinations, 40 directional social follow and crossover states, and 12 resource visibility levels (`private`, `friends_only`, `shared`, `public`).
+  - Authored zero-mock dual-origin Playwright E2E suite `frontend/__tests__/e2e/federation_matrix_workflows.spec.ts` exercising live bilateral trust, asymmetric approval, blocked instance isolation, and friends-only resource boundaries.
+  - Hardened `send_friend_request` in `app/core/friend_service.py` to return HTTP 409 when a federated friend relationship already exists, preventing duplicate silent requests.
+  - Updated `scripts/iqopretest.sh` to automatically reset secondary peer database volumes during paired staging clone operations, ensuring reproducible test states.
+
 - **Federation Notification Actions & Worker Hardening (C91)**:
   - Added deep-link routing for `follow_request` notifications to `/profile?tab=incoming#friends` in `frontend/components/dashboard/notification-center.tsx`.
   - Added requester username, display name, and origin domain formatting to in-app notification payloads in `app/core/federation_handlers.py`.

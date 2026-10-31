@@ -55,7 +55,7 @@ The system SHALL execute only stateless HTTP NodeInfo/root discovery requests in
 
 ### Requirement: Canonical Port-Preserving Peer Domain Normalization and Default Trust Clamping
 
-All peer discovery, outbound actor caching, and inbound activity instance lookups SHALL normalize domains identically—stripping schemes, paths, and default ports (`:80`, `:443`) while preserving non-standard ports—and SHALL clamp initial peer trust for newly registered instances to `untrusted` or `pending`.
+All peer discovery, outbound actor caching, and inbound activity instance lookups SHALL normalize domains identically—stripping schemes, paths, and default ports (`:80`, `:443`) while preserving non-standard ports—and SHALL assign initial peer trust for newly registered or discovered instances to `untrusted` within the 3-state trust model (`trusted`, `untrusted`, `blocked`).
 
 #### Scenario: Non-standard port is preserved uniformly across discovery and caching
 
@@ -64,8 +64,8 @@ All peer discovery, outbound actor caching, and inbound activity instance lookup
 
 #### Scenario: Newly discovered peer honors clamped default trust
 
-- **WHEN** a previously unseen peer domain is discovered while `FEDERATION_DEFAULT_TRUST` is set to `"pending"` (or if corrupted to `"trusted"`)
-- **THEN** the newly created peer record receives trust level `"pending"` (or falls back to `"untrusted"` when the configured value is not in `{"untrusted", "pending"}`)
+- **WHEN** a previously unseen peer domain is registered or discovered
+- **THEN** the newly created `FederationInstance` record receives `trust_level = "untrusted"` (and any legacy `"pending"` value in database rows or API payloads is normalized to `"untrusted"`)
 
 ### Requirement: Cryptographic Verification of Peer Instance Key Fingerprints
 
@@ -94,3 +94,21 @@ The federation trust synchronization, cryptographic key fingerprinting, and peer
 
 - **WHEN** probing `evil.example` returns a NodeInfo 2.1 document claiming `"metadata": {"instance_actor": "https://victim.example/api/federation/actor"}`
 - **THEN** the health probe rejects the cross-origin `instance_actor` URL without fetching `victim.example` or polluting the local instance registry
+
+### Requirement: Three-Category Trust Gating Across Catalog Metadata, Friend Requests, and Collection/Loan Requests
+
+The system SHALL enforce a unified 3-category trust model (`trusted`, `untrusted`, `blocked`) across catalog metadata synchronization, federated friend/follow requests, and federated collection/loan requests:
+
+- **`trusted`**: Inbound catalog metadata auto-enriches empty fields with provenance; friend/follow requests and collection/loan requests are permitted, and inbound `Follow` requests may auto-accept if the target local user has enabled `auto_accept_follows`.
+- **`untrusted`**: Inbound catalog metadata is queued as pending provenance candidates (`ProviderMergeDialog`) for custodian approval; friend/follow requests and collection/loan requests are permitted with mandatory manual user approval.
+- **`blocked`**: All inbound and outbound catalog sync, friend/follow requests, and collection/loan requests are rejected (`HTTP 403`).
+
+#### Scenario: Untrusted peer queues catalog metadata for review and requires manual follow approval
+
+- **WHEN** a remote peer has `trust_level = "untrusted"` and sends either a catalog `Create`/`Update` activity or a `Follow` activity
+- **THEN** `sync_manifestation` stores incoming bibliographic fields in `_pending_federation_sync` for custodian review without overwriting authoritative fields, and `handle_follow` records the follow request as `pending` for manual approval regardless of the user's `auto_accept_follows` toggle
+
+#### Scenario: Blocked peer is rejected for outbound and inbound friend and loan requests
+
+- **WHEN** a local user attempts to send a friend request or loan request to an actor on a `blocked` peer instance (or an actor on a `blocked` peer sends an inbound `Follow` or `Offer` activity)
+- **THEN** the backend rejects the request with `PermissionError` / HTTP `403 Forbidden`
