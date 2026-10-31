@@ -198,6 +198,19 @@ with app.app_context():
             if hasattr(consent, 'auto_accept_follows'):
                 consent.auto_accept_follows = True
         db.session.commit()
+
+    skruk_user = User.query.filter_by(email='sebastian.kruk@gmail.com').first()
+    if skruk_user:
+        if not skruk_user.public_username:
+            skruk_user.public_username = 'skruk'
+        s_consent = FederationConsent.query.filter_by(user_id=skruk_user.id).first()
+        if not s_consent:
+            s_consent = FederationConsent(user_id=skruk_user.id, federated_profile=True, federated_collection=True)
+            db.session.add(s_consent)
+        else:
+            s_consent.federated_profile = True
+            s_consent.federated_collection = True
+        db.session.commit()
 "
 pass "Primary user configured with active federated profile & consent."
 

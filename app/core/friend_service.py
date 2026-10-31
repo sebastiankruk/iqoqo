@@ -481,6 +481,18 @@ def send_friend_request(
                 .first()
             )
             if existing_fol:
+                if existing_fol.status == FollowStatus.ACCEPTED:
+                    return None, "Already friends with this federated user", 409
+                if existing_fol.status == FollowStatus.PENDING:
+                    return None, "Friend request already sent", 409
+                existing_fol.status = FollowStatus.PENDING
+                db.session.commit()
+                try:
+                    from app.core.federation_dispatch import dispatch_follow
+
+                    dispatch_follow(requester, actor)
+                except Exception as exc:
+                    logger.warning("Failed dispatching follow activity for existing follower: %s", exc)
                 res_dict = existing_fol.to_dict()
                 res_dict["id"] = f"fed:{existing_fol.id}"
                 return res_dict, None, 200
