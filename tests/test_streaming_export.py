@@ -233,3 +233,43 @@ def test_admin_export_sets_attachment_headers(client, admin_headers, app, export
 
 def test_admin_export_requires_auth(client, app, export_setup):
     assert client.get("/api/admin/export").status_code in (401, 403)
+
+
+def test_user_export_requires_auth(client):
+    assert client.get("/api/items/export").status_code == 401
+    assert client.get("/api/v1/items/export").status_code == 401
+
+
+def test_user_export_rejects_invalid_format(client, normal_user_headers):
+    resp = client.get("/api/items/export?format=xml", headers=normal_user_headers)
+    assert resp.status_code == 400
+    assert "Supported formats" in resp.get_json()["error"]
+
+
+def test_user_export_formats_and_headers(client, normal_user_headers, app, export_setup):
+    with app.app_context():
+        test_user = User.query.filter_by(email="test_user@iqoqo.local").first()
+        if test_user:
+            item = Item.query.first()
+            if item:
+                item.owner_id = test_user.id
+                db.session.commit()
+
+    for fmt, expected_mimetype, expected_ext in [
+        ("json", "application/json", ".json"),
+        ("json-ld", "application/ld+json", ".jsonld"),
+        ("turtle", "text/turtle", ".ttl"),
+        ("nt", "application/n-triples", ".nt"),
+    ]:
+        resp = client.get(f"/api/items/export?format={fmt}", headers=normal_user_headers)
+        assert resp.status_code == 200
+        assert expected_mimetype in resp.mimetype
+        assert "Content-Disposition" in resp.headers
+        assert f".{expected_ext.lstrip('.')}\"" in resp.headers["Content-Disposition"]
+        assert resp.headers["X-Accel-Buffering"] == "no"
+        content = resp.get_data(as_text=True)
+        assert len(content) > 0
+
+    resp_v1 = client.get("/api/v1/items/export", headers=normal_user_headers)
+    assert resp_v1.status_code == 200
+    assert "application/ld+json" in resp_v1.mimetype

@@ -459,6 +459,15 @@ def request_federated_loan() -> Response | tuple[Response, int]:
     if not target_item_uri or not target_actor_uri:
         return jsonify({"error": "target_item_uri and target_actor_uri are required", "code": 400}), 400
 
+    from app.core.federation_discovery import clean_instance_domain
+    from app.db.federation import FederationInstance, TrustLevel
+
+    target_domain = clean_instance_domain(target_actor_uri)
+    if target_domain:
+        inst = db.session.execute(select(FederationInstance).where(FederationInstance.domain == target_domain)).scalars().first()
+        if inst and inst.trust_level == TrustLevel.BLOCKED:
+            return jsonify({"error": f"Cannot request loan from blocked peer {target_domain}", "code": 403}), 403
+
     client = FederationClient()
     actor_doc = client.fetch_actor(target_actor_uri)
     if not actor_doc or not isinstance(actor_doc, dict):

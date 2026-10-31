@@ -192,8 +192,9 @@ def get_actor_private_key(user_id: str) -> rsa.RSAPrivateKey | None:
 def get_actor_public_key(user_id: str) -> str | None:
     """Get the public key PEM for a federation actor.
 
-    Reads from the User model's federation_public_key column if present.
-    Falls back to deriving from the decrypted private key file if column is empty.
+    Derives from the decrypted private key file if present, keeping the
+    User model's federation_public_key synchronized. Falls back to the
+    cached column if the private key file is absent.
 
     Args:
         user_id: UUID string of the local user.
@@ -201,7 +202,30 @@ def get_actor_public_key(user_id: str) -> str | None:
     Returns:
         Public key PEM string or None if no key exists.
     """
-    # Check if user model holds cached public key
+    private_key = get_actor_private_key(user_id)
+    if private_key is not None:
+        public_pem = (
+            private_key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode("utf-8")
+        )
+        try:
+            from app.db.models import User, db
+
+            if _is_valid_uuid(user_id):
+                user = db.session.get(User, uuid.UUID(user_id))
+                if user and getattr(user, "federation_public_key", None) != public_pem:
+                    user.federation_public_key = public_pem
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+            pass
+        return public_pem
+
+    # Fall back to user model cached public key if private key not on disk
     try:
         from app.db.models import User, db
 
@@ -212,16 +236,7 @@ def get_actor_public_key(user_id: str) -> str | None:
     except Exception:
         pass
 
-    # Try deriving from private key
-    private_key = get_actor_private_key(user_id)
-    if private_key is None:
-        return None
-
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return public_pem.decode("utf-8")
+    return None
 
 
 def delete_actor_keypair(user_id: str) -> bool:

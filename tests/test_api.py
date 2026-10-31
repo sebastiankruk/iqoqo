@@ -542,3 +542,30 @@ def test_add_item_manual_standard_envelope(client, normal_user_headers):
     assert "item_id" in data["data"]
     assert "manifestation_id" in data["data"]
     assert data["error"] is None
+
+
+def test_serve_gallery_image_valid_and_traversal(client, tmp_path, monkeypatch):
+    """Test serving gallery images and ensuring directory traversal protection."""
+    from app.api import system
+
+    # Create dummy image in a temp gallery dir
+    test_gallery = tmp_path / "gallery"
+    test_gallery.mkdir()
+    sample_file = test_gallery / "sample.jpg"
+    sample_file.write_bytes(b"JPEG_MOCK_DATA")
+
+    # Point GALLERY_DIR to our test directory
+    monkeypatch.setattr(system, "GALLERY_DIR", str(test_gallery))
+
+    # 1. Valid file request succeeds
+    res_ok = client.get("/api/static/gallery/sample.jpg")
+    assert res_ok.status_code == 200
+    assert res_ok.data == b"JPEG_MOCK_DATA"
+
+    # 2. Non-existent file returns 404
+    res_404 = client.get("/api/static/gallery/nonexistent.jpg")
+    assert res_404.status_code == 404
+
+    # 3. Directory traversal attempt is rejected by Flask send_from_directory (404 or 400)
+    res_traversal = client.get("/api/static/gallery/../secret.txt")
+    assert res_traversal.status_code in (404, 400)

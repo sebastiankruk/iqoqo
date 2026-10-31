@@ -195,3 +195,48 @@ def test_update_profile_html_sanitization(client):
     assert data["bio"] == "Hello World"
     assert "<" not in data["bio"]
     assert ">" not in data["bio"]
+
+
+def test_update_profile_visibility_friends_only(client):
+    """PUT /api/profile/ accepts 'friends_only' for visibility and default_item_visibility."""
+    client.post("/api/auth/register", json={"email": "friends_vis@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "friends_vis@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "visibility": "friends_only",
+        "default_item_visibility": "friends_only",
+    }
+    resp = client.put("/api/profile/", headers=headers, json=payload)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["visibility"] == "friends_only"
+    assert data["default_item_visibility"] == "friends_only"
+
+
+def test_federation_consent_auto_accept_follows(client):
+    """GET and PUT /api/v1/profile/federation-consent exposes and updates auto_accept_follows."""
+    client.post("/api/auth/register", json={"email": "fed_consent_test@iqoqo.local", "password": "test-password"})
+    res = client.post("/api/auth/login", json={"email": "fed_consent_test@iqoqo.local", "password": "test-password"})
+    token = json.loads(res.data)["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Initial state
+    get_res = client.get("/api/v1/profile/federation-consent", headers=headers)
+    assert get_res.status_code == 200
+    assert get_res.get_json()["data"]["auto_accept_follows"] is False
+
+    # Update auto_accept_follows to True
+    put_res = client.put(
+        "/api/v1/profile/federation-consent",
+        headers=headers,
+        json={"auto_accept_follows": True, "federated_profile": True},
+    )
+    assert put_res.status_code == 200
+    assert put_res.get_json()["data"]["auto_accept_follows"] is True
+
+    # Re-fetch
+    get_res2 = client.get("/api/v1/profile/federation-consent", headers=headers)
+    assert get_res2.status_code == 200
+    assert get_res2.get_json()["data"]["auto_accept_follows"] is True

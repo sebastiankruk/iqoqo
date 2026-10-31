@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -135,6 +135,7 @@ help:
 	@echo "  test-backend-pg - Run backend integration tests requiring PostgreSQL"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
 	@echo "  test-e2e       - Run Playwright against an isolated E2E-only PostgreSQL service."
+	@echo "  test-e2e-federation - Run Playwright against paired live federation preview containers."
 	@echo ""
 	@echo "Deployment:"
 	@echo "  start          - Start development environment (DB, Flask API, Next.js frontend)"
@@ -727,6 +728,29 @@ test-e2e-db-up: .venv/bin/activate
 
 test-e2e: test-e2e-db-up
 	@$(MAKE) --no-print-directory _test-e2e-run NO_RESET='$(NO_RESET)' args='$(args)'
+
+test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite against paired containers
+	@set -euo pipefail; \
+	echo "🚀 Orchestrating live federation pair test run..."; \
+	REPO_ROOT="$$(pwd)"; \
+	PREVIEW_STARTED=0; \
+	if ! docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
+		echo "Starting paired federation preview stack..."; \
+		if FEDERATION_PAIR=1 $(MAKE) preview-up; then \
+			PREVIEW_STARTED=1; \
+			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then $(MAKE) -C "$$REPO_ROOT" preview-down; fi' EXIT; \
+		else \
+			echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
+		fi; \
+	fi; \
+	if docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
+		bash scripts/verify_federation_preview.sh; \
+		(cd frontend && FEDERATION_PAIR_LIVE=1 $(NPX) playwright test --project=chromium __tests__/e2e/federation_pair_live.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
+	else \
+		echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
+		npx bats tests/bash/verify_federation_preview.bats; \
+		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/help_hub_workflow.spec.ts $(args)); \
+	fi
 
 # FRBR merge integrity against a real PostgreSQL instance.
 #

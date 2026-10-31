@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-10-31
+
+### Added
+
+- **Pre-Merge Hardening, ActivityPub Lifecycle & WebFinger Robustness (C94)**:
+  - Scoped inbound ActivityPub `Follow` activity queries in `app/core/friend_service.py` to target user actor IRIs and pending actor URIs, preventing cross-user inbound follow theft.
+  - Implemented outbound ActivityPub `Reject(Follow)` and `Undo(Follow)` activity delivery on friend rejection and removal in `app/core/friend_service.py` and `app/core/federation_dispatch.py`.
+  - Sanitized WebFinger SQL lookup queries against wildcard injection, prioritized exact `public_username` matches over unconsented email prefixes, and appended `@domain` on fallback discovery queries in `app/api/federation.py` and `app/core/friend_service.py`.
+  - Hardened inbound `Accept` and `Reject` actor IRI checks in `app/core/federation_handlers.py` to require anchored `/u/<user_uuid>` suffix or canonical IRI matches, and hid notification action buttons on auto-accepted requests in `frontend/components/dashboard/notification-center.tsx`.
+  - Synchronized dual-origin Playwright E2E placeholder expectations in `federation_pair_live.spec.ts` and `federation_matrix_workflows.spec.ts` with localized templates.
+  - Normalized target domains before block checks, made RSA keypair generation idempotent against existing disk keys, rolled back transactions on key synchronization exceptions, normalized migration downgrade constraints, and safeguarded archive tar extraction in `scripts/restore.sh`.
+
+- **REST API Test Coverage Hardening across Edge Boundaries (C93)**:
+  - Authored comprehensive test suites closing test coverage gaps across residual REST endpoints in `v0.9.4`.
+  - Added user library streaming export integration tests in `tests/test_streaming_export.py` verifying authenticated streaming across `json-ld`, `turtle`, `nt`, and `json`, 400 rejection for invalid formats, and 401 unauthenticated guard.
+  - Added email verification resend tests in `tests/test_account_deletion.py` verifying 200 delivery dispatch, 3/hour account-scoped rate limiting (429), already-verified response, and 503 mail relay failure handling.
+  - Added borrower loan status tests in `tests/test_api_items_lending.py` verifying requester active loan request serialization and null data when unrequested.
+  - Added Linked Open Data admin stats and cleanup tests in `tests/test_lod_linking_api.py` verifying 403 for non-curator/admin users, 200 stats dictionary breakdown, and dry-run cleanup task execution.
+  - Added static gallery asset traversal security tests in `tests/test_api.py` verifying legitimate asset serving and path traversal (`../`) rejection.
+
+- **Orthogonal Federation Combinatorial Matrix & Multi-Origin E2E Suite (C92)**:
+  - Authored comprehensive parametrized two-instance pytest test suite `tests/test_federation_combinatorial_matrix.py` verifying 92 cases across 4 orthogonal dimensions: 16 bilateral/asymmetric peering topologies ($T_{A \to B} \times T_{B \to A}$), 24 user consent and auto-acceptance combinations, 40 directional social follow and crossover states, and 12 resource visibility levels (`private`, `friends_only`, `shared`, `public`).
+  - Authored zero-mock dual-origin Playwright E2E suite `frontend/__tests__/e2e/federation_matrix_workflows.spec.ts` exercising live bilateral trust, asymmetric approval, blocked instance isolation, and friends-only resource boundaries.
+  - Hardened `send_friend_request` in `app/core/friend_service.py` to return HTTP 409 when a federated friend relationship already exists, preventing duplicate silent requests.
+  - Updated `scripts/iqopretest.sh` to automatically reset secondary peer database volumes during paired staging clone operations, ensuring reproducible test states.
+
+- **Federation Notification Actions & Worker Hardening (C91)**:
+  - Added deep-link routing for `follow_request` notifications to `/profile?tab=incoming#friends` in `frontend/components/dashboard/notification-center.tsx`.
+  - Added requester username, display name, and origin domain formatting to in-app notification payloads in `app/core/federation_handlers.py`.
+  - Added inline Accept and Reject action buttons for incoming friend and follow requests directly inside `NotificationCenter` popover, resolving `fed:<id>` and local friendships via `/api/profile/friends/<id>/respond`.
+  - Added bilingual localization for inline notification actions in `frontend/messages/en.json` and `frontend/messages/pl.json`.
+  - Added `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables to `peer-worker` service in `docker-compose.federation-preview.yml`, preventing Celery worker startup crash loops.
+
+- **Dual-Backend Cloud Backup & Federation Key Preservation (C88)**:
+  - Preserved dual-backend `S3_BACKEND=auto|rclone|s3` host backups in `scripts/cloud_backup.sh` supporting 40+ storage providers via `rclone` (Dropbox, Google Drive, OneDrive, WebDAV, SFTP) alongside native `boto3` S3 object storage.
+  - Added `data/federation_keys` (`server.pem` instance RSA private key) to `ASSET_PATHS` in `scripts/cloud_backup.sh` so remote peer cryptographic pinning survives disaster recovery.
+  - Authored `scripts/restore.sh` disaster-recovery restore workflow verifying SQL dump integrity, restoring PostgreSQL database schemas, and enforcing `0700`/`0600` permissions on restored federation keys.
+  - Expanded `tests/bash/cloud_backup.bats` to 38 test cases covering federation key archiving, restore validation, and permissions enforcement.
+  - Updated `docs/BACKUPS.md` with disaster-recovery restore guide.
+- **v0.9.x Final Review & Mobile Readiness Gate (C90)**:
+  - Authored `tests/test_ontology_validation.py` verifying runtime expansion guards (`validate_work_not_expansion_aggregated`, `validate_container_not_linked_as_expansion`) mirroring SHACL `ExpansionWorkShape`.
+  - Authored `tests/test_federation_guard.py` verifying `@federation_required` and `is_federation_enabled`.
+  - Authored `tests/test_search_types.py` verifying dialect-aware `SearchVector` compilation on PostgreSQL (`TSVECTOR`) and SQLite (`TEXT`).
+  - Authored `frontend/__tests__/app/admin/lending.test.tsx` verifying custodian loan coordination and mutations on `/admin/lending`.
+  - Authored component unit tests for `frontend/components/item/item-timeline.tsx` (provenance events and virtual item boundary), `frontend/components/social/star-rating.tsx` (interactive star rating and hover preview), and `frontend/components/admin/relation-management-dialog.tsx` (reassign, merge, and split workflows).
+  - Authored operational script test suite `tests/test_operational_scripts.py` covering cover pipeline scheduling in `scripts/archive_orphans.py`, circuit-breaker batch processing in `scripts/generate_ai_covers.py`, and URL security/integrity verification in `scripts/init_geonames_db.py`.
+  - Authored `tests/test_mobile_readiness.py` verifying NodeInfo 2.1 protocol links, auth providers discovery, and CORS preflight for upcoming v1.0.0 Capacitor apps.
+  - Authored comprehensive federation architecture document `docs/FEDERATION.md` and finalized `docs/API.md`, `docs/SECURITY.md`, and `docs/OPERATIONS.md`.
+- **Live Dual-Origin Federation E2E Suite & Automation Harness (C89b)**:
+  - Added dual-origin live Playwright E2E suite `frontend/__tests__/e2e/federation_pair_live.spec.ts` exercising cross-instance trust graph peering, profile federation consent, social follow handshake, connected library directory, and ActivityPub loan/custody workflows across live paired application stacks.
+  - Added `frontend/__tests__/e2e/help_hub_workflow.spec.ts` testing Help Hub guide discovery, markdown article rendering, and bilingual English/Polish switching.
+  - Added `test-e2e-federation` target to `Makefile` and `test-federation-pair-e2e` CI job to `.github/workflows/quality.yml`.
+  - Added CLI argument parsing, fixture seeding, and health verification in `scripts/verify_federation_preview.sh` with dedicated BATS test suite `tests/bash/verify_federation_preview.bats`.
+- **Domain Migration to iqoqo.kruk.cc & Cloudflare Agent Rules (C89)**:
+  - Migrated production deployment URLs and base entity IRI templates in `.env.example`, `docker-compose.yml`, and `deploy/otel-collector-*.yaml` to `iqoqo.kruk.cc`.
+  - Added WebFinger migration domain aliasing in `app/api/federation.py` supporting concurrent resolution of `@user@iqoqo.kruk.cc` and `@user@iqoqo.cc`.
+  - Codified Cloudflare WAF and Bot Management bypass rules in `deploy/cloudflare-semantic-federation-rules.md` allowing automated machine-to-machine traffic for ActivityPub, WebFinger, NodeInfo, and Linked Open Data crawlers.
+  - Authored automated rule verification script `scripts/verify_cloudflare_rules.sh` with BATS syntax testing in `tests/bash/scripts_syntax.bats`.
+- **Auxiliary Test Suites & Shell Script Syntax Guardrails (C87c)**:
+  - Added BATS syntax validation (`bash -n`) in `tests/bash/scripts_syntax.bats` covering `scripts/iqopretest.sh`, `scripts/verify_federation_preview.sh`, and `deploy/wait-for-postgres.sh`.
+  - Added unit test suite `tests/test_verify_http_signature.py` covering CLI argument parsing, SHA-256 Digest header verification, signing string assembly, clock-skew rejection, and RSA-SHA256 signature verification.
+  - Added component unit tests `frontend/__tests__/components/cookie-consent.test.tsx` and `frontend/__tests__/components/mode-toggle.test.tsx` covering localStorage consent lifecycle and accessible theme switching.
+- **Per-User Follow Auto-Acceptance & Federation Consent (C89c)**:
+  - Added `auto_accept_follows` boolean column to `FederationConsent` model and schema via linear Alembic migration `v0_9_4_fed_trust_autoaccept`.
+  - Added user toggle "Auto-Accept Follow Requests from Trusted Peers" on `/profile` federation settings, deprecating instance-wide auto-acceptance.
+  - Added resilient Celery `RuntimeError` fallback in `submit_task` (`app/core/tasks.py`) so ActivityPub inbox operations gracefully execute synchronously if the task broker is unreachable.
+
+### Changed
+
+- **Federation Peering Trust Simplification (C89c)**:
+  - Simplified instance trust model into 3 distinct tiers: `trusted`, `untrusted`, and `blocked` (merging legacy `pending` into `untrusted`).
+  - Removed redundant "Pending Review" badge in Admin Peering dashboard and replaced technical peering banner with a plain-language explanation of trust tiers across catalog synchronization, friend requests, and lending.
+
+### Fixed
+
+- **Federated Friend Resolution & Profile Visibility (C89c)**:
+  - Fixed WebFinger lookup and friend request dispatch to parse `@user@instance` handles with `.rsplit("@", 1)` and support username, full email, or email local-part resolution.
+  - Fixed `PUT /api/profile/` rejecting `"friends_only"` and `"shared"` visibility options.
+  - Removed dead "Public Profile" link from navigation bar dropdown and forwarded authenticated cookies in `/u/[username]` SSR.
+
 ## [0.9.3] - 2026-10-28
 
 ### Added

@@ -42,6 +42,8 @@ receivers:
             - "http://127.0.0.1:3000"
             - "http://localhost:${FRONTEND_PORT}"
             - "http://127.0.0.1:${FRONTEND_PORT}"
+            - "https://iqoqo.kruk.cc"
+            - "https://dev.iqoqo.kruk.cc"
             - "https://iqoqo.cc"
             - "https://dev.iqoqo.cc"
             - "https://cc.iqoqo.app"
