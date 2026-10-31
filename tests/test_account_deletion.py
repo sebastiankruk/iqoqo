@@ -1466,3 +1466,79 @@ class TestTokenTransport:
         finally:
             limiter.enabled = False
             limiter._enabled = False
+
+
+class TestEmailVerificationRequest:
+    """Tests for POST /api/account/email/verification-request."""
+
+    def test_unauthenticated_request_is_refused(self, client) -> None:
+        response = client.post("/api/account/email/verification-request")
+        assert response.status_code == 401
+
+    def test_unverified_account_dispatches_verification_email(self, client, configured_mail, unverified_user) -> None:
+        token = _session_cookie(client, unverified_user)
+        response = client.post(
+            "/api/account/email/verification-request",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+        assert len(configured_mail.sent) == 1
+        assert "unverified-fixture@iqoqo.local" in configured_mail.sent[0].recipient
+
+    def test_already_verified_account_succeeds_without_dispatch(self, client, configured_mail, owner) -> None:
+        token = _session_cookie(client, owner)
+        response = client.post(
+            "/api/account/email/verification-request",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+        assert len(configured_mail.sent) == 0
+
+    def test_request_email_verification_is_rate_limited(self, app, client, configured_mail, unverified_user) -> None:
+        """Exceeding 3 attempts per hour triggers 429."""
+        from app.core.limiter import limiter
+
+        app.config["RATELIMIT_ENABLED"] = True
+        app.config["RATELIMIT_STORAGE_URI"] = "memory://"
+        limiter.enabled = True
+        limiter._enabled = True
+        limiter.init_app(app)
+        limiter.reset()
+        try:
+            token = _session_cookie(client, unverified_user)
+            headers = {"Authorization": f"Bearer {token}"}
+            statuses = []
+            for _ in range(5):
+                resp = client.post("/api/account/email/verification-request", headers=headers)
+                statuses.append(resp.status_code)
+            assert 429 in statuses
+        finally:
+            limiter.enabled = False
+            limiter._enabled = False
+
+    def test_mail_failure_handling(self, client, configured_mail, unverified_user, monkeypatch) -> None:
+        from app.core.account_lifecycle import MailUnavailableError
+        from app.core.mail_service import MailConfigurationError
+
+        token = _session_cookie(client, unverified_user)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 1. MailUnavailableError -> 503 delivery_problem
+        def fail_unavailable(user):
+            raise MailUnavailableError("Relay refused")
+
+        monkeypatch.setattr(account_lifecycle, "send_verification", fail_unavailable)
+        resp1 = client.post("/api/account/email/verification-request", headers=headers)
+        assert resp1.status_code == 503
+        assert "could not be reached or refused" in resp1.get_json()["error"]
+
+        # 2. MailConfigurationError -> 503 not configured
+        def fail_config(user):
+            raise MailConfigurationError("No host configured")
+
+        monkeypatch.setattr(account_lifecycle, "send_verification", fail_config)
+        resp2 = client.post("/api/account/email/verification-request", headers=headers)
+        assert resp2.status_code == 503
+        assert "not configured to send mail" in resp2.get_json()["error"]

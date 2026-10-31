@@ -336,3 +336,44 @@ def test_lending_reset_is_reachable_end_to_end_via_env(monkeypatch):
         client = app.test_client()
         res = client.post("/api/lending/test/reset", headers={"X-E2E-Reset-Secret": "s3cr3t"})
         assert res.status_code == 200, res.get_json()
+
+
+def test_get_loan_status_unauthenticated_returns_401(client, sample_item):
+    """Assert unauthenticated request to /api/lending/items/<id>/loan-status returns 401."""
+    res = client.get(f"/api/lending/items/{sample_item}/loan-status")
+    assert res.status_code == 401
+
+
+def test_get_loan_status_unrequested_returns_null_data(client, sample_item, normal_user_headers):
+    """Assert authenticated user with no active loan request receives data: None."""
+    res = client.get(f"/api/lending/items/{sample_item}/loan-status", headers=normal_user_headers)
+    assert res.status_code == 200
+    json_data = res.get_json()
+    assert json_data["success"] is True
+    assert json_data["data"] is None
+
+
+def test_get_loan_status_with_active_request_returns_details(client, sample_item, normal_user_headers, app):
+    """Assert authenticated requester with an active loan request receives serialized loan request."""
+    from app.db.lending import LoanRequest
+    from app.db.models import User
+
+    with app.app_context():
+        user = User.query.filter_by(email="test_user@iqoqo.local").first()
+        lr = LoanRequest(
+            item_id=sample_item,
+            requester_id=user.id,
+            status="pending",
+            notes="Can I borrow this, Caveman friend?",
+        )
+        db.session.add(lr)
+        db.session.commit()
+        lr_id = lr.id
+
+    res = client.get(f"/api/lending/items/{sample_item}/loan-status", headers=normal_user_headers)
+    assert res.status_code == 200
+    json_data = res.get_json()
+    assert json_data["success"] is True
+    assert json_data["data"]["id"] == lr_id
+    assert json_data["data"]["status"] == "pending"
+    assert json_data["data"]["notes"] == "Can I borrow this, Caveman friend?"

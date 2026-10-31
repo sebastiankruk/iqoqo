@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **REST API Test Coverage Hardening across Edge Boundaries (C93)**:
+  - Authored comprehensive test suites closing test coverage gaps across residual REST endpoints in `v0.9.4`.
+  - Added user library streaming export integration tests in `tests/test_streaming_export.py` verifying authenticated streaming across `json-ld`, `turtle`, `nt`, and `json`, 400 rejection for invalid formats, and 401 unauthenticated guard.
+  - Added email verification resend tests in `tests/test_account_deletion.py` verifying 200 delivery dispatch, 3/hour account-scoped rate limiting (429), already-verified response, and 503 mail relay failure handling.
+  - Added borrower loan status tests in `tests/test_api_items_lending.py` verifying requester active loan request serialization and null data when unrequested.
+  - Added Linked Open Data admin stats and cleanup tests in `tests/test_lod_linking_api.py` verifying 403 for non-curator/admin users, 200 stats dictionary breakdown, and dry-run cleanup task execution.
+  - Added static gallery asset traversal security tests in `tests/test_api.py` verifying legitimate asset serving and path traversal (`../`) rejection.
+
 - **Orthogonal Federation Combinatorial Matrix & Multi-Origin E2E Suite (C92)**:
   - Authored comprehensive parametrized two-instance pytest test suite `tests/test_federation_combinatorial_matrix.py` verifying 92 cases across 4 orthogonal dimensions: 16 bilateral/asymmetric peering topologies ($T_{A \to B} \times T_{B \to A}$), 24 user consent and auto-acceptance combinations, 40 directional social follow and crossover states, and 12 resource visibility levels (`private`, `friends_only`, `shared`, `public`).
   - Authored zero-mock dual-origin Playwright E2E suite `frontend/__tests__/e2e/federation_matrix_workflows.spec.ts` exercising live bilateral trust, asymmetric approval, blocked instance isolation, and friends-only resource boundaries.

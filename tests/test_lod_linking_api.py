@@ -286,3 +286,45 @@ def test_cleanup_lod_links_task_dry_run_and_apply(app):
         assert audit.diff["link_id"] == link_id
         assert audit.diff["old_status"] == "accepted"
         assert audit.diff["new_status"] == "suggested"
+
+
+def test_admin_lod_stats_rbac_and_data(client, normal_user_headers, admin_headers, lod_manif_setup):
+    """Verify GET /api/admin/lod/stats enforces RBAC and returns statistics breakdown."""
+    # 1. Unauthenticated -> 401
+    assert client.get("/api/admin/lod/stats").status_code == 401
+
+    # 2. Regular user -> 403
+    assert client.get("/api/admin/lod/stats", headers=normal_user_headers).status_code == 403
+
+    # 3. Admin user -> 200 with stats
+    resp = client.get("/api/admin/lod/stats", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert "total_manifestations" in data
+    assert "linked_manifestations" in data
+    assert "unlinked_manifestations" in data
+    assert "total_links" in data
+    assert "suggested_links" in data
+    assert "by_authority" in data
+    assert "dbpedia" in data["by_authority"]
+
+
+def test_admin_lod_cleanup_endpoint(client, normal_user_headers, admin_headers, app):
+    """Verify POST /api/v1/admin/lod/cleanup enforces RBAC and triggers cleanup task."""
+    # 1. Unauthenticated -> 401
+    assert client.post("/api/v1/admin/lod/cleanup").status_code == 401
+
+    # 2. Regular user -> 403
+    assert client.post("/api/v1/admin/lod/cleanup", headers=normal_user_headers).status_code == 403
+
+    # 3. Admin user -> 200 with task execution result
+    resp = client.post(
+        "/api/v1/admin/lod/cleanup",
+        headers=admin_headers,
+        json={"dry_run": True, "batch_size": 25},
+    )
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["success"] is True
+    assert "total_evaluated" in payload["data"]
+    assert "demoted" in payload["data"]
