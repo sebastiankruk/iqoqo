@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import and_, or_, select
@@ -186,7 +187,7 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
     )
     fed_results = db.session.execute(fed_stmt).all()
 
-    # Pre-fetch outbound Follow activities initiated by this local user
+    # Pre-fetch outbound and inbound Follow activities for accurate directional segregation
     outbound_acts = (
         db.session.execute(
             select(FederationActivity).where(
@@ -202,14 +203,37 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
         .all()
     )
 
-    outbound_targets: set[str] = set()
+    outbound_by_target: dict[str, datetime] = {}
     for o_act in outbound_acts:
+        if not o_act.created_at:
+            continue
         if o_act.target_uri:
-            outbound_targets.add(o_act.target_uri)
+            prev = outbound_by_target.get(o_act.target_uri)
+            if not prev or o_act.created_at > prev:
+                outbound_by_target[o_act.target_uri] = o_act.created_at
         if isinstance(o_act.object_json, dict):
             obj = o_act.object_json.get("object")
             if isinstance(obj, str):
-                outbound_targets.add(obj)
+                prev = outbound_by_target.get(obj)
+                if not prev or o_act.created_at > prev:
+                    outbound_by_target[obj] = o_act.created_at
+
+    inbound_acts = (
+        db.session.execute(
+            select(FederationActivity).where(
+                FederationActivity.direction == "inbound",
+                FederationActivity.activity_type == "Follow",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    inbound_by_actor: dict[str, datetime] = {}
+    for i_act in inbound_acts:
+        if i_act.actor_uri and i_act.created_at:
+            prev = inbound_by_actor.get(i_act.actor_uri)
+            if not prev or i_act.created_at > prev:
+                inbound_by_actor[i_act.actor_uri] = i_act.created_at
 
     for fol, act in fed_results:
         fed_data = {
@@ -226,10 +250,17 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
         if fol.status == FollowStatus.ACCEPTED:
             accepted.append(fed_data)
         elif fol.status == FollowStatus.PENDING:
-            is_outbound = bool(
-                (act.actor_uri and act.actor_uri in outbound_targets) or (act.inbox_url and act.inbox_url in outbound_targets)
-            )
-            if is_outbound:
+            latest_out = None
+            if act.actor_uri and act.actor_uri in outbound_by_target:
+                latest_out = outbound_by_target[act.actor_uri]
+            if act.inbox_url and act.inbox_url in outbound_by_target:
+                inbox_time = outbound_by_target[act.inbox_url]
+                if not latest_out or inbox_time > latest_out:
+                    latest_out = inbox_time
+
+            latest_in = inbound_by_actor.get(act.actor_uri) if act.actor_uri else None
+
+            if latest_out and (not latest_in or latest_out > latest_in):
                 outgoing.append(fed_data)
             else:
                 incoming.append(fed_data)
@@ -455,8 +486,6 @@ def send_friend_request(
                 return res_dict, None, 200
 
             # Ensure requester has opted-in federated profile so remote instance can verify HTTP signature
-            from datetime import UTC, datetime
-
             req_consent = db.session.execute(select(FederationConsent).where(FederationConsent.user_id == req_uuid)).scalars().first()
             if not req_consent:
                 req_consent = FederationConsent(
@@ -538,7 +567,8 @@ def respond_friend_request(
 
         remote_act = db.session.get(FederationActor, fol.remote_actor_id)
 
-        # Disallow caller responding (accept/reject) to an outbound follow request they initiated
+        # Disallow caller responding (accept/reject) to an outbound follow request they initiated,
+        # unless remote actor subsequently sent an inbound follow to the caller.
         if remote_act:
             outbound_acts = (
                 db.session.execute(
@@ -554,6 +584,7 @@ def respond_friend_request(
                 .scalars()
                 .all()
             )
+            matching_outbound = []
             for o_act in outbound_acts:
                 is_outbound_match = False
                 if o_act.target_uri and remote_act.inbox_url and o_act.target_uri == remote_act.inbox_url:
@@ -561,6 +592,25 @@ def respond_friend_request(
                 elif isinstance(o_act.object_json, dict) and o_act.object_json.get("object") == remote_act.actor_uri:
                     is_outbound_match = True
                 if is_outbound_match:
+                    matching_outbound.append(o_act)
+
+            if matching_outbound:
+                latest_outbound_time = max((o.created_at for o in matching_outbound if o.created_at), default=None)
+                latest_inbound = (
+                    db.session.execute(
+                        select(FederationActivity)
+                        .where(
+                            FederationActivity.direction == "inbound",
+                            FederationActivity.activity_type == "Follow",
+                            FederationActivity.actor_uri == remote_act.actor_uri,
+                        )
+                        .order_by(FederationActivity.created_at.desc())
+                    )
+                    .scalars()
+                    .first()
+                )
+                latest_inbound_time = latest_inbound.created_at if latest_inbound else None
+                if latest_outbound_time and (not latest_inbound_time or latest_outbound_time > latest_inbound_time):
                     return None, "Cannot respond to an outgoing request you initiated; use cancel instead", 400
 
         if action == "accept":
