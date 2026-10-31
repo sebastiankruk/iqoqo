@@ -145,12 +145,12 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-ASSET_ARCHIVES=$(find "${UNPACKED_DIR}" -maxdepth 1 -type f -name "*_*.tar.gz" 2>/dev/null || true)
-for asset_archive in ${ASSET_ARCHIVES}; do
+while IFS= read -r -d '' asset_archive; do
+    [ -z "${asset_archive}" ] && continue
     asset_base=$(basename "${asset_archive}")
     log "📁 Restoring asset archive: ${asset_base}..."
-    tar -xzf "${asset_archive}" -C "${PROJECT_ROOT}"
-done
+    tar -xzf "${asset_archive}" --no-same-owner -C "${PROJECT_ROOT}"
+done < <(find "${UNPACKED_DIR}" -maxdepth 1 -type f -name "*_*.tar.gz" -print0 2>/dev/null || true)
 
 # 3. Enforce strict permissions on restored federation keys
 if [ -d "${PROJECT_ROOT}/data/federation_keys" ]; then

@@ -178,6 +178,115 @@ def dispatch_accept_follow(user: User, remote_actor: FederationActor, original_a
         )
 
 
+def dispatch_reject_follow(user: User, remote_actor: FederationActor, original_activity: dict[str, Any]) -> None:
+    """Send a Reject activity in response to a Follow.
+
+    Args:
+        user: The local user rejecting the follow.
+        remote_actor: The remote actor who sent the follow.
+        original_activity: The original Follow activity.
+    """
+    base_url = get_federation_base_url()
+    actor_url = canonical_actor_iri(user.id, base_url)
+
+    reject_activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Reject",
+        "actor": actor_url,
+        "object": original_activity,
+    }
+
+    fed_activity = FederationActivity(
+        actor_uri=actor_url,
+        activity_type="Reject",
+        object_json=reject_activity,
+        target_uri=remote_actor.inbox_url,
+        direction="outbound",
+        status=ActivityStatus.QUEUED,
+    )
+    db.session.add(fed_activity)
+    db.session.commit()
+
+    from app.core.federation_tasks import deliver_activity
+    from app.core.tasks import submit_task
+
+    key_id = f"{actor_url}#main-key"
+    task_id = submit_task(
+        deliver_activity,
+        str(fed_activity.id),
+        remote_actor.inbox_url,
+        reject_activity,
+        str(user.id),
+        key_id,
+        queue="federation",
+    )
+    if not task_id:
+        deliver_activity(
+            str(fed_activity.id),
+            remote_actor.inbox_url,
+            reject_activity,
+            str(user.id),
+            key_id,
+        )
+
+
+def dispatch_undo_follow(user: User, remote_actor: FederationActor) -> None:
+    """Send an Undo activity for an existing Follow.
+
+    Args:
+        user: The local user undoing the follow.
+        remote_actor: The remote actor being unfollowed.
+    """
+    base_url = get_federation_base_url()
+    actor_url = canonical_actor_iri(user.id, base_url)
+
+    follow_activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Follow",
+        "actor": actor_url,
+        "object": remote_actor.actor_uri,
+    }
+    undo_activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Undo",
+        "actor": actor_url,
+        "object": follow_activity,
+    }
+
+    fed_activity = FederationActivity(
+        actor_uri=actor_url,
+        activity_type="Undo",
+        object_json=undo_activity,
+        target_uri=remote_actor.inbox_url,
+        direction="outbound",
+        status=ActivityStatus.QUEUED,
+    )
+    db.session.add(fed_activity)
+    db.session.commit()
+
+    from app.core.federation_tasks import deliver_activity
+    from app.core.tasks import submit_task
+
+    key_id = f"{actor_url}#main-key"
+    task_id = submit_task(
+        deliver_activity,
+        str(fed_activity.id),
+        remote_actor.inbox_url,
+        undo_activity,
+        str(user.id),
+        key_id,
+        queue="federation",
+    )
+    if not task_id:
+        deliver_activity(
+            str(fed_activity.id),
+            remote_actor.inbox_url,
+            undo_activity,
+            str(user.id),
+            key_id,
+        )
+
+
 def dispatch_follow(user: User, remote_actor: FederationActor) -> bool:
     """Dispatch an outbound Follow activity to a remote Actor.
 

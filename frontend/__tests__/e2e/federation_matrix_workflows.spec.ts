@@ -93,7 +93,7 @@ test.describe("Dual-Origin Federation Combinatorial Matrix E2E Suite (OpenSpec C
     await expect(pageA.getByTestId("peering-guidance-banner")).toBeVisible();
 
     // 2. Locate or register peer domain in Trust Graph
-    const domainInput = pageA.getByPlaceholder(/instance\.example\.org/i);
+    const domainInput = pageA.getByPlaceholder(/library\.example\.org|biblioteka\.example\.org/i);
     await expect(domainInput).toBeVisible();
 
     // Verify trust level selection controls exist in peer row

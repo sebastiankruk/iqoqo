@@ -537,6 +537,35 @@ class TestActivityHandlers:
             db.session.refresh(follower)
             assert follower.status == FollowStatus.REJECTED
 
+    def test_handle_accept_and_reject_spoofing_prevention(self, app, fed_user, remote_peer_instance):
+        """Accept and Reject reject unanchored local: substring spoofing."""
+        with app.app_context():
+            base_url = get_federation_base_url()
+            target_iri = canonical_actor_iri(uuid.UUID(fed_user["id"]), base_url)
+
+            # Followed object is local:h which is a loose substring of https://...
+            accept_spoof = {
+                "type": "Accept",
+                "actor": remote_peer_instance["actor_uri"],
+                "object": {
+                    "type": "Follow",
+                    "actor": target_iri,
+                    "object": "local:h",
+                },
+            }
+            assert handle_activity(accept_spoof) is False
+
+            reject_spoof = {
+                "type": "Reject",
+                "actor": remote_peer_instance["actor_uri"],
+                "object": {
+                    "type": "Follow",
+                    "actor": target_iri,
+                    "object": "local:h",
+                },
+            }
+            assert handle_activity(reject_spoof) is False
+
     def test_handle_delete_remote_actor(self, app, remote_peer_instance):
         """Delete activity referencing remote actor URI cleans up actor and followers."""
         with app.app_context():

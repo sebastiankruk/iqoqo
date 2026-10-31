@@ -5,9 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.4] - TBD
+## [0.9.4] - 2026-10-31
 
 ### Added
+
+- **Pre-Merge Hardening, ActivityPub Lifecycle & WebFinger Robustness (C94)**:
+  - Scoped inbound ActivityPub `Follow` activity queries in `app/core/friend_service.py` to target user actor IRIs and pending actor URIs, preventing cross-user inbound follow theft.
+  - Implemented outbound ActivityPub `Reject(Follow)` and `Undo(Follow)` activity delivery on friend rejection and removal in `app/core/friend_service.py` and `app/core/federation_dispatch.py`.
+  - Sanitized WebFinger SQL lookup queries against wildcard injection, prioritized exact `public_username` matches over unconsented email prefixes, and appended `@domain` on fallback discovery queries in `app/api/federation.py` and `app/core/friend_service.py`.
+  - Hardened inbound `Accept` and `Reject` actor IRI checks in `app/core/federation_handlers.py` to require anchored `/u/<user_uuid>` suffix or canonical IRI matches, and hid notification action buttons on auto-accepted requests in `frontend/components/dashboard/notification-center.tsx`.
+  - Synchronized dual-origin Playwright E2E placeholder expectations in `federation_pair_live.spec.ts` and `federation_matrix_workflows.spec.ts` with localized templates.
+  - Normalized target domains before block checks, made RSA keypair generation idempotent against existing disk keys, rolled back transactions on key synchronization exceptions, normalized migration downgrade constraints, and safeguarded archive tar extraction in `scripts/restore.sh`.
 
 - **REST API Test Coverage Hardening across Edge Boundaries (C93)**:
   - Authored comprehensive test suites closing test coverage gaps across residual REST endpoints in `v0.9.4`.

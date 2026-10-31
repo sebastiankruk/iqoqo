@@ -167,7 +167,8 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
               const targetUrl = getNotificationTargetUrl(notif);
               const fid = notif.payload?.friendship_id as string | number | undefined;
               const isFriendOrFollow = notif.type === "friend_request" || notif.type === "follow_request";
-              const showActions = isFriendOrFollow && Boolean(fid) && !notif.read_at;
+              const showActions =
+                isFriendOrFollow && Boolean(fid) && !notif.read_at && notif.payload?.status !== "accepted";
 
               const content = (
                 <div

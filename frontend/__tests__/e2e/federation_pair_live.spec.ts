@@ -117,7 +117,7 @@ test.describe("Multi-Instance Dual-Origin Live Federation E2E Suite", () => {
     await expect(pageA.getByTestId("peering-guidance-banner")).toBeVisible();
 
     // 2. Discover/verify peer instance in Trust Graph
-    const domainInput = pageA.getByPlaceholder(/instance\.example\.org/i);
+    const domainInput = pageA.getByPlaceholder(/library\.example\.org|biblioteka\.example\.org/i);
     await expect(domainInput).toBeVisible();
 
     // 3. Instance Beta: Verify user privacy and federation consent settings on /profile

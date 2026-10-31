@@ -221,6 +221,7 @@ def get_actor_public_key(user_id: str) -> str | None:
                     user.federation_public_key = public_pem
                     db.session.commit()
         except Exception:
+            db.session.rollback()
             pass
         return public_pem
 

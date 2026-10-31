@@ -134,7 +134,8 @@ def update_consent():
             db.session.add(fed_consent)
         else:
             fed_consent.federated_profile = is_granted
-            fed_consent.federated_collection = is_granted
+            if not is_granted:
+                fed_consent.federated_collection = False
             fed_consent.updated_at = datetime.now(UTC)
 
         if is_granted and not user.federation_public_key:
@@ -143,7 +144,11 @@ def update_consent():
 
             try:
                 base_url = get_federation_base_url()
-                _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
+                existing_pub = federation_keys.get_actor_public_key(str(user.id))
+                if existing_pub:
+                    public_key_pem = existing_pub
+                else:
+                    _, public_key_pem = federation_keys.generate_actor_keypair(str(user.id))
                 canonical_uri = canonical_actor_iri(user.id, base_url)
                 user.federation_public_key = public_key_pem
                 user.federation_key_id = f"{canonical_uri}#main-key"

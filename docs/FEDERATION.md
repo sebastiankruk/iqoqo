@@ -23,7 +23,7 @@ Federated instances are classified into three distinct, non-overlapping trust le
 | Trust Level | Peering Behavior | Catalog Sync | Friend Requests | Loan Requests |
 | :--- | :--- | :--- | :--- | :--- |
 | **`trusted`** | Verified peer instance | Full reciprocal metadata synchronization | Delivered to target users | Allowed (custodian approval) |
-| **`untrusted`** | Known or discovering peer | Public catalog discovery only | Held for manual review or consent | Blocked |
+| **`untrusted`** | Known or discovering peer | Public catalog discovery only | Held for manual review or consent | Allowed (manual approval) |
 | **`blocked`** | Denylisted instance | Rejected at HTTP signature gate | Dropped silently | Dropped |
 
 > [!NOTE]

@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.federation_discovery import clean_instance_domain, get_safe_default_trust
+from app.core.iri import canonical_actor_iri
 from app.db import db
 from app.db.auth import User
 from app.db.federation import (
@@ -256,6 +257,7 @@ def handle_follow(activity: dict[str, Any]) -> bool:
             f"{actor_label} ({domain_label}) followed you" if should_accept else f"New friend request from {actor_label} ({domain_label})"
         )
 
+        target_tab = "/profile?tab=accepted#friends" if should_accept else "/profile?tab=incoming#friends"
         create_notification(
             user_id=user.id,
             notification_type="follow_request",
@@ -266,9 +268,9 @@ def handle_follow(activity: dict[str, Any]) -> bool:
                 "friendship_id": follower_fid,
                 "status": follow_status,
                 "message": notification_msg,
-                "target_iri": "/profile?tab=incoming#friends",
+                "target_iri": target_tab,
             },
-            target_iri="/profile?tab=incoming#friends",
+            target_iri=target_tab,
             actor_uri=actor_uri,
         )
     except Exception as notif_err:
@@ -382,7 +384,7 @@ def handle_accept(activity: dict[str, Any]) -> bool:
         is_same_actor = False
         if followed_uri.startswith("local:"):
             target_id = followed_uri.split(":", 1)[1]
-            if target_id and target_id in actor_uri:
+            if target_id and (actor_uri.rstrip("/").endswith(f"/u/{target_id}") or actor_uri == canonical_actor_iri(target_id)):
                 is_same_actor = True
         if not is_same_actor:
             logger.warning("Accept spoofing attempt: actor %s accepted follow intended for %s", actor_uri, followed_uri)
@@ -448,8 +450,14 @@ def handle_reject(activity: dict[str, Any]) -> bool:
         return True
 
     if followed_uri != actor_uri:
-        logger.warning("Reject spoofing attempt: actor %s rejected follow intended for %s", actor_uri, followed_uri)
-        return False
+        is_same_actor = False
+        if followed_uri.startswith("local:"):
+            target_id = followed_uri.split(":", 1)[1]
+            if target_id and (actor_uri.rstrip("/").endswith(f"/u/{target_id}") or actor_uri == canonical_actor_iri(target_id)):
+                is_same_actor = True
+        if not is_same_actor:
+            logger.warning("Reject spoofing attempt: actor %s rejected follow intended for %s", actor_uri, followed_uri)
+            return False
 
     stmt = select(FederationActor).where(FederationActor.actor_uri == actor_uri)
     remote_actor = db.session.execute(stmt).scalars().first()

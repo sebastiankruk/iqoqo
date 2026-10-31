@@ -23,7 +23,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from flask import Blueprint, Response, current_app, g, jsonify, redirect, request
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.decorators import require_auth
@@ -128,15 +128,13 @@ def _handle_webfinger_lookup() -> Response | tuple[Response, int]:
                 return jsonify({"error": f"Resource domain mismatch: {req_domain} != {domain}", "code": 404}), 404
         else:
             username = account_part
-        # Look up by public_username, email, or email local-part
-        stmt = select(User).where(
-            or_(
-                User.public_username == username,
-                func.lower(User.email) == username.lower(),
-                User.email.ilike(f"{username}@%"),
-            )
-        )
-        user = db.session.execute(stmt).scalars().first()
+        # Look up by public_username (exact), email (exact), or sanitized email local-part
+        user = db.session.execute(select(User).where(func.lower(User.public_username) == username.lower())).scalars().first()
+        if not user:
+            user = db.session.execute(select(User).where(func.lower(User.email) == username.lower())).scalars().first()
+        if not user and "@" not in username:
+            clean_username_like = username.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            user = db.session.execute(select(User).where(User.email.ilike(f"{clean_username_like}@%", escape="\\"))).scalars().first()
         if not user:
             try:
                 parsed_uuid = uuid.UUID(username)

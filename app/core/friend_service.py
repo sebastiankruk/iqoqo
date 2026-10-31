@@ -218,22 +218,35 @@ def list_friends(user_id: uuid.UUID | str) -> dict[str, list[dict[str, Any]]]:
                 if not prev or o_act.created_at > prev:
                     outbound_by_target[obj] = o_act.created_at
 
-    inbound_acts = (
-        db.session.execute(
-            select(FederationActivity).where(
-                FederationActivity.direction == "inbound",
-                FederationActivity.activity_type == "Follow",
-            )
-        )
-        .scalars()
-        .all()
-    )
+    pending_actor_uris = [act.actor_uri for fol, act in fed_results if fol.status == FollowStatus.PENDING and act.actor_uri]
     inbound_by_actor: dict[str, datetime] = {}
-    for i_act in inbound_acts:
-        if i_act.actor_uri and i_act.created_at:
-            prev = inbound_by_actor.get(i_act.actor_uri)
-            if not prev or i_act.created_at > prev:
-                inbound_by_actor[i_act.actor_uri] = i_act.created_at
+    if pending_actor_uris:
+        local_actor_iri = canonical_actor_iri(u_uuid)
+        inbound_acts = (
+            db.session.execute(
+                select(FederationActivity).where(
+                    FederationActivity.direction == "inbound",
+                    FederationActivity.activity_type == "Follow",
+                    FederationActivity.actor_uri.in_(pending_actor_uris),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for i_act in inbound_acts:
+            if not i_act.actor_uri or not i_act.created_at:
+                continue
+            target_match = False
+            if i_act.target_uri and (i_act.target_uri == local_actor_iri or str(u_uuid) in i_act.target_uri):
+                target_match = True
+            elif isinstance(i_act.object_json, dict):
+                obj = i_act.object_json.get("object")
+                if isinstance(obj, str) and (obj == local_actor_iri or str(u_uuid) in obj):
+                    target_match = True
+            if target_match:
+                prev = inbound_by_actor.get(i_act.actor_uri)
+                if not prev or i_act.created_at > prev:
+                    inbound_by_actor[i_act.actor_uri] = i_act.created_at
 
     for fol, act in fed_results:
         fed_data = {
@@ -379,6 +392,9 @@ def send_friend_request(
             target_username, target_domain = handle_parts[0], None
 
         if target_domain:
+            from app.core.federation_discovery import clean_instance_domain
+
+            target_domain = clean_instance_domain(target_domain)
             inst = db.session.execute(select(FederationInstance).where(FederationInstance.domain == target_domain)).scalars().first()
             if inst and inst.trust_level == TrustLevel.BLOCKED:
                 return None, f"Cannot connect with user from blocked instance {target_domain}", 403
@@ -442,7 +458,14 @@ def send_friend_request(
             from app.utils.http_client import safe_get
 
             registered_instances = (
-                db.session.execute(select(FederationInstance).where(FederationInstance.trust_level != TrustLevel.BLOCKED)).scalars().all()
+                db.session.execute(
+                    select(FederationInstance)
+                    .where(FederationInstance.trust_level != TrustLevel.BLOCKED)
+                    .order_by(FederationInstance.last_seen_at.desc().nullslast())
+                    .limit(5)
+                )
+                .scalars()
+                .all()
             )
             for reg_inst in registered_instances:
                 if reg_inst.domain == target_domain:
@@ -453,7 +476,10 @@ def send_friend_request(
                         if ("localhost" in reg_inst.domain or "127.0.0.1" in reg_inst.domain or reg_inst.domain.startswith("peer-web"))
                         else "https"
                     )
-                    wf_url = f"{scheme}://{reg_inst.domain}/.well-known/webfinger?resource=acct:{clean_id.lstrip('@')}"
+                    handle_user = clean_id.lstrip("@")
+                    if "@" in handle_user:
+                        handle_user = handle_user.split("@", 1)[0]
+                    wf_url = f"{scheme}://{reg_inst.domain}/.well-known/webfinger?resource=acct:{handle_user}@{reg_inst.domain}"
                     wf_resp = safe_get(wf_url, headers={"Accept": "application/jrd+json, application/json"}, timeout=5.0)
                     if wf_resp.status_code == 200:
                         for link in wf_resp.json().get("links", []):
@@ -515,7 +541,11 @@ def send_friend_request(
 
                 try:
                     base_url = get_federation_base_url()
-                    _, public_key_pem = federation_keys.generate_actor_keypair(str(requester.id))
+                    existing_pub = federation_keys.get_actor_public_key(str(requester.id))
+                    if existing_pub:
+                        public_key_pem = existing_pub
+                    else:
+                        _, public_key_pem = federation_keys.generate_actor_keypair(str(requester.id))
                     canonical_uri = canonical_actor_iri(requester.id, base_url)
                     requester.federation_public_key = public_key_pem
                     requester.federation_key_id = f"{canonical_uri}#main-key"
@@ -598,7 +628,7 @@ def respond_friend_request(
             matching_outbound = []
             for o_act in outbound_acts:
                 is_outbound_match = False
-                if o_act.target_uri and remote_act.inbox_url and o_act.target_uri == remote_act.inbox_url:
+                if o_act.target_uri and (o_act.target_uri == remote_act.inbox_url or o_act.target_uri == remote_act.actor_uri):
                     is_outbound_match = True
                 elif isinstance(o_act.object_json, dict) and o_act.object_json.get("object") == remote_act.actor_uri:
                     is_outbound_match = True
@@ -607,7 +637,9 @@ def respond_friend_request(
 
             if matching_outbound:
                 latest_outbound_time = max((o.created_at for o in matching_outbound if o.created_at), default=None)
-                latest_inbound = (
+                base_url = get_federation_base_url()
+                local_actor_iri = canonical_actor_iri(u_uuid, base_url)
+                inbound_candidates = (
                     db.session.execute(
                         select(FederationActivity)
                         .where(
@@ -618,8 +650,19 @@ def respond_friend_request(
                         .order_by(FederationActivity.created_at.desc())
                     )
                     .scalars()
-                    .first()
+                    .all()
                 )
+                latest_inbound = None
+                for candidate in inbound_candidates:
+                    if candidate.target_uri and (candidate.target_uri == local_actor_iri or str(u_uuid) in candidate.target_uri):
+                        latest_inbound = candidate
+                        break
+                    if isinstance(candidate.object_json, dict):
+                        obj = candidate.object_json.get("object")
+                        if isinstance(obj, str) and (obj == local_actor_iri or str(u_uuid) in obj):
+                            latest_inbound = candidate
+                            break
+
                 latest_inbound_time = latest_inbound.created_at if latest_inbound else None
                 if latest_outbound_time and (not latest_inbound_time or latest_outbound_time > latest_inbound_time):
                     return None, "Cannot respond to an outgoing request you initiated; use cancel instead", 400
@@ -649,6 +692,23 @@ def respond_friend_request(
             res["id"] = f"fed:{fol.id}"
             return res, None, 200
         elif action == "reject":
+            # Send ActivityPub Reject
+            try:
+                from app.core.federation_dispatch import dispatch_reject_follow
+
+                user = db.session.get(User, u_uuid)
+                if user and remote_act:
+                    base_url = get_federation_base_url()
+                    local_actor_iri = canonical_actor_iri(user.id, base_url)
+                    dummy_follow = {
+                        "type": "Follow",
+                        "actor": remote_act.actor_uri,
+                        "object": local_actor_iri,
+                    }
+                    dispatch_reject_follow(user, remote_act, dummy_follow)
+            except Exception as exc:
+                logger.warning("Failed dispatching Reject for federated follow: %s", exc)
+
             db.session.delete(fol)
             db.session.commit()
             return {"id": str_fid, "status": "rejected"}, None, 200
@@ -721,8 +781,19 @@ def remove_friend(
         if not fol or fol.local_user_id != u_uuid:
             return False, "Federated friendship not found", 404
 
+        remote_act = db.session.get(FederationActor, fol.remote_actor_id)
+        user = db.session.get(User, u_uuid)
         db.session.delete(fol)
         db.session.commit()
+
+        if user and remote_act and remote_act.inbox_url:
+            try:
+                from app.core.federation_dispatch import dispatch_undo_follow
+
+                dispatch_undo_follow(user, remote_act)
+            except Exception as exc:
+                logger.warning("Failed dispatching Undo for federated follow removal: %s", exc)
+
         return True, None, 200
 
     try:

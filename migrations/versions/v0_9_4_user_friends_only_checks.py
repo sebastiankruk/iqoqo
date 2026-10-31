@@ -66,6 +66,14 @@ def downgrade():
     auth_schema = "auth" if is_pg else None
 
     if inspector.has_table("users", schema=auth_schema):
+        table_name = "auth.users" if is_pg else "users"
+        bind.execute(sa.text(f"UPDATE {table_name} SET visibility = 'private' WHERE visibility = 'friends_only'"))
+        bind.execute(
+            sa.text(
+                f"UPDATE {table_name} SET default_item_visibility = 'private' "
+                f"WHERE default_item_visibility IN ('friends_only', 'shared')"
+            )
+        )
         user_checks = {check["name"] for check in inspector.get_check_constraints("users", schema=auth_schema)}
         with op.batch_alter_table("users", schema=auth_schema) as batch_op:
             if "check_user_visibility" in user_checks:
