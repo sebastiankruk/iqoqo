@@ -356,8 +356,8 @@ export function Navbar() {
         <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       </nav>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card h-16 sm:hidden flex justify-around items-center px-4 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-card-foreground">
+      {/* Mobile Bottom Navigation Bar: Home / Scan / Collection / Search */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card h-16 sm:hidden flex justify-around items-center px-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-card-foreground">
         <Link
           href="/"
           className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
@@ -369,54 +369,38 @@ export function Navbar() {
         </Link>
 
         <Link
+          href="/scan"
+          className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+            pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ScanLine className="h-5 w-5" />
+          <span className="text-[10px] mt-1">{t("scan")}</span>
+        </Link>
+
+        <Link
           href="/collection"
           className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-            pathname === "/collection" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
+            pathname === "/collection" && searchParams?.get("focus") !== "search"
+              ? "text-accent font-semibold"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Library className="h-5 w-5" />
           <span className="text-[10px] mt-1">{t("collection")}</span>
         </Link>
 
-        {!mounted ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-1 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-          </div>
-        ) : profile ? (
-          <>
-            <Link
-              href="/scan"
-              className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-                pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ScanLine className="h-5 w-5" />
-              <span className="text-[10px] mt-1">{t("scan")}</span>
-            </Link>
-
-            <Link
-              href="/profile"
-              className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-                pathname?.startsWith("/profile")
-                  ? "text-accent font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <User className="h-5 w-5" />
-              <span className="text-[10px] mt-1">{t("profile")}</span>
-            </Link>
-          </>
-        ) : (
-          <Link
-            href="/login"
-            className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-              pathname === "/login" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <User className="h-5 w-5" />
-            <span className="text-[10px] mt-1">{t("signIn")}</span>
-          </Link>
-        )}
+        <Link
+          href="/collection?focus=search"
+          className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+            pathname === "/collection" && searchParams?.get("focus") === "search"
+              ? "text-accent font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Search className="h-5 w-5" />
+          <span className="text-[10px] mt-1">{t("search")}</span>
+        </Link>
       </div>
     </>
   );

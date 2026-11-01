@@ -25,6 +25,11 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ id: "_placeholder" }];
+}
+
 /**
  * Server-side data fetcher for Work detail.
  *
@@ -52,6 +57,9 @@ async function getWork(id: string | number): Promise<WorkDetail | null> {
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const work = await getWork(id);
 
   if (!work) {
@@ -104,6 +112,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 export default async function WorkPage({ params }: Props) {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return <WorkDetailClient workId={0} initialWork={null as any} />;
+  }
   const workId = Number(id);
   const work = await getWork(workId);
 

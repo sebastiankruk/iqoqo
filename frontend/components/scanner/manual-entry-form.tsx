@@ -285,7 +285,11 @@ export function ManualEntryForm({
               disabled={!formData.identifier || isLookingUp || isSubmitting}
               aria-label="Look up metadata for identifier"
             >
-              {isLookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {isLookingUp ? (
+                <Loader2 className="h-4 w-4 aspect-square shrink-0 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
               <span className="ml-2">{isLookingUp ? "Searching..." : "Lookup"}</span>
             </Button>
           </div>

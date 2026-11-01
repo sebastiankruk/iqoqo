@@ -59,18 +59,18 @@ export function Hero() {
       <div className="relative z-10 text-center px-4 max-w-3xl">
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">{t("title")}</h1>
         <p className="text-xl text-muted-foreground mb-8">{t("description")}</p>
-        <div className="flex gap-4 justify-center flex-wrap">
+        <div className="flex gap-4 justify-center items-center flex-wrap">
           <Button
             asChild
-            size="sm"
-            className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md"
+            size="default"
+            className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md px-6"
           >
             <Link href="/register">{t("startCatalog")}</Link>
           </Button>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="default">
             <Link href="/collection">{t("browseInstance")}</Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="text-muted-foreground hover:text-foreground">
+          <Button asChild variant="ghost" size="default" className="text-muted-foreground hover:text-foreground">
             <Link href="https://github.com/sebastiankruk/iqoqo" target="_blank" rel="noopener noreferrer">
               <GithubIcon className="w-4 h-4 mr-2" />
               {t("github")}

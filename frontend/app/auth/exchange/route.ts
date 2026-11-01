@@ -14,4 +14,5 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 // frontend/app/auth/exchange/route.ts
+export const dynamic = "force-static";
 export { GET, POST } from "@/app/api/auth-exchange/route";

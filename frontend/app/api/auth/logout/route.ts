@@ -16,6 +16,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-static";
+
 /**
  * Resolve the Flask API base, matching the rewrite destination the app uses.
  *

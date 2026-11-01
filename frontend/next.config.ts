@@ -20,6 +20,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 const e2eDistDir = process.env.IQOQO_E2E_NEXT_DIST_DIR ?? ".next-e2e";
+const isCapacitorBuild = process.env.CAPACITOR_BUILD === "true";
 
 // Read version from package.json so NEXT_PUBLIC_APP_VERSION is always in sync
 // with the canonical semver set by `make bump-version` / `scripts/sync_version.py`.
@@ -39,8 +40,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  // Enable standalone output for the production Docker image (Dockerfile.prod)
-  output: "standalone",
+  // Enable static export for native mobile Capacitor builds, or standalone output for Docker image
+  output: isCapacitorBuild ? "export" : "standalone",
 
   allowedDevOrigins: ["dev.iqoqo.cc", "*.iqoqo.cc"],
 
@@ -57,28 +58,30 @@ const nextConfig: NextConfig = {
    * are a clickjacking target, since being framed turns "confirm" into "confirm
    * what the frame's owner says".
    */
-  async headers() {
-    return [
-      {
-        source: "/account/:path*",
-        headers: [
-          { key: "Referrer-Policy", value: "no-referrer" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
-          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
-        ],
+  headers: isCapacitorBuild
+    ? undefined
+    : async () => {
+        return [
+          {
+            source: "/account/:path*",
+            headers: [
+              { key: "Referrer-Policy", value: "no-referrer" },
+              { key: "X-Frame-Options", value: "DENY" },
+              { key: "X-Content-Type-Options", value: "nosniff" },
+              { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+              { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
+            ],
+          },
+          {
+            source: "/share/:path*",
+            headers: [
+              { key: "Referrer-Policy", value: "no-referrer" },
+              { key: "X-Frame-Options", value: "DENY" },
+              { key: "X-Content-Type-Options", value: "nosniff" },
+            ],
+          },
+        ];
       },
-      {
-        source: "/share/:path*",
-        headers: [
-          { key: "Referrer-Policy", value: "no-referrer" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-        ],
-      },
-    ];
-  },
 
   // Increase Next.js proxy body size and timeout for multi-attachment uploads
   experimental: {
@@ -91,52 +94,55 @@ const nextConfig: NextConfig = {
    *
    * @returns {Promise<Array<{ source: string, destination: string }>>} The rewrites
    */
-  async rewrites() {
-    // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format) or be relative "/api".
-    // We favor FLASK_API_URL if available for the server-side proxy destination.
-    const rawApiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000/api";
-    const rawBase = rawApiUrl.replace(/\/api\/?$/, "");
-    const backendBase =
-      rawBase.startsWith("http://") || rawBase.startsWith("https://")
-        ? rawBase
-        : process.env.FLASK_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:5000";
+  rewrites: isCapacitorBuild
+    ? undefined
+    : async () => {
+        // NEXT_PUBLIC_API_URL may carry a trailing "/api" suffix (legacy .env format) or be relative "/api".
+        // We favor FLASK_API_URL if available for the server-side proxy destination.
+        const rawApiUrl = process.env.FLASK_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000/api";
+        const rawBase = rawApiUrl.replace(/\/api\/?$/, "");
+        const backendBase =
+          rawBase.startsWith("http://") || rawBase.startsWith("https://")
+            ? rawBase
+            : process.env.FLASK_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:5000";
 
-    return {
-      afterFiles: [
-        {
-          // Proxy to Flask backend for any API routes not handled locally by Next.js app/api/
-          source: "/api/:path*",
-          destination: `${backendBase}/api/:path*`,
-        },
-        {
-          // Proxy RFC well-known URIs (WebFinger, NodeInfo) to Flask backend
-          source: "/.well-known/:path*",
-          destination: `${backendBase}/.well-known/:path*`,
-        },
-        {
-          // Intercept static asset requests (stored as /static/... in DB)
-          // and proxy them to the backend API static serving endpoint.
-          source: "/static/:path*",
-          destination: `${backendBase}/api/static/:path*`,
-        },
-        {
-          // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
-          source: "/rum/:path*",
-          destination: "http://127.0.0.1:5080/rum/:path*",
-        },
-        {
-          // Proxy OTel Collector traces to avoid CORS origin mismatches
-          source: "/v1/traces",
-          destination: "http://127.0.0.1:4318/v1/traces",
-        },
-      ],
-    };
-  },
+        return {
+          afterFiles: [
+            {
+              // Proxy to Flask backend for any API routes not handled locally by Next.js app/api/
+              source: "/api/:path*",
+              destination: `${backendBase}/api/:path*`,
+            },
+            {
+              // Proxy RFC well-known URIs (WebFinger, NodeInfo) to Flask backend
+              source: "/.well-known/:path*",
+              destination: `${backendBase}/.well-known/:path*`,
+            },
+            {
+              // Intercept static asset requests (stored as /static/... in DB)
+              // and proxy them to the backend API static serving endpoint.
+              source: "/static/:path*",
+              destination: `${backendBase}/api/static/:path*`,
+            },
+            {
+              // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
+              source: "/rum/:path*",
+              destination: "http://127.0.0.1:5080/rum/:path*",
+            },
+            {
+              // Proxy OTel Collector traces to avoid CORS origin mismatches
+              source: "/v1/traces",
+              destination: "http://127.0.0.1:4318/v1/traces",
+            },
+          ],
+        };
+      },
   // Allow cover images from a restricted set of HTTPS origins (metadata comes
   // from multiple providers: Google Books, Open Library, etc.). Apply
   // optimization per provider once URLs are stabilised; unoptimized prop is
   // used in the component until then.
   images: {
+    unoptimized: isCapacitorBuild,
     localPatterns: [
       {
         pathname: "/api/static/**",

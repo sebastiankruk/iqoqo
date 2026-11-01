@@ -16,6 +16,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-static";
+
 type ExchangeResult = { token: string; callbackUrl: string } | null;
 
 /**

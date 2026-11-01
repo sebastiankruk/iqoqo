@@ -30,7 +30,7 @@ import { CheckInventory } from "@/components/public/check-inventory";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Footer } from "@/components/dashboard/footer";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 
 /** Items requested per page on the public profile. Matches the API default. */
 const ITEMS_PER_PAGE = 24;
@@ -40,11 +40,19 @@ interface PublicProfilePageProps {
   searchParams?: Promise<{ page?: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ username: "_placeholder" }];
+}
+
 /**
  * Safely retrieve request cookies if within an active request context.
  * Returns empty headers in unit test or static environments.
  */
 async function getCookieHeader(): Promise<Record<string, string>> {
+  if (process.env.CAPACITOR_BUILD === "true") {
+    return {};
+  }
   try {
     const cookieStore = await cookies();
     const cookieHeader = cookieStore?.toString();
@@ -111,6 +119,9 @@ async function getItems(username: string, page = 1) {
  */
 export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
   const { username } = await params;
+  if (username === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const profileRes = await getProfile(username);
 
   if (!profileRes || !profileRes.success) {
@@ -149,11 +160,18 @@ export async function generateMetadata({ params }: PublicProfilePageProps): Prom
  * @returns The rendered page.
  */
 export default async function PublicProfilePage({ params, searchParams }: PublicProfilePageProps) {
-  const emptySearch: { page?: string } = {};
-  const [{ username }, resolvedSearchParams] = await Promise.all([
-    params,
-    searchParams ?? Promise.resolve(emptySearch),
-  ]);
+  const { username } = await params;
+
+  if (username === "_placeholder") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+      </div>
+    );
+  }
+
+  const isStaticExport = process.env.CAPACITOR_BUILD === "true";
+  const resolvedSearchParams = isStaticExport ? {} : ((await searchParams) ?? {});
 
   // Clamp before use. The value comes straight off the query string, so an
   // arbitrary string ("abc", "-3") must not reach the API or the pager. A

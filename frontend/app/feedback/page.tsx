@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
@@ -80,7 +80,7 @@ const statusStyles: Record<string, { bg: string; text: string; border: string; l
  *
  * @returns {JSX.Element} The FeedbackPage component.
  */
-export default function FeedbackPage() {
+function FeedbackPageContent() {
   const t = useTranslations("FeedbackPage");
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
@@ -582,5 +582,18 @@ export default function FeedbackPage() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Dedicated feedback and ticket management page wrapped in Suspense for static prerendering.
+ *
+ * @returns {JSX.Element} The FeedbackPage component.
+ */
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <FeedbackPageContent />
+    </Suspense>
   );
 }
