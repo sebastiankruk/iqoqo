@@ -220,9 +220,9 @@ export function ItemCard({
   const renderAuthors = () => {
     if (authorsList.length === 0) return <span>Unknown author</span>;
     return (
-      <span className="relative z-20">
+      <span className="relative z-20 inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
         {authorsList.map((author, idx) => (
-          <span key={author}>
+          <span key={author} className="inline-flex items-center">
             <button
               type="button"
               onClick={e => {
@@ -230,11 +230,11 @@ export function ItemCard({
                 e.stopPropagation();
                 router.push(`/collection?q=${encodeURIComponent(author)}`);
               }}
-              className="hover:text-primary hover:underline cursor-pointer bg-transparent border-none p-0 font-inherit text-inherit text-left inline"
+              className="hover:text-primary hover:underline cursor-pointer bg-transparent border-none py-1.5 px-0.5 font-inherit text-inherit text-left min-h-[44px] inline-flex items-center"
             >
               {author}
             </button>
-            {idx < authorsList.length - 1 ? ", " : ""}
+            {idx < authorsList.length - 1 ? <span className="mr-0.5">,</span> : ""}
           </span>
         ))}
       </span>
@@ -349,7 +349,7 @@ export function ItemCard({
             {wishlistRemoveBtn}
             {(isProcessing || coverStatus === "pending") && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <Loader2 className="h-5 w-5 aspect-square shrink-0 animate-spin text-primary" />
               </div>
             )}
             {coverUrl ? (
@@ -466,7 +466,7 @@ export function ItemCard({
           {selectionOverlay}
           {(isProcessing || coverStatus === "pending") && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm p-4 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Loader2 className="h-8 w-8 aspect-square shrink-0 animate-spin text-primary" />
               <span className="text-xs font-medium text-foreground">
                 {coverStatus === "pending" ? "Generating..." : "Processing..."}
               </span>

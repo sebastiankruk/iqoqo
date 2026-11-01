@@ -17,7 +17,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { HELP_ARTICLES, HelpArticle } from "@/lib/help-articles";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

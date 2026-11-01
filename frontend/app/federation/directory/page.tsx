@@ -18,7 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { getFederationDirectory } from "@/lib/api/federation";
 import type { FederationDirectoryData } from "@/types/federation";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

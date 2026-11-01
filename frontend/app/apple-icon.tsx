@@ -15,6 +15,8 @@
 //
 import { ImageResponse } from "next/og";
 
+export const dynamic = "force-static";
+
 // Image metadata
 export const size = {
   width: 180,

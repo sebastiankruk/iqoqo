@@ -25,6 +25,11 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ id: "_placeholder" }];
+}
+
 /**
  * Server-side data fetcher for Expression detail.
  *
@@ -52,6 +57,9 @@ async function getExpression(id: string | number): Promise<ExpressionDetail | nu
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const expr = await getExpression(id);
 
   if (!expr) {
@@ -101,6 +109,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 export default async function ExpressionPage({ params }: Props) {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return <ExpressionDetailClient expressionId={0} initialExpression={null} />;
+  }
   const exprId = Number(id);
   const expr = await getExpression(exprId);
 

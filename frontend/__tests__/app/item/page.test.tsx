@@ -30,6 +30,7 @@ vi.mock("next/navigation", () => ({
     replace: vi.fn(),
   })),
   usePathname: vi.fn().mockReturnValue("/item/1"),
+  useParams: vi.fn().mockReturnValue({ id: "1" }),
 }));
 
 // Mock Navbar

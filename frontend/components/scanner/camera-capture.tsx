@@ -346,7 +346,7 @@ export function CameraCapture({
         <Button onClick={handleClick} disabled={uploading} variant={variant || "outline"} className={buttonClassName}>
           {uploading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" />
               {t("cameraCapture.processing")}
             </>
           ) : (
@@ -406,7 +406,7 @@ export function CameraCapture({
           <Button onClick={handleClick} disabled={uploading} className="mt-2">
             {uploading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("cameraCapture.processing")}
+                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" /> {t("cameraCapture.processing")}
               </>
             ) : (
               t("cameraCapture.browseFiles")
@@ -423,7 +423,7 @@ export function CameraCapture({
           >
             {uploading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" />
                 {t("cameraCapture.processing")}
               </>
             ) : (
