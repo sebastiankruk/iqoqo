@@ -103,8 +103,21 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
   {
     id: "google",
     title: "Google Services",
-    description: "Configure Google Books API for ISBN metadata and Google Gemini API for AI features.",
+    description:
+      "Configure Google OAuth client credentials for single sign-on, Google Books API for ISBN metadata, and Google Gemini API for AI features.",
     items: [
+      {
+        key: "GOOGLE_CLIENT_ID",
+        label: "Google OAuth Client ID",
+        type: "api",
+        placeholder: "Enter Google OAuth Client ID",
+      },
+      {
+        key: "GOOGLE_CLIENT_SECRET",
+        label: "Google OAuth Client Secret",
+        type: "api",
+        placeholder: "Enter Google OAuth Client Secret",
+      },
       {
         key: "GOOGLE_BOOKS_API_KEY",
         label: "Google Books API Key",
