@@ -35,10 +35,10 @@ export const PLACEHOLDER_PARAM = "_placeholder";
  * Extracts a dynamic route parameter value from a URL pathname.
  *
  * @param pathname - The URL pathname (e.g., "/item/123", "/u/alice")
- * @param paramName - The expected parameter key (e.g., "id", "username")
+ * @param _paramName - The expected parameter key (e.g., "id", "username")
  * @returns The extracted string value or undefined
  */
-export function extractParamFromPathname(pathname: string, paramName: string = "id"): string | undefined {
+export function extractParamFromPathname(pathname: string, _paramName: string = "id"): string | undefined {
   if (!pathname) return undefined;
 
   // Remove leading/trailing slashes and split into segments
@@ -67,12 +67,7 @@ export function extractParamFromPathname(pathname: string, paramName: string = "
  * @returns The resolved parameter value as a string, or undefined if not yet available
  */
 export function useResolvedRouteParam(paramName: string = "id"): string | undefined {
-  let params: Record<string, string | string[] | undefined> | null = null;
-  try {
-    params = typeof useParams === "function" ? (useParams() as Record<string, string | string[] | undefined>) : null;
-  } catch {
-    params = null;
-  }
+  const params = useParams();
   const rawValue = params?.[paramName];
   const initialParam = Array.isArray(rawValue) ? rawValue[0] : rawValue;
 
@@ -91,6 +86,7 @@ export function useResolvedRouteParam(paramName: string = "id"): string | undefi
 
   useEffect(() => {
     if (!isPlaceholderOrMissing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResolvedParam(initialParam);
     } else if (typeof window !== "undefined") {
       const fromPath = extractParamFromPathname(window.location.pathname, paramName);

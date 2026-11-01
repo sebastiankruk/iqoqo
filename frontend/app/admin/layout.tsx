@@ -19,7 +19,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Shield, ExternalLink, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 
 /**
@@ -49,6 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNative(isNativeApp());
     setMounted(true);
   }, []);

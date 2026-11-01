@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";

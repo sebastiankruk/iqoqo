@@ -113,7 +113,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function WorkPage({ params }: Props) {
   const { id } = await params;
   if (id === "_placeholder") {
-    return <WorkDetailClient workId={0} initialWork={null as any} />;
+    return <WorkDetailClient workId={0} initialWork={null} />;
   }
   const workId = Number(id);
   const work = await getWork(workId);

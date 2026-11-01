@@ -31,7 +31,7 @@ import type { WorkDetail, WorkDetailManifestation } from "@/types/frbr";
 
 export interface WorkDetailClientProps {
   workId: number;
-  initialWork: WorkDetail;
+  initialWork?: WorkDetail | null;
 }
 
 /**

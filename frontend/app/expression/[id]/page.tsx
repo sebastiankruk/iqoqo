@@ -110,7 +110,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ExpressionPage({ params }: Props) {
   const { id } = await params;
   if (id === "_placeholder") {
-    return <ExpressionDetailClient expressionId={0} initialExpression={null as any} />;
+    return <ExpressionDetailClient expressionId={0} initialExpression={null} />;
   }
   const exprId = Number(id);
   const expr = await getExpression(exprId);

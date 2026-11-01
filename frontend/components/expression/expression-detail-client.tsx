@@ -31,7 +31,7 @@ import type { ExpressionDetail } from "@/types/frbr";
 
 export interface ExpressionDetailClientProps {
   expressionId: number;
-  initialExpression: ExpressionDetail;
+  initialExpression?: ExpressionDetail | null;
 }
 
 /**
