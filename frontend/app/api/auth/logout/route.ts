@@ -15,7 +15,7 @@
 //
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 /**
  * Resolve the Flask API base, matching the rewrite destination the app uses.

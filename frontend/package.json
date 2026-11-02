@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "type-check": "tsc --noEmit",
     "cap": "cap",
-    "cap:build": "CAPACITOR_BUILD=true next build && cap sync"
+    "cap:build": "node scripts/build-capacitor.js && cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",

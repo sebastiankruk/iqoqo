@@ -110,6 +110,7 @@
     "signUp": "Sign up",
     "loginFailed": "Login failed",
     "token_exchange_failed": "Google sign-in could not be completed. Please try again.",
+    "oauth_exchange_failed": "Failed to complete sign-in. Please try again.",
     "id_token_parse_failed": "Failed to verify your Google identity. Please try again.",
     "no_email": "Google account has no email address associated with it.",
     "user_setup_failed": "Failed to create your account. Please try again or contact support.",

@@ -565,7 +565,7 @@ build-frontend:
 # Mobile Targets (Capacitor 7 Native Android & iOS)
 mobile-build:
 	$(AI_ECHO) "Building Next.js conditional static export for Capacitor..."
-	@cd frontend && CAPACITOR_BUILD=true $(NPM) run build
+	@cd frontend && node scripts/build-capacitor.js
 
 mobile-sync: mobile-build
 	$(AI_ECHO) "Syncing Capacitor assets to native Android and iOS projects..."

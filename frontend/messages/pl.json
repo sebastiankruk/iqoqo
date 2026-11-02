@@ -110,6 +110,7 @@
     "signUp": "Zarejestruj się",
     "loginFailed": "Logowanie nie powiodło się",
     "token_exchange_failed": "Logowanie przez Google nie mogło zostać ukończone. Spróbuj ponownie.",
+    "oauth_exchange_failed": "Wymiana kodu autoryzacyjnego nie powiodła się. Spróbuj ponownie.",
     "id_token_parse_failed": "Nie udało się zweryfikować Twojej tożsamości w Google. Spróbuj ponownie.",
     "no_email": "Konto Google nie ma przypisanego adresu e-mail.",
     "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
