@@ -103,7 +103,7 @@ test.describe("Feedback & Ticket Lifecycle (v0.7.15)", () => {
 
     // 1. Verify Page Header and Admin View Indicator
     await expect(page.getByRole("heading", { name: "Help & Feedback" })).toBeVisible();
-    await expect(page.getByText("Admin View Enabled")).toBeVisible();
+    await expect(page.getByText("Admin View Enabled", { exact: true })).toBeVisible();
 
     // 2. Verify Ticket Tile Rendering
     await expect(page.getByText("Add keyboard navigation shortcuts for catalog inspection")).toBeVisible();

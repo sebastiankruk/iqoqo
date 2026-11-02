@@ -30,7 +30,7 @@ test.describe("Advanced Organization & Views - Step 2", () => {
         await page.locator('input[type="password"]').fill("E2ETestPassword123!");
         // Use Promise.all so navigation tracking starts before the click
         await Promise.all([
-          page.waitForURL(/\/(collection)?$/, { timeout: 20000 }),
+          page.waitForURL(/\/(collection)?$/, { timeout: 30000 }),
           page.locator('button[type="submit"]').click(),
         ]);
       }

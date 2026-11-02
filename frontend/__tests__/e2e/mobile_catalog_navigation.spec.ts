@@ -70,10 +70,7 @@ for (const vp of viewports) {
           contentType: "application/json",
           body: JSON.stringify({
             success: true,
-            data: {
-              items: [],
-              total: 0,
-            },
+            data: [],
           }),
         });
       });

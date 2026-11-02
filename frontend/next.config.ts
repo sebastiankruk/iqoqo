@@ -146,9 +146,19 @@ const nextConfig: NextConfig = {
     localPatterns: [
       {
         pathname: "/api/static/**",
+        search: "?*",
+      },
+      {
+        pathname: "/api/static/**",
+        search: "",
       },
       {
         pathname: "/static/**",
+        search: "?*",
+      },
+      {
+        pathname: "/static/**",
+        search: "",
       },
       {
         pathname: "/*.png",
