@@ -24,9 +24,8 @@ import com.getcapacitor.RouteProcessor;
 
 public class MainActivity extends BridgeActivity {
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        getBridge().setRouteProcessor(new RouteProcessor() {
+    protected void load() {
+        bridgeBuilder.setRouteProcessor(new RouteProcessor() {
             @Override
             public ProcessedRoute process(String basePath, String path) {
                 ProcessedRoute route = new ProcessedRoute();
@@ -55,5 +54,6 @@ public class MainActivity extends BridgeActivity {
                 return route;
             }
         });
+        super.load();
     }
 }

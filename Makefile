@@ -563,6 +563,10 @@ build-frontend:
 	@cd frontend && npm run build
 
 # Mobile Targets (Capacitor 7 Native Android & iOS)
+JAVA_HOME ?= $(shell [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ] && echo "/usr/lib/jvm/java-21-openjdk-amd64" || ([ -d "$(HOME)/.jdk-21" ] && echo "$(HOME)/.jdk-21" || echo "$$JAVA_HOME"))
+ANDROID_HOME ?= $(shell [ -d "$(HOME)/.android-sdk" ] && echo "$(HOME)/.android-sdk" || echo "$$ANDROID_HOME")
+export JAVA_HOME
+export ANDROID_HOME
 mobile-build:
 	$(AI_ECHO) "Building Next.js conditional static export for Capacitor..."
 	@cd frontend && node scripts/build-capacitor.js
