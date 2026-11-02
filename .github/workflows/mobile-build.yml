@@ -58,10 +58,14 @@ jobs:
       - name: Build debug APK
         run: cd frontend/android && ./gradlew assembleDebug
 
+      - name: Compute artifact tag
+        id: vars
+        run: echo "tag=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iqoqo-android-debug-${{ github.ref_name }}
+          name: iqoqo-android-debug-${{ steps.vars.outputs.tag }}
           path: frontend/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
@@ -89,10 +93,15 @@ jobs:
       - name: Sync Capacitor to iOS project
         run: cd frontend && npx cap sync ios
 
+      - name: Compute artifact tag
+        id: vars
+        run: echo "tag=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
       - name: Build unsigned xcarchive and package ipa
         # CODE_SIGNING_ALLOWED=NO produces a signable archive without requiring
         # provisioning profiles in CI. Package into Payload/App.app for AltStore/Sideloadly.
         run: |
+          TAG="${{ steps.vars.outputs.tag }}"
           cd frontend/ios/App
           xcodebuild \
             -workspace App.xcworkspace \
@@ -102,17 +111,17 @@ jobs:
             -archivePath "${{ runner.temp }}/iqoqo.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             archive
-          
+
           mkdir -p "${{ runner.temp }}/Payload"
           cp -R "${{ runner.temp }}/iqoqo.xcarchive/Products/Applications/App.app" "${{ runner.temp }}/Payload/"
           cd "${{ runner.temp }}"
-          zip -qr "iqoqo-ios-sideload-${{ github.ref_name }}.ipa" Payload
-          zip -qr "iqoqo-ios-xcarchive-${{ github.ref_name }}.zip" iqoqo.xcarchive
+          zip -qr "iqoqo-ios-sideload-${TAG}.ipa" Payload
+          zip -qr "iqoqo-ios-xcarchive-${TAG}.zip" iqoqo.xcarchive
 
       - name: Upload iOS sideload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: iqoqo-ios-sideload-${{ github.ref_name }}
+          name: iqoqo-ios-sideload-${{ steps.vars.outputs.tag }}
           path: |
             ${{ runner.temp }}/iqoqo-ios-sideload-*.ipa
             ${{ runner.temp }}/iqoqo-ios-xcarchive-*.zip
