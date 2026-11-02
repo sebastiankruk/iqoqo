@@ -344,7 +344,8 @@ export default function ScanPage() {
                 />
                 <Button
                   data-testid="unified-lookup-submit"
-                  type="submit"
+                  type="button"
+                  onClick={handleQuickLookup}
                   size="sm"
                   disabled={!quickQuery.trim() || isQuickSearching}
                   className="h-7 px-2.5 text-xs ml-1 shrink-0"

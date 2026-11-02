@@ -508,7 +508,7 @@
       "duplicateCooldown": "Barcode scanned recently, cooldown active"
     },
     "unifiedLookup": {
-      "placeholder": "Enter ISBN, barcode, or title...",
+      "placeholder": "Quick search title, code or barcode...",
       "searchButton": "Lookup",
       "searching": "Searching..."
     }

@@ -508,7 +508,7 @@
       "duplicateCooldown": "Kod kreskowy niedawno zeskanowany, trwa odliczanie"
     },
     "unifiedLookup": {
-      "placeholder": "Wpisz ISBN, kod kreskowy lub tytuł...",
+      "placeholder": "Szybkie szukanie po tytule lub kodzie...",
       "searchButton": "Szukaj",
       "searching": "Szukanie..."
     }
