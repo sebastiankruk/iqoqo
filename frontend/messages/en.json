@@ -198,6 +198,7 @@
     "foundOne": "Found 1 item",
     "foundMultiple": "Found {count} items",
     "browseManage": "Browse and manage your library",
+    "scopeFriends": "Friends",
     "tabMyItems": "My Items",
     "tabGlobalLibrary": "Global Library",
     "tabExpressions": "Expressions",

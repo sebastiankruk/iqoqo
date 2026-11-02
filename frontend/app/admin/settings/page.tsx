@@ -41,6 +41,12 @@ function SettingsContent(): React.JSX.Element {
   const router = useRouter();
   const { data: profile, isLoading } = useProfile();
   const [internalTab, setInternalTab] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   // Redirect to login if user is unauthenticated, or to /profile if no admin/custodian access
   useEffect(() => {
@@ -62,7 +68,7 @@ function SettingsContent(): React.JSX.Element {
     setInternalTab(tab);
   };
 
-  if (isLoading || !profile) {
+  if (!mounted || isLoading || !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />

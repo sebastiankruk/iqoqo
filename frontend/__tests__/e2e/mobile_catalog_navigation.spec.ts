@@ -29,6 +29,10 @@ for (const vp of viewports) {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
     test.beforeEach(async ({ page }) => {
+      await page.addInitScript(() => {
+        window.localStorage.setItem("iqoqo-cookie-consent", "true");
+      });
+
       await page
         .context()
         .addCookies([{ name: "iqoqo_session", value: "mock-session-c95", domain: "localhost", path: "/" }]);
