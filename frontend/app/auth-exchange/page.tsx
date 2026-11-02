@@ -118,7 +118,9 @@ function AuthExchangeContent() {
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <Smartphone className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-bold">Open in iqoqo</CardTitle>
+            <CardTitle role="heading" aria-level={2} className="text-2xl font-bold">
+              Open in iqoqo
+            </CardTitle>
             <CardDescription>Authentication successful! Tap below to return to your iqoqo mobile app.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

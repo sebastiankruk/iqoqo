@@ -38,6 +38,7 @@ def upgrade():
     is_pg = bind.dialect.name == "postgresql"
     inspector = sa.inspect(bind)
     auth_schema = "auth" if is_pg else None
+    idx_name = "ix_auth_users_apple_id" if is_pg else "ix_users_apple_id"
 
     if inspector.has_table("users", schema=auth_schema):
         columns = {col["name"] for col in inspector.get_columns("users", schema=auth_schema)}
@@ -46,7 +47,7 @@ def upgrade():
         with op.batch_alter_table("users", schema=auth_schema) as batch_op:
             if "apple_id" not in columns:
                 batch_op.add_column(sa.Column("apple_id", sa.String(255), nullable=True))
-                batch_op.create_index("ix_users_apple_id", ["apple_id"], unique=True)
+                batch_op.create_index(idx_name, ["apple_id"], unique=True)
 
             if "check_user_auth_method" in user_checks:
                 batch_op.drop_constraint("check_user_auth_method", type_="check")
@@ -62,6 +63,7 @@ def downgrade():
     is_pg = bind.dialect.name == "postgresql"
     inspector = sa.inspect(bind)
     auth_schema = "auth" if is_pg else None
+    idx_name = "ix_auth_users_apple_id" if is_pg else "ix_users_apple_id"
 
     if inspector.has_table("users", schema=auth_schema):
         columns = {col["name"] for col in inspector.get_columns("users", schema=auth_schema)}
@@ -76,5 +78,5 @@ def downgrade():
             )
 
             if "apple_id" in columns:
-                batch_op.drop_index("ix_users_apple_id")
+                batch_op.drop_index(idx_name)
                 batch_op.drop_column("apple_id")
