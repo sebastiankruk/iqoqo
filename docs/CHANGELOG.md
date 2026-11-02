@@ -5,13 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - TBD
+## [1.0.0] - 2026-11-02
 
 ### Added
 
+- **Native Android & iOS Mobile Ecosystem (C95–C99)**:
+  - Integrated Capacitor 7 native shells with dedicated, version-controlled `frontend/android/` and `frontend/ios/` projects.
+  - Implemented zero-URL-rewrite Next.js static export (`CAPACITOR_BUILD=true`) preserving all canonical FRBR dynamic path routes (`/item/[id]`, `/manifestation/[id]`, `/work/[id]`, `/expression/[id]`, `/u/[username]`, `/share/[token]`, `/help/[slug]`) via `generateStaticParams()` placeholder shells and client `useResolvedRouteParam()`.
+  - Upgraded mobile bottom navigation to 4 persistent tabs (`Home`, `Scan`, `Collection`, `Search`) with drawer-focus global library search and top-right avatar menu for settings/server controls.
+  - Built Home Assistant-style native Server Selector (`ServerSelector`, `OnboardingGuard`) verifying `/api/health` and `/api/auth/providers` across self-hosted and cloud instances, supporting seamless multi-instance switching.
+  - Implemented hardware-backed encrypted mobile credential storage using `@capacitor-community/secure-storage` (iOS Keychain / Android EncryptedSharedPreferences) for JWTs and `iqo_*` Personal Access Tokens, paired with `@capacitor/preferences` for instance URLs.
+  - Added native Sign in with Apple with linear Alembic migration `v1_0_0_add_apple_id_to_users` and mobile Google OAuth pass-through with pure HTTP 302 redirects (**zero HTML in Flask**), branded frontend `/auth-exchange`, and `iqoqo://auth-exchange` deep-link routing.
+  - Supported mobile TOTP 2FA challenge resolution and Personal Access Token native authentication.
+  - Added native scanner hardware bridge with camera permissions, torch toggle, tactile `@capacitor/haptics` confirmation, continuous shelf cataloging `BatchScanToggle`, and unified quick-lookup search input on `/scan` reducing manual item ingestion to $\le 3$ clicks.
+  - Added native mobile share sheet integration (`@capacitor/share`).
+  - Created automated headless Ubuntu Android SDK & emulator setup scripts (`scripts/setup-android-sdk.sh`, `scripts/setup-android-emulator.sh`) and multi-platform GitHub CI (`.github/workflows/mobile-build.yml`) building debug `.apk`, release `.aab`, and unsigned macOS Xcode `.ipa`/`.xcarchive`.
+  - Authored comprehensive mobile sideloading and platform target guides in `docs/MOBILE_SIDELOAD.md` and `docs/MOBILE_TARGETS.md`.
+
+- **Google OAuth Admin Settings UI (C94x / C97b)**:
+  - Added secret-masked, toggle-revealed Google OAuth client credentials management in `frontend/components/admin/instance-settings.tsx`.
+  - Enabled dynamic encrypted persistence in `InstanceSettings` via `PUT /api/admin/settings` with immediate reflection across auth providers without server restarts.
+
+- **AI Skills Architecture Reorganization & v1.0.x Harmonization (C100)**:
+  - Created dedicated `.agent/skills/mobile-capacitor-expert/SKILL.md` covering mobile engineering workflows.
+  - Retired `.agent/skills/cloud-backup-setup/` and consolidated S3/rclone runbooks into `.agent/skills/devops-observability-expert/SKILL.md`.
+  - Refactored `.agent/skills/planning-expert/SKILL.md` into OpenSpec PRD & Release Stream Architect.
+  - Synchronized `Current State` (v0.9.4 complete through C94) and `Upcoming` (v1.0.0 through v1.0.2) across all 13 persona skills and 10 Gemini Gems.
+  - Authored `tests/test_ai_skills_integrity.py` testing skill frontmatter and roadmap context synchronization.
+
 ### Changed
 
+- Replaced mobile bottom navigation `Login` tab with `Search` drawer trigger.
+- Fixed circular loading spinner aspect ratio and SVG clipping across mobile viewports.
+- Enhanced landing page hero CTA visual hierarchy and item card author touch-target sizing ($\ge 44\text{px}$).
+
 ### Fixed
+
+- Resolved Dependabot security vulnerabilities across python backend and frontend dependencies.
 
 ## [0.9.4] - 2026-10-31
 
