@@ -40,21 +40,17 @@ export function OnboardingScreen({ onConnected }: { onConnected: (instanceUrl: s
  * devices if no instance URL has been configured yet.
  */
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(() => isNativeApp());
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    const checkInstance = async () => {
-      if (!isNativeApp()) {
-        if (mounted) {
-          setNeedsOnboarding(false);
-          setChecking(false);
-        }
-        return;
-      }
+    if (!isNativeApp()) {
+      return;
+    }
 
+    const checkInstance = async () => {
       try {
         const url = await getInstanceUrl();
         if (mounted) {
