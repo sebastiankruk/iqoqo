@@ -46,7 +46,7 @@ describe("useAuthProviders", () => {
   it("returns google: true when API reports google enabled", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ google: true }),
+      json: async () => ({ google: true, apple: false }),
     });
 
     const { result } = renderHook(() => useAuthProviders(), {
@@ -57,13 +57,13 @@ describe("useAuthProviders", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual({ google: true });
+    expect(result.current.data).toEqual({ google: true, apple: false });
   });
 
-  it("returns google: false when API reports google disabled", async () => {
+  it("returns google: false and apple: false when API reports disabled", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ google: false }),
+      json: async () => ({ google: false, apple: false }),
     });
 
     const { result } = renderHook(() => useAuthProviders(), {
@@ -74,13 +74,30 @@ describe("useAuthProviders", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual({ google: false });
+    expect(result.current.data).toEqual({ google: false, apple: false });
   });
 
-  it("falls back to google: false when API request fails", async () => {
+  it("returns apple: true when API reports apple enabled", async () => {
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ google: false, apple: true }),
+    });
+
+    const { result } = renderHook(() => useAuthProviders(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual({ google: false, apple: true });
+  });
+
+  it("falls back to false when API request fails", async () => {
     (global.fetch as Mock).mockRejectedValueOnce(new Error("Network error"));
 
     const providers = await fetchAuthProviders();
-    expect(providers).toEqual({ google: false });
+    expect(providers).toEqual({ google: false, apple: false });
   });
 });

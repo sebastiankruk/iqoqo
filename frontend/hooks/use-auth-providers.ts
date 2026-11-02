@@ -20,10 +20,12 @@ import { useQuery } from "@tanstack/react-query";
 
 export interface AuthProviders {
   google: boolean;
+  apple: boolean;
 }
 
 export const DEFAULT_AUTH_PROVIDERS: AuthProviders = {
   google: false,
+  apple: false,
 };
 
 /**
@@ -40,6 +42,7 @@ export async function fetchAuthProviders(): Promise<AuthProviders> {
     const data = await res.json();
     return {
       google: Boolean(data?.google),
+      apple: Boolean(data?.apple),
     };
   } catch {
     return DEFAULT_AUTH_PROVIDERS;

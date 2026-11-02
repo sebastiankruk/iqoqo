@@ -218,3 +218,33 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
     </Card>
   );
 }
+
+/**
+ * Modal wrapper for ServerSelector to switch servers on mobile login screens.
+ */
+export function ServerSelectorModal({
+  isOpen,
+  onClose,
+  onConnected,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConnected?: (instanceUrl: string) => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md">
+        <ServerSelector
+          showCancel
+          onCancel={onClose}
+          onConnected={url => {
+            onConnected?.(url);
+            onClose();
+          }}
+        />
+      </div>
+    </div>
+  );
+}

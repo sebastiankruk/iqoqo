@@ -17,12 +17,16 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { setAuthToken } from "@/lib/capacitor/storage";
+import { ServerSelectorModal } from "@/components/mobile/server-selector";
 
 /**
  * Login page component.
@@ -45,15 +49,20 @@ export default function LoginPage() {
 function LoginPageContent() {
   const t = useTranslations("Login");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: providers } = useAuthProviders();
   const isGoogleEnabled = providers?.google ?? false;
+  const isAppleEnabled = providers?.apple ?? false;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isNative] = useState(() => isNativeApp());
+  const [serverSelectorOpen, setServerSelectorOpen] = useState(false);
   const searchParams = useSearchParams();
+
   const errorCode = searchParams.get("error");
   let errorMessage: string | null = null;
   if (errorCode) {
@@ -98,6 +107,14 @@ function LoginPageContent() {
         }
 
         const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+
+        if (isNativeApp()) {
+          await setAuthToken(data.token);
+          queryClient.clear();
+          router.push(callbackUrl || "/");
+          return;
+        }
+
         // Exchange token in BFF via POST body — sets httpOnly session cookie
         const exchangeRes = await fetch(`/api/auth-exchange`, {
           method: "POST",
@@ -176,25 +193,46 @@ function LoginPageContent() {
               {formError && (
                 <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{formError}</div>
               )}
-              {isGoogleEnabled && (
-                <>
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => {
-                      const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-                      const cbQuery = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
-                      // OAuth flow requires full page navigation to API endpoint
-                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                      window.location.href = `/api/auth/login/google${cbQuery}`;
-                    }}
-                  >
-                    {t("googleSignIn")}
-                  </Button>
+              {(isGoogleEnabled || isAppleEnabled) && (
+                <div className="space-y-2">
+                  {isGoogleEnabled && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => {
+                        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+                        const params = new URLSearchParams();
+                        if (callbackUrl) params.set("callbackUrl", callbackUrl);
+                        if (isNative) params.set("mobile_origin", "capacitor");
+                        const qs = params.toString() ? `?${params.toString()}` : "";
+                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                        window.location.href = `/api/auth/login/google${qs}`;
+                      }}
+                    >
+                      {t("googleSignIn")}
+                    </Button>
+                  )}
+                  {isAppleEnabled && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => {
+                        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+                        const params = new URLSearchParams();
+                        if (callbackUrl) params.set("callbackUrl", callbackUrl);
+                        if (isNative) params.set("mobile_origin", "capacitor");
+                        const qs = params.toString() ? `?${params.toString()}` : "";
+                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                        window.location.href = `/api/auth/login/apple${qs}`;
+                      }}
+                    >
+                      {t("appleSignIn")}
+                    </Button>
+                  )}
                   <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
                     <span className="relative z-10 px-2 text-muted-foreground">{t("or")}</span>
                   </div>
-                </>
+                </div>
               )}
               <form onSubmit={handleLocalLogin} className="space-y-4">
                 <input
@@ -219,16 +257,36 @@ function LoginPageContent() {
                   {isLoading ? "..." : t("signInButton")}
                 </Button>
 
-                <div className="text-center text-sm pt-4">
-                  {t("noAccount")}
-                  <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-                    {t("signUp")}
-                  </Link>
+                <div className="text-center text-sm pt-4 space-y-2">
+                  <div>
+                    {t("noAccount")}
+                    <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+                      {t("signUp")}
+                    </Link>
+                  </div>
+                  {isNative && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setServerSelectorOpen(true)}
+                        className="text-xs text-muted-foreground hover:text-primary underline"
+                      >
+                        {t("changeServer")}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </form>
             </>
           )}
         </div>
+        {serverSelectorOpen && (
+          <ServerSelectorModal
+            isOpen={serverSelectorOpen}
+            onClose={() => setServerSelectorOpen(false)}
+            onConnected={() => setServerSelectorOpen(false)}
+          />
+        )}
       </main>
       <Footer />
     </div>

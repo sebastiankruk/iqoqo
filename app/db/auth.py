@@ -362,7 +362,7 @@ class User(db.Model):  # type: ignore[name-defined]
         db.CheckConstraint(
             "default_item_visibility IN ('private', 'friends_only', 'shared', 'public')", name="check_user_default_item_visibility"
         ),
-        db.CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL", name="check_user_auth_method"),
+        db.CheckConstraint("password_hash IS NOT NULL OR google_id IS NOT NULL OR apple_id IS NOT NULL", name="check_user_auth_method"),
         *(({"schema": _AUTH},) if _AUTH else ()),
     )
 
@@ -374,6 +374,7 @@ class User(db.Model):  # type: ignore[name-defined]
     bio = db.Column(db.Text, nullable=True)
     avatar_url = db.Column(db.String(500), nullable=True)
     google_id = db.Column(db.String(255), unique=True, nullable=True)
+    apple_id = db.Column(db.String(255), unique=True, nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     last_login = db.Column(db.DateTime, nullable=True)

@@ -23,6 +23,8 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { setAuthToken } from "@/lib/capacitor/storage";
 
 /**
  * Register page component.
@@ -34,11 +36,13 @@ export default function RegisterPage() {
   const router = useRouter();
   const { data: providers } = useAuthProviders();
   const isGoogleEnabled = providers?.google ?? false;
+  const isAppleEnabled = providers?.apple ?? false;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isNative] = useState(() => isNativeApp());
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +60,12 @@ export default function RegisterPage() {
 
     if (res.ok) {
       const data = await res.json();
+      if (isNativeApp()) {
+        await setAuthToken(data.token);
+        router.push("/");
+        return;
+      }
+
       // Exchange token in BFF via POST body to set the session cookie
       const exchangeRes = await fetch(`/api/auth-exchange`, {
         method: "POST",
@@ -84,24 +94,38 @@ export default function RegisterPage() {
             <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
 
-          {isGoogleEnabled && (
-            <>
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => {
-                  // OAuth flow requires full page navigation to API endpoint
-                  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                  window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`;
-                }}
-              >
-                {t("googleSignUp")}
-              </Button>
-
+          {(isGoogleEnabled || isAppleEnabled) && (
+            <div className="space-y-2">
+              {isGoogleEnabled && (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    const qs = isNative ? "?mobile_origin=capacitor" : "";
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                    window.location.href = `/api/auth/login/google${qs}`;
+                  }}
+                >
+                  {t("googleSignUp")}
+                </Button>
+              )}
+              {isAppleEnabled && (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => {
+                    const qs = isNative ? "?mobile_origin=capacitor" : "";
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                    window.location.href = `/api/auth/login/apple${qs}`;
+                  }}
+                >
+                  {t("appleSignUp")}
+                </Button>
+              )}
               <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:block after:border-b after:border-border">
                 <span className="relative z-10 px-2 text-muted-foreground">{t("orEmail")}</span>
               </div>
-            </>
+            </div>
           )}
 
           {error && <div className="text-sm text-red-500 text-center">{error}</div>}

@@ -41,6 +41,8 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { removeAuthToken } from "@/lib/capacitor/storage";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,6 +115,9 @@ export function Navbar() {
     } catch (err) {
       console.error("Failed to logout:", err);
     } finally {
+      if (isNativeApp()) {
+        await removeAuthToken();
+      }
       queryClient.clear();
       router.push("/login");
     }
