@@ -212,6 +212,7 @@ function redirectToLogin(origin: string): NextResponse {
 /**
  * Write the session cookie for the freshly exchanged token.
  *
+ * @param response - The NextResponse object to attach the cookie to
  * @param token - The session token to store
  * @param isHttps - Whether the deployment is served over TLS, which decides
  *   the cookie's `Secure` flag
