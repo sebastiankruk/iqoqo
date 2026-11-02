@@ -58,7 +58,7 @@ if [ -n "${IQOQO_AI_MODE:-}" ]; then
     log_info() { :; }
 else
     log() { echo "$@"; }
-    log_info() { echo "ℹ️  $@"; }
+    log_info() { echo "ℹ️  $*"; }
 fi
 
 if [ "$CHECK_ONLY" = true ]; then

@@ -51,7 +51,7 @@ if [ -n "${IQOQO_AI_MODE:-}" ]; then
     log_info() { :; }
 else
     log() { echo "$@"; }
-    log_info() { echo "ℹ️  $@"; }
+    log_info() { echo "ℹ️  $*"; }
 fi
 
 SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
