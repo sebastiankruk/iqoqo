@@ -17,11 +17,12 @@ You are a Principal Site Reliability Engineer (SRE), Platform Architect, and Sys
 
 ## Current State
 
-We are in the **v0.9.x stream (Federation, Social Library & Pre-1.0 Hardening)**; `main` is at **v0.9.2**, feature-complete and awaiting release, after **v0.9.0** and **v0.9.1** shipped (OpenSpec changes C71–C83b done). **v0.9.0** laid the foundation: `Item.local_barcode` (FRBR F5 physical tags), immutable canonical Actor/Object IRIs with `owl:sameAs` / ActivityStreams `Move` merge tombstones, the `federation` DB schema, Fernet-encrypted RSA-2048 actor keys, WebFinger/NodeInfo/Actor discovery, `draft-cavage-http-signatures-12` signing, an SSRF-safe `FederationClient` (IP-pinned via `http_client.py`), per-user `default_item_visibility` and `FederationConsent`, fail-fast container mount-permission checks, and multi-instance preview/E2E (`make preview-up FEDERATION_PAIR=1`). **v0.9.1** activated server-to-server ActivityPub (S2S only, no C2S): per-actor/shared Inbox and read-only Outbox, a dedicated `federation` Celery queue with 100KB caps and `bleach` sanitization, the Trust Graph (`untrusted | pending | trusted | blocked`) with provenance-aware metadata sync (`meta["_provenance"]`, `ProviderMergeDialog`), the `/admin/federation` dashboard, and a two-instance S2S security audit gate. **v0.9.2** adds the social layer: ActivityStreams 2.0 + CIDOC CRM (`crm:E10_Transfer_of_Custody`) social ontology and SHACL shapes, federated friends (`@user@domain`), friend collection/wishlist browsing, federated check-if-I-have-it, cross-instance `as:Offer`/`as:Accept` loans with immutable `ItemCustodyEvent` logging, the In-App Notification Center (`social.notifications`), SPARQL access-rights scoping (private items and non-consented collections excluded; isolated `sparql-runner` retained over Apache Fuseki per ADR), and a public connected-libraries directory (`/federation/directory`) plus in-app `/help` documentation hub. Developer knowledge tooling is the trio CodeGraph, Graphify and MemPalace.
+We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
 
-## Upcoming (v0.9.3 & Beyond)
+## Upcoming (v1.0.1 & Beyond)
 
-With v0.9.2 feature-complete, our focus is **v0.9.3: Async Transitions, Auth Hardening (PATs & OTP), OpenAPI 3.1 & BGG2** (C84–C87): asynchronous transition ingestion and background PostgreSQL `tsvector` FTS re-indexing via Celery + Redis with Server-Sent Events (`/api/v1/events/stream`); Personal Access Tokens (`iqo_*`, scoped Bearer auth, one-time secret display, revocation) and TOTP 2FA with recovery codes; migration to `boardgamegeek2` plus a 4-state Twitch/IGDB healthcheck in `make status`; and 100% OpenAPI 3.1 coverage (`/api/docs/openapi.json`) with new `federation-interop-tester` and `openapi-contract-auditor` skills and a collector Gemini Gem template (`docs/gems/iqoqo-librarian-gem.md`). Then **v0.9.4: Pre-1.0.0 Infrastructure, Native S3 & Mobile Readiness Gate** (C88–C90): retire residual `rclone` for native S3 backups (including the `federation` schema and encrypted actor keys), migrate local deployment to `iqoqo.kruk.cc`, codify Cloudflare WAF/Bot rules for Semantic Web and ActivityPub agents (`/.well-known/*`, `/api/federation/*`, `/api/public/rdf/*`), and run the full `0.9.x` multi-agent security/architecture review and mobile discovery/auth contract check (`NodeInfo`, `/api/auth/providers`, PAT/JWT refresh). This paves the way toward **v1.0.0: Native Mobile Ecosystem** (Capacitor iOS/Android, HASS-style server selector, bottom-action navigation) and **v1++** (Magic Shelf Scan AI, MCP server, monetization).
+- **v1.0.1: FRBR Format Expansion (LEGO & Maps), New Type Requests & Post-0.9.x Fixes** (`C101`–`C108`): AI cover repair script, federation peering directionality matrix, LEGO Sets FRBRoo ontology, Cartographic Maps, format request governance, and mobile responsive polish.
+- **v1.0.2: Offline Cache & Store Readiness Gate** (`C109`–`C110`): SQLite offline collection cache, background barcode sync queue, and App Store / Google Play metadata & compliance checklists.
 
 ## Domain Constraints
 
@@ -168,3 +169,28 @@ To fetch recent traces for a specific service:
 curl -s "http://127.0.0.1:5080/api/default/traces?service=iqoqo-api&limit=10" \
   -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" | jq '.'
 ```
+
+## Multi-Tier Cloud Backup & Disaster Recovery (S3 & Rclone)
+
+iQoQo ships an automated, lock-guarded backup and disaster recovery suite:
+- **Primary Script:** `scripts/cloud_backup.sh`
+- **Disaster Recovery Restore:** `scripts/restore.sh`
+- **Makefile Targets:** `make backup-run`, `make backup-install`, `make backup-check`, `make archive-run`, `make archive-check`.
+
+### Architecture & Supported Backends
+The system supports dual cloud storage engines via `S3_BACKEND=auto|s3|rclone`:
+1. **Native S3 (`boto3`):** Default when AWS / S3 credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_BACKUP`) are provided. Directly streams compressed backups into object storage without external CLI binaries.
+2. **Rclone Engine:** Fallback or explicit backend (`S3_BACKEND=rclone`) supporting 40+ cloud providers (Dropbox, Google Drive, Backblaze B2, SFTP, OneDrive) using remote name `iqoqo-backup` (`~/.config/rclone/rclone.conf`).
+3. **Dual Scope Coverage:** Archives PostgreSQL dumps (`pg_dumpall`), cover artwork (`data/covers/`), and critical cryptographic actor keys (`data/federation_keys/server.pem`) with strict 0700/0600 permission preservation.
+
+### Disaster Recovery Runbook
+To verify or restore an archive:
+
+```bash
+# Verify archive integrity and extract federation keys
+./scripts/restore.sh /path/to/iqoqo_backup_<timestamp>.tar.gz --verify-only
+
+# Full interactive disaster recovery
+./scripts/restore.sh /path/to/iqoqo_backup_<timestamp>.tar.gz
+```
+
