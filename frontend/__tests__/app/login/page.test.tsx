@@ -99,6 +99,12 @@ describe("LoginPage", () => {
     expect(screen.getByText(/Google sign-in is not configured on this instance/i)).toBeInTheDocument();
   });
 
+  it("displays oauth_exchange_failed localized message when error query parameter is present", () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("error=oauth_exchange_failed") as any);
+    renderWithQueryClient(<LoginPage />);
+    expect(screen.getByText(/Failed to complete sign-in. Please try again./i)).toBeInTheDocument();
+  });
+
   it("redirects to Google SSO when button is clicked", () => {
     renderWithQueryClient(<LoginPage />);
     fireEvent.click(screen.getByRole("button", { name: /Sign in with Google/i }));
