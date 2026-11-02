@@ -84,6 +84,7 @@ function FeedbackPageContent() {
   const t = useTranslations("FeedbackPage");
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
   const { data: profile } = useProfile();
