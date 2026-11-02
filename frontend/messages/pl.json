@@ -841,6 +841,22 @@
       "curation": "Podręcznik Kustosza",
       "privacy": "Prywatność i udostępnianie"
     }
+  },
+  "Mobile": {
+    "serverSelectorTitle": "Połącz ze swoją biblioteką",
+    "serverSelectorDescription": "Wprowadź adres URL swojej instancji iqoqo, aby rozpocząć.",
+    "serverUrlLabel": "Adres URL serwera",
+    "serverUrlPlaceholder": "https://biblioteka.przyklad.pl",
+    "verifyConnection": "Sprawdź połączenie",
+    "verifying": "Sprawdzanie...",
+    "connectionSuccess": "Połączono z {name}",
+    "connectionFailed": "Nie można połączyć się z tym serwerem. Sprawdź adres URL i połączenie sieciowe.",
+    "invalidUrl": "Wprowadź poprawny adres URL HTTP lub HTTPS.",
+    "switchServer": "Zmień serwer",
+    "currentServer": "Połączony serwer",
+    "continue": "Przejdź do logowania",
+    "cancel": "Anuluj",
+    "version": "Wersja: {version}"
   }
 }
 

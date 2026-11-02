@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useProfile } from "@/lib/api/hooks";
+import { OnboardingGuard } from "@/components/mobile/onboarding-screen";
 
 export const DEFAULT_QUERY_STALE_TIME = 60_000;
 
@@ -142,7 +143,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TransitionEventsListener />
-      {children}
+      <OnboardingGuard>{children}</OnboardingGuard>
       <Toaster
         richColors
         position={isMobile ? "top-center" : "bottom-right"}

@@ -106,6 +106,7 @@ const eslintConfig = defineConfig([
     '.next-e2e-*/**',
     // Project-specific:
     'android/**',
+    'ios/**',
     'test-results/**',
     'playwright-report/**',
   ]),

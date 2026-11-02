@@ -119,3 +119,36 @@ describe("apiClient response error interceptor", () => {
     });
   });
 });
+
+describe("apiClient mobile Capacitor request interceptor", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("injects instance URL and Bearer token when running on native platform", async () => {
+    const platform = await import("@/lib/capacitor/platform");
+    const storage = await import("@/lib/capacitor/storage");
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue("https://iqoqo.kruk.cc");
+    vi.spyOn(storage, "getAuthToken").mockResolvedValue("jwt-token-123");
+
+    const { mobileRequestInterceptor } = await import("@/lib/api/client");
+    const config = { baseURL: "/api", headers: {} };
+    const modified = await mobileRequestInterceptor(config);
+
+    expect(modified.baseURL).toBe("https://iqoqo.kruk.cc/api");
+    expect((modified.headers as Record<string, string>).Authorization).toBe("Bearer jwt-token-123");
+  });
+
+  it("leaves baseURL and headers unchanged when running on web", async () => {
+    const platform = await import("@/lib/capacitor/platform");
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+
+    const { mobileRequestInterceptor } = await import("@/lib/api/client");
+    const config = { baseURL: "/api", headers: {} };
+    const modified = await mobileRequestInterceptor(config);
+
+    expect(modified.baseURL).toBe("/api");
+    expect((modified.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+});

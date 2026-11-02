@@ -85,6 +85,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(frontendUrl),
   title: "iqoqo – The Library of Everything",
   description: "Your personal library dashboard for books, games, music and collections",
+  manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
     apple: "/apple-icon",

@@ -841,6 +841,22 @@
       "curation": "Curator's Handbook",
       "privacy": "Privacy & Sharing"
     }
+  },
+  "Mobile": {
+    "serverSelectorTitle": "Connect to your library",
+    "serverSelectorDescription": "Enter the URL of your self-hosted iqoqo instance to begin.",
+    "serverUrlLabel": "Server URL",
+    "serverUrlPlaceholder": "https://library.example.com",
+    "verifyConnection": "Verify connection",
+    "verifying": "Verifying...",
+    "connectionSuccess": "Connected to {name}",
+    "connectionFailed": "Unable to connect to this server. Please check the URL and network connection.",
+    "invalidUrl": "Please enter a valid HTTP or HTTPS URL.",
+    "switchServer": "Switch server",
+    "currentServer": "Connected server",
+    "continue": "Continue to login",
+    "cancel": "Cancel",
+    "version": "Version: {version}"
   }
 }
 

@@ -1,0 +1,17 @@
+{
+  "name": "iqoqo",
+  "short_name": "iqoqo",
+  "description": "Decentralized Personal Catalog & Library of Everything",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#040608",
+  "theme_color": "#d15500",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
