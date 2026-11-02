@@ -45,5 +45,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>iqoqo needs camera access to scan barcodes and photograph book and media covers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>iqoqo needs permission to save cover images to your photo library.</string>
 </dict>
 </plist>

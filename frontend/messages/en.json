@@ -498,6 +498,19 @@
       "coverPreview": "Cover preview",
       "uploadCover": "Upload Cover",
       "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
+    },
+    "batchMode": {
+      "toggleLabel": "Batch mode",
+      "viewQueue": "View scanned batch queue",
+      "recentScans": "Recent scans ({count})",
+      "clearQueue": "Clear queue",
+      "itemAddedToast": "Added \"{title}\" to collection",
+      "duplicateCooldown": "Barcode scanned recently, cooldown active"
+    },
+    "unifiedLookup": {
+      "placeholder": "Enter ISBN, barcode, or title...",
+      "searchButton": "Lookup",
+      "searching": "Searching..."
     }
   },
   "SemanticLinks": {

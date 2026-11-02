@@ -498,6 +498,19 @@
       "coverPreview": "Podgląd okładki",
       "uploadCover": "Dodaj okładkę",
       "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
+    },
+    "batchMode": {
+      "toggleLabel": "Tryb seryjny",
+      "viewQueue": "Zobacz kolejkę skanowania seryjnego",
+      "recentScans": "Ostatnie skany ({count})",
+      "clearQueue": "Wyczyść kolejkę",
+      "itemAddedToast": "Dodano „{title}” do kolekcji",
+      "duplicateCooldown": "Kod kreskowy niedawno zeskanowany, trwa odliczanie"
+    },
+    "unifiedLookup": {
+      "placeholder": "Wpisz ISBN, kod kreskowy lub tytuł...",
+      "searchButton": "Szukaj",
+      "searching": "Szukanie..."
     }
   },
   "SemanticLinks": {

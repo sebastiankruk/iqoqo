@@ -37,6 +37,7 @@ import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
 import { Button, ButtonVariant } from "@/components/ui/button";
 import { MediaFormat } from "@/types/frbr";
+import { triggerScanHaptic, triggerSuccessHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -222,6 +223,7 @@ export function CameraCapture({
 
   const processFile = async (file: File) => {
     setUploading(true);
+    await triggerScanHaptic();
     const formData = new FormData();
 
     // Default source logic: if explicitly provided use it, otherwise detect from capture prop
@@ -264,13 +266,16 @@ export function CameraCapture({
         if (envelope.success && envelope.data?.task_id) {
           // Transition to polling
           const result = await startPolling(envelope.data.task_id);
+          await triggerSuccessHaptic();
           if (onExtractComplete) onExtractComplete(result, file, format);
         } else {
+          await triggerErrorHaptic();
           toast.error(envelope.error ?? t("cameraCapture.visionSubmissionFailed"));
           if (onExtractionFailure) onExtractionFailure();
         }
       }
     } catch (error) {
+      await triggerErrorHaptic();
       const message = error instanceof Error ? error.message : t("cameraCapture.processImageFailed");
       toast.error(message);
       console.error("Failed to process cover image", error);
