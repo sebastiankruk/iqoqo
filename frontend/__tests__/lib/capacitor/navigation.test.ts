@@ -60,6 +60,14 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
       expect(res.path).toBe("/auth-exchange?token=my-jwt-token");
     });
 
+    it("parses intent://auth-exchange?token=XYZ Android intent URL", () => {
+      const res = parseAppUrl(
+        "intent://auth-exchange?token=my-intent-token#Intent;scheme=iqoqo;package=cc.iqoqo.app;end"
+      );
+      expect(res.token).toBe("my-intent-token");
+      expect(res.path).toContain("/auth-exchange?token=my-intent-token");
+    });
+
     it("parses iqoqo://auth-exchange#token=XYZ hash param", () => {
       const res = parseAppUrl("iqoqo://auth-exchange#token=my-hash-token");
       expect(res.token).toBe("my-hash-token");

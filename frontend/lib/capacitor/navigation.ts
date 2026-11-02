@@ -37,6 +37,8 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
     let normalized = rawUrl;
     if (normalized.startsWith("iqoqo://")) {
       normalized = normalized.replace("iqoqo://", "https://app.iqoqo.local/");
+    } else if (normalized.startsWith("intent://")) {
+      normalized = normalized.replace("intent://", "https://app.iqoqo.local/");
     }
 
     const parsed = new URL(normalized);

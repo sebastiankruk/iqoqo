@@ -69,6 +69,17 @@ function AuthExchangeContent() {
         if (isMobileFlow) {
           setShowHandoff(true);
           setIsProcessing(false);
+          if (typeof window !== "undefined") {
+            try {
+              const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+              const target = isAndroid
+                ? `intent://auth-exchange?token=${encodeURIComponent(extractedToken)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`
+                : `iqoqo://auth-exchange?token=${encodeURIComponent(extractedToken)}`;
+              window.location.href = target;
+            } catch {
+              // Ignore automatic navigation error
+            }
+          }
           return;
         }
 
@@ -110,6 +121,12 @@ function AuthExchangeContent() {
 
   if (showHandoff && token) {
     const deepLinkUrl = `iqoqo://auth-exchange?token=${encodeURIComponent(token)}`;
+    const androidIntentUrl = `intent://auth-exchange?token=${encodeURIComponent(token)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`;
+
+    const handleOpenApp = () => {
+      const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+      window.location.href = isAndroid ? androidIntentUrl : deepLinkUrl;
+    };
 
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4 py-8">
@@ -124,8 +141,11 @@ function AuthExchangeContent() {
             <CardDescription>Authentication successful! Tap below to return to your iqoqo mobile app.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <a href={deepLinkUrl} className="block w-full">
-              <Button className="w-full h-11 text-base font-medium flex items-center justify-center space-x-2">
+            <a href={deepLinkUrl} onClick={handleOpenApp} className="block w-full">
+              <Button
+                type="button"
+                className="w-full h-11 text-base font-medium flex items-center justify-center space-x-2"
+              >
                 <span>Open iqoqo App</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
