@@ -13,8 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-static";
 
@@ -43,8 +42,17 @@ function apiBase(): string {
  *
  * @returns {Promise<NextResponse>} A success payload, and a cleared cookie.
  */
-export async function POST() {
-  const token = (await cookies()).get("iqoqo_session")?.value;
+export async function POST(request?: NextRequest) {
+  let token = request?.cookies.get("iqoqo_session")?.value;
+
+  if (!token) {
+    try {
+      const { cookies } = await import("next/headers");
+      token = (await cookies()).get("iqoqo_session")?.value;
+    } catch {
+      // ignore
+    }
+  }
 
   if (token) {
     try {

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { cookies } from "next/headers";
+// Remove `cookies` import from next/headers because next.js prohibits mutating cookies() on force-static routes
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-static";
@@ -217,15 +217,27 @@ function redirectToLogin(origin: string): NextResponse {
  *   the cookie's `Secure` flag
  * @returns Resolves once the cookie has been written
  */
-async function setSessionCookie(token: string, isHttps: boolean): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set("iqoqo_session", token, {
+async function applySessionCookie(response: NextResponse, token: string, isHttps: boolean): Promise<void> {
+  response.cookies.set("iqoqo_session", token, {
     httpOnly: true,
     secure: isHttps,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    cookieStore.set("iqoqo_session", token, {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+  } catch {
+    // In force-static mode or static generation, cookieStore.set throws; response.cookies already sets header
+  }
 }
 
 /**
@@ -243,8 +255,9 @@ export async function GET(request: Request) {
     const exchanged = await exchangeCode(code);
     if (!exchanged) return redirectToLogin(origin);
 
-    await setSessionCookie(exchanged.token, new URL(origin).protocol === "https:");
-    return noStore(NextResponse.redirect(new URL(exchanged.callbackUrl, origin)));
+    const response = noStore(NextResponse.redirect(new URL(exchanged.callbackUrl, origin)));
+    await applySessionCookie(response, exchanged.token, new URL(origin).protocol === "https:");
+    return response;
   } catch {
     return redirectToLogin(origin);
   }
@@ -289,7 +302,8 @@ export async function POST(request: Request) {
   }
 
   const origin = resolveFrontendOrigin(request);
-  await setSessionCookie(token, new URL(origin).protocol === "https:");
   const redirectUrl = new URL(callbackUrl, origin).toString();
-  return noStore(NextResponse.json({ success: true, redirectUrl }));
+  const response = noStore(NextResponse.json({ success: true, redirectUrl }));
+  await applySessionCookie(response, token, new URL(origin).protocol === "https:");
+  return response;
 }
