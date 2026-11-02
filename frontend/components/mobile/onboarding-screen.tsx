@@ -73,7 +73,7 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
           await hideSplashScreen();
         }
       }
-    }
+    };
 
     checkInstance();
 

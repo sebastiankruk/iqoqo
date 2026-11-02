@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse } from "@/types/frbr";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { getInstanceUrl, getAuthToken } from "@/lib/capacitor/storage";
@@ -44,17 +44,22 @@ export const apiClient = axios.create({
  * @param config - Outbound Axios request config
  * @returns Modified Axios request config
  */
-export async function mobileRequestInterceptor<T = any>(config: T): Promise<T> {
-  const req = config as Record<string, any>;
+export async function mobileRequestInterceptor(
+  config: InternalAxiosRequestConfig
+): Promise<InternalAxiosRequestConfig> {
   if (isNativeApp()) {
     const instanceUrl = await getInstanceUrl();
     if (instanceUrl) {
-      req.baseURL = `${instanceUrl}/api`;
+      config.baseURL = `${instanceUrl}/api`;
     }
     const token = await getAuthToken();
     if (token) {
-      req.headers = req.headers || {};
-      req.headers.Authorization = `Bearer ${token}`;
+      if (typeof config.headers?.set === "function") {
+        config.headers.set("Authorization", `Bearer ${token}`);
+      } else {
+        config.headers = config.headers || {};
+        (config.headers as Record<string, unknown>)["Authorization"] = `Bearer ${token}`;
+      }
     }
   }
   return config;
