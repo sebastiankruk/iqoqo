@@ -40,17 +40,28 @@ def test_native_bearer_token_authenticates_requests(client, app):
     assert "items" in data
 
 
-def test_native_mobile_cors_preflight(client, app):
+def test_native_mobile_cors_preflight():
     """Verify OPTIONS preflight request from capacitor://localhost returns allowed CORS headers."""
-    app.config["CORS_ENABLED"] = "true"
-    response = client.open(
-        "/api/auth/tokens",
-        method="OPTIONS",
-        headers={
-            "Origin": "capacitor://localhost",
-            "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "Authorization,Content-Type",
-        },
+    from app import create_app
+
+    cors_app = create_app(
+        config_override={
+            "TESTING": True,
+            "CORS_ENABLED": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_ENGINE_OPTIONS": {},
+            "RATELIMIT_ENABLED": False,
+        }
     )
-    assert response.status_code == 200
-    assert response.headers.get("Access-Control-Allow-Origin") == "capacitor://localhost"
+    with cors_app.test_client() as client:
+        response = client.open(
+            "/api/auth/tokens",
+            method="OPTIONS",
+            headers={
+                "Origin": "capacitor://localhost",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization,Content-Type",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers.get("Access-Control-Allow-Origin") == "capacitor://localhost"
