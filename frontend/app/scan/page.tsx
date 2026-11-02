@@ -326,10 +326,8 @@ export default function ScanPage() {
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
-        />
-
-        {!result && !showManual && (
-          <div className="absolute inset-x-0 top-18 z-20 flex flex-col gap-2 px-4 pointer-events-auto">
+        >
+          {!result && !showManual && (
             <div className="flex items-center gap-2">
               <form
                 onSubmit={handleQuickLookup}
@@ -368,8 +366,8 @@ export default function ScanPage() {
                 className="shrink-0"
               />
             </div>
-          </div>
-        )}
+          )}
+        </TopBar>
 
         {!result && !showManual && scannerTab === "barcode" && (
           <Viewfinder isScanning={scannerActive} format={activeFormat} />

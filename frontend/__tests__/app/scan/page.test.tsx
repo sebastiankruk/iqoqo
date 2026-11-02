@@ -42,7 +42,7 @@ vi.mock("@/components/scanner/top-bar", () => ({
   TopBar: (props: any) => {
     mockSetMediaType = props.setFormat;
     mockSetPolicy = props.setPolicy;
-    return <div data-testid="top-bar" />;
+    return <div data-testid="top-bar">{props.children}</div>;
   },
 }));
 

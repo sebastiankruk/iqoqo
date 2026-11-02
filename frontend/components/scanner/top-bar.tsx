@@ -30,6 +30,7 @@ interface TopBarProps {
   hasFlash?: boolean;
   isFlashOn?: boolean;
   onToggleFlash?: () => void;
+  children?: React.ReactNode;
 }
 
 const POLICY_KEYS: Record<"inventory" | "wishlist" | "catalog", { labelKey: string; hintKey: string }> = {
@@ -55,6 +56,7 @@ export function TopBar({
   hasFlash,
   isFlashOn,
   onToggleFlash,
+  children,
 }: TopBarProps) {
   const t = useTranslations("scanner");
   const activePolicyConfig = POLICY_KEYS[currentPolicy] || POLICY_KEYS.inventory;
@@ -149,6 +151,10 @@ export function TopBar({
             </div>
           )}
         </div>
+      )}
+
+      {children && (
+        <div className="flex flex-col px-4 py-2 bg-black/20 backdrop-blur-sm border-b border-white/5">{children}</div>
       )}
     </div>
   );
