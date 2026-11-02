@@ -15,6 +15,7 @@
 //
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { App } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import {
   parseAppUrl,
   handleDeepLink,
@@ -24,6 +25,13 @@ import {
 } from "@/lib/capacitor/navigation";
 import * as platform from "@/lib/capacitor/platform";
 import * as storage from "@/lib/capacitor/storage";
+
+vi.mock("@capacitor/browser", () => ({
+  Browser: {
+    open: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 vi.mock("@capacitor/app", () => ({
   App: {
@@ -72,7 +80,7 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
   });
 
   describe("handleDeepLink", () => {
-    it("persists token and redirects to / on auth-exchange link", async () => {
+    it("persists token, closes browser, and redirects to / on auth-exchange link", async () => {
       const spySetToken = vi.spyOn(storage, "setAuthToken").mockResolvedValue();
       const mockQueryClient = { clear: vi.fn() } as any;
 
@@ -80,6 +88,7 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
 
       expect(spySetToken).toHaveBeenCalledWith("token-abc");
       expect(mockQueryClient.clear).toHaveBeenCalled();
+      expect(Browser.close).toHaveBeenCalled();
       expect(mockRouter.replace).toHaveBeenCalledWith("/");
     });
 

@@ -21,20 +21,46 @@ export const INSTANCE_URL_KEY = "iqoqo_instance_url";
 export const INSTANCE_NAME_KEY = "iqoqo_instance_name";
 export const AUTH_TOKEN_KEY = "iqoqo_auth_token";
 
+let inMemoryInstanceUrl: string | null = null;
+
+/**
+ * Synchronously retrieves the active instance URL from in-memory cache
+ * or localStorage mirror.
+ *
+ * @returns {string | null} The active instance URL or null if not yet resolved.
+ */
+export function getSyncInstanceUrl(): string | null {
+  if (inMemoryInstanceUrl) {
+    return inMemoryInstanceUrl;
+  }
+  if (typeof window !== "undefined") {
+    const val = window.localStorage.getItem(INSTANCE_URL_KEY);
+    if (val) {
+      inMemoryInstanceUrl = val.replace(/\/+$/, "");
+      return inMemoryInstanceUrl;
+    }
+  }
+  return null;
+}
+
 /**
  * Retrieve the saved self-hosted instance URL.
  *
  * @returns {Promise<string | null>} The instance URL or null if not set.
  */
 export async function getInstanceUrl(): Promise<string | null> {
+  let resolved: string | null = null;
   if (isNativeApp()) {
     const { value } = await Preferences.get({ key: INSTANCE_URL_KEY });
-    return value ? value.replace(/\/+$/, "") : null;
+    resolved = value ? value.replace(/\/+$/, "") : null;
+  } else if (typeof window !== "undefined") {
+    resolved = window.localStorage.getItem(INSTANCE_URL_KEY) || null;
   }
-  if (typeof window !== "undefined") {
-    return window.localStorage.getItem(INSTANCE_URL_KEY) || null;
+  inMemoryInstanceUrl = resolved;
+  if (typeof window !== "undefined" && resolved) {
+    window.localStorage.setItem(INSTANCE_URL_KEY, resolved);
   }
-  return null;
+  return resolved;
 }
 
 /**
@@ -45,10 +71,12 @@ export async function getInstanceUrl(): Promise<string | null> {
  */
 export async function setInstanceUrl(url: string): Promise<void> {
   const normalized = url.trim().replace(/\/+$/, "");
+  inMemoryInstanceUrl = normalized;
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(INSTANCE_URL_KEY, normalized);
+  }
   if (isNativeApp()) {
     await Preferences.set({ key: INSTANCE_URL_KEY, value: normalized });
-  } else if (typeof window !== "undefined") {
-    window.localStorage.setItem(INSTANCE_URL_KEY, normalized);
   }
 }
 
@@ -58,10 +86,12 @@ export async function setInstanceUrl(url: string): Promise<void> {
  * @returns {Promise<void>}
  */
 export async function removeInstanceUrl(): Promise<void> {
+  inMemoryInstanceUrl = null;
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(INSTANCE_URL_KEY);
+  }
   if (isNativeApp()) {
     await Preferences.remove({ key: INSTANCE_URL_KEY });
-  } else if (typeof window !== "undefined") {
-    window.localStorage.removeItem(INSTANCE_URL_KEY);
   }
 }
 
@@ -166,6 +196,7 @@ export async function removeAuthToken(): Promise<void> {
  * @returns {Promise<void>}
  */
 export async function clearAllMobileStorage(): Promise<void> {
+  inMemoryInstanceUrl = null;
   await removeAuthToken();
   await removeInstanceUrl();
   await removeInstanceName();

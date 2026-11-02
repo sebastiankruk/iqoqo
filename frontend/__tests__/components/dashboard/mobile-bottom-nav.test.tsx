@@ -41,6 +41,7 @@ vi.mock("next-intl", () => ({
       collection: "Collection",
       search: "Search",
       signIn: "Sign In",
+      profile: "Profile",
     };
     return map[key] || key;
   },
@@ -71,29 +72,39 @@ describe("Mobile Bottom Navigation (C95)", () => {
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as any);
   });
 
-  it("renders 4 primary actions: Home, Scan, Collection, Search on all screen sizes", () => {
+  it("renders 5 primary actions including Sign In when unauthenticated, with safe-area insets", () => {
+    (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
     render(<Navbar />);
+
+    const nav = document.querySelector("nav");
+    expect(nav?.className).toContain("pt-[env(safe-area-inset-top,0px)]");
 
     const bottomNav = document.querySelector(".fixed.bottom-0");
     expect(bottomNav).toBeInTheDocument();
+    expect(bottomNav?.className).toContain("pb-[env(safe-area-inset-bottom,0px)]");
 
     const homeLink = bottomNav?.querySelector('a[href="/"]');
     const scanLink = bottomNav?.querySelector('a[href="/scan"]');
     const collectionLink = bottomNav?.querySelector('a[href="/collection"]');
     const searchLink = bottomNav?.querySelector('a[href="/collection?focus=search"]');
+    const loginLink = bottomNav?.querySelector('a[href="/login"]');
 
     expect(homeLink).toBeInTheDocument();
     expect(scanLink).toBeInTheDocument();
     expect(collectionLink).toBeInTheDocument();
     expect(searchLink).toBeInTheDocument();
+    expect(loginLink).toBeInTheDocument();
   });
 
-  it("never renders a login or sign-in link inside the mobile bottom navigation bar", () => {
-    (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
+  it("renders Profile link in mobile bottom navigation when user is authenticated", () => {
+    (useProfile as Mock).mockReturnValue({ data: { id: "1", display_name: "Ugg" }, isLoading: false });
     render(<Navbar />);
 
     const bottomNav = document.querySelector(".fixed.bottom-0");
+    const profileLink = bottomNav?.querySelector('a[href="/profile"]');
     const loginLink = bottomNav?.querySelector('a[href="/login"]');
+
+    expect(profileLink).toBeInTheDocument();
     expect(loginLink).toBeNull();
   });
 

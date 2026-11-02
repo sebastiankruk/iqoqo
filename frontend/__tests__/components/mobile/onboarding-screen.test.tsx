@@ -14,14 +14,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { OnboardingGuard } from "@/components/mobile/onboarding-screen";
 import * as platform from "@/lib/capacitor/platform";
 import * as storage from "@/lib/capacitor/storage";
 import * as splash from "@/lib/capacitor/splash";
 
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock("next-intl", () => ({
@@ -91,5 +92,37 @@ describe("OnboardingGuard Component", () => {
     });
     expect(screen.queryByText("Connect to your library")).toBeNull();
     expect(splash.hideSplashScreen).toHaveBeenCalled();
+  });
+
+  it("navigates to /login when onboarding completes without auth token", async () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue(null);
+    vi.spyOn(storage, "getAuthToken").mockResolvedValue(null);
+    vi.spyOn(storage, "setInstanceUrl").mockResolvedValue();
+    vi.spyOn(storage, "setInstanceName").mockResolvedValue();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "ok", app_name: "iqoqo Preview" }),
+    });
+
+    render(
+      <OnboardingGuard>
+        <div data-testid="app-content">Protected App Content</div>
+      </OnboardingGuard>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("https://library.example.com")).toBeDefined();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("https://library.example.com"), {
+      target: { value: "https://preview.iqoqo.cc" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify connection" }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/login");
+    });
   });
 });

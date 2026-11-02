@@ -154,13 +154,14 @@ describe("Navbar", () => {
   });
 
   describe("Navbar Auth State", () => {
-    it("shows Sign In when not authenticated in top header", () => {
+    it("shows Sign In when not authenticated in top header and mobile bottom nav", () => {
       (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
       render(<Navbar />);
 
       const signInLinks = screen.getAllByRole("link", { name: "Sign In" });
-      expect(signInLinks.length).toBe(1);
+      expect(signInLinks.length).toBe(2);
       expect(signInLinks[0]).toHaveAttribute("href", "/login");
+      expect(signInLinks[1]).toHaveAttribute("href", "/login");
     });
     expect(screen.queryByLabelText("Settings menu")).toBeNull();
     expect(screen.queryByLabelText("User menu")).toBeNull();

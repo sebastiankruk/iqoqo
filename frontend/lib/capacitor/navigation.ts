@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import type { QueryClient } from "@tanstack/react-query";
 import { isNativeApp } from "./platform";
 import { setAuthToken } from "./storage";
@@ -71,6 +72,7 @@ export async function handleDeepLink(
   }
 
   if (path.includes("auth-exchange")) {
+    await Browser.close().catch(() => {});
     router.replace("/");
   } else if (path && path !== "/") {
     router.push(path);

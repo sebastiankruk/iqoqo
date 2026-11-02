@@ -62,7 +62,7 @@ export function TopBar({
   const activePolicyConfig = POLICY_KEYS[currentPolicy] || POLICY_KEYS.inventory;
 
   return (
-    <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
+    <div className="absolute inset-x-0 top-0 z-20 flex flex-col pt-[env(safe-area-inset-top,0px)]">
       <div className="flex items-center justify-between bg-black/40 px-4 py-4 backdrop-blur-sm">
         <Link
           href="/"
