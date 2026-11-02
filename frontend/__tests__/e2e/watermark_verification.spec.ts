@@ -9,6 +9,9 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Watermark Verification Workflow", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
+    });
     await page.goto("/login");
     await page.fill('input[name="email"]', "e2e-admin@iqoqo.local");
     await page.fill('input[name="password"]', "E2ETestPassword123!");

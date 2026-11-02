@@ -106,7 +106,16 @@ function LoginPageContent() {
         });
         if (exchangeRes?.ok) {
           const result = await exchangeRes.json().catch(() => ({}));
-          router.push(result.redirectUrl || callbackUrl || "/");
+          let target = callbackUrl || "/";
+          if (typeof result?.redirectUrl === "string") {
+            try {
+              const parsed = new URL(result.redirectUrl, window.location.origin);
+              target = parsed.pathname + parsed.search;
+            } catch {
+              target = result.redirectUrl.startsWith("/") ? result.redirectUrl : "/";
+            }
+          }
+          router.push(target);
         } else {
           router.push(callbackUrl || "/");
         }
