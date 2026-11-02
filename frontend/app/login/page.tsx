@@ -93,7 +93,13 @@ function LoginPageContent() {
         payload.otp_code = otpCode.trim();
       }
 
-      const res = await fetch(`/api/auth/login`, {
+      let loginUrl = "/api/auth/login";
+      if (isNativeApp()) {
+        const base = (await getInstanceUrl()) || "";
+        if (base) loginUrl = `${base}/api/auth/login`;
+      }
+
+      const res = await fetch(loginUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

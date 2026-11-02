@@ -18,6 +18,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthProviders, fetchAuthProviders } from "@/hooks/use-auth-providers";
+import * as platform from "@/lib/capacitor/platform";
+import * as storage from "@/lib/capacitor/storage";
 import React from "react";
 
 const createWrapper = () => {
@@ -99,5 +101,20 @@ describe("useAuthProviders", () => {
 
     const providers = await fetchAuthProviders();
     expect(providers).toEqual({ google: false, apple: false });
+  });
+
+  it("resolves full instance URL when running inside native app", async () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://preview.iqoqo.cc");
+    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue("https://preview.iqoqo.cc");
+
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ google: true, apple: false }),
+    });
+
+    const providers = await fetchAuthProviders();
+    expect(global.fetch).toHaveBeenCalledWith("https://preview.iqoqo.cc/api/auth/providers");
+    expect(providers).toEqual({ google: true, apple: false });
   });
 });

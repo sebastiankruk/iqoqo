@@ -63,7 +63,13 @@ export default function RegisterPage() {
     }
     setError("");
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+    let registerUrl = `${process.env.NEXT_PUBLIC_API_URL || ""}/auth/register`;
+    if (isNativeApp()) {
+      const base = (await getInstanceUrl()) || "";
+      if (base) registerUrl = `${base}/api/auth/register`;
+    }
+
+    const res = await fetch(registerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, display_name: displayName }),

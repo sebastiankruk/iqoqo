@@ -19,6 +19,7 @@ import { useState, useEffect } from "react";
 import type React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, Server } from "lucide-react";
@@ -38,6 +39,7 @@ export interface ServerSelectorProps {
 export function ServerSelector({ initialUrl, onConnected, showCancel = false, onCancel }: ServerSelectorProps) {
   const t = useTranslations("Mobile");
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [urlInput, setUrlInput] = useState(initialUrl || "");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -129,6 +131,7 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
 
       await setInstanceUrl(normalized);
       await setInstanceName(detectedName);
+      queryClient.invalidateQueries({ queryKey: ["auth", "providers"] });
 
       setVerifiedInfo({ name: detectedName, version: detectedVersion });
 
