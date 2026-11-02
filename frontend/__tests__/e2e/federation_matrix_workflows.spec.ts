@@ -19,7 +19,7 @@ import { test, expect, BrowserContext, Page } from "@playwright/test";
 test.describe("Dual-Origin Federation Combinatorial Matrix E2E Suite (OpenSpec C92)", () => {
   const primaryUrl = process.env.PRIMARY_FRONTEND_URL || "http://localhost:8000";
   const peerUrl = process.env.PEER_FRONTEND_URL || "http://localhost:3001";
-  const peerDomain = process.env.PEER_DOMAIN || "localhost:5005";
+  const _peerDomain = process.env.PEER_DOMAIN || "localhost:5005";
 
   let contextA: BrowserContext;
   let contextB: BrowserContext;

@@ -60,6 +60,7 @@ vi.mock("next-intl", () => ({
           administration: "Administration",
           logOut: "Log out",
           home: "Home",
+          search: "Search",
           profile: "Profile",
           languageSubmenu: "Language",
           themeSubmenu: "Theme",
@@ -133,25 +134,34 @@ describe("Navbar", () => {
     expect(screen.getByTestId("language-toggle")).toBeInTheDocument();
   });
 
-  it("renders mobile bottom nav with link to /profile for authenticated users", () => {
+  it("renders mobile bottom nav with 4 primary actions: Home, Scan, Collection, Search", () => {
     (useProfile as Mock).mockReturnValue({
       data: { email: "user@example.com", display_name: "User", roles: ["user"] },
       isLoading: false,
     });
     render(<Navbar />);
-    const profileLinks = screen.getAllByRole("link", { name: "Profile" });
-    const mobileProfileLink = profileLinks.find(l => l.getAttribute("href") === "/profile");
-    expect(mobileProfileLink).toBeDefined();
+    const homeLinks = screen.getAllByRole("link", { name: /home/i });
+    expect(homeLinks.some(l => l.getAttribute("href") === "/")).toBe(true);
+
+    const scanLinks = screen.getAllByRole("link", { name: /scan/i });
+    expect(scanLinks.some(l => l.getAttribute("href") === "/scan")).toBe(true);
+
+    const collectionLinks = screen.getAllByRole("link", { name: /collection/i });
+    expect(collectionLinks.some(l => l.getAttribute("href") === "/collection")).toBe(true);
+
+    const searchLinks = screen.getAllByRole("link", { name: /search/i });
+    expect(searchLinks.some(l => l.getAttribute("href") === "/collection?focus=search")).toBe(true);
   });
-});
 
-describe("Navbar Auth State", () => {
-  it("shows Sign In when not authenticated and no settings dropdown", () => {
-    (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
-    render(<Navbar />);
+  describe("Navbar Auth State", () => {
+    it("shows Sign In when not authenticated in top header", () => {
+      (useProfile as Mock).mockReturnValue({ data: null, isLoading: false });
+      render(<Navbar />);
 
-    const signInLinks = screen.getAllByRole("link", { name: "Sign In" });
-    expect(signInLinks.length).toBe(2);
+      const signInLinks = screen.getAllByRole("link", { name: "Sign In" });
+      expect(signInLinks.length).toBe(1);
+      expect(signInLinks[0]).toHaveAttribute("href", "/login");
+    });
     expect(screen.queryByLabelText("Settings menu")).toBeNull();
     expect(screen.queryByLabelText("User menu")).toBeNull();
   });

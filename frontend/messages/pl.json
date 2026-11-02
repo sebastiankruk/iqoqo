@@ -15,6 +15,7 @@
     "administration": "Administracja",
     "logOut": "Wyloguj się",
     "home": "Główna",
+    "search": "Szukaj",
     "profile": "Profil",
     "languageSubmenu": "Język",
     "themeSubmenu": "Motyw",
@@ -99,6 +100,8 @@
   "Login": {
     "title": "Zaloguj się do iqoqo",
     "googleSignIn": "Zaloguj się przez Google",
+    "appleSignIn": "Zaloguj się przez Apple",
+    "changeServer": "Zmień serwer instancji",
     "or": "Lub",
     "emailPlaceholder": "E-mail",
     "passwordPlaceholder": "Hasło",
@@ -107,12 +110,14 @@
     "signUp": "Zarejestruj się",
     "loginFailed": "Logowanie nie powiodło się",
     "token_exchange_failed": "Logowanie przez Google nie mogło zostać ukończone. Spróbuj ponownie.",
+    "oauth_exchange_failed": "Wymiana kodu autoryzacyjnego nie powiodła się. Spróbuj ponownie.",
     "id_token_parse_failed": "Nie udało się zweryfikować Twojej tożsamości w Google. Spróbuj ponownie.",
     "no_email": "Konto Google nie ma przypisanego adresu e-mail.",
     "user_setup_failed": "Nie udało się utworzyć konta. Spróbuj ponownie lub skontaktuj się ze wsparciem.",
     "jwt_generation_failed": "Tworzenie sesji nie powiodło się. Spróbuj ponownie.",
     "MissingToken": "Brak tokenu uwierzytelniającego. Spróbuj zalogować się ponownie.",
     "oauth_not_configured": "Logowanie przez Google nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło.",
+    "apple_oauth_not_configured": "Logowanie przez Apple nie jest skonfigurowane w tej instancji. Użyj logowania e-mail i hasło.",
     "twoFactorTitle": "Uwierzytelnianie dwuskładnikowe (2FA)",
     "twoFactorDescription": "Wprowadź 6-cyfrowy kod z aplikacji uwierzytelniającej lub 8-znakowy kod zapasowy.",
     "otpPlaceholder": "123456 lub kod zapasowy",
@@ -124,6 +129,7 @@
     "title": "Utwórz konto",
     "subtitle": "Dołącz do rozproszonej biblioteki",
     "googleSignUp": "Zarejestruj się przez Google",
+    "appleSignUp": "Zarejestruj się przez Apple",
     "orEmail": "Lub kontynuuj z adresem e-mail",
     "displayNamePlaceholder": "Nazwa wyświetlana (opcjonalnie)",
     "emailPlaceholder": "E-mail",
@@ -197,6 +203,7 @@
     "foundOne": "Znaleziono 1 element",
     "foundMultiple": "Znaleziono {count} elementów",
     "browseManage": "Przeglądaj i zarządzaj swoją biblioteką",
+    "scopeFriends": "Znajomi",
     "tabMyItems": "Moje egzemplarze",
     "tabGlobalLibrary": "Globalna biblioteka",
     "tabExpressions": "Ekspresje",
@@ -492,6 +499,19 @@
       "coverPreview": "Podgląd okładki",
       "uploadCover": "Dodaj okładkę",
       "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
+    },
+    "batchMode": {
+      "toggleLabel": "Tryb seryjny",
+      "viewQueue": "Zobacz kolejkę skanowania seryjnego",
+      "recentScans": "Ostatnie skany ({count})",
+      "clearQueue": "Wyczyść kolejkę",
+      "itemAddedToast": "Dodano „{title}” do kolekcji",
+      "duplicateCooldown": "Kod kreskowy niedawno zeskanowany, trwa odliczanie"
+    },
+    "unifiedLookup": {
+      "placeholder": "Szybkie szukanie po tytule lub kodzie...",
+      "searchButton": "Szukaj",
+      "searching": "Szukanie..."
     }
   },
   "SemanticLinks": {
@@ -839,6 +859,22 @@
       "curation": "Podręcznik Kustosza",
       "privacy": "Prywatność i udostępnianie"
     }
+  },
+  "Mobile": {
+    "serverSelectorTitle": "Połącz ze swoją biblioteką",
+    "serverSelectorDescription": "Wprowadź adres URL swojej instancji iqoqo, aby rozpocząć.",
+    "serverUrlLabel": "Adres URL serwera",
+    "serverUrlPlaceholder": "https://biblioteka.przyklad.pl",
+    "verifyConnection": "Sprawdź połączenie",
+    "verifying": "Sprawdzanie...",
+    "connectionSuccess": "Połączono z {name}",
+    "connectionFailed": "Nie można połączyć się z tym serwerem. Sprawdź adres URL i połączenie sieciowe.",
+    "invalidUrl": "Wprowadź poprawny adres URL HTTP lub HTTPS.",
+    "switchServer": "Zmień serwer",
+    "currentServer": "Połączony serwer",
+    "continue": "Przejdź do logowania",
+    "cancel": "Anuluj",
+    "version": "Wersja: {version}"
   }
 }
 

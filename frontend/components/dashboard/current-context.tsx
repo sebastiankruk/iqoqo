@@ -33,7 +33,9 @@ export function CurrentContext() {
   const { data: readingData, isLoading: isLoadingReading } = useItems(1, 10, ["reading"]);
   const { data: wishListData, isLoading: isLoadingWishList } = useWishlist({ limit: 10 });
 
-  const readingItems = readingData?.data?.filter(item => item.status === "reading") ?? [];
+  const readingItems = Array.isArray(readingData?.data)
+    ? readingData.data.filter(item => item.status === "reading")
+    : [];
   const wishListItems = wishListData?.data ?? [];
   const isLoading = isLoadingReading || isLoadingWishList;
 

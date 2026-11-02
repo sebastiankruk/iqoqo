@@ -47,7 +47,7 @@ export function CookieConsent() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm p-4 bg-background border border-border rounded-lg shadow-lg flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5">
+    <div className="fixed bottom-20 sm:bottom-4 right-4 z-50 max-w-sm p-4 bg-background border border-border rounded-lg shadow-lg flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5">
       <div className="text-sm italic text-muted-foreground font-serif">
         <p>{t("haikuLine1")}</p>
         <p>{t("haikuLine2")}</p>

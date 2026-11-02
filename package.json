@@ -21,7 +21,9 @@
     "colord": "^2.9.4",
     "katex": "^0.18.2",
     "source-map-js": "^1.2.2",
-    "postcss-selector-parser": "^7.1.6"
+    "postcss-selector-parser": "^7.1.6",
+    "re2js": ">=2.8.7",
+    "minimatch": ">=11.0.1"
   },
   "repository": {
     "type": "git",

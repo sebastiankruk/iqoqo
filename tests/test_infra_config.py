@@ -255,6 +255,45 @@ exit 0
         self.assertIn("Forced rotation requested", result.stdout)
         self.assertIn("Generated and set new SECRET_KEY in .env.dev", result.stdout)
 
+    def test_mobile_build_workflow_config(self):
+        import yaml
+
+        workflow_path = self.repo_root / ".github" / "workflows" / "mobile-build.yml"
+        self.assertTrue(workflow_path.exists(), "mobile-build.yml workflow missing")
+
+        data = yaml.safe_load(workflow_path.read_text())
+        # Check triggers
+        on_block = data.get("on") or data.get(True)
+        push_block = on_block.get("push", {})
+        self.assertIn("v1.*", push_block.get("tags", []))
+        self.assertIn("release/1.*", push_block.get("branches", []))
+        self.assertIn("workflow_dispatch", on_block)
+
+        # Check jobs
+        jobs = data.get("jobs", {})
+        self.assertIn("build-android", jobs)
+        self.assertEqual(jobs["build-android"].get("runs-on"), "ubuntu-latest")
+
+        self.assertIn("build-ios", jobs)
+        self.assertEqual(jobs["build-ios"].get("runs-on"), "macos-15")
+
+    def test_makefile_mobile_targets(self):
+        makefile_content = (self.repo_root / "Makefile").read_text()
+        required_targets = [
+            "mobile-build:",
+            "mobile-sync:",
+            "mobile-android-apk:",
+            "mobile-android-aab:",
+            "mobile-adb-install:",
+            "test-e2e-mobile:",
+        ]
+        for target in required_targets:
+            self.assertIn(target, makefile_content, f"Missing Makefile target: {target}")
+
+        phony_line = [line for line in makefile_content.splitlines() if line.startswith(".PHONY:")][0]
+        for target in ["mobile-build", "mobile-sync", "mobile-android-apk", "mobile-android-aab", "mobile-adb-install", "test-e2e-mobile"]:
+            self.assertIn(target, phony_line, f"Target {target} not in .PHONY")
+
 
 if __name__ == "__main__":
     unittest.main()

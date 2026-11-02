@@ -27,7 +27,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ShareButton } from "@/components/ui/share-button";
 import { Footer } from "@/components/dashboard/footer";
-import { Navbar } from "@/components/dashboard/navbar";
+import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 
 interface SharedCollectionItem {
   id: number | string;
@@ -56,6 +56,11 @@ type SharedCollectionResult =
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
+}
+
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ token: "_placeholder" }];
 }
 
 /**
@@ -87,6 +92,9 @@ async function getSharedCollection(token: string): Promise<SharedCollectionResul
  */
 export async function generateMetadata({ params }: SharedCollectionPageProps): Promise<Metadata> {
   const { token } = await params;
+  if (token === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const collectionRes = await getSharedCollection(token);
 
   if (collectionRes.kind !== "success") {
@@ -124,6 +132,13 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
  */
 export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
   const { token } = await params;
+  if (token === "_placeholder") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+      </div>
+    );
+  }
   const t = await getTranslations("Public");
 
   const collectionRes = await getSharedCollection(token);

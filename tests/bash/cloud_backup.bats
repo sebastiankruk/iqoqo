@@ -23,6 +23,7 @@
 
 setup() {
   export TEST_TEMP_DIR="$(mktemp -d)"
+  export BACKUP_LOCK_FILE="${TEST_TEMP_DIR}/backup.lock"
   export STUB_DIR="${TEST_TEMP_DIR}/stub"
   export PATH="${TEST_TEMP_DIR}/stub-bin:${PATH}"
   mkdir -p "${TEST_TEMP_DIR}/stub-bin" "${STUB_DIR}/botocore"

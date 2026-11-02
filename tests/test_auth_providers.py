@@ -18,27 +18,30 @@ from unittest.mock import patch
 
 
 def test_auth_providers_unconfigured(client):
-    """Verify /api/auth/providers returns google: false when unconfigured."""
-    with patch("app.api.auth._ensure_google_oauth", return_value=False):
+    """Verify /api/auth/providers returns google: false and apple: false when unconfigured."""
+    with patch("app.api.auth._ensure_google_oauth", return_value=False), patch("app.api.auth._ensure_apple_oauth", return_value=False):
         response = client.get("/api/auth/providers")
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data == {"google": False}
+        assert data == {"google": False, "apple": False}
 
 
 def test_auth_providers_configured(client):
-    """Verify /api/auth/providers returns google: true when configured."""
-    with patch("app.api.auth._ensure_google_oauth", return_value=True):
+    """Verify /api/auth/providers returns true when configured."""
+    with patch("app.api.auth._ensure_google_oauth", return_value=True), patch("app.api.auth._ensure_apple_oauth", return_value=True):
         response = client.get("/api/auth/providers")
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data == {"google": True}
+        assert data == {"google": True, "apple": True}
 
 
 def test_auth_providers_exception_fallback(client):
-    """Verify /api/auth/providers gracefully returns google: false on error."""
-    with patch("app.api.auth._ensure_google_oauth", side_effect=RuntimeError("Config error")):
+    """Verify /api/auth/providers gracefully returns false on error."""
+    with (
+        patch("app.api.auth._ensure_google_oauth", side_effect=RuntimeError("Config error")),
+        patch("app.api.auth._ensure_apple_oauth", side_effect=RuntimeError("Apple config error")),
+    ):
         response = client.get("/api/auth/providers")
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data == {"google": False}
+        assert data == {"google": False, "apple": False}

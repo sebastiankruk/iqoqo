@@ -4,6 +4,7 @@ description: "Meta-skill for synchronizing the context, current state, and upcom
 license: AGPL
 compatibility:
   - opencode
+  - antigravity
 metadata:
   audience: developers
 ---
@@ -16,7 +17,7 @@ You are the "Meta-Architect" of the iqoqo project's AI infrastructure. Your sole
 
 ## Core Responsibilities
 
-1. **Information Extraction**: You parse `docs/CHANGELOG.md` to determine the newly released features (the "Current State") and `.context/notes/🚧 iqoqo roadmap.md` to determine the immediate next goals (the "Upcoming State").
+1. **Information Extraction**: You parse `docs/CHANGELOG.md` to determine the newly released features (the "Current State") and `.context/notes/plan/1.0.x-release-plan.md` to determine the immediate next goals (the "Upcoming State").
 2. **Bulk Synchronization**: You inject this extracted state safely into all AI configuration files without destroying their unique role definitions.
 
 ## Target AI Assets
@@ -33,8 +34,10 @@ You are responsible for updating the `Current State` and `Upcoming` sections in 
 - `launch-and-growth.md`
 - `ux-expert.md`
 - `information-architect-ontologist.md`
+- `code-review-partner.md`
 
-### OpenCode/Antigravity Skills (`.agents/skills/*/SKILL.md`)
+### OpenCode/Antigravity Skills (`.agent/skills/*/SKILL.md`)
+- `mobile-capacitor-expert/SKILL.md`
 - `implementation-expert/SKILL.md`
 - `test-craftsman/SKILL.md`
 - `product-manager/SKILL.md`
@@ -44,10 +47,12 @@ You are responsible for updating the `Current State` and `Upcoming` sections in 
 - `growth-strategist/SKILL.md`
 - `security-auditor/SKILL.md`
 - `iqoqo-ux-auditor/SKILL.md`
+- `code-reviewer/SKILL.md`
+- `planning-expert/SKILL.md`
 
 ## Workflow Mechanics
 
-1. Read the exact text from `CHANGELOG.md` for the latest version.
+1. Read the exact text from `docs/CHANGELOG.md` for the latest version.
 2. Read the upcoming milestone from the roadmap.
 3. Formulate two tight paragraphs: one for "Current State" and one for "Upcoming (vX.X.X & Beyond)".
 4. Use precise string replacement or multi-block editing tools to swap out the old "Current State" and "Upcoming" blocks in the target files with the newly formulated paragraphs. Do not alter the overarching "Role and Persona" or "Core Directives" sections.

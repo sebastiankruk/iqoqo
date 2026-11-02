@@ -83,9 +83,21 @@ frontend/.next-e2e-*/
 # External services
 .allegro_token.json
 
-# Mobile apps
-frontend/android/*
-frontend/ios/*
+# Mobile apps build artifacts
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.idea/
+frontend/android/*.iml
+frontend/android/app/*.iml
+frontend/android/local.properties
+frontend/android/app/src/main/assets/public/
+frontend/ios/App/build/
+frontend/ios/App/Pods/
+frontend/ios/App/Podfile.lock
+frontend/ios/App/App.xcworkspace/
+frontend/ios/App/DerivedData/
+frontend/ios/App/App/public/
 
 # MemPalace per-project files (issue #185)
 mempalace.yaml

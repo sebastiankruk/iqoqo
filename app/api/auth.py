@@ -20,12 +20,13 @@ admin bootstrap token. Token verification is delegated to the auth models, not
 reimplemented here."""
 
 import hashlib
+import json
 import logging
 import os
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlparse, urlsplit
+from urllib.parse import urlencode, urlparse, urlsplit
 
 import jwt as pyjwt
 import requests
@@ -131,6 +132,23 @@ def _ensure_google_oauth() -> bool:
     return True
 
 
+def _ensure_apple_oauth() -> bool:
+    """Ensure Apple OAuth is configured.
+
+    Priority:
+    1. Database (InstanceSettings table via ConfigService)
+    2. Flask app config
+    3. Environment variables
+
+    Returns:
+        True if Apple client ID is configured.
+    """
+    from app.core.config_service import ConfigService
+
+    client_id = ConfigService.get("APPLE_CLIENT_ID")
+    return bool(client_id)
+
+
 def init_oauth(app):
     """Register the OAuth providers on the application.
 
@@ -213,7 +231,19 @@ def get_auth_providers():
         logger.warning("Error checking Google OAuth provider status: %s", exc)
         google_active = False
 
-    return jsonify({"google": google_active}), 200
+    try:
+        apple_active = bool(_ensure_apple_oauth())
+    except (
+        SQLAlchemyError,
+        ValueError,
+        AttributeError,
+        KeyError,
+        RuntimeError,
+    ) as exc:
+        logger.warning("Error checking Apple OAuth provider status: %s", exc)
+        apple_active = False
+
+    return jsonify({"google": google_active, "apple": apple_active}), 200
 
 
 @auth_bp.route("/login/google")
@@ -230,6 +260,10 @@ def google_login():
     callback_url = _safe_oauth_callback_path(request.args.get("callbackUrl") or request.args.get("redirect"))
     if callback_url:
         session["oauth_callback_url"] = callback_url
+
+    mobile_origin = request.args.get("mobile_origin") or ("capacitor" if request.args.get("mobile") == "1" else None)
+    if mobile_origin == "capacitor":
+        session["oauth_mobile_origin"] = "capacitor"
 
     redirect_uri = request.url_root + "api/auth/callback/google"
     original_uri = redirect_uri
@@ -263,6 +297,7 @@ def google_callback():
         error_code = "oauth_not_configured"
 
     callback_url = session.pop("oauth_callback_url", None)
+    mobile_origin = session.pop("oauth_mobile_origin", None)
     token = None
     if not error_code:
         try:
@@ -340,11 +375,172 @@ def google_callback():
         logger.error("Google OAuth user creation/update failed: %s", e, exc_info=True)
         return redirect(f"{frontend_url}/login?error=user_setup_failed")
 
+    if mobile_origin == "capacitor":
+        jwt_token = generate_internal_jwt(user)
+        response = redirect(f"{frontend_url.rstrip('/')}/auth-exchange?mobile=1#token={jwt_token}")
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
     try:
         exchange_code = _issue_oauth_exchange_code(user, _safe_oauth_callback_path(callback_url))
     except SQLAlchemyError as e:
         db.session.rollback()
         logger.error("Google OAuth exchange-code creation failed: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=oauth_exchange_failed")
+
+    response = redirect(f"{frontend_url.rstrip('/')}/api/auth-exchange?code={exchange_code}")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@auth_bp.route("/login/apple")
+def apple_login():
+    """Start the Apple OAuth flow."""
+    if not _ensure_apple_oauth():
+        logger.warning("Apple OAuth login attempted but Apple client is not configured")
+        frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+        return redirect(f"{frontend_url}/login?error=apple_oauth_not_configured")
+
+    from app.core.config_service import ConfigService
+
+    client_id = ConfigService.get("APPLE_CLIENT_ID")
+    callback_url = _safe_oauth_callback_path(request.args.get("callbackUrl") or request.args.get("redirect"))
+    if callback_url:
+        session["oauth_callback_url"] = callback_url
+
+    mobile_origin = request.args.get("mobile_origin") or ("capacitor" if request.args.get("mobile") == "1" else None)
+    if mobile_origin == "capacitor":
+        session["oauth_mobile_origin"] = "capacitor"
+
+    state = secrets.token_urlsafe(32)
+    session["oauth_apple_state"] = state
+
+    redirect_uri = request.url_root + "api/auth/callback/apple"
+    if redirect_uri.startswith("http://") and os.getenv("FLASK_ENV") == "production":
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code id_token",
+        "response_mode": "form_post",
+        "scope": "name email",
+        "state": state,
+    }
+    apple_auth_url = f"https://appleid.apple.com/auth/authorize?{urlencode(params)}"
+    return redirect(apple_auth_url)
+
+
+@auth_bp.route("/callback/apple", methods=["GET", "POST"])
+def apple_callback():
+    """Complete Apple Sign In flow."""
+    frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+
+    if not _ensure_apple_oauth():
+        logger.warning("Apple OAuth callback received but Apple client is not configured")
+        return redirect(f"{frontend_url}/login?error=apple_oauth_not_configured")
+
+    callback_url = session.pop("oauth_callback_url", None)
+    mobile_origin = session.pop("oauth_mobile_origin", None)
+    saved_state = session.pop("oauth_apple_state", None)
+
+    # Apple returns params via POST (form_post) or GET
+    payload: dict[str, str] = {}
+    if request.method == "POST":
+        payload = request.form.to_dict()
+    else:
+        payload = request.args.to_dict()
+
+    if not payload and request.is_json:
+        payload = request.get_json(silent=True) or {}
+
+    state = payload.get("state")
+    if saved_state and state and saved_state != state:
+        logger.error("Apple OAuth state mismatch: expected %s, got %s", saved_state, state)
+        return redirect(f"{frontend_url}/login?error=csrf_state_mismatch")
+
+    id_token_str = payload.get("id_token")
+    user_payload_raw = payload.get("user")
+
+    if not id_token_str:
+        logger.error("Apple OAuth callback missing id_token: %s", payload)
+        return redirect(f"{frontend_url}/login?error=missing_id_token")
+
+    # Decode id_token claims
+    try:
+        claims = pyjwt.decode(id_token_str, options={"verify_signature": False})
+    except Exception as e:
+        logger.error("Failed to decode Apple id_token: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=invalid_id_token")
+
+    apple_id = claims.get("sub")
+    email = claims.get("email")
+
+    if not apple_id:
+        logger.error("Apple id_token missing sub claim: %s", claims)
+        return redirect(f"{frontend_url}/login?error=missing_apple_sub")
+
+    display_name = None
+    if user_payload_raw:
+        try:
+            user_data = json.loads(user_payload_raw) if isinstance(user_payload_raw, str) else user_payload_raw
+            name_obj = user_data.get("name", {})
+            first = name_obj.get("firstName", "")
+            last = name_obj.get("lastName", "")
+            full = f"{first} {last}".strip()
+            if full:
+                display_name = full
+        except Exception:
+            pass
+
+    try:
+        user = db.session.execute(db.select(User).filter_by(apple_id=apple_id)).scalar_one_or_none()
+        if not user and email:
+            user = db.session.execute(db.select(User).filter_by(email=email)).scalar_one_or_none()
+            if user:
+                user.apple_id = apple_id
+
+        if not user:
+            account_email = email or f"{apple_id}@privaterelay.appleid.apple.com"
+            user = User(
+                email=account_email,
+                display_name=display_name or "Apple User",
+                apple_id=apple_id,
+                is_active=True,
+            )
+            default_role = db.session.execute(db.select(Role).filter_by(name="user")).scalar_one_or_none()
+            if default_role:
+                user.roles.append(default_role)
+            db.session.add(user)
+        else:
+            if display_name and not user.display_name:
+                user.display_name = display_name
+
+        from app.core.account_tokens import mark_verified_from_oidc
+
+        mark_verified_from_oidc(user, claims)
+
+        user.last_login = datetime.now(UTC)
+        db.session.commit()
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Apple OAuth user creation failed: %s", e, exc_info=True)
+        return redirect(f"{frontend_url}/login?error=user_setup_failed")
+
+    if mobile_origin == "capacitor":
+        jwt_token = generate_internal_jwt(user)
+        response = redirect(f"{frontend_url.rstrip('/')}/auth-exchange?mobile=1#token={jwt_token}")
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
+    try:
+        exchange_code = _issue_oauth_exchange_code(user, _safe_oauth_callback_path(callback_url))
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Apple OAuth exchange-code creation failed: %s", e, exc_info=True)
         return redirect(f"{frontend_url}/login?error=oauth_exchange_failed")
 
     response = redirect(f"{frontend_url.rstrip('/')}/api/auth-exchange?code={exchange_code}")

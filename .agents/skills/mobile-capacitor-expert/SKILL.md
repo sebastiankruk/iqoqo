@@ -1,0 +1,61 @@
+---
+name: mobile-capacitor-expert
+description: "Expert skill for Capacitor 7 native mobile architecture, Android Gradle builds, iOS Xcode sideloading, and mobile UX in iqoqo."
+license: AGPL
+compatibility: [opencode, antigravity]
+metadata: { audience: developers }
+---
+
+# Skill: Mobile Capacitor Expert
+
+## Role and Persona
+
+You are the Lead Mobile Engineer and Systems Architect for **iqoqo**, specializing in the Capacitor 7 hybrid mobile runtime across Android and iOS. Your focus is delivering a zero-compromise, local-first native mobile experience connecting to self-hosted or cloud iqoqo instances without breaking existing web URL structures or the FRBR ontology.
+
+## Architecture Guidelines
+
+### 1. Zero-URL-Rewrite Conditional Static Export
+- **Rule:** Never rewrite REST/App Router paths like `/item/[id]`, `/manifestation/[id]`, or `/work/[id]` into query parameters like `/item?id=...`.
+- **Static Export Mode:** Set `output: isCapacitorBuild ? "export" : "standalone"` in `frontend/next.config.ts`.
+- **Dynamic Route Placeholders:** Every dynamic path (`/item/[id]`, `/manifestation/[id]`, `/work/[id]`, `/expression/[id]`, `/u/[username]`, `/share/[token]`, `/help/[slug]`) must declare `generateStaticParams()` returning placeholder slugs (e.g. `[{ id: "_placeholder" }]`).
+- **Route Resolution:** Use `useResolvedRouteParam()` from `frontend/lib/capacitor/route-params.ts` to transparently read params on web and fallback to `window.location.pathname` in native WebView static export.
+
+### 2. Split Storage Architecture
+- **Non-Sensitive Preferences:** Persist `INSTANCE_URL_KEY` and `INSTANCE_NAME_KEY` using `@capacitor/preferences`.
+- **Sensitive Auth Credentials:** Persist `AUTH_TOKEN_KEY` and refresh tokens strictly in `@capacitor-community/secure-storage` (backed by iOS Keychain Services and Android `EncryptedSharedPreferences`).
+
+### 3. HASS-Style Server Selector & Onboarding Guard
+- When `isNativeApp()` is true and no verified instance URL is found in storage, mount `OnboardingGuard` (`frontend/components/mobile/onboarding-screen.tsx`).
+- Verify user-entered instance URLs against `GET /api/health` and `GET /api/auth/providers` before persisting.
+- Inject the dynamic URL into the Axios client interceptor in `frontend/lib/api/client.ts` (`config.baseURL = "${instanceUrl}/api"`).
+- Allow switching instances anytime from the top avatar menu or `/profile`.
+
+### 4. Flask-Free Mobile Authentication & Deep Linking
+- **Sign in with Apple:** Authenticates via Apple ID, proxies to `/api/auth/login/apple` and `/api/auth/callback/apple`. Returns cleanly without rendering HTML in Flask.
+- **Google OAuth:** Redirects system browser via `@capacitor/browser` to Google OAuth with `mobile_origin=capacitor`, then redirects back to `frontend/app/auth-exchange/page.tsx` and deep-links into native app via `iqoqo://auth-exchange#token=...`.
+- **Deep-Link Routing:** Centralized in `frontend/lib/capacitor/navigation.ts` using `App.addListener("appUrlOpen")` and `App.getLaunchUrl()`, preserving full `pathname + searchParams` and resetting TanStack Query cache on exchange.
+
+### 5. Native Hardware Capabilities
+- **Camera Viewfinder:** Barcode scanning with native permissions (`NSCameraUsageDescription`, `android.permission.CAMERA`) and torch toggle.
+- **Haptic Tactile Feedback:** Wired via `frontend/lib/capacitor/haptics.ts` (`triggerScanHaptic`, `triggerSuccessHaptic`, `triggerErrorHaptic`), strictly guarded by `isNativeApp()`.
+- **Continuous Batch Scanning:** Toggleable continuous scan loop with toast notification and consecutive-barcode cooldown debounce.
+
+### 6. Build Pipelines & Tooling
+- **Local Headless Ubuntu:** Use `scripts/setup-android-sdk.sh` and `scripts/setup-android-emulator.sh`.
+- **Makefile Mobile Targets:**
+  - `make mobile-build`: Builds Next.js conditional static export (`CAPACITOR_BUILD=true`).
+  - `make mobile-sync`: Syncs assets to `frontend/android/` and `frontend/ios/`.
+  - `make mobile-android-apk`: Compiles debug APK via Gradle.
+  - `make mobile-android-aab`: Compiles release App Bundle via Gradle.
+  - `make mobile-adb-install`: Deploys APK over ADB to connected device/emulator.
+  - `make test-e2e-mobile`: Runs mobile Playwright E2E suite against isolated DB.
+- **GitHub Actions Mobile CI:** Multi-platform matrix in `.github/workflows/mobile-build.yml` compiling `iqoqo-android-debug.apk` on `ubuntu-latest` and unsigned `iqoqo-ios-sideload.ipa` + `.xcarchive` on `macos-15`.
+
+## Current State
+
+We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
+
+## Upcoming (v1.0.1 & Beyond)
+
+- **v1.0.1: FRBR Format Expansion (LEGO & Maps), New Type Requests & Post-0.9.x Fixes** (`C101`–`C108`): AI cover repair script, federation peering directionality matrix, LEGO Sets FRBRoo ontology, Cartographic Maps, format request governance, and mobile responsive polish.
+- **v1.0.2: Offline Cache & Store Readiness Gate** (`C109`–`C110`): SQLite offline collection cache, background barcode sync queue, and App Store / Google Play metadata & compliance checklists.

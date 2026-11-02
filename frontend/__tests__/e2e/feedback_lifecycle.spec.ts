@@ -103,7 +103,7 @@ test.describe("Feedback & Ticket Lifecycle (v0.7.15)", () => {
 
     // 1. Verify Page Header and Admin View Indicator
     await expect(page.getByRole("heading", { name: "Help & Feedback" })).toBeVisible();
-    await expect(page.getByText("Admin View Enabled")).toBeVisible();
+    await expect(page.getByText("Admin View Enabled", { exact: true })).toBeVisible();
 
     // 2. Verify Ticket Tile Rendering
     await expect(page.getByText("Add keyboard navigation shortcuts for catalog inspection")).toBeVisible();
@@ -191,7 +191,7 @@ test.describe("Feedback & Ticket Lifecycle (v0.7.15)", () => {
 
     // 1. Verify Attachment Count Badge on Ticket List Card
     await expect(page.getByText("Visual glitch when uploading album art")).toBeVisible();
-    await expect(page.getByText("1", { exact: true })).toBeVisible();
+    await expect(page.getByRole("article").getByText("1", { exact: true })).toBeVisible();
 
     // 2. Open Ticket Detail Modal
     await page.getByText("Visual glitch when uploading album art").click();

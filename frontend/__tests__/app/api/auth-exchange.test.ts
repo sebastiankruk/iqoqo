@@ -14,7 +14,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { GET, POST, sanitizeAllowedHost } from "@/app/api/auth-exchange/route";
+import { GET, POST, dynamic, sanitizeAllowedHost } from "@/app/api/auth-exchange/route";
+import { dynamic as exchangeRouteDynamic } from "@/app/auth/exchange/route";
+import { dynamic as logoutRouteDynamic } from "@/app/api/auth/logout/route";
+import enMessages from "@/messages/en.json";
+import plMessages from "@/messages/pl.json";
 
 const { mockCookieSet } = vi.hoisted(() => ({ mockCookieSet: vi.fn() }));
 const originalFlaskApiUrl = process.env.FLASK_API_URL;
@@ -191,5 +195,26 @@ describe("auth-exchange route handler", () => {
     expect(resPath.status).toBe(307);
     expect(resPath.headers.get("location")).toBe("https://localhost:3000/");
     expect(resPath.headers.get("location")).not.toContain("evil.com");
+  });
+
+  it("maintains force-dynamic route segment configuration to prevent static redirect baking in web standalone", () => {
+    expect(dynamic).toBe("force-dynamic");
+    expect(exchangeRouteDynamic).toBe("force-dynamic");
+    expect(logoutRouteDynamic).toBe("force-dynamic");
+  });
+
+  it("contains localized error translations for oauth_exchange_failed in all supported locales", () => {
+    expect(enMessages.Login.oauth_exchange_failed).toBeDefined();
+    expect(enMessages.Login.oauth_exchange_failed.length).toBeGreaterThan(0);
+    expect(plMessages.Login.oauth_exchange_failed).toBeDefined();
+    expect(plMessages.Login.oauth_exchange_failed.length).toBeGreaterThan(0);
+  });
+
+  it("allows preview and production kruk.cc hostnames in sanitizeAllowedHost", () => {
+    expect(sanitizeAllowedHost("kruk.cc")).toBe("kruk.cc");
+    expect(sanitizeAllowedHost("iqoqo.kruk.cc")).toBe("iqoqo.kruk.cc");
+    expect(sanitizeAllowedHost("pre.iqoqo.kruk.cc")).toBe("pre.iqoqo.kruk.cc");
+    expect(sanitizeAllowedHost("preview.iqoqo.cc")).toBe("preview.iqoqo.cc");
+    expect(sanitizeAllowedHost("iqoqo.cc")).toBe("iqoqo.cc");
   });
 });

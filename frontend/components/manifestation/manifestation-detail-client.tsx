@@ -21,6 +21,7 @@ import { BookOpen, Loader2, Disc, ImagePlus } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
+import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { resolveSchemaType } from "@/lib/schema-org";
@@ -71,8 +72,12 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
   const t = useTranslations("Manifestation");
   const router = useRouter();
 
+  const routeId = useResolvedRouteParam("id");
+  const effectiveId =
+    manifestationId && !isNaN(manifestationId) ? manifestationId : routeId ? parseInt(routeId, 10) : 0;
+
   const { data: userProfile } = useProfile();
-  const { data: manifestation, isLoading, isError } = useManifestation(manifestationId, initialManifestation);
+  const { data: manifestation, isLoading, isError } = useManifestation(effectiveId, initialManifestation);
   const { data: partsResponse } = useWorkParts(manifestation?.container_work_id ?? manifestation?.work_id ?? 0);
   const parts = partsResponse?.data ?? [];
 
@@ -81,7 +86,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 aspect-square shrink-0 animate-spin text-primary" />
         </div>
         <Footer />
       </div>

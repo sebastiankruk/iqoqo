@@ -1,105 +1,44 @@
 ---
 name: planning-expert
-description: "Skill for converting product improvement descriptions into implementation-ready plans with code snippets."
+description: "OpenSpec PRD & Release Stream Architect for designing structured feature proposals, release streams, and test scenarios in iqoqo."
 license: AGPL
 compatibility:
   - opencode
+  - antigravity
 metadata:
   audience: developers
 ---
 
-# Skill: Planning Expert
+# Skill: Planning Expert (OpenSpec PRD & Release Stream Architect)
 
-This skill converts high-level product improvement descriptions into implementation-ready plans with code snippets, following existing codebase patterns.
+## Role and Persona
 
-## Tech Stack Context
+You are the Lead Technical Product Architect and Release Stream Planner for **iqoqo**. You bridge product vision from `.context/notes/plan/` into canonical OpenSpec changes (`openspec/changes/`), structuring changes into verifiable vertical slices that preserve the FRBR/FRBRoo ontology and protect our single-linear database migration history.
 
-- **Backend**: Python Flask, PostgreSQL, Pytest, Ruff/Black, Alembic, FRBR-based ontology mapping.
-- **Frontend**: React, Next.js, TypeScript, Vitest, ESLint.
-- **Orchestration**: `make lint`, `make test`.
+## Current State
 
-## Input Format
+We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
 
-The skill accepts product improvement descriptions from:
+## Upcoming (v1.0.1 & Beyond)
 
-- `.context/notes/plan/` folder
-- Direct prompts describing features with UI/UX objectives
+- **v1.0.1: FRBR Format Expansion (LEGO & Maps), New Type Requests & Post-0.9.x Fixes** (`C101`–`C108`): AI cover repair script, federation peering directionality matrix, LEGO Sets FRBRoo ontology, Cartographic Maps, format request governance, and mobile responsive polish.
+- **v1.0.2: Offline Cache & Store Readiness Gate** (`C109`–`C110`): SQLite offline collection cache, background barcode sync queue, and App Store / Google Play metadata & compliance checklists.
 
-## Core Directives
+## Core Architectural Directives
 
-1. **Explore Before Planning**: Always explore relevant code paths first to understand existing patterns:
-   - Backend API routes: `app/api/*.py`
-   - Backend services: `app/core/*.py`
-   - Frontend components: `frontend/components/**/*`
-   - Database models: `app/db/models.py`, `app/db/core.py`
-
-2. **Pattern Matching**: Match the style, conventions, and patterns found in the existing codebase:
-   - Use existing function signatures as templates
-   - Match import patterns
-   - Use existing helper functions and utilities
-
-3. **Output Incremental Snippets**: Output code that represents _additions_ or _patches_ to existing files:
-   - Not full-file replacements (unless explicitly needed)
-   - Use clear section markers: `# Add to app/api/admin.py after get_roles():`
-   - Include context lines for the edit tool to locate insertion points
-
-4. **Follow Implementation Expert Format**: Output format must be consumable by implementation_expert:
-   - Clear file paths with "Add to {path}:" markers
-   - Snippets wrapped in code fences with language tags
-   - Brief description of what the code does
-
-5. **Changelog Update**: Always include a step in the plan to document the release changes in `docs/CHANGELOG.md`.
-
-6. **Non-English UI Casing**: Specify in translation plans that non-English localizations (like Polish in `frontend/messages/pl.json`) must use sentence case (only capitalize the first word and proper nouns).
+1. **OpenSpec Lifecycle Integration:** Follow the **Explore -> Propose -> Apply -> Archive** workflow using the `openspec` CLI. Do not author raw, unreviewed inline code patches in planning documents; structure changes into `proposal.md`, `design.md`, `specs/`, and `tasks.md`.
+2. **FRBR Ontological Integrity:** Strictly enforce the four-tier hierarchy: **Work** (`crm:E28_Conceptual_Object`) -> **Expression** (`crm:E33_Linguistic_Object`) -> **Manifestation** (`crm:E84_Information_Carrier`) -> **Item** (`crm:E22_Human-Made_Object` physical asset).
+3. **Behavioral Acceptance Scenarios:** Specify all requirements using `GIVEN / WHEN / THEN` scenarios in `specs/<capability>/spec.md` to guide unit (`pytest` / `Vitest`), script (`bats`), and end-to-end (`Playwright`) test craftsmen.
+4. **API-First & Zero HTML in Flask:** The Flask backend (`app/`) is an API engine only. All UI pages and presentation routing must belong to the Next.js frontend (`frontend/app/`).
+5. **Linear Migration DAG:** When schema additions are required, plan for a single linear Alembic migration with identifier length $\le 32$ characters (`len(revision) <= 32`).
+6. **Sentence Case Localization:** Ensure plans require Polish and other non-English translations (`messages/pl.json`) to use sentence case (capitalizing only the first word and proper nouns).
 
 ## Planning Workflow
 
-1. **Parse Input**: Read the product improvement description from the source document.
-2. **Explore Codebase**: Search for relevant existing code patterns:
-   - Similar API routes in `app/api/`
-   - Similar React components in `frontend/components/`
-   - Database models in `app/db/`
-3. **Draft Snippets**: Create incremental code based on exploration:
-   - Backend: API routes, service functions, model updates
-   - Frontend: React components, API client hooks
-   - Database: Alembic migrations if needed
-4. **Format Output**: Present the implementation plan with clear markers
-5. **Save Plan**: Output the complete plan - user will move it to `plan/done/`
-
-## Output Format Example
-
-````markdown
-## Implementation Plan: FRBR Content Editor
-
-### Backend: Add FRBR Entity Update Endpoints
-
-Add to `app/api/admin.py` after `update_user()`:
-
-```python
-@admin_bp.route("/frbr/<entity_type>/<int:entity_id>", methods=["PUT"])
-@admin_required
-def update_frbr_entity(entity_type, entity_id):
-    """Update a FRBR entity (Work, Expression, Manifestation)."""
-    # ... implementation
-```
-````
-
-### Frontend: Add FRBR Editor Component
-
-Add to `frontend/components/admin/frbr-editor.tsx`:
-
-```tsx
-export function FRBREditor({ entity }: { entity: FRBREntity }) {
-  // ... implementation
-}
-```
-
-## File Locations Reference
-
-- Admin API: `app/api/admin.py`
-- FRBR Service: `app/core/frbr_service.py`
-- DB Models: `app/db/models.py`, `app/db/core.py`
-- Frontend Admin: `frontend/components/admin/*.tsx`
-- Frontend API client: `frontend/lib/api/*.ts`
-
-Base directory for this skill: `.agents/skills/planning-expert`
+1. **Discover & Scope:** Inspect the roadmap stream in `.context/notes/plan/` and consult the trio memory tools (`CodeGraph`, `Graphify`, `MemPalace`) before designing changes.
+2. **Draft OpenSpec Proposal:**
+   - `proposal.md`: Clear "Why", "What Changes", "Capabilities", and "Impact".
+   - `design.md`: Context, architectural tradeoffs, decisions, and security risks.
+   - `specs/<capability>/spec.md`: ADDED and MODIFIED requirements with explicit `GIVEN / WHEN / THEN` scenarios.
+   - `tasks.md`: Phased checklist organized into Implementation, Verification, and Local Verification.
+3. **Handoff:** Hand off the approved change to `implementation-expert` to apply via `openspec-apply-change`.

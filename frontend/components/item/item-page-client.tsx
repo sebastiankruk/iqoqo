@@ -24,6 +24,7 @@ import { ItemHeader } from "@/components/item/item-header";
 import { ItemActions } from "@/components/item/item-actions";
 import { ItemTabs } from "@/components/item/item-tabs";
 import { useItem, useManifestationWithPolling } from "@/lib/api/hooks";
+import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import type { Item } from "@/types/frbr";
 
@@ -114,7 +115,9 @@ export interface ItemPageClientProps {
  */
 export function ItemPageClient({ itemId }: ItemPageClientProps) {
   const router = useRouter();
-  const { data: item, isLoading, isError } = useItem(itemId);
+  const routeId = useResolvedRouteParam("id");
+  const effectiveId = itemId && !isNaN(itemId) ? itemId : routeId ? parseInt(routeId, 10) : 0;
+  const { data: item, isLoading, isError } = useItem(effectiveId);
 
   if (isLoading) {
     return (

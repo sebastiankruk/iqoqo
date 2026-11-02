@@ -25,6 +25,11 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ id: "_placeholder" }];
+}
+
 /**
  * Server-side data fetcher for item detail.
  *

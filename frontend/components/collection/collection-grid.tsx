@@ -127,7 +127,11 @@ export function CollectionGrid({
 
       {hasMore && (
         <div ref={loadMoreRef} data-testid="load-more-trigger" className="flex justify-center py-6">
-          {isLoadingMore ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : <div className="h-6" />}
+          {isLoadingMore ? (
+            <Loader2 className="h-6 w-6 aspect-square shrink-0 animate-spin text-muted-foreground" />
+          ) : (
+            <div className="h-6" />
+          )}
         </div>
       )}
     </div>

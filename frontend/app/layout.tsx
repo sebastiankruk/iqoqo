@@ -85,6 +85,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(frontendUrl),
   title: "iqoqo – The Library of Everything",
   description: "Your personal library dashboard for books, games, music and collections",
+  manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
     apple: "/apple-icon",
@@ -112,8 +113,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
-  const messages = await getMessages();
+  const isStaticExport = process.env.CAPACITOR_BUILD === "true";
+  const locale = isStaticExport ? "en" : await getLocale();
+  const messages = isStaticExport ? (await import(`../messages/en.json`)).default : await getMessages();
   // Resolved per request on the server; see resolveRumConfig for why this is
   // not a NEXT_PUBLIC_* build-time value.
   const rumConfig = resolveRumConfig();
