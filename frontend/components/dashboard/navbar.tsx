@@ -33,9 +33,10 @@ import {
   Globe,
   HelpCircle,
   BookOpen,
+  X,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
@@ -80,6 +81,8 @@ export function Navbar() {
   const queryClient = useQueryClient();
   const [manageCollOpen, setManageCollOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [searchPopupOpen, setSearchPopupOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { setTheme, theme } = useTheme();
   const locale = useLocale();
@@ -102,7 +105,19 @@ export function Navbar() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchQuery(searchParams?.get("q") || searchParams?.get("search") || "");
+    if (searchParams?.get("focus") === "search") {
+      setSearchPopupOpen(true);
+    }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (searchPopupOpen) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [searchPopupOpen]);
 
   /**
    * Handles the user logout process.
@@ -405,8 +420,14 @@ export function Navbar() {
 
         <Link
           href="/collection?focus=search"
+          onClick={e => {
+            e.preventDefault();
+            setSearchPopupOpen(prev => !prev);
+          }}
+          aria-label={t("search")}
+          aria-expanded={searchPopupOpen}
           className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-            pathname === "/collection" && searchParams?.get("focus") === "search"
+            searchPopupOpen || (pathname === "/collection" && searchParams?.get("focus") === "search")
               ? "text-accent font-semibold"
               : "text-muted-foreground hover:text-foreground"
           }`}
@@ -437,6 +458,72 @@ export function Navbar() {
           </Link>
         )}
       </div>
+
+      {/* Mobile Thumb Search Popup */}
+      {searchPopupOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs sm:hidden"
+            onClick={() => setSearchPopupOpen(false)}
+            aria-hidden="true"
+            data-testid="search-popup-backdrop"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("search")}
+            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-3 right-3 z-50 rounded-2xl border bg-card p-2.5 shadow-2xl text-card-foreground sm:hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+          >
+            <form
+              onSubmit={e => {
+                handleSearch(e);
+                setSearchPopupOpen(false);
+              }}
+              className="flex items-center gap-2"
+            >
+              <div className="relative flex-1">
+                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder={t("searchPlaceholder")}
+                  autoFocus
+                  data-testid="thumb-search-input"
+                  className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-9 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute inset-y-0 right-2 flex items-center px-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="flex h-10 items-center justify-center rounded-xl bg-accent px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90 active:scale-95"
+              >
+                {t("search")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSearchPopupOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-input text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95"
+                aria-label="Close search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </form>
+          </div>
+        </>
+      )}
     </>
   );
 }

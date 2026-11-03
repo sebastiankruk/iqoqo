@@ -13,12 +13,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render } from "@testing-library/react";
+import { render, fireEvent, screen } from "@testing-library/react";
 import { describe, it, expect, vi, type Mock, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useProfile, useAppConfig } from "@/lib/api/hooks";
 import { useMyEscalations } from "@/lib/api/escalations";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 
 vi.mock("@/components/collection/manage-collections-modal", () => ({
   ManageCollectionsModal: () => null,
@@ -128,5 +128,77 @@ describe("Mobile Bottom Navigation (C95)", () => {
 
     const collectionLink = bottomNav?.querySelector('a[href="/collection"]');
     expect(collectionLink?.className).not.toContain("text-accent");
+  });
+
+  it("opens thumb search popup when tapping Search in bottom nav, allowing query input and submit", () => {
+    const pushMock = vi.fn();
+    vi.mocked(useRouter).mockReturnValue({
+      push: pushMock,
+      replace: vi.fn(),
+      prefetch: vi.fn(),
+      back: vi.fn(),
+      forward: vi.fn(),
+      refresh: vi.fn(),
+    });
+    render(<Navbar />);
+
+    const bottomNav = document.querySelector(".fixed.bottom-0");
+    const searchLink = bottomNav?.querySelector('a[href="/collection?focus=search"]');
+    expect(searchLink).toBeInTheDocument();
+
+    // Popup is initially not open
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Tap search button
+    fireEvent.click(searchLink!);
+
+    // Popup is now visible
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(searchLink?.className).toContain("text-accent");
+
+    // Type in search query
+    const input = screen.getByTestId("thumb-search-input");
+    fireEvent.change(input, { target: { value: "Tolkien" } });
+
+    // Clear button appears and works
+    const clearButton = screen.getByLabelText("Clear search");
+    expect(clearButton).toBeInTheDocument();
+    fireEvent.click(clearButton);
+    expect((input as HTMLInputElement).value).toBe("");
+
+    // Type query again and submit
+    fireEvent.change(input, { target: { value: "Lem" } });
+    const submitButton = dialog.querySelector('button[type="submit"]');
+    fireEvent.click(submitButton!);
+
+    // Should push to collection with search query and page 1
+    expect(pushMock).toHaveBeenCalledWith("/collection?q=Lem&page=1");
+
+    // Popup should close
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes thumb search popup when clicking close button or backdrop", () => {
+    render(<Navbar />);
+
+    const bottomNav = document.querySelector(".fixed.bottom-0");
+    const searchLink = bottomNav?.querySelector('a[href="/collection?focus=search"]');
+
+    fireEvent.click(searchLink!);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Close button dismisses
+    const closeButton = screen.getByLabelText("Close search");
+    fireEvent.click(closeButton);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Reopen and close via backdrop
+    fireEvent.click(searchLink!);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    const backdrop = screen.getByTestId("search-popup-backdrop");
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
