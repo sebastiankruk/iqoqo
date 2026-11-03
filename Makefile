@@ -930,12 +930,27 @@ migrate-secrets: .venv/bin/activate ## Migrate API secrets from env file into en
 		.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args); \
 	fi
 
-repair-authors: .venv/bin/activate ## Repair empty or corrupted FRBR author metadata and contributions across catalog
-	@echo "Repairing FRBR author metadata and contributions..."
-	@if [ -n "$$(docker compose -p $(COMPOSE_PROJECT) ps -q web 2>/dev/null)" ]; then \
-		docker compose -p $(COMPOSE_PROJECT) exec -T -u root web python3 scripts/repair_frbr_authors.py --apply; \
+repair-authors: ## Repair empty or corrupted FRBR author metadata across catalog in Docker (usage: make repair-authors [preview|prod] [env=preview|prod] [dry_run=1])
+	@target_env="$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(env),$(env),$(if $(ENV),$(ENV),$(if $(filter preview,$(MODE)),preview,$(if $(filter prod,$(MODE)),prod,))))))"; \
+	repair_args="$(if $(filter 1,$(dry_run)$(DRY_RUN)),--dry-run,--apply) $(args)"; \
+	if [ "$$target_env" = "preview" ]; then \
+		echo "Repairing FRBR authors in PREVIEW Docker stack (iqoqo-preview)..."; \
+		docker compose -p iqoqo-preview exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ "$$target_env" = "prod" ]; then \
+		echo "Repairing FRBR authors in PRODUCTION Docker stack (iqoqo)..."; \
+		docker compose -p iqoqo exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ -n "$$(docker compose -p iqoqo-preview ps -q web 2>/dev/null)" ]; then \
+		echo "Detected running PREVIEW Docker stack (iqoqo-preview); repairing..."; \
+		docker compose -p iqoqo-preview exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ -n "$$(docker compose -p iqoqo ps -q web 2>/dev/null)" ]; then \
+		echo "Detected running PRODUCTION Docker stack (iqoqo); repairing..."; \
+		docker compose -p iqoqo exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ -f .venv/bin/python ]; then \
+		echo "No running preview or prod Docker container detected; falling back to local Python venv..."; \
+		.venv/bin/python scripts/repair_frbr_authors.py $$repair_args; \
 	else \
-		.venv/bin/python scripts/repair_frbr_authors.py --apply; \
+		echo "Error: No running Docker stack (iqoqo or iqoqo-preview) found and no .venv/bin/python available." >&2; \
+		exit 1; \
 	fi
 
 
