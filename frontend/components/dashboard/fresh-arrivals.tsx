@@ -35,7 +35,8 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
   const t = useTranslations("FreshArrivals");
   const { data: recentManifestations, isLoading, isError } = useRecentManifestations(12);
   const items = recentManifestations ?? [];
-  const rssUrl = resolvePublicUrl("/api/public/feed.xml");
+  const feedPath = "/api/public/feed.xml";
+  const rssUrl = isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
 
   if (isError) {
     return (

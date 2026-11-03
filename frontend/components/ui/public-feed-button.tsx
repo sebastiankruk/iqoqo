@@ -39,12 +39,12 @@ export function PublicFeedButton({
   className = "inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground shadow-sm transition-all",
   title = "Subscribe to RSS feed",
 }: PublicFeedButtonProps) {
-  const url = resolvePublicUrl(feedPath);
+  const url = isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (isNativeApp()) {
       e.preventDefault();
-      openExternalUrl(url);
+      openExternalUrl(resolvePublicUrl(feedPath));
     }
   };
 
