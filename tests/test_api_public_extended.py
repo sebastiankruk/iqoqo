@@ -484,3 +484,32 @@ def test_shared_collection_query_does_not_match_arbitrary_description(client, ap
     assert data["success"] is True
     # 'dom' is in 'domu' and 'Domaniewska' in description/address, not in title/authors/tags
     assert len(data["data"]["items"]) == 0
+
+
+def test_shared_collection_authors_from_work_meta(client, app, test_user):
+    """Items in shared collection must pull authors from Work.meta when manifestation meta lacks them."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Czarny Dom", meta={"authors": ["Stephen King", "Peter Straub"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id, meta={})
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+
+        coll = SharedCollection(user_id=user.id, name="Authors Test", filters={"query": "Czarny"})
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert data["success"] is True
+    assert len(data["data"]["items"]) == 1
+    item = data["data"]["items"][0]
+    assert item["title"] == "Czarny Dom"
+    assert item["authors"] == ["Stephen King", "Peter Straub"]

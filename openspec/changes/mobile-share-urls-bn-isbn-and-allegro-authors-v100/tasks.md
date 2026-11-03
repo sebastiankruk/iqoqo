@@ -24,3 +24,12 @@
 - [x] 4.2 Add `_resolve_manifestation_display_author` fallback in `app/api/manifestations.py` to prevent "Undefined" authors
 - [x] 4.3 Enhance `scripts/repair_frbr_authors.py` to backfill missing authors from attached manifestations' `raw_payload["parameters"]` and apply to database
 - [x] 4.4 Add test coverage for parameter extraction in `tests/test_allegro.py` and FRBR author normalization in `tests/test_frbr_author_normalization.py`
+
+## 5. Maintenance Automation, Docker Stacks & Shared Search Parity
+
+- [x] 5.1 Implement admin one-click maintenance endpoint `POST /api/admin/maintenance/repair-authors` with dry run option in `app/api/admin.py` and verify via `tests/test_api_admin.py`
+- [x] 5.2 Add Docker stack-aware `make repair-authors [preview|prod]` target in `Makefile` supporting auto-detection, `dry_run=1`, and explicit environment parameters
+- [x] 5.3 Enforce strict non-localhost fallback in `getPublicBaseUrl` (`frontend/lib/utils.ts`), eager preference hydration on module load (`frontend/lib/capacitor/storage.ts`), and build-time URL injection in `frontend/scripts/build-capacitor.js`
+- [x] 5.4 Connect `get_shared_collection` and `fetch_shared_collection_by_token` to `SearchService.search_items` on PostgreSQL, and narrow `build_ilike_search_clause` to specific metadata fields to prevent false positive matches against raw JSON descriptions and producer addresses
+- [x] 5.5 Extract authors from linked FRBR Work metadata in shared collection item serializer when manifestation lacks inline authors
+- [x] 5.6 Verify tests for negative description matching and author fallback in `tests/test_api_public_extended.py` and native fallback in `frontend/__tests__/lib/utils.test.ts`

@@ -37,6 +37,18 @@ See `proposal.md` for motivation and `specs/` for normative requirements.
 - **Choice**: In `app/utils/allegro.py`, add `_extract_allegro_parameters` to harvest creator names, cleaned titles, publishers, and release years. In `app/api/manifestations.py`, add `_resolve_manifestation_display_author` to fallback from `work.meta["authors"]` to manifestation parameters and contributions. Update `scripts/repair_frbr_authors.py` to backfill database records.
 - **Alternatives Considered**: Deleting empty-author manifestations and re-ingesting. Rejected because manifestations already have user item links and historical collections.
 
+### Decision 5: Shared Collection Search Parity with PostgreSQL Full-Text Search
+- **Choice**: In `app/api/public_items.py`, route `get_shared_collection` and `fetch_shared_collection_by_token` through `SearchService.search_items` on PostgreSQL. In `app/core/search_service.py`, restrict `build_ilike_search_clause` to specific searchable bibliographic fields (titles, authors, tags, genres, publisher, label, identifiers), removing broad full-JSON dump substring matching (`_meta_text(Manifestation.meta)`). Also pull authors from both Work and Manifestation tiers.
+- **Alternatives Considered**: Leaving hand-rolled ILIKE query in public sharing endpoint. Rejected because substring matching over 20KB provider payloads produced 25+ false positives on short query tokens like "dom".
+
+### Decision 6: Native Mobile Anti-Localhost Guarantees
+- **Choice**: Hardened `getPublicBaseUrl` to never return `localhost` or `capacitor://localhost` on native apps or localhost origins, falling back to `NEXT_PUBLIC_FRONTEND_URL` / `https://preview.iqoqo.cc`. Eagerly hydrate native preferences on JS module initialization in `storage.ts`, and inject the canonical URL during static export in `build-capacitor.js`.
+- **Alternatives Considered**: Requiring explicit server URL input before any share link or RSS button is rendered. Rejected because user experience on cold launch should display clean public links immediately.
+
+### Decision 7: Docker Stack-Aware Operational Catalog Maintenance
+- **Choice**: Implemented `POST /api/admin/maintenance/repair-authors` with dry run support, and updated `make repair-authors [preview|prod]` with Docker stack auto-detection for instant one-command repair across both environments.
+- **Alternatives Considered**: Requiring operators to manually attach to docker containers with shell heredocs. Prohibited by project guidelines.
+
 ## Risks / Trade-offs
 
 - **[Risk] Biblioteka Narodowa API availability or latency spikes** → Mitigation: Governed by the global `max_duration` ceiling (6.0s) and bounded TCP connect timeouts (1.5s min) in `_calc_timeout()`.

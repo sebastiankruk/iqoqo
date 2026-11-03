@@ -1309,7 +1309,11 @@ def trigger_repair_authors():
     """Trigger one-click FRBR author repair across the catalog."""
     from scripts.repair_frbr_authors import repair_work_authors
 
-    inspected, repaired = repair_work_authors(apply_changes=True)
+    payload = request.get_json(silent=True) or {}
+    dry_run = bool(payload.get("dry_run", False))
+    apply_changes = not dry_run
+
+    inspected, repaired = repair_work_authors(apply_changes=apply_changes)
     return (
         jsonify(
             {
@@ -1317,8 +1321,9 @@ def trigger_repair_authors():
                 "data": {
                     "inspected": inspected,
                     "repaired": repaired,
+                    "dry_run": dry_run,
                 },
-                "message": f"Successfully inspected {inspected} works and repaired {repaired} authors.",
+                "message": f"Successfully inspected {inspected} works and repaired {repaired} authors ({'dry run' if dry_run else 'applied'}).",
             }
         ),
         200,

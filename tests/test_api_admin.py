@@ -205,6 +205,15 @@ def test_admin_can_trigger_author_repair(client, admin_headers):
     assert "repaired" in body["data"]
 
 
+def test_admin_can_trigger_author_repair_dry_run(client, admin_headers):
+    """Admin can trigger author repair endpoint in dry run mode."""
+    resp = client.post("/api/admin/maintenance/repair-authors", json={"dry_run": True}, headers=admin_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body["data"]["dry_run"] is True
+
+
 def test_normal_user_cannot_trigger_author_repair(client, normal_user_headers):
     """Normal user cannot trigger author repair endpoint."""
     resp = client.post("/api/admin/maintenance/repair-authors", headers=normal_user_headers)
