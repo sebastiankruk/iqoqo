@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Resolved dynamic route navigation and Next.js flight data resolution failure on iOS native shell via custom `NextJSRouter` in `ViewController`.
+- Added automated Android and iOS route parity tests (`tests/test_mobile_readiness.py`, `frontend/__tests__/lib/capacitor/mobile-routing-parity.test.ts`) and updated `mobile-capacitor-expert` skill guidelines to prevent future drift.
 - Resolved Dependabot security vulnerabilities across python backend and frontend dependencies.
 
 ## [0.9.4] - 2026-10-31

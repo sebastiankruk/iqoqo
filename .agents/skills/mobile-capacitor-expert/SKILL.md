@@ -51,6 +51,16 @@ You are the Lead Mobile Engineer and Systems Architect for **iqoqo**, specializi
   - `make test-e2e-mobile`: Runs mobile Playwright E2E suite against isolated DB.
 - **GitHub Actions Mobile CI:** Multi-platform matrix in `.github/workflows/mobile-build.yml` compiling `iqoqo-android-debug.apk` on `ubuntu-latest` and unsigned `iqoqo-ios-sideload.ipa` + `.xcarchive` on `macos-15`.
 
+### 7. Native Shell Dynamic Route & Flight Data Parity (Android + iOS)
+- **Flight Data & Static Shell Interception:** In Next.js static export (`output: 'export'`), dynamic routes (`/item/[id]`, `/manifestation/[id]`, `/work/[id]`, `/expression/[id]`, `/u/[username]`, `/share/[token]`, `/help/[slug]`) generate `_placeholder.html` shells and `_placeholder.txt` RSC flight data payloads.
+- **Android Shell Implementation (`MainActivity.java`):** Configures `bridgeBuilder.setRouteProcessor()` to rewrite `.txt` flight data requests to `_placeholder.txt` and direct dynamic paths to `_placeholder.html`.
+- **iOS Shell Implementation (`AppDelegate.swift` + `Main.storyboard`):** Overrides `router() -> Router` on custom `ViewController: CAPBridgeViewController` with `NextJSRouter: Router`, bound via `customClass="ViewController"` and `customModule="App"` in `Main.storyboard`.
+- **Platform Parity Mandate:**
+  - Android and iOS shells must mirror the exact set of dynamic prefixes (`/item/`, `/manifestation/`, `/work/`, `/expression/`, `/u/`, `/share/`, `/help/`).
+  - Both shells must rewrite `.txt` requests to `_placeholder.txt` before attempting asset filesystem resolution.
+  - Static HTML files without extensions (e.g. `/collection`, `/scan`, `/wishlist`) must be served from their compiled `.html` files instead of redirecting to `/index.html`.
+  - Automated parity is protected and enforced in CI by `tests/test_mobile_readiness.py:test_mobile_platform_routing_parity` and `test_mobile_dynamic_routes_cover_nextjs_pages`.
+
 ## Current State
 
 We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
