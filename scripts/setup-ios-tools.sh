@@ -46,7 +46,7 @@ gem install cocoapods -v 1.11.3 --user-install --no-document
 
 if [[ -x "$USER_GEM_BIN/pod" ]]; then
   export PATH="$USER_GEM_BIN:$PATH"
-  echo "==> CocoaPods installed successfully: $($USER_GEM_BIN/pod --version)"
+  echo "==> CocoaPods installed successfully: $("$USER_GEM_BIN/pod" --version)"
   echo ""
   echo "    NOTE: Ensure the following line is in your ~/.zshrc or ~/.bash_profile:"
   echo ""
