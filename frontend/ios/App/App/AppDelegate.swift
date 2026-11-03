@@ -1,6 +1,97 @@
 import UIKit
 import Capacitor
 
+public struct NextJSRouter: Router {
+    public var basePath: String = ""
+
+    public init() {}
+
+    public func route(for path: String) -> String {
+        if path.isEmpty || path == "/" {
+            return basePath + "/index.html"
+        }
+
+        let isStaticAsset = path.hasPrefix("/_next/") ||
+            path.hasSuffix(".js") ||
+            path.hasSuffix(".css") ||
+            path.hasSuffix(".png") ||
+            path.hasSuffix(".jpg") ||
+            path.hasSuffix(".jpeg") ||
+            path.hasSuffix(".svg") ||
+            path.hasSuffix(".ico") ||
+            path.hasSuffix(".woff") ||
+            path.hasSuffix(".woff2") ||
+            path.hasSuffix(".json") ||
+            path.hasSuffix(".map")
+
+        if !isStaticAsset {
+            let dynamicPrefixes = [
+                "/item/",
+                "/manifestation/",
+                "/work/",
+                "/expression/",
+                "/u/",
+                "/share/"
+            ]
+
+            for prefix in dynamicPrefixes {
+                if path.hasPrefix(prefix) {
+                    if path.hasSuffix(".txt") {
+                        return basePath + prefix + "_placeholder.txt"
+                    } else {
+                        return basePath + prefix + "_placeholder.html"
+                    }
+                }
+            }
+
+            if path.hasPrefix("/help/") {
+                let staticHelpPaths: Set<String> = [
+                    "/help/camera-to-catalog.html",
+                    "/help/camera-to-catalog.txt",
+                    "/help/curators-handbook.html",
+                    "/help/curators-handbook.txt",
+                    "/help/federation-architecture.html",
+                    "/help/federation-architecture.txt",
+                    "/help/frbr-hierarchy.html",
+                    "/help/frbr-hierarchy.txt",
+                    "/help/privacy-sharing-social.html",
+                    "/help/privacy-sharing-social.txt"
+                ]
+
+                if !staticHelpPaths.contains(path) {
+                    if path.hasSuffix(".txt") {
+                        return basePath + "/help/_placeholder.txt"
+                    } else {
+                        return basePath + "/help/_placeholder.html"
+                    }
+                }
+            }
+
+            let pathUrl = URL(fileURLWithPath: path)
+            if pathUrl.pathExtension.isEmpty {
+                let htmlPath = basePath + path + ".html"
+                if FileManager.default.fileExists(atPath: htmlPath) {
+                    return htmlPath
+                }
+                let nestedIndexPath = basePath + path + "/index.html"
+                if FileManager.default.fileExists(atPath: nestedIndexPath) {
+                    return nestedIndexPath
+                }
+                return basePath + "/index.html"
+            }
+        }
+
+        return basePath + path
+    }
+}
+
+@objc(ViewController)
+class ViewController: CAPBridgeViewController {
+    override func router() -> Router {
+        return NextJSRouter()
+    }
+}
+
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 

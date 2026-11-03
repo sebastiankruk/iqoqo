@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Resolved dynamic route navigation and Next.js flight data resolution failure on iOS native shell via custom `NextJSRouter` in `ViewController`.
 - Resolved Dependabot security vulnerabilities across python backend and frontend dependencies.
 
 ## [0.9.4] - 2026-10-31
