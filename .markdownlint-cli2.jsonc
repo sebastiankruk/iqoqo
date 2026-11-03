@@ -4,6 +4,7 @@
     "**/node_modules/**",
     "**/.venv/**",
     "**/frontend/node_modules/**",
+    "**/frontend/ios/App/Pods/**",
     "**/frontend/.next/**",
     "**/frontend/playwright-report/**",
     "**/frontend/test-results/**",
