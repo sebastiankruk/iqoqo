@@ -420,8 +420,7 @@ export function Navbar() {
 
         <Link
           href="/collection?focus=search"
-          onClick={e => {
-            e.preventDefault();
+          onClick={() => {
             setSearchPopupOpen(prev => !prev);
           }}
           aria-label={t("search")}
