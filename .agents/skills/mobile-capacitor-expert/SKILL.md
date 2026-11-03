@@ -61,6 +61,16 @@ You are the Lead Mobile Engineer and Systems Architect for **iqoqo**, specializi
   - Static HTML files without extensions (e.g. `/collection`, `/scan`, `/wishlist`) must be served from their compiled `.html` files instead of redirecting to `/index.html`.
   - Automated parity is protected and enforced in CI by `tests/test_mobile_readiness.py:test_mobile_platform_routing_parity` and `test_mobile_dynamic_routes_cover_nextjs_pages`.
 
+### 8. Web UI & Native Mobile Soft-Sync
+- **Shared Component Tree:** Both web and native mobile compile from the same Next.js App Router codebase. On mobile viewports (`< 640px` / `sm:hidden`), mobile web browser and native Capacitor webviews render identical UX:
+  - 5-button bottom nav (`Home`, `Scan`, `Collection`, `Search`, `Profile`/`Login`).
+  - Safe-area insets (`pt-[env(safe-area-inset-top,0px)]` and `pb-[env(safe-area-inset-bottom,0px)]`).
+  - Search popup drawer triggered under user's thumb.
+  - Consolidated top navbar (scanner button suppressed when bottom bar is active; notification badge hidden when 0; language selector under user avatar).
+- **Live Data & Query Invalidation Parity:** Both targets communicate over the REST API and share identical TanStack Query key invalidation patterns (`queryClient.invalidateQueries(...)`), so shelf additions, status updates, or reviews made in the mobile app immediately reflect across active desktop web sessions.
+- **URL & Param Transparency:** `useResolvedRouteParam()` ensures canonical URLs like `/item/123` work seamlessly without query string rewrites whether rendered on full-stack web or static native Capacitor export.
+- **Deep-Link Handoff:** Branded `/auth-exchange` screen provides one-tap handoff between external mobile browsers and the native app (`iqoqo://auth-exchange`).
+
 ## Current State
 
 We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
