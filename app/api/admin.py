@@ -1301,6 +1301,30 @@ def cancel_lod_reconciliation_task(task_id: str | None = None):
     return jsonify({"success": True, "data": {"task_id": target_task_id}, "message": "LOD reconciliation task cancelled"}), 200
 
 
+@admin_bp.route("/maintenance/repair-authors", methods=["POST"])
+@api_bp.route("/admin/maintenance/repair-authors", methods=["POST"])
+@require_auth
+@curator_or_admin_required
+def trigger_repair_authors():
+    """Trigger one-click FRBR author repair across the catalog."""
+    from scripts.repair_frbr_authors import repair_work_authors
+
+    inspected, repaired = repair_work_authors(apply_changes=True)
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "inspected": inspected,
+                    "repaired": repaired,
+                },
+                "message": f"Successfully inspected {inspected} works and repaired {repaired} authors.",
+            }
+        ),
+        200,
+    )
+
+
 @admin_bp.route("/lod/tasks/<string:task_id>", methods=["GET"])
 @api_bp.route("/admin/lod/tasks/<string:task_id>", methods=["GET"])
 @require_auth

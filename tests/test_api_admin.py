@@ -193,3 +193,19 @@ def test_user_without_read_metadata_cannot_access_frbr_tree(client, normal_user_
     """User without read:metadata gets 403 on FRBR tree endpoint."""
     resp = client.get("/api/v1/admin/frbr/tree/manifestation/1", headers=normal_user_headers)
     assert resp.status_code in [401, 403]
+
+
+def test_admin_can_trigger_author_repair(client, admin_headers):
+    """Admin can trigger author repair endpoint."""
+    resp = client.post("/api/admin/maintenance/repair-authors", headers=admin_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert "inspected" in body["data"]
+    assert "repaired" in body["data"]
+
+
+def test_normal_user_cannot_trigger_author_repair(client, normal_user_headers):
+    """Normal user cannot trigger author repair endpoint."""
+    resp = client.post("/api/admin/maintenance/repair-authors", headers=normal_user_headers)
+    assert resp.status_code in [401, 403]

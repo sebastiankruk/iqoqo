@@ -930,6 +930,15 @@ migrate-secrets: .venv/bin/activate ## Migrate API secrets from env file into en
 		.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args); \
 	fi
 
+repair-authors: .venv/bin/activate ## Repair empty or corrupted FRBR author metadata and contributions across catalog
+	@echo "Repairing FRBR author metadata and contributions..."
+	@if [ -n "$$(docker compose -p $(COMPOSE_PROJECT) ps -q web 2>/dev/null)" ]; then \
+		docker compose -p $(COMPOSE_PROJECT) exec -T -u root web python3 scripts/repair_frbr_authors.py --apply; \
+	else \
+		.venv/bin/python scripts/repair_frbr_authors.py --apply; \
+	fi
+
+
 backup-run:
 	@remote_target="$(remote)"; \
 	if [ -z "$$remote_target" ] && [ -f .env ]; then \
