@@ -139,7 +139,7 @@ describe("Mobile Bottom Navigation (C95)", () => {
       back: vi.fn(),
       forward: vi.fn(),
       refresh: vi.fn(),
-    });
+    } as any);
     render(<Navbar />);
 
     const bottomNav = document.querySelector(".fixed.bottom-0");
