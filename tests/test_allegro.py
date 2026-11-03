@@ -259,3 +259,36 @@ def test_get_allegro_token_refresh_concurrency_double_check(mock_load, mock_post
             assert token == "fresh_worker_token"
             # Refresh HTTP request was bypassed!
             mock_post.assert_not_called()
+
+
+def test_extract_allegro_parameters_book_and_music():
+    """Verify extraction of parameters (Autor, Tytuł, Wydawnictwo, Rok, Nośnik) from Allegro structures."""
+    from app.utils.allegro import _extract_allegro_parameters
+
+    book_params = [
+        {"name": "Autor", "values": ["Dominika Musiałowska", "Magdalena Makarowska,"]},
+        {"name": "Tytuł", "values": ["Dieta w insulinooporności"]},
+        {"name": "Wydawnictwo", "values": ["Wydawnictwo Feeria"]},
+        {"name": "Rok wydania", "values": ["2018"]},
+        {"name": "ISBN", "values": ["9788372297150"]},
+        {"name": "Gatunek", "values": ["Książki kucharskie"]},
+    ]
+    extracted_book = _extract_allegro_parameters(book_params)
+    assert extracted_book["authors"] == ["Dominika Musiałowska", "Magdalena Makarowska"]
+    assert extracted_book["title"] == "Dieta w insulinooporności"
+    assert extracted_book["publisher"] == "Wydawnictwo Feeria"
+    assert extracted_book["year"] == "2018"
+    assert extracted_book["barcode"] == "9788372297150"
+    assert extracted_book["genres"] == ["Książki kucharskie"]
+
+    music_params = [
+        {"name": "Wykonawca", "values": ["Dire Straits"]},
+        {"name": "Tytuł", "values": ["Brothers in Arms"]},
+        {"name": "Wytwórnia", "values": ["Vertigo"]},
+        {"name": "Format", "values": ["Winyl"]},
+    ]
+    extracted_music = _extract_allegro_parameters(music_params)
+    assert extracted_music["authors"] == ["Dire Straits"]
+    assert extracted_music["title"] == "Brothers in Arms"
+    assert extracted_music["publisher"] == "Vertigo"
+    assert extracted_music["format"] == "Winyl"

@@ -174,6 +174,31 @@ class TestManifestationApiAuthorResilience:
         assert detail_data["authors"] == ["Remigiusz Mróz"]
         assert isinstance(detail_data["authors"], list)
 
+    def test_manifestation_author_fallback_from_manifestation_meta(self, client: Any, app: Any) -> None:
+        """Verify that when work.meta has no authors, manifestation fallback extracts author from m.meta."""
+        with app.app_context():
+            work = Work(title="Empty Author Work", meta={})
+            db.session.add(work)
+            db.session.flush()
+
+            expression = Expression(work_id=work.id)
+            db.session.add(expression)
+            db.session.flush()
+
+            manifestation = Manifestation(
+                expression_id=expression.id,
+                isbn13="9788395968686",
+                meta={"title": "Hania, Tyśka", "author": "Abelard Giza"},
+            )
+            db.session.add(manifestation)
+            db.session.commit()
+            m_id = manifestation.id
+
+        res = client.get(f"/api/manifestations/{m_id}")
+        assert res.status_code == 200
+        data = res.get_json()["data"]
+        assert data["authors"] == ["Abelard Giza"]
+
 
 class TestRepairFrbrAuthorsScript:
     """Test the data repair script for legacy corrupted authors."""
@@ -209,3 +234,31 @@ class TestRepairFrbrAuthorsScript:
             contribs = WorkContribution.query.filter_by(work_id=w_id).all()
             names = {c.contributor.name for c in contribs}
             assert names == {"Corrupted", "String"}
+
+    def test_repair_script_extracts_from_manifestation_parameters(self, app: Any) -> None:
+        """Verify repair script backfills work author from attached manifestation raw_payload parameters."""
+        with app.app_context():
+            work = Work(title="Allegro Param Work", meta={"authors": []})
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id)
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(
+                expression_id=expr.id,
+                barcode="9788324087945",
+                raw_payload={"parameters": [{"name": "Autor", "values": ["Tomasz Strzelczyk"]}]},
+            )
+            db.session.add(m)
+            db.session.commit()
+            w_id = work.id
+
+            inspected, repaired = repair_work_authors(apply_changes=True)
+            assert inspected >= 1
+            assert repaired >= 1
+
+            db.session.expire_all()
+            fixed_work = db.session.get(Work, w_id)
+            assert fixed_work.meta["authors"] == ["Tomasz Strzelczyk"]
