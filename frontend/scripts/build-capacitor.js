@@ -42,7 +42,11 @@ try {
   execSync("npx next build", {
     cwd: frontendDir,
     stdio: "inherit",
-    env: { ...process.env, CAPACITOR_BUILD: "true" },
+    env: {
+      ...process.env,
+      CAPACITOR_BUILD: "true",
+      NEXT_PUBLIC_FRONTEND_URL: process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc",
+    },
   });
 } catch (err) {
   buildError = err;

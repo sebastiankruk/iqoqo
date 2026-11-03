@@ -23,6 +23,34 @@ export const AUTH_TOKEN_KEY = "iqoqo_auth_token";
 
 let inMemoryInstanceUrl: string | null = null;
 
+// Eagerly initialize cache from localStorage and native Preferences on module load
+if (typeof window !== "undefined") {
+  try {
+    const val = window.localStorage.getItem(INSTANCE_URL_KEY);
+    if (val) {
+      inMemoryInstanceUrl = val.replace(/\/+$/, "");
+    }
+  } catch {
+    // Ignore localStorage access failures in restricted environments
+  }
+
+  if (isNativeApp()) {
+    Preferences.get({ key: INSTANCE_URL_KEY })
+      .then(({ value }) => {
+        if (value) {
+          const norm = value.replace(/\/+$/, "");
+          inMemoryInstanceUrl = norm;
+          try {
+            window.localStorage.setItem(INSTANCE_URL_KEY, norm);
+          } catch {
+            // Ignore localStorage mirror errors
+          }
+        }
+      })
+      .catch(() => {});
+  }
+}
+
 /**
  * Synchronously retrieves the active instance URL from in-memory cache
  * or localStorage mirror.

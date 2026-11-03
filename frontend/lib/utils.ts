@@ -155,17 +155,22 @@ export function resolveApiUrl(path: string, isServer = false): string {
 /**
  * Resolves the public base origin for links, shares, and feeds.
  * In a native Capacitor environment (iOS or Android), returns the configured instance
- * URL instead of https://localhost or capacitor://localhost.
+ * URL instead of https://localhost or capacitor://localhost. If no remote instance
+ * is configured or if on localhost, falls back to the public canonical frontend URL.
  *
  * @returns {string} Public origin URL without trailing slash.
  */
 export function getPublicBaseUrl(): string {
+  const defaultPublicUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc").replace(/\/+$/, "");
+
   if (isNativeApp()) {
     const instanceUrl = getSyncInstanceUrl();
-    if (instanceUrl) {
+    if (instanceUrl && !instanceUrl.includes("localhost") && !instanceUrl.includes("127.0.0.1")) {
       return instanceUrl.replace(/\/+$/, "");
     }
+    return defaultPublicUrl;
   }
+
   if (typeof window !== "undefined") {
     const isLocalhostOrCapacitor =
       window.location.hostname === "localhost" ||
@@ -173,13 +178,15 @@ export function getPublicBaseUrl(): string {
       window.location.protocol === "capacitor:";
     if (isLocalhostOrCapacitor) {
       const instanceUrl = getSyncInstanceUrl();
-      if (instanceUrl) {
+      if (instanceUrl && !instanceUrl.includes("localhost") && !instanceUrl.includes("127.0.0.1")) {
         return instanceUrl.replace(/\/+$/, "");
       }
+      return defaultPublicUrl;
     }
     return window.location.origin;
   }
-  return (process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+  return defaultPublicUrl;
 }
 
 /**

@@ -82,4 +82,23 @@ describe("getPublicBaseUrl and resolvePublicUrl", () => {
     expect(getPublicBaseUrl()).toBe("https://my-instance.iqoqo.app");
     expect(resolvePublicUrl("/api/public/feed.xml")).toBe("https://my-instance.iqoqo.app/api/public/feed.xml");
   });
+
+  it("falls back to default public url on native app when instance URL is null or localhost", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue(null);
+
+    expect(getPublicBaseUrl()).toBe("https://preview.iqoqo.cc");
+    expect(resolvePublicUrl("/share/token-123")).toBe("https://preview.iqoqo.cc/share/token-123");
+
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("http://localhost:5000");
+    expect(getPublicBaseUrl()).toBe("https://preview.iqoqo.cc");
+  });
+
+  it("falls back to default public url on web localhost when instance URL is not set", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue(null);
+
+    // In JSDOM, window.location.hostname is localhost
+    expect(getPublicBaseUrl()).toBe("https://preview.iqoqo.cc");
+  });
 });
