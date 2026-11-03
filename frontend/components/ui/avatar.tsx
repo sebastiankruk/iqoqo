@@ -15,7 +15,8 @@
 //
 "use client";
 
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { cn, resolveAvatarUrl } from "@/lib/utils";
 
 /** Props for Avatar component */
 export interface AvatarProps {
@@ -38,18 +39,29 @@ export interface AvatarProps {
  * @returns {JSX.Element} The component
  */
 export function Avatar({ src, alt, size = 40, className, fallback }: AvatarProps) {
+  const [hasError, setHasError] = useState(false);
   const initials = fallback;
+  const resolvedSrc = resolveAvatarUrl(src);
+
   return (
     <div
       style={{ width: size, height: size }}
       className={cn("inline-flex items-center justify-center rounded-full overflow-hidden", className)}
       aria-hidden={src && !alt ? true : undefined}
-      role={!src ? "img" : undefined}
-      aria-label={!src ? alt || initials || "avatar" : undefined}
+      role={!src || hasError ? "img" : undefined}
+      aria-label={!src || hasError ? alt || initials || "avatar" : undefined}
     >
-      {src ? (
+      {resolvedSrc && !hasError ? (
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={src} alt={alt || "avatar"} width={size} height={size} className="object-cover w-full h-full" />
+        <img
+          src={resolvedSrc}
+          alt={alt || "avatar"}
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+          width={size}
+          height={size}
+          className="object-cover w-full h-full"
+        />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground select-none font-medium">
           {initials ?? "?"}

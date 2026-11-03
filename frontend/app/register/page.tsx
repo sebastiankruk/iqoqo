@@ -23,8 +23,9 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { Browser } from "@capacitor/browser";
 import { isNativeApp } from "@/lib/capacitor/platform";
-import { setAuthToken } from "@/lib/capacitor/storage";
+import { getInstanceUrl, setAuthToken } from "@/lib/capacitor/storage";
 
 /**
  * Register page component.
@@ -44,6 +45,16 @@ export default function RegisterPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isNative] = useState(() => isNativeApp());
 
+  const handleOAuthRegister = async (provider: "google" | "apple") => {
+    if (isNative) {
+      const base = (await getInstanceUrl()) || "";
+      await Browser.open({ url: `${base}/api/auth/login/${provider}?mobile_origin=capacitor` });
+      return;
+    }
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = `/api/auth/login/${provider}`;
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!acceptedTerms) {
@@ -52,7 +63,13 @@ export default function RegisterPage() {
     }
     setError("");
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+    let registerUrl = `${process.env.NEXT_PUBLIC_API_URL || ""}/auth/register`;
+    if (isNativeApp()) {
+      const base = (await getInstanceUrl()) || "";
+      if (base) registerUrl = `${base}/api/auth/register`;
+    }
+
+    const res = await fetch(registerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, display_name: displayName }),
@@ -97,28 +114,12 @@ export default function RegisterPage() {
           {(isGoogleEnabled || isAppleEnabled) && (
             <div className="space-y-2">
               {isGoogleEnabled && (
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => {
-                    const qs = isNative ? "?mobile_origin=capacitor" : "";
-                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                    window.location.href = `/api/auth/login/google${qs}`;
-                  }}
-                >
+                <Button className="w-full" variant="outline" onClick={() => handleOAuthRegister("google")}>
                   {t("googleSignUp")}
                 </Button>
               )}
               {isAppleEnabled && (
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => {
-                    const qs = isNative ? "?mobile_origin=capacitor" : "";
-                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                    window.location.href = `/api/auth/login/apple${qs}`;
-                  }}
-                >
+                <Button className="w-full" variant="outline" onClick={() => handleOAuthRegister("apple")}>
                   {t("appleSignUp")}
                 </Button>
               )}

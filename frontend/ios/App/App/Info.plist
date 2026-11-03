@@ -49,5 +49,16 @@
 	<string>iqoqo needs camera access to scan barcodes and photograph book and media covers.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>iqoqo needs permission to save cover images to your photo library.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>cc.iqoqo.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>iqoqo</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

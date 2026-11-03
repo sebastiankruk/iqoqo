@@ -19,7 +19,9 @@ import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import * as platform from "@/lib/capacitor/platform";
 import {
   getInstanceUrl,
+  getSyncInstanceUrl,
   setInstanceUrl,
+  removeInstanceUrl,
   getInstanceName,
   setInstanceName,
   getAuthToken,
@@ -70,6 +72,21 @@ describe("Capacitor Split Storage Utility", () => {
 
       const url = await getInstanceUrl();
       expect(url).toBe("https://iqoqo.kruk.cc");
+      expect(getSyncInstanceUrl()).toBe("https://iqoqo.kruk.cc");
+    });
+
+    it("clears synchronous instance URL when removeInstanceUrl or clearAllMobileStorage runs", async () => {
+      await setInstanceUrl("https://preview.iqoqo.cc");
+      expect(getSyncInstanceUrl()).toBe("https://preview.iqoqo.cc");
+
+      await removeInstanceUrl();
+      expect(getSyncInstanceUrl()).toBeNull();
+
+      await setInstanceUrl("https://preview.iqoqo.cc");
+      expect(getSyncInstanceUrl()).toBe("https://preview.iqoqo.cc");
+
+      await clearAllMobileStorage();
+      expect(getSyncInstanceUrl()).toBeNull();
     });
 
     it("stores and retrieves instance display name via Preferences", async () => {

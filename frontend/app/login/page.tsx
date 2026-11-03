@@ -24,8 +24,9 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { useTranslations } from "next-intl";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { Browser } from "@capacitor/browser";
 import { isNativeApp } from "@/lib/capacitor/platform";
-import { setAuthToken } from "@/lib/capacitor/storage";
+import { getInstanceUrl, setAuthToken } from "@/lib/capacitor/storage";
 import { ServerSelectorModal } from "@/components/mobile/server-selector";
 
 /**
@@ -92,7 +93,13 @@ function LoginPageContent() {
         payload.otp_code = otpCode.trim();
       }
 
-      const res = await fetch(`/api/auth/login`, {
+      let loginUrl = "/api/auth/login";
+      if (isNativeApp()) {
+        const base = (await getInstanceUrl()) || "";
+        if (base) loginUrl = `${base}/api/auth/login`;
+      }
+
+      const res = await fetch(loginUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -142,6 +149,22 @@ function LoginPageContent() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleOAuthLogin = async (provider: "google" | "apple") => {
+    const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+    const params = new URLSearchParams();
+    if (callbackUrl) params.set("callbackUrl", callbackUrl);
+    if (isNative) {
+      params.set("mobile_origin", "capacitor");
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const base = (await getInstanceUrl()) || "";
+      await Browser.open({ url: `${base}/api/auth/login/${provider}${qs}` });
+      return;
+    }
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = `/api/auth/login/${provider}${qs}`;
   };
 
   return (
@@ -196,36 +219,12 @@ function LoginPageContent() {
               {(isGoogleEnabled || isAppleEnabled) && (
                 <div className="space-y-2">
                   {isGoogleEnabled && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => {
-                        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-                        const params = new URLSearchParams();
-                        if (callbackUrl) params.set("callbackUrl", callbackUrl);
-                        if (isNative) params.set("mobile_origin", "capacitor");
-                        const qs = params.toString() ? `?${params.toString()}` : "";
-                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                        window.location.href = `/api/auth/login/google${qs}`;
-                      }}
-                    >
+                    <Button className="w-full" variant="outline" onClick={() => handleOAuthLogin("google")}>
                       {t("googleSignIn")}
                     </Button>
                   )}
                   {isAppleEnabled && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => {
-                        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
-                        const params = new URLSearchParams();
-                        if (callbackUrl) params.set("callbackUrl", callbackUrl);
-                        if (isNative) params.set("mobile_origin", "capacitor");
-                        const qs = params.toString() ? `?${params.toString()}` : "";
-                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                        window.location.href = `/api/auth/login/apple${qs}`;
-                      }}
-                    >
+                    <Button className="w-full" variant="outline" onClick={() => handleOAuthLogin("apple")}>
                       {t("appleSignIn")}
                     </Button>
                   )}

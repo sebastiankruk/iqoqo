@@ -71,9 +71,34 @@ describe("NotificationCenter", () => {
       </QueryClientProvider>
     );
 
-  it("renders notification bell icon without badge when no unread notifications", () => {
+  it("hides notification bell when there are no notifications", () => {
     vi.mocked(notificationsApi.useNotifications).mockReturnValue({
       data: { notifications: [], total: 0, unread_count: 0, limit: 20, offset: 0 },
+      isLoading: false,
+    } as any);
+
+    renderComponent();
+    expect(screen.queryByTestId("notification-bell")).not.toBeInTheDocument();
+  });
+
+  it("renders notification bell icon without badge when notifications exist but none unread", () => {
+    vi.mocked(notificationsApi.useNotifications).mockReturnValue({
+      data: {
+        notifications: [
+          {
+            id: 1,
+            user_id: "user-1",
+            type: "follow_request",
+            payload: { message: "Alice followed you" },
+            read_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+        unread_count: 0,
+        limit: 20,
+        offset: 0,
+      },
       isLoading: false,
     } as any);
 

@@ -17,6 +17,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { resolveApiUrl } from "@/lib/utils";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl, getSyncInstanceUrl } from "@/lib/capacitor/storage";
 
 export interface AuthProviders {
   google: boolean;
@@ -35,7 +38,14 @@ export const DEFAULT_AUTH_PROVIDERS: AuthProviders = {
  */
 export async function fetchAuthProviders(): Promise<AuthProviders> {
   try {
-    const res = await fetch("/api/auth/providers");
+    let url = resolveApiUrl("/auth/providers");
+    if (isNativeApp() && !/^https?:\/\//i.test(url)) {
+      const instanceUrl = await getInstanceUrl();
+      if (instanceUrl) {
+        url = `${instanceUrl}/api/auth/providers`;
+      }
+    }
+    const res = await fetch(url);
     if (!res.ok) {
       return DEFAULT_AUTH_PROVIDERS;
     }
@@ -55,8 +65,9 @@ export async function fetchAuthProviders(): Promise<AuthProviders> {
  * @returns {import('@tanstack/react-query').UseQueryResult<AuthProviders>} Query result
  */
 export function useAuthProviders() {
+  const syncInstance = isNativeApp() ? getSyncInstanceUrl() : null;
   return useQuery({
-    queryKey: ["auth", "providers"],
+    queryKey: ["auth", "providers", syncInstance],
     queryFn: fetchAuthProviders,
     staleTime: 5 * 60 * 1000,
     retry: 1,

@@ -53,6 +53,10 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
   const notifications = data?.notifications || [];
   const unreadCount = data?.unread_count || 0;
 
+  if (!isLoading && notifications.length === 0) {
+    return null;
+  }
+
   const handleNotificationClick = (notif: NotificationItem) => {
     if (!notif.read_at) {
       markReadMutation.mutate([notif.id]);
@@ -117,7 +121,7 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
           aria-label={t("ariaLabel")}
           data-testid="notification-bell"
         >
-          <Bell className="h-4 w-4 text-foreground/80 dark:text-foreground" />
+          <Bell className="h-4 w-4 text-white/90 hover:text-white dark:text-foreground/80 dark:hover:text-foreground transition-colors" />
           {unreadCount > 0 && (
             <span
               data-testid="notification-badge"

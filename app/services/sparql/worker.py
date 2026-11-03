@@ -126,8 +126,20 @@ def _apply_process_rlimits(timeout_seconds: float) -> None:
         pass
 
     try:
-        # Virtual memory (address space) ceiling
-        resource.setrlimit(resource.RLIMIT_AS, (CHILD_MAX_MEMORY_BYTES, CHILD_MAX_MEMORY_BYTES))
+        # Virtual memory (address space) ceiling.
+        # Account for parent virtual memory baseline so forked child processes (e.g. under large test suites)
+        # do not trigger spurious MemoryError upon child entry if the parent process has already grown.
+        base_vm = 0
+        try:
+            with open("/proc/self/statm", encoding="utf-8") as f:
+                fields = f.read().split()
+                if fields:
+                    base_vm = int(fields[0]) * os.sysconf("SC_PAGE_SIZE")
+        except (OSError, ValueError, IndexError):
+            pass
+
+        limit_bytes = max(CHILD_MAX_MEMORY_BYTES, base_vm + CHILD_MAX_MEMORY_BYTES)
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
     except (ValueError, OSError):
         pass
 

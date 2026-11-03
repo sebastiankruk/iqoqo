@@ -16,8 +16,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { isNativeApp } from "@/lib/capacitor/platform";
-import { getInstanceUrl } from "@/lib/capacitor/storage";
+import { getInstanceUrl, getAuthToken } from "@/lib/capacitor/storage";
 import { hideSplashScreen } from "@/lib/capacitor/splash";
 import { ServerSelector } from "./server-selector";
 import { Loader2 } from "lucide-react";
@@ -40,6 +41,7 @@ export function OnboardingScreen({ onConnected }: { onConnected: (instanceUrl: s
  * devices if no instance URL has been configured yet.
  */
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [checking, setChecking] = useState(() => isNativeApp());
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
@@ -89,8 +91,12 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
   if (needsOnboarding) {
     return (
       <OnboardingScreen
-        onConnected={() => {
+        onConnected={async () => {
           setNeedsOnboarding(false);
+          const token = await getAuthToken();
+          if (!token) {
+            router.push("/login");
+          }
         }}
       />
     );

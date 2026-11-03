@@ -13,11 +13,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
+import { setSavedLocale } from "./capacitor/locale";
+
+export const LOCALE_CHANGE_EVENT = "iqoqo:locale-change";
+
 /**
- * Persists a locale preference with secure cookie attributes.
+ * Persists a locale preference with secure cookie attributes and notifies client providers.
  *
- * @param locale - The selected locale identifier.
+ * @param locale - The selected locale identifier ("en" | "pl").
  */
 export function setLocaleCookie(locale: string): void {
-  document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; Secure; SameSite=Lax`;
+  if (typeof document !== "undefined") {
+    document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; Secure; SameSite=Lax`;
+  }
+  if (locale === "en" || locale === "pl") {
+    setSavedLocale(locale).catch(() => {});
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(LOCALE_CHANGE_EVENT, { detail: { locale } }));
+  }
 }

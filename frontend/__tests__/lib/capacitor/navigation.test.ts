@@ -15,6 +15,7 @@
 //
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { App } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import {
   parseAppUrl,
   handleDeepLink,
@@ -24,6 +25,13 @@ import {
 } from "@/lib/capacitor/navigation";
 import * as platform from "@/lib/capacitor/platform";
 import * as storage from "@/lib/capacitor/storage";
+
+vi.mock("@capacitor/browser", () => ({
+  Browser: {
+    open: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 vi.mock("@capacitor/app", () => ({
   App: {
@@ -52,6 +60,14 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
       expect(res.path).toBe("/auth-exchange?token=my-jwt-token");
     });
 
+    it("parses intent://auth-exchange?token=XYZ Android intent URL", () => {
+      const res = parseAppUrl(
+        "intent://auth-exchange?token=my-intent-token#Intent;scheme=iqoqo;package=cc.iqoqo.app;end"
+      );
+      expect(res.token).toBe("my-intent-token");
+      expect(res.path).toContain("/auth-exchange?token=my-intent-token");
+    });
+
     it("parses iqoqo://auth-exchange#token=XYZ hash param", () => {
       const res = parseAppUrl("iqoqo://auth-exchange#token=my-hash-token");
       expect(res.token).toBe("my-hash-token");
@@ -72,7 +88,7 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
   });
 
   describe("handleDeepLink", () => {
-    it("persists token and redirects to / on auth-exchange link", async () => {
+    it("persists token, closes browser, and redirects to / on auth-exchange link", async () => {
       const spySetToken = vi.spyOn(storage, "setAuthToken").mockResolvedValue();
       const mockQueryClient = { clear: vi.fn() } as any;
 
@@ -80,12 +96,19 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
 
       expect(spySetToken).toHaveBeenCalledWith("token-abc");
       expect(mockQueryClient.clear).toHaveBeenCalled();
+      expect(Browser.close).toHaveBeenCalled();
       expect(mockRouter.replace).toHaveBeenCalledWith("/");
     });
 
     it("navigates to deep linked resource path", async () => {
       await handleDeepLink({ url: "iqoqo://item/123" }, mockRouter);
       expect(mockRouter.push).toHaveBeenCalledWith("/item/123");
+    });
+
+    it("does not redirect when url is root localhost without token", async () => {
+      await handleDeepLink({ url: "https://localhost/" }, mockRouter);
+      expect(mockRouter.push).not.toHaveBeenCalled();
+      expect(mockRouter.replace).not.toHaveBeenCalled();
     });
   });
 

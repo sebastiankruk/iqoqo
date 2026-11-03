@@ -15,6 +15,8 @@
 //
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { isNativeApp } from "./capacitor/platform";
+import { getSyncInstanceUrl } from "./capacitor/storage";
 
 /**
  * Merge class names.
@@ -82,7 +84,7 @@ export function resolveApiUrl(path: string, isServer = false): string {
     try {
       const url = new URL(path);
       const allowedOrigins = new Set<string>();
-      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL, getSyncInstanceUrl()]) {
         if (!configuredUrl) continue;
         try {
           allowedOrigins.add(new URL(configuredUrl).origin);
@@ -111,6 +113,16 @@ export function resolveApiUrl(path: string, isServer = false): string {
   }
 
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Native mobile runtime (Capacitor) loads assets from https://localhost or capacitor://localhost.
+  // Relative /api paths cannot resolve against local static files, so we prefix with the active instance URL.
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      const apiPrefix = cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`;
+      return `${instanceUrl}${apiPrefix}`;
+    }
+  }
 
   // Server-side fetch requires an absolute URL.
   // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
@@ -155,7 +167,7 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
     try {
       const parsed = new URL(path);
       const allowedOrigins = new Set<string>();
-      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL, getSyncInstanceUrl()]) {
         if (!configuredUrl) continue;
         try {
           allowedOrigins.add(new URL(configuredUrl).origin);
@@ -176,6 +188,30 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
     return `${url}${separator}t=${timestamp}`;
   }
   return url;
+}
+
+/**
+ * Resolves an avatar image URL.
+ * Passes through valid http/https URLs (e.g. Google OAuth avatars on lh3.googleusercontent.com).
+ * For relative paths, prefixes with the active instance URL on native mobile platforms.
+ *
+ * @param src - The avatar source path or URL
+ * @returns {string | undefined} Resolved avatar URL or undefined
+ */
+export function resolveAvatarUrl(src?: string | null): string | undefined {
+  if (!src) return undefined;
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+  const cleanPath = src.startsWith("/") ? src : `/${src}`;
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      const cleanInstance = instanceUrl.replace(/\/$/, "");
+      return `${cleanInstance}${cleanPath}`;
+    }
+  }
+  return cleanPath;
 }
 
 /**

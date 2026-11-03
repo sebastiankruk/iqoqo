@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import type { QueryClient } from "@tanstack/react-query";
 import { isNativeApp } from "./platform";
 import { setAuthToken } from "./storage";
@@ -36,6 +37,8 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
     let normalized = rawUrl;
     if (normalized.startsWith("iqoqo://")) {
       normalized = normalized.replace("iqoqo://", "https://app.iqoqo.local/");
+    } else if (normalized.startsWith("intent://")) {
+      normalized = normalized.replace("intent://", "https://app.iqoqo.local/");
     }
 
     const parsed = new URL(normalized);
@@ -71,10 +74,11 @@ export async function handleDeepLink(
   }
 
   if (path.includes("auth-exchange")) {
+    await Browser.close().catch(() => {});
     router.replace("/");
   } else if (path && path !== "/") {
     router.push(path);
-  } else {
+  } else if (token) {
     router.replace("/");
   }
 }
