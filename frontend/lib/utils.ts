@@ -191,6 +191,30 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
 }
 
 /**
+ * Resolves an avatar image URL.
+ * Passes through valid http/https URLs (e.g. Google OAuth avatars on lh3.googleusercontent.com).
+ * For relative paths, prefixes with the active instance URL on native mobile platforms.
+ *
+ * @param src - The avatar source path or URL
+ * @returns {string | undefined} Resolved avatar URL or undefined
+ */
+export function resolveAvatarUrl(src?: string | null): string | undefined {
+  if (!src) return undefined;
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+  const cleanPath = src.startsWith("/") ? src : `/${src}`;
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      const cleanInstance = instanceUrl.replace(/\/$/, "");
+      return `${cleanInstance}${cleanPath}`;
+    }
+  }
+  return cleanPath;
+}
+
+/**
  * Classifies the cover type based on cover_source metadata.
  *
  * @param meta - The metadata object containing cover_source

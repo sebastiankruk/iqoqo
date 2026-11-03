@@ -78,7 +78,7 @@ export async function handleDeepLink(
     router.replace("/");
   } else if (path && path !== "/") {
     router.push(path);
-  } else {
+  } else if (token) {
     router.replace("/");
   }
 }

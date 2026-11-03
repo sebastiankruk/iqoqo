@@ -32,20 +32,60 @@ public class MainActivity extends BridgeActivity {
                 String targetPath = path;
 
                 if (path != null) {
-                    if (path.startsWith("/item/")) {
-                        targetPath = "/item/_placeholder.html";
-                    } else if (path.startsWith("/manifestation/")) {
-                        targetPath = "/manifestation/_placeholder.html";
-                    } else if (path.startsWith("/work/")) {
-                        targetPath = "/work/_placeholder.html";
-                    } else if (path.startsWith("/expression/")) {
-                        targetPath = "/expression/_placeholder.html";
-                    } else if (path.startsWith("/u/")) {
-                        targetPath = "/u/_placeholder.html";
-                    } else if (path.startsWith("/share/")) {
-                        targetPath = "/share/_placeholder.html";
-                    } else if (path.startsWith("/help/") && !path.endsWith(".html") && !path.endsWith(".js") && !path.endsWith(".css") && !path.endsWith(".png") && !path.endsWith(".svg") && !path.endsWith(".jpg")) {
-                        targetPath = "/help/_placeholder.html";
+                    boolean isStaticAsset = path.startsWith("/_next/") ||
+                        path.endsWith(".js") ||
+                        path.endsWith(".css") ||
+                        path.endsWith(".png") ||
+                        path.endsWith(".jpg") ||
+                        path.endsWith(".jpeg") ||
+                        path.endsWith(".svg") ||
+                        path.endsWith(".ico") ||
+                        path.endsWith(".woff") ||
+                        path.endsWith(".woff2") ||
+                        path.endsWith(".json") ||
+                        path.endsWith(".map");
+
+                    if (!isStaticAsset) {
+                        String[] dynamicPrefixes = new String[] {
+                            "/item/",
+                            "/manifestation/",
+                            "/work/",
+                            "/expression/",
+                            "/u/",
+                            "/share/"
+                        };
+
+                        for (String prefix : dynamicPrefixes) {
+                            if (path.startsWith(prefix)) {
+                                if (path.endsWith(".txt")) {
+                                    targetPath = prefix + "_placeholder.txt";
+                                } else {
+                                    targetPath = prefix + "_placeholder.html";
+                                }
+                                break;
+                            }
+                        }
+
+                        if (path.startsWith("/help/")) {
+                            boolean isStaticHelp = path.equals("/help/camera-to-catalog.html") ||
+                                path.equals("/help/camera-to-catalog.txt") ||
+                                path.equals("/help/curators-handbook.html") ||
+                                path.equals("/help/curators-handbook.txt") ||
+                                path.equals("/help/federation-architecture.html") ||
+                                path.equals("/help/federation-architecture.txt") ||
+                                path.equals("/help/frbr-hierarchy.html") ||
+                                path.equals("/help/frbr-hierarchy.txt") ||
+                                path.equals("/help/privacy-sharing-social.html") ||
+                                path.equals("/help/privacy-sharing-social.txt");
+
+                            if (!isStaticHelp) {
+                                if (path.endsWith(".txt")) {
+                                    targetPath = "/help/_placeholder.txt";
+                                } else {
+                                    targetPath = "/help/_placeholder.html";
+                                }
+                            }
+                        }
                     }
                 }
 

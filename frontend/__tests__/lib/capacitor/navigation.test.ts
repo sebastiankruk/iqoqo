@@ -104,6 +104,12 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
       await handleDeepLink({ url: "iqoqo://item/123" }, mockRouter);
       expect(mockRouter.push).toHaveBeenCalledWith("/item/123");
     });
+
+    it("does not redirect when url is root localhost without token", async () => {
+      await handleDeepLink({ url: "https://localhost/" }, mockRouter);
+      expect(mockRouter.push).not.toHaveBeenCalled();
+      expect(mockRouter.replace).not.toHaveBeenCalled();
+    });
   });
 
   describe("registerDeepLinkHandler", () => {
