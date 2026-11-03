@@ -31,7 +31,7 @@ from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
-from app.core.search_service import _meta_text, build_ilike_search_clause, normalize_diacritics
+from app.core.search_service import SearchService, _meta_text, build_ilike_search_clause, normalize_diacritics
 from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
@@ -304,11 +304,28 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
     if "query" in filters:
         search_query = filters["query"]
         if search_query:
-            if "tags" not in filters:
-                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
-            query = query.where(build_ilike_search_clause(search_query))
+            if db.engine.dialect.name == "postgresql":
+                statuses_list = statuses if "status" in filters else None
+                tags_list = filters.get("tags")
+                _, results = SearchService.search_items(
+                    q=search_query,
+                    user_id=user.id,
+                    limit=limit,
+                    offset=0,
+                    statuses=statuses_list,
+                    category=tags_list,
+                    owner_only=True,
+                )
+                item_ids = [r["item_id"] for r in results]
+                if not item_ids:
+                    return [] if not stream else iter([])
+                query = query.where(Item.id.in_(item_ids))
+            else:
+                if "tags" not in filters:
+                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                query = query.outerjoin(Work, Expression.work_id == Work.id)
+                query = query.where(build_ilike_search_clause(search_query))
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
 
@@ -568,14 +585,39 @@ def get_shared_collection(token: str):
     if "query" in filters:
         search_query = filters["query"]
         if search_query:
-            # Join Work and Manifestation if not joined
-            if "tags" not in filters:
-                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
-            query = query.where(build_ilike_search_clause(search_query))
+            if db.engine.dialect.name == "postgresql":
+                statuses_list = statuses if "status" in filters else None
+                tags_list = filters.get("tags")
+                _, results = SearchService.search_items(
+                    q=search_query,
+                    user_id=user.id,
+                    limit=1000,
+                    offset=0,
+                    statuses=statuses_list,
+                    category=tags_list,
+                    owner_only=True,
+                )
+                item_ids = [r["item_id"] for r in results]
+                if not item_ids:
+                    query = query.where(sa.false())
+                else:
+                    query = query.where(Item.id.in_(item_ids))
+            else:
+                # Join Work and Manifestation if not joined
+                if "tags" not in filters:
+                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                query = query.outerjoin(Work, Expression.work_id == Work.id)
+                query = query.where(build_ilike_search_clause(search_query))
 
-    items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().unique().all())
+    items = list(
+        db.session.execute(
+            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
 
     items_list = [
         {
@@ -584,7 +626,15 @@ def get_shared_collection(token: str):
             "status": item.status,
             "collection_status": item.collection_status,
             "title": item.manifestation.title,
-            "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
+            "authors": (
+                (
+                    item.manifestation.expression.work.meta.get("authors")
+                    if item.manifestation.expression and item.manifestation.expression.work and item.manifestation.expression.work.meta
+                    else None
+                )
+                or (item.manifestation.meta.get("authors") if item.manifestation.meta else None)
+                or []
+            ),
             "cover_url": item.manifestation.cover_url or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
         }
         for item in items

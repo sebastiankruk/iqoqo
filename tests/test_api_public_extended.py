@@ -451,3 +451,36 @@ def test_shared_collection_with_query_filter_identifiers_and_meta(client, app, t
         assert data["success"] is True
         assert len(data["data"]["items"]) == 1
         assert data["data"]["items"][0]["title"] == "Album With Barcode"
+
+
+def test_shared_collection_query_does_not_match_arbitrary_description(client, app, test_user):
+    """Search query 'dom' must not match an item just because 'dom' is in description or address."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Pieklo jest puste")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(
+            expression_id=expr.id,
+            meta={
+                "description": "podczas powrotu do domu",
+                "producerAddress": "ul. Domaniewska 48",
+            },
+        )
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+
+        coll = SharedCollection(user_id=user.id, name="Dom Search", filters={"query": "dom", "tags": ["text"]})
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert data["success"] is True
+    # 'dom' is in 'domu' and 'Domaniewska' in description/address, not in title/authors/tags
+    assert len(data["data"]["items"]) == 0
