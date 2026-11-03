@@ -1,17 +1,24 @@
 ## Context
 
-See `proposal.md` for motivation. In Capacitor 7 Android and iOS builds, the Next.js frontend is packaged as a static export (`out/`) served from local origin `https://localhost` (Android) or `capacitor://localhost` (iOS). While Axios API requests in `frontend/lib/api/client.ts` are dynamically rewritten by an async request interceptor to target `${instanceUrl}/api`, three categories of browser interactions bypass Axios:
-1. OAuth navigation in `login/page.tsx` and `register/page.tsx` (`window.location.href = "/api/auth/login/google"`).
-2. Cover art `<Image src={getCoverUrl(...)} />` rendering (`resolveApiUrl()` synchronously returning relative `/api/static/covers/...`).
-3. Android 15 (API 35) enforced edge-to-edge window layout where WebView content extends behind the status bar and display cutout unless system window insets and CSS `env(safe-area-inset-*)` are applied.
+See `proposal.md` for motivation. In Capacitor 7 Android and iOS builds, the Next.js frontend is packaged as a static export (`out/`) served from local origin `https://localhost` (Android) or `capacitor://localhost` (iOS). In addition to initial OAuth, insets, and cover resolution, production verification on a physical Pixel device surfaced critical runtime behaviors:
+1. Dynamic page requests (`/item/123.txt`) were intercepted by Android's `RouteProcessor` and rewritten to HTML (`_placeholder.html`), causing Next.js flight parser crashes that reset navigation back to root.
+2. Cold-start launch URLs (`https://localhost/`) triggered unconditional `router.replace("/")` in the native deep link handler.
+3. User avatars from external OAuth providers (e.g. Google's `lh3.googleusercontent.com`) were either mutilated by API resolvers or rejected with 403/404 by Google due to `Referer: https://localhost/`.
+4. Next.js static exports lack a Node.js server lifecycle, making cookie-based `router.refresh()` internationalization completely inoperative.
+5. Inactive `<video>` elements rendered Chromium's default media player play arrow, while batch mode buttons suffered from vertical layout misalignment.
+6. Mobile navigation contained redundant controls (scan and language buttons in the top bar), invisible bell icons against navy backgrounds, and lacked brand app launcher icons.
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Route native OAuth initiation through `@capacitor/browser` against the remote `instanceUrl` and auto-close the browser sheet upon deep-link completion.
 - Ensure top and bottom bars respect system status bar, Pixel camera hole, and navigation bar insets across Android 15+ and iOS.
-- Synchronously resolve cover art URLs in `getCoverUrl()` / `resolveApiUrl()` against the active remote `instanceUrl` when running in a native WebView.
+- Synchronously resolve cover art and user avatar URLs against the active remote `instanceUrl` or external CDN with `no-referrer` protection.
 - Route unauthenticated users to `/login` after initial server onboarding and expose a persistent `Sign In` / `Profile` tab in the mobile bottom navigation bar.
+- Prevent client navigation loops on cold-start and ensure Android `RouteProcessor` serves static assets and flight payload text files correctly.
+- Provide client-side internationalization with instant language switching in static export builds.
+- Polish camera scanner UI, suppress Chromium video placeholders, and align batch mode controls.
+- Streamline mobile navbar, hide empty notifications bell, and equip the Android app with official iqoqo brand launcher icons.
 
 **Non-Goals:**
 - Modifying backend Flask OAuth routes or introducing HTML rendering in Flask.
@@ -19,27 +26,35 @@ See `proposal.md` for motivation. In Capacitor 7 Android and iOS builds, the Nex
 
 ## Decisions
 
-### 1. Synchronous Instance URL Cache for `resolveApiUrl()`
-- **Decision:** Keep an in-memory `cachedInstanceUrl` in `frontend/lib/capacitor/storage.ts` mirrored to `window.localStorage.getItem(INSTANCE_URL_KEY)`. Update it whenever `getInstanceUrl()`, `setInstanceUrl()`, or `clearAllMobileStorage()` runs, and expose a synchronous `getSyncInstanceUrl(): string | null` helper. In `frontend/lib/utils.ts:resolveApiUrl()`, if `isNativeApp()` is true and `getSyncInstanceUrl()` returns a base URL, prefix the resolved `/api/...` path with that instance URL. Also allow `getSyncInstanceUrl()` origin inside `getCoverUrl()` when full URLs are passed.
-- **Rationale:** `getCoverUrl()` is called synchronously during React render across dozens of components (`ItemCard`, `FreshArrivals`, `ItemHeader`, `ManifestationDetailClient`). Making `getCoverUrl()` async would require refactoring every image render into an async effect. Mirroring the non-sensitive `instanceUrl` in memory + `localStorage` keeps `getCoverUrl()` 100% synchronous while `@capacitor/preferences` remains the durable native source of truth.
-- **Alternatives Considered:** Converting `getCoverUrl()` to an async hook — rejected due to unnecessary render waterfall and broad component churn.
+### 1. Synchronous Instance URL Cache for Covers & Avatars
+- **Decision:** Keep an in-memory `cachedInstanceUrl` in `frontend/lib/capacitor/storage.ts` mirrored to `window.localStorage.getItem(INSTANCE_URL_KEY)`. Expose `resolveAvatarUrl()` in `frontend/lib/utils.ts` and update `frontend/components/ui/avatar.tsx` to use it with `referrerPolicy="no-referrer"` and `onError` fallback to user initials.
+- **Rationale:** `getCoverUrl()` and `resolveAvatarUrl()` are called synchronously during render. External Google avatars cannot be prefixed with `instanceUrl` and cannot leak `localhost` referrers.
 
 ### 2. `@capacitor/browser` for Native OAuth Launch
-- **Decision:** In `frontend/app/login/page.tsx` and `frontend/app/register/page.tsx`, extract a shared helper `startNativeOrWebOAuth(provider: "google" | "apple", callbackUrl?: string)`. When `isNativeApp()` is true, read `await getInstanceUrl()`, construct `${instanceUrl}/api/auth/login/${provider}?mobile_origin=capacitor`, and invoke `await Browser.open({ url })`. In `frontend/lib/capacitor/navigation.ts:handleDeepLink()`, call `await Browser.close().catch(() => {})` after persisting the token so the Custom Tab / Safari sheet dismisses cleanly.
-- **Rationale:** Google OAuth blocks embedded WebView user agents (`403 disallowed_useragent`), and local WebView origin `https://localhost` has no `/api/auth/login/*` backend. `@capacitor/browser` uses Chrome Custom Tabs on Android and `SFSafariViewController` on iOS, which comply with Google/Apple OAuth policies and share system session state.
+- **Decision:** In `frontend/app/login/page.tsx` and `frontend/app/register/page.tsx`, launch OAuth flows using `@capacitor/browser` targeting `${instanceUrl}/api/auth/login/${provider}?mobile_origin=capacitor`. In `frontend/lib/capacitor/navigation.ts:handleDeepLink()`, call `await Browser.close().catch(() => {})`.
+- **Rationale:** Google OAuth rejects embedded WebViews (`403 disallowed_useragent`). Chrome Custom Tabs and Safari sheets preserve security and session cookies.
 
 ### 3. Dual-Layer Inset Protection (Android Theme + CSS Safe-Area)
-- **Decision:**
-  1. In `frontend/android/app/src/main/res/values/styles.xml`, set `<item name="android:fitsSystemWindows">true</item>` on `AppTheme.NoActionBar`.
-  2. In `frontend/app/layout.tsx`, export `export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" }`.
-  3. In `frontend/components/dashboard/navbar.tsx` and `frontend/components/scanner/top-bar.tsx`, apply `pt-[env(safe-area-inset-top,0px)]` to the top bar container and `pb-[env(safe-area-inset-bottom,0px)]` to the fixed bottom navigation bar.
-- **Rationale:** Android 15 (compileSdk 35) enforces edge-to-edge window drawing by default. Combining `fitsSystemWindows="true"` with CSS `env(safe-area-inset-top)` ensures both Android status bars / camera cutouts and iOS Dynamic Island / Home indicators are respected.
+- **Decision:** Configure `<item name="android:fitsSystemWindows">true</item>` on `AppTheme.NoActionBar` in `frontend/android/app/src/main/res/values/styles.xml`, set `viewportFit: "cover"` in `frontend/app/layout.tsx`, and apply `pt-[env(safe-area-inset-top,0px)]` and `pb-[env(safe-area-inset-bottom,0px)]`.
+- **Rationale:** Android 15 enforces edge-to-edge layout. Dual-layer handling protects UI elements across both Android display cutouts and iOS Dynamic Island.
 
-### 4. Onboarding-to-Login Handoff & 5-Tab Bottom Bar
-- **Decision:** In `frontend/components/mobile/onboarding-screen.tsx`, when `OnboardingScreen` invokes `onConnected`, check `await getAuthToken()`. If null, call `router.push("/login")`. In `frontend/components/dashboard/navbar.tsx`, add a 5th tab to the mobile bottom navigation bar: when `profile` is present, render **Profile** (`/profile` with `User` icon); when unauthenticated, render **Sign In** (`/login` with `LogIn` icon).
-- **Rationale:** Eliminates the dead-end guest state after choosing a server on first launch and ensures authentication / profile / server switching is always one tap away on mobile viewports.
+### 4. Dynamic Route Asset Preservation in `MainActivity.java` & Deep-Link Guard
+- **Decision:** In `frontend/android/app/src/main/java/cc/iqoqo/app/MainActivity.java`, update `RouteProcessor` to ignore static assets (`.js`, `.css`, `_next/`) and rewrite `.txt` flight requests to `_placeholder.txt` rather than `_placeholder.html`. In `frontend/lib/capacitor/navigation.ts`, remove unconditional `router.replace("/")` when launch URL is `https://localhost/`.
+- **Rationale:** Serving HTML for RSC `.txt` requests breaks Next.js client-side navigation. Unconditional root replacement in deep-link handlers caused page clicks to snap back to the home page.
+
+### 5. Client-Side Internationalization (`ClientI18nProvider`)
+- **Decision:** Implement `ClientI18nProvider` in `frontend/components/i18n-provider.tsx` loading both `en.json` and `pl.json` (~80KB total) into memory. Listen for `LOCALE_CHANGE_EVENT` dispatched by `setLocaleCookie()` and read `getSavedLocale()` from Capacitor Preferences / localStorage.
+- **Rationale:** In static export builds, `getLocale()` and `getMessages()` run at build time. Dynamic client-side provider allows instantaneous switching between Polish and English without server reloads.
+
+### 6. Video Element Overlay & Batch Mode Alignment
+- **Decision:** In `frontend/app/scan/page.tsx`, attach a transparent SVG `poster` and `opacity-0 pointer-events-none` when `scannerActive` is false. In `batch-scan-toggle.tsx`, match `h-9 rounded-xl border border-border/40` dimensions and enforce `min-w-0` on inputs.
+- **Rationale:** Chromium displays an enormous media player play arrow when an empty `<video>` is present in a WebView. Unifying heights and flex boundaries prevents horizontal overflow and vertical clipping on mobile screens.
+
+### 7. Navbar Streamlining & Official App Launcher Icons
+- **Decision:** In `navbar.tsx`, hide top-bar scan and language buttons on mobile (`hidden sm:flex` / `hidden md:flex`). In `notification-center.tsx`, change icon color to `text-white/90` and return `null` when `notifications.length === 0`. Generate Android adaptive and density icons from `frontend/assets/icon.svg` via `@capacitor/assets`.
+- **Rationale:** Removes UI clutter on portrait phones, ensures bell visibility, and equips the application with official iqoqo brand identity.
 
 ## Risks / Trade-offs
 
-- **[Risk] First render before `getInstanceUrl()` resolves on cold start** → **Mitigation:** `OnboardingGuard` already gates initial native render until `getInstanceUrl()` resolves (`checking` state), which populates `cachedInstanceUrl` before any collection or cover component mounts. Additionally, `localStorage` fallback is synchronous on subsequent cold starts.
-- **[Risk] `Browser.close()` throwing on Android if Custom Tab was already dismissed by user or intent** → **Mitigation:** Wrap `Browser.close()` in a `.catch(() => {})` no-op guard.
+- **[Risk] In-memory bundle size for multi-language catalogs** → **Mitigation:** English and Polish dictionaries total ~80KB uncompressed (<15KB gzipped), well within acceptable budgets for mobile clients.
+- **[Risk] RouteProcessor pattern drift on new dynamic routes** → **Mitigation:** All dynamic routes follow canonical `_placeholder` patterns covered by route definitions.

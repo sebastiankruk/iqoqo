@@ -16,7 +16,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as platform from "@/lib/capacitor/platform";
 import * as storage from "@/lib/capacitor/storage";
-import { getCoverUrl, resolveApiUrl } from "@/lib/utils";
+import { getCoverUrl, resolveApiUrl, resolveAvatarUrl } from "@/lib/utils";
 
 describe("Native Mobile Cover URL Resolution", () => {
   beforeEach(() => {
@@ -55,5 +55,32 @@ describe("Native Mobile Cover URL Resolution", () => {
 
     const resolved = getCoverUrl("https://preview.iqoqo.cc/api/static/covers/book123.jpg");
     expect(resolved).toBe("https://preview.iqoqo.cc/api/static/covers/book123.jpg");
+  });
+
+  describe("resolveAvatarUrl", () => {
+    it("returns undefined when src is null or empty", () => {
+      expect(resolveAvatarUrl(null)).toBeUndefined();
+      expect(resolveAvatarUrl(undefined)).toBeUndefined();
+      expect(resolveAvatarUrl("")).toBeUndefined();
+    });
+
+    it("passes through external HTTP/HTTPS avatar URLs untouched", () => {
+      const googleUrl = "https://lh3.googleusercontent.com/a/ACg8ocK-avatar-123";
+      expect(resolveAvatarUrl(googleUrl)).toBe(googleUrl);
+    });
+
+    it("prefixes relative avatar paths with remote instance URL on native mobile", () => {
+      vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+      vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://preview.iqoqo.cc");
+
+      expect(resolveAvatarUrl("/static/avatars/user.png")).toBe("https://preview.iqoqo.cc/static/avatars/user.png");
+      expect(resolveAvatarUrl("static/avatars/user.png")).toBe("https://preview.iqoqo.cc/static/avatars/user.png");
+    });
+
+    it("leaves relative avatar paths as-is when on standard web browser", () => {
+      vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+
+      expect(resolveAvatarUrl("/static/avatars/user.png")).toBe("/static/avatars/user.png");
+    });
   });
 });
