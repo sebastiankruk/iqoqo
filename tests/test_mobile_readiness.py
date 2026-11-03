@@ -151,3 +151,38 @@ def test_mobile_dynamic_routes_cover_nextjs_pages():
 
         assert f'"{prefix}"' in android_src, f"Android MainActivity missing dynamic route prefix '{prefix}' for {page_path}"
         assert f'"{prefix}"' in ios_src, f"iOS AppDelegate missing dynamic route prefix '{prefix}' for {page_path}"
+
+
+def test_mobile_app_icons_present_and_branded():
+    """Verify Android and iOS native shells include branded iqoqo launcher icons."""
+    from PIL import Image
+
+    repo_root = Path(__file__).resolve().parent.parent
+
+    # 1. Android ic_launcher icons must exist and be branded
+    android_icon = repo_root / "frontend" / "android" / "app" / "src" / "main" / "res" / "mipmap-xxhdpi" / "ic_launcher_foreground.png"
+    assert android_icon.is_file(), "Android ic_launcher_foreground.png must exist"
+    with Image.open(android_icon) as im:
+        assert im.size[0] >= 192 and im.size[1] >= 192, "Android icon too small"
+        center_pixel = im.getpixel((im.size[0] // 2, im.size[1] // 2))
+        assert (
+            center_pixel[0] > 180 and center_pixel[1] > 60 and center_pixel[2] < 30
+        ), f"Android icon center pixel is {center_pixel}, expected iqoqo orange"
+
+    # 2. iOS AppIcon must exist, be 1024x1024 RGB, and branded
+    ios_icon = repo_root / "frontend" / "ios" / "App" / "App" / "Assets.xcassets" / "AppIcon.appiconset" / "AppIcon-512@2x.png"
+    assert ios_icon.is_file(), "iOS AppIcon-512@2x.png must exist"
+    with Image.open(ios_icon) as im:
+        assert im.size == (1024, 1024), "iOS AppIcon must be 1024x1024 universal image"
+        assert im.mode == "RGB", "iOS AppIcon must be RGB without alpha transparency"
+        center_pixel = im.getpixel((512, 512))
+        assert (
+            center_pixel[0] > 180 and center_pixel[1] > 60 and center_pixel[2] < 30
+        ), f"iOS AppIcon center pixel is {center_pixel}, expected iqoqo orange"
+        assert not (center_pixel[0] < 100 and center_pixel[2] > 200), "iOS AppIcon still contains default Capacitor blue logo"
+
+    # 3. iOS Contents.json must be valid
+    ios_contents = repo_root / "frontend" / "ios" / "App" / "App" / "Assets.xcassets" / "AppIcon.appiconset" / "Contents.json"
+    assert ios_contents.is_file(), "iOS AppIcon Contents.json must exist"
+    contents_text = ios_contents.read_text(encoding="utf-8")
+    assert "AppIcon-512@2x.png" in contents_text, "iOS Contents.json must reference AppIcon-512@2x.png"

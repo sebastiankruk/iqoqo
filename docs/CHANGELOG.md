@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Branded native iOS AppIcon (1024x1024) and universal Splash screens with official iqoqo logo and added `make mobile-icons` asset generator.
 - Resolved dynamic route navigation and Next.js flight data resolution failure on iOS native shell via custom `NextJSRouter` in `ViewController`.
 - Added automated Android and iOS route parity tests (`tests/test_mobile_readiness.py`, `frontend/__tests__/lib/capacitor/mobile-routing-parity.test.ts`) and updated `mobile-capacitor-expert` skill guidelines for native shells and web UI soft-sync to prevent future drift.
 - Resolved Dependabot security vulnerabilities across python backend and frontend dependencies.
