@@ -135,7 +135,7 @@ def _apply_process_rlimits(timeout_seconds: float) -> None:
                 fields = f.read().split()
                 if fields:
                     base_vm = int(fields[0]) * os.sysconf("SC_PAGE_SIZE")
-        except Exception:  # pylint: disable=broad-exception-caught
+        except (OSError, ValueError, IndexError):
             pass
 
         limit_bytes = max(CHILD_MAX_MEMORY_BYTES, base_vm + CHILD_MAX_MEMORY_BYTES)

@@ -157,8 +157,8 @@ test.describe("Audio Media Workflow", () => {
     const labelSelect = page.locator("select").filter({ hasText: "Disc" });
     await expect(labelSelect).toBeVisible();
 
-    await expect(page.getByText("Browse")).toBeVisible();
-    await expect(page.getByText("Snap")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Browse" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Snap" })).toBeVisible();
 
     // 9. Verify NO redundant format toggle (Book/CD/Vinyl) on the item page
     // It should be hidden because manifestation_id is passed to CameraCapture
