@@ -37,7 +37,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app import create_app
 from app.core.frbr_service import normalize_authors_list, sync_entity_contributions
 from app.db.contributions import WorkContribution
-from app.db.models import Work, db
+from app.db.models import Expression, Work, db
 
 
 def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> tuple[int, int]:
@@ -65,7 +65,10 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
     while True:
         stmt = (
             select(Work)
-            .options(selectinload(Work.contributions).selectinload(WorkContribution.contributor))
+            .options(
+                selectinload(Work.contributions).selectinload(WorkContribution.contributor),
+                selectinload(Work.expressions).selectinload(Expression.manifestations),
+            )
             .order_by(Work.id)
             .offset(offset)
             .limit(batch_size)
@@ -79,6 +82,29 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
             meta = dict(work.meta or {})
             raw_authors = meta.get("authors")
             normalized = normalize_authors_list(raw_authors)
+
+            # If work has no authors, attempt fallback extraction from attached manifestations
+            if not normalized:
+                for expr in getattr(work, "expressions", []):
+                    for m in getattr(expr, "manifestations", []):
+                        if m.raw_payload and isinstance(m.raw_payload, dict) and "parameters" in m.raw_payload:
+                            from app.utils.allegro import _extract_allegro_parameters
+
+                            ext = _extract_allegro_parameters(m.raw_payload.get("parameters", []))
+                            if ext.get("authors"):
+                                cand = normalize_authors_list(ext["authors"])
+                                if cand:
+                                    normalized = cand
+                                    break
+                        if not normalized and m.meta and isinstance(m.meta, dict):
+                            m_auth = m.meta.get("authors") or m.meta.get("author") or m.meta.get("Artist")
+                            if m_auth:
+                                cand = normalize_authors_list(m_auth)
+                                if cand:
+                                    normalized = cand
+                                    break
+                    if normalized:
+                        break
 
             needs_repair = False
 
@@ -107,6 +133,16 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
                     if normalized:
                         contributions_payload = [{"name": name, "role": "author"} for name in normalized]
                         sync_entity_contributions(work, contributions_payload)
+
+                    # Propagate to child expressions and manifestations if lacking authors
+                    for expr in getattr(work, "expressions", []):
+                        for m in getattr(expr, "manifestations", []):
+                            m_meta = dict(m.meta or {})
+                            if not m_meta.get("author") or not m_meta.get("authors"):
+                                m_meta["authors"] = normalized
+                                m_meta["author"] = normalized[0] if normalized else None
+                                m.meta = m_meta
+                                flag_modified(m, "meta")
 
         if apply_changes and batch_repaired > 0:
             db.session.commit()

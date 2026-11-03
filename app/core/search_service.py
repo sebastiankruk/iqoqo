@@ -150,6 +150,9 @@ def build_ilike_search_clause(q: str) -> Any:
         match(_meta_text(Work.meta)),
         match(_meta_text(Manifestation.meta)),
         Manifestation.isbn13.ilike(search_term),
+        Manifestation.upc.ilike(search_term),
+        Manifestation.barcode.ilike(search_term),
+        Manifestation.catalog_number.ilike(search_term),
         work_contributor,
         expression_contributor,
     )

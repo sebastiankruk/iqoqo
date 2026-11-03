@@ -153,6 +153,51 @@ export function resolveApiUrl(path: string, isServer = false): string {
 }
 
 /**
+ * Resolves the public base origin for links, shares, and feeds.
+ * In a native Capacitor environment (iOS or Android), returns the configured instance
+ * URL instead of https://localhost or capacitor://localhost.
+ *
+ * @returns {string} Public origin URL without trailing slash.
+ */
+export function getPublicBaseUrl(): string {
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      return instanceUrl.replace(/\/+$/, "");
+    }
+  }
+  if (typeof window !== "undefined") {
+    const isLocalhostOrCapacitor =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.protocol === "capacitor:";
+    if (isLocalhostOrCapacitor) {
+      const instanceUrl = getSyncInstanceUrl();
+      if (instanceUrl) {
+        return instanceUrl.replace(/\/+$/, "");
+      }
+    }
+    return window.location.origin;
+  }
+  return (process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000").replace(/\/+$/, "");
+}
+
+/**
+ * Resolves a full public URL for share links, feeds, and open-in-browser targets.
+ *
+ * @param path - Relative or absolute path (e.g. "/share/abc", "/api/public/feed.xml")
+ * @returns {string} Fully-qualified public URL.
+ */
+export function resolvePublicUrl(path: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path)) {
+    return path;
+  }
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const base = getPublicBaseUrl();
+  return `${base}${cleanPath}`;
+}
+
+/**
  * Resolves a cover URL using the generic resolveApiUrl logic.
  * Supports optional cache-busting timestamp.
  *

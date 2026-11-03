@@ -23,7 +23,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from flask import Response, current_app, g, jsonify, request, stream_with_context
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.decorators import optional_auth
@@ -31,6 +31,8 @@ from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
+from app.core.search_service import _meta_text, build_ilike_search_clause, normalize_diacritics
+from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
 
@@ -285,7 +287,12 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
 
     if "status" in filters:
         status_val = filters["status"]
-        query = query.where(or_(Item.status == status_val, Item.collection_status == status_val))
+        statuses = status_val if isinstance(status_val, list) else [status_val]
+        statuses = [s for s in statuses if isinstance(s, str) and s]
+        if statuses:
+            query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+        else:
+            query = query.where(sa.false())
 
     if "tags" in filters:
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
@@ -301,15 +308,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                 query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
                 query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
             query = query.outerjoin(Work, Expression.work_id == Work.id)
-            query = query.where(
-                or_(
-                    Work.title.ilike(f"%{search_query}%"),
-                    Manifestation.isbn13 == search_query,
-                    Manifestation.upc == search_query,
-                    db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
-                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%"),
-                )
-            )
+            query = query.where(build_ilike_search_clause(search_query))
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
 
@@ -574,18 +573,9 @@ def get_shared_collection(token: str):
                 query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
                 query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
             query = query.outerjoin(Work, Expression.work_id == Work.id)
+            query = query.where(build_ilike_search_clause(search_query))
 
-            query = query.where(
-                or_(
-                    Work.title.ilike(f"%{search_query}%"),
-                    Manifestation.isbn13 == search_query,
-                    Manifestation.upc == search_query,
-                    db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
-                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%"),
-                )
-            )
-
-    items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all())
+    items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().unique().all())
 
     items_list = [
         {
@@ -631,12 +621,26 @@ def get_shared_collection(token: str):
         if filters.get("query"):
             search_term = filters["query"].strip()
             if search_term:
-                escaped_term = search_term.lower().replace("%", r"\%").replace("_", r"\_")
-                search_pattern = f"%{escaped_term}%"
+                raw_pat = f"%{search_term}%"
+                norm_pat = f"%{normalize_diacritics(search_term)}%"
                 intent_query = intent_query.join(Work, UserWorkIntent.work_id == Work.id).filter(
                     or_(
-                        Work.title.ilike(search_pattern, escape="\\"),
-                        db.cast(Work.meta["authors"], db.String).ilike(search_pattern, escape="\\"),
+                        Work.title.ilike(raw_pat),
+                        func.immutable_unaccent(Work.title).ilike(norm_pat),
+                        _meta_text(Work.meta).ilike(raw_pat),
+                        func.immutable_unaccent(_meta_text(Work.meta)).ilike(norm_pat),
+                        exists(
+                            select(1)
+                            .select_from(WorkContribution)
+                            .join(Contributor, Contributor.id == WorkContribution.contributor_id)
+                            .where(
+                                WorkContribution.work_id == Work.id,
+                                or_(
+                                    Contributor.name.ilike(raw_pat),
+                                    func.immutable_unaccent(Contributor.name).ilike(norm_pat),
+                                ),
+                            )
+                        ),
                     )
                 )
 

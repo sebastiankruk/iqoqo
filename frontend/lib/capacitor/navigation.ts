@@ -139,3 +139,23 @@ export function registerBackButtonHandler(router: NavigationRouter): () => void 
     listenerPromise.then(handle => handle.remove()).catch(() => {});
   };
 }
+
+/**
+ * Opens an external URL in the system browser using Capacitor Browser on native platforms,
+ * or standard window.open on the web.
+ *
+ * @param url - Destination URL
+ */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isNativeApp()) {
+    try {
+      await Browser.open({ url });
+      return;
+    } catch (err) {
+      console.warn("Failed to open URL in native browser:", err);
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}

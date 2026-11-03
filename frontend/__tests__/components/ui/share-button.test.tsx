@@ -18,6 +18,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { ShareButton } from "@/components/ui/share-button";
 import { toast } from "sonner";
+import * as platform from "@/lib/capacitor/platform";
+import * as storage from "@/lib/capacitor/storage";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -74,5 +76,24 @@ describe("ShareButton", () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalled();
     });
+  });
+
+  it("shares instance URL instead of localhost on native app when url prop is omitted", async () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://preview.iqoqo.cc");
+    const shareSpy = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      value: shareSpy,
+      configurable: true,
+    });
+
+    render(<ShareButton title="My Profile" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(shareSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringMatching(/^https:\/\/preview\.iqoqo\.cc\//),
+      })
+    );
   });
 });

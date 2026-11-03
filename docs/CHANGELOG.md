@@ -45,6 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolved dynamic route navigation and Next.js flight data resolution failure on iOS native shell via custom `NextJSRouter` in `ViewController`.
 - Added automated Android and iOS route parity tests (`tests/test_mobile_readiness.py`, `frontend/__tests__/lib/capacitor/mobile-routing-parity.test.ts`) and updated `mobile-capacitor-expert` skill guidelines for native shells and web UI soft-sync to prevent future drift.
 - Resolved Dependabot security vulnerabilities across python backend and frontend dependencies.
+- **Mobile Share URLs & External RSS Feed Routing**:
+  - Replaced hardcoded `window.location.origin` / `localhost` references in `ShareCollectionDialog`, `ShareButton`, and `FreshArrivals` with `resolvePublicUrl(path)` dynamic resolution against active instance URL (`getSyncInstanceUrl()`).
+  - Added native external browser routing (`@capacitor/browser`) for RSS feeds (`/api/public/feed.xml`) and external share links on mobile devices, preventing WebView crashes.
+  - Added reusable `PublicFeedButton` on shared collection pages (`/share/[token]`).
+- **Shared Collection Search Filtering**:
+  - Fixed search clause builder in `app/api/public_items.py` and `app/core/search_service.py` to match barcode, UPC, catalog number, diacritic-normalized titles, and contributor names across shared collections.
+- **Scanner ISBN Resolution & Biblioteka Narodowa Fallback**:
+  - Added National Library of Poland (Biblioteka Narodowa, `data.bn.org.pl`) API integration as an authoritative fallback for Polish ISBNs (`978-83-...` / `979-83-...`).
+  - Loaded Google Books API key from `ConfigService` / encrypted `InstanceSettings` in addition to environment variables to prevent HTTP 429 quota exhaustion.
+- **Allegro Parameter Extraction & "Undefined" Author Repair**:
+  - Extracted rich parameter structures (`Autor`, `Autorzy`, `Wykonawca`, `Twórca`, `Reżyser`, `Wydawnictwo`, clean `Tytuł`, `Rok wydania`) in `app/utils/allegro.py` for Allegro products and offers.
+  - Added FRBR author resolution fallback in `app/api/manifestations.py` to display manifestation parameters and contributor names when `work.meta["authors"]` is empty.
+  - Enhanced `scripts/repair_frbr_authors.py` to backfill missing authors from attached manifestations' `raw_payload["parameters"]` and committed repairs for all existing catalog items.
 
 ## [0.9.4] - 2026-10-31
 

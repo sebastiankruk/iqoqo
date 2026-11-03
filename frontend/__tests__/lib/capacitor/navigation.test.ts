@@ -21,6 +21,7 @@ import {
   handleDeepLink,
   registerDeepLinkHandler,
   registerBackButtonHandler,
+  openExternalUrl,
   type NavigationRouter,
 } from "@/lib/capacitor/navigation";
 import * as platform from "@/lib/capacitor/platform";
@@ -161,6 +162,25 @@ describe("Capacitor Navigation & Deep Link Handler", () => {
       registerBackButtonHandler(mockRouter);
       callback({ canGoBack: false });
       expect(App.exitApp).toHaveBeenCalled();
+    });
+  });
+
+  describe("openExternalUrl", () => {
+    it("opens URL via Browser.open on native platforms", async () => {
+      vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+      await openExternalUrl("https://preview.iqoqo.cc/api/public/feed.xml");
+      expect(Browser.open).toHaveBeenCalledWith({ url: "https://preview.iqoqo.cc/api/public/feed.xml" });
+    });
+
+    it("opens URL via window.open on web", async () => {
+      vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+      const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      await openExternalUrl("https://preview.iqoqo.cc/api/public/feed.xml");
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        "https://preview.iqoqo.cc/api/public/feed.xml",
+        "_blank",
+        "noopener,noreferrer"
+      );
     });
   });
 });

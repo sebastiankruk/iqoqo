@@ -20,6 +20,7 @@ import json
 import pytest
 
 from app.api.auth import generate_internal_jwt
+from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
 
 
@@ -316,3 +317,137 @@ def test_active_shared_collection_returns_200(client, app):
     response = client.get(f"/api/public/share/{token}")
     assert response.status_code == 200
     assert response.json["success"] is True
+
+
+def test_shared_collection_with_query_filter_title_and_diacritics(client, app, test_user):
+    """Search query in shared collection must match Work.title and fold diacritics."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work1 = Work(title="Dieta w insulinooporności")
+        db.session.add(work1)
+        db.session.flush()
+        expr1 = Expression(work_id=work1.id)
+        db.session.add(expr1)
+        db.session.flush()
+        mani1 = Manifestation(expression_id=expr1.id)
+        db.session.add(mani1)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani1.id, status="read"))
+
+        work2 = Work(title="Cooking Italian Classics")
+        db.session.add(work2)
+        db.session.flush()
+        expr2 = Expression(work_id=work2.id)
+        db.session.add(expr2)
+        db.session.flush()
+        mani2 = Manifestation(expression_id=expr2.id)
+        db.session.add(mani2)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani2.id, status="read"))
+
+        # Query using unaccented text 'insulinoopornosci'
+        coll_unaccented = SharedCollection(
+            user_id=user.id,
+            name="Insulin Resistance Query",
+            filters={"query": "insulinoopornosci"},
+        )
+        # Query using accented text 'insulinooporności'
+        coll_accented = SharedCollection(
+            user_id=user.id,
+            name="Insulin Resistance Accented",
+            filters={"query": "insulinooporności"},
+        )
+        db.session.add_all([coll_unaccented, coll_accented])
+        db.session.commit()
+        token1 = coll_unaccented.share_token
+        token2 = coll_accented.share_token
+
+    res1 = client.get(f"/api/public/share/{token1}")
+    data1 = res1.json
+    assert data1["success"] is True
+    assert len(data1["data"]["items"]) == 1
+    assert data1["data"]["items"][0]["title"] == "Dieta w insulinooporności"
+
+    res2 = client.get(f"/api/public/share/{token2}")
+    data2 = res2.json
+    assert data2["success"] is True
+    assert len(data2["data"]["items"]) == 1
+    assert data2["data"]["items"][0]["title"] == "Dieta w insulinooporności"
+
+
+def test_shared_collection_with_query_filter_contributor(client, app, test_user):
+    """Search query in shared collection must match author/contributor names."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Sultans of Swing")
+        db.session.add(work)
+        db.session.flush()
+        contrib = Contributor(name="Dire Straits")
+        db.session.add(contrib)
+        db.session.flush()
+        db.session.add(WorkContribution(work_id=work.id, contributor_id=contrib.id, role="artist"))
+
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id)
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+
+        coll = SharedCollection(
+            user_id=user.id,
+            name="Dire Straits Search",
+            filters={"query": "dire straits"},
+        )
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert data["success"] is True
+    assert len(data["data"]["items"]) == 1
+    assert data["data"]["items"][0]["title"] == "Sultans of Swing"
+
+    # Also verify feed.xml yields item
+    feed_res = client.get(f"/api/public/share/{token}/feed.xml")
+    assert feed_res.status_code == 200
+    assert "Sultans of Swing" in feed_res.data.decode("utf-8")
+
+
+def test_shared_collection_with_query_filter_identifiers_and_meta(client, app, test_user):
+    """Search query in shared collection must match barcode, UPC, and meta."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Album With Barcode")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(
+            expression_id=expr.id,
+            barcode="5099950453023",
+            upc="012345678905",
+            meta={"label": "Harvest Records"},
+        )
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read"))
+
+        coll_barcode = SharedCollection(user_id=user.id, name="Barcode Share", filters={"query": "5099950453023"})
+        coll_upc = SharedCollection(user_id=user.id, name="UPC Share", filters={"query": "012345678905"})
+        coll_meta = SharedCollection(user_id=user.id, name="Meta Share", filters={"query": "Harvest Records"})
+        db.session.add_all([coll_barcode, coll_upc, coll_meta])
+        db.session.commit()
+        tok_barcode = coll_barcode.share_token
+        tok_upc = coll_upc.share_token
+        tok_meta = coll_meta.share_token
+
+    for tok in (tok_barcode, tok_upc, tok_meta):
+        res = client.get(f"/api/public/share/{tok}")
+        data = res.json
+        assert data["success"] is True
+        assert len(data["data"]["items"]) == 1
+        assert data["data"]["items"][0]["title"] == "Album With Barcode"
