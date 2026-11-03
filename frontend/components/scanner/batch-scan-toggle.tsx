@@ -191,25 +191,25 @@ export function BatchScanToggle({
   };
 
   return (
-    <div className={`flex items-center space-x-1.5 ${className}`}>
+    <div className={`flex items-center space-x-1.5 shrink-0 ${className}`}>
       <Button
         type="button"
         variant={enabled ? "default" : "outline"}
         size="sm"
         onClick={handleToggleClick}
         aria-pressed={enabled}
-        className={`h-9 px-3 text-xs font-medium transition-all ${
+        className={`h-9 px-3 text-xs font-medium rounded-xl border border-border/40 shadow-sm transition-all whitespace-nowrap ${
           enabled
             ? "bg-primary text-primary-foreground shadow-sm"
             : "bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground"
         }`}
       >
-        <Layers className={`h-4 w-4 mr-1.5 ${enabled ? "animate-pulse" : ""}`} />
-        <span>{t("batchMode.toggleLabel")}</span>
+        <Layers className={`h-4 w-4 mr-1.5 shrink-0 ${enabled ? "animate-pulse" : ""}`} />
+        <span className="whitespace-nowrap">{t("batchMode.toggleLabel")}</span>
         {queueCount > 0 && (
           <Badge
             variant={enabled ? "secondary" : "default"}
-            className="ml-1.5 px-1.5 py-0 h-4 text-[10px] font-semibold"
+            className="ml-1.5 px-1.5 py-0 h-4 text-[10px] font-semibold shrink-0"
           >
             {queueCount}
           </Badge>
@@ -223,7 +223,7 @@ export function BatchScanToggle({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 text-muted-foreground hover:text-foreground bg-background/60 backdrop-blur-sm"
+              className="h-9 w-9 rounded-xl border border-border/40 text-muted-foreground hover:text-foreground bg-background/60 backdrop-blur-sm"
               aria-label={t("batchMode.viewQueue")}
             >
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />

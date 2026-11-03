@@ -314,8 +314,11 @@ export default function ScanPage() {
           playsInline
           muted
           autoPlay
+          poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"
           suppressHydrationWarning
-          className="absolute inset-0 z-0 h-full w-full object-cover"
+          className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-300 ${
+            scannerActive ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         />
 
         <TopBar
@@ -331,7 +334,7 @@ export default function ScanPage() {
             <div className="flex items-center gap-2">
               <form
                 onSubmit={handleQuickLookup}
-                className="flex flex-1 items-center rounded-xl bg-background/80 backdrop-blur-md border border-border/40 shadow-sm px-3 py-1.5 focus-within:border-primary/60"
+                className="flex flex-1 min-w-0 h-9 items-center rounded-xl bg-background/80 backdrop-blur-md border border-border/40 shadow-sm px-3 focus-within:border-primary/60"
               >
                 <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
                 <input
@@ -340,7 +343,7 @@ export default function ScanPage() {
                   value={quickQuery}
                   onChange={e => setQuickQuery(e.target.value)}
                   placeholder={t("unifiedLookup.placeholder")}
-                  className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                  className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
                 />
                 <Button
                   data-testid="unified-lookup-submit"
@@ -348,7 +351,7 @@ export default function ScanPage() {
                   onClick={handleQuickLookup}
                   size="sm"
                   disabled={!quickQuery.trim() || isQuickSearching}
-                  className="h-7 px-2.5 text-xs ml-1 shrink-0"
+                  className="h-7 px-2.5 text-xs ml-1 shrink-0 rounded-lg"
                 >
                   {isQuickSearching ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

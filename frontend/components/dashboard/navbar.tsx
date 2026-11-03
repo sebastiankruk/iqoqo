@@ -203,9 +203,11 @@ export function Navbar() {
               <span />
             )}
 
-            <div className="hidden md:flex items-center gap-1">
+            <div className="flex items-center gap-1">
               <LanguageToggle />
-              <ModeToggle />
+              <div className="hidden md:block">
+                <ModeToggle />
+              </div>
             </div>
 
             {/* Auth State Rendering */}

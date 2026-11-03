@@ -24,7 +24,7 @@ import { JsonLdConsoleFilter } from "@/components/json-ld-console-filter";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getMessages, getLocale } from "next-intl/server";
-import { NextIntlClientProvider } from "next-intl";
+import { ClientI18nProvider } from "@/components/i18n-provider";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -135,13 +135,13 @@ export default async function RootLayout({
         <BrowserTelemetry />
         <JsonLdConsoleFilter />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientI18nProvider initialLocale={locale} initialMessages={messages}>
             <Providers>
               {rumConfig ? <BrowserOpenObserveRum {...rumConfig} /> : <BrowserOpenObserveRum />}
               {children}
               <CookieConsent />
             </Providers>
-          </NextIntlClientProvider>
+          </ClientI18nProvider>
         </ThemeProvider>
       </body>
     </html>
