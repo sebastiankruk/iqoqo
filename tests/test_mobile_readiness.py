@@ -50,10 +50,9 @@ def test_mobile_auth_providers_contract(client):
 
 
 def test_mobile_cors_preflight_headers(client, app):
-    """Mobile client native origin receives permissive preflight headers for API access."""
+    """Mobile client native origin receives preflight headers even when CORS_ENABLED is false."""
     with app.app_context():
-        app.config["CORS_ENABLED"] = "true"
-        app.config["CORS_ORIGINS"] = "capacitor://localhost,http://localhost"
+        app.config["CORS_ENABLED"] = False
 
     resp = client.open(
         "/api/auth/providers",
@@ -65,6 +64,19 @@ def test_mobile_cors_preflight_headers(client, app):
     )
     # Status can be 200 or 204 for OPTIONS
     assert resp.status_code in (200, 204)
+    assert resp.headers.get("Access-Control-Allow-Origin") == "capacitor://localhost"
+
+    # Also check https://localhost on public route /api/public/federation/instance-info
+    resp_pub = client.open(
+        "/api/public/federation/instance-info",
+        method="OPTIONS",
+        headers={
+            "Origin": "https://localhost",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert resp_pub.status_code in (200, 204)
+    assert resp_pub.headers.get("Access-Control-Allow-Origin") in ("https://localhost", "*")
 
 
 def test_mobile_platform_routing_parity():

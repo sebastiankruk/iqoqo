@@ -168,12 +168,11 @@ def create_app(config_class=Config, config_override=None):
     }
 
     cors_enabled = _coerce_bool(app.config.get("CORS_ENABLED"), default=False)
+    native_mobile_origins = ["capacitor://localhost", "https://localhost"]
     if cors_enabled:
         cors_origins = _coerce_list(app.config.get("CORS_ORIGINS"))
-        # Ensure native mobile WebView origins are permitted for Capacitor clients
-        mobile_origins = ["capacitor://localhost", "https://localhost", "http://localhost"]
         merged_origins = list(cors_origins) if cors_origins else []
-        for m_origin in mobile_origins:
+        for m_origin in native_mobile_origins:
             if m_origin not in merged_origins:
                 merged_origins.append(m_origin)
 
@@ -196,6 +195,20 @@ def create_app(config_class=Config, config_override=None):
                 app.config.get("CORS_SUPPORTS_CREDENTIALS"),
                 default=False,
             ),
+        }
+    else:
+        # Out-of-the-box native mobile support: allow Capacitor origins even when universal CORS is disabled
+        cors_resources[r"/api/*"] = {
+            "origins": native_mobile_origins,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False,
+        }
+        cors_resources[r"/.well-known/*"] = {
+            "origins": native_mobile_origins,
+            "methods": ["GET", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False,
         }
 
     CORS(app, resources=cors_resources)

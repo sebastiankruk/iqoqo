@@ -45,6 +45,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { removeAuthToken } from "@/lib/capacitor/storage";
+import { apiClient } from "@/lib/api/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -124,9 +125,13 @@ export function Navbar() {
    */
   const handleLogout = async () => {
     try {
-      const response = await fetch("/api/auth/logout", { method: "POST" });
-      if (!response.ok) {
-        throw new Error(`Logout failed with status ${response.status} ${response.statusText}`);
+      if (isNativeApp()) {
+        await apiClient.post("/auth/logout").catch(() => {});
+      } else {
+        const response = await fetch("/api/auth/logout", { method: "POST" });
+        if (!response.ok) {
+          throw new Error(`Logout failed with status ${response.status} ${response.statusText}`);
+        }
       }
     } catch (err) {
       console.error("Failed to logout:", err);

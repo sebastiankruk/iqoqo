@@ -113,12 +113,19 @@ function LoginPageContent() {
           return;
         }
 
-        const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+        const rawCallback = searchParams.get("callbackUrl") || searchParams.get("redirect") || "";
+        const callbackUrl =
+          typeof rawCallback === "string" &&
+          rawCallback.startsWith("/") &&
+          !rawCallback.startsWith("//") &&
+          !rawCallback.includes("\\")
+            ? rawCallback
+            : "/";
 
         if (isNativeApp()) {
           await setAuthToken(data.token);
           queryClient.clear();
-          router.push(callbackUrl || "/");
+          router.push(callbackUrl);
           return;
         }
 
@@ -130,18 +137,19 @@ function LoginPageContent() {
         });
         if (exchangeRes?.ok) {
           const result = await exchangeRes.json().catch(() => ({}));
-          let target = callbackUrl || "/";
+          let target = callbackUrl;
           if (typeof result?.redirectUrl === "string") {
             try {
               const parsed = new URL(result.redirectUrl, window.location.origin);
               target = parsed.pathname + parsed.search;
             } catch {
-              target = result.redirectUrl.startsWith("/") ? result.redirectUrl : "/";
+              target =
+                result.redirectUrl.startsWith("/") && !result.redirectUrl.startsWith("//") ? result.redirectUrl : "/";
             }
           }
           router.push(target);
         } else {
-          router.push(callbackUrl || "/");
+          router.push(callbackUrl);
         }
       } else {
         setFormError(data?.error || (mfaRequired ? t("invalidOtp") : t("loginFailed")));

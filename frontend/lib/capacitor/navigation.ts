@@ -18,6 +18,7 @@ import { Browser } from "@capacitor/browser";
 import type { QueryClient } from "@tanstack/react-query";
 import { isNativeApp } from "./platform";
 import { setAuthToken } from "./storage";
+import { apiClient } from "@/lib/api/client";
 
 export interface NavigationRouter {
   push: (href: string) => void;
@@ -32,7 +33,7 @@ export interface NavigationRouter {
  * @param rawUrl - Raw URL string from native launch or appUrlOpen event
  * @returns Parsed internal route path and any extracted auth token
  */
-export function parseAppUrl(rawUrl: string): { path: string; token: string | null } {
+export function parseAppUrl(rawUrl: string): { path: string; token: string | null; code: string | null } {
   try {
     let normalized = rawUrl;
     if (normalized.startsWith("iqoqo://")) {
@@ -43,16 +44,22 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
 
     const parsed = new URL(normalized);
     let token: string | null = parsed.searchParams.get("token");
+    const code: string | null = parsed.searchParams.get("code");
 
     if (!token && parsed.hash) {
       const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ""));
       token = hashParams.get("token");
     }
 
-    const path = parsed.pathname + (parsed.search || "");
-    return { path, token };
+    let path = parsed.pathname + (parsed.search || "");
+    // Open redirect safety guard: strictly reject protocol-relative '//' paths
+    if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
+      path = "/";
+    }
+
+    return { path, token, code };
   } catch {
-    return { path: "/", token: null };
+    return { path: "/", token: null, code: null };
   }
 }
 
@@ -64,12 +71,26 @@ export async function handleDeepLink(
   router: NavigationRouter,
   queryClient?: QueryClient
 ): Promise<void> {
-  const { path, token } = parseAppUrl(event.url);
+  const { path, token, code } = parseAppUrl(event.url);
 
   if (token) {
     await setAuthToken(token);
     if (queryClient) {
       queryClient.clear();
+    }
+  } else if (code) {
+    try {
+      const res = await apiClient.post("/auth/exchange", { code });
+      const data = res.data;
+      const jwt = data?.token || data?.access_token;
+      if (jwt) {
+        await setAuthToken(jwt);
+        if (queryClient) {
+          queryClient.clear();
+        }
+      }
+    } catch (err) {
+      console.error("Deep link auth exchange error:", err);
     }
   }
 
@@ -78,7 +99,7 @@ export async function handleDeepLink(
     router.replace("/");
   } else if (path && path !== "/") {
     router.push(path);
-  } else if (token) {
+  } else if (token || code) {
     router.replace("/");
   }
 }

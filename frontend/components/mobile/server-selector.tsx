@@ -23,7 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, Server } from "lucide-react";
-import { getInstanceUrl, setInstanceUrl, setInstanceName } from "@/lib/capacitor/storage";
+import { getInstanceUrl, setInstanceUrl, setInstanceName, removeAuthToken } from "@/lib/capacitor/storage";
 
 export interface ServerSelectorProps {
   initialUrl?: string;
@@ -127,6 +127,13 @@ export function ServerSelector({ initialUrl, onConnected, showCancel = false, on
         }
       } catch {
         // Non-critical, fallback to default name
+      }
+
+      const previousUrl = await getInstanceUrl();
+      if (previousUrl && previousUrl !== normalized) {
+        // Isolate credentials and cached data across different servers
+        await removeAuthToken();
+        queryClient.clear();
       }
 
       await setInstanceUrl(normalized);

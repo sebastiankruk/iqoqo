@@ -48,6 +48,7 @@ export async function mobileRequestInterceptor(
   config: InternalAxiosRequestConfig
 ): Promise<InternalAxiosRequestConfig> {
   if (isNativeApp()) {
+    config.withCredentials = false;
     const instanceUrl = await getInstanceUrl();
     if (instanceUrl) {
       config.baseURL = `${instanceUrl}/api`;

@@ -94,7 +94,11 @@ describe("AuthExchangePage", () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/auth-exchange?code=exchange-code-789");
+      expect(global.fetch).toHaveBeenCalledWith("/api/auth-exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: "exchange-code-789" }),
+      });
       expect(mockReplace).toHaveBeenCalledWith("/collection");
     });
   });
