@@ -125,7 +125,7 @@ describe("PublicProfileClient", () => {
   it("renders user not found when user API returns 404", async () => {
     vi.spyOn(routeParams, "useResolvedRouteParam").mockReturnValue("ghost_user");
 
-    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    vi.spyOn(global, "fetch").mockResolvedValue({
       ok: false,
       status: 404,
     } as Response);

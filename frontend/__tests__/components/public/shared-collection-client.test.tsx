@@ -108,7 +108,7 @@ describe("SharedCollectionClient", () => {
   it("displays not found state when API returns 404", async () => {
     vi.spyOn(routeParams, "useResolvedRouteParam").mockReturnValue("expired-token");
 
-    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+    vi.spyOn(global, "fetch").mockResolvedValue({
       ok: false,
       status: 404,
     } as Response);
