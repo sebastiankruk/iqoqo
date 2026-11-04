@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import time
+import urllib.parse
 from typing import Any, cast
 
 import requests
@@ -385,7 +386,7 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
-        "affiliate_url": f"https://allegro.pl/listing?string={barcode or query}",
+        "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Catalog",
         "data_source": "allegro",
         "raw_payload": item,
@@ -407,7 +408,7 @@ def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
-        "affiliate_url": f"https://allegro.pl/listing?string={barcode or query}",
+        "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Listing",
         "data_source": "allegro",
         "raw_payload": offer,

@@ -232,3 +232,31 @@ def test_mobile_native_manifests_and_targets_security():
     pbxproj_file = repo_root / "frontend" / "ios" / "App" / "App.xcodeproj" / "project.pbxproj"
     assert pbxproj_file.is_file()
     assert "MARKETING_VERSION = 1.0.0;" in pbxproj_file.read_text(encoding="utf-8")
+
+    # 6. Android ExampleInstrumentedTest asserts cc.iqoqo.app
+    inst_test = (
+        repo_root
+        / "frontend"
+        / "android"
+        / "app"
+        / "src"
+        / "androidTest"
+        / "java"
+        / "com"
+        / "getcapacitor"
+        / "myapp"
+        / "ExampleInstrumentedTest.java"
+    )
+    assert inst_test.is_file()
+    inst_text = inst_test.read_text(encoding="utf-8")
+    assert '"cc.iqoqo.app"' in inst_text
+    assert '"com.getcapacitor.app"' not in inst_text
+
+    # 7. Makefile declares repair-authors in .PHONY
+    makefile = repo_root / "Makefile"
+    assert makefile.is_file()
+    phony_line = next(
+        (line for line in makefile.read_text(encoding="utf-8").splitlines() if line.startswith(".PHONY:")),
+        "",
+    )
+    assert "repair-authors" in phony_line

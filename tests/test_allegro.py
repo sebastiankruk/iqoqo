@@ -292,3 +292,20 @@ def test_extract_allegro_parameters_book_and_music():
     assert extracted_music["title"] == "Brothers in Arms"
     assert extracted_music["publisher"] == "Vertigo"
     assert extracted_music["format"] == "Winyl"
+
+
+def test_normalize_allegro_product_and_offer_url_encodes_affiliate_url():
+    """Verify multi-word and special-character queries are URL-encoded in affiliate_url."""
+    from app.utils.allegro import _normalize_allegro_offer, _normalize_allegro_product
+
+    product = _normalize_allegro_product(
+        {"name": "Wiedźmin & Miecz Przeznaczenia", "parameters": []},
+        query="Wiedźmin & Miecz Przeznaczenia",
+    )
+    assert product["affiliate_url"] == "https://allegro.pl/listing?string=Wied%C5%BAmin+%26+Miecz+Przeznaczenia"
+
+    offer = _normalize_allegro_offer(
+        {"name": "Dune + Messiah", "parameters": []},
+        query="Dune + Messiah",
+    )
+    assert offer["affiliate_url"] == "https://allegro.pl/listing?string=Dune+%2B+Messiah"
