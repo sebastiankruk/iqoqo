@@ -45,20 +45,22 @@ public struct NextJSRouter: Router {
             }
 
             if path.hasPrefix("/help/") {
-                let staticHelpPaths: Set<String> = [
-                    "/help/camera-to-catalog.html",
-                    "/help/camera-to-catalog.txt",
-                    "/help/curators-handbook.html",
-                    "/help/curators-handbook.txt",
-                    "/help/federation-architecture.html",
-                    "/help/federation-architecture.txt",
-                    "/help/frbr-hierarchy.html",
-                    "/help/frbr-hierarchy.txt",
-                    "/help/privacy-sharing-social.html",
-                    "/help/privacy-sharing-social.txt"
+                let trimmed = path.hasSuffix(".html") ? String(path.dropLast(5)) : path
+                let staticHelpSlugs: Set<String> = [
+                    "/help/camera-to-catalog",
+                    "/help/curators-handbook",
+                    "/help/federation-architecture",
+                    "/help/frbr-hierarchy",
+                    "/help/privacy-sharing-social"
                 ]
 
-                if !staticHelpPaths.contains(path) {
+                if staticHelpSlugs.contains(trimmed) {
+                    if path.hasSuffix(".txt") {
+                        return basePath + trimmed + ".txt"
+                    } else {
+                        return basePath + trimmed + ".html"
+                    }
+                } else {
                     if path.hasSuffix(".txt") {
                         return basePath + "/help/_placeholder.txt"
                     } else {

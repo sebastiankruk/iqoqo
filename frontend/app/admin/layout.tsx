@@ -21,21 +21,9 @@ import { Shield, ExternalLink, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-
-/**
- * Checks whether the current environment is running inside a native Capacitor platform.
- *
- * @returns True if running inside iOS or Android native Capacitor WebView.
- */
-function isNativeApp(): boolean {
-  if (typeof window === "undefined") return false;
-  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } })
-    .Capacitor;
-  if (!cap) return false;
-  if (typeof cap.isNativePlatform === "function") return cap.isNativePlatform();
-  const platform = cap.getPlatform?.();
-  return platform === "android" || platform === "ios";
-}
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl } from "@/lib/capacitor/storage";
+import { openExternalUrl } from "@/lib/capacitor/navigation";
 
 /**
  * Admin section layout providing native Capacitor platform exclusion.
@@ -56,22 +44,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleOpenInBrowser = async () => {
     if (typeof window === "undefined") return;
-    const currentUrl = window.location.href;
-    const cap = (
-      window as unknown as {
-        Capacitor?: { Plugins?: { Browser?: { open: (opts: { url: string }) => Promise<void> } } };
-      }
-    ).Capacitor;
+    const instanceUrl = await getInstanceUrl();
+    const pathname = window.location.pathname;
+    const search = window.location.search;
+    const targetUrl = instanceUrl ? `${instanceUrl.replace(/\/+$/, "")}${pathname}${search}` : window.location.href;
 
-    if (cap?.Plugins?.Browser?.open) {
-      try {
-        await cap.Plugins.Browser.open({ url: currentUrl });
-        return;
-      } catch {
-        // Fallback to window.open
-      }
-    }
-    window.open(currentUrl, "_system");
+    await openExternalUrl(targetUrl);
   };
 
   if (!mounted) {

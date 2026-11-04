@@ -98,6 +98,7 @@ class TestAISkillsIntegrity(unittest.TestCase):
             self.assertIn("v1.0.x stream", text, f"{skill_name} missing 'v1.0.x stream' in Current State")
             self.assertIn("v0.9.4", text, f"{skill_name} missing 'v0.9.4' baseline")
             self.assertNotIn("v0.9.2, feature-complete", text, f"{skill_name} has stale v0.9.2 reference")
+            self.assertNotIn("## Upcoming (v0.9.3 & Beyond)", text, f"{skill_name} has stale duplicate v0.9.3 Upcoming section")
 
         gem_files = [
             "software-engineer.md",
@@ -118,6 +119,7 @@ class TestAISkillsIntegrity(unittest.TestCase):
             self.assertIn("v1.0.x stream", text, f"{gem_name} missing 'v1.0.x stream'")
             self.assertIn("v0.9.4", text, f"{gem_name} missing 'v0.9.4' baseline")
             self.assertNotIn("v0.9.2, feature-complete", text, f"{gem_name} has stale v0.9.2 reference")
+            self.assertNotIn("## Upcoming (v0.9.3 & Beyond)", text, f"{gem_name} has stale duplicate v0.9.3 Upcoming section")
 
 
 if __name__ == "__main__":

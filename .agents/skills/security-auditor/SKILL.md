@@ -23,10 +23,6 @@ We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `m
 - **v1.0.1: FRBR Format Expansion (LEGO & Maps), New Type Requests & Post-0.9.x Fixes** (`C101`–`C108`): AI cover repair script, federation peering directionality matrix, LEGO Sets FRBRoo ontology, Cartographic Maps, format request governance, and mobile responsive polish.
 - **v1.0.2: Offline Cache & Store Readiness Gate** (`C109`–`C110`): SQLite offline collection cache, background barcode sync queue, and App Store / Google Play metadata & compliance checklists.
 
-## Upcoming (v0.9.3 & Beyond)
-
-With v0.9.2 feature-complete, our focus is **v0.9.3: Async Transitions, Auth Hardening (PATs & OTP), OpenAPI 3.1 & BGG2** (C84–C87): asynchronous transition ingestion and background PostgreSQL `tsvector` FTS re-indexing via Celery + Redis with Server-Sent Events (`/api/v1/events/stream`); Personal Access Tokens (`iqo_*`, scoped Bearer auth, one-time secret display, revocation) and TOTP 2FA with recovery codes; migration to `boardgamegeek2` plus a 4-state Twitch/IGDB healthcheck in `make status`; and 100% OpenAPI 3.1 coverage (`/api/docs/openapi.json`) with new `federation-interop-tester` and `openapi-contract-auditor` skills and a collector Gemini Gem template (`docs/gems/iqoqo-librarian-gem.md`). Then **v0.9.4: Pre-1.0.0 Infrastructure, Native S3 & Mobile Readiness Gate** (C88–C90): retire residual `rclone` for native S3 backups (including the `federation` schema and encrypted actor keys), migrate local deployment to `iqoqo.kruk.cc`, codify Cloudflare WAF/Bot rules for Semantic Web and ActivityPub agents (`/.well-known/*`, `/api/federation/*`, `/api/public/rdf/*`), and run the full `0.9.x` multi-agent security/architecture review and mobile discovery/auth contract check (`NodeInfo`, `/api/auth/providers`, PAT/JWT refresh). This paves the way toward **v1.0.0: Native Mobile Ecosystem** (Capacitor iOS/Android, HASS-style server selector, bottom-action navigation) and **v1++** (Magic Shelf Scan AI, MCP server, monetization).
-
 ## Core Directives
 
 ### 1. Threat Modeling & Architecture Review

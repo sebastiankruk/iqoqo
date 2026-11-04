@@ -23,12 +23,7 @@ import { Library } from "lucide-react";
 import { resolveApiUrl } from "@/lib/utils";
 import { buildProfileJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
-import { CollectionGrid } from "@/components/collection/collection-grid";
-import { PublicProfilePager } from "@/components/public/public-profile-pager";
-import { ShareButton } from "@/components/ui/share-button";
-import { CheckInventory } from "@/components/public/check-inventory";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Avatar } from "@/components/ui/avatar";
+import { PublicProfileClient } from "@/components/public/public-profile-client";
 import { Footer } from "@/components/dashboard/footer";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 
@@ -163,139 +158,48 @@ export default async function PublicProfilePage({ params, searchParams }: Public
   const { username } = await params;
 
   if (username === "_placeholder") {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-      </div>
-    );
+    return <PublicProfileClient initialData={null} initialUsername="_placeholder" />;
   }
 
   const isStaticExport = process.env.CAPACITOR_BUILD === "true";
   const resolvedSearchParams = isStaticExport ? {} : ((await searchParams) ?? {});
 
-  // Clamp before use. The value comes straight off the query string, so an
-  // arbitrary string ("abc", "-3") must not reach the API or the pager. A
-  // non-numeric or out-of-range page falls back to the first page.
   const rawPage = Number.parseInt(resolvedSearchParams?.page ?? "1", 10);
   const currentPage = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
 
-  // The profile guard has to resolve before anything reads profileRes.data, but
-  // the items fetch and the translations do not depend on it -- only on
-  // `username`, which is already known. Running them concurrently removes a
-  // serial round trip from every public profile render. The 404 check below
-  // still gates rendering, so the early fetch is wasted only when the profile
-  // does not exist.
   const itemsPromise = getItems(username, currentPage);
-  const translationsPromise = getTranslations("Public");
 
-  // Guard: if the profile is not found (private or non-existent), return 404
-  // immediately BEFORE reading profileRes.data. Accessing it on a null
-  // profileRes would cause a runtime TypeError → HTTP 500 instead of 404.
   const profileRes = await getProfile(username);
   if (!profileRes || !profileRes.success) {
     return notFound();
   }
 
-  const t = await translationsPromise;
-
   const user = profileRes.data;
 
   const itemsRes = await itemsPromise;
-  const items = itemsRes.data.items || [];
+  const items = itemsRes.data?.items || [];
   const meta = itemsRes.meta ?? {};
-  const totalPages = typeof meta.pages === "number" && meta.pages > 0 ? meta.pages : 1;
 
   const profileJsonLd = buildProfileJsonLd({
     username: user.username,
     displayName: user.display_name,
     bio: user.bio,
     avatarUrl: user.avatar_url,
-    // The API's own count, not this page's slice length: a profile with 500
-    // public items reports 24 here, which would publish a wrong count to
-    // search engines via the JSON-LD.
     publicItemCount: user.public_item_count ?? items.length,
   });
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <>
       <JsonLdScript data={profileJsonLd} />
-      <Navbar />
-      <main className="flex-1">
-        {/* Header / Hero Section */}
-        <div className="bg-muted/30 border-b">
-          <div className="mx-auto max-w-5xl px-6 py-12 md:py-20">
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-              <Avatar
-                src={user.avatar_url}
-                alt={user.display_name || user.username}
-                fallback={(user.display_name?.[0] || user.username[0])?.toUpperCase()}
-                className="h-24 w-24 md:h-32 md:w-32 border-4 border-background shadow-xl"
-              />
-
-              <div className="flex-1 text-center md:text-left space-y-3">
-                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
-                  <h1 className="text-3xl font-serif font-bold tracking-tight">{user.display_name || user.username}</h1>
-                  <span className="text-muted-foreground font-mono text-sm px-2 py-1 bg-muted rounded">
-                    @{user.username}
-                  </span>
-                </div>
-
-                {user.bio && (
-                  <p className="text-muted-foreground max-w-2xl leading-relaxed whitespace-pre-wrap">{user.bio}</p>
-                )}
-
-                <div className="pt-4 flex flex-wrap items-center justify-center md:justify-start gap-6">
-                  <div className="text-center md:text-left">
-                    <p className="text-2xl font-bold">{user.public_item_count}</p>
-                    <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
-                      Public Items
-                    </p>
-                  </div>
-                  <div className="h-8 w-px bg-border hidden md:block" />
-                  <ShareButton title={t("profileTitle", { name: user.display_name || user.username })} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Section */}
-        <div className="mx-auto max-w-5xl px-6 py-12 space-y-12">
-          {/* Inventory Check Tool */}
-          <section className="max-w-2xl mx-auto text-center space-y-4">
-            <h2 className="text-xl font-serif font-semibold">{t("checkInventory")}</h2>
-            <CheckInventory username={user.username} />
-          </section>
-
-          {/* Items Grid */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between border-b pb-4">
-              <h2 className="text-2xl font-serif font-bold">Collection</h2>
-              <p className="text-sm text-muted-foreground">{t("hiddenItemNote")}</p>
-            </div>
-
-            {items.length > 0 ? (
-              <>
-                <CollectionGrid items={items} />
-                <PublicProfilePager
-                  username={username}
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  shown={items.length}
-                  total={typeof meta.total === "number" ? meta.total : undefined}
-                />
-              </>
-            ) : (
-              <EmptyState
-                title="Nothing here yet"
-                description="This user hasn't shared any items in their public collection yet."
-                icon={Library}
-              />
-            )}
-          </section>
-        </div>
-      </main>
-      <Footer />
-    </div>
+      <PublicProfileClient
+        initialData={{
+          user,
+          items,
+          meta,
+          currentPage,
+        }}
+        initialUsername={username}
+      />
+    </>
   );
 }

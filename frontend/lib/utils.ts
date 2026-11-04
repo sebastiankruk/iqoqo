@@ -161,7 +161,7 @@ export function resolveApiUrl(path: string, isServer = false): string {
  * @returns {string} Public origin URL without trailing slash.
  */
 export function getPublicBaseUrl(): string {
-  const defaultPublicUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc").replace(/\/+$/, "");
+  const defaultPublicUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || "https://iqoqo.cc").replace(/\/+$/, "");
 
   if (isNativeApp()) {
     const instanceUrl = getSyncInstanceUrl();

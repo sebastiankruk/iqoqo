@@ -88,6 +88,8 @@ export default function ScanPage() {
     return false;
   });
 
+  const inFlightBarcodesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
@@ -124,16 +126,18 @@ export default function ScanPage() {
       // Prefer the backend-normalized identifier/barcode if available
       const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
 
-      // Tactile scan confirmation on native mobile
-      await triggerScanHaptic();
-
       // Continuous batch mode handling: auto-adds item, toasts, and keeps scanner active
       if (isBatchMode) {
-        if (isCooldownActive(canonicalId)) {
+        if (inFlightBarcodesRef.current.has(canonicalId) || isCooldownActive(canonicalId)) {
           return;
         }
+        inFlightBarcodesRef.current.add(canonicalId);
+
+        // Single tactile scan confirmation on native mobile
+        await triggerScanHaptic();
 
         if (meta.candidates && meta.candidates.length > 1) {
+          inFlightBarcodesRef.current.delete(canonicalId);
           setCandidates({ isbn: canonicalId, items: meta.candidates });
           return;
         }
@@ -151,6 +155,10 @@ export default function ScanPage() {
             meta: meta.data_source ? meta : undefined,
           });
 
+          if (!res.data?.success) {
+            throw new Error((res.data as unknown as { error?: string })?.error || "Failed to add item in batch mode");
+          }
+
           const itemTitle = meta.title || meta.Title || "Scanned item";
           const authors = meta.authors || meta.Authors;
           const normalizedAuthors = Array.isArray(authors)
@@ -167,6 +175,8 @@ export default function ScanPage() {
 
           queryClient.invalidateQueries({ queryKey: queryKeys.items() });
           queryClient.invalidateQueries({ queryKey: queryKeys.stats() });
+          queryClient.invalidateQueries({ queryKey: ["works", "shelf"] });
+          queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] });
 
           toast.success(t("batchMode.itemAddedToast", { title: itemTitle }));
           setAutoStart(true);
@@ -175,9 +185,13 @@ export default function ScanPage() {
           await triggerErrorHaptic();
           toast.error((err as Error).message || "Failed to add item in batch mode");
           return;
+        } finally {
+          inFlightBarcodesRef.current.delete(canonicalId);
         }
       }
 
+      // Single scan mode
+      await triggerScanHaptic();
       if (meta.candidates && meta.candidates.length > 1) {
         setCandidates({ isbn: canonicalId, items: meta.candidates });
       } else {

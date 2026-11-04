@@ -22,6 +22,7 @@ import { Toaster } from "sonner";
 import { useProfile } from "@/lib/api/hooks";
 import { OnboardingGuard } from "@/components/mobile/onboarding-screen";
 import { registerDeepLinkHandler, registerBackButtonHandler } from "@/lib/capacitor/navigation";
+import { isNativeApp } from "@/lib/capacitor/platform";
 
 export const DEFAULT_QUERY_STALE_TIME = 60_000;
 
@@ -44,13 +45,21 @@ export function TransitionEventsListener() {
       pathname.startsWith("/share/") ||
       pathname.startsWith("/verify-email") ||
       pathname.startsWith("/reset-password") ||
+      pathname === "/auth-exchange" ||
+      pathname.startsWith("/auth-exchange") ||
       pathname.startsWith("/api/auth-exchange"))
   );
 
   const isAuthenticated = Boolean(profile && profile.id);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("EventSource" in window) || !isAuthenticated || isPublicRoute) {
+    if (
+      typeof window === "undefined" ||
+      !("EventSource" in window) ||
+      isNativeApp() ||
+      !isAuthenticated ||
+      isPublicRoute
+    ) {
       return;
     }
 
