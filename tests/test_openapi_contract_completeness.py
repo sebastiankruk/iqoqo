@@ -245,3 +245,33 @@ def test_path_parameter_types_and_public_endpoint_security(app):
             if method in ("parameters", "summary", "description") or not isinstance(op, dict):
                 continue
             assert "security" not in op, f"Public endpoint {method.upper()} {endpoint} should not have security requirement"
+
+
+def test_oauth_and_maintenance_request_bodies_and_redirects(app):
+    """Verify 302 redirects and requestBody contracts for Apple OAuth and repair-authors."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    paths = spec.get("paths", {})
+
+    # Apple login / callback 302 response
+    apple_callback = paths.get("/api/auth/callback/apple", {}).get("post", {})
+    assert "302" in apple_callback.get("responses", {})
+    assert "requestBody" in apple_callback
+    content = apple_callback["requestBody"]["content"]
+    assert "application/x-www-form-urlencoded" in content
+    assert "application/json" in content
+
+    # Auth exchange requestBody
+    auth_exchange = paths.get("/api/auth/exchange", {}).get("post", {})
+    assert "requestBody" in auth_exchange
+    assert "application/json" in auth_exchange["requestBody"]["content"]
+    assert "code" in auth_exchange["requestBody"]["content"]["application/json"]["schema"]["properties"]
+
+    # Repair authors maintenance requestBody
+    repair_authors = paths.get("/api/admin/maintenance/repair-authors", {}).get("post", {})
+    assert "requestBody" in repair_authors
+    assert "application/json" in repair_authors["requestBody"]["content"]
+    props = repair_authors["requestBody"]["content"]["application/json"]["schema"]["properties"]
+    assert "dry_run" in props
+    assert "batch_size" in props
