@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { isNativeApp } from "@/lib/capacitor/platform";
@@ -37,68 +37,59 @@ function AuthExchangeContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
-  const [token, setToken] = useState<string | null>(null);
-  const [code, setCode] = useState<string | null>(null);
+  const initialToken =
+    searchParams.get("token") ||
+    (typeof window !== "undefined" && window.location.hash
+      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get("token")
+      : null);
+  const initialCode = searchParams.get("code");
+  const isMobileParam = searchParams.get("mobile") === "1" || searchParams.get("mobile_origin") === "capacitor";
+
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [code, setCode] = useState<string | null>(initialCode);
   const [isProcessing, setIsProcessing] = useState(true);
-  const [showHandoff, setShowHandoff] = useState(false);
+  const [showHandoff, setShowHandoff] = useState(isMobileParam && Boolean(initialToken || initialCode));
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
-    let extractedToken: string | null = searchParams.get("token");
+    if (hasProcessedRef.current) return;
+    hasProcessedRef.current = true;
 
-    if (!extractedToken && typeof window !== "undefined" && window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      extractedToken = hashParams.get("token");
+    // Clear sensitive token/code from URL immediately
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
     }
 
-    const extractedCode = searchParams.get("code");
-    const isMobileFlow = searchParams.get("mobile") === "1" || searchParams.get("mobile_origin") === "capacitor";
-
     const processAuth = async () => {
-      // Clear sensitive token/code from URL immediately
-      if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", window.location.pathname);
-      }
-
-      if (extractedToken) {
-        setToken(extractedToken);
+      if (initialToken) {
+        setToken(initialToken);
 
         if (isNativeApp()) {
-          await setAuthToken(extractedToken);
+          await setAuthToken(initialToken);
           queryClient.clear();
           router.replace("/");
           return;
         }
 
-        if (isMobileFlow) {
+        if (isMobileParam) {
           setShowHandoff(true);
           setIsProcessing(false);
-          if (typeof window !== "undefined") {
-            try {
-              const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-              const target = isAndroid
-                ? `intent://auth-exchange?token=${encodeURIComponent(extractedToken)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`
-                : `iqoqo://auth-exchange?token=${encodeURIComponent(extractedToken)}`;
-              window.location.href = target;
-            } catch {
-              // Ignore automatic navigation error
-            }
-          }
           return;
         }
 
         // Standard web browser fallback
-        await setAuthToken(extractedToken);
+        await setAuthToken(initialToken);
         queryClient.clear();
         router.replace("/");
         return;
       }
 
-      if (extractedCode) {
-        setCode(extractedCode);
+      if (initialCode) {
+        setCode(initialCode);
         if (isNativeApp()) {
           // Native Capacitor WebView: redeem code directly via active instance backend
           try {
-            const res = await apiClient.post("/auth/exchange", { code: extractedCode });
+            const res = await apiClient.post("/auth/exchange", { code: initialCode });
             const data = res.data;
             const jwt = data.token || data.access_token;
             if (jwt) {
@@ -114,22 +105,11 @@ function AuthExchangeContent() {
           return;
         }
 
-        if (isMobileFlow) {
+        if (isMobileParam) {
           // System browser (Chrome Custom Tabs / ASWebAuthenticationSession):
           // Forward code to app via deep-link without consuming it here!
           setShowHandoff(true);
           setIsProcessing(false);
-          if (typeof window !== "undefined") {
-            try {
-              const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-              const target = isAndroid
-                ? `intent://auth-exchange?code=${encodeURIComponent(extractedCode)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`
-                : `iqoqo://auth-exchange?code=${encodeURIComponent(extractedCode)}`;
-              window.location.href = target;
-            } catch {
-              // Ignore automatic navigation error
-            }
-          }
           return;
         }
 
@@ -138,7 +118,7 @@ function AuthExchangeContent() {
           const res = await fetch("/api/auth-exchange", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: extractedCode }),
+            body: JSON.stringify({ code: initialCode }),
           });
           if (res.ok) {
             queryClient.clear();
@@ -155,7 +135,7 @@ function AuthExchangeContent() {
     };
 
     processAuth();
-  }, [router, searchParams, queryClient]);
+  }, [router, initialToken, initialCode, isMobileParam, queryClient]);
 
   if (isProcessing) {
     return (

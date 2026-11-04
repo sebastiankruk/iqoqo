@@ -370,7 +370,7 @@ def google_callback():
         logger.warning("Google OAuth state verification failed or mismatch")
         return redirect(f"{frontend_url}/login?error=csrf_state_mismatch")
 
-    callback_url = verified_state.get("callback_url")
+    callback_url = verified_state.get("callback_url") or session.get("oauth_callback_url")
     mobile_origin = verified_state.get("mobile_origin")
 
     token = None
@@ -542,7 +542,7 @@ def apple_callback():
         logger.warning("Apple OAuth state verification failed or mismatch")
         return redirect(f"{frontend_url}/login?error=csrf_state_mismatch")
 
-    callback_url = verified_state.get("callback_url")
+    callback_url = verified_state.get("callback_url") or session.get("oauth_callback_url")
     mobile_origin = verified_state.get("mobile_origin")
 
     id_token_str = payload.get("id_token")
