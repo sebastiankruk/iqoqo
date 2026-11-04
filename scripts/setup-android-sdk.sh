@@ -88,8 +88,10 @@ mkdir -p "$ANDROID_HOME"
 # 1. Download and bootstrap cmdline-tools if missing
 if [ ! -x "$SDKMANAGER" ]; then
     log_info "Android cmdline-tools missing. Bootstrapping into $ANDROID_HOME..."
-    TMP_ZIP="/tmp/cmdline-tools-linux-$$.zip"
-    TMP_EXTRACT="/tmp/cmdline-tools-extract-$$"
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+    TMP_ZIP="$TMP_DIR/cmdline-tools.zip"
+    TMP_EXTRACT="$TMP_DIR/extract"
     mkdir -p "$TMP_EXTRACT"
     
     if command -v curl >/dev/null 2>&1; then
@@ -101,11 +103,20 @@ if [ ! -x "$SDKMANAGER" ]; then
         exit 1
     fi
 
+    CMDLINE_TOOLS_SHA256="${CMDLINE_TOOLS_SHA256:-2d2d50b703e30bc549646570336329c2a315b4213b0d23580903b780fe1aec0d}"
+    if command -v sha256sum >/dev/null 2>&1; then
+        echo "$CMDLINE_TOOLS_SHA256  $TMP_ZIP" | sha256sum -c - || {
+            echo "ERROR: SHA-256 verification failed for Android cmdline-tools" >&2
+            exit 1
+        }
+    fi
+
     unzip -q "$TMP_ZIP" -d "$TMP_EXTRACT"
     mkdir -p "$ANDROID_HOME/cmdline-tools"
     rm -rf "$ANDROID_HOME/cmdline-tools/latest"
     mv "$TMP_EXTRACT/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-    rm -rf "$TMP_ZIP" "$TMP_EXTRACT"
+    rm -rf "$TMP_DIR"
+    trap - EXIT
     log_info "cmdline-tools unpacked to $ANDROID_HOME/cmdline-tools/latest"
 fi
 

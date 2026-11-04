@@ -28,6 +28,30 @@ const routesToPatch = [
   path.join(frontendDir, "app/api/auth/logout/route.ts"),
 ];
 
+/**
+ * Restores route files to force-dynamic after build.
+ */
+function restoreRoutes() {
+  console.log("⚡ Restoring routes to force-dynamic...");
+  for (const file of routesToPatch) {
+    if (fs.existsSync(file)) {
+      let content = fs.readFileSync(file, "utf8");
+      content = content.replace(/export const dynamic = "force-static";/g, 'export const dynamic = "force-dynamic";');
+      fs.writeFileSync(file, content, "utf8");
+    }
+  }
+}
+
+process.on("SIGINT", () => {
+  restoreRoutes();
+  process.exit(130);
+});
+
+process.on("SIGTERM", () => {
+  restoreRoutes();
+  process.exit(143);
+});
+
 console.log("⚡ Preparing Capacitor static export (toggling routes to force-static)...");
 for (const file of routesToPatch) {
   if (fs.existsSync(file)) {
@@ -45,20 +69,13 @@ try {
     env: {
       ...process.env,
       CAPACITOR_BUILD: "true",
-      NEXT_PUBLIC_FRONTEND_URL: process.env.NEXT_PUBLIC_FRONTEND_URL || "https://preview.iqoqo.cc",
+      NEXT_PUBLIC_FRONTEND_URL: process.env.NEXT_PUBLIC_FRONTEND_URL || "https://iqoqo.cc",
     },
   });
 } catch (err) {
   buildError = err;
 } finally {
-  console.log("⚡ Restoring routes to force-dynamic...");
-  for (const file of routesToPatch) {
-    if (fs.existsSync(file)) {
-      let content = fs.readFileSync(file, "utf8");
-      content = content.replace(/export const dynamic = "force-static";/g, 'export const dynamic = "force-dynamic";');
-      fs.writeFileSync(file, content, "utf8");
-    }
-  }
+  restoreRoutes();
 }
 
 if (buildError) {

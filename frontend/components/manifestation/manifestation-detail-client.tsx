@@ -108,7 +108,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
   const timestamp = getCoverTimestamp(manifestation.meta);
   const coverUrl =
     getCoverUrl(manifestation.cover_url || undefined, timestamp) ||
-    (manifestation.meta?.["cover_url"] as string | undefined);
+    (manifestation.meta?.["cover_url"] ? getCoverUrl(manifestation.meta["cover_url"] as string, timestamp) : undefined);
   const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
 
   const isSeries = parts.length > 0;

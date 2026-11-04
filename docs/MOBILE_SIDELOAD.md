@@ -189,6 +189,7 @@ The workflow `.github/workflows/mobile-build.yml` runs automatically on `v1.*` t
 On first launch, the iqoqo native mobile app presents the **Server Selector** screen.
 Enter your server address (e.g. `https://iqoqo.example.com`). The client queries `GET /api/health` and `GET /api/auth/providers` to confirm availability.
 
-- **Sign in with Apple:** Supported on iOS native and macOS; returns credentials to `/auth-exchange`.
-- **Google OAuth:** Redirects through system browser and deep-links back via `iqoqo://auth-exchange#token=...`.
-- **Local Credentials / 2FA:** Authenticates directly and stores JWT securely in `@capacitor-community/secure-storage`.
+- **Sign in with Apple:** Supported on iOS native and macOS; returns credentials to `/auth-exchange` using RS256 token verification.
+- **Google OAuth:** Redirects through system browser and deep-links back via `iqoqo://auth-exchange?code=...` which is redeemed once for an access token via `POST /api/auth/exchange`.
+- **Local Credentials / 2FA:** Authenticates directly and stores JWT securely in `capacitor-secure-storage-plugin` (falling back to `@capacitor/preferences`).
+- **Web Share Integration:** Public collection feeds and profile links utilize the native Web Share API (`navigator.share`) for direct platform sharing sheet integration.

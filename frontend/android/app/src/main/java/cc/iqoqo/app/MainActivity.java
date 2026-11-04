@@ -67,18 +67,20 @@ public class MainActivity extends BridgeActivity {
                         }
 
                         if (path.startsWith("/help/")) {
-                            boolean isStaticHelp = path.equals("/help/camera-to-catalog.html") ||
-                                path.equals("/help/camera-to-catalog.txt") ||
-                                path.equals("/help/curators-handbook.html") ||
-                                path.equals("/help/curators-handbook.txt") ||
-                                path.equals("/help/federation-architecture.html") ||
-                                path.equals("/help/federation-architecture.txt") ||
-                                path.equals("/help/frbr-hierarchy.html") ||
-                                path.equals("/help/frbr-hierarchy.txt") ||
-                                path.equals("/help/privacy-sharing-social.html") ||
-                                path.equals("/help/privacy-sharing-social.txt");
+                            String trimmed = path.endsWith(".html") ? path.substring(0, path.length() - 5) : path;
+                            boolean isStaticHelp = trimmed.equals("/help/camera-to-catalog") ||
+                                trimmed.equals("/help/curators-handbook") ||
+                                trimmed.equals("/help/federation-architecture") ||
+                                trimmed.equals("/help/frbr-hierarchy") ||
+                                trimmed.equals("/help/privacy-sharing-social");
 
-                            if (!isStaticHelp) {
+                            if (isStaticHelp) {
+                                if (path.endsWith(".txt")) {
+                                    targetPath = trimmed + ".txt";
+                                } else {
+                                    targetPath = trimmed + ".html";
+                                }
+                            } else {
                                 if (path.endsWith(".txt")) {
                                     targetPath = "/help/_placeholder.txt";
                                 } else {

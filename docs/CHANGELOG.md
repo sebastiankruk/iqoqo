@@ -58,6 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extracted rich parameter structures (`Autor`, `Autorzy`, `Wykonawca`, `Twórca`, `Reżyser`, `Wydawnictwo`, clean `Tytuł`, `Rok wydania`) in `app/utils/allegro.py` for Allegro products and offers.
   - Added FRBR author resolution fallback in `app/api/manifestations.py` to display manifestation parameters and contributor names when `work.meta["authors"]` is empty.
   - Enhanced `scripts/repair_frbr_authors.py` to backfill missing authors from attached manifestations' `raw_payload["parameters"]` and committed repairs for all existing catalog items.
+- **Mobile Auth Security, CORS & Token Isolation (C100d)**:
+  - Verified Apple `id_token` RS256 signatures against Apple JWKS endpoints, enforced URLSafeTimedSerializer OAuth state, and eliminated long-lived JWT leakage over mobile redirects with single-use `OAuthExchangeCode` (`?code=...`).
+  - Isolated credentialed CORS origins, enforced `withCredentials = false` on native Capacitor app clients, scrubbed protocol-relative (`//`) open redirects, and ensured mobile logout revokes tokens in `TokenBlocklist`.
+- **Non-Destructive FRBR Author Repair & Shared Search Hardening (C100e)**:
+  - Preserved non-author `WorkContribution` roles (`director`, `translator`, etc.) during author repair, added relational contributor fallback in manifestation display, and secured admin author maintenance with `EntityAuditLog`.
+  - Pushed hidden-item exclusion into PostgreSQL FTS before `LIMIT`, normalized multi-status shared wishlist filters, and bounded ISBN provider timeouts with outbound telemetry.
+- **Client-Hydrated Mobile Shells, Scanner Race Guards & Build Hardening (C100f)**:
+  - Added client-hydrated shells `SharedCollectionClient` and `PublicProfileClient` for `/share/[token]` and `/u/[username]` on native mobile shells.
+  - Added static placeholder guards preventing `/api/items/NaN` fetches during static export and wrapped fallback cover URLs in `getCoverUrl()`.
+  - Added synchronous in-flight barcode locking in continuous batch scanner and resolved covers against active instance URL in `SuccessCard`.
+  - Disabled Android cloud backup, raised `minSdkVersion` to 26, removed deprecated `armv7` slice from iOS plist, and sanitized build setup scripts.
 
 ## [0.9.4] - 2026-10-31
 

@@ -42,7 +42,7 @@ echo "    Installing compatible pinned gems (skipping Homebrew LLVM compilation)
 gem install ffi -v 1.15.5 --user-install --no-document
 gem install zeitwerk -v 2.6.18 --user-install --no-document
 gem install i18n -v 1.14.8 --user-install --no-document
-gem install cocoapods -v 1.11.3 --user-install --no-document
+gem install cocoapods -v 1.16.2 --user-install --no-document
 
 if [[ -x "$USER_GEM_BIN/pod" ]]; then
   export PATH="$USER_GEM_BIN:$PATH"

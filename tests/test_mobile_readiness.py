@@ -198,3 +198,37 @@ def test_mobile_app_icons_present_and_branded():
     assert ios_contents.is_file(), "iOS AppIcon Contents.json must exist"
     contents_text = ios_contents.read_text(encoding="utf-8")
     assert "AppIcon-512@2x.png" in contents_text, "iOS Contents.json must reference AppIcon-512@2x.png"
+
+
+def test_mobile_native_manifests_and_targets_security():
+    """Verify Android and iOS native configuration aligns with security and target baselines."""
+    repo_root = Path(__file__).resolve().parent.parent
+
+    # 1. AndroidManifest.xml disables allowBackup
+    manifest_file = repo_root / "frontend" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+    assert manifest_file.is_file()
+    manifest_xml = manifest_file.read_text(encoding="utf-8")
+    assert 'android:allowBackup="false"' in manifest_xml
+
+    # 2. variables.gradle enforces minSdkVersion = 26
+    vars_file = repo_root / "frontend" / "android" / "variables.gradle"
+    assert vars_file.is_file()
+    vars_text = vars_file.read_text(encoding="utf-8")
+    assert "minSdkVersion = 26" in vars_text
+
+    # 3. Android build.gradle has versionName "1.0.0"
+    build_gradle = repo_root / "frontend" / "android" / "app" / "build.gradle"
+    assert build_gradle.is_file()
+    assert 'versionName "1.0.0"' in build_gradle.read_text(encoding="utf-8")
+
+    # 4. iOS Info.plist has arm64 and no armv7
+    plist_file = repo_root / "frontend" / "ios" / "App" / "App" / "Info.plist"
+    assert plist_file.is_file()
+    plist_text = plist_file.read_text(encoding="utf-8")
+    assert "armv7" not in plist_text
+    assert "arm64" in plist_text
+
+    # 5. iOS project.pbxproj has MARKETING_VERSION = 1.0.0
+    pbxproj_file = repo_root / "frontend" / "ios" / "App" / "App.xcodeproj" / "project.pbxproj"
+    assert pbxproj_file.is_file()
+    assert "MARKETING_VERSION = 1.0.0;" in pbxproj_file.read_text(encoding="utf-8")

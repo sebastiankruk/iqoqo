@@ -16,17 +16,11 @@
 
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-import { Library, Share2 } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
-import type { Item, CatalogEntry } from "@/types/frbr";
-import { CollectionGrid } from "@/components/collection/collection-grid";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ShareButton } from "@/components/ui/share-button";
-import { PublicFeedButton } from "@/components/ui/public-feed-button";
+import { SharedCollectionClient } from "@/components/public/shared-collection-client";
 import { Footer } from "@/components/dashboard/footer";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 
@@ -134,13 +128,8 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
 export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
   const { token } = await params;
   if (token === "_placeholder") {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Navbar />
-      </div>
-    );
+    return <SharedCollectionClient initialData={null} initialToken="_placeholder" />;
   }
-  const t = await getTranslations("Public");
 
   const collectionRes = await getSharedCollection(token);
   if (collectionRes.kind === "not-found") {
@@ -177,67 +166,9 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
   });
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <>
       <JsonLdScript data={collectionJsonLd} />
-      <Navbar />
-      <main className="flex-1">
-        {/* Header Section */}
-        <div className="bg-primary/5 border-b">
-          <div className="mx-auto max-w-5xl px-6 py-12 md:py-16 text-center">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-6">
-              <Share2 className="h-6 w-6 text-primary" />
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-serif font-bold tracking-tight mb-4">
-              {collection.collection_name}
-            </h1>
-
-            <p className="text-muted-foreground text-sm uppercase tracking-[0.2em] font-bold mb-6">
-              Shared by <span className="text-foreground">@{collection.author}</span>
-            </p>
-
-            {collection.collection_description && (
-              <p className="text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-                {collection.collection_description}
-              </p>
-            )}
-
-            <div className="flex justify-center gap-4">
-              <ShareButton
-                title={collection.collection_name}
-                text={`Check out this shared collection by ${collection.author} on iqoqo!`}
-              />
-              <PublicFeedButton feedPath={`/api/public/share/${token}/feed.xml`} />
-            </div>
-          </div>
-        </div>
-
-        {/* Content Section */}
-        <div className="mx-auto max-w-5xl px-6 py-12">
-          <div className="flex items-center justify-between border-b pb-4 mb-8">
-            <h2 className="text-xl font-serif font-bold">Items in this Collection</h2>
-            <span className="text-sm font-medium bg-muted px-2 py-1 rounded">
-              {items.length} {items.length === 1 ? "Item" : "Items"}
-            </span>
-          </div>
-
-          {items.length > 0 ? (
-            <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
-          ) : (
-            <EmptyState
-              title="Empty Collection"
-              description="This shared collection doesn't contain any items yet."
-              icon={Library}
-            />
-          )}
-        </div>
-      </main>
-      <Footer />
-
-      {/* Disclaimer footer */}
-      <div className="bg-muted/30 py-4 text-center border-t">
-        <p className="text-xs text-muted-foreground italic">{t("hiddenItemNote")}</p>
-      </div>
-    </div>
+      <SharedCollectionClient initialData={collection} initialToken={token} />
+    </>
   );
 }

@@ -607,7 +607,7 @@ mobile-ios-open: mobile-sync
 
 test-e2e-mobile: test-e2e-db-up
 	$(AI_ECHO) "Running mobile Playwright E2E suite against isolated database..."
-	@$(MAKE) --no-print-directory _test-e2e-run args='--grep @mobile|mobile'
+	@$(MAKE) --no-print-directory _test-e2e-run args='--grep "(?i)@mobile|mobile"'
 
 lint-license:
 	$(AI_ECHO) "Checking copyright headers..."
