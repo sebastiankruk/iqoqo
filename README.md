@@ -38,7 +38,7 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 
 ## 🛠 Tech Stack
 
-- **Frontend:** React, Next.js (App Router), TypeScript, Tailwind CSS
+- **Frontend:** React, Next.js (App Router), TypeScript, Tailwind CSS, Capacitor 7 (iOS & Android)
 - **Backend:** Python 3.14+ / Flask, Celery
 - **Database & Cache:** PostgreSQL (Full-Text Search & JSONB), Redis 8
 - **Observability:** OpenTelemetry & OpenObserve
@@ -56,6 +56,8 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 - **[API Reference](docs/API.md)** - Complete REST API documentation
 - **[Operations Runbook](docs/OPERATIONS.md)** - FRBR ETL, ontology sync, and maintenance
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
+- **[Mobile Sideloading Guide](docs/MOBILE_SIDELOAD.md)** - Android & iOS sideload and build instructions
+- **[Mobile Platform Targets](docs/MOBILE_TARGETS.md)** - Operating systems baseline & native capabilities
 - **[Changelog](docs/CHANGELOG.md)** - Recent updates and version history
 - **[Cover Setup](docs/COVERS_SETUP.md)** - AI cover generation and vision extraction setup
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
@@ -113,7 +115,7 @@ See the **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** for SPARQL examples, Link
 - [x] Semantic Web & Linked Open Data (SPARQL, JSON-LD, Turtle)
 - [x] Schema.org SEO and structured data
 - [x] Data sovereignty export (JSON-LD, Turtle, JSON)
-- [ ] Mobile apps (iOS & Android)
+- [x] Mobile apps (iOS & Android)
 - [x] Federation protocol for cross-instance discovery (ActivityPub)
 
 ## 💖 Support & Upstream Sustainability
