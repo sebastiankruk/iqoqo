@@ -21,7 +21,7 @@ import pytest
 
 from app.api.auth import generate_internal_jwt
 from app.db.contributions import Contributor, WorkContribution
-from app.db.models import Expression, Item, Manifestation, SharedCollection, User, Work, db
+from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
 
 @pytest.fixture
@@ -513,3 +513,90 @@ def test_shared_collection_authors_from_work_meta(client, app, test_user):
     item = data["data"]["items"][0]
     assert item["title"] == "Czarny Dom"
     assert item["authors"] == ["Stephen King", "Peter Straub"]
+
+
+def test_shared_collection_multi_status_with_wishlist_query(client, app, test_user):
+    """Multi-status list filter with query must handle list statuses without TypeError and return intents."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Dune Messiah", meta={"authors": ["Frank Herbert"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id, meta={"title": "Dune Messiah"})
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="reading"))
+
+        # Add wishlist intent
+        intent = UserWorkIntent(user_id=user.id, work_id=work.id, status="want_to_read", is_hidden=False)
+        db.session.add(intent)
+
+        coll = SharedCollection(
+            user_id=user.id,
+            name="Multi Status Share",
+            filters={"status": ["want_to_read", "reading"], "query": "Dune"},
+        )
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert res.status_code == 200
+    assert data["success"] is True
+    assert len(data["data"]["items"]) >= 1
+
+
+def test_shared_collection_excludes_hidden_items(client, app, test_user):
+    """Hidden items (is_hidden=True) must be strictly excluded from shared collections."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Hidden Secret Book", meta={"authors": ["Secret Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id, meta={"title": "Hidden Secret Book"})
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read", is_hidden=True))
+
+        coll = SharedCollection(user_id=user.id, name="Public Share", filters={"query": "Hidden"})
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert res.status_code == 200
+    assert len(data["data"]["items"]) == 0
+
+
+def test_shared_collection_escapes_sql_wildcards(client, app, test_user):
+    """Searching for SQL wildcards like % or _ should not match every item."""
+    with app.app_context():
+        user = User.query.filter_by(public_username=test_user).first()
+        work = Work(title="Normal Book Title", meta={"authors": ["Normal Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text")
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id, meta={"title": "Normal Book Title"})
+        db.session.add(mani)
+        db.session.flush()
+        db.session.add(Item(owner_id=user.id, manifestation_id=mani.id, status="read", is_hidden=False))
+
+        coll = SharedCollection(user_id=user.id, name="Wildcard Share", filters={"query": "%"})
+        db.session.add(coll)
+        db.session.commit()
+        token = coll.share_token
+
+    res = client.get(f"/api/public/share/{token}")
+    data = res.json
+    assert res.status_code == 200
+    assert len(data["data"]["items"]) == 0

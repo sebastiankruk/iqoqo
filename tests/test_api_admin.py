@@ -218,3 +218,16 @@ def test_normal_user_cannot_trigger_author_repair(client, normal_user_headers):
     """Normal user cannot trigger author repair endpoint."""
     resp = client.post("/api/admin/maintenance/repair-authors", headers=normal_user_headers)
     assert resp.status_code in [401, 403]
+
+
+def test_admin_repair_authors_records_audit_log(client, app, admin_headers):
+    """Admin triggering repair-authors records an EntityAuditLog entry."""
+    from app.db.core import EntityAuditLog
+
+    resp = client.post("/api/admin/maintenance/repair-authors", json={"dry_run": True}, headers=admin_headers)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        log = EntityAuditLog.query.filter_by(change_type="maintenance_repair_authors").first()
+        assert log is not None
+        assert log.diff["dry_run"] is True

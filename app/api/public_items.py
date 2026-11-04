@@ -31,7 +31,13 @@ from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
-from app.core.search_service import SearchService, _meta_text, build_ilike_search_clause, normalize_diacritics
+from app.core.search_service import (
+    SearchService,
+    _meta_text,
+    build_ilike_search_clause,
+    escape_ilike_term,
+    normalize_diacritics,
+)
 from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
@@ -315,6 +321,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
+                    include_hidden=False,
                 )
                 item_ids = [r["item_id"] for r in results]
                 if not item_ids:
@@ -640,61 +647,89 @@ def get_shared_collection(token: str):
         for item in items
     ]
 
-    is_wish_list = False
-    if "status" in filters:
-        status_val = filters["status"]
-        if status_val in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play"):
-            is_wish_list = True
+    status_filter = filters.get("status")
+    status_list: list[str] = []
+    if status_filter:
+        raw_list = status_filter if isinstance(status_filter, list) else [status_filter]
+        status_list = [s for s in raw_list if isinstance(s, str) and s]
+
+    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+    wish_list_statuses = _INTENT_LEVEL_STATUSES | {"wish_list"}
+    is_wish_list = any(s in wish_list_statuses for s in status_list)
 
     if is_wish_list:
         # Query UserWorkIntent directly for shared collection visibility.
         # Only non-hidden intents are exposed through shared collections.
-        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
-        intent_query = (
-            db.session.query(UserWorkIntent)
-            .options(
-                joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
-                .selectinload(Work.expressions)  # type: ignore[arg-type]
-                .selectinload(Expression.manifestations)  # type: ignore[arg-type]
-            )
-            .filter(
+        intent_stmt = (
+            select(UserWorkIntent)
+            .options(joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations))
+            .where(
                 UserWorkIntent.user_id == user.id,
                 UserWorkIntent.is_hidden.is_(False),
             )
         )
-        status_val = filters["status"]
-        if status_val in _INTENT_LEVEL_STATUSES:
-            intent_query = intent_query.filter(UserWorkIntent.status == status_val)
+        matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
+        if matched_intents:
+            intent_stmt = intent_stmt.where(UserWorkIntent.status.in_(matched_intents))
         else:
-            intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
+            intent_stmt = intent_stmt.where(UserWorkIntent.status != "fulfilled")
 
         if filters.get("query"):
-            search_term = filters["query"].strip()
+            search_term = str(filters["query"]).strip()
             if search_term:
-                raw_pat = f"%{search_term}%"
-                norm_pat = f"%{normalize_diacritics(search_term)}%"
-                intent_query = intent_query.join(Work, UserWorkIntent.work_id == Work.id).filter(
+                escaped_term = escape_ilike_term(search_term)
+                raw_pat = f"%{escaped_term}%"
+                is_pg = db.engine.dialect.name == "postgresql"
+                norm_pat = f"%{escape_ilike_term(normalize_diacritics(search_term))}%"
+
+                # Field-scoped searches avoiding full Work.meta JSON blob dump
+                title_match = (
                     or_(
-                        Work.title.ilike(raw_pat),
-                        func.immutable_unaccent(Work.title).ilike(norm_pat),
-                        _meta_text(Work.meta).ilike(raw_pat),
-                        func.immutable_unaccent(_meta_text(Work.meta)).ilike(norm_pat),
+                        Work.title.ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(Work.title).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else Work.title.ilike(raw_pat, escape="\\")
+                )
+                author_meta_match = (
+                    or_(
+                        _meta_text(Work.meta["authors"]).ilike(raw_pat, escape="\\"),
+                        _meta_text(Work.meta["author"]).ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(_meta_text(Work.meta["authors"])).ilike(norm_pat, escape="\\"),
+                        func.immutable_unaccent(_meta_text(Work.meta["author"])).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else or_(
+                        _meta_text(Work.meta["authors"]).ilike(raw_pat, escape="\\"),
+                        _meta_text(Work.meta["author"]).ilike(raw_pat, escape="\\"),
+                    )
+                )
+                contrib_match = (
+                    or_(
+                        Contributor.name.ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(Contributor.name).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else Contributor.name.ilike(raw_pat, escape="\\")
+                )
+
+                intent_stmt = intent_stmt.join(Work, UserWorkIntent.work_id == Work.id).where(
+                    or_(
+                        title_match,
+                        author_meta_match,
                         exists(
                             select(1)
                             .select_from(WorkContribution)
                             .join(Contributor, Contributor.id == WorkContribution.contributor_id)
                             .where(
                                 WorkContribution.work_id == Work.id,
-                                or_(
-                                    Contributor.name.ilike(raw_pat),
-                                    func.immutable_unaccent(Contributor.name).ilike(norm_pat),
-                                ),
+                                contrib_match,
                             )
                         ),
                     )
                 )
 
-        intents = intent_query.all()
+        intents = db.session.execute(intent_stmt).scalars().all()
         for intent in intents:
             work = intent.work
             manifestation = None

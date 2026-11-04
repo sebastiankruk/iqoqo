@@ -20,6 +20,7 @@ All routes require the admin permission. Destructive FRBR operations (merge,
 split, reassign) live here rather than in the public blueprint because each one
 rewrites references across entity types."""
 
+import logging
 import os
 import uuid
 from datetime import date
@@ -58,6 +59,8 @@ from app.services.item_reassignment import (
     preview_reassignment,
 )
 from app.utils.json_utils import parse_meta, sanitize_meta
+
+logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/v1/admin")
 
@@ -1314,6 +1317,27 @@ def trigger_repair_authors():
     apply_changes = not dry_run
 
     inspected, repaired = repair_work_authors(apply_changes=apply_changes)
+
+    try:
+        from app.db.core import EntityAuditLog
+
+        audit = EntityAuditLog(
+            entity_type="work",
+            entity_id=0,
+            actor_id=g.current_user.id if hasattr(g, "current_user") and g.current_user else None,
+            change_type="maintenance_repair_authors",
+            diff={
+                "inspected": inspected,
+                "repaired": repaired,
+                "dry_run": dry_run,
+            },
+        )
+        db.session.add(audit)
+        db.session.commit()
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        logger.warning("Could not record EntityAuditLog for repair-authors: %s", exc)
+
     return (
         jsonify(
             {

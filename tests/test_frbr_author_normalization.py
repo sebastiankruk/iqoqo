@@ -262,3 +262,79 @@ class TestRepairFrbrAuthorsScript:
             db.session.expire_all()
             fixed_work = db.session.get(Work, w_id)
             assert fixed_work.meta["authors"] == ["Tomasz Strzelczyk"]
+
+    def test_repair_preserves_non_author_roles(self, app: Any) -> None:
+        """Verify repair preserves non-author WorkContribution roles and does not pollute Manifestation.meta."""
+        with app.app_context():
+            work = Work(title="Lord of the Rings", meta={"authors": "J.R.R. Tolkien; "})
+            db.session.add(work)
+            db.session.flush()
+
+            # Add existing translator contribution
+            translator = Contributor(name="Maria Skibniewska")
+            db.session.add(translator)
+            db.session.flush()
+            trans_contrib = WorkContribution(work_id=work.id, contributor_id=translator.id, role="translator", sequence=1)
+            db.session.add(trans_contrib)
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(expression_id=expr.id, meta={"title": "Władca Pierścieni"})
+            db.session.add(m)
+            db.session.commit()
+            w_id = work.id
+            m_id = m.id
+
+            inspected, repaired = repair_work_authors(apply_changes=True)
+            assert inspected >= 1
+            assert repaired >= 1
+
+            db.session.expire_all()
+            repaired_work = db.session.get(Work, w_id)
+            assert repaired_work.meta["authors"] == ["J.R.R. Tolkien"]
+
+            roles = {c.role: c.contributor.name for c in repaired_work.contributions}
+            assert "translator" in roles
+            assert roles["translator"] == "Maria Skibniewska"
+            assert "author" in roles
+            assert roles["author"] == "J.R.R. Tolkien"
+
+            manifestation = db.session.get(Manifestation, m_id)
+            assert "authors" not in (manifestation.meta or {})
+
+    def test_repair_dry_run_idempotent_on_unrepairable_works(self, app: Any) -> None:
+        """Verify unrepairable empty-author works are skipped and report 0 repairs."""
+        with app.app_context():
+            work = Work(title="Anonymous Work", meta={"authors": []})
+            db.session.add(work)
+            db.session.commit()
+
+            _, repaired = repair_work_authors(apply_changes=False)
+            assert repaired == 0
+
+    def test_resolve_manifestation_display_author_fallback_to_relational_contributor(self, app: Any) -> None:
+        """Verify manifestation display author resolves relational WorkContribution when meta is empty."""
+        from app.api.manifestations import _resolve_manifestation_display_author
+
+        with app.app_context():
+            work = Work(title="Solaris", meta={"authors": []})
+            db.session.add(work)
+            db.session.flush()
+
+            author = Contributor(name="Stanisław Lem")
+            db.session.add(author)
+            db.session.flush()
+            db.session.add(WorkContribution(work_id=work.id, contributor_id=author.id, role="author", sequence=1))
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(expression_id=expr.id, meta={})
+            db.session.add(m)
+            db.session.commit()
+
+            display_author = _resolve_manifestation_display_author(m)
+            assert display_author == ["Stanisław Lem"]

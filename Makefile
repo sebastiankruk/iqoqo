@@ -935,16 +935,16 @@ repair-authors: ## Repair empty or corrupted FRBR author metadata across catalog
 	repair_args="$(if $(filter 1,$(dry_run)$(DRY_RUN)),--dry-run,--apply) $(args)"; \
 	if [ "$$target_env" = "preview" ]; then \
 		echo "Repairing FRBR authors in PREVIEW Docker stack (iqoqo-preview)..."; \
-		docker compose -p iqoqo-preview exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+		docker compose -p iqoqo-preview exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
 	elif [ "$$target_env" = "prod" ]; then \
 		echo "Repairing FRBR authors in PRODUCTION Docker stack (iqoqo)..."; \
-		docker compose -p iqoqo exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+		docker compose -p iqoqo exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
 	elif [ -n "$$(docker compose -p iqoqo-preview ps -q web 2>/dev/null)" ]; then \
 		echo "Detected running PREVIEW Docker stack (iqoqo-preview); repairing..."; \
-		docker compose -p iqoqo-preview exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+		docker compose -p iqoqo-preview exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
 	elif [ -n "$$(docker compose -p iqoqo ps -q web 2>/dev/null)" ]; then \
-		echo "Detected running PRODUCTION Docker stack (iqoqo); repairing..."; \
-		docker compose -p iqoqo exec -T -u root web python3 scripts/repair_frbr_authors.py $$repair_args; \
+		echo "Detected running PRODUCTION Docker stack (iqoqo); repairing (dry-run unless env=prod explicitly passed)..."; \
+		docker compose -p iqoqo exec -T web python3 scripts/repair_frbr_authors.py $(if $(filter 1,$(dry_run)$(DRY_RUN)),--dry-run,--dry-run) $(args); \
 	elif [ -f .venv/bin/python ]; then \
 		echo "No running preview or prod Docker container detected; falling back to local Python venv..."; \
 		.venv/bin/python scripts/repair_frbr_authors.py $$repair_args; \

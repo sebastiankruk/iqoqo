@@ -30,6 +30,8 @@ from collections.abc import Sequence
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -113,11 +115,11 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
                 needs_repair = True
 
             # Condition 2: check if WorkContribution rows exist and match normalized
-            existing_contributions = work.contributions
-            existing_names = {c.contributor.name for c in existing_contributions if c.contributor} if existing_contributions else set()
+            existing_contributions = work.contributions or []
+            existing_author_names = {c.contributor.name for c in existing_contributions if c.contributor and c.role == "author"}
             expected_names = set(normalized)
 
-            if normalized and existing_names != expected_names:
+            if normalized and existing_author_names != expected_names:
                 needs_repair = True
 
             if needs_repair:
@@ -131,18 +133,26 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
                     flag_modified(work, "meta")
 
                     if normalized:
-                        contributions_payload = [{"name": name, "role": "author"} for name in normalized]
-                        sync_entity_contributions(work, contributions_payload)
-
-                    # Propagate to child expressions and manifestations if lacking authors
-                    for expr in getattr(work, "expressions", []):
-                        for m in getattr(expr, "manifestations", []):
-                            m_meta = dict(m.meta or {})
-                            if not m_meta.get("author") or not m_meta.get("authors"):
-                                m_meta["authors"] = normalized
-                                m_meta["author"] = normalized[0] if normalized else None
-                                m.meta = m_meta
-                                flag_modified(m, "meta")
+                        # Non-destructive: preserve all existing non-author contributions (director, artist, etc.)
+                        combined_contributions: list[dict[str, Any]] = []
+                        for c in existing_contributions:
+                            if c.contributor and c.role != "author":
+                                combined_contributions.append(
+                                    {
+                                        "name": c.contributor.name,
+                                        "role": c.role,
+                                        "sequence": c.sequence,
+                                    }
+                                )
+                        for seq, name in enumerate(normalized, start=1):
+                            combined_contributions.append(
+                                {
+                                    "name": name,
+                                    "role": "author",
+                                    "sequence": seq,
+                                }
+                            )
+                        sync_entity_contributions(work, combined_contributions)
 
         if apply_changes and batch_repaired > 0:
             db.session.commit()

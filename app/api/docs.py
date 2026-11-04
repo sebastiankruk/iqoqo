@@ -476,6 +476,83 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             },
                         }
 
+                # Attach accurate requestBody schemas for specific endpoints
+                if openapi_path == "/api/auth/callback/apple" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": False,
+                            "content": {
+                                "application/x-www-form-urlencoded": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id_token": {"type": "string", "description": "Apple-signed JWT identity token."},
+                                            "code": {"type": "string", "description": "Single-use authorization code."},
+                                            "state": {"type": "string", "description": "CSRF state parameter."},
+                                            "user": {
+                                                "type": "string",
+                                                "description": "JSON-encoded user object sent on first authorization.",
+                                            },
+                                        },
+                                    }
+                                },
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id_token": {"type": "string"},
+                                            "code": {"type": "string"},
+                                            "state": {"type": "string"},
+                                            "user": {"type": "string"},
+                                        },
+                                    }
+                                },
+                            },
+                        }
+                elif openapi_path == "/api/auth/exchange" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "code": {
+                                                "type": "string",
+                                                "description": "Single-use exchange code from mobile OAuth redirect.",
+                                            },
+                                        },
+                                        "required": ["code"],
+                                    }
+                                }
+                            },
+                        }
+                elif openapi_path == "/api/admin/maintenance/repair-authors" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": False,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "dry_run": {
+                                                "type": "boolean",
+                                                "default": True,
+                                                "description": "When true, scans without committing changes.",
+                                            },
+                                            "batch_size": {
+                                                "type": "integer",
+                                                "default": 50,
+                                                "description": "Number of works to process per batch.",
+                                            },
+                                        },
+                                    }
+                                }
+                            },
+                        }
+
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)
                 requires_auth = _endpoint_requires_auth(view_func, openapi_path)

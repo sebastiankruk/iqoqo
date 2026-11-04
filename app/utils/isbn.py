@@ -51,6 +51,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from app.core.telemetry import record_outbound_telemetry
+
 logger = logging.getLogger(__name__)
 
 
@@ -479,6 +481,7 @@ def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] 
     try:
         session = _make_session()
         to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        record_outbound_telemetry("biblioteka_narodowa", dict(session.headers), url=url)
         response = session.get(url, timeout=to)
         response.raise_for_status()
         data = response.json()
@@ -684,8 +687,12 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
 
     def _calc_timeout() -> tuple[float, float]:
         rem = max(0.1, _remaining_time())
-        conn_to = min(float(_CONNECT_TIMEOUT), max(1.5, rem * 0.4))
-        read_to = max(0.2, rem - conn_to)
+        if rem < 1.5:
+            conn_to = min(rem, max(0.05, rem * 0.5))
+            read_to = min(rem, max(0.05, rem - conn_to))
+        else:
+            conn_to = min(float(_CONNECT_TIMEOUT), rem, max(1.5, rem * 0.4))
+            read_to = min(rem, max(0.2, rem - conn_to))
         return (conn_to, read_to)
 
     google_outcome = _lookup_google_books_outcome(isbn, timeout=_calc_timeout())
@@ -771,9 +778,6 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
     if retry_google_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
         logger.info("ISBN %s resolved via Google Books retry", isbn)
         return retry_google_outcome.metadata
-
-    logger.warning("No metadata found for ISBN %s from any upstream source after retry", isbn)
-    return None
 
     logger.warning("No metadata found for ISBN %s from any upstream source after retry", isbn)
     return None

@@ -26,6 +26,7 @@ import requests
 from app.utils.isbn import (
     ISBNProviderOutcome,
     ISBNProviderOutcomeStatus,
+    _lookup_biblioteka_narodowa_outcome,
     _lookup_google_books,
     _lookup_google_books_outcome,
     _lookup_open_library,
@@ -530,3 +531,40 @@ def test_biblioteka_narodowa_outcome_parsing():
     assert outcome.metadata["publisher"] == "Wydawnictwo Literackie"
     assert outcome.metadata["year"] == 2007
     assert outcome.metadata["Source"] == "Biblioteka Narodowa"
+
+
+def test_biblioteka_narodowa_records_outbound_telemetry():
+    """Verify Biblioteka Narodowa lookup calls record_outbound_telemetry."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"bibs": []}
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_resp
+    mock_session.headers = {"User-Agent": "test-agent"}
+
+    with (
+        patch("app.utils.isbn._make_session", return_value=mock_session),
+        patch("app.utils.isbn.record_outbound_telemetry") as mock_telem,
+    ):
+        _lookup_biblioteka_narodowa_outcome("9788308039854")
+
+    mock_telem.assert_called_once()
+    assert mock_telem.call_args[0][0] == "biblioteka_narodowa"
+
+
+def test_calc_timeout_sub_1_5s_budget():
+    """Verify timeout calculation strictly respects sub-1.5s remaining duration."""
+    captured_timeouts = []
+
+    def mock_google(isbn, timeout=None):
+        captured_timeouts.append(timeout)
+        return ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="google_books")
+
+    with patch("app.utils.isbn._lookup_google_books_outcome", side_effect=mock_google):
+        # Pass a very short max_duration (0.4s)
+        fetch_isbn_metadata("9780140449136", max_duration=0.4)
+
+    assert len(captured_timeouts) >= 1
+    conn_to, read_to = captured_timeouts[0]
+    assert conn_to <= 0.4
+    assert read_to <= 0.4
