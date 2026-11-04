@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change auth-and-integrations. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Allegro OAuth Authorization
 The system MUST provide a UI-driven way to initiate the Allegro OAuth 2.0 Device Code flow, eliminating the need for manual SSH token generation and entry.
 
@@ -40,3 +42,12 @@ The status check tooling and system health endpoints SHALL accurately determine 
 
 - **WHEN** the status script fails to connect to the database or execute the internal probe
 - **THEN** the status check reports an explicit probe failure rather than claiming an OAuth handshake is pending.
+
+### Requirement: Bibliographic and Media Parameter Extraction from Allegro Catalog
+The Allegro ingestion service SHALL parse structured catalog parameters from products and offers into canonical FRBR attributes, extracting creators, clean titles, publishers, and release years.
+
+#### Scenario: Ingesting books and media with rich parameter structures
+- **WHEN** an item is ingested or scanned via the Allegro Catalog API
+- **THEN** the system SHALL parse parameter keys for `Autor`, `Autorzy`, `Wykonawca`, `Twórca`, `Reżyser`, clean `Tytuł`, `Wydawnictwo`, and `Rok wydania`
+- **AND** the extracted values SHALL populate FRBR `work.meta["authors"]`, manifestation authors, publisher, and year
+- **AND** display projections SHALL NOT fall back to "Undefined" or "Unknown Title".
