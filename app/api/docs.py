@@ -431,24 +431,50 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
 
                 # Provide default OpenAPI responses envelope if not specified
                 if not operation.get("responses"):
-                    operation["responses"] = {
-                        "200": {
-                            "description": "Successful operation.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
-                        },
-                        "400": {
-                            "description": "Bad Request or Validation Error.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                        "401": {
-                            "description": "Authentication credentials required or invalid.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                        "404": {
-                            "description": "Resource not found.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                    }
+                    if openapi_path in (
+                        "/api/auth/login/apple",
+                        "/api/auth/callback/apple",
+                        "/api/auth/login/google",
+                        "/api/auth/callback/google",
+                    ):
+                        operation["responses"] = {
+                            "302": {
+                                "description": "Redirects to OAuth provider consent screen or frontend /auth-exchange handler.",
+                                "headers": {
+                                    "Location": {
+                                        "description": "Target redirection URI.",
+                                        "schema": {"type": "string"},
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "Bad Request or Validation Error.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "503": {
+                                "description": "OAuth provider service unconfigured or unavailable.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                        }
+                    else:
+                        operation["responses"] = {
+                            "200": {
+                                "description": "Successful operation.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
+                            },
+                            "400": {
+                                "description": "Bad Request or Validation Error.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "401": {
+                                "description": "Authentication credentials required or invalid.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "404": {
+                                "description": "Resource not found.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                        }
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

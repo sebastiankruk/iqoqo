@@ -99,7 +99,7 @@ describe("RegisterPage", () => {
     renderWithQueryClient(<RegisterPage />);
 
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "exist@iqoqo.local" } });
-    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "pass123" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /I agree to the/i }));
     fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
 

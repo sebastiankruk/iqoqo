@@ -15,11 +15,12 @@
 //
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { setAuthToken } from "@/lib/capacitor/storage";
+import { apiClient } from "@/lib/api/client";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Button } from "@/components/ui/button";
@@ -36,63 +37,89 @@ function AuthExchangeContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
-  const [token, setToken] = useState<string | null>(null);
+  const initialToken =
+    searchParams.get("token") ||
+    (typeof window !== "undefined" && window.location.hash
+      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get("token")
+      : null);
+  const initialCode = searchParams.get("code");
+  const isMobileParam = searchParams.get("mobile") === "1" || searchParams.get("mobile_origin") === "capacitor";
+
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [code, setCode] = useState<string | null>(initialCode);
   const [isProcessing, setIsProcessing] = useState(true);
-  const [showHandoff, setShowHandoff] = useState(false);
+  const [showHandoff, setShowHandoff] = useState(isMobileParam && Boolean(initialToken || initialCode));
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
-    let extractedToken: string | null = searchParams.get("token");
+    if (hasProcessedRef.current) return;
+    hasProcessedRef.current = true;
 
-    if (!extractedToken && typeof window !== "undefined" && window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      extractedToken = hashParams.get("token");
+    // Clear sensitive token/code from URL immediately
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", window.location.pathname);
     }
 
-    const code = searchParams.get("code");
-    const isMobileFlow = searchParams.get("mobile") === "1" || searchParams.get("mobile_origin") === "capacitor";
-
     const processAuth = async () => {
-      if (extractedToken) {
-        setToken(extractedToken);
-        // Clear sensitive token from browser address bar immediately
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", window.location.pathname + window.location.search);
-        }
+      if (initialToken) {
+        setToken(initialToken);
 
         if (isNativeApp()) {
-          await setAuthToken(extractedToken);
+          await setAuthToken(initialToken);
           queryClient.clear();
           router.replace("/");
           return;
         }
 
-        if (isMobileFlow) {
+        if (isMobileParam) {
           setShowHandoff(true);
           setIsProcessing(false);
-          if (typeof window !== "undefined") {
-            try {
-              const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-              const target = isAndroid
-                ? `intent://auth-exchange?token=${encodeURIComponent(extractedToken)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`
-                : `iqoqo://auth-exchange?token=${encodeURIComponent(extractedToken)}`;
-              window.location.href = target;
-            } catch {
-              // Ignore automatic navigation error
-            }
-          }
           return;
         }
 
         // Standard web browser fallback
-        await setAuthToken(extractedToken);
+        await setAuthToken(initialToken);
         queryClient.clear();
         router.replace("/");
         return;
       }
 
-      if (code) {
+      if (initialCode) {
+        setCode(initialCode);
+        if (isNativeApp()) {
+          // Native Capacitor WebView: redeem code directly via active instance backend
+          try {
+            const res = await apiClient.post("/auth/exchange", { code: initialCode });
+            const data = res.data;
+            const jwt = data.token || data.access_token;
+            if (jwt) {
+              await setAuthToken(jwt);
+              queryClient.clear();
+              router.replace(data.callbackUrl || "/");
+              return;
+            }
+          } catch (err) {
+            console.error("Native auth exchange error:", err);
+          }
+          setIsProcessing(false);
+          return;
+        }
+
+        if (isMobileParam) {
+          // System browser (Chrome Custom Tabs / ASWebAuthenticationSession):
+          // Forward code to app via deep-link without consuming it here!
+          setShowHandoff(true);
+          setIsProcessing(false);
+          return;
+        }
+
+        // Web flow: exchange via server-side Next.js route using POST
         try {
-          const res = await fetch(`/api/auth-exchange?code=${encodeURIComponent(code)}`);
+          const res = await fetch("/api/auth-exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: initialCode }),
+          });
           if (res.ok) {
             queryClient.clear();
             const data = await res.json().catch(() => ({}));
@@ -108,7 +135,7 @@ function AuthExchangeContent() {
     };
 
     processAuth();
-  }, [router, searchParams, queryClient]);
+  }, [router, initialToken, initialCode, isMobileParam, queryClient]);
 
   if (isProcessing) {
     return (
@@ -119,13 +146,42 @@ function AuthExchangeContent() {
     );
   }
 
-  if (showHandoff && token) {
-    const deepLinkUrl = `iqoqo://auth-exchange?token=${encodeURIComponent(token)}`;
-    const androidIntentUrl = `intent://auth-exchange?token=${encodeURIComponent(token)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`;
+  if (showHandoff && (token || code)) {
+    const deepLinkUrl = token
+      ? `iqoqo://auth-exchange?token=${encodeURIComponent(token)}`
+      : `iqoqo://auth-exchange?code=${encodeURIComponent(code || "")}`;
+    const androidIntentUrl = token
+      ? `intent://auth-exchange?token=${encodeURIComponent(token)}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`
+      : `intent://auth-exchange?code=${encodeURIComponent(code || "")}#Intent;scheme=iqoqo;package=cc.iqoqo.app;end`;
 
     const handleOpenApp = () => {
       const isAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
       window.location.href = isAndroid ? androidIntentUrl : deepLinkUrl;
+    };
+
+    const handleContinueWeb = async () => {
+      if (token) {
+        await setAuthToken(token);
+        queryClient.clear();
+        router.replace("/");
+      } else if (code) {
+        try {
+          const res = await fetch("/api/auth-exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          if (res.ok) {
+            queryClient.clear();
+            const data = await res.json().catch(() => ({}));
+            router.replace(data.redirectUrl || "/");
+          } else {
+            router.replace("/login?error=oauth_exchange_failed");
+          }
+        } catch {
+          router.replace("/login?error=oauth_exchange_failed");
+        }
+      }
     };
 
     return (
@@ -150,15 +206,7 @@ function AuthExchangeContent() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </a>
-            <Button
-              variant="ghost"
-              className="w-full text-muted-foreground"
-              onClick={async () => {
-                await setAuthToken(token);
-                queryClient.clear();
-                router.replace("/");
-              }}
-            >
+            <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleContinueWeb}>
               Continue in web browser
             </Button>
           </CardContent>

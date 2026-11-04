@@ -21,17 +21,25 @@ from app.db.models import User, db
 
 
 def test_google_login_captures_mobile_origin(client):
-    """Verify google_login stores mobile_origin=capacitor in session."""
+    """Verify google_login stores mobile_origin in signed state."""
     with patch("app.api.auth._ensure_google_oauth", return_value=True), patch("app.api.auth.oauth.google") as mock_google:
         mock_google.authorize_redirect.return_value = ("redirect-response", 302)
         response = client.get("/api/auth/login/google?mobile_origin=capacitor")
         assert response.status_code == 302
-        with client.session_transaction() as sess:
-            assert sess.get("oauth_mobile_origin") == "capacitor"
+        assert mock_google.authorize_redirect.called
+        kwargs = mock_google.authorize_redirect.call_args[1]
+        state = kwargs.get("state")
+        from app.api.auth import _verify_oauth_state
+
+        verified = _verify_oauth_state(state)
+        assert verified is not None
+        assert verified.get("mobile_origin") == "capacitor"
 
 
 def test_google_callback_mobile_redirect(client, app):
-    """Verify Google callback with mobile_origin=capacitor redirects to #token hash."""
+    """Verify Google callback with mobile_origin=capacitor redirects to ?code= without raw token."""
+    from app.api.auth import _generate_oauth_state
+
     user_info = {
         "sub": "google-mobile-user-789",
         "email": "googlemobile@example.com",
@@ -39,17 +47,20 @@ def test_google_callback_mobile_redirect(client, app):
         "email_verified": True,
     }
 
+    state = _generate_oauth_state(mobile_origin="capacitor")
+
     with patch("app.api.auth._ensure_google_oauth", return_value=True), patch("app.api.auth.oauth.google") as mock_google:
         mock_google.authorize_access_token.return_value = {"access_token": "fake-access-token"}
         mock_google.parse_id_token.return_value = user_info
 
         with client.session_transaction() as sess:
-            sess["oauth_mobile_origin"] = "capacitor"
+            sess["oauth_google_state"] = state
 
-        response = client.get("/api/auth/callback/google")
+        response = client.get(f"/api/auth/callback/google?state={state}")
         assert response.status_code == 302
         loc = response.headers["Location"]
-        assert "/auth-exchange?mobile=1#token=" in loc
+        assert "/auth-exchange?mobile=1&code=" in loc
+        assert "#token=" not in loc
         assert response.headers["Cache-Control"] == "no-store"
         assert response.headers["Referrer-Policy"] == "no-referrer"
 
@@ -57,3 +68,37 @@ def test_google_callback_mobile_redirect(client, app):
             user = db.session.execute(db.select(User).filter_by(google_id="google-mobile-user-789")).scalar_one_or_none()
             assert user is not None
             assert user.email == "googlemobile@example.com"
+
+
+def test_google_callback_suspended_user_rejected(client, app):
+    """Verify that suspended user cannot log in via Google OAuth with mobile_origin=capacitor."""
+    from app.api.auth import _generate_oauth_state
+
+    with app.app_context():
+        user = User(
+            email="googlesuspended@example.com",
+            google_id="google-suspended-777",
+            is_active=False,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    user_info = {
+        "sub": "google-suspended-777",
+        "email": "googlesuspended@example.com",
+        "name": "Banned User",
+        "email_verified": True,
+    }
+
+    state = _generate_oauth_state(mobile_origin="capacitor")
+
+    with patch("app.api.auth._ensure_google_oauth", return_value=True), patch("app.api.auth.oauth.google") as mock_google:
+        mock_google.authorize_access_token.return_value = {"access_token": "fake-access-token"}
+        mock_google.parse_id_token.return_value = user_info
+
+        with client.session_transaction() as sess:
+            sess["oauth_google_state"] = state
+
+        response = client.get(f"/api/auth/callback/google?state={state}")
+        assert response.status_code == 302
+        assert "login?error=account_suspended" in response.headers["Location"]

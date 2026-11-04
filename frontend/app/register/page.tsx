@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
@@ -35,6 +36,7 @@ import { getInstanceUrl, setAuthToken } from "@/lib/capacitor/storage";
 export default function RegisterPage() {
   const t = useTranslations("Register");
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: providers } = useAuthProviders();
   const isGoogleEnabled = providers?.google ?? false;
   const isAppleEnabled = providers?.apple ?? false;
@@ -42,6 +44,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isNative] = useState(() => isNativeApp());
 
@@ -62,42 +65,52 @@ export default function RegisterPage() {
       return;
     }
     setError("");
+    setIsLoading(true);
 
-    let registerUrl = `${process.env.NEXT_PUBLIC_API_URL || ""}/auth/register`;
-    if (isNativeApp()) {
-      const base = (await getInstanceUrl()) || "";
-      if (base) registerUrl = `${base}/api/auth/register`;
-    }
-
-    const res = await fetch(registerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, display_name: displayName }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
+    try {
+      let registerUrl = "/api/auth/register";
       if (isNativeApp()) {
-        await setAuthToken(data.token);
-        router.push("/");
-        return;
+        const base = (await getInstanceUrl()) || "";
+        if (base) registerUrl = `${base}/api/auth/register`;
       }
 
-      // Exchange token in BFF via POST body to set the session cookie
-      const exchangeRes = await fetch(`/api/auth-exchange`, {
+      const res = await fetch(registerUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: data.token }),
+        body: JSON.stringify({ email, password, display_name: displayName }),
       });
-      if (exchangeRes.ok) {
-        const result = await exchangeRes.json().catch(() => ({}));
-        router.push(result.redirectUrl || "/");
+
+      if (res.ok) {
+        const data = await res.json();
+        if (isNativeApp()) {
+          await setAuthToken(data.token);
+          queryClient.clear();
+          router.push("/");
+          return;
+        }
+
+        // Exchange token in BFF via POST body to set the session cookie
+        const exchangeRes = await fetch(`/api/auth-exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: data.token }),
+        });
+        if (exchangeRes.ok) {
+          const result = await exchangeRes.json().catch(() => ({}));
+          queryClient.clear();
+          router.push(result.redirectUrl || "/");
+        } else {
+          queryClient.clear();
+          router.push("/");
+        }
       } else {
-        router.push("/");
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || t("registrationFailed"));
       }
-    } else {
-      const errData = await res.json();
-      setError(errData.error || t("registrationFailed"));
+    } catch {
+      setError(t("registrationFailed"));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -156,7 +169,7 @@ export default function RegisterPage() {
                 type="password"
                 placeholder={t("passwordPlaceholder")}
                 required
-                minLength={6}
+                minLength={8}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -184,8 +197,8 @@ export default function RegisterPage() {
               </label>
             </div>
 
-            <Button type="submit" className="w-full" disabled={!acceptedTerms} variant="ghost">
-              {t("signUpButton")}
+            <Button type="submit" className="w-full" disabled={!acceptedTerms || isLoading}>
+              {isLoading ? "Signing up..." : t("signUpButton")}
             </Button>
           </form>
 

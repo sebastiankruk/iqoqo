@@ -55,22 +55,28 @@ def test_apple_login_configured_redirect(client):
 
 def test_apple_callback_web_success(client, app):
     """Verify Apple callback creates user and redirects to web /api/auth-exchange."""
+    from app.api.auth import _generate_oauth_state
+
     token_claims = {
         "sub": "apple-user-unique-id-123",
         "email": "appleuser@example.com",
         "email_verified": True,
     }
-    fake_id_token = pyjwt.encode(token_claims, "secret-key-at-least-32-bytes-long!", algorithm="HS256")
 
-    with patch("app.api.auth._ensure_apple_oauth", return_value=True):
+    state = _generate_oauth_state(callback_url="/collection")
+
+    with (
+        patch("app.api.auth._ensure_apple_oauth", return_value=True),
+        patch("app.api.auth._verify_apple_id_token", return_value=token_claims),
+    ):
         with client.session_transaction() as sess:
-            sess["oauth_apple_state"] = "csrf-state-abc"
+            sess["oauth_apple_state"] = state
 
         response = client.post(
             "/api/auth/callback/apple",
             data={
-                "state": "csrf-state-abc",
-                "id_token": fake_id_token,
+                "state": state,
+                "id_token": "valid.apple.jwt",
                 "user": json.dumps({"name": {"firstName": "Ada", "lastName": "Lovelace"}}),
             },
         )
@@ -86,28 +92,132 @@ def test_apple_callback_web_success(client, app):
 
 
 def test_apple_callback_mobile_capacitor_redirect(client, app):
-    """Verify Apple callback with mobile_origin=capacitor redirects to #token hash without HTML."""
+    """Verify Apple callback with mobile_origin=capacitor redirects to ?code= exchange without raw token or HTML."""
+    from app.api.auth import _generate_oauth_state
+
     token_claims = {
         "sub": "apple-mobile-user-456",
         "email": "mobile@example.com",
         "email_verified": True,
     }
-    fake_id_token = pyjwt.encode(token_claims, "secret-key-at-least-32-bytes-long!", algorithm="HS256")
 
-    with patch("app.api.auth._ensure_apple_oauth", return_value=True):
+    state = _generate_oauth_state(mobile_origin="capacitor")
+
+    with (
+        patch("app.api.auth._ensure_apple_oauth", return_value=True),
+        patch("app.api.auth._verify_apple_id_token", return_value=token_claims),
+    ):
         with client.session_transaction() as sess:
-            sess["oauth_apple_state"] = "csrf-state-xyz"
-            sess["oauth_mobile_origin"] = "capacitor"
+            sess["oauth_apple_state"] = state
 
         response = client.post(
             "/api/auth/callback/apple",
             data={
-                "state": "csrf-state-xyz",
-                "id_token": fake_id_token,
+                "state": state,
+                "id_token": "valid.apple.jwt",
             },
         )
         assert response.status_code == 302
         loc = response.headers["Location"]
-        assert "/auth-exchange?mobile=1#token=" in loc
+        assert "/auth-exchange?mobile=1&code=" in loc
+        assert "#token=" not in loc
         assert response.headers["Cache-Control"] == "no-store"
         assert response.headers["Referrer-Policy"] == "no-referrer"
+
+
+def test_apple_callback_suspended_user_rejected(client, app):
+    """Verify that a suspended user (is_active=False) cannot log in via Apple OAuth."""
+    from app.api.auth import _generate_oauth_state
+
+    token_claims = {
+        "sub": "apple-suspended-user-999",
+        "email": "suspended@example.com",
+        "email_verified": True,
+    }
+
+    with app.app_context():
+        user = User(
+            email="suspended@example.com",
+            apple_id="apple-suspended-user-999",
+            is_active=False,
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    state = _generate_oauth_state(mobile_origin="capacitor")
+
+    with (
+        patch("app.api.auth._ensure_apple_oauth", return_value=True),
+        patch("app.api.auth._verify_apple_id_token", return_value=token_claims),
+    ):
+        with client.session_transaction() as sess:
+            sess["oauth_apple_state"] = state
+
+        response = client.post(
+            "/api/auth/callback/apple",
+            data={
+                "state": state,
+                "id_token": "valid.apple.jwt",
+            },
+        )
+        assert response.status_code == 302
+        assert "login?error=account_suspended" in response.headers["Location"]
+
+
+def test_apple_callback_tampered_state_rejected(client):
+    """Verify that tampered or missing state fails closed."""
+    with (
+        patch("app.api.auth._ensure_apple_oauth", return_value=True),
+        patch("app.api.auth._verify_apple_id_token", return_value={"sub": "123"}),
+    ):
+        response = client.post(
+            "/api/auth/callback/apple",
+            data={
+                "state": "forged-invalid-state",
+                "id_token": "valid.apple.jwt",
+            },
+        )
+        assert response.status_code == 302
+        assert "login?error=csrf_state_mismatch" in response.headers["Location"]
+
+
+def test_apple_callback_unverified_email_not_linked(client, app):
+    """Verify that unverified Apple email is NOT linked to an existing account."""
+    from app.api.auth import _generate_oauth_state
+
+    with app.app_context():
+        existing = User(
+            email="victim@example.com",
+            is_active=True,
+        )
+        db.session.add(existing)
+        db.session.commit()
+        existing_id = existing.id
+
+    token_claims = {
+        "sub": "attacker-apple-sub-007",
+        "email": "victim@example.com",
+        "email_verified": False,  # Not verified!
+    }
+
+    state = _generate_oauth_state()
+
+    with (
+        patch("app.api.auth._ensure_apple_oauth", return_value=True),
+        patch("app.api.auth._verify_apple_id_token", return_value=token_claims),
+    ):
+        with client.session_transaction() as sess:
+            sess["oauth_apple_state"] = state
+
+        response = client.post(
+            "/api/auth/callback/apple",
+            data={
+                "state": state,
+                "id_token": "valid.apple.jwt",
+            },
+        )
+        assert response.status_code == 302
+
+        with app.app_context():
+            victim = db.session.get(User, existing_id)
+            assert victim.apple_id is None
