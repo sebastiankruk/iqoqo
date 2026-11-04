@@ -1,4 +1,4 @@
-"useclient";
+"use client";
 
 // Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
 //
