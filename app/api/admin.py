@@ -1334,7 +1334,7 @@ def trigger_repair_authors():
         )
         db.session.add(audit)
         db.session.commit()
-    except Exception as exc:  # pylint: disable=broad-except
+    except SQLAlchemyError as exc:
         db.session.rollback()
         logger.warning("Could not record EntityAuditLog for repair-authors: %s", exc)
 
