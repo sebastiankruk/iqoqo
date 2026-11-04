@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -111,6 +111,13 @@ help:
 	@echo ""
 	@echo "Building:"
 	@echo "  build-frontend - Build Next.js production bundle"
+	@echo "  mobile-build   - Build Next.js static export for Capacitor"
+	@echo "  mobile-sync    - Build export and sync native Android/iOS assets"
+	@echo "  mobile-android-apk - Build debug Android APK via Gradle"
+	@echo "  mobile-android-aab - Build release Android AAB via Gradle"
+	@echo "  mobile-adb-install - Install debug APK to connected ADB device"
+	@echo "  mobile-ios-setup   - Idempotently install CocoaPods for iOS build"
+	@echo "  mobile-ios-open    - Sync assets and open iOS workspace in Xcode"
 	@echo "  clean          - Remove build artifacts"
 	@echo ""
 	@echo "Code quality:"
@@ -135,6 +142,7 @@ help:
 	@echo "  test-backend-pg - Run backend integration tests requiring PostgreSQL"
 	@echo "  test-frontend  - Run frontend unit tests (Vitest)"
 	@echo "  test-e2e       - Run Playwright against an isolated E2E-only PostgreSQL service."
+	@echo "  test-e2e-mobile - Run mobile Playwright E2E suite against isolated database."
 	@echo "  test-e2e-federation - Run Playwright against paired live federation preview containers."
 	@echo ""
 	@echo "Deployment:"
@@ -556,6 +564,51 @@ build-frontend:
 	@echo "Building Next.js production bundle..."
 	@cd frontend && npm run build
 
+# Mobile Targets (Capacitor 7 Native Android & iOS)
+JAVA_HOME ?= $(shell [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ] && echo "/usr/lib/jvm/java-21-openjdk-amd64" || ([ -d "$(HOME)/.jdk-21" ] && echo "$(HOME)/.jdk-21" || echo "$$JAVA_HOME"))
+ANDROID_HOME ?= $(shell [ -d "$(HOME)/.android-sdk" ] && echo "$(HOME)/.android-sdk" || echo "$$ANDROID_HOME")
+RUBY_GEM_BIN := $(shell ruby -e 'puts Gem.bindir(Gem.user_dir)' 2>/dev/null)
+export JAVA_HOME
+export ANDROID_HOME
+ifneq ($(RUBY_GEM_BIN),)
+export PATH := $(RUBY_GEM_BIN):$(PATH)
+endif
+mobile-build:
+	$(AI_ECHO) "Building Next.js conditional static export for Capacitor..."
+	@cd frontend && node scripts/build-capacitor.js
+
+mobile-sync: mobile-build
+	$(AI_ECHO) "Syncing Capacitor assets to native Android and iOS projects..."
+	@cd frontend && $(NPX) cap sync
+
+mobile-icons:
+	$(AI_ECHO) "Generating native mobile icons and splash assets..."
+	@node scripts/generate-ios-icons.js
+
+mobile-android-apk: mobile-sync
+	$(AI_ECHO) "Compiling Android debug APK..."
+	@cd frontend/android && ./gradlew assembleDebug
+
+mobile-android-aab: mobile-sync
+	$(AI_ECHO) "Compiling Android release App Bundle (AAB)..."
+	@cd frontend/android && ./gradlew bundleRelease
+
+mobile-adb-install:
+	$(AI_ECHO) "Installing Android debug APK via ADB..."
+	@adb install -r frontend/android/app/build/outputs/apk/debug/app-debug.apk
+
+mobile-ios-setup:
+	$(AI_ECHO) "Provisioning iOS build tooling (CocoaPods)..."
+	@./scripts/setup-ios-tools.sh
+
+mobile-ios-open: mobile-sync
+	$(AI_ECHO) "Opening iOS App workspace in Xcode..."
+	@cd frontend && $(NPX) cap open ios
+
+test-e2e-mobile: test-e2e-db-up
+	$(AI_ECHO) "Running mobile Playwright E2E suite against isolated database..."
+	@$(MAKE) --no-print-directory _test-e2e-run args='--grep "(?i)@mobile|mobile"'
+
 lint-license:
 	$(AI_ECHO) "Checking copyright headers..."
 	./scripts/check_license.sh
@@ -876,6 +929,30 @@ migrate-secrets: .venv/bin/activate ## Migrate API secrets from env file into en
 	else \
 		.venv/bin/python scripts/migrate_env_secrets_to_db.py $(args); \
 	fi
+
+repair-authors: ## Repair empty or corrupted FRBR author metadata across catalog in Docker (usage: make repair-authors [preview|prod] [env=preview|prod] [dry_run=1])
+	@target_env="$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(env),$(env),$(if $(ENV),$(ENV),$(if $(filter preview,$(MODE)),preview,$(if $(filter prod,$(MODE)),prod,))))))"; \
+	repair_args="$(if $(filter 1,$(dry_run)$(DRY_RUN)),--dry-run,--apply) $(args)"; \
+	if [ "$$target_env" = "preview" ]; then \
+		echo "Repairing FRBR authors in PREVIEW Docker stack (iqoqo-preview)..."; \
+		docker compose -p iqoqo-preview exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ "$$target_env" = "prod" ]; then \
+		echo "Repairing FRBR authors in PRODUCTION Docker stack (iqoqo)..."; \
+		docker compose -p iqoqo exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ -n "$$(docker compose -p iqoqo-preview ps -q web 2>/dev/null)" ]; then \
+		echo "Detected running PREVIEW Docker stack (iqoqo-preview); repairing..."; \
+		docker compose -p iqoqo-preview exec -T web python3 scripts/repair_frbr_authors.py $$repair_args; \
+	elif [ -n "$$(docker compose -p iqoqo ps -q web 2>/dev/null)" ]; then \
+		echo "Detected running PRODUCTION Docker stack (iqoqo); repairing (dry-run unless env=prod explicitly passed)..."; \
+		docker compose -p iqoqo exec -T web python3 scripts/repair_frbr_authors.py $(if $(filter 1,$(dry_run)$(DRY_RUN)),--dry-run,--dry-run) $(args); \
+	elif [ -f .venv/bin/python ]; then \
+		echo "No running preview or prod Docker container detected; falling back to local Python venv..."; \
+		.venv/bin/python scripts/repair_frbr_authors.py $$repair_args; \
+	else \
+		echo "Error: No running Docker stack (iqoqo or iqoqo-preview) found and no .venv/bin/python available." >&2; \
+		exit 1; \
+	fi
+
 
 backup-run:
 	@remote_target="$(remote)"; \

@@ -30,6 +30,8 @@ from collections.abc import Sequence
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, root_dir)
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
@@ -37,7 +39,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app import create_app
 from app.core.frbr_service import normalize_authors_list, sync_entity_contributions
 from app.db.contributions import WorkContribution
-from app.db.models import Work, db
+from app.db.models import Expression, Work, db
 
 
 def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> tuple[int, int]:
@@ -65,7 +67,10 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
     while True:
         stmt = (
             select(Work)
-            .options(selectinload(Work.contributions).selectinload(WorkContribution.contributor))
+            .options(
+                selectinload(Work.contributions).selectinload(WorkContribution.contributor),
+                selectinload(Work.expressions).selectinload(Expression.manifestations),
+            )
             .order_by(Work.id)
             .offset(offset)
             .limit(batch_size)
@@ -80,6 +85,29 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
             raw_authors = meta.get("authors")
             normalized = normalize_authors_list(raw_authors)
 
+            # If work has no authors, attempt fallback extraction from attached manifestations
+            if not normalized:
+                for expr in getattr(work, "expressions", []):
+                    for m in getattr(expr, "manifestations", []):
+                        if m.raw_payload and isinstance(m.raw_payload, dict) and "parameters" in m.raw_payload:
+                            from app.utils.allegro import _extract_allegro_parameters
+
+                            ext = _extract_allegro_parameters(m.raw_payload.get("parameters", []))
+                            if ext.get("authors"):
+                                cand = normalize_authors_list(ext["authors"])
+                                if cand:
+                                    normalized = cand
+                                    break
+                        if not normalized and m.meta and isinstance(m.meta, dict):
+                            m_auth = m.meta.get("authors") or m.meta.get("author") or m.meta.get("Artist")
+                            if m_auth:
+                                cand = normalize_authors_list(m_auth)
+                                if cand:
+                                    normalized = cand
+                                    break
+                    if normalized:
+                        break
+
             needs_repair = False
 
             # Condition 1: raw_authors is not already a list of clean strings equal to normalized
@@ -87,11 +115,11 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
                 needs_repair = True
 
             # Condition 2: check if WorkContribution rows exist and match normalized
-            existing_contributions = work.contributions
-            existing_names = {c.contributor.name for c in existing_contributions if c.contributor} if existing_contributions else set()
+            existing_contributions = work.contributions or []
+            existing_author_names = {c.contributor.name for c in existing_contributions if c.contributor and c.role == "author"}
             expected_names = set(normalized)
 
-            if normalized and existing_names != expected_names:
+            if normalized and existing_author_names != expected_names:
                 needs_repair = True
 
             if needs_repair:
@@ -105,8 +133,26 @@ def repair_work_authors(apply_changes: bool = False, batch_size: int = 500) -> t
                     flag_modified(work, "meta")
 
                     if normalized:
-                        contributions_payload = [{"name": name, "role": "author"} for name in normalized]
-                        sync_entity_contributions(work, contributions_payload)
+                        # Non-destructive: preserve all existing non-author contributions (director, artist, etc.)
+                        combined_contributions: list[dict[str, Any]] = []
+                        for c in existing_contributions:
+                            if c.contributor and c.role != "author":
+                                combined_contributions.append(
+                                    {
+                                        "name": c.contributor.name,
+                                        "role": c.role,
+                                        "sequence": c.sequence,
+                                    }
+                                )
+                        for seq, name in enumerate(normalized, start=1):
+                            combined_contributions.append(
+                                {
+                                    "name": name,
+                                    "role": "author",
+                                    "sequence": seq,
+                                }
+                            )
+                        sync_entity_contributions(work, combined_contributions)
 
         if apply_changes and batch_repaired > 0:
             db.session.commit()

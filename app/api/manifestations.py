@@ -51,6 +51,50 @@ MAX_CURSOR_PAGE_SIZE = 100
 logger = logging.getLogger(__name__)
 
 
+def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
+    """Resolve author list for a manifestation with graceful fallbacks across FRBR hierarchy."""
+    if m.expression and m.expression.work:
+        work = m.expression.work
+        if work.meta:
+            authors = normalize_authors_list(work.meta.get("authors"))
+            if authors:
+                return authors
+
+        # Fallback to relational contributions if work.meta['authors'] is empty
+        relational_authors = [
+            c.contributor.name for c in getattr(work, "contributions", []) if c.contributor and c.role == "author" and c.contributor.name
+        ]
+        if relational_authors:
+            return relational_authors
+
+        # Also check other key creative contributor roles if no author role exists
+        creative_contributors = [
+            c.contributor.name
+            for c in getattr(work, "contributions", [])
+            if c.contributor and c.role in ("director", "designer", "artist", "composer", "creator") and c.contributor.name
+        ]
+        if creative_contributors:
+            return creative_contributors
+
+    if m.meta:
+        m_authors = normalize_authors_list(m.meta.get("authors") or m.meta.get("author") or m.meta.get("Artist"))
+        if m_authors:
+            return m_authors
+
+    author_prop = getattr(m, "author", None)
+    if author_prop:
+        return [author_prop]
+
+    if m.raw_payload and isinstance(m.raw_payload, dict) and "parameters" in m.raw_payload:
+        from app.utils.allegro import _extract_allegro_parameters
+
+        ext = _extract_allegro_parameters(m.raw_payload.get("parameters", []))
+        if ext.get("authors"):
+            return normalize_authors_list(ext["authors"])
+
+    return []
+
+
 @api_bp.route("/manifestations", methods=["GET"])
 @optional_auth
 def get_manifestations() -> tuple[Response, int]:
@@ -211,12 +255,8 @@ def get_manifestations() -> tuple[Response, int]:
 
     data = []
     for m in manifestations:
-        work_title = ""
-        authors: list[str] = []
-        if m.expression and m.expression.work:
-            work = m.expression.work
-            work_title = work.title or ""
-            authors = normalize_authors_list(work.meta.get("authors")) if work.meta else []
+        work_title = (m.expression.work.title if (m.expression and m.expression.work and m.expression.work.title) else m.title) or ""
+        authors = _resolve_manifestation_display_author(m)
 
         user_owns = False
         item_id = None
@@ -296,12 +336,8 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     if not m:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
 
-    work_title = ""
-    authors: list[str] = []
-    if m.expression and m.expression.work:
-        work = m.expression.work
-        work_title = work.title or ""
-        authors = normalize_authors_list(work.meta.get("authors")) if work.meta else []
+    work_title = (m.expression.work.title if (m.expression and m.expression.work and m.expression.work.title) else m.title) or ""
+    authors = _resolve_manifestation_display_author(m)
 
     user_owns = False
     item_id: int | None = None

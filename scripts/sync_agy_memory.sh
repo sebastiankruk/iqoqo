@@ -137,6 +137,7 @@ skipped_no_match=0
 redacted_files=0
 
 for brain_dir in \
+    "$HOME/.gemini/antigravity/brain" \
     "$HOME/.gemini/antigravity-cli/brain" \
     "$HOME/.gemini/antigravity-ide/brain"; do
 

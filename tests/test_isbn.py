@@ -26,6 +26,7 @@ import requests
 from app.utils.isbn import (
     ISBNProviderOutcome,
     ISBNProviderOutcomeStatus,
+    _lookup_biblioteka_narodowa_outcome,
     _lookup_google_books,
     _lookup_google_books_outcome,
     _lookup_open_library,
@@ -393,6 +394,27 @@ class TestFetchIsbnMetadata:
         assert mock_gb.call_count == 2
         mock_ol.assert_called_once_with("9780553380163", timeout=ANY)
 
+    def test_polish_isbn_falls_back_to_biblioteka_narodowa(self):
+        """Verify that a Polish ISBN (97883...) falls back to BN when Google & OL have no result."""
+        gb_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="google_books")
+        ol_none = ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="open_library")
+        bn_meta = {"Title": "Lód", "Authors": ["Jacek Dukaj"], "Source": "Biblioteka Narodowa"}
+        bn_success = ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.SUCCESS,
+            metadata=bn_meta,
+            provider="biblioteka_narodowa",
+        )
+
+        with (
+            patch("app.utils.isbn._lookup_google_books_outcome", return_value=gb_none),
+            patch("app.utils.isbn._lookup_open_library_outcome", return_value=ol_none),
+            patch("app.utils.isbn._lookup_biblioteka_narodowa_outcome", return_value=bn_success) as mock_bn,
+        ):
+            result = fetch_isbn_metadata("9788308039854")
+
+        assert result == bn_meta
+        mock_bn.assert_called_once()
+
     def test_both_google_attempts_fail_and_chain_continues(self):
         """Task 3.4: Both Google attempts fail transiently, returns None so strategy continues downstream."""
         gb_transient = ISBNProviderOutcome(
@@ -467,3 +489,82 @@ def test_fetch_google_books_candidates_url_encoding(mock_session):
     assert "params" in kwargs
     assert kwargs["params"]["q"] == "Jaś i Małgosia"
     assert kwargs["params"]["maxResults"] == 5
+
+
+def test_biblioteka_narodowa_outcome_parsing():
+    """Verify parsing of Biblioteka Narodowa API JSON bib structures."""
+    from app.utils.isbn import ISBNProviderOutcomeStatus, _lookup_biblioteka_narodowa_outcome
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "bibs": [
+            {
+                "title": "Lód /",
+                "publisher": "Wydawnictwo Literackie Wydawnictwo Literackie,",
+                "publicationYear": "2007",
+                "genre": "Powieść",
+                "marc": {
+                    "fields": [
+                        {
+                            "100": {
+                                "subfields": [
+                                    {"a": "Dukaj, Jacek"},
+                                ]
+                            }
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_resp
+
+    with patch("app.utils.isbn._make_session", return_value=mock_session):
+        outcome = _lookup_biblioteka_narodowa_outcome("9788308039854")
+
+    assert outcome.status == ISBNProviderOutcomeStatus.SUCCESS
+    assert outcome.metadata is not None
+    assert outcome.metadata["Title"] == "Lód"
+    assert outcome.metadata["Authors"] == ["Jacek Dukaj"]
+    assert outcome.metadata["publisher"] == "Wydawnictwo Literackie"
+    assert outcome.metadata["year"] == 2007
+    assert outcome.metadata["Source"] == "Biblioteka Narodowa"
+
+
+def test_biblioteka_narodowa_records_outbound_telemetry():
+    """Verify Biblioteka Narodowa lookup calls record_outbound_telemetry."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"bibs": []}
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_resp
+    mock_session.headers = {"User-Agent": "test-agent"}
+
+    with (
+        patch("app.utils.isbn._make_session", return_value=mock_session),
+        patch("app.utils.isbn.record_outbound_telemetry") as mock_telem,
+    ):
+        _lookup_biblioteka_narodowa_outcome("9788308039854")
+
+    mock_telem.assert_called_once()
+    assert mock_telem.call_args[0][0] == "biblioteka_narodowa"
+
+
+def test_calc_timeout_sub_1_5s_budget():
+    """Verify timeout calculation strictly respects sub-1.5s remaining duration."""
+    captured_timeouts = []
+
+    def mock_google(isbn, timeout=None):
+        captured_timeouts.append(timeout)
+        return ISBNProviderOutcome(status=ISBNProviderOutcomeStatus.NO_RESULT, provider="google_books")
+
+    with patch("app.utils.isbn._lookup_google_books_outcome", side_effect=mock_google):
+        # Pass a very short max_duration (0.4s)
+        fetch_isbn_metadata("9780140449136", max_duration=0.4)
+
+    assert len(captured_timeouts) >= 1
+    conn_to, read_to = captured_timeouts[0]
+    assert conn_to <= 0.4
+    assert read_to <= 0.4

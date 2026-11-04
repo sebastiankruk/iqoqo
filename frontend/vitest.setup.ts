@@ -182,6 +182,7 @@ vi.mock("axios", async importOriginal => {
 vi.mock("next-intl", async () => {
   const { default: messages } = await import("./messages/en.json");
   return {
+    NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
     useLocale: () => "en",
     useTranslations: (namespace: string) => {
       const dictionary = messages[namespace as keyof typeof messages] as Record<string, unknown> | undefined;

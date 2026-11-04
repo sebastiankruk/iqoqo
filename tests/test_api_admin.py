@@ -193,3 +193,41 @@ def test_user_without_read_metadata_cannot_access_frbr_tree(client, normal_user_
     """User without read:metadata gets 403 on FRBR tree endpoint."""
     resp = client.get("/api/v1/admin/frbr/tree/manifestation/1", headers=normal_user_headers)
     assert resp.status_code in [401, 403]
+
+
+def test_admin_can_trigger_author_repair(client, admin_headers):
+    """Admin can trigger author repair endpoint."""
+    resp = client.post("/api/admin/maintenance/repair-authors", headers=admin_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert "inspected" in body["data"]
+    assert "repaired" in body["data"]
+
+
+def test_admin_can_trigger_author_repair_dry_run(client, admin_headers):
+    """Admin can trigger author repair endpoint in dry run mode."""
+    resp = client.post("/api/admin/maintenance/repair-authors", json={"dry_run": True}, headers=admin_headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body["data"]["dry_run"] is True
+
+
+def test_normal_user_cannot_trigger_author_repair(client, normal_user_headers):
+    """Normal user cannot trigger author repair endpoint."""
+    resp = client.post("/api/admin/maintenance/repair-authors", headers=normal_user_headers)
+    assert resp.status_code in [401, 403]
+
+
+def test_admin_repair_authors_records_audit_log(client, app, admin_headers):
+    """Admin triggering repair-authors records an EntityAuditLog entry."""
+    from app.db.core import EntityAuditLog
+
+    resp = client.post("/api/admin/maintenance/repair-authors", json={"dry_run": True}, headers=admin_headers)
+    assert resp.status_code == 200
+
+    with app.app_context():
+        log = EntityAuditLog.query.filter_by(change_type="maintenance_repair_authors").first()
+        assert log is not None
+        assert log.diff["dry_run"] is True

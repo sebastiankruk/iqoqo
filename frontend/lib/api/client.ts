@@ -13,8 +13,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse } from "@/types/frbr";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { getInstanceUrl, getAuthToken } from "@/lib/capacitor/storage";
 
 // In the browser we always use a relative "/api" base so requests are same-origin
 // and flow through the Next.js rewrite proxy (/api/:path* → Flask). This avoids
@@ -34,6 +36,37 @@ export const apiClient = axios.create({
   withCredentials: true,
   timeout: 15_000,
 });
+
+/**
+ * Dynamic Capacitor interceptor to route requests to the self-hosted instance
+ * and inject hardware-stored bearer tokens on iOS/Android.
+ *
+ * @param config - Outbound Axios request config
+ * @returns Modified Axios request config
+ */
+export async function mobileRequestInterceptor(
+  config: InternalAxiosRequestConfig
+): Promise<InternalAxiosRequestConfig> {
+  if (isNativeApp()) {
+    config.withCredentials = false;
+    const instanceUrl = await getInstanceUrl();
+    if (instanceUrl) {
+      config.baseURL = `${instanceUrl}/api`;
+    }
+    const token = await getAuthToken();
+    if (token) {
+      if (typeof config.headers?.set === "function") {
+        config.headers.set("Authorization", `Bearer ${token}`);
+      } else {
+        config.headers = config.headers || {};
+        (config.headers as Record<string, unknown>)["Authorization"] = `Bearer ${token}`;
+      }
+    }
+  }
+  return config;
+}
+
+apiClient.interceptors.request.use(mobileRequestInterceptor);
 
 /** Unwrap the standard `{ success, data, error }` envelope. */
 apiClient.interceptors.response.use(

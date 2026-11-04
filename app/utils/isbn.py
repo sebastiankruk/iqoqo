@@ -51,6 +51,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from app.core.telemetry import record_outbound_telemetry
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,6 +163,19 @@ def canonicalize_isbn(raw: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def _get_google_books_api_key() -> str | None:
+    """Retrieve Google Books API key from ConfigService (DB settings) or environment."""
+    try:
+        from app.core.config_service import ConfigService
+
+        val = ConfigService.get("GOOGLE_BOOKS_API_KEY")
+        if val:
+            return str(val)
+    except Exception:
+        pass
+    return os.environ.get("GOOGLE_BOOKS_API_KEY")
+
+
 def _lookup_google_books_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
     """Fetch metadata outcome from the Google Books API without leaking secrets.
 
@@ -172,7 +187,7 @@ def _lookup_google_books_outcome(isbn: str, timeout: tuple[float, float] | float
         :class:`ISBNProviderOutcome` indicating success, definitive no-result,
         or transient failure.
     """
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    api_key = _get_google_books_api_key()
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}"
     if api_key:
         url += f"&key={api_key}"
@@ -282,7 +297,7 @@ def fetch_google_books_candidates(query: str, max_results: int = 10) -> list[dic
     Returns:
         List of normalised metadata dicts, possibly empty.
     """
-    api_key = os.environ.get("GOOGLE_BOOKS_API_KEY")
+    api_key = _get_google_books_api_key()
     url = "https://www.googleapis.com/books/v1/volumes"
     params: dict[str, Any] = {"q": query, "maxResults": min(max_results, 40)}
     if api_key:
@@ -448,6 +463,138 @@ def _lookup_open_library(isbn: str) -> dict[str, Any] | None:
     return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
 
 
+def _lookup_biblioteka_narodowa_outcome(isbn: str, timeout: tuple[float, float] | float | None = None) -> ISBNProviderOutcome:
+    """Fetch metadata outcome from the National Library of Poland (Biblioteka Narodowa) API.
+
+    Open REST API: https://data.bn.org.pl/api/bibs.json?isbnIssn={isbn}
+    Requires no authentication. Authoritative catalog for Polish publications (978-83-...).
+
+    Args:
+        isbn: A canonical 13-digit ISBN string.
+        timeout: Optional (connect, read) timeout tuple or float in seconds.
+
+    Returns:
+        :class:`ISBNProviderOutcome` indicating success, definitive no-result,
+        or transient failure.
+    """
+    url = f"https://data.bn.org.pl/api/bibs.json?isbnIssn={isbn}"
+    try:
+        session = _make_session()
+        to = timeout if timeout is not None else (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+        record_outbound_telemetry("biblioteka_narodowa", dict(session.headers), url=url)
+        response = session.get(url, timeout=to)
+        response.raise_for_status()
+        data = response.json()
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        safe_msg = f"HTTP {status_code}" if status_code else "HTTPError"
+        logger.warning("Biblioteka Narodowa returned HTTP %s for ISBN %s", safe_msg, isbn)
+        if status_code in (429, 500, 502, 503, 504) or (status_code and status_code >= 500):
+            return ISBNProviderOutcome(
+                status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+                provider="biblioteka_narodowa",
+                error_detail=safe_msg,
+            )
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="biblioteka_narodowa",
+            error_detail=safe_msg,
+        )
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Biblioteka Narodowa request failed for ISBN %s: %s", isbn, exc)
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.TRANSIENT_FAILURE,
+            provider="biblioteka_narodowa",
+            error_detail=str(exc),
+        )
+
+    bibs = data.get("bibs") if isinstance(data, dict) else None
+    if not bibs or not isinstance(bibs, list):
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="biblioteka_narodowa",
+        )
+
+    bib = bibs[0]
+    raw_title = bib.get("title", "")
+    title = re.sub(r"\s*[/:]\s*$", "", raw_title).strip()
+    if not title:
+        return ISBNProviderOutcome(
+            status=ISBNProviderOutcomeStatus.NO_RESULT,
+            provider="biblioteka_narodowa",
+        )
+
+    # Extract authors from MARC fields 100 / 700 if present
+    authors: list[str] = []
+    marc = bib.get("marc", {})
+    if isinstance(marc, dict) and "fields" in marc:
+        for f in marc.get("fields", []):
+            if isinstance(f, dict):
+                for tag in ("100", "700"):
+                    if tag in f:
+                        subfields = f[tag].get("subfields", [])
+                        for sub in subfields:
+                            if "a" in sub:
+                                name_part = sub["a"].strip().rstrip(",")
+                                if "," in name_part:
+                                    parts = [p.strip() for p in name_part.split(",", 1)]
+                                    name_part = f"{parts[1]} {parts[0]}"
+                                if name_part and name_part not in authors:
+                                    authors.append(name_part)
+
+    # Fallback to bib.get("author")
+    if not authors:
+        raw_author = bib.get("author", "")
+        if raw_author:
+            cleaned = re.sub(r"\(\d{4}[^)]*\)", "", raw_author).strip()
+            if "," in cleaned:
+                parts = [p.strip() for p in cleaned.split(",", 1)]
+                cleaned = f"{parts[1]} {parts[0]}"
+            if cleaned:
+                authors.append(cleaned)
+
+    publisher = bib.get("publisher", "").strip().rstrip(",")
+    if publisher:
+        words = publisher.split()
+        if len(words) >= 4 and len(words) % 2 == 0:
+            half = len(words) // 2
+            if words[:half] == words[half:]:
+                publisher = " ".join(words[:half])
+
+    year = bib.get("publicationYear")
+    genre = bib.get("genre", "")
+    form = bib.get("formOfWork", "")
+    categories = [c for c in [genre, form] if c]
+
+    metadata = {
+        "Title": title,
+        "title": title,
+        "Authors": authors,
+        "authors": authors,
+        "publisher": publisher,
+        "year": int(year) if str(year).isdigit() else None,
+        "publication_date": str(year) if year else None,
+        "Categories": categories,
+        "categories": categories,
+        "Source": "Biblioteka Narodowa",
+        "data_source": "biblioteka_narodowa",
+        "barcode": isbn,
+        "isbn13": isbn,
+    }
+
+    return ISBNProviderOutcome(
+        status=ISBNProviderOutcomeStatus.SUCCESS,
+        metadata=metadata,
+        provider="biblioteka_narodowa",
+    )
+
+
+def _lookup_biblioteka_narodowa(isbn: str) -> dict[str, Any] | None:
+    """Fetch metadata from the National Library of Poland API."""
+    outcome = _lookup_biblioteka_narodowa_outcome(isbn)
+    return outcome.metadata if outcome.status == ISBNProviderOutcomeStatus.SUCCESS else None
+
+
 def _merge_metadata_gaps(primary: dict[str, Any], secondary: dict[str, Any], primary_name: str, secondary_name: str) -> dict[str, Any]:
     """Merge missing fields from secondary provider into primary metadata.
 
@@ -507,38 +654,45 @@ def _metadata_has_gaps(meta: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float = 3.0) -> dict[str, Any] | None:
+def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float = 6.0) -> dict[str, Any] | None:
     """Look up book metadata for *isbn* from external sources with gap-filling.
 
     Tries Google Books first. If Google Books succeeds but has gaps (e.g. missing
-    cover art or key metadata), queries Open Library to enrich missing fields
-    within a total duration bounded by *max_duration* (defaults to 3.0s).
+    cover art or key metadata), queries Open Library (and Biblioteka Narodowa for Polish
+    ISBNs) to enrich missing fields within a total duration bounded by *max_duration*
+    (defaults to 6.0s).
 
-    If Google Books fails transiently (e.g. 429/5xx), immediately attempts Open Library.
-    If Open Library has no metadata, retries Google Books once after *retry_delay*.
+    If Google Books fails transiently (e.g. 429/5xx), immediately attempts Open Library
+    and Biblioteka Narodowa. If both have no metadata, retries Google Books once after
+    *retry_delay*.
 
     Args:
         isbn: A canonical 13-digit ISBN string. Use :func:`canonicalize_isbn` to
               obtain one from raw user input before calling this function.
         retry_delay: Delay in seconds before a single Google Books retry when
-                     Google Books initially failed transiently and Open Library
+                     Google Books initially failed transiently and fallback providers
                      had no result. Defaults to 1.0.
         max_duration: Overall timeout ceiling in seconds for multi-provider lookups.
-                      Defaults to 3.0.
+                      Defaults to 6.0.
 
     Returns:
         A dict containing standard keys (Title, Authors, Description, Categories)
         plus raw payload and optional ``_provenance``, or ``None``.
     """
     start_time = time.monotonic()
+    is_polish = isbn.startswith("97883") or isbn.startswith("97983")
 
     def _remaining_time() -> float:
         return max_duration - (time.monotonic() - start_time)
 
     def _calc_timeout() -> tuple[float, float]:
         rem = max(0.1, _remaining_time())
-        conn_to = min(float(_CONNECT_TIMEOUT), max(0.1, rem * 0.4))
-        read_to = max(0.1, rem - conn_to)
+        if rem < 1.5:
+            conn_to = min(rem, max(0.05, rem * 0.5))
+            read_to = min(rem, max(0.05, rem - conn_to))
+        else:
+            conn_to = min(float(_CONNECT_TIMEOUT), rem, max(1.5, rem * 0.4))
+            read_to = min(rem, max(0.2, rem - conn_to))
         return (conn_to, read_to)
 
     google_outcome = _lookup_google_books_outcome(isbn, timeout=_calc_timeout())
@@ -554,6 +708,14 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
                 logger.info("Enriching ISBN %s metadata gaps from Open Library", isbn)
                 result = _merge_metadata_gaps(result, ol_outcome.metadata, "google_books", "open_library")
 
+        # Check for gap-filling from Biblioteka Narodowa if gaps still exist (especially for Polish ISBNs)
+        if _metadata_has_gaps(result) and is_polish and _remaining_time() > 0:
+            logger.debug("Google Books result has gaps for Polish ISBN %s, querying Biblioteka Narodowa", isbn)
+            bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+            if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS and bn_outcome.metadata:
+                logger.info("Enriching ISBN %s metadata gaps from Biblioteka Narodowa", isbn)
+                result = _merge_metadata_gaps(result, bn_outcome.metadata, "google_books", "biblioteka_narodowa")
+
         return result
 
     if google_outcome.status == ISBNProviderOutcomeStatus.NO_RESULT:
@@ -565,6 +727,14 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         if ol_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
             logger.info("ISBN %s resolved via Open Library", isbn)
             return ol_outcome.metadata
+
+        if is_polish and _remaining_time() > 0:
+            logger.debug("Checking Biblioteka Narodowa for Polish ISBN %s", isbn)
+            bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+            if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
+                logger.info("ISBN %s resolved via Biblioteka Narodowa", isbn)
+                return bn_outcome.metadata
+
         logger.warning("No metadata found for ISBN %s from Google Books or Open Library", isbn)
         return None
 
@@ -579,9 +749,16 @@ def fetch_isbn_metadata(isbn: str, retry_delay: float = 1.0, max_duration: float
         logger.info("ISBN %s resolved via Open Library after Google Books transient failure", isbn)
         return ol_outcome.metadata
 
+    if is_polish and _remaining_time() > 0:
+        logger.debug("Google Books transient failure, checking Biblioteka Narodowa for Polish ISBN %s", isbn)
+        bn_outcome = _lookup_biblioteka_narodowa_outcome(isbn, timeout=_calc_timeout())
+        if bn_outcome.status == ISBNProviderOutcomeStatus.SUCCESS:
+            logger.info("ISBN %s resolved via Biblioteka Narodowa after Google Books transient failure", isbn)
+            return bn_outcome.metadata
+
     # Open Library has no result (or also failed transiently), and Google Books failed transiently on first attempt
     logger.warning(
-        "Open Library had no metadata for ISBN %s after Google Books transient failure; retrying Google Books once",
+        "Fallback providers had no metadata for ISBN %s after Google Books transient failure; retrying Google Books once",
         isbn,
     )
     rem = _remaining_time()

@@ -21,6 +21,7 @@ import { Share2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { resolvePublicUrl } from "@/lib/utils";
 
 interface ShareButtonProps {
   /** The URL to share. Defaults to current window location if omitted. */
@@ -45,7 +46,8 @@ export function ShareButton({ url, title, text }: ShareButtonProps) {
   const [copied, setCopied] = React.useState(false);
 
   const handleShare = async () => {
-    const shareUrl = url || (typeof window !== "undefined" ? window.location.href : "");
+    const target = url || (typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "");
+    const shareUrl = target ? resolvePublicUrl(target) : "";
     if (!shareUrl) return;
 
     // Attempt Web Share API first

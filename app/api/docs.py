@@ -431,24 +431,127 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
 
                 # Provide default OpenAPI responses envelope if not specified
                 if not operation.get("responses"):
-                    operation["responses"] = {
-                        "200": {
-                            "description": "Successful operation.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
-                        },
-                        "400": {
-                            "description": "Bad Request or Validation Error.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                        "401": {
-                            "description": "Authentication credentials required or invalid.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                        "404": {
-                            "description": "Resource not found.",
-                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
-                        },
-                    }
+                    if openapi_path in (
+                        "/api/auth/login/apple",
+                        "/api/auth/callback/apple",
+                        "/api/auth/login/google",
+                        "/api/auth/callback/google",
+                    ):
+                        operation["responses"] = {
+                            "302": {
+                                "description": "Redirects to OAuth provider consent screen or frontend /auth-exchange handler.",
+                                "headers": {
+                                    "Location": {
+                                        "description": "Target redirection URI.",
+                                        "schema": {"type": "string"},
+                                    }
+                                },
+                            },
+                            "400": {
+                                "description": "Bad Request or Validation Error.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "503": {
+                                "description": "OAuth provider service unconfigured or unavailable.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                        }
+                    else:
+                        operation["responses"] = {
+                            "200": {
+                                "description": "Successful operation.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
+                            },
+                            "400": {
+                                "description": "Bad Request or Validation Error.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "401": {
+                                "description": "Authentication credentials required or invalid.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                            "404": {
+                                "description": "Resource not found.",
+                                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+                            },
+                        }
+
+                # Attach accurate requestBody schemas for specific endpoints
+                if openapi_path == "/api/auth/callback/apple" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": False,
+                            "content": {
+                                "application/x-www-form-urlencoded": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id_token": {"type": "string", "description": "Apple-signed JWT identity token."},
+                                            "code": {"type": "string", "description": "Single-use authorization code."},
+                                            "state": {"type": "string", "description": "CSRF state parameter."},
+                                            "user": {
+                                                "type": "string",
+                                                "description": "JSON-encoded user object sent on first authorization.",
+                                            },
+                                        },
+                                    }
+                                },
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id_token": {"type": "string"},
+                                            "code": {"type": "string"},
+                                            "state": {"type": "string"},
+                                            "user": {"type": "string"},
+                                        },
+                                    }
+                                },
+                            },
+                        }
+                elif openapi_path == "/api/auth/exchange" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "code": {
+                                                "type": "string",
+                                                "description": "Single-use exchange code from mobile OAuth redirect.",
+                                            },
+                                        },
+                                        "required": ["code"],
+                                    }
+                                }
+                            },
+                        }
+                elif openapi_path == "/api/admin/maintenance/repair-authors" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": False,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "dry_run": {
+                                                "type": "boolean",
+                                                "default": True,
+                                                "description": "When true, scans without committing changes.",
+                                            },
+                                            "batch_size": {
+                                                "type": "integer",
+                                                "default": 50,
+                                                "description": "Number of works to process per batch.",
+                                            },
+                                        },
+                                    }
+                                }
+                            },
+                        }
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

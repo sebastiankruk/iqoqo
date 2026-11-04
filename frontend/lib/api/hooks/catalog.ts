@@ -27,6 +27,8 @@ import type {
   WorkPartEntry,
   TaxonomiesResponse,
   SemanticLinksData,
+  WorkDetail,
+  ExpressionDetail,
 } from "@/types/frbr";
 
 import { queryKeys } from "./query-keys";
@@ -370,6 +372,44 @@ export function useManifestation(id: number, initialData?: CatalogEntry | null) 
     queryKey: queryKeys.manifestation(id),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CatalogEntry>>(`/manifestations/${id}`);
+      return res.data?.data ?? null;
+    },
+    enabled: id > 0,
+    initialData: initialData ?? undefined,
+  });
+}
+
+/**
+ * Custom hook to fetch a single Work by its numeric ID.
+ *
+ * @param id - The Work ID
+ * @param initialData - Optional initial data for SSR pre-fetching
+ * @returns Query result containing the WorkDetail
+ */
+export function useWork(id: number, initialData?: WorkDetail | null) {
+  return useQuery({
+    queryKey: queryKeys.work(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WorkDetail>>(`/works/${id}`);
+      return res.data?.data ?? null;
+    },
+    enabled: id > 0,
+    initialData: initialData ?? undefined,
+  });
+}
+
+/**
+ * Custom hook to fetch a single Expression by its numeric ID.
+ *
+ * @param id - The Expression ID
+ * @param initialData - Optional initial data for SSR pre-fetching
+ * @returns Query result containing the ExpressionDetail
+ */
+export function useExpression(id: number, initialData?: ExpressionDetail | null) {
+  return useQuery({
+    queryKey: queryKeys.expression(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ExpressionDetail>>(`/expressions/${id}`);
       return res.data?.data ?? null;
     },
     enabled: id > 0,

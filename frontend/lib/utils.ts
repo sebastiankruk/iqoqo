@@ -15,6 +15,8 @@
 //
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { isNativeApp } from "./capacitor/platform";
+import { getSyncInstanceUrl } from "./capacitor/storage";
 
 /**
  * Merge class names.
@@ -82,7 +84,7 @@ export function resolveApiUrl(path: string, isServer = false): string {
     try {
       const url = new URL(path);
       const allowedOrigins = new Set<string>();
-      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL, getSyncInstanceUrl()]) {
         if (!configuredUrl) continue;
         try {
           allowedOrigins.add(new URL(configuredUrl).origin);
@@ -111,6 +113,16 @@ export function resolveApiUrl(path: string, isServer = false): string {
   }
 
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Native mobile runtime (Capacitor) loads assets from https://localhost or capacitor://localhost.
+  // Relative /api paths cannot resolve against local static files, so we prefix with the active instance URL.
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      const apiPrefix = cleanPath.startsWith("/api") ? cleanPath : `/api${cleanPath}`;
+      return `${instanceUrl}${apiPrefix}`;
+    }
+  }
 
   // Server-side fetch requires an absolute URL.
   // We prefer FLASK_API_URL (internal) over NEXT_PUBLIC_API_URL (public/relative).
@@ -141,6 +153,58 @@ export function resolveApiUrl(path: string, isServer = false): string {
 }
 
 /**
+ * Resolves the public base origin for links, shares, and feeds.
+ * In a native Capacitor environment (iOS or Android), returns the configured instance
+ * URL instead of https://localhost or capacitor://localhost. If no remote instance
+ * is configured or if on localhost, falls back to the public canonical frontend URL.
+ *
+ * @returns {string} Public origin URL without trailing slash.
+ */
+export function getPublicBaseUrl(): string {
+  const defaultPublicUrl = (process.env.NEXT_PUBLIC_FRONTEND_URL || "https://iqoqo.cc").replace(/\/+$/, "");
+
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl && !instanceUrl.includes("localhost") && !instanceUrl.includes("127.0.0.1")) {
+      return instanceUrl.replace(/\/+$/, "");
+    }
+    return defaultPublicUrl;
+  }
+
+  if (typeof window !== "undefined") {
+    const isLocalhostOrCapacitor =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.protocol === "capacitor:";
+    if (isLocalhostOrCapacitor) {
+      const instanceUrl = getSyncInstanceUrl();
+      if (instanceUrl && !instanceUrl.includes("localhost") && !instanceUrl.includes("127.0.0.1")) {
+        return instanceUrl.replace(/\/+$/, "");
+      }
+      return defaultPublicUrl;
+    }
+    return window.location.origin;
+  }
+
+  return defaultPublicUrl;
+}
+
+/**
+ * Resolves a full public URL for share links, feeds, and open-in-browser targets.
+ *
+ * @param path - Relative or absolute path (e.g. "/share/abc", "/api/public/feed.xml")
+ * @returns {string} Fully-qualified public URL.
+ */
+export function resolvePublicUrl(path: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path)) {
+    return path;
+  }
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const base = getPublicBaseUrl();
+  return `${base}${cleanPath}`;
+}
+
+/**
  * Resolves a cover URL using the generic resolveApiUrl logic.
  * Supports optional cache-busting timestamp.
  *
@@ -155,7 +219,7 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
     try {
       const parsed = new URL(path);
       const allowedOrigins = new Set<string>();
-      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL]) {
+      for (const configuredUrl of [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL, getSyncInstanceUrl()]) {
         if (!configuredUrl) continue;
         try {
           allowedOrigins.add(new URL(configuredUrl).origin);
@@ -176,6 +240,30 @@ export function getCoverUrl(path: string | undefined, timestamp?: number | strin
     return `${url}${separator}t=${timestamp}`;
   }
   return url;
+}
+
+/**
+ * Resolves an avatar image URL.
+ * Passes through valid http/https URLs (e.g. Google OAuth avatars on lh3.googleusercontent.com).
+ * For relative paths, prefixes with the active instance URL on native mobile platforms.
+ *
+ * @param src - The avatar source path or URL
+ * @returns {string | undefined} Resolved avatar URL or undefined
+ */
+export function resolveAvatarUrl(src?: string | null): string | undefined {
+  if (!src) return undefined;
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+  const cleanPath = src.startsWith("/") ? src : `/${src}`;
+  if (isNativeApp()) {
+    const instanceUrl = getSyncInstanceUrl();
+    if (instanceUrl) {
+      const cleanInstance = instanceUrl.replace(/\/$/, "");
+      return `${cleanInstance}${cleanPath}`;
+    }
+  }
+  return cleanPath;
 }
 
 /**

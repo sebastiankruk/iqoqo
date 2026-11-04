@@ -42,7 +42,7 @@ vi.mock("@/components/scanner/top-bar", () => ({
   TopBar: (props: any) => {
     mockSetMediaType = props.setFormat;
     mockSetPolicy = props.setPolicy;
-    return <div data-testid="top-bar" />;
+    return <div data-testid="top-bar">{props.children}</div>;
   },
 }));
 
@@ -169,5 +169,33 @@ describe("ScanPage", () => {
     expect(setItemSpy).toHaveBeenCalledWith("iqoqo_scanner_policy", "catalog");
 
     setItemSpy.mockRestore();
+  });
+
+  it("renders unified lookup input and batch mode toggle", () => {
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    render(<ScanPage />);
+
+    expect(screen.getByTestId("unified-lookup-input")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-lookup-submit")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /batch mode/i })).toBeInTheDocument();
+  });
+
+  it("toggles batch mode button state on click", () => {
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    render(<ScanPage />);
+
+    const batchButton = screen.getByRole("button", { name: /batch mode/i });
+    expect(batchButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(batchButton);
+    expect(batchButton).toHaveAttribute("aria-pressed", "true");
   });
 });

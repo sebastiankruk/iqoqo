@@ -19,7 +19,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { ChevronRight, BookOpen, Loader2, Rss } from "lucide-react";
 import { useRecentManifestations } from "@/lib/api/hooks";
-import { getCoverUrl } from "@/lib/utils";
+import { getCoverUrl, resolvePublicUrl } from "@/lib/utils";
+import { isNativeApp } from "@/lib/capacitor/platform";
+import { openExternalUrl } from "@/lib/capacitor/navigation";
 import { useTranslations } from "next-intl";
 
 /**
@@ -33,6 +35,8 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
   const t = useTranslations("FreshArrivals");
   const { data: recentManifestations, isLoading, isError } = useRecentManifestations(12);
   const items = recentManifestations ?? [];
+  const feedPath = "/api/public/feed.xml";
+  const rssUrl = isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
 
   if (isError) {
     return (
@@ -51,16 +55,22 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
           <span className="hidden rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:inline-block">
             {t("latest")}
           </span>
-          <Link
-            href="/api/public/feed.xml"
+          <a
+            href={rssUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={e => {
+              if (isNativeApp()) {
+                e.preventDefault();
+                openExternalUrl(rssUrl);
+              }
+            }}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             title={t("rssTitle")}
           >
             <Rss className="h-4 w-4" />
             <span className="sr-only">RSS</span>
-          </Link>
+          </a>
         </div>
         {!publicMode && (
           <Link

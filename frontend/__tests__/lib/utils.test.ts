@@ -13,8 +13,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-import { afterEach, describe, expect, it } from "vitest";
-import { getCoverTimestamp, resolveApiUrl } from "@/lib/utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getCoverTimestamp, resolveApiUrl, getPublicBaseUrl, resolvePublicUrl } from "@/lib/utils";
+import * as storage from "@/lib/capacitor/storage";
+import * as platform from "@/lib/capacitor/platform";
 
 describe("getCoverTimestamp", () => {
   it("returns empty string for invalid timestamps", () => {
@@ -55,5 +57,48 @@ describe("resolveApiUrl", () => {
 
   it("rejects unsupported URL protocols", () => {
     expect(resolveApiUrl("javascript:alert(1)")).toBe("/api");
+  });
+});
+
+describe("getPublicBaseUrl and resolvePublicUrl", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("resolves to instance URL when running on native app", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://preview.iqoqo.cc");
+
+    expect(getPublicBaseUrl()).toBe("https://preview.iqoqo.cc");
+    expect(resolvePublicUrl("/share/my-token")).toBe("https://preview.iqoqo.cc/share/my-token");
+    expect(resolvePublicUrl("https://other.com/link")).toBe("https://other.com/link");
+  });
+
+  it("resolves to instance URL on localhost or capacitor origin if instance URL exists", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://my-instance.iqoqo.app");
+
+    // In JSDOM, window.location.hostname is localhost
+    expect(getPublicBaseUrl()).toBe("https://my-instance.iqoqo.app");
+    expect(resolvePublicUrl("/api/public/feed.xml")).toBe("https://my-instance.iqoqo.app/api/public/feed.xml");
+  });
+
+  it("falls back to default public url on native app when instance URL is null or localhost", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue(null);
+
+    expect(getPublicBaseUrl()).toBe("https://iqoqo.cc");
+    expect(resolvePublicUrl("/share/token-123")).toBe("https://iqoqo.cc/share/token-123");
+
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("http://localhost:5000");
+    expect(getPublicBaseUrl()).toBe("https://iqoqo.cc");
+  });
+
+  it("falls back to default public url on web localhost when instance URL is not set", () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(false);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue(null);
+
+    // In JSDOM, window.location.hostname is localhost
+    expect(getPublicBaseUrl()).toBe("https://iqoqo.cc");
   });
 });

@@ -23,7 +23,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from flask import Response, current_app, g, jsonify, request, stream_with_context
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.decorators import optional_auth
@@ -31,6 +31,14 @@ from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
+from app.core.search_service import (
+    SearchService,
+    _meta_text,
+    build_ilike_search_clause,
+    escape_ilike_term,
+    normalize_diacritics,
+)
+from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
 
@@ -285,7 +293,12 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
 
     if "status" in filters:
         status_val = filters["status"]
-        query = query.where(or_(Item.status == status_val, Item.collection_status == status_val))
+        statuses = status_val if isinstance(status_val, list) else [status_val]
+        statuses = [s for s in statuses if isinstance(s, str) and s]
+        if statuses:
+            query = query.where(or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
+        else:
+            query = query.where(sa.false())
 
     if "tags" in filters:
         query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
@@ -297,19 +310,29 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
     if "query" in filters:
         search_query = filters["query"]
         if search_query:
-            if "tags" not in filters:
-                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
-            query = query.where(
-                or_(
-                    Work.title.ilike(f"%{search_query}%"),
-                    Manifestation.isbn13 == search_query,
-                    Manifestation.upc == search_query,
-                    db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
-                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%"),
+            if db.engine.dialect.name == "postgresql":
+                statuses_list = statuses if "status" in filters else None
+                tags_list = filters.get("tags")
+                _, results = SearchService.search_items(
+                    q=search_query,
+                    user_id=user.id,
+                    limit=limit,
+                    offset=0,
+                    statuses=statuses_list,
+                    category=tags_list,
+                    owner_only=True,
+                    include_hidden=False,
                 )
-            )
+                item_ids = [r["item_id"] for r in results]
+                if not item_ids:
+                    return [] if not stream else iter([])
+                query = query.where(Item.id.in_(item_ids))
+            else:
+                if "tags" not in filters:
+                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                query = query.outerjoin(Work, Expression.work_id == Work.id)
+                query = query.where(build_ilike_search_clause(search_query))
 
     query = query.order_by(Item.updated_at.desc()).limit(limit)
 
@@ -569,23 +592,39 @@ def get_shared_collection(token: str):
     if "query" in filters:
         search_query = filters["query"]
         if search_query:
-            # Join Work and Manifestation if not joined
-            if "tags" not in filters:
-                query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
-                query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
-            query = query.outerjoin(Work, Expression.work_id == Work.id)
-
-            query = query.where(
-                or_(
-                    Work.title.ilike(f"%{search_query}%"),
-                    Manifestation.isbn13 == search_query,
-                    Manifestation.upc == search_query,
-                    db.cast(Work.meta, db.String).ilike(f"%{search_query}%"),
-                    db.cast(Manifestation.meta, db.String).ilike(f"%{search_query}%"),
+            if db.engine.dialect.name == "postgresql":
+                statuses_list = statuses if "status" in filters else None
+                tags_list = filters.get("tags")
+                _, results = SearchService.search_items(
+                    q=search_query,
+                    user_id=user.id,
+                    limit=1000,
+                    offset=0,
+                    statuses=statuses_list,
+                    category=tags_list,
+                    owner_only=True,
                 )
-            )
+                item_ids = [r["item_id"] for r in results]
+                if not item_ids:
+                    query = query.where(sa.false())
+                else:
+                    query = query.where(Item.id.in_(item_ids))
+            else:
+                # Join Work and Manifestation if not joined
+                if "tags" not in filters:
+                    query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+                    query = query.outerjoin(Expression, Manifestation.expression_id == Expression.id)
+                query = query.outerjoin(Work, Expression.work_id == Work.id)
+                query = query.where(build_ilike_search_clause(search_query))
 
-    items = list(db.session.execute(query.options(selectinload(Item.manifestation))).scalars().all())
+    items = list(
+        db.session.execute(
+            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
 
     items_list = [
         {
@@ -594,53 +633,103 @@ def get_shared_collection(token: str):
             "status": item.status,
             "collection_status": item.collection_status,
             "title": item.manifestation.title,
-            "authors": item.manifestation.meta.get("authors", []) if item.manifestation.meta else [],
+            "authors": (
+                (
+                    item.manifestation.expression.work.meta.get("authors")
+                    if item.manifestation.expression and item.manifestation.expression.work and item.manifestation.expression.work.meta
+                    else None
+                )
+                or (item.manifestation.meta.get("authors") if item.manifestation.meta else None)
+                or []
+            ),
             "cover_url": item.manifestation.cover_url or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
         }
         for item in items
     ]
 
-    is_wish_list = False
-    if "status" in filters:
-        status_val = filters["status"]
-        if status_val in ("wish_list", "want_to_read", "want_to_listen", "want_to_watch", "want_to_play"):
-            is_wish_list = True
+    status_filter = filters.get("status")
+    status_list: list[str] = []
+    if status_filter:
+        raw_list = status_filter if isinstance(status_filter, list) else [status_filter]
+        status_list = [s for s in raw_list if isinstance(s, str) and s]
+
+    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+    wish_list_statuses = _INTENT_LEVEL_STATUSES | {"wish_list"}
+    is_wish_list = any(s in wish_list_statuses for s in status_list)
 
     if is_wish_list:
         # Query UserWorkIntent directly for shared collection visibility.
         # Only non-hidden intents are exposed through shared collections.
-        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
-        intent_query = (
-            db.session.query(UserWorkIntent)
-            .options(
-                joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
-                .selectinload(Work.expressions)  # type: ignore[arg-type]
-                .selectinload(Expression.manifestations)  # type: ignore[arg-type]
-            )
-            .filter(
+        intent_stmt = (
+            select(UserWorkIntent)
+            .options(joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations))
+            .where(
                 UserWorkIntent.user_id == user.id,
                 UserWorkIntent.is_hidden.is_(False),
             )
         )
-        status_val = filters["status"]
-        if status_val in _INTENT_LEVEL_STATUSES:
-            intent_query = intent_query.filter(UserWorkIntent.status == status_val)
+        matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
+        if matched_intents:
+            intent_stmt = intent_stmt.where(UserWorkIntent.status.in_(matched_intents))
         else:
-            intent_query = intent_query.filter(UserWorkIntent.status != "fulfilled")
+            intent_stmt = intent_stmt.where(UserWorkIntent.status != "fulfilled")
 
         if filters.get("query"):
-            search_term = filters["query"].strip()
+            search_term = str(filters["query"]).strip()
             if search_term:
-                escaped_term = search_term.lower().replace("%", r"\%").replace("_", r"\_")
-                search_pattern = f"%{escaped_term}%"
-                intent_query = intent_query.join(Work, UserWorkIntent.work_id == Work.id).filter(
+                escaped_term = escape_ilike_term(search_term)
+                raw_pat = f"%{escaped_term}%"
+                is_pg = db.engine.dialect.name == "postgresql"
+                norm_pat = f"%{escape_ilike_term(normalize_diacritics(search_term))}%"
+
+                # Field-scoped searches avoiding full Work.meta JSON blob dump
+                title_match = (
                     or_(
-                        Work.title.ilike(search_pattern, escape="\\"),
-                        db.cast(Work.meta["authors"], db.String).ilike(search_pattern, escape="\\"),
+                        Work.title.ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(Work.title).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else Work.title.ilike(raw_pat, escape="\\")
+                )
+                author_meta_match = (
+                    or_(
+                        _meta_text(Work.meta["authors"]).ilike(raw_pat, escape="\\"),
+                        _meta_text(Work.meta["author"]).ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(_meta_text(Work.meta["authors"])).ilike(norm_pat, escape="\\"),
+                        func.immutable_unaccent(_meta_text(Work.meta["author"])).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else or_(
+                        _meta_text(Work.meta["authors"]).ilike(raw_pat, escape="\\"),
+                        _meta_text(Work.meta["author"]).ilike(raw_pat, escape="\\"),
+                    )
+                )
+                contrib_match = (
+                    or_(
+                        Contributor.name.ilike(raw_pat, escape="\\"),
+                        func.immutable_unaccent(Contributor.name).ilike(norm_pat, escape="\\"),
+                    )
+                    if is_pg
+                    else Contributor.name.ilike(raw_pat, escape="\\")
+                )
+
+                intent_stmt = intent_stmt.join(Work, UserWorkIntent.work_id == Work.id).where(
+                    or_(
+                        title_match,
+                        author_meta_match,
+                        exists(
+                            select(1)
+                            .select_from(WorkContribution)
+                            .join(Contributor, Contributor.id == WorkContribution.contributor_id)
+                            .where(
+                                WorkContribution.work_id == Work.id,
+                                contrib_match,
+                            )
+                        ),
                     )
                 )
 
-        intents = intent_query.all()
+        intents = db.session.execute(intent_stmt).scalars().all()
         for intent in intents:
             work = intent.work
             manifestation = None

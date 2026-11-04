@@ -178,7 +178,7 @@ def test_google_oauth_initialization_error_is_sanitized(client, monkeypatch):
 
     class FailingGoogle:
         @staticmethod
-        def authorize_redirect(_redirect_uri):
+        def authorize_redirect(_redirect_uri, *args, **kwargs):
             raise AttributeError("internal provider endpoint and secret details")
 
     class FakeOAuth:
@@ -215,10 +215,12 @@ def test_google_callback_uses_one_time_code_instead_of_jwt_query(client, app, mo
     monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
     monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
     monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    state = auth_module._generate_oauth_state(callback_url="/collection?view=roadmap")
     with client.session_transaction() as flask_session:
         flask_session["oauth_callback_url"] = "/collection?view=roadmap"
+        flask_session["oauth_google_state"] = state
 
-    callback = client.get("/api/auth/callback/google")
+    callback = client.get(f"/api/auth/callback/google?state={state}")
     assert callback.status_code == 302
     location = callback.headers["Location"]
     parsed = urlparse(location)
@@ -294,8 +296,11 @@ def test_google_callback_accepts_safe_https_avatar(client, app, monkeypatch):
     monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
     monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
     monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    state = auth_module._generate_oauth_state()
+    with client.session_transaction() as flask_session:
+        flask_session["oauth_google_state"] = state
 
-    callback = client.get("/api/auth/callback/google")
+    callback = client.get(f"/api/auth/callback/google?state={state}")
     assert callback.status_code == 302
 
     with app.app_context():
@@ -328,8 +333,11 @@ def test_google_callback_rejects_unsafe_avatar(client, app, monkeypatch):
     monkeypatch.setattr(auth_module, "oauth", FakeOAuth())
     monkeypatch.setattr(auth_module, "_ensure_google_oauth", lambda: True)
     monkeypatch.setenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    state = auth_module._generate_oauth_state()
+    with client.session_transaction() as flask_session:
+        flask_session["oauth_google_state"] = state
 
-    callback = client.get("/api/auth/callback/google")
+    callback = client.get(f"/api/auth/callback/google?state={state}")
     assert callback.status_code == 302
 
     with app.app_context():

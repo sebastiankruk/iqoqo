@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
@@ -80,8 +80,13 @@ const statusStyles: Record<string, { bg: string; text: string; border: string; l
  *
  * @returns {JSX.Element} The FeedbackPage component.
  */
-export default function FeedbackPage() {
+function FeedbackPageContent() {
   const t = useTranslations("FeedbackPage");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
   const { data: profile } = useProfile();
   const isAdmin = Boolean(profile?.roles?.includes("admin") || profile?.permissions?.includes("tickets:admin"));
   const searchParams = useSearchParams();
@@ -356,7 +361,7 @@ export default function FeedbackPage() {
           >
             <Headphones className="h-4 w-4" />
             <span>{t("curatorEscalations") || "Curator Escalations"}</span>
-            {pendingEscalationsCount > 0 && (
+            {mounted && pendingEscalationsCount > 0 && (
               <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
                 {pendingEscalationsCount}
               </span>
@@ -410,7 +415,7 @@ export default function FeedbackPage() {
                     Showing {filteredItems.length} {filteredItems.length === 1 ? "ticket" : "tickets"}
                     {pagination.total > 0 && ` of ${pagination.total}`}
                   </span>
-                  {isAdmin && <span className="font-semibold text-primary">Admin View Enabled</span>}
+                  {mounted && isAdmin && <span className="font-semibold text-primary">Admin View Enabled</span>}
                 </div>
 
                 {loading ? (
@@ -582,5 +587,18 @@ export default function FeedbackPage() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Dedicated feedback and ticket management page wrapped in Suspense for static prerendering.
+ *
+ * @returns {JSX.Element} The FeedbackPage component.
+ */
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <FeedbackPageContent />
+    </Suspense>
   );
 }

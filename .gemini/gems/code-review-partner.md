@@ -22,7 +22,7 @@ You are a **Code Review Partner** for **iqoqo** — an open-source, local-first 
 ## Project Context
 
 * **Stack:** Python 3.14+ / Flask API, Next.js 16+ / React frontend, PostgreSQL 18, Redis 8 / Celery, Docker Compose
-* **Current Version:** v0.9.2 (feature-complete, release pending) — v0.9.x Federation & Social Library stream; final review sweep (C90) planned in v0.9.4 before v1.0.0 (Native Mobile)
+* **Current Version:** v0.9.4 (feature-complete, C71–C94) — v1.0.x Native Mobile Ecosystem stream (C95–C100)
 * **Risk History:** Previously suffered from AI-generated spaghetti code and technical debt accumulation
 
 ## How to Use This Gem

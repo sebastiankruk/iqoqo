@@ -25,6 +25,11 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ id: "_placeholder" }];
+}
+
 /**
  * Server-side data fetcher for manifestation detail.
  *
@@ -32,6 +37,7 @@ interface Props {
  * @returns {Promise<CatalogEntry | null>} Manifestation data or null if not found.
  */
 async function getManifestation(id: string | number): Promise<CatalogEntry | null> {
+  if (id === "_placeholder" || Number.isNaN(Number(id))) return null;
   try {
     const res = await fetch(resolveApiUrl(`/manifestations/${id}`, true), {
       next: { revalidate: 60 },
@@ -52,6 +58,9 @@ async function getManifestation(id: string | number): Promise<CatalogEntry | nul
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const manifestation = await getManifestation(id);
 
   if (!manifestation) {
@@ -65,7 +74,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const timestamp = getCoverTimestamp(manifestation.meta);
   const coverUrl =
     getCoverUrl(manifestation.cover_url || undefined, timestamp) ||
-    (manifestation.meta?.["cover_url"] as string | undefined);
+    (manifestation.meta?.["cover_url"] ? getCoverUrl(manifestation.meta["cover_url"] as string, timestamp) : undefined);
 
   return {
     title: `${title} - iqoqo`,
@@ -98,6 +107,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 export default async function ManifestationPage({ params }: Props) {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return <ManifestationDetailClient manifestationId={0} initialManifestation={null} />;
+  }
   const manifestationId = Number(id);
   const manifestation = await getManifestation(manifestationId);
 
@@ -106,7 +118,9 @@ export default async function ManifestationPage({ params }: Props) {
     const timestamp = getCoverTimestamp(manifestation.meta);
     const coverUrl =
       getCoverUrl(manifestation.cover_url || undefined, timestamp) ||
-      (manifestation.meta?.["cover_url"] as string | undefined);
+      (manifestation.meta?.["cover_url"]
+        ? getCoverUrl(manifestation.meta["cover_url"] as string, timestamp)
+        : undefined);
     const resolved_year = manifestation.year || manifestation.meta?.Year || manifestation.meta?.year;
     const format =
       (manifestation.meta?.format as string | undefined) || (manifestation.meta?.Format as string | undefined);

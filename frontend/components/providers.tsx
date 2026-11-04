@@ -16,10 +16,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useProfile } from "@/lib/api/hooks";
+import { OnboardingGuard } from "@/components/mobile/onboarding-screen";
+import { registerDeepLinkHandler, registerBackButtonHandler } from "@/lib/capacitor/navigation";
+import { isNativeApp } from "@/lib/capacitor/platform";
 
 export const DEFAULT_QUERY_STALE_TIME = 60_000;
 
@@ -42,13 +45,21 @@ export function TransitionEventsListener() {
       pathname.startsWith("/share/") ||
       pathname.startsWith("/verify-email") ||
       pathname.startsWith("/reset-password") ||
+      pathname === "/auth-exchange" ||
+      pathname.startsWith("/auth-exchange") ||
       pathname.startsWith("/api/auth-exchange"))
   );
 
   const isAuthenticated = Boolean(profile && profile.id);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("EventSource" in window) || !isAuthenticated || isPublicRoute) {
+    if (
+      typeof window === "undefined" ||
+      !("EventSource" in window) ||
+      isNativeApp() ||
+      !isAuthenticated ||
+      isPublicRoute
+    ) {
       return;
     }
 
@@ -115,6 +126,25 @@ export function createAppQueryClient(): QueryClient {
 }
 
 /**
+ * Listens for hardware back button and deep link URL events on native platforms.
+ */
+function NativeNavigationListener() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const unregisterDeepLinks = registerDeepLinkHandler(router, queryClient);
+    const unregisterBackButton = registerBackButtonHandler(router);
+    return () => {
+      unregisterDeepLinks();
+      unregisterBackButton();
+    };
+  }, [router, queryClient]);
+
+  return null;
+}
+
+/**
  * Global client-side providers: React Query + Sonner toasts.
  * Wraps the entire application via `app/layout.tsx`.
  *
@@ -141,8 +171,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <NativeNavigationListener />
       <TransitionEventsListener />
-      {children}
+      <OnboardingGuard>{children}</OnboardingGuard>
       <Toaster
         richColors
         position={isMobile ? "top-center" : "bottom-right"}

@@ -174,6 +174,31 @@ class TestManifestationApiAuthorResilience:
         assert detail_data["authors"] == ["Remigiusz Mróz"]
         assert isinstance(detail_data["authors"], list)
 
+    def test_manifestation_author_fallback_from_manifestation_meta(self, client: Any, app: Any) -> None:
+        """Verify that when work.meta has no authors, manifestation fallback extracts author from m.meta."""
+        with app.app_context():
+            work = Work(title="Empty Author Work", meta={})
+            db.session.add(work)
+            db.session.flush()
+
+            expression = Expression(work_id=work.id)
+            db.session.add(expression)
+            db.session.flush()
+
+            manifestation = Manifestation(
+                expression_id=expression.id,
+                isbn13="9788395968686",
+                meta={"title": "Hania, Tyśka", "author": "Abelard Giza"},
+            )
+            db.session.add(manifestation)
+            db.session.commit()
+            m_id = manifestation.id
+
+        res = client.get(f"/api/manifestations/{m_id}")
+        assert res.status_code == 200
+        data = res.get_json()["data"]
+        assert data["authors"] == ["Abelard Giza"]
+
 
 class TestRepairFrbrAuthorsScript:
     """Test the data repair script for legacy corrupted authors."""
@@ -209,3 +234,107 @@ class TestRepairFrbrAuthorsScript:
             contribs = WorkContribution.query.filter_by(work_id=w_id).all()
             names = {c.contributor.name for c in contribs}
             assert names == {"Corrupted", "String"}
+
+    def test_repair_script_extracts_from_manifestation_parameters(self, app: Any) -> None:
+        """Verify repair script backfills work author from attached manifestation raw_payload parameters."""
+        with app.app_context():
+            work = Work(title="Allegro Param Work", meta={"authors": []})
+            db.session.add(work)
+            db.session.flush()
+
+            expr = Expression(work_id=work.id)
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(
+                expression_id=expr.id,
+                barcode="9788324087945",
+                raw_payload={"parameters": [{"name": "Autor", "values": ["Tomasz Strzelczyk"]}]},
+            )
+            db.session.add(m)
+            db.session.commit()
+            w_id = work.id
+
+            inspected, repaired = repair_work_authors(apply_changes=True)
+            assert inspected >= 1
+            assert repaired >= 1
+
+            db.session.expire_all()
+            fixed_work = db.session.get(Work, w_id)
+            assert fixed_work.meta["authors"] == ["Tomasz Strzelczyk"]
+
+    def test_repair_preserves_non_author_roles(self, app: Any) -> None:
+        """Verify repair preserves non-author WorkContribution roles and does not pollute Manifestation.meta."""
+        with app.app_context():
+            work = Work(title="Lord of the Rings", meta={"authors": "J.R.R. Tolkien; "})
+            db.session.add(work)
+            db.session.flush()
+
+            # Add existing translator contribution
+            translator = Contributor(name="Maria Skibniewska")
+            db.session.add(translator)
+            db.session.flush()
+            trans_contrib = WorkContribution(work_id=work.id, contributor_id=translator.id, role="translator", sequence=1)
+            db.session.add(trans_contrib)
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(expression_id=expr.id, meta={"title": "Władca Pierścieni"})
+            db.session.add(m)
+            db.session.commit()
+            w_id = work.id
+            m_id = m.id
+
+            inspected, repaired = repair_work_authors(apply_changes=True)
+            assert inspected >= 1
+            assert repaired >= 1
+
+            db.session.expire_all()
+            repaired_work = db.session.get(Work, w_id)
+            assert repaired_work.meta["authors"] == ["J.R.R. Tolkien"]
+
+            roles = {c.role: c.contributor.name for c in repaired_work.contributions}
+            assert "translator" in roles
+            assert roles["translator"] == "Maria Skibniewska"
+            assert "author" in roles
+            assert roles["author"] == "J.R.R. Tolkien"
+
+            manifestation = db.session.get(Manifestation, m_id)
+            assert "authors" not in (manifestation.meta or {})
+
+    def test_repair_dry_run_idempotent_on_unrepairable_works(self, app: Any) -> None:
+        """Verify unrepairable empty-author works are skipped and report 0 repairs."""
+        with app.app_context():
+            work = Work(title="Anonymous Work", meta={"authors": []})
+            db.session.add(work)
+            db.session.commit()
+
+            _, repaired = repair_work_authors(apply_changes=False)
+            assert repaired == 0
+
+    def test_resolve_manifestation_display_author_fallback_to_relational_contributor(self, app: Any) -> None:
+        """Verify manifestation display author resolves relational WorkContribution when meta is empty."""
+        from app.api.manifestations import _resolve_manifestation_display_author
+
+        with app.app_context():
+            work = Work(title="Solaris", meta={"authors": []})
+            db.session.add(work)
+            db.session.flush()
+
+            author = Contributor(name="Stanisław Lem")
+            db.session.add(author)
+            db.session.flush()
+            db.session.add(WorkContribution(work_id=work.id, contributor_id=author.id, role="author", sequence=1))
+
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+
+            m = Manifestation(expression_id=expr.id, meta={})
+            db.session.add(m)
+            db.session.commit()
+
+            display_author = _resolve_manifestation_display_author(m)
+            assert display_author == ["Stanisław Lem"]

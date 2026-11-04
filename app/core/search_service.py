@@ -29,7 +29,7 @@ from typing import Any
 from sqlalchemy import bindparam, exists, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.api.filters import CatalogFilterBuilder
+from app.api.filters import CatalogFilterBuilder, escape_ilike_term
 from app.db import db
 from app.db.contributions import Contributor, ExpressionContribution, WorkContribution
 from app.db.models import Expression, Item, Manifestation, Work
@@ -115,11 +115,12 @@ def build_ilike_search_clause(q: str) -> Any:
     with several contributors cannot multiply result rows or inflate totals.
     Shared by the item and manifestation ILIKE backends so they cannot drift.
     """
-    search_term = f"%{q}%"
-    norm_term = f"%{normalize_diacritics(q)}%"
+    escaped_q = escape_ilike_term(q)
+    search_term = f"%{escaped_q}%"
+    norm_term = f"%{normalize_diacritics(escaped_q)}%"
     raw_patterns = [search_term]
     norm_patterns = [norm_term]
-    words = q.split()
+    words = [escape_ilike_term(w) for w in q.split() if w.strip()]
     if len(words) > 1:
         # 'Garcia Marquez' -> '%Garcia%Marquez%'
         raw_patterns.append("%" + "%".join(words) + "%")
@@ -129,8 +130,8 @@ def build_ilike_search_clause(q: str) -> Any:
 
     def match(expr: Any) -> Any:
         return db.or_(
-            *[expr.ilike(p) for p in raw_patterns],
-            *[unaccent_func(expr).ilike(p) for p in norm_patterns],
+            *[expr.ilike(p, escape="\\") for p in raw_patterns],
+            *[unaccent_func(expr).ilike(p, escape="\\") for p in norm_patterns],
         )
 
     work_contributor = exists(
@@ -147,9 +148,22 @@ def build_ilike_search_clause(q: str) -> Any:
     )
     return db.or_(
         match(Work.title),
-        match(_meta_text(Work.meta)),
-        match(_meta_text(Manifestation.meta)),
+        match(Manifestation.label),
+        match(Manifestation.publisher),
+        match(_meta_text(Manifestation.meta["title"])),
+        match(_meta_text(Manifestation.meta["alt_title"])),
+        match(_meta_text(Manifestation.meta["publisher"])),
+        match(_meta_text(Manifestation.meta["label"])),
+        match(_meta_text(Manifestation.meta["tags"])),
+        match(_meta_text(Manifestation.meta["genres"])),
+        match(_meta_text(Work.meta["authors"])),
+        match(_meta_text(Work.meta["author"])),
+        match(_meta_text(Work.meta["tags"])),
+        match(_meta_text(Work.meta["genres"])),
         Manifestation.isbn13.ilike(search_term),
+        Manifestation.upc.ilike(search_term),
+        Manifestation.barcode.ilike(search_term),
+        Manifestation.catalog_number.ilike(search_term),
         work_contributor,
         expression_contributor,
     )
@@ -185,6 +199,7 @@ class ItemSearchFilters:
     lod_authority: str | None = None
     lod_status: str | None = None
     owner_only: bool = False
+    include_hidden: bool = True
     scope: str = "personal"
     friend_ids: list[Any] | None = None
 
@@ -528,6 +543,9 @@ class SearchService:
                 " AND (m.meta ->> 'catalog_number' IS NULL OR m.meta ->> 'catalog_number' = '')"
             )
 
+        if not filters.include_hidden:
+            extra_filters_sql += " AND i.is_hidden = FALSE"
+
         count_sql = f"""
         SELECT count(i.id) FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
@@ -595,6 +613,7 @@ class SearchService:
             lod_authority,
             lod_status,
             owner_only,
+            include_hidden,
             scope,
             friend_ids,
         ) = dataclasses.astuple(filters)
@@ -659,6 +678,9 @@ class SearchService:
             )
 
         query = query.filter(Item.id.in_(matching_items_sub))
+
+        if not filters.include_hidden:
+            query = query.filter(Item.is_hidden.is_(False))
 
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))

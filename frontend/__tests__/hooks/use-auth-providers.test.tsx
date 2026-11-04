@@ -18,6 +18,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthProviders, fetchAuthProviders } from "@/hooks/use-auth-providers";
+import * as platform from "@/lib/capacitor/platform";
+import * as storage from "@/lib/capacitor/storage";
 import React from "react";
 
 const createWrapper = () => {
@@ -46,7 +48,7 @@ describe("useAuthProviders", () => {
   it("returns google: true when API reports google enabled", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ google: true }),
+      json: async () => ({ google: true, apple: false }),
     });
 
     const { result } = renderHook(() => useAuthProviders(), {
@@ -57,13 +59,13 @@ describe("useAuthProviders", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual({ google: true });
+    expect(result.current.data).toEqual({ google: true, apple: false });
   });
 
-  it("returns google: false when API reports google disabled", async () => {
+  it("returns google: false and apple: false when API reports disabled", async () => {
     (global.fetch as Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ google: false }),
+      json: async () => ({ google: false, apple: false }),
     });
 
     const { result } = renderHook(() => useAuthProviders(), {
@@ -74,13 +76,45 @@ describe("useAuthProviders", () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(result.current.data).toEqual({ google: false });
+    expect(result.current.data).toEqual({ google: false, apple: false });
   });
 
-  it("falls back to google: false when API request fails", async () => {
+  it("returns apple: true when API reports apple enabled", async () => {
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ google: false, apple: true }),
+    });
+
+    const { result } = renderHook(() => useAuthProviders(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual({ google: false, apple: true });
+  });
+
+  it("falls back to false when API request fails", async () => {
     (global.fetch as Mock).mockRejectedValueOnce(new Error("Network error"));
 
     const providers = await fetchAuthProviders();
-    expect(providers).toEqual({ google: false });
+    expect(providers).toEqual({ google: false, apple: false });
+  });
+
+  it("resolves full instance URL when running inside native app", async () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getSyncInstanceUrl").mockReturnValue("https://preview.iqoqo.cc");
+    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue("https://preview.iqoqo.cc");
+
+    (global.fetch as Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ google: true, apple: false }),
+    });
+
+    const providers = await fetchAuthProviders();
+    expect(global.fetch).toHaveBeenCalledWith("https://preview.iqoqo.cc/api/auth/providers");
+    expect(providers).toEqual({ google: true, apple: false });
   });
 });

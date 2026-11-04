@@ -25,6 +25,11 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+/** Generates static placeholder params for Capacitor static export builds. */
+export function generateStaticParams() {
+  return [{ id: "_placeholder" }];
+}
+
 /**
  * Server-side data fetcher for item detail.
  *
@@ -32,6 +37,7 @@ interface Props {
  * @returns {Promise<Item | null>} Item data or null if not found.
  */
 async function getItem(id: string | number): Promise<Item | null> {
+  if (id === "_placeholder" || Number.isNaN(Number(id))) return null;
   try {
     const res = await fetch(resolveApiUrl(`/items/${id}`, true), {
       cache: "no-store",
@@ -52,6 +58,9 @@ async function getItem(id: string | number): Promise<Item | null> {
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+  if (id === "_placeholder") {
+    return { title: "iqoqo" };
+  }
   const item = await getItem(id);
 
   if (!item) {
@@ -101,6 +110,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ItemPage(props: Props) {
   const { params } = props;
   const { id } = await params;
+  if (id === "_placeholder") {
+    return <ItemPageClient itemId={0} />;
+  }
   const itemId = parseInt(id, 10);
   const item = await getItem(itemId);
 

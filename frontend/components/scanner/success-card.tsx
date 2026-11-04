@@ -28,7 +28,8 @@ import { queryKeys } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { isAudioMedia } from "@/lib/utils";
+import { isAudioMedia, getCoverUrl } from "@/lib/utils";
+import { triggerSuccessHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 
 interface SuccessCardProps {
   isbn: string;
@@ -191,6 +192,8 @@ export function SuccessCard({
         }
       }
 
+      await triggerSuccessHaptic();
+
       // Arm scanner auto-start for batch scanning continuity when navigating back to /scan
       try {
         if (typeof window !== "undefined" && window.sessionStorage) {
@@ -216,6 +219,7 @@ export function SuccessCard({
         onDismiss();
       }
     } catch (e) {
+      await triggerErrorHaptic();
       toast.error((e as Error).message ?? "Failed to add item");
     } finally {
       setAdding(false);
@@ -244,9 +248,7 @@ export function SuccessCard({
             >
               {coverUrl && coverUrl !== "/file.svg" ? (
                 <Image
-                  src={
-                    coverUrl.startsWith("/static") ? `${process.env.NEXT_PUBLIC_API_URL || ""}${coverUrl}` : coverUrl
-                  }
+                  src={getCoverUrl(coverUrl) || coverUrl}
                   alt={title}
                   fill
                   className="object-cover"

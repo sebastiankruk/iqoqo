@@ -103,3 +103,14 @@
   [ "$status" -eq 0 ]
 }
 
+@test "scripts/setup-android-sdk.sh syntax check" {
+  run bash -n scripts/setup-android-sdk.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "scripts/setup-android-emulator.sh syntax check" {
+  run bash -n scripts/setup-android-emulator.sh
+  [ "$status" -eq 0 ]
+}
+
+

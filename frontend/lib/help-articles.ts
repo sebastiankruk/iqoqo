@@ -221,7 +221,7 @@ When you open the Scanner, you will notice two controls in the top bar before yo
 
 * **Single Mode:** Best when you just bought one new book or game. You scan the barcode, review the rich success card, and jump straight to the new item's page.
 
-* **Batch Mode:** Built for cataloging an entire bookshelf at once. Keep your phone in one hand and pull books off the shelf with the other—every time iqoqo recognizes a barcode, it chimes, shows a non-blocking toast card at the bottom of the screen, and **keeps the camera viewfinder active** so you can scan the next item immediately.
+* **Batch Mode:** Built for cataloging an entire bookshelf at once. Keep your phone in one hand and pull books off the shelf with the other—every time iqoqo recognizes a barcode, it chimes, shows a non-blocking toast card at the bottom of the screen, and **keeps the camera viewfinder active** so you can scan the next item immediately. In the native Android and iOS apps, batch mode uses the hardware camera bridge, flashlight toggle, and tactile haptic pulses to make continuous shelf scanning effortless.
 
 ### Policy / Intent: Collection vs. Wishlist
 
@@ -319,7 +319,7 @@ Gdy otwierasz Skaner, na górnym pasku zobaczysz dwa przełączniki jeszcze prze
 
 * **Tryb pojedynczy:** Idealny, gdy kupujesz jedną nową książkę lub grę. Skanujesz kod, oglądasz kartę sukcesu i przechodzisz od razu do strony nowego egzemplarza.
 
-* **Tryb seryjny (Batch):** Stworzony do katalogowania całego regału naraz. Trzymaj telefon w jednej ręce i zdejmuj książki z półki drugą — za każdym razem, gdy iqoqo rozpozna kod, wyda dźwięk potwierdzenia, wyświetli dyskretne powiadomienie na dole ekranu i **pozostawi aktywny podgląd kamery**, by od razu skanować kolejną pozycję.
+* **Tryb seryjny (Batch):** Stworzony do katalogowania całego regału naraz. Trzymaj telefon w jednej ręce i zdejmuj książki z półki drugą — za każdym razem, gdy iqoqo rozpozna kod, wyda dźwięk potwierdzenia, wyświetli dyskretne powiadomienie na dole ekranu i **pozostawi aktywny podgląd kamery**, by od razu skanować kolejną pozycję. W natywnej aplikacji na Androida i iOS tryb seryjny wykorzystuje sprzętowy aparat, latarkę i wibracje haptyczne, ułatwiając szybkie skanowanie.
 
 ### Intencja dodania: Półka czy Lista Życzeń
 

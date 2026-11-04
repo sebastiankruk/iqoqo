@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import time
+import urllib.parse
 from typing import Any, cast
 
 import requests
@@ -291,6 +292,68 @@ def get_allegro_token() -> str | None:
         return None
 
 
+def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract standard bibliographic and media fields from Allegro product/offer parameters."""
+    barcode = None
+    authors: list[str] = []
+    clean_title: str | None = None
+    publisher: str | None = None
+    year: str | None = None
+    genres: list[str] = []
+    format_label: str | None = None
+    language: str | None = None
+
+    for param in params or []:
+        p_name = (param.get("name") or "").strip()
+        vals = param.get("valuesLabels") or param.get("values") or []
+        vals = [str(v).strip() for v in vals if v is not None and str(v).strip()]
+        if not vals:
+            continue
+
+        if p_name in ("EAN", "ISBN", "GTIN", "Kod producenta"):
+            if not barcode:
+                barcode = vals[0]
+        elif p_name in ("Autor", "Autorzy", "Wykonawca", "Twórca", "Reżyser"):
+            authors.extend(vals)
+        elif p_name in ("Tytuł", "Tytuł oryginalny"):
+            if not clean_title:
+                clean_title = vals[0]
+        elif p_name in ("Wydawnictwo", "Wytwórnia", "Producent"):
+            if not publisher:
+                publisher = vals[0]
+        elif p_name in ("Rok wydania", "Rok nagrania", "Rok"):
+            if not year:
+                year = vals[0]
+        elif p_name in ("Gatunek",):
+            genres.extend(vals)
+        elif p_name in ("Nośnik", "Format"):
+            if not format_label:
+                format_label = vals[0]
+        elif p_name in ("Język publikacji", "Język"):
+            if not language:
+                language = vals[0]
+
+    seen: set[str] = set()
+    unique_authors: list[str] = []
+    for a in authors:
+        a_clean = a.strip().rstrip(",;.")
+        if a_clean and a_clean not in seen:
+            seen.add(a_clean)
+            unique_authors.append(a_clean)
+
+    return {
+        "barcode": barcode,
+        "authors": unique_authors,
+        "author": unique_authors[0] if unique_authors else None,
+        "title": clean_title,
+        "publisher": publisher,
+        "year": year,
+        "genres": genres,
+        "format": format_label,
+        "language": language,
+    }
+
+
 def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[str, Any]:
     """Normalize a product item from Allegro Catalog API."""
     desc_obj = item.get("description")
@@ -305,24 +368,25 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
     elif isinstance(desc_obj, str):
         desc_text = desc_obj
 
-    barcode = query
-    for param in item.get("parameters", []):
-        if param.get("name") in ("EAN", "ISBN", "GTIN", "Kod producenta"):
-            values = param.get("values", [])
-            if values:
-                barcode = str(values[0])
-                break
+    extracted = _extract_allegro_parameters(item.get("parameters", []))
+    barcode = extracted["barcode"] or query
 
     pub_obj = item.get("publication")
-    publisher = pub_obj.get("publisher") if isinstance(pub_obj, dict) else None
+    publisher = extracted["publisher"] or (pub_obj.get("publisher") if isinstance(pub_obj, dict) else None)
 
     return {
-        "title": item.get("name", "Unknown Media"),
+        "title": extracted["title"] or item.get("name", "Unknown Media"),
         "barcode": barcode,
         "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
         "description": desc_text,
         "publisher": publisher,
-        "affiliate_url": f"https://allegro.pl/listing?string={barcode or query}",
+        "author": extracted["author"],
+        "authors": extracted["authors"],
+        "year": extracted["year"],
+        "genres": extracted["genres"],
+        "format": extracted["format"],
+        "language": extracted["language"],
+        "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Catalog",
         "data_source": "allegro",
         "raw_payload": item,
@@ -331,11 +395,20 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
 
 def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str, Any]:
     """Normalize an offer item from Allegro Listing API."""
+    extracted = _extract_allegro_parameters(offer.get("parameters", []))
+    barcode = extracted["barcode"] or query
     return {
-        "title": offer.get("name", "Unknown Media"),
-        "barcode": query,
+        "title": extracted["title"] or offer.get("name", "Unknown Media"),
+        "barcode": barcode,
         "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
-        "affiliate_url": f"https://allegro.pl/listing?string={query}",
+        "publisher": extracted["publisher"],
+        "author": extracted["author"],
+        "authors": extracted["authors"],
+        "year": extracted["year"],
+        "genres": extracted["genres"],
+        "format": extracted["format"],
+        "language": extracted["language"],
+        "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Listing",
         "data_source": "allegro",
         "raw_payload": offer,

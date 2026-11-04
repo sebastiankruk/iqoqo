@@ -29,10 +29,16 @@ import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
-import { useAddManualItem } from "@/lib/api/hooks";
+import { useAddManualItem, queryKeys } from "@/lib/api/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
+import { Search, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useBatchMode, BatchScanToggle } from "@/components/scanner/batch-scan-toggle";
+import { triggerScanHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import type { IsbnMeta, ScanFormat } from "@/types/frbr";
+import type { IsbnMeta, ScanFormat, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
 
@@ -82,6 +88,8 @@ export default function ScanPage() {
     return false;
   });
 
+  const inFlightBarcodesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
@@ -96,17 +104,125 @@ export default function ScanPage() {
 
   const addManualMutation = useAddManualItem();
   const router = useRouter();
+  const t = useTranslations("scanner");
+  const queryClient = useQueryClient();
 
-  const handleFound = useCallback((isbn: string, meta: IsbnMeta) => {
-    // Prefer the backend-normalized identifier/barcode if available
-    const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
+  const { isBatchMode, setBatchMode, scannedQueue, isCooldownActive, recordScan, clearQueue } = useBatchMode();
 
-    if (meta.candidates && meta.candidates.length > 1) {
-      setCandidates({ isbn: canonicalId, items: meta.candidates });
-    } else {
-      setResult({ isbn: canonicalId, meta });
+  const [quickQuery, setQuickQuery] = useState("");
+  const [isQuickSearching, setIsQuickSearching] = useState(false);
+
+  const formatToApiParam = (fmt?: string): string => {
+    if (fmt === "movie" || fmt === "video") return "movie";
+    if (fmt === "board_game" || fmt === "boardgame") return "board_game";
+    if (fmt === "puzzle") return "puzzle";
+    if (fmt === "music" || fmt === "audio") return "music";
+    if (fmt === "book") return "book";
+    return "";
+  };
+
+  const handleFound = useCallback(
+    async (isbn: string, meta: IsbnMeta) => {
+      // Prefer the backend-normalized identifier/barcode if available
+      const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
+
+      // Continuous batch mode handling: auto-adds item, toasts, and keeps scanner active
+      if (isBatchMode) {
+        if (inFlightBarcodesRef.current.has(canonicalId) || isCooldownActive(canonicalId)) {
+          return;
+        }
+        inFlightBarcodesRef.current.add(canonicalId);
+
+        // Single tactile scan confirmation on native mobile
+        await triggerScanHaptic();
+
+        if (meta.candidates && meta.candidates.length > 1) {
+          inFlightBarcodesRef.current.delete(canonicalId);
+          setCandidates({ isbn: canonicalId, items: meta.candidates });
+          return;
+        }
+
+        try {
+          const payloadCollectionStatus = policy === "wishlist" ? "wish_list" : "available";
+          const res = await apiClient.post<
+            ApiResponse<{ item_id?: number | null; intent_id?: number; manifestation_id: number; action?: string }>
+          >("/scan", {
+            barcode: canonicalId,
+            manifestation_id: meta.manifestation_id,
+            format: mapFormatToApi(activeFormat),
+            collection_status: payloadCollectionStatus,
+            policy,
+            meta: meta.data_source ? meta : undefined,
+          });
+
+          if (!res.data?.success) {
+            throw new Error((res.data as unknown as { error?: string })?.error || "Failed to add item in batch mode");
+          }
+
+          const itemTitle = meta.title || meta.Title || "Scanned item";
+          const authors = meta.authors || meta.Authors;
+          const normalizedAuthors = Array.isArray(authors)
+            ? authors.map((a: unknown) =>
+                a && typeof a === "object" && "name" in a ? (a as { name: string }).name : String(a)
+              )
+            : undefined;
+
+          recordScan(canonicalId, {
+            id: res.data?.data?.item_id || undefined,
+            title: itemTitle,
+            authors: normalizedAuthors,
+          });
+
+          queryClient.invalidateQueries({ queryKey: queryKeys.items() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.stats() });
+          queryClient.invalidateQueries({ queryKey: ["works", "shelf"] });
+          queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] });
+
+          toast.success(t("batchMode.itemAddedToast", { title: itemTitle }));
+          setAutoStart(true);
+          return;
+        } catch (err) {
+          await triggerErrorHaptic();
+          toast.error((err as Error).message || "Failed to add item in batch mode");
+          return;
+        } finally {
+          inFlightBarcodesRef.current.delete(canonicalId);
+        }
+      }
+
+      // Single scan mode
+      await triggerScanHaptic();
+      if (meta.candidates && meta.candidates.length > 1) {
+        setCandidates({ isbn: canonicalId, items: meta.candidates });
+      } else {
+        setResult({ isbn: canonicalId, meta });
+      }
+    },
+    [isBatchMode, isCooldownActive, policy, activeFormat, recordScan, queryClient, t]
+  );
+
+  const handleQuickLookup = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const query = quickQuery.trim();
+    if (!query) return;
+
+    setIsQuickSearching(true);
+    try {
+      const { apiFetch } = await import("@/lib/api/client");
+      const formatParam = formatToApiParam(activeFormat);
+      const url = formatParam
+        ? `/lookup/${encodeURIComponent(query)}?format=${formatParam}`
+        : `/lookup/${encodeURIComponent(query)}`;
+      const data = await apiFetch<IsbnMeta>(url);
+      setQuickQuery("");
+      await handleFound(query, data);
+    } catch {
+      toast.info(t("bottomSheet.lookupFailed"));
+      handleShowManualForm(query);
+    } finally {
+      setIsQuickSearching(false);
     }
-  }, []);
+  };
 
   const handleScanAnother = useCallback(() => {
     setResult(null);
@@ -212,8 +328,11 @@ export default function ScanPage() {
           playsInline
           muted
           autoPlay
+          poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"
           suppressHydrationWarning
-          className="absolute inset-0 z-0 h-full w-full object-cover"
+          className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-300 ${
+            scannerActive ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
         />
 
         <TopBar
@@ -224,7 +343,49 @@ export default function ScanPage() {
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
-        />
+        >
+          {!result && !showManual && (
+            <div className="flex items-center gap-2">
+              <form
+                onSubmit={handleQuickLookup}
+                className="flex flex-1 min-w-0 h-9 items-center rounded-xl bg-background/80 backdrop-blur-md border border-border/40 shadow-sm px-3 focus-within:border-primary/60"
+              >
+                <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+                <input
+                  data-testid="unified-lookup-input"
+                  type="text"
+                  value={quickQuery}
+                  onChange={e => setQuickQuery(e.target.value)}
+                  placeholder={t("unifiedLookup.placeholder")}
+                  className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                />
+                <Button
+                  data-testid="unified-lookup-submit"
+                  type="button"
+                  onClick={handleQuickLookup}
+                  size="sm"
+                  disabled={!quickQuery.trim() || isQuickSearching}
+                  className="h-7 px-2.5 text-xs ml-1 shrink-0 rounded-lg"
+                >
+                  {isQuickSearching ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    t("unifiedLookup.searchButton")
+                  )}
+                </Button>
+              </form>
+
+              <BatchScanToggle
+                enabled={isBatchMode}
+                onToggle={setBatchMode}
+                queueCount={scannedQueue.length}
+                recentItems={scannedQueue}
+                onClearQueue={clearQueue}
+                className="shrink-0"
+              />
+            </div>
+          )}
+        </TopBar>
 
         {!result && !showManual && scannerTab === "barcode" && (
           <Viewfinder isScanning={scannerActive} format={activeFormat} />

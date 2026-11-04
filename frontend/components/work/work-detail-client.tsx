@@ -18,18 +18,20 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Disc, Film, Gamepad2, Layers, Music, Sparkles } from "lucide-react";
+import { ArrowLeft, BookOpen, Disc, Film, Gamepad2, Layers, Loader2, Music, Sparkles } from "lucide-react";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveSchemaType } from "@/lib/schema-org";
 import { getCoverUrl } from "@/lib/utils";
+import { useWork } from "@/lib/api/hooks";
+import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import type { WorkDetail, WorkDetailManifestation } from "@/types/frbr";
 
 export interface WorkDetailClientProps {
   workId: number;
-  initialWork: WorkDetail;
+  initialWork?: WorkDetail | null;
 }
 
 /**
@@ -79,9 +81,23 @@ function getFormatIcon(format?: string | null, contentType?: string | null) {
  * @param {WorkDetailClientProps} props - Component properties.
  * @returns {JSX.Element} Interactive Work detail UI.
  */
-export function WorkDetailClient({ initialWork }: WorkDetailClientProps) {
+export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps) {
   const router = useRouter();
-  const work = initialWork;
+  const routeId = useResolvedRouteParam("id");
+  const effectiveId = workId && !isNaN(workId) && workId > 0 ? workId : routeId ? parseInt(routeId, 10) : 0;
+  const { data: clientWork, isLoading } = useWork(effectiveId, initialWork);
+  const work = clientWork ?? initialWork;
+
+  if (isLoading || !work || !work.id) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 aspect-square shrink-0 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   // Flatten all manifestations to find the primary cover
   const allManifestations: WorkDetailManifestation[] = [];

@@ -24,7 +24,7 @@ import { JsonLdConsoleFilter } from "@/components/json-ld-console-filter";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { getMessages, getLocale } from "next-intl/server";
-import { NextIntlClientProvider } from "next-intl";
+import { ClientI18nProvider } from "@/components/i18n-provider";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -85,6 +85,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(frontendUrl),
   title: "iqoqo – The Library of Everything",
   description: "Your personal library dashboard for books, games, music and collections",
+  manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
     apple: "/apple-icon",
@@ -97,6 +98,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#2C3E50",
 };
 
@@ -112,8 +116,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
-  const messages = await getMessages();
+  const isStaticExport = process.env.CAPACITOR_BUILD === "true";
+  const locale = isStaticExport ? "en" : await getLocale();
+  const messages = isStaticExport ? (await import(`../messages/en.json`)).default : await getMessages();
   // Resolved per request on the server; see resolveRumConfig for why this is
   // not a NEXT_PUBLIC_* build-time value.
   const rumConfig = resolveRumConfig();
@@ -130,13 +135,13 @@ export default async function RootLayout({
         <BrowserTelemetry />
         <JsonLdConsoleFilter />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientI18nProvider initialLocale={locale} initialMessages={messages}>
             <Providers>
               {rumConfig ? <BrowserOpenObserveRum {...rumConfig} /> : <BrowserOpenObserveRum />}
               {children}
               <CookieConsent />
             </Providers>
-          </NextIntlClientProvider>
+          </ClientI18nProvider>
         </ThemeProvider>
       </body>
     </html>

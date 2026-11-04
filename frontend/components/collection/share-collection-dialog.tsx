@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { ShareButton } from "@/components/ui/share-button";
 import { apiClient } from "@/lib/api/client";
+import { resolvePublicUrl } from "@/lib/utils";
 import { type ActiveFilter } from "./filter-bar";
 
 interface ShareCollectionDialogProps {
@@ -103,7 +104,7 @@ export function ShareCollectionDialog({ activeFilters, appliedQuery }: ShareColl
 
       const data = response.data;
       if (data.success && data.data && data.data.share_token) {
-        const url = `${window.location.origin}/share/${data.data.share_token}`;
+        const url = resolvePublicUrl(`/share/${data.data.share_token}`);
         setShareUrl(url);
         toast.success("Sharing link generated!");
       }

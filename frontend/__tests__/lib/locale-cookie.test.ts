@@ -14,7 +14,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 import { describe, expect, it, vi } from "vitest";
-import { setLocaleCookie } from "@/lib/locale-cookie";
+import { setLocaleCookie, LOCALE_CHANGE_EVENT } from "@/lib/locale-cookie";
+import * as capacitorLocale from "@/lib/capacitor/locale";
 
 describe("setLocaleCookie", () => {
   it("sets the locale cookie with Secure and SameSite=Lax", () => {
@@ -23,5 +24,20 @@ describe("setLocaleCookie", () => {
     setLocaleCookie("pl");
 
     expect(cookieSetter).toHaveBeenCalledWith("NEXT_LOCALE=pl; path=/; max-age=31536000; Secure; SameSite=Lax");
+  });
+
+  it("persists locale to storage and dispatches LOCALE_CHANGE_EVENT", () => {
+    const spySetSaved = vi.spyOn(capacitorLocale, "setSavedLocale").mockResolvedValue();
+    const eventHandler = vi.fn();
+    window.addEventListener(LOCALE_CHANGE_EVENT, eventHandler);
+
+    setLocaleCookie("pl");
+
+    expect(spySetSaved).toHaveBeenCalledWith("pl");
+    expect(eventHandler).toHaveBeenCalled();
+    const event = eventHandler.mock.calls[0][0] as CustomEvent;
+    expect(event.detail).toEqual({ locale: "pl" });
+
+    window.removeEventListener(LOCALE_CHANGE_EVENT, eventHandler);
   });
 });

@@ -20,6 +20,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LoginPage from "@/app/login/page";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { useSearchParams } from "next/navigation";
+import { Browser } from "@capacitor/browser";
+import * as platform from "@/lib/capacitor/platform";
+import * as storage from "@/lib/capacitor/storage";
+
+vi.mock("@capacitor/browser", () => ({
+  Browser: {
+    open: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 vi.mock("@/hooks/use-auth-providers", () => ({
   useAuthProviders: vi.fn(),
@@ -99,10 +109,30 @@ describe("LoginPage", () => {
     expect(screen.getByText(/Google sign-in is not configured on this instance/i)).toBeInTheDocument();
   });
 
+  it("displays oauth_exchange_failed localized message when error query parameter is present", () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("error=oauth_exchange_failed") as any);
+    renderWithQueryClient(<LoginPage />);
+    expect(screen.getByText(/Failed to complete sign-in. Please try again./i)).toBeInTheDocument();
+  });
+
   it("redirects to Google SSO when button is clicked", () => {
     renderWithQueryClient(<LoginPage />);
     fireEvent.click(screen.getByRole("button", { name: /Sign in with Google/i }));
     expect(window.location.href).toContain("/api/auth/login/google");
+  });
+
+  it("opens system browser via Capacitor Browser.open when running in native app", async () => {
+    vi.spyOn(platform, "isNativeApp").mockReturnValue(true);
+    vi.spyOn(storage, "getInstanceUrl").mockResolvedValue("https://preview.iqoqo.cc");
+
+    renderWithQueryClient(<LoginPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Sign in with Google/i }));
+
+    await waitFor(() => {
+      expect(Browser.open).toHaveBeenCalledWith({
+        url: "https://preview.iqoqo.cc/api/auth/login/google?mobile_origin=capacitor",
+      });
+    });
   });
 
   it("handles successful local login and redirects", async () => {

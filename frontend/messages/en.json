@@ -15,6 +15,7 @@
     "administration": "Administration",
     "logOut": "Log out",
     "home": "Home",
+    "search": "Search",
     "profile": "Profile",
     "languageSubmenu": "Language",
     "themeSubmenu": "Theme",
@@ -99,6 +100,8 @@
   "Login": {
     "title": "Sign in to iqoqo",
     "googleSignIn": "Sign in with Google",
+    "appleSignIn": "Sign in with Apple",
+    "changeServer": "Change instance server",
     "or": "Or",
     "emailPlaceholder": "Email",
     "passwordPlaceholder": "Password",
@@ -107,12 +110,14 @@
     "signUp": "Sign up",
     "loginFailed": "Login failed",
     "token_exchange_failed": "Google sign-in could not be completed. Please try again.",
+    "oauth_exchange_failed": "Failed to complete sign-in. Please try again.",
     "id_token_parse_failed": "Failed to verify your Google identity. Please try again.",
     "no_email": "Google account has no email address associated with it.",
     "user_setup_failed": "Failed to create your account. Please try again or contact support.",
     "jwt_generation_failed": "Session creation failed. Please try again.",
     "MissingToken": "Authentication token was missing. Please try signing in again.",
     "oauth_not_configured": "Google sign-in is not configured on this instance. Please use email and password.",
+    "apple_oauth_not_configured": "Apple sign-in is not configured on this instance. Please use email and password.",
     "twoFactorTitle": "Two-Factor Authentication",
     "twoFactorDescription": "Enter the 6-digit verification code from your authenticator app or an 8-character recovery code.",
     "otpPlaceholder": "123456 or recovery code",
@@ -124,6 +129,7 @@
     "title": "Create an account",
     "subtitle": "Join the distributed library",
     "googleSignUp": "Sign up with Google",
+    "appleSignUp": "Sign up with Apple",
     "orEmail": "Or continue with email",
     "displayNamePlaceholder": "Display Name (Optional)",
     "emailPlaceholder": "Email",
@@ -197,6 +203,7 @@
     "foundOne": "Found 1 item",
     "foundMultiple": "Found {count} items",
     "browseManage": "Browse and manage your library",
+    "scopeFriends": "Friends",
     "tabMyItems": "My Items",
     "tabGlobalLibrary": "Global Library",
     "tabExpressions": "Expressions",
@@ -492,6 +499,19 @@
       "coverPreview": "Cover preview",
       "uploadCover": "Upload Cover",
       "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
+    },
+    "batchMode": {
+      "toggleLabel": "Batch mode",
+      "viewQueue": "View scanned batch queue",
+      "recentScans": "Recent scans ({count})",
+      "clearQueue": "Clear queue",
+      "itemAddedToast": "Added \"{title}\" to collection",
+      "duplicateCooldown": "Barcode scanned recently, cooldown active"
+    },
+    "unifiedLookup": {
+      "placeholder": "Quick search title, code or barcode...",
+      "searchButton": "Lookup",
+      "searching": "Searching..."
     }
   },
   "SemanticLinks": {
@@ -839,6 +859,22 @@
       "curation": "Curator's Handbook",
       "privacy": "Privacy & Sharing"
     }
+  },
+  "Mobile": {
+    "serverSelectorTitle": "Connect to your library",
+    "serverSelectorDescription": "Enter the URL of your self-hosted iqoqo instance to begin.",
+    "serverUrlLabel": "Server URL",
+    "serverUrlPlaceholder": "https://library.example.com",
+    "verifyConnection": "Verify connection",
+    "verifying": "Verifying...",
+    "connectionSuccess": "Connected to {name}",
+    "connectionFailed": "Unable to connect to this server. Please check the URL and network connection.",
+    "invalidUrl": "Please enter a valid HTTP or HTTPS URL.",
+    "switchServer": "Switch server",
+    "currentServer": "Connected server",
+    "continue": "Continue to login",
+    "cancel": "Cancel",
+    "version": "Version: {version}"
   }
 }
 
