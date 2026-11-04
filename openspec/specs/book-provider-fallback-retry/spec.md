@@ -87,6 +87,7 @@ The system SHALL query secondary configured metadata providers using the canonic
 When an ISBN lookup corresponds to a Polish publication (ISBN-13 prefix 978-83 or 979-83) and primary providers yield no metadata or fail transiently, the system SHALL query the National Library of Poland (Biblioteka Narodowa) open REST API before declaring the lookup failed.
 
 #### Scenario: Polish ISBN resolves via Biblioteka Narodowa
+
 - **WHEN** a user or background process looks up a Polish ISBN (prefix 97883... or 97983...)
 - **AND** Google Books and Open Library return no metadata
 - **THEN** the system SHALL query `https://data.bn.org.pl/api/bibs.json?isbnIssn={isbn}`
@@ -97,6 +98,7 @@ When an ISBN lookup corresponds to a Polish publication (ISBN-13 prefix 978-83 o
 When performing Google Books volume lookups or candidate searches, the system SHALL read the API key from central instance settings before falling back to environment variables to prevent unauthenticated IP quota exhaustion.
 
 #### Scenario: Google Books queries use stored instance settings key
+
 - **WHEN** looking up ISBN metadata or candidate books from Google Books
 - **AND** a valid Google Books API key exists in encrypted instance settings
 - **THEN** all outbound Google Books requests SHALL attach the key as a parameter
