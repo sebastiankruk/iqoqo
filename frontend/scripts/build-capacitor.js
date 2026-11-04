@@ -28,6 +28,9 @@ const routesToPatch = [
   path.join(frontendDir, "app/api/auth/logout/route.ts"),
 ];
 
+/**
+ * Restores route files to force-dynamic after build.
+ */
 function restoreRoutes() {
   console.log("⚡ Restoring routes to force-dynamic...");
   for (const file of routesToPatch) {

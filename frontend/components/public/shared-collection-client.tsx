@@ -51,6 +51,12 @@ interface SharedCollectionClientProps {
   initialToken?: string;
 }
 
+/**
+ * Client-hydrated shared collection view for web and native Capacitor shells.
+ *
+ * @param {SharedCollectionClientProps} props - Component props.
+ * @returns {JSX.Element} Rendered shared collection page.
+ */
 export function SharedCollectionClient({ initialData, initialToken }: SharedCollectionClientProps) {
   const resolvedToken = useResolvedRouteParam("token") || initialToken;
   const t = useTranslations("Public");
@@ -65,9 +71,6 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
     if (!resolvedToken || resolvedToken === "_placeholder") return;
 
     let isMounted = true;
-    setIsLoading(true);
-    setIsError(false);
-    setIsNotFound(false);
 
     fetch(resolveApiUrl(`/public/share/${resolvedToken}`, false))
       .then(async res => {

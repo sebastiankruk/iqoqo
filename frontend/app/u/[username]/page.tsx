@@ -17,15 +17,11 @@
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { cookies } from "next/headers";
-import { getTranslations } from "next-intl/server";
-import { Library } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { buildProfileJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
 import { PublicProfileClient } from "@/components/public/public-profile-client";
-import { Footer } from "@/components/dashboard/footer";
-import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 
 /** Items requested per page on the public profile. Matches the API default. */
 const ITEMS_PER_PAGE = 24;

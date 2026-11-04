@@ -54,12 +54,18 @@ interface PublicProfileClientProps {
   initialUsername?: string;
 }
 
+/**
+ * Client-hydrated public profile view for web and native Capacitor shells.
+ *
+ * @param {PublicProfileClientProps} props - Component props.
+ * @returns {JSX.Element} Rendered public profile page.
+ */
 export function PublicProfileClient({ initialData, initialUsername }: PublicProfileClientProps) {
   const resolvedUsername = useResolvedRouteParam("username") || initialUsername;
   const t = useTranslations("Public");
 
   const [profileData, setProfileData] = useState<PublicProfileData | null>(initialData || null);
-  const [currentPage, setCurrentPage] = useState<number>(initialData?.currentPage || 1);
+  const currentPage = initialData?.currentPage || 1;
   const [isLoading, setIsLoading] = useState<boolean>(!initialData && !!resolvedUsername);
   const [isNotFound, setIsNotFound] = useState<boolean>(false);
   const [isError, setIsError] = useState<boolean>(false);
@@ -69,9 +75,6 @@ export function PublicProfileClient({ initialData, initialUsername }: PublicProf
     if (!resolvedUsername || resolvedUsername === "_placeholder") return;
 
     let isMounted = true;
-    setIsLoading(true);
-    setIsError(false);
-    setIsNotFound(false);
 
     Promise.all([
       fetch(resolveApiUrl(`/public/u/${resolvedUsername}`, false)),

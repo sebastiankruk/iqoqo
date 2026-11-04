@@ -16,8 +16,6 @@
 
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-import { Library, Share2 } from "lucide-react";
 
 import { resolveApiUrl } from "@/lib/utils";
 import { buildCollectionJsonLd } from "@/lib/schema-org";

@@ -108,7 +108,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ManifestationPage({ params }: Props) {
   const { id } = await params;
   if (id === "_placeholder") {
-    return <ManifestationDetailClient initialManifestation={null} />;
+    return <ManifestationDetailClient manifestationId={0} initialManifestation={null} />;
   }
   const manifestationId = Number(id);
   const manifestation = await getManifestation(manifestationId);

@@ -111,7 +111,7 @@ export default async function ItemPage(props: Props) {
   const { params } = props;
   const { id } = await params;
   if (id === "_placeholder") {
-    return <ItemPageClient />;
+    return <ItemPageClient itemId={0} />;
   }
   const itemId = parseInt(id, 10);
   const item = await getItem(itemId);

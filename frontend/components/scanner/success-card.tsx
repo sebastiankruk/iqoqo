@@ -248,7 +248,7 @@ export function SuccessCard({
             >
               {coverUrl && coverUrl !== "/file.svg" ? (
                 <Image
-                  src={getCoverUrl(coverUrl)}
+                  src={getCoverUrl(coverUrl) || coverUrl}
                   alt={title}
                   fill
                   className="object-cover"
