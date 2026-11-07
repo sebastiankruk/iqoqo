@@ -384,7 +384,7 @@ function ProcessedRequestsSection() {
                       {esc.request_type === "new_media_type" ? (
                         <div className="text-xs text-muted-foreground mt-1">
                           <span className="font-semibold text-foreground">New Media Type:</span>{" "}
-                          <span>{esc.payload?.proposed_format || esc.suggested_value}</span>
+                          <span>{String(esc.payload?.proposed_format || esc.suggested_value)}</span>
                         </div>
                       ) : isDeletion ? (
                         <p className="text-xs text-muted-foreground">

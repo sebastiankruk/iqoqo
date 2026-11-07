@@ -20,7 +20,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RequestNewTypeModal } from "@/components/social/request-new-type-modal";
 
 vi.mock("next-intl", () => ({
-  useTranslations: (ns: string) => {
+  useTranslations: () => {
     return (key: string) => {
       const msgs: Record<string, string> = {
         requestNewMediaType: "Request New Media Type",

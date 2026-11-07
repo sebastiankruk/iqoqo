@@ -474,7 +474,7 @@ export interface EscalationRequest {
   suggested_value: string;
   note?: string | null;
   request_type?: "correction" | "deletion" | "change_type" | "new_media_type";
-  payload?: EscalationNewMediaTypePayload | Record<string, unknown> | null;
+  payload?: EscalationNewMediaTypePayload | null;
   status: "pending" | "accepted" | "rejected" | "duplicate";
   resolved_by?: string | null;
   resolver_display_name?: string | null;

@@ -58,6 +58,12 @@ export async function createEscalation(
  * Submit a general new media type escalation request not bound to an entity.
  *
  * @param data - The new media type proposal payload.
+ * @param data.proposed_category - Proposed category name.
+ * @param data.proposed_format - Proposed format name.
+ * @param data.parent_frbr_class - FRBR class hierarchy binding.
+ * @param [data.sample_identifier_or_url] - Optional barcode or reference link.
+ * @param [data.suggested_properties] - Optional list of property names.
+ * @param data.rationale - Justification for adding this type.
  * @returns The created EscalationRequest.
  */
 export async function createNewMediaTypeEscalation(data: {

@@ -197,18 +197,18 @@ export function MyEscalations() {
                       <div>
                         <span className="font-semibold text-muted-foreground">Proposed Format:</span>{" "}
                         <span className="font-medium text-foreground">
-                          {esc.payload?.proposed_format || esc.suggested_value}
+                          {String(esc.payload?.proposed_format || esc.suggested_value)}
                         </span>
                       </div>
-                      {esc.payload?.proposed_category && (
+                      {Boolean(esc.payload?.proposed_category) && (
                         <div>
                           <span className="font-semibold text-muted-foreground">Category:</span>{" "}
-                          <span>{esc.payload.proposed_category}</span>
+                          <span>{String(esc.payload?.proposed_category)}</span>
                         </div>
                       )}
                       <div>
                         <span className="font-semibold text-muted-foreground">Rationale:</span>{" "}
-                        <span className="text-foreground">{esc.payload?.rationale || esc.note || "—"}</span>
+                        <span className="text-foreground">{String(esc.payload?.rationale || esc.note || "—")}</span>
                       </div>
                     </div>
                   ) : isDeletion ? (
