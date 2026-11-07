@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cartographic Maps & Map Supplements (C105)**:
+  - Extended FRBR ontology (`docs/ontology/iqoqo.ttl`, `docs/ontology/iqoqo-shapes.ttl`, `docs/ontology/taxonomy.ttl`) with standalone `cartographic_map` and `atlas` formats under `text`, `iqoqo:mapScale`, `iqoqo:mapProjection`, and `iqoqo:hasMapAttachment` linking to `iqoqo:MapAttachment` (`frbroo:R15_has_part`).
+  - Added physical item exemplar tracking for map completeness via `iqoqo:mapInsertPresent` on `Item` (`F5`).
+  - Implemented map attachment endpoints (`GET`, `POST`, `DELETE /manifestations/<id>/map-attachments`) with validated multipart image uploads, secure filename sanitization, and structured metadata.
+  - Added physical item update support for `map_insert_present` on `PUT / PATCH /items/<id>`.
+  - Extended metadata display projection (`app/core/meta_display.py` and `frontend/lib/meta.ts`) and RDF export (`app/core/frbr_service.py`) emitting full cartographic properties and `schema:Map` mapping.
+
 ### Changed
 
 ### Fixed

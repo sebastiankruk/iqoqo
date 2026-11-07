@@ -43,6 +43,10 @@ media_categories:
         label: "Magazine"
       - id: ebook
         label: "eBook"
+      - id: cartographic_map
+        label: "Cartographic Map"
+      - id: atlas
+        label: "Atlas"
       - id: unknown_text
         label: "Unknown Text Format"
 
@@ -182,6 +186,9 @@ format_aliases:
   lego: lego
   # text aliases
   standard: text
+  map: text
+  cartographic_map: text
+  atlas: text
   # music aliases
   audio: music
   sound: music

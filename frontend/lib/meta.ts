@@ -46,6 +46,9 @@ export const FIELD_CHAINS = {
   piece_count: ["piece_count", "num_parts", "PieceCount", "pieces"],
   minifig_count: ["minifig_count", "num_minifigs", "MinifigCount", "minifigs"],
   theme: ["theme", "Theme", "lego_theme"],
+  map_scale: ["map_scale", "scale", "MapScale"],
+  map_projection: ["map_projection", "projection", "MapProjection"],
+  has_map: ["has_map", "has_map_attachment", "has_maps"],
 } as const satisfies Record<string, KeyChain>;
 
 /**
@@ -89,6 +92,8 @@ export const DEDICATED_SECTION_KEYS: readonly string[] = [
   "build_status",
   "missing_pieces_count",
   "instructions_included",
+  "map_attachments",
+  "map_insert_present",
   "cover_status",
   "cover_source",
   "cover_url",

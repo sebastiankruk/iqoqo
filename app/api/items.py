@@ -29,6 +29,7 @@ from flask import Response, current_app, g, jsonify, request, send_file, stream_
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
@@ -549,6 +550,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
+        "map_insert_present": (item.meta or {}).get("map_insert_present"),
     }
 
     if is_owner or is_admin or is_borrowed:
@@ -703,6 +705,12 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         # Also update item.meta if needed, but usually extra fields are for manifestation
         item.meta = {**item.meta, **metadata} if item.meta else metadata
 
+    if payload.map_insert_present is not None:
+        item_meta = dict(item.meta or {})
+        item_meta["map_insert_present"] = payload.map_insert_present
+        item.meta = item_meta
+        flag_modified(item, "meta")
+
     sync_tags(item.id, user_id, payload.tags)
 
     try:
@@ -729,6 +737,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
                     "condition": item.condition,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
+                    "map_insert_present": (item.meta or {}).get("map_insert_present"),
                 },
                 "error": None,
             }

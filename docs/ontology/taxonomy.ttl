@@ -46,6 +46,14 @@
     rdfs:label "ebook" ;
     :belongsToCategory :MediaCategoryText ;
     rdfs:comment "eBook" .
+:MediaFormatCartographicMap a :MediaFormat ;
+    rdfs:label "cartographic_map" ;
+    :belongsToCategory :MediaCategoryText ;
+    rdfs:comment "Cartographic Map" .
+:MediaFormatAtlas a :MediaFormat ;
+    rdfs:label "atlas" ;
+    :belongsToCategory :MediaCategoryText ;
+    rdfs:comment "Atlas" .
 :MediaFormatUnknownText a :MediaFormat ;
     rdfs:label "unknown_text" ;
     :belongsToCategory :MediaCategoryText ;
@@ -235,6 +243,15 @@
     :resolvesToCategory :MediaCategoryLego .
 :FormatAliasStandard a :FormatAlias ;
     rdfs:label "standard" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasMap a :FormatAlias ;
+    rdfs:label "map" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasCartographicMap a :FormatAlias ;
+    rdfs:label "cartographic_map" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasAtlas a :FormatAlias ;
+    rdfs:label "atlas" ;
     :resolvesToCategory :MediaCategoryText .
 :FormatAliasAudio a :FormatAlias ;
     rdfs:label "audio" ;

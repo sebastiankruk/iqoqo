@@ -41,6 +41,8 @@ class MediaFormat:
     COMIC_BOOK = "comic_book"
     MAGAZINE = "magazine"
     EBOOK = "ebook"
+    CARTOGRAPHIC_MAP = "cartographic_map"
+    ATLAS = "atlas"
     UNKNOWN_TEXT = "unknown_text"
     AUDIOBOOK_CD = "audiobook_cd"
     AUDIOBOOK_CASSETTE = "audiobook_cassette"
@@ -82,6 +84,8 @@ class MediaFormat:
         "comic_book",
         "magazine",
         "ebook",
+        "cartographic_map",
+        "atlas",
         "unknown_text",
         "audiobook_cd",
         "audiobook_cassette",
@@ -158,6 +162,8 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "cartographic_map": "text",
+    "atlas": "text",
     "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
@@ -201,6 +207,8 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "comic_book": "text",
     "magazine": "text",
     "ebook": "text",
+    "cartographic_map": "text",
+    "atlas": "text",
     "unknown_text": "text",
     "audiobook_cd": "audiobook",
     "audiobook_cassette": "audiobook",
@@ -243,6 +251,7 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "puzzle": "puzzle",
     "lego": "lego",
     "standard": "text",
+    "map": "text",
     "audio": "music",
     "sound": "music",
     "lp": "music",

@@ -33,6 +33,8 @@ export const SCHEMA_TYPE_MAP: Record<string, string> = {
   video_game: "VideoGame",
   comic_book: "ComicStory",
   graphic_novel: "ComicStory",
+  cartographic_map: "Map",
+  atlas: "Book",
   puzzle: "Product",
   jigsaw_puzzle: "Product",
   mechanical_puzzle: "Product",

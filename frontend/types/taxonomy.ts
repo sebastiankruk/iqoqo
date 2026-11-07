@@ -23,6 +23,8 @@ export const MEDIA_FORMATS = [
   "comic_book",
   "magazine",
   "ebook",
+  "cartographic_map",
+  "atlas",
   "unknown_text",
   "audiobook_cd",
   "audiobook_cassette",
@@ -92,6 +94,14 @@ export const MEDIA_HIERARCHY = {
       {
         id: "ebook",
         label: "eBook",
+      },
+      {
+        id: "cartographic_map",
+        label: "Cartographic Map",
+      },
+      {
+        id: "atlas",
+        label: "Atlas",
       },
       {
         id: "unknown_text",
@@ -341,6 +351,8 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   comic_book: "text",
   magazine: "text",
   ebook: "text",
+  cartographic_map: "text",
+  atlas: "text",
   unknown_text: "text",
   audiobook_cd: "audiobook",
   audiobook_cassette: "audiobook",
@@ -383,6 +395,7 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   puzzle: "puzzle",
   lego: "lego",
   standard: "text",
+  map: "text",
   audio: "music",
   sound: "music",
   lp: "music",

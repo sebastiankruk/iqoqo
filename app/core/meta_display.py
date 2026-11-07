@@ -140,6 +140,24 @@ DISPLAY_FIELD_DEFINITIONS: dict[str, DisplayFieldDef] = {
         section="header",
         label="Theme",
     ),
+    "map_scale": DisplayFieldDef(
+        field="map_scale",
+        spellings=("map_scale", "scale", "MapScale"),
+        section="cartographic",
+        label="Map Scale",
+    ),
+    "map_projection": DisplayFieldDef(
+        field="map_projection",
+        spellings=("map_projection", "projection", "MapProjection"),
+        section="cartographic",
+        label="Map Projection",
+    ),
+    "has_map": DisplayFieldDef(
+        field="has_map",
+        spellings=("has_map", "has_map_attachment", "has_maps"),
+        section="cartographic",
+        label="Includes Map",
+    ),
 }
 
 # Explicit precedence orders for sections (design decision 4)
@@ -208,6 +226,9 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
     "build_status",
     "missing_pieces_count",
     "instructions_included",
+    # Cartographic & Map Supplements
+    "map_attachments",
+    "map_insert_present",
     # Identifiers & Covers handled structurally
     "barcode",
     "Barcode",
@@ -332,7 +353,26 @@ def build_display_projection(
             sections["instructions_included"] = instructions
             fields["instructions_included"] = instructions
 
-    # 7. Additional Details (catch-all for primitive values not rendered in dedicated sections)
+        map_insert = read_first_present_value(source_item_meta, ("map_insert_present", "mapInsertPresent"))
+        if map_insert is not None:
+            sections["map_insert_present"] = map_insert
+            fields["map_insert_present"] = map_insert
+
+    # 7. Cartographic Manifestation Fields (Map Scale, Projection, Includes Map, Map Attachments)
+    for carto_field in ("map_scale", "map_projection", "has_map"):
+        carto_val = read_first_present_value(meta, DISPLAY_FIELD_DEFINITIONS[carto_field].spellings)
+        if carto_val is not None:
+            sections[carto_field] = carto_val
+            fields[carto_field] = carto_val
+
+    map_attachments = meta.get("map_attachments")
+    if isinstance(map_attachments, list) and map_attachments:
+        sections["map_attachments"] = map_attachments
+        fields["map_attachments"] = map_attachments
+        sections["has_map"] = True
+        fields["has_map"] = True
+
+    # 8. Additional Details (catch-all for primitive values not rendered in dedicated sections)
     additional_details: list[dict[str, Any]] = []
     for raw_key, raw_val in meta.items():
         if not isinstance(raw_key, str):

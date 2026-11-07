@@ -3195,6 +3195,49 @@ def build_collection_rdf_graph(
             except (ValueError, TypeError):
                 pass
 
+        # Cartographic Manifestation attributes & attachments (F3)
+        carto_scale = item.get("map_scale") if isinstance(item, dict) and "map_scale" in item else m_meta_dict.get("map_scale")
+        if not carto_scale:
+            carto_scale = item.get("scale") if isinstance(item, dict) and "scale" in item else m_meta_dict.get("scale")
+
+        carto_proj = (
+            item.get("map_projection") if isinstance(item, dict) and "map_projection" in item else m_meta_dict.get("map_projection")
+        )
+        if not carto_proj:
+            carto_proj = item.get("projection") if isinstance(item, dict) and "projection" in item else m_meta_dict.get("projection")
+
+        if carto_scale:
+            g.add((m_uri, IQOQO.mapScale, Literal(str(carto_scale), datatype=XSD.string)))
+        if carto_proj:
+            g.add((m_uri, IQOQO.mapProjection, Literal(str(carto_proj), datatype=XSD.string)))
+
+        raw_attachments = (
+            item.get("map_attachments") if isinstance(item, dict) and "map_attachments" in item else m_meta_dict.get("map_attachments")
+        )
+        if isinstance(raw_attachments, list):
+            for idx, att in enumerate(raw_attachments):
+                if not isinstance(att, dict):
+                    continue
+                att_title = att.get("title") or f"Map Attachment #{idx + 1}"
+                att_type = att.get("type") or "fold_out_insert"
+                att_img = att.get("image_url")
+
+                att_node = BNode()
+                g.add((m_uri, IQOQO.hasMapAttachment, att_node))
+                g.add((att_node, RDF.type, IQOQO.MapAttachment))
+                g.add((att_node, IQOQO.mapTitle, Literal(str(att_title), datatype=XSD.string)))
+                g.add((att_node, IQOQO.mapType, Literal(str(att_type), datatype=XSD.string)))
+                if att_img:
+                    safe_img = _safe_iri(str(att_img))
+                    if safe_img:
+                        img_val = safe_img if safe_img.startswith(("http://", "https://")) else f"{base_url}/{safe_img}"
+                        g.add((att_node, IQOQO.mapImageUrl, Literal(str(img_val), datatype=XSD.string)))
+
+        # Format-specific Schema.org assertions
+        m_format = item.get("format") if isinstance(item, dict) and "format" in item else m_meta_dict.get("format")
+        if m_format == "cartographic_map":
+            g.add((m_uri, RDF.type, SCHEMA.Map))
+
         for author in authors:
             author_name = author.get("name") if isinstance(author, dict) else author
             if not author_name:
@@ -3247,6 +3290,15 @@ def build_collection_rdf_graph(
                     pass
             if instructions_included is not None:
                 g.add((i_uri, IQOQO.instructionsIncluded, Literal(bool(instructions_included), datatype=XSD.boolean)))
+
+            # Cartographic Item attributes (F5)
+            map_insert_present = (
+                item["map_insert_present"]
+                if isinstance(item, dict) and "map_insert_present" in item
+                else i_meta_dict.get("map_insert_present")
+            )
+            if map_insert_present is not None:
+                g.add((i_uri, IQOQO.mapInsertPresent, Literal(bool(map_insert_present), datatype=XSD.boolean)))
 
         # External LOD semantic links for Manifestation
         m_obj = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)

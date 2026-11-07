@@ -186,6 +186,14 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "buildStatus": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
     "missingPiecesCount": (OWL.DatatypeProperty, IQOQO.Item, XSD.integer),
     "instructionsIncluded": (OWL.DatatypeProperty, IQOQO.Item, XSD.boolean),
+    # Cartographic Maps & Map Supplements (v1.0.1 - C105)
+    "mapScale": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "mapProjection": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "hasMapAttachment": (OWL.ObjectProperty, IQOQO.Manifestation, IQOQO.MapAttachment),
+    "mapInsertPresent": (OWL.DatatypeProperty, IQOQO.Item, XSD.boolean),
+    "mapTitle": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
+    "mapType": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
+    "mapImageUrl": (OWL.DatatypeProperty, IQOQO.MapAttachment, XSD.string),
 }
 
 # Required shape identifier -> exact target class. This is selective: a shape
@@ -218,6 +226,9 @@ REQUIRED_SHAPE_CONTRACT: dict[str, URIRef | set[URIRef]] = {
     "DuplicateCandidateShape": IQOQO.DuplicateCandidate,
     "LegoManifestationShape": IQOQO.Manifestation,
     "LegoItemShape": IQOQO.Item,
+    "MapAttachmentShape": IQOQO.MapAttachment,
+    "CartographicManifestationShape": IQOQO.Manifestation,
+    "CartographicItemShape": IQOQO.Item,
 }
 
 
