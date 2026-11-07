@@ -18,8 +18,11 @@
 
 import logging
 import os
+from typing import Any
 
 import requests
+
+from app.core.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +100,53 @@ def _normalize_release_data(release: dict) -> dict:
     }
 
 
+def _get_discogs_auth_header() -> str | None:
+    """Resolve Discogs credentials and build Authorization header."""
+    consumer_key = ConfigService.get("DISCOGS_CONSUMER_KEY")
+    consumer_secret = ConfigService.get("DISCOGS_CONSUMER_SECRET")
+    legacy_token = ConfigService.get("DISCOGS_USER_TOKEN")
+
+    if consumer_key and consumer_secret:
+        return f"Discogs key={consumer_key}, secret={consumer_secret}"
+    if legacy_token:
+        logger.debug("Using legacy DISCOGS_USER_TOKEN; consider migrating to DISCOGS_CONSUMER_KEY/SECRET.")
+        return f"Discogs token={legacy_token}"
+    return None
+
+
+def get_discogs_status() -> dict[str, Any]:
+    """Inspect Discogs configuration status for system diagnostics."""
+    consumer_key = ConfigService.get("DISCOGS_CONSUMER_KEY")
+    consumer_secret = ConfigService.get("DISCOGS_CONSUMER_SECRET")
+    legacy_token = ConfigService.get("DISCOGS_USER_TOKEN")
+
+    configured = bool((consumer_key and consumer_secret) or legacy_token)
+    auth_mode = "consumer_oauth" if (consumer_key and consumer_secret) else ("user_token" if legacy_token else "none")
+
+    source = "missing"
+    if consumer_key or consumer_secret or legacy_token:
+        try:
+            from app.db.models import InstanceSettings
+
+            db_has = (
+                InstanceSettings.get_value("DISCOGS_CONSUMER_KEY")
+                or InstanceSettings.get_value("DISCOGS_CONSUMER_SECRET")
+                or InstanceSettings.get_value("DISCOGS_USER_TOKEN")
+            )
+            if db_has:
+                source = "db"
+            else:
+                source = "env"
+        except Exception:
+            source = "env" if (os.environ.get("DISCOGS_CONSUMER_KEY") or os.environ.get("DISCOGS_USER_TOKEN")) else "db"
+
+    return {
+        "configured": configured,
+        "auth_mode": auth_mode,
+        "source": source,
+    }
+
+
 def fetch_discogs_metadata(barcode: str) -> dict | None:
     """Fetch metadata for an audio item using its barcode from Discogs.
 
@@ -110,18 +160,8 @@ def fetch_discogs_metadata(barcode: str) -> dict | None:
     Returns:
         dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
     """
-    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
-    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
-    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
-
-    if consumer_key and consumer_secret:
-        # Preferred: OAuth 1.0a consumer credentials
-        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
-    elif legacy_token:
-        # Fallback: legacy personal access token (still valid, just deprecated)
-        logger.debug("Using legacy DISCOGS_USER_TOKEN; consider migrating to DISCOGS_CONSUMER_KEY/SECRET.")
-        auth_header = f"Discogs token={legacy_token}"
-    else:
+    auth_header = _get_discogs_auth_header()
+    if not auth_header:
         logger.warning("No Discogs credentials found. Skipping Discogs lookup.")
         return None
 
@@ -159,15 +199,8 @@ def fetch_discogs_candidates(query: str, max_results: int = 5) -> list[dict]:
     Returns:
         list[dict]: List of normalised release metadata dicts, possibly empty.
     """
-    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
-    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
-    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
-
-    if consumer_key and consumer_secret:
-        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
-    elif legacy_token:
-        auth_header = f"Discogs token={legacy_token}"
-    else:
+    auth_header = _get_discogs_auth_header()
+    if not auth_header:
         logger.warning("No Discogs credentials found. Skipping Discogs candidate search.")
         return []
 
@@ -197,15 +230,8 @@ def fetch_discogs_by_id(discogs_id: str) -> dict | None:
     Returns:
         dict | None: Dictionary containing title, author, cover_url, etc. or None if not found.
     """
-    consumer_key = os.environ.get("DISCOGS_CONSUMER_KEY")
-    consumer_secret = os.environ.get("DISCOGS_CONSUMER_SECRET")
-    legacy_token = os.environ.get("DISCOGS_USER_TOKEN")
-
-    if consumer_key and consumer_secret:
-        auth_header = f"Discogs key={consumer_key}, secret={consumer_secret}"
-    elif legacy_token:
-        auth_header = f"Discogs token={legacy_token}"
-    else:
+    auth_header = _get_discogs_auth_header()
+    if not auth_header:
         return None
 
     from app.config import Config

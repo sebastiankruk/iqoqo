@@ -149,7 +149,9 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         logger.debug("Gemini execution skipped: ALLOW_LLM=%s, cloud status=%s", Config.ALLOW_LLM, can_use_cloud_llm)
         return None
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    from app.core.config_service import ConfigService
+
+    api_key = ConfigService.get("GEMINI_API_KEY")
     if not api_key:
         logger.warning("GEMINI_API_KEY not set – skipping Gemini vision extraction.")
         return None

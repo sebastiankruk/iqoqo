@@ -215,6 +215,62 @@ check() {
     esac
 }
 
+db_keys_queried=0
+declare -A db_settings_map
+
+get_db_configured_keys() {
+    if [[ $db_keys_queried -eq 1 ]]; then
+        return 0
+    fi
+    db_keys_queried=1
+
+    local keys_raw=""
+    if [[ "$STACK" == "dev" ]]; then
+        local py_bin="python3"
+        if [[ -x "$IQOQO_ROOT/.venv/bin/python3" ]]; then
+            py_bin="$IQOQO_ROOT/.venv/bin/python3"
+        elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
+            py_bin="$IQOQO_ROOT/.venv/bin/python"
+        fi
+        keys_raw=$(IQOQO_ROOT="$IQOQO_ROOT" $py_bin -c "
+import sys, os
+try:
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.db.models import InstanceSettings
+        print(','.join(InstanceSettings.get_configured_keys()))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+    else
+        local web_cname
+        web_cname=$(find_container "web")
+        if [[ -n "$web_cname" ]]; then
+            keys_raw=$(docker exec "$web_cname" python3 -c "
+import sys
+try:
+    sys.path.insert(0, '/app')
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.db.models import InstanceSettings
+        print(','.join(InstanceSettings.get_configured_keys()))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+        fi
+    fi
+
+    if [[ -n "$keys_raw" ]]; then
+        IFS=',' read -r -a k_arr <<< "$keys_raw"
+        for k in "${k_arr[@]}"; do
+            [[ -n "$k" ]] && db_settings_map["$k"]=1
+        done
+    fi
+}
+
 if [[ -z "${IQOQO_AI_MODE:-}" ]]; then
     printf "\n"
     printf "╔══════════════════════════════════════════════╗\n"
@@ -751,6 +807,10 @@ fi
 header "Allegro API"
 client_id=$(load_env "ALLEGRO_CLIENT_ID")
 client_secret=$(load_env "ALLEGRO_CLIENT_SECRET")
+get_db_configured_keys
+if [[ -z "$client_id" && -n "${db_settings_map['ALLEGRO_CLIENT_ID']:-}" ]]; then
+    client_id="[db]"
+fi
 
 allegro_status_json=""
 if [[ "$STACK" == "dev" ]]; then
@@ -851,6 +911,12 @@ igdb_client_id=$(load_env "IGDB_CLIENT_ID")
 [[ -z "$igdb_client_id" ]] && igdb_client_id=$(load_env "TWITCH_CLIENT_ID")
 igdb_client_secret=$(load_env "IGDB_CLIENT_SECRET")
 [[ -z "$igdb_client_secret" ]] && igdb_client_secret=$(load_env "TWITCH_CLIENT_SECRET")
+get_db_configured_keys
+if [[ -z "$igdb_client_id" && -n "${db_settings_map['IGDB_CLIENT_ID']:-}" ]]; then
+    igdb_client_id="[db]"
+elif [[ -z "$igdb_client_id" && -n "${db_settings_map['TWITCH_CLIENT_ID']:-}" ]]; then
+    igdb_client_id="[db]"
+fi
 
 igdb_status_json=""
 if [[ "$STACK" == "dev" ]]; then
@@ -945,11 +1011,62 @@ fi
 
 # ─── BoardGameGeek API ──────────────────────────────────────────
 header "BoardGameGeek API"
+get_db_configured_keys
 bgg_token=$(load_env "BGG_API_TOKEN")
 if [[ -n "$bgg_token" ]]; then
     check "Status" pass "configured (BGG_API_TOKEN set)"
+elif [[ -n "${db_settings_map['BGG_API_TOKEN']:-}" ]]; then
+    check "Status" pass "configured (DB: InstanceSettings)"
 else
     check "Status" info "anonymous / optional (BGG_API_TOKEN not configured)"
+fi
+
+# ─── Metadata Lookup Providers ──────────────────────────────────
+header "Metadata Lookup Providers"
+get_db_configured_keys
+
+# Discogs
+discogs_user_token=$(load_env "DISCOGS_USER_TOKEN")
+discogs_consumer_key=$(load_env "DISCOGS_CONSUMER_KEY")
+discogs_consumer_secret=$(load_env "DISCOGS_CONSUMER_SECRET")
+if [[ -n "${db_settings_map['DISCOGS_USER_TOKEN']:-}" || ( -n "${db_settings_map['DISCOGS_CONSUMER_KEY']:-}" && -n "${db_settings_map['DISCOGS_CONSUMER_SECRET']:-}" ) ]]; then
+    check "Discogs API" pass "configured (DB: InstanceSettings)"
+elif [[ -n "$discogs_user_token" || ( -n "$discogs_consumer_key" && -n "$discogs_consumer_secret" ) ]]; then
+    check "Discogs API" pass "configured (.env)"
+else
+    check "Discogs API" info "optional (not configured)"
+fi
+
+# TMDB
+tmdb_token=$(load_env "TMDB_API_READ_ACCESS_TOKEN")
+tmdb_key=$(load_env "TMDB_API_KEY")
+if [[ -n "${db_settings_map['TMDB_API_READ_ACCESS_TOKEN']:-}" || -n "${db_settings_map['TMDB_API_KEY']:-}" ]]; then
+    check "TMDB API" pass "configured (DB: InstanceSettings)"
+elif [[ -n "$tmdb_token" || -n "$tmdb_key" ]]; then
+    check "TMDB API" pass "configured (.env)"
+else
+    check "TMDB API" info "optional (not configured)"
+fi
+
+# Google Books
+gb_key=$(load_env "GOOGLE_BOOKS_API_KEY")
+if [[ -n "${db_settings_map['GOOGLE_BOOKS_API_KEY']:-}" ]]; then
+    check "Google Books API" pass "configured (DB: InstanceSettings)"
+elif [[ -n "$gb_key" ]]; then
+    check "Google Books API" pass "configured (.env)"
+else
+    check "Google Books API" info "optional (not configured)"
+fi
+
+# UPC Databases
+upc_item_key=$(load_env "UPC_ITEM_DB_KEY")
+upc_org_key=$(load_env "UPC_DATABASE_ORG_KEY")
+if [[ -n "${db_settings_map['UPC_ITEM_DB_KEY']:-}" || -n "${db_settings_map['UPC_DATABASE_ORG_KEY']:-}" ]]; then
+    check "UPC Databases" pass "configured (DB: InstanceSettings)"
+elif [[ -n "$upc_item_key" || -n "$upc_org_key" ]]; then
+    check "UPC Databases" pass "configured (.env)"
+else
+    check "UPC Databases" info "optional (not configured)"
 fi
 
 # ─── Linked Open Data & Gazetteer ────────────────────────────────
@@ -1035,14 +1152,20 @@ missing_warn=0
 missing_info=0
 empty_count=0
 active_count=0
+db_active_count=0
 missing_warn_vars=()
 missing_info_vars=()
 empty_vars=()
+
+get_db_configured_keys
 
 for key in "${expected_keys[@]}"; do
     val=$(load_env "$key")
     if [[ -n "$val" ]]; then
         active_count=$((active_count + 1))
+    elif [[ -n "${db_settings_map[$key]:-}" ]]; then
+        active_count=$((active_count + 1))
+        db_active_count=$((db_active_count + 1))
     elif [[ "$val" == "" ]] && grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
         empty_count=$((empty_count + 1))
         empty_vars+=("$key")
@@ -1057,7 +1180,11 @@ for key in "${expected_keys[@]}"; do
     fi
 done
 
-check "Configured" pass "${active_count} of ${total_expected} variables present"
+if [[ "$db_active_count" -gt 0 ]]; then
+    check "Configured" pass "${active_count} of ${total_expected} variables present (${db_active_count} in DB)"
+else
+    check "Configured" pass "${active_count} of ${total_expected} variables present"
+fi
 
 if [[ "$missing_warn" -gt 0 ]]; then
     check "Missing" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"

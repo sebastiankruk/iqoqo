@@ -150,8 +150,10 @@ def get_config():
 @api_bp.route("/system/status", methods=["GET"])
 @require_auth
 def get_system_status():
-    """Return system health and integration status (e.g., Allegro, Twitch/IGDB, BGG)."""
+    """Return system health and integration status (e.g., Allegro, Twitch/IGDB, BGG, Discogs, TMDB, etc.)."""
+    from app.db.models import InstanceSettings
     from app.utils.allegro import get_allegro_token_status
+    from app.utils.discogs import get_discogs_status
     from app.utils.igdb import get_igdb_token_status
 
     probe_remote = request.args.get("probe", "false").lower() in ("1", "true", "yes")
@@ -163,10 +165,60 @@ def get_system_status():
 
     allegro_status = get_allegro_token_status()
     igdb_status = get_igdb_token_status(probe_remote=probe_remote)
-    bgg_configured = bool(os.getenv("BGG_API_TOKEN"))
+
+    # BGG status
+    bgg_db = InstanceSettings.get_value("BGG_API_TOKEN")
+    bgg_env = os.getenv("BGG_API_TOKEN")
+    bgg_source = "db" if bgg_db else ("env" if bgg_env else "missing")
+    bgg_configured = bool(bgg_db or bgg_env)
     bgg_status = {
         "configured": bgg_configured,
+        "source": bgg_source,
         "status": "CONFIGURED_VALID" if bgg_configured else "DISABLED",
+    }
+
+    # Discogs status
+    discogs_status = get_discogs_status()
+
+    # TMDB status
+    tmdb_key_db = InstanceSettings.get_value("TMDB_API_KEY")
+    tmdb_token_db = InstanceSettings.get_value("TMDB_API_READ_ACCESS_TOKEN")
+    tmdb_key_env = os.getenv("TMDB_API_KEY")
+    tmdb_token_env = os.getenv("TMDB_API_READ_ACCESS_TOKEN")
+    tmdb_source = "db" if (tmdb_key_db or tmdb_token_db) else ("env" if (tmdb_key_env or tmdb_token_env) else "missing")
+    tmdb_configured = bool(tmdb_key_db or tmdb_token_db or tmdb_key_env or tmdb_token_env)
+    tmdb_auth_mode = "bearer" if (tmdb_token_db or tmdb_token_env) else ("api_key" if (tmdb_key_db or tmdb_key_env) else "none")
+    tmdb_status = {
+        "configured": tmdb_configured,
+        "source": tmdb_source,
+        "auth_mode": tmdb_auth_mode,
+        "status": "CONFIGURED_VALID" if tmdb_configured else "DISABLED",
+    }
+
+    # Google Books status
+    gb_db = InstanceSettings.get_value("GOOGLE_BOOKS_API_KEY")
+    gb_env = os.getenv("GOOGLE_BOOKS_API_KEY")
+    gb_source = "db" if gb_db else ("env" if gb_env else "missing")
+    gb_configured = bool(gb_db or gb_env)
+    google_books_status = {
+        "configured": gb_configured,
+        "source": gb_source,
+        "status": "CONFIGURED_VALID" if gb_configured else "DISABLED",
+    }
+
+    # UPC status
+    upc_org_db = InstanceSettings.get_value("UPC_DATABASE_ORG_KEY")
+    upc_item_db = InstanceSettings.get_value("UPC_ITEM_DB_KEY")
+    upc_org_env = os.getenv("UPC_DATABASE_ORG_KEY")
+    upc_item_env = os.getenv("UPC_ITEM_DB_KEY")
+    upc_source = "db" if (upc_org_db or upc_item_db) else ("env" if (upc_org_env or upc_item_env) else "missing")
+    upc_configured = bool(upc_org_db or upc_item_db or upc_org_env or upc_item_env)
+    upc_status = {
+        "configured": upc_configured,
+        "source": upc_source,
+        "upcdatabase_org": bool(upc_org_db or upc_org_env),
+        "upcitemdb": bool(upc_item_db or upc_item_env),
+        "status": "CONFIGURED_VALID" if upc_configured else "DISABLED",
     }
 
     payload = {
@@ -177,6 +229,10 @@ def get_system_status():
         "igdb": igdb_status,
         "twitch_igdb_status": igdb_status.get("status"),
         "bgg": bgg_status,
+        "discogs": discogs_status,
+        "tmdb": tmdb_status,
+        "google_books": google_books_status,
+        "upc": upc_status,
     }
     return jsonify({"success": True, "data": payload, "error": None}), 200
 

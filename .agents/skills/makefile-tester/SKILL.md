@@ -29,6 +29,16 @@ You must optimize the feedback loop to save time and tokens. Prevent trivial lin
 
 2. **Run Master Lints/Tests:** Or run individual sub-tasks to verify changes rapidly.
 
+### Parallel Testing Across All CPU Cores (`make test-parallel` / `make test-fast`)
+Project iqoqo has a dedicated multi-core parallel test runner: `scripts/run_tests_parallel.py`.
+- **Command:** `IQOQO_AI_MODE=1 make test-parallel` (or `IQOQO_AI_MODE=1 make test-fast`)
+- **Streams:**
+  1. Stream 1: Domain, FRBR & Ontology Core (`pytest`)
+  2. Stream 2: API, Auth & Federation (`pytest`)
+  3. Stream 3: Frontend Unit Tests (`vitest`)
+  4. Stream 4: Services, Tooling, Scripts & BATS
+- **When to use:** ALWAYS prefer `IQOQO_AI_MODE=1 make test-parallel` before commit and push. It utilizes all CPU cores concurrently and finishes in ~1-2 minutes, avoiding the lengthy sequential browser-based `test-e2e` execution of plain `make test`.
+
 3. **Sub-Task Lint Command Reference:**
    - **Python Ruff Linter:**
      - Command: `.venv/bin/ruff check app/ tests/ scripts/`

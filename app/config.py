@@ -179,11 +179,6 @@ class Config:
     # Set per-environment: iqoqo_cc (prod), iqoqo_pre (preview), iqoqo_dev (dev).
     ALLEGRO_APP_NAME = os.environ.get("ALLEGRO_APP_NAME", "iqoqo")
 
-    # Discogs credentials — v2 OAuth preferred, legacy token as fallback
-    DISCOGS_CONSUMER_KEY = os.environ.get("DISCOGS_CONSUMER_KEY")
-    DISCOGS_CONSUMER_SECRET = os.environ.get("DISCOGS_CONSUMER_SECRET")
-    # DISCOGS_USER_TOKEN is read directly in discogs.py as a legacy fallback
-
     # Rebrickable API key for LEGO set metadata lookups (C104)
     REBRICKABLE_API_KEY = os.environ.get("REBRICKABLE_API_KEY")
 
