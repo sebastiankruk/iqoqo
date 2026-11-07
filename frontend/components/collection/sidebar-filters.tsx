@@ -527,23 +527,21 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
-      <AccordionSection
-        title={t("secMaps") || "Maps & Supplements"}
-        defaultOpen={activeFilters.some(f => f.type === "has_map")}
-      >
+      <AccordionSection title={t("secMaps") || "Maps & Supplements"} defaultOpen={true}>
         <div className="flex flex-col gap-1">
           {(() => {
             const hasMapActive = activeFilters.some(f => f.type === "has_map");
             return (
               <label
-                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
                   hasMapActive
-                    ? "bg-muted text-foreground"
+                    ? "bg-muted text-foreground font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                 }`}
               >
                 <input
                   type="checkbox"
+                  name="has_map_filter"
                   aria-label={t("hasMap") || "Includes Map"}
                   checked={hasMapActive}
                   onChange={() => onToggleFilter({ type: "has_map", value: "true" })}

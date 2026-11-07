@@ -207,15 +207,17 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
 
     // 1. Expand Maps & Supplements accordion if collapsed
     const mapsSection = page.getByRole("button", { name: /Maps & Supplements/i });
-    if (await mapsSection.isVisible()) {
+    const hasMapCheckbox = page.getByRole("checkbox", { name: "Includes Map" }).first();
+
+    if (!(await hasMapCheckbox.isVisible())) {
+      await mapsSection.scrollIntoViewIfNeeded();
       await mapsSection.click();
-      await page.waitForTimeout(300);
+      await expect(hasMapCheckbox).toBeVisible({ timeout: 5000 });
     }
 
-    // 2. Click "Includes Map" label or checkbox
-    const hasMapOption = page.getByText("Includes Map", { exact: true });
-    await expect(hasMapOption).toBeVisible({ timeout: 10000 });
-    await hasMapOption.click();
+    // 2. Check "Includes Map" checkbox
+    await hasMapCheckbox.scrollIntoViewIfNeeded();
+    await hasMapCheckbox.check({ force: true });
 
     // 3. Verify URL updated with has_map=true
     await expect(page).toHaveURL(/has_map=true/);
