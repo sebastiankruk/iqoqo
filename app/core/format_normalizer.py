@@ -191,6 +191,7 @@ class FormatNormalizer:
             "music": MediaFormat.UNKNOWN_AUDIO,
             "audiobook": MediaFormat.UNKNOWN_AUDIO,
             "text": MediaFormat.UNKNOWN_TEXT,
+            "lego": MediaFormat.UNKNOWN_LEGO,
         }
         return mapping.get(category_lower)
 

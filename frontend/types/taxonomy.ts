@@ -51,10 +51,17 @@ export const MEDIA_FORMATS = [
   "jigsaw_puzzle",
   "mechanical_puzzle",
   "unknown_puzzle",
+  "standard_set",
+  "ucs_collector_set",
+  "technic_set",
+  "minifigure_series",
+  "polybag",
+  "modular_building",
+  "unknown_lego",
 ] as const;
 export type MediaFormat = (typeof MEDIA_FORMATS)[number];
 
-export const MEDIA_CATEGORIES = ["text", "audiobook", "music", "movie", "board_game", "puzzle"] as const;
+export const MEDIA_CATEGORIES = ["text", "audiobook", "music", "movie", "board_game", "puzzle", "lego"] as const;
 export type MediaCategory = (typeof MEDIA_CATEGORIES)[number];
 
 export const MEDIA_HIERARCHY = {
@@ -254,6 +261,44 @@ export const MEDIA_HIERARCHY = {
       },
     ],
   },
+  lego: {
+    label: "LEGO & Construction Sets",
+    default_image_type: "box",
+    image_types: ["box", "built_model", "minifigures", "instructions"],
+    ui_icon: "Boxes",
+    ui_aspect_ratio: 1.0,
+    ui_parent: null,
+    formats: [
+      {
+        id: "standard_set",
+        label: "Standard Set",
+      },
+      {
+        id: "ucs_collector_set",
+        label: "UCS / Collector Set",
+      },
+      {
+        id: "technic_set",
+        label: "Technic Set",
+      },
+      {
+        id: "minifigure_series",
+        label: "Collectible Minifigure (CMF)",
+      },
+      {
+        id: "polybag",
+        label: "Polybag / Promo",
+      },
+      {
+        id: "modular_building",
+        label: "Modular Building",
+      },
+      {
+        id: "unknown_lego",
+        label: "Unknown LEGO Format",
+      },
+    ],
+  },
 } as const;
 
 export const CATEGORY_STATUS_MAP = {
@@ -263,6 +308,7 @@ export const CATEGORY_STATUS_MAP = {
   movie: ["want_to_watch", "watching", "watched", "dnf"],
   board_game: ["want_to_play", "playing", "played"],
   puzzle: ["want_to_play", "playing", "played"],
+  lego: ["want_to_build", "building", "built"],
 } as const;
 
 export const SCAN_FORMATS = ["book", "audiobook", "music", "movie", "board_game", "puzzle"] as const;
@@ -276,6 +322,7 @@ export const CATEGORY_IMAGE_TYPES = {
   movie: ["disc", "inlay", "slipcover", "booklet"],
   board_game: ["box", "board", "components", "rulebook"],
   puzzle: ["pieces", "completed_puzzle", "poster"],
+  lego: ["box", "built_model", "minifigures", "instructions"],
 } as const;
 
 export const CATEGORY_DEFAULT_IMAGE_TYPE: Record<MediaCategory, string> = {
@@ -285,6 +332,7 @@ export const CATEGORY_DEFAULT_IMAGE_TYPE: Record<MediaCategory, string> = {
   movie: "disc",
   board_game: "box",
   puzzle: "box",
+  lego: "box",
 };
 
 export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
@@ -321,11 +369,19 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   jigsaw_puzzle: "puzzle",
   mechanical_puzzle: "puzzle",
   unknown_puzzle: "puzzle",
+  standard_set: "lego",
+  ucs_collector_set: "lego",
+  technic_set: "lego",
+  minifigure_series: "lego",
+  polybag: "lego",
+  modular_building: "lego",
+  unknown_lego: "lego",
   text: "text",
   audiobook: "audiobook",
   music: "music",
   movie: "movie",
   puzzle: "puzzle",
+  lego: "lego",
   standard: "text",
   audio: "music",
   sound: "music",
@@ -339,11 +395,16 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   game: "board_game",
   boardgame: "board_game",
   "three-dimensional object": "board_game",
+  construction_set: "lego",
+  brick_set: "lego",
+  brick: "lego",
 };
 
 export type CollectionStatus = "available" | "damaged" | "lent" | "lost" | "ordered" | "wish_list";
 
 export type ProgressStatus =
+  | "building"
+  | "built"
   | "dnf"
   | "listened"
   | "listening"
@@ -352,6 +413,7 @@ export type ProgressStatus =
   | "read"
   | "reading"
   | "unread"
+  | "want_to_build"
   | "want_to_listen"
   | "want_to_play"
   | "want_to_read"
@@ -364,6 +426,7 @@ export type ImageType =
   | "board"
   | "booklet"
   | "box"
+  | "built_model"
   | "cassette"
   | "completed_puzzle"
   | "components"
@@ -372,6 +435,8 @@ export type ImageType =
   | "front"
   | "gatefold"
   | "inlay"
+  | "instructions"
+  | "minifigures"
   | "obi"
   | "other"
   | "pages"
@@ -427,6 +492,18 @@ export const GENRES_HIERARCHY: Record<MediaCategory, string[]> = {
     "Role-Playing",
   ],
   puzzle: ["Jigsaw", "3D", "Logic", "Mechanical"],
+  lego: [
+    "Star Wars",
+    "Icons",
+    "Technic",
+    "City",
+    "Harry Potter",
+    "Architecture",
+    "Creator Expert",
+    "Ideas",
+    "Speed Champions",
+    "Classic",
+  ],
 };
 
 export const ALL_GENRES = [
@@ -434,12 +511,16 @@ export const ALL_GENRES = [
   "Abstract",
   "Action",
   "Animation",
+  "Architecture",
   "Biography",
   "Blues",
+  "City",
+  "Classic",
   "Classical",
   "Comedy",
   "Cooperative",
   "Country",
+  "Creator Expert",
   "Deck-Building",
   "Documentary",
   "Drama",
@@ -448,10 +529,13 @@ export const ALL_GENRES = [
   "Fantasy",
   "Fiction",
   "Folk",
+  "Harry Potter",
   "Hip-Hop",
   "Historical Fiction",
   "History",
   "Horror",
+  "Icons",
+  "Ideas",
   "Jazz",
   "Jigsaw",
   "Logic",
@@ -470,7 +554,10 @@ export const ALL_GENRES = [
   "Science",
   "Science Fiction",
   "Self-Help",
+  "Speed Champions",
+  "Star Wars",
   "Strategy",
+  "Technic",
   "Thriller",
   "Worker Placement",
 ] as const;

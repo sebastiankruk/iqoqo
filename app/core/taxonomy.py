@@ -31,7 +31,8 @@ class MediaCategory:
     MOVIE = "movie"
     BOARD_GAME = "board_game"
     PUZZLE = "puzzle"
-    ALL = ("text", "audiobook", "music", "movie", "board_game", "puzzle")
+    LEGO = "lego"
+    ALL = ("text", "audiobook", "music", "movie", "board_game", "puzzle", "lego")
 
 
 class MediaFormat:
@@ -68,6 +69,13 @@ class MediaFormat:
     JIGSAW_PUZZLE = "jigsaw_puzzle"
     MECHANICAL_PUZZLE = "mechanical_puzzle"
     UNKNOWN_PUZZLE = "unknown_puzzle"
+    STANDARD_SET = "standard_set"
+    UCS_COLLECTOR_SET = "ucs_collector_set"
+    TECHNIC_SET = "technic_set"
+    MINIFIGURE_SERIES = "minifigure_series"
+    POLYBAG = "polybag"
+    MODULAR_BUILDING = "modular_building"
+    UNKNOWN_LEGO = "unknown_lego"
     ALL = (
         "book",
         "graphic_novel",
@@ -102,12 +110,21 @@ class MediaFormat:
         "jigsaw_puzzle",
         "mechanical_puzzle",
         "unknown_puzzle",
+        "standard_set",
+        "ucs_collector_set",
+        "technic_set",
+        "minifigure_series",
+        "polybag",
+        "modular_building",
+        "unknown_lego",
     )
 
 
 COLLECTION_STATUSES: tuple[str, ...] = ("wish_list", "ordered", "available", "lent", "damaged", "lost")
 
 PROGRESS_STATUSES: tuple[str, ...] = (
+    "building",
+    "built",
     "dnf",
     "listened",
     "listening",
@@ -116,6 +133,7 @@ PROGRESS_STATUSES: tuple[str, ...] = (
     "read",
     "reading",
     "unread",
+    "want_to_build",
     "want_to_listen",
     "want_to_play",
     "want_to_read",
@@ -131,6 +149,7 @@ CATEGORY_PROGRESS_STATUSES: dict[str, tuple[str, ...]] = {
     "movie": ("want_to_watch", "watching", "watched", "dnf"),
     "board_game": ("want_to_play", "playing", "played"),
     "puzzle": ("want_to_play", "playing", "played"),
+    "lego": ("want_to_build", "building", "built"),
 }
 
 FORMAT_TO_CATEGORY: dict[str, str] = {
@@ -167,6 +186,13 @@ FORMAT_TO_CATEGORY: dict[str, str] = {
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
     "unknown_puzzle": "puzzle",
+    "standard_set": "lego",
+    "ucs_collector_set": "lego",
+    "technic_set": "lego",
+    "minifigure_series": "lego",
+    "polybag": "lego",
+    "modular_building": "lego",
+    "unknown_lego": "lego",
 }
 
 FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
@@ -203,11 +229,19 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "jigsaw_puzzle": "puzzle",
     "mechanical_puzzle": "puzzle",
     "unknown_puzzle": "puzzle",
+    "standard_set": "lego",
+    "ucs_collector_set": "lego",
+    "technic_set": "lego",
+    "minifigure_series": "lego",
+    "polybag": "lego",
+    "modular_building": "lego",
+    "unknown_lego": "lego",
     "text": "text",
     "audiobook": "audiobook",
     "music": "music",
     "movie": "movie",
     "puzzle": "puzzle",
+    "lego": "lego",
     "standard": "text",
     "audio": "music",
     "sound": "music",
@@ -221,6 +255,9 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "game": "board_game",
     "boardgame": "board_game",
     "three-dimensional object": "board_game",
+    "construction_set": "lego",
+    "brick_set": "lego",
+    "brick": "lego",
 }
 
 GLOBAL_IMAGE_TYPES: list[str] = ["front", "back", "spine", "other"]
@@ -231,6 +268,7 @@ CATEGORY_IMAGE_TYPES: dict[str, list[str]] = {
     "movie": ["disc", "inlay", "slipcover", "booklet"],
     "board_game": ["box", "board", "components", "rulebook"],
     "puzzle": ["pieces", "completed_puzzle", "poster"],
+    "lego": ["box", "built_model", "minifigures", "instructions"],
 }
 
 CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
@@ -240,6 +278,7 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
     "movie": "disc",
     "board_game": "box",
     "puzzle": "box",
+    "lego": "box",
 }
 
 SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle")
@@ -297,6 +336,18 @@ GENRES_HIERARCHY: dict[str, list[str]] = {
     "movie": ["Action", "Comedy", "Drama", "Sci-Fi", "Horror", "Romance", "Documentary", "Animation", "Thriller", "Family"],
     "board_game": ["Strategy", "Family", "Party", "Cooperative", "Deck-Building", "Worker Placement", "Abstract", "Role-Playing"],
     "puzzle": ["Jigsaw", "3D", "Logic", "Mechanical"],
+    "lego": [
+        "Star Wars",
+        "Icons",
+        "Technic",
+        "City",
+        "Harry Potter",
+        "Architecture",
+        "Creator Expert",
+        "Ideas",
+        "Speed Champions",
+        "Classic",
+    ],
 }
 
 ALL_GENRES = tuple(sorted({genre for genres in GENRES_HIERARCHY.values() for genre in genres}))
