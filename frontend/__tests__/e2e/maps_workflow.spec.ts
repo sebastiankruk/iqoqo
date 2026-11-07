@@ -209,12 +209,13 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
     const mapsSection = page.getByRole("button", { name: /Maps & Supplements/i });
     if (await mapsSection.isVisible()) {
       await mapsSection.click();
+      await page.waitForTimeout(300);
     }
 
-    // 2. Check "Includes Map" checkbox
-    const hasMapCheckbox = page.getByLabel(/Includes Map/i);
-    await expect(hasMapCheckbox).toBeVisible({ timeout: 10000 });
-    await hasMapCheckbox.check({ force: true });
+    // 2. Click "Includes Map" label or checkbox
+    const hasMapOption = page.getByText("Includes Map", { exact: true });
+    await expect(hasMapOption).toBeVisible({ timeout: 10000 });
+    await hasMapOption.click();
 
     // 3. Verify URL updated with has_map=true
     await expect(page).toHaveURL(/has_map=true/);
