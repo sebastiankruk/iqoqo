@@ -17,14 +17,12 @@
 
 import { Boxes, Layers, Users, ExternalLink, Wrench, FileText } from "lucide-react";
 import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
+import type { DisplayProjection } from "@/types/frbr";
 import { DiscoveryPivot } from "./discovery-pivot";
 
 interface ExtendedMetadataLegoProps {
   meta: Record<string, unknown>;
-  display?: {
-    fields?: Record<string, unknown>;
-    sections?: Record<string, unknown>;
-  };
+  display?: DisplayProjection | null;
 }
 
 const BUILD_STATUS_LABELS: Record<string, string> = {
