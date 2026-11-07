@@ -35,6 +35,12 @@ interface ExtendedMetadataMapsProps {
   canEdit?: boolean;
 }
 
+/**
+ * Extended metadata component for displaying cartographic map data and attachments.
+ *
+ * @param {ExtendedMetadataMapsProps} props - Component properties.
+ * @returns {JSX.Element | null} Rendered cartographic metadata or null.
+ */
 export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit = false }: ExtendedMetadataMapsProps) {
   const queryClient = useQueryClient();
   const fields = display?.fields || {};

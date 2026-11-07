@@ -49,6 +49,25 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
   });
 
   test("should display map metadata, open interactive map viewer modal, zoom/rotate", async ({ page }) => {
+    const mockManifestationMeta = {
+      title: "Atlas of Middle-earth",
+      format: "atlas",
+      category: "cartographic",
+      map_scale: "1:1,000,000",
+      map_projection: "Lambert Conformal",
+      map_attachments: [
+        {
+          id: "map-att-1",
+          title: "West of the Misty Mountains",
+          type: "regional_map",
+          image_url:
+            "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='green'/></svg>",
+          scale: "1:500,000",
+          projection: "Lambert",
+        },
+      ],
+    };
+
     const mockItem = {
       id: 99,
       manifestation_id: 199,
@@ -57,22 +76,17 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
       is_owner: true,
       map_insert_present: true,
       meta: {
-        title: "Atlas of Middle-earth",
-        format: "atlas",
-        category: "cartographic",
-        map_scale: "1:1,000,000",
-        map_projection: "Lambert Conformal",
-        map_attachments: [
-          {
-            id: "map-att-1",
-            title: "West of the Misty Mountains",
-            type: "regional_map",
-            image_url:
-              "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='green'/></svg>",
-            scale: "1:500,000",
-            projection: "Lambert",
-          },
-        ],
+        map_insert_present: true,
+      },
+      manifestation_meta: mockManifestationMeta,
+      display: {
+        fields: {
+          map_scale: "1:1,000,000",
+          map_projection: "Lambert Conformal",
+          map_attachments: mockManifestationMeta.map_attachments,
+          map_insert_present: true,
+        },
+        additional_details: [],
       },
       work: {
         id: 50,
@@ -89,17 +103,7 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
         format: "atlas",
         map_scale: "1:1,000,000",
         map_projection: "Lambert Conformal",
-        map_attachments: [
-          {
-            id: "map-att-1",
-            title: "West of the Misty Mountains",
-            type: "regional_map",
-            image_url:
-              "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='green'/></svg>",
-            scale: "1:500,000",
-            projection: "Lambert",
-          },
-        ],
+        meta: mockManifestationMeta,
       },
     };
 
@@ -210,7 +214,7 @@ test.describe("Cartographic Maps & Attachments Workflow", () => {
     // 2. Check "Includes Map" checkbox
     const hasMapCheckbox = page.getByLabel(/Includes Map/i);
     await expect(hasMapCheckbox).toBeVisible({ timeout: 10000 });
-    await hasMapCheckbox.check();
+    await hasMapCheckbox.check({ force: true });
 
     // 3. Verify URL updated with has_map=true
     await expect(page).toHaveURL(/has_map=true/);

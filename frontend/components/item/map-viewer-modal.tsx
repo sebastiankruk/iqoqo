@@ -15,7 +15,7 @@
 //
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
   ZoomIn,
@@ -54,6 +54,12 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.5;
 
+/**
+ * Interactive zoom/pan/rotate modal dialog for exploring high-resolution map attachments.
+ *
+ * @param {MapViewerModalProps} props - Component properties.
+ * @returns {JSX.Element | null} Rendered map inspector modal.
+ */
 export function MapViewerModal({
   isOpen,
   onClose,
@@ -62,6 +68,9 @@ export function MapViewerModal({
   title = "Map Inspector",
 }: MapViewerModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [prevInitialIndex, setPrevInitialIndex] = useState(initialIndex);
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
@@ -70,13 +79,17 @@ export function MapViewerModal({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sync index when initialIndex changes or modal opens
-  useEffect(() => {
+  // Sync state during render when props change, avoiding synchronous setState in useEffect
+  if (isOpen !== prevIsOpen || initialIndex !== prevInitialIndex) {
+    setPrevIsOpen(isOpen);
+    setPrevInitialIndex(initialIndex);
     if (isOpen) {
       setCurrentIndex(Math.max(0, Math.min(initialIndex, maps.length - 1)));
-      resetView();
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      setRotation(0);
     }
-  }, [isOpen, initialIndex, maps.length]);
+  }
 
   const resetView = useCallback(() => {
     setZoom(1);
