@@ -20,7 +20,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
 import { hasMetaChain, isKnownMetaSpelling, readMeta, readMetaChain } from "@/lib/meta";
-import { isBoardGameFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
+import { isBoardGameFormat, isLegoFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 import { RichText } from "@/components/ui/rich-text";
 
@@ -40,6 +40,7 @@ function getFormatLabel(formatId: string): string | undefined {
 import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
+import { ExtendedMetadataLego } from "./extended-metadata-lego";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 import { TagCloud } from "@/components/ui/tag-cloud";
@@ -100,6 +101,11 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
   const isVideo = isVideoFormat(format);
   const isBoardGame = isBoardGameFormat(format);
   const isPuzzle = isPuzzleFormat(format);
+  const isLego =
+    isLegoFormat(format) ||
+    meta["category"] === "lego" ||
+    meta["content_type"] === "lego" ||
+    (meta["set_number"] !== undefined && meta["piece_count"] !== undefined);
 
   const trackList = meta["track_list"] as
     Array<{ position: string; title: string; duration_seconds: number }> | undefined;
@@ -132,6 +138,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
     !isVideo &&
     !isBoardGame &&
     !isPuzzle &&
+    !isLego &&
     !trackList &&
     additionalDetails.length === 0 &&
     !owner_name &&
@@ -153,6 +160,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
       {isVideo && <ExtendedMetadataVideo meta={meta} />}
       {isBoardGame && <ExtendedMetadataBoardGame meta={meta} />}
       {isPuzzle && <ExtendedMetadataPuzzle meta={meta} />}
+      {isLego && <ExtendedMetadataLego meta={meta} display={display} />}
 
       {isAudio && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

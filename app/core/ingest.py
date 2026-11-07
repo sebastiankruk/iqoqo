@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from typing import Any
+
 from app.core.frbr_service import (
     add_expression_contribution,
     add_work_contribution,
@@ -561,6 +563,67 @@ class IngestService:
                 "authors": [author_name] if author_name else [],
                 "cover_url": cover_url,
                 "mechanics": mechanics,
+            }
+        )
+
+        manifestation = Manifestation(
+            expression=expression,
+            meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+        start_cover_processing(manifestation_id=manifestation.id, identifier=query, title=title, author=author_name or "")
+        return manifestation
+
+    @staticmethod
+    def ingest_lego_from_barcode(query: str) -> Manifestation:
+        """Ingest LEGO set by set number or barcode (via Rebrickable and UPC resolution)."""
+        from app.strategies.lego import LegoLookupStrategy
+
+        strategy = LegoLookupStrategy()
+        meta, _ = strategy.lookup(query)
+
+        if not meta:
+            raise ValueError("LEGO set metadata not found in external services.")
+
+        title = meta.get("title") or "Unknown LEGO Set"
+        author_name = meta.get("author") or meta.get("designer")
+        cover_url = meta.get("cover_url")
+        theme = meta.get("theme")
+        work_genres = _extract_genres(meta)
+        if theme and theme not in work_genres:
+            work_genres.append(theme)
+
+        work_meta: dict[str, Any] = {"theme": theme} if theme else {}
+        if author_name:
+            work_meta["authors"] = [author_name]
+        if work_genres:
+            work_meta["genres"] = work_genres
+
+        work = Work(title=title, meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.LEGO)
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "person")
+            if contributor:
+                add_work_contribution(work.id, contributor.id, "designer")
+
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
+        stored_barcode = query if is_barcode else meta.get("barcode")
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": stored_barcode,
+                "format": meta.get("format", MediaFormat.STANDARD_SET),
+                "title": title,
+                "cover_url": cover_url,
             }
         )
 

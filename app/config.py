@@ -184,6 +184,9 @@ class Config:
     DISCOGS_CONSUMER_SECRET = os.environ.get("DISCOGS_CONSUMER_SECRET")
     # DISCOGS_USER_TOKEN is read directly in discogs.py as a legacy fallback
 
+    # Rebrickable API key for LEGO set metadata lookups (C104)
+    REBRICKABLE_API_KEY = os.environ.get("REBRICKABLE_API_KEY")
+
     # Isolated SPARQL Execution Service (v0.8.3)
     SPARQL_SERVICE_URL = os.environ.get("SPARQL_SERVICE_URL")
     SPARQL_SERVICE_SECRET = os.environ.get("SPARQL_SERVICE_SECRET", os.environ.get("SECRET_KEY", "dev-sparql-service-secret"))

@@ -19,6 +19,7 @@ import * as React from "react";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { isLegoFormat } from "@/lib/media-classification";
 import {
   Dialog,
   DialogContent,
@@ -58,16 +59,44 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
     (item as { visibility?: "private" | "friends_only" | "public" }).visibility ??
       (item.is_hidden ? "private" : "public")
   );
+
+  const isLego =
+    item.expression?.content_type === "lego" ||
+    item.content_type === "lego" ||
+    item.meta?.category === "lego" ||
+    item.meta?.build_status !== undefined ||
+    (Boolean(item.manifestation_meta?.category) && item.manifestation_meta?.category === "lego") ||
+    (Boolean(item.manifestation_meta?.format) && isLegoFormat(item.manifestation_meta?.format as string));
+
+  const [buildStatus, setBuildStatus] = useState<string>((item.meta?.build_status as string) ?? "built");
+  const [missingPiecesCount, setMissingPiecesCount] = useState<string>(
+    item.meta?.missing_pieces_count !== undefined ? String(item.meta.missing_pieces_count) : "0"
+  );
+  const [instructionsIncluded, setInstructionsIncluded] = useState<boolean>(
+    item.meta?.instructions_included !== undefined ? Boolean(item.meta.instructions_included) : true
+  );
+
   const updateItem = useUpdateItem(item.id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateItem.mutateAsync({
+      const payload: Record<string, unknown> = {
         local_barcode: localBarcode.trim() ? localBarcode.trim() : null,
         condition: condition.trim() ? condition.trim() : null,
         visibility,
-      });
+      };
+
+      if (isLego) {
+        payload.meta = {
+          ...(item.meta || {}),
+          build_status: buildStatus,
+          missing_pieces_count: parseInt(missingPiecesCount, 10) || 0,
+          instructions_included: instructionsIncluded,
+        };
+      }
+
+      await updateItem.mutateAsync(payload as Partial<Item>);
       toast.success(t("success"));
       onOpenChange(false);
       onSuccess?.();
@@ -135,6 +164,64 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           {t("visibilityHint") || "Controls who can see this physical item in your library."}
         </p>
       </div>
+
+      {isLego && (
+        <div className="space-y-4 pt-2 border-t border-border/40">
+          <div className="space-y-2">
+            <label
+              htmlFor="item-build-status"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              {t("buildStatus") || "Build Status"}
+            </label>
+            <select
+              id="item-build-status"
+              name="build_status"
+              value={buildStatus}
+              onChange={e => setBuildStatus(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <option value="sealed">{t("buildStatusSealed") || "Sealed (In Box)"}</option>
+              <option value="built">{t("buildStatusBuilt") || "Built"}</option>
+              <option value="incomplete">{t("buildStatusIncomplete") || "Incomplete"}</option>
+              <option value="parted_out">{t("buildStatusPartedOut") || "Parted Out"}</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="item-missing-pieces"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              {t("missingPieces") || "Missing Pieces Count"}
+            </label>
+            <input
+              id="item-missing-pieces"
+              name="missing_pieces_count"
+              type="number"
+              min="0"
+              value={missingPiecesCount}
+              onChange={e => setMissingPiecesCount(e.target.value)}
+              placeholder="0"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            ></input>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="item-instructions-included"
+              name="instructions_included"
+              type="checkbox"
+              checked={instructionsIncluded}
+              onChange={e => setInstructionsIncluded(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <label htmlFor="item-instructions-included" className="text-sm font-medium leading-none cursor-pointer">
+              {t("instructionsIncluded") || "Instructions Included"}
+            </label>
+          </div>
+        </div>
+      )}
 
       <DialogFooter className="pt-2">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateItem.isPending}>

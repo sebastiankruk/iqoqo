@@ -100,4 +100,12 @@ class DefaultFallbackStrategy(LookupStrategy):
                         meta["data_source"] = "bgg"
                         provider = "bgg"
 
+        if not meta:
+            from app.utils.rebrickable import fetch_rebrickable_set, is_set_number_format
+
+            if is_set_number_format(barcode):
+                meta = fetch_rebrickable_set(barcode)
+                if meta:
+                    provider = "rebrickable"
+
         return meta, provider

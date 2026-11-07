@@ -165,6 +165,12 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
         type: "api",
         placeholder: "Enter UPC Database key",
       },
+      {
+        key: "REBRICKABLE_API_KEY",
+        label: "Rebrickable API Key",
+        type: "api",
+        placeholder: "Enter Rebrickable API key",
+      },
     ],
   },
   {

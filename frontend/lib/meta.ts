@@ -42,6 +42,10 @@ export const FIELD_CHAINS = {
   publisher: ["publisher", "label", "Publisher"],
 
   subtitle: ["subtitle", "Subtitle"],
+  set_number: ["set_number", "set_num", "SetNumber", "set_no"],
+  piece_count: ["piece_count", "num_parts", "PieceCount", "pieces"],
+  minifig_count: ["minifig_count", "num_minifigs", "MinifigCount", "minifigs"],
+  theme: ["theme", "Theme", "lego_theme"],
 } as const satisfies Record<string, KeyChain>;
 
 /**
@@ -76,6 +80,15 @@ export const DEDICATED_SECTION_KEYS: readonly string[] = [
   "artist",
   "manufacturer",
   "puzzle_type",
+  "set_number",
+  "set_num",
+  "num_parts",
+  "minifig_count",
+  "num_minifigs",
+  "theme",
+  "build_status",
+  "missing_pieces_count",
+  "instructions_included",
   "cover_status",
   "cover_source",
   "cover_url",

@@ -21,6 +21,7 @@ from .boardgame import BoardGameLookupStrategy
 from .book import BookLookupStrategy
 from .default import DefaultFallbackStrategy
 from .factory import LookupStrategyFactory
+from .lego import LegoLookupStrategy
 from .puzzle import PuzzleLookupStrategy
 from .video import VideoLookupStrategy
 
@@ -29,6 +30,7 @@ __all__ = [
     "VideoLookupStrategy",
     "BoardGameLookupStrategy",
     "PuzzleLookupStrategy",
+    "LegoLookupStrategy",
     "AudioLookupStrategy",
     "BookLookupStrategy",
     "DefaultFallbackStrategy",

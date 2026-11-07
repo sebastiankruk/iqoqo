@@ -50,6 +50,21 @@ const BOARD_GAME_FORMATS: ReadonlySet<string> = new Set([
 /** Formats that mean the work is a puzzle specifically. */
 const PUZZLE_FORMATS: ReadonlySet<string> = new Set(["puzzle", "jigsaw", "jigsaw puzzle"]);
 
+/** Formats that mean the work is a LEGO or construction set. */
+const LEGO_FORMATS: ReadonlySet<string> = new Set([
+  "lego",
+  "standard_set",
+  "ucs_collector_set",
+  "technic_set",
+  "minifigure_series",
+  "polybag",
+  "modular_building",
+  "unknown_lego",
+  "construction_set",
+  "brick_set",
+  "brick",
+]);
+
 /** Formats that mean the work is audio. */
 const AUDIO_FORMATS: ReadonlySet<string> = new Set([
   "audio",
@@ -104,6 +119,16 @@ export function isBoardGameFormat(...values: (string | null | undefined)[]): boo
  */
 export function isPuzzleFormat(...values: (string | null | undefined)[]): boolean {
   return values.some(v => PUZZLE_FORMATS.has(norm(v)));
+}
+
+/**
+ * Whether the given formats describe a LEGO or construction set.
+ *
+ * @param values - Candidate format strings.
+ * @returns True when any candidate is a LEGO format.
+ */
+export function isLegoFormat(...values: (string | null | undefined)[]): boolean {
+  return values.some(v => LEGO_FORMATS.has(norm(v)));
 }
 
 /**

@@ -281,7 +281,7 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
     "lego": "box",
 }
 
-SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle")
+SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle", "lego")
 
 LOOKUP_STRATEGY_MAP: dict[str, str] = {
     "movie": "VideoLookupStrategy",
@@ -289,16 +289,18 @@ LOOKUP_STRATEGY_MAP: dict[str, str] = {
     "book": "BookLookupStrategy",
     "board_game": "BoardGameLookupStrategy",
     "puzzle": "PuzzleLookupStrategy",
+    "lego": "LegoLookupStrategy",
     "text": "BookLookupStrategy",
 }
 
-LOOKUP_WATERFALL_ORDER: list[str] = ["movie", "music", "book", "board_game", "puzzle"]
+LOOKUP_WATERFALL_ORDER: list[str] = ["movie", "music", "book", "board_game", "puzzle", "lego"]
 
 CATEGORY_INGEST_METHOD: dict[str, str] = {
     "music": "ingest_audio_from_barcode",
     "movie": "ingest_video_from_barcode",
     "board_game": "ingest_game_from_barcode",
     "puzzle": "ingest_puzzle_from_barcode",
+    "lego": "ingest_lego_from_barcode",
 }
 
 GENRES_HIERARCHY: dict[str, list[str]] = {
