@@ -43,7 +43,8 @@ export type FilterType =
   | "publisher"
   | "ownership"
   | "lod_authority"
-  | "lod_status";
+  | "lod_status"
+  | "has_map";
 
 /** Active filter */
 export interface ActiveFilter {
@@ -111,6 +112,7 @@ export function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "lod_status") {
     return `LOD: ${filter.value === "linked" ? "Linked" : "Unlinked"}`;
   }
+  if (filter.type === "has_map") return "Has Map";
   return filter.value;
 }
 
@@ -134,6 +136,8 @@ function chipColor(filter: ActiveFilter): string {
     return "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-500 dark:border-orange-500/20";
   if (filter.type === "lod_authority" || filter.type === "lod_status")
     return "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20";
+  if (filter.type === "has_map")
+    return "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20";
   return "bg-secondary text-secondary-foreground border-border";
 }
 

@@ -119,6 +119,7 @@ def get_manifestations() -> tuple[Response, int]:
     format_list = expand_format_filter(format_list_raw)
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
     tags_filter = request.args.get("tags")
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
@@ -191,6 +192,7 @@ def get_manifestations() -> tuple[Response, int]:
             user_id=user_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         if result_ids:
@@ -225,6 +227,7 @@ def get_manifestations() -> tuple[Response, int]:
             missing_id=missing_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         query = query.order_by(Manifestation.id.desc())

@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added physical item update support for `map_insert_present` on `PUT / PATCH /items/<id>`.
   - Extended metadata display projection (`app/core/meta_display.py` and `frontend/lib/meta.ts`) and RDF export (`app/core/frbr_service.py`) emitting full cartographic properties and `schema:Map` mapping.
 
+- **Interactive Map Viewer & Collection Gallery Filter (C106)**:
+  - Created `<MapViewerModal />` dialog supporting smooth zoom (`1x`–`5x`), pan/touch drag, 90-degree rotation, view reset, and multi-map navigation controls.
+  - Added cartographic metadata section and map attachment cards in item detail tabs with "Inspect Map" button and map attachment upload dialog.
+  - Implemented physical item `map_insert_present` toggle in `EditItemDialog`.
+  - Added `has_map` query parameter and SQL filter support in `CatalogFilterBuilder` and `SearchService` (manifestation- and item-rooted queries).
+  - Exposed `"Includes Map"` checkbox and filter chip in collection sidebar and filter bar with complete English and Polish localizations.
+
 ### Changed
 
 ### Fixed

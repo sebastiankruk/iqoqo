@@ -76,6 +76,24 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
     item.meta?.instructions_included !== undefined ? Boolean(item.meta.instructions_included) : true
   );
 
+  const hasMapAttachment =
+    Boolean(item.manifestation_meta?.has_map) ||
+    Boolean(item.display?.fields?.has_map) ||
+    (Array.isArray(item.manifestation_meta?.map_attachments) &&
+      (item.manifestation_meta?.map_attachments as unknown[]).length > 0) ||
+    item.manifestation_meta?.format === "cartographic_map" ||
+    item.manifestation_meta?.format === "atlas" ||
+    item.map_insert_present !== undefined ||
+    item.meta?.map_insert_present !== undefined;
+
+  const [mapInsertPresent, setMapInsertPresent] = useState<boolean>(
+    item.map_insert_present !== undefined
+      ? Boolean(item.map_insert_present)
+      : item.meta?.map_insert_present !== undefined
+        ? Boolean(item.meta.map_insert_present)
+        : true
+  );
+
   const updateItem = useUpdateItem(item.id);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,6 +112,10 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
           missing_pieces_count: parseInt(missingPiecesCount, 10) || 0,
           instructions_included: instructionsIncluded,
         };
+      }
+
+      if (hasMapAttachment) {
+        payload.map_insert_present = mapInsertPresent;
       }
 
       await updateItem.mutateAsync(payload as Partial<Item>);
@@ -220,6 +242,22 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
               {t("instructionsIncluded") || "Instructions Included"}
             </label>
           </div>
+        </div>
+      )}
+
+      {hasMapAttachment && (
+        <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+          <input
+            id="item-map-insert-present"
+            name="map_insert_present"
+            type="checkbox"
+            checked={mapInsertPresent}
+            onChange={e => setMapInsertPresent(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+          <label htmlFor="item-map-insert-present" className="text-sm font-medium leading-none cursor-pointer">
+            {t("mapInsertPresent") || "Map Insert Present"}
+          </label>
         </div>
       )}
 

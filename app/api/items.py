@@ -266,6 +266,7 @@ def get_items():
     owner_only = request.args.get("owner_only", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
     # When include_public=true, also include non-hidden available items from other users.
     # This enables the social lending catalogue: borrowers can discover lendable items.
     include_public = request.args.get("include_public", "false").lower() == "true"
@@ -317,6 +318,7 @@ def get_items():
             publishers=publishers_list,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
             scope=scope,
             friend_ids=friend_ids_list,
         )
@@ -388,7 +390,7 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or lod_authority or lod_status)
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
@@ -417,6 +419,7 @@ def get_items():
             missing_id=missing_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         total_physical = query.order_by(None).count()

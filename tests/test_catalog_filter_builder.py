@@ -238,6 +238,19 @@ def test_no_filters_returns_query_unchanged():
     assert "where" not in sql, sql
 
 
+def test_has_map_filter_manifestation():
+    query = Manifestation.query.join(Expression).join(Work)
+    sql = _sql(CatalogFilterBuilder(query).apply(has_map=True))
+    assert "cartographic_map" in sql
+    assert "has_map" in sql
+
+
+def test_has_map_filter_item():
+    query = Item.query
+    sql = _sql(CatalogFilterBuilder(query, root="item").apply(has_map=True))
+    assert "map_insert_present" in sql
+
+
 def test_build_alias_matches_apply():
     query = Manifestation.query.join(Expression).join(Work)
     apply_sql = _sql(CatalogFilterBuilder(query).apply(fmt=["book"]))

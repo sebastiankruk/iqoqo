@@ -162,7 +162,8 @@ export function useInfiniteItems(
   includePublic = false,
   lodAuthority?: string,
   lodStatus?: string,
-  scope?: "personal" | "friends" | "global"
+  scope?: "personal" | "friends" | "global",
+  hasMap?: boolean
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -187,6 +188,7 @@ export function useInfiniteItems(
       lodAuthority,
       lodStatus,
       scope,
+      hasMap,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -199,6 +201,7 @@ export function useInfiniteItems(
       if (borrowed) params.borrowed = true;
       if (missingCover) params.missing_cover = true;
       if (missingId) params.missing_id = true;
+      if (hasMap) params.has_map = true;
       if (tags && tags.length > 0) params.tags = tags.join(",");
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");
@@ -306,7 +309,8 @@ export function useInfiniteManifestations(
   statuses?: string[],
   ownership?: string[],
   lodAuthority?: string,
-  lodStatus?: string
+  lodStatus?: string,
+  hasMap?: boolean
 ) {
   return useInfiniteQuery({
     queryKey: [
@@ -329,6 +333,7 @@ export function useInfiniteManifestations(
       ownership,
       lodAuthority,
       lodStatus,
+      hasMap,
     ],
     initialPageParam: 1,
     queryFn: async ({ pageParam = 1 }) => {
@@ -338,6 +343,7 @@ export function useInfiniteManifestations(
       if (formatFilter) params.format = formatFilter;
       if (missingCover) params.missing_cover = true;
       if (missingId) params.missing_id = true;
+      if (hasMap) params.has_map = true;
       if (tags && tags.length > 0) params.tags = tags.join(",");
       if (collections && collections.length > 0) params.collections = collections.join(",");
       if (genres && genres.length > 0) params.genres = genres.join(",");

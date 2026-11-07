@@ -41,6 +41,7 @@ import { ExtendedMetadataVideo } from "./extended-metadata-video";
 import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
 import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
 import { ExtendedMetadataLego } from "./extended-metadata-lego";
+import { ExtendedMetadataMaps } from "./extended-metadata-maps";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 import { TagCloud } from "@/components/ui/tag-cloud";
@@ -70,6 +71,8 @@ interface ExtendedMetadataProps {
   owner_name?: string | null;
   owner_count?: number;
   display?: DisplayProjection | null;
+  manifestationId?: number;
+  canEdit?: boolean;
 }
 
 /**
@@ -81,9 +84,19 @@ interface ExtendedMetadataProps {
  * @param root0.owner_name - The owner name to display
  * @param root0.owner_count - The number of owners for this manifestation
  * @param root0.display - Optional server-derived display projection
+ * @param root0.manifestationId - Optional manifestation identifier
+ * @param root0.canEdit - Optional whether caller can edit metadata
  * @returns {JSX.Element | null} The component or null if no metadata
  */
-export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, display }: ExtendedMetadataProps) {
+export function ExtendedMetadata({
+  meta,
+  workMeta,
+  owner_name,
+  owner_count,
+  display,
+  manifestationId,
+  canEdit = false,
+}: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!meta) return null;
@@ -131,6 +144,15 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
   const additionalDetails =
     display && Array.isArray(display.additional_details) ? display.additional_details : fallbackEntries;
 
+  const hasMaps =
+    Boolean(meta["has_map"]) ||
+    Boolean(display?.fields?.has_map) ||
+    Boolean(meta["map_scale"]) ||
+    Boolean(meta["map_projection"]) ||
+    (Array.isArray(meta["map_attachments"]) && meta["map_attachments"].length > 0) ||
+    format === "cartographic_map" ||
+    format === "atlas";
+
   if (
     !description &&
     categories.length === 0 &&
@@ -139,6 +161,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
     !isBoardGame &&
     !isPuzzle &&
     !isLego &&
+    !hasMaps &&
     !trackList &&
     additionalDetails.length === 0 &&
     !owner_name &&
@@ -161,6 +184,7 @@ export function ExtendedMetadata({ meta, workMeta, owner_name, owner_count, disp
       {isBoardGame && <ExtendedMetadataBoardGame meta={meta} />}
       {isPuzzle && <ExtendedMetadataPuzzle meta={meta} />}
       {isLego && <ExtendedMetadataLego meta={meta} display={display} />}
+      <ExtendedMetadataMaps meta={meta} display={display} manifestationId={manifestationId} canEdit={canEdit} />
 
       {isAudio && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

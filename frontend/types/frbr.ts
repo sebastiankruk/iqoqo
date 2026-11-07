@@ -248,6 +248,7 @@ export interface Item {
   manifestation_meta?: Record<string, unknown>;
   display?: DisplayProjection;
   content_type?: string | null;
+  map_insert_present?: boolean | null;
   work_type?: string | null;
   medium_type?: string | null;
   work_id?: number | null;

@@ -27,6 +27,7 @@ import {
   Boxes,
   Search,
   Check,
+  Map as MapIcon,
 } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
@@ -523,6 +524,33 @@ export function SidebarFilters({
               </label>
             );
           })}
+        </div>
+      </AccordionSection>
+
+      <AccordionSection title={t("secMaps") || "Maps & Supplements"} defaultOpen={false}>
+        <div className="flex flex-col gap-1">
+          {(() => {
+            const hasMapActive = activeFilters.some(f => f.type === "has_map");
+            return (
+              <label
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors ${
+                  hasMapActive
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={hasMapActive}
+                  onChange={() => onToggleFilter({ type: "has_map", value: "true" })}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
+                />
+                <MapIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1 truncate">{t("hasMap") || "Includes Map"}</span>
+                {hasMapActive && <Check className="h-3 w-3 text-primary" />}
+              </label>
+            );
+          })()}
         </div>
       </AccordionSection>
 
