@@ -24,6 +24,7 @@ import {
   Film,
   Puzzle as PuzzleIcon,
   LayoutGrid,
+  Boxes,
   Search,
   Check,
 } from "lucide-react";
@@ -77,6 +78,9 @@ const progressLabels: Record<string, { label: string; dot: string }> = {
   want_to_play: { label: "Want to Play", dot: "bg-purple-500" },
   playing: { label: "Playing", dot: "bg-green-500" },
   played: { label: "Played", dot: "bg-blue-500" },
+  want_to_build: { label: "Want to Build", dot: "bg-purple-500" },
+  building: { label: "Building", dot: "bg-green-500" },
+  built: { label: "Built", dot: "bg-blue-500" },
 };
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -85,6 +89,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
   movie: <Film className="h-3.5 w-3.5" />,
   board_game: <LayoutGrid className="h-3.5 w-3.5" />,
   puzzle: <PuzzleIcon className="h-3.5 w-3.5" />,
+  lego: <Boxes className="h-3.5 w-3.5" />,
 };
 
 /**

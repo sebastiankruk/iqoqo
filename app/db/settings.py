@@ -110,6 +110,7 @@ SENSITIVE_SETTING_KEYS = {
     # is a live SMTP credential for the account-deletion mail path, so leaving
     # it out would store it in cleartext in `instance_settings`.
     "MAIL_PASSWORD",
+    "REBRICKABLE_API_KEY",
 }
 
 

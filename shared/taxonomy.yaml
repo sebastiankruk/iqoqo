@@ -226,7 +226,7 @@ progress_statuses:
   lego: ["want_to_build", "building", "built"]
 
 # Scanner top-bar formats (categories shown in scanner UI)
-scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle"]
+scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle", "lego"]
 
 # Mapping of media categories to their respective lookup strategy classes
 lookup_strategies:
@@ -245,6 +245,9 @@ lookup_strategies:
   puzzle:
     class: PuzzleLookupStrategy
     waterfall_order: 5
+  lego:
+    class: LegoLookupStrategy
+    waterfall_order: 6
   text:
     class: BookLookupStrategy
     waterfall_order: 3
@@ -255,6 +258,7 @@ ingest_methods:
   movie: ingest_video_from_barcode
   board_game: ingest_game_from_barcode
   puzzle: ingest_puzzle_from_barcode
+  lego: ingest_lego_from_barcode
 
 genres:
   text:

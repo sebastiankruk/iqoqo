@@ -311,7 +311,7 @@ export const CATEGORY_STATUS_MAP = {
   lego: ["want_to_build", "building", "built"],
 } as const;
 
-export const SCAN_FORMATS = ["book", "audiobook", "music", "movie", "board_game", "puzzle"] as const;
+export const SCAN_FORMATS = ["book", "audiobook", "music", "movie", "board_game", "puzzle", "lego"] as const;
 export type ScanFormat = (typeof SCAN_FORMATS)[number];
 
 export const GLOBAL_IMAGE_TYPES = ["front", "back", "spine", "other"] as const;

@@ -390,6 +390,11 @@
     :strategyClass "PuzzleLookupStrategy" ;
     :waterfallOrder 5 ;
     :forCategory :MediaCategoryPuzzle .
+:LookupStrategyLego a :LookupStrategy ;
+    rdfs:label "lego" ;
+    :strategyClass "LegoLookupStrategy" ;
+    :waterfallOrder 6 ;
+    :forCategory :MediaCategoryLego .
 :LookupStrategyText a :LookupStrategy ;
     rdfs:label "text" ;
     :strategyClass "BookLookupStrategy" ;

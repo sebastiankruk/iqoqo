@@ -116,6 +116,30 @@ DISPLAY_FIELD_DEFINITIONS: dict[str, DisplayFieldDef] = {
         section="header",
         label="Subtitle",
     ),
+    "set_number": DisplayFieldDef(
+        field="set_number",
+        spellings=("set_number", "set_num", "SetNumber", "set_no"),
+        section="header",
+        label="Set Number",
+    ),
+    "piece_count": DisplayFieldDef(
+        field="piece_count",
+        spellings=("piece_count", "num_parts", "PieceCount", "pieces"),
+        section="header",
+        label="Piece Count",
+    ),
+    "minifig_count": DisplayFieldDef(
+        field="minifig_count",
+        spellings=("minifig_count", "num_minifigs", "MinifigCount", "minifigs"),
+        section="header",
+        label="Minifigures",
+    ),
+    "theme": DisplayFieldDef(
+        field="theme",
+        spellings=("theme", "Theme", "lego_theme"),
+        section="header",
+        label="Theme",
+    ),
 }
 
 # Explicit precedence orders for sections (design decision 4)
@@ -168,6 +192,22 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
     "artist",
     "manufacturer",
     "puzzle_type",
+    # LEGO & Construction Sets
+    "set_number",
+    "set_num",
+    "SetNumber",
+    "set_no",
+    "num_parts",
+    "minifig_count",
+    "num_minifigs",
+    "MinifigCount",
+    "minifigs",
+    "theme",
+    "Theme",
+    "lego_theme",
+    "build_status",
+    "missing_pieces_count",
+    "instructions_included",
     # Identifiers & Covers handled structurally
     "barcode",
     "Barcode",
@@ -215,8 +255,11 @@ def is_primitive_value(value: Any) -> bool:
     return isinstance(value, (str, int, float, bool))
 
 
-def build_display_projection(meta: dict[str, Any] | None) -> dict[str, Any]:
-    """Build an ordered display projection from raw manifestation metadata.
+def build_display_projection(
+    meta: dict[str, Any] | None,
+    item_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an ordered display projection from raw manifestation and item metadata.
 
     Applies server-side normalization and value-level display rules so that:
     1. Each logical field is extracted with its canonical label and section.
@@ -264,7 +307,32 @@ def build_display_projection(meta: dict[str, Any] | None) -> dict[str, Any]:
     elif header_pub_val is not None:
         fields["publisher"] = header_pub_val
 
-    # 5. Additional Details (catch-all for primitive values not rendered in dedicated sections)
+    # 5. LEGO Manifestation Fields (Set Number, Piece Count, Minifigures, Theme)
+    for lego_field in ("set_number", "piece_count", "minifig_count", "theme"):
+        lego_val = read_first_present_value(meta, DISPLAY_FIELD_DEFINITIONS[lego_field].spellings)
+        if lego_val is not None:
+            sections[lego_field] = lego_val
+            fields[lego_field] = lego_val
+
+    # 6. LEGO Item Fields (Build Status, Missing Pieces, Instructions Included)
+    source_item_meta = item_meta if isinstance(item_meta, dict) else meta
+    if isinstance(source_item_meta, dict):
+        build_status = read_first_present_value(source_item_meta, ("build_status", "buildStatus", "BuildStatus"))
+        if build_status is not None:
+            sections["build_status"] = build_status
+            fields["build_status"] = build_status
+
+        missing_pieces = read_first_present_value(source_item_meta, ("missing_pieces_count", "missingPiecesCount"))
+        if missing_pieces is not None:
+            sections["missing_pieces_count"] = missing_pieces
+            fields["missing_pieces_count"] = missing_pieces
+
+        instructions = read_first_present_value(source_item_meta, ("instructions_included", "instructionsIncluded"))
+        if instructions is not None:
+            sections["instructions_included"] = instructions
+            fields["instructions_included"] = instructions
+
+    # 7. Additional Details (catch-all for primitive values not rendered in dedicated sections)
     additional_details: list[dict[str, Any]] = []
     for raw_key, raw_val in meta.items():
         if not isinstance(raw_key, str):
