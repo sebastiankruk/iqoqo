@@ -59,7 +59,7 @@ function formatDate(iso: string): string {
  * @param props.type - The request type string.
  * @returns Request type badge JSX element.
  */
-function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change_type" | string }) {
+function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change_type" | "new_media_type" | string }) {
   const t = useTranslations("HelpRequests");
   if (type === "deletion") {
     return (
@@ -73,6 +73,13 @@ function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
         Change Type
+      </span>
+    );
+  }
+  if (type === "new_media_type") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
+        New Media Type
       </span>
     );
   }
@@ -374,7 +381,12 @@ function ProcessedRequestsSection() {
                           );
                         })()}
                       </div>
-                      {isDeletion ? (
+                      {esc.request_type === "new_media_type" ? (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <span className="font-semibold text-foreground">New Media Type:</span>{" "}
+                          <span>{esc.payload?.proposed_format || esc.suggested_value}</span>
+                        </div>
+                      ) : isDeletion ? (
                         <p className="text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">{t("reasonForDeletion")}:</span>{" "}
                           {esc.note || "—"}
@@ -457,6 +469,20 @@ export function EscalationQueue() {
     <div className="space-y-4" data-testid="escalation-queue">
       {queue.map(esc => {
         const isDeletion = esc.request_type === "deletion" || !esc.field_name;
+        const payload = (esc.payload ??
+          (() => {
+            try {
+              return JSON.parse(esc.suggested_value);
+            } catch {
+              return null;
+            }
+          })()) as {
+          proposed_category?: string;
+          proposed_format?: string;
+          parent_frbr_class?: string;
+          sample_identifier_or_url?: string;
+          rationale?: string;
+        } | null;
         return (
           <Card key={esc.id}>
             <CardContent className="p-4 space-y-3">
@@ -486,45 +512,77 @@ export function EscalationQueue() {
                     })()}
                   </div>
 
-                  <div className="text-xs space-y-1.5 mt-2 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                    {esc.target_entity ? (
+                  {/* Content details based on request type */}
+                  {esc.request_type === "new_media_type" ? (
+                    <div className="text-xs space-y-2 mt-2 bg-sky-50/50 dark:bg-sky-950/20 p-2.5 rounded-md border border-sky-200/50 dark:border-sky-800/40">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <span className="font-semibold text-muted-foreground">Target title:</span>{" "}
-                          {esc.target_entity.title}
+                          <span className="font-semibold text-muted-foreground">Proposed Category:</span>{" "}
+                          <span className="font-medium text-foreground">{payload?.proposed_category || "—"}</span>
                         </div>
                         <div>
-                          <span className="font-semibold text-muted-foreground">Type:</span> {esc.target_entity.type}
+                          <span className="font-semibold text-muted-foreground">Proposed Format:</span>{" "}
+                          <span className="font-medium text-foreground">{payload?.proposed_format || "—"}</span>
                         </div>
                         <div>
-                          <span className="font-semibold text-muted-foreground">ID:</span> #{esc.target_entity.id}
+                          <span className="font-semibold text-muted-foreground">FRBR Class:</span>{" "}
+                          <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">
+                            {payload?.parent_frbr_class || "F1_Work"}
+                          </span>
                         </div>
                         <div>
-                          <span className="font-semibold text-muted-foreground">Current state:</span>{" "}
-                          {esc.target_entity.current_state}
+                          <span className="font-semibold text-muted-foreground">Sample / Barcode:</span>{" "}
+                          <span className="font-mono text-[11px] text-foreground">
+                            {payload?.sample_identifier_or_url || "—"}
+                          </span>
                         </div>
                       </div>
-                    ) : (
                       <div>
-                        <span className="font-semibold text-muted-foreground">Target Entity ID:</span>{" "}
-                        {getTargetLabel(esc)}
+                        <span className="font-semibold text-muted-foreground">Rationale:</span>{" "}
+                        <span className="text-foreground">{payload?.rationale || esc.note || "—"}</span>
                       </div>
-                    )}
-                    <div>
-                      <span className="font-semibold text-muted-foreground">Requested change details:</span>{" "}
-                      {isDeletion ? (
-                        <span className="text-destructive font-semibold">Deletion</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs space-y-1.5 mt-2 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                      {esc.target_entity ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Target title:</span>{" "}
+                            {esc.target_entity.title}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Type:</span> {esc.target_entity.type}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-muted-foreground">ID:</span> #{esc.target_entity.id}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-muted-foreground">Current state:</span>{" "}
+                            {esc.target_entity.current_state}
+                          </div>
+                        </div>
                       ) : (
-                        <span>
-                          Current: {esc.current_value || "—"} &rarr; Suggested: {esc.suggested_value}
-                        </span>
+                        <div>
+                          <span className="font-semibold text-muted-foreground">Target Entity ID:</span>{" "}
+                          {getTargetLabel(esc)}
+                        </div>
                       )}
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Requested change details:</span>{" "}
+                        {isDeletion ? (
+                          <span className="text-destructive font-semibold">Deletion</span>
+                        ) : (
+                          <span>
+                            Current: {esc.current_value || "—"} &rarr; Suggested: {esc.suggested_value}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Reason / note from requester:</span>{" "}
+                        {esc.note || "—"}
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-semibold text-muted-foreground">Reason / note from requester:</span>{" "}
-                      {esc.note || "—"}
-                    </div>
-                  </div>
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
                   {esc.created_at ? formatDate(esc.created_at) : ""}

@@ -447,6 +447,15 @@ export interface EscalationTargetEntity {
   current_state: string;
 }
 
+export interface EscalationNewMediaTypePayload {
+  proposed_category: string;
+  proposed_format: string;
+  parent_frbr_class: "F1_Work" | "F16_Container_Work";
+  sample_identifier_or_url?: string | null;
+  suggested_properties?: string[] | null;
+  rationale: string;
+}
+
 /** Custodian metadata escalation request */
 export interface EscalationRequest {
   id: number;
@@ -464,7 +473,8 @@ export interface EscalationRequest {
   current_value?: string | null;
   suggested_value: string;
   note?: string | null;
-  request_type?: "correction" | "deletion" | "change_type";
+  request_type?: "correction" | "deletion" | "change_type" | "new_media_type";
+  payload?: EscalationNewMediaTypePayload | Record<string, unknown> | null;
   status: "pending" | "accepted" | "rejected" | "duplicate";
   resolved_by?: string | null;
   resolver_display_name?: string | null;

@@ -44,13 +44,34 @@ export async function createEscalation(
     suggested_value: string;
     current_value?: string;
     note?: string;
-    request_type?: "correction" | "deletion" | "change_type";
+    request_type?: "correction" | "deletion" | "change_type" | "new_media_type";
   }
 ) {
   const res = await apiClient.post<{ success: boolean; data: EscalationRequest }>(
     `/escalations/${level}/${targetId}`,
     data
   );
+  return res.data.data;
+}
+
+/**
+ * Submit a general new media type escalation request not bound to an entity.
+ *
+ * @param data - The new media type proposal payload.
+ * @returns The created EscalationRequest.
+ */
+export async function createNewMediaTypeEscalation(data: {
+  proposed_category: string;
+  proposed_format: string;
+  parent_frbr_class: "F1_Work" | "F16_Container_Work";
+  sample_identifier_or_url?: string;
+  suggested_properties?: string[];
+  rationale: string;
+}) {
+  const res = await apiClient.post<{ success: boolean; data: EscalationRequest }>("/escalations", {
+    request_type: "new_media_type",
+    ...data,
+  });
   return res.data.data;
 }
 
@@ -161,11 +182,35 @@ export function useCreateEscalation() {
         suggested_value: string;
         current_value?: string;
         note?: string;
-        request_type?: "correction" | "deletion" | "change_type";
+        request_type?: "correction" | "deletion" | "change_type" | "new_media_type";
       };
     }) => createEscalation(level, targetId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: escalationQueryKeys.mine });
+    },
+  });
+}
+
+/**
+ * Hook to create a new media type proposal escalation request.
+ *
+ * @returns Mutation result for creating a new media type escalation.
+ */
+export function useCreateNewMediaTypeEscalation() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {
+      proposed_category: string;
+      proposed_format: string;
+      parent_frbr_class: "F1_Work" | "F16_Container_Work";
+      sample_identifier_or_url?: string;
+      suggested_properties?: string[];
+      rationale: string;
+    }) => createNewMediaTypeEscalation(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: escalationQueryKeys.mine });
+      qc.invalidateQueries({ queryKey: escalationQueryKeys.queue });
     },
   });
 }

@@ -419,7 +419,19 @@
     "escalationSubmitted": "Escalation request submitted to custodians",
     "failedToSubmit": "Failed to submit escalation request",
     "custodianNote": "Custodian note",
-    "suggested": "Suggested"
+    "suggested": "Suggested",
+    "requestNewMediaType": "Request New Media Type",
+    "requestNewMediaTypeTitle": "Request New Media Type or Format",
+    "requestNewMediaTypeDesc": "Propose a new media category or physical format not yet supported in iqoqo. Custodians will review and adapt the ontology.",
+    "proposedCategoryLabel": "Proposed Category",
+    "proposedFormatLabel": "Proposed Format",
+    "parentFrbrClassLabel": "Ontology FRBR Class",
+    "sampleIdentifierLabel": "Sample Barcode, Identifier or URL",
+    "rationaleLabel": "Rationale & Why it should be added",
+    "newMediaTypeSubmittedToast": "New media type request submitted to custodians",
+    "newMediaTypeSubmittedDesc": "Thank you! Instance custodians have been notified. You can track this request in your Requests tab.",
+    "requestSubmittedTitle": "Proposal Submitted",
+    "allRequiredFieldsError": "Please fill in all required fields."
   },
   "Scanner": {
     "skipAndEnterManually": "Skip and enter manually"

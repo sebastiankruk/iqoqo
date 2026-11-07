@@ -38,6 +38,7 @@ import { apiFetch } from "@/lib/api/client";
 
 import { ScanFormat, SCAN_FORMATS } from "@/types/frbr";
 import { MEDIA_REGISTRY } from "@/lib/media";
+import { RequestNewTypeModal } from "@/components/social/request-new-type-modal";
 
 export interface ManualEntryData {
   title: string;
@@ -228,6 +229,21 @@ export function ManualEntryForm({
               </optgroup>
             ))}
           </select>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-0.5">
+            <span>Can&apos;t find your format?</span>
+            <RequestNewTypeModal
+              defaultSampleIdentifier={formData.identifier}
+              trigger={
+                <button
+                  type="button"
+                  className="font-medium text-primary hover:underline"
+                  data-testid="scanner-request-new-type-link"
+                >
+                  Request new media type
+                </button>
+              }
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1">

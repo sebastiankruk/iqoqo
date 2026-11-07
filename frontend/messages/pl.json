@@ -419,7 +419,19 @@
     "escalationSubmitted": "Prośba wysłana do kustoszy",
     "failedToSubmit": "Nie udało się wysłać prośby",
     "custodianNote": "Notatka kustosza",
-    "suggested": "Sugerowane"
+    "suggested": "Sugerowane",
+    "requestNewMediaType": "Poproś o nowy typ mediów",
+    "requestNewMediaTypeTitle": "Poproś o nowy typ lub format mediów",
+    "requestNewMediaTypeDesc": "Zaproponuj nową kategorię mediów lub format fizyczny nieobsługiwany jeszcze w iqoqo. Kustosze przeanalizują wniosek i dostosują ontologię.",
+    "proposedCategoryLabel": "Proponowana kategoria",
+    "proposedFormatLabel": "Proponowany format",
+    "parentFrbrClassLabel": "Klasa FRBR ontologii",
+    "sampleIdentifierLabel": "Przykładowy kod kreskowy, identyfikator lub URL",
+    "rationaleLabel": "Uzasadnienie i cel dodania",
+    "newMediaTypeSubmittedToast": "Prośba o nowy typ mediów została wysłana do kustoszy",
+    "newMediaTypeSubmittedDesc": "Dziękujemy! Kustosze instancji zostali powiadomieni. Możesz śledzić status prośby w zakładce Prośby.",
+    "requestSubmittedTitle": "Propozycja wysłana",
+    "allRequiredFieldsError": "Proszę wypełnić wszystkie wymagane pola."
   },
   "Scanner": {
     "skipAndEnterManually": "Pomiń i wprowadź ręcznie"

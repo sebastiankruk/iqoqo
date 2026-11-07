@@ -47,13 +47,20 @@ function formatDate(iso: string): string {
  * @param props.type - The request type string.
  * @returns Request type badge JSX element.
  */
-function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | string }) {
+function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change_type" | "new_media_type" | string }) {
   const t = useTranslations("HelpRequests");
   if (type === "deletion") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-destructive bg-destructive/10 px-1.5 py-0.5 rounded border border-destructive/20">
         <Trash2 className="h-3 w-3" />
         {t("deletion")}
+      </span>
+    );
+  }
+  if (type === "new_media_type") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
+        New Media Type
       </span>
     );
   }
@@ -185,7 +192,26 @@ export function MyEscalations() {
                       <span className="font-medium text-foreground">{getTargetLabel(esc)}</span>
                     )}
                   </div>
-                  {isDeletion ? (
+                  {esc.request_type === "new_media_type" ? (
+                    <div className="text-xs space-y-1 bg-muted/40 p-2 rounded mt-1">
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Proposed Format:</span>{" "}
+                        <span className="font-medium text-foreground">
+                          {esc.payload?.proposed_format || esc.suggested_value}
+                        </span>
+                      </div>
+                      {esc.payload?.proposed_category && (
+                        <div>
+                          <span className="font-semibold text-muted-foreground">Category:</span>{" "}
+                          <span>{esc.payload.proposed_category}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Rationale:</span>{" "}
+                        <span className="text-foreground">{esc.payload?.rationale || esc.note || "—"}</span>
+                      </div>
+                    </div>
+                  ) : isDeletion ? (
                     <div className="text-xs text-foreground bg-background/80 p-2.5 rounded border border-border/40 mt-1">
                       <span className="font-semibold text-muted-foreground block mb-0.5">
                         {t("reasonForDeletion")}:
