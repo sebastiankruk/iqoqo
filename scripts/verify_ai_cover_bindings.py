@@ -304,7 +304,7 @@ def main() -> None:
     app = create_app()
     with app.app_context():
         # Operational script guard for production environments
-        is_production = os.environ.get("FLASK_ENV") == "production" or os.environ.get("ENVIRONMENT") == "production"
+        is_production = os.environ.get("FLASK_ENV") == "production"
         is_test = "pytest" in sys.modules
 
         if apply_mode and is_production and not is_test and not args.force:
