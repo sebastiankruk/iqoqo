@@ -697,6 +697,22 @@ Instance administrators manage peer relationships in the Admin Federation Dashbo
 ### 6. Access-Controlled Federated SPARQL
 
 Each instance runs an isolated **Oxigraph-powered SPARQL Execution Service**. When federated queries are executed across instances, iqoqo enforces strict **Federated Access Rights**: public queries only ever see public triples (Works, Expressions, Manifestations, and explicitly public Items), ensuring private and friends-only items are never leaked through graph traversal.
+
+### 7. Unilateral Trust vs. Bilateral (Reciprocal) Peering
+
+A common question among administrators is: *"What happens if I add a peer instance, but their administrator hasn't added mine yet?"*
+
+In iqoqo's three-tier trust model (\`trusted\`, \`untrusted\`, \`blocked\`), trust is configured locally on each server. However, certain interactions require mutual (reciprocal) participation:
+
+| Relationship State | Auto Metadata Sync | Custodian Review Queue | Send Friend Follows | Cross-Instance Loans |
+| :--- | :---: | :---: | :---: | :---: |
+| **Bilateral (Reciprocal Trusted)** | ✅ Active | ➖ Bypassed | ✅ Active | ✅ Active |
+| **Unilateral Outbound (Trusted)** | ✅ Active | ➖ Bypassed | ✅ Active | ❌ Needs Remote Peer |
+| **Unilateral Outbound (Untrusted)** | ❌ Inactive | ✅ Active | ❌ Inactive | ❌ Inactive |
+| **Blocked / Defederated** | ❌ Inactive | ❌ Inactive | ❌ Inactive | ❌ Inactive |
+
+* **Unilateral Outbound Trust:** Setting a peer to **Trusted** immediately allows your instance to enrich empty bibliographic records from their catalog and lets your users send \`@user@domain\` follow requests. However, physical item loans require the remote instance to also recognize your server so their users can receive custody transfer notifications.
+* **Reciprocal Peering:** Once the remote instance administrator adds your domain (or reciprocal ActivityPub handshakes are verified), full two-way social borrowing and mutual Friends-Only shelf access are unlocked.
 `,
       pl: `Tradycyjne platformy do katalogowania stawiają użytkowników przed bolesnym kompromisem:
 * **Silosy chmurowe** (jak Goodreads czy BoardGameGeek) ułatwiają podglądanie tego, co czytają znajomi i wymianę metadanych, ale zamykają Twoje dane w korporacyjnym ogrodzie, śledzą nawyki i mogą w każdej chwili zmienić regulamin lub zamknąć usługę.
@@ -802,6 +818,22 @@ Administratorzy zarządzają partnerami w Panelu Administracyjnym Federacji:
 ### 6. Kontrola dostępu w SPARQL
 
 Każda instancja uruchamia wyizolowany silnik SPARQL oparty o Oxigraph. Podczas zapytań federacyjnych iqoqo egzekwuje rygorystyczne **prawa dostępu federacyjnego**: zapytania publiczne widzą wyłącznie trójki jawnie publiczne, co gwarantuje, że prywatne zbiory nigdy nie wyciekną przez trawersowanie grafu.
+
+### 7. Zaufanie jednostronne a obustronne (wzajemne) węzły federacji
+
+Częstym pytaniem administratorów jest: *„Co się stanie, jeśli dodam instancję partnerską, ale jej administrator jeszcze nie dodał mojej?”*
+
+W trójstopniowym modelu zaufania iqoqo (\`trusted\` — zaufany, \`untrusted\` — niezaufany, \`blocked\` — zablokowany), zaufanie konfiguruje się lokalnie na każdym serwerze. Jednak niektóre interakcje wymagają wzajemnego uczestnictwa:
+
+| Stan relacji | Autouzupełnianie metadanych | Kolejka scalania kustosza | Wysyłanie próśb o znajomość | Wypożyczenia międzyinstancyjne |
+| :--- | :---: | :---: | :---: | :---: |
+| **Obustronny (Wzajemny zaufany)** | ✅ Aktywne | ➖ Pomijana | ✅ Aktywne | ✅ Aktywne |
+| **Jednostronny wychodzący (Zaufany)** | ✅ Aktywne | ➖ Pomijana | ✅ Aktywne | ❌ Wymaga wzajemności |
+| **Jednostronny wychodzący (Niezaufany)** | ❌ Nieaktywne | ✅ Aktywne | ❌ Nieaktywne | ❌ Nieaktywne |
+| **Zablokowany** | ❌ Nieaktywne | ❌ Nieaktywne | ❌ Nieaktywne | ❌ Nieaktywne |
+
+* **Jednostronne zaufanie wychodzące:** Ustawienie partnera jako **Zaufany** natychmiast pozwala Twojej instancji uzupełniać brakujące metadane bibliograficzne z ich katalogu oraz umożliwia Twoim użytkownikom wysyłanie próśb o obserwację \`@użytkownik@domena\`. Jednak fizyczne wypożyczenia przedmiotów wymagają, aby zdalna instancja również zarejestrowała Twój serwer.
+* **Obustronny węzeł (wzajemny):** Gdy administrator zdalnego serwera doda Twoją domenę (lub nastąpi zweryfikowane wzajemne potwierdzenie ActivityPub), odblokowane zostają pełne wypożyczenia oraz dostęp do półek tylko dla znajomych.
 `,
     },
   },

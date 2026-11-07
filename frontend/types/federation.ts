@@ -16,6 +16,15 @@
 
 export type TrustLevel = "trusted" | "untrusted" | "blocked";
 
+export type PeeringDirection = "reciprocal" | "outbound_only" | "inbound_only" | "blocked";
+
+export interface EffectiveCapabilities {
+  auto_metadata_sync: boolean;
+  custodian_merge_queue: boolean;
+  friend_follows: boolean;
+  cross_instance_loans: boolean;
+}
+
 export interface FederationInstance {
   id: number;
   domain: string;
@@ -26,6 +35,8 @@ export interface FederationInstance {
   trust_level: TrustLevel;
   created_at: string | null;
   key_fingerprint?: string | null;
+  peering_direction?: PeeringDirection;
+  effective_capabilities?: EffectiveCapabilities;
 }
 
 export interface FederationActivity {

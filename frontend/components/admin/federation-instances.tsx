@@ -18,7 +18,24 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Building2, Copy, Globe, Info, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
+  Ban,
+  Building2,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Globe,
+  Info,
+  Loader2,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   useFederationInstances,
   useAddFederationInstance,
@@ -77,6 +94,7 @@ export function FederationInstancesManager() {
 
   const [newDomain, setNewDomain] = useState("");
   const [instanceToDelete, setInstanceToDelete] = useState<FederationInstance | null>(null);
+  const [expandedCapabilitiesId, setExpandedCapabilitiesId] = useState<number | null>(null);
 
   const handleAddInstance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,6 +218,7 @@ export function FederationInstancesManager() {
                     <th className="px-4 py-3 font-medium">{t("thDomain")}</th>
                     <th className="px-4 py-3 font-medium">{t("thSoftware")}</th>
                     <th className="px-4 py-3 font-medium">{t("thTrustLevel")}</th>
+                    <th className="px-4 py-3 font-medium">{t("thPeering")}</th>
                     <th className="px-4 py-3 font-medium">{t("thLastProbed")}</th>
                     <th className="px-4 py-3 font-medium text-right">{t("thActions")}</th>
                   </tr>
@@ -266,6 +285,127 @@ export function FederationInstancesManager() {
                             ))}
                           </select>
                         </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const direction =
+                            inst.peering_direction || (inst.trust_level === "blocked" ? "blocked" : "outbound_only");
+                          const caps = inst.effective_capabilities || {
+                            auto_metadata_sync: inst.trust_level === "trusted",
+                            custodian_merge_queue: inst.trust_level === "untrusted",
+                            friend_follows: inst.trust_level === "trusted",
+                            cross_instance_loans: inst.trust_level === "trusted" && direction === "reciprocal",
+                          };
+                          const isExpanded = expandedCapabilitiesId === inst.id;
+
+                          return (
+                            <div className="space-y-1">
+                              <div>
+                                {direction === "reciprocal" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1 font-medium"
+                                  >
+                                    <ArrowLeftRight className="h-3 w-3 shrink-0" />
+                                    <span>{t("directionReciprocal")}</span>
+                                  </Badge>
+                                ) : direction === "blocked" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-destructive/10 text-destructive border-destructive/30 gap-1 font-medium"
+                                  >
+                                    <Ban className="h-3 w-3 shrink-0" />
+                                    <span>{t("directionBlocked")}</span>
+                                  </Badge>
+                                ) : direction === "inbound_only" ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 gap-1 font-medium"
+                                  >
+                                    <ArrowLeft className="h-3 w-3 shrink-0" />
+                                    <span>{t("directionInboundOnly")}</span>
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 gap-1 font-medium"
+                                  >
+                                    <ArrowRight className="h-3 w-3 shrink-0" />
+                                    <span>{t("directionOutboundOnly")}</span>
+                                  </Badge>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedCapabilitiesId(isExpanded ? null : inst.id)}
+                                aria-expanded={isExpanded}
+                                aria-label={`${t("viewCapabilities")} for ${inst.domain}`}
+                                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal underline decoration-dotted transition-colors"
+                              >
+                                <Info className="h-3 w-3 shrink-0" />
+                                <span>{t("viewCapabilities")}</span>
+                                {isExpanded ? (
+                                  <ChevronUp className="h-3 w-3 shrink-0" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3 shrink-0" />
+                                )}
+                              </button>
+                              {isExpanded && (
+                                <div
+                                  data-testid={`capabilities-matrix-${inst.id}`}
+                                  className="mt-2 p-2.5 rounded-lg border border-border bg-muted/40 text-xs space-y-1.5 text-muted-foreground max-w-xs sm:max-w-sm"
+                                >
+                                  <p className="font-semibold text-foreground text-[11px] uppercase tracking-wide">
+                                    {t("capabilitiesTitle")}
+                                  </p>
+                                  <p className="text-[11px] leading-tight text-foreground/80">
+                                    {direction === "reciprocal"
+                                      ? t("directionReciprocalDesc")
+                                      : direction === "blocked"
+                                        ? t("directionBlockedDesc")
+                                        : direction === "inbound_only"
+                                          ? t("directionInboundOnlyDesc")
+                                          : t("directionOutboundOnlyDesc")}
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 pt-1.5 border-t border-border/60">
+                                    <div className="flex items-center gap-1.5">
+                                      {caps.auto_metadata_sync ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                      )}
+                                      <span>{t("capAutoMetadataSync")}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {caps.custodian_merge_queue ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                      )}
+                                      <span>{t("capCustodianMergeQueue")}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {caps.friend_follows ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                      )}
+                                      <span>{t("capFriendFollows")}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {caps.cross_instance_loans ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                      )}
+                                      <span>{t("capCrossInstanceLoans")}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
                         {formatRelativeTime(inst.last_seen_at, t)}

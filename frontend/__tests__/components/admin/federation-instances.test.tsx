@@ -218,4 +218,58 @@ describe("FederationInstancesManager Component", () => {
       expect(toast.success).toHaveBeenCalledWith("Removed instance library.alpha.org");
     });
   });
+
+  it("renders peering direction badges and expands effective capabilities matrix", async () => {
+    const user = userEvent.setup();
+    vi.mocked(federationHooks.useFederationInstances).mockReturnValue({
+      data: [
+        {
+          id: 1,
+          domain: "reciprocal.fed.org",
+          software_name: "iqoqo",
+          software_version: "1.0.0",
+          trust_level: "trusted",
+          peering_direction: "reciprocal",
+          effective_capabilities: {
+            auto_metadata_sync: true,
+            custodian_merge_queue: false,
+            friend_follows: true,
+            cross_instance_loans: true,
+          },
+          last_seen_at: null,
+        },
+        {
+          id: 2,
+          domain: "unilateral.fed.org",
+          software_name: "BookWyrm",
+          software_version: "0.7.0",
+          trust_level: "trusted",
+          peering_direction: "outbound_only",
+          effective_capabilities: {
+            auto_metadata_sync: true,
+            custodian_merge_queue: false,
+            friend_follows: true,
+            cross_instance_loans: false,
+          },
+          last_seen_at: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<FederationInstancesManager />);
+
+    expect(screen.getByText("Bilateral (Reciprocal)")).toBeInTheDocument();
+    expect(screen.getByText("Outbound only")).toBeInTheDocument();
+
+    const viewCapsBtn = screen.getByLabelText("View capabilities for reciprocal.fed.org");
+    await user.click(viewCapsBtn);
+
+    expect(screen.getByTestId("capabilities-matrix-1")).toBeInTheDocument();
+    expect(screen.getByText("Effective Capabilities")).toBeInTheDocument();
+    expect(screen.getByText("Auto metadata sync")).toBeInTheDocument();
+    expect(screen.getByText("Friend follows")).toBeInTheDocument();
+    expect(screen.getByText("Cross-instance loans")).toBeInTheDocument();
+  });
 });

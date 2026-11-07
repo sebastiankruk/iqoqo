@@ -297,3 +297,61 @@ class TestFederationDiscoveryAdmin:
         with app.app_context():
             updated = db.session.get(FederationInstance, inst_id)
             assert updated.trust_level == TrustLevel.UNTRUSTED
+
+    def test_get_federation_instances_serializes_peering_direction_and_effective_capabilities(self, client, admin_headers, app):
+        """Instances endpoint exposes peering_direction and effective_capabilities summary."""
+        from app.db.federation import FederationActivity
+
+        with app.app_context():
+            # Instance 1: Trusted, outbound only (no inbound activity)
+            inst1 = FederationInstance(
+                domain="unilateral-trusted.fed.org",
+                trust_level=TrustLevel.TRUSTED,
+                shared_inbox_url="https://unilateral-trusted.fed.org/inbox",
+            )
+            # Instance 2: Trusted, reciprocal (has inbound activity)
+            inst2 = FederationInstance(
+                domain="reciprocal-peer.fed.org",
+                trust_level=TrustLevel.TRUSTED,
+                shared_inbox_url="https://reciprocal-peer.fed.org/inbox",
+            )
+            # Instance 3: Blocked
+            inst3 = FederationInstance(
+                domain="blocked-peer.fed.org",
+                trust_level=TrustLevel.BLOCKED,
+                shared_inbox_url="https://blocked-peer.fed.org/inbox",
+            )
+            db.session.add_all([inst1, inst2, inst3])
+            db.session.flush()
+
+            # Record an inbound activity for inst2
+            inbound_act = FederationActivity(
+                actor_uri="https://reciprocal-peer.fed.org/users/alice",
+                activity_type="Follow",
+                direction="inbound",
+            )
+            db.session.add(inbound_act)
+            db.session.commit()
+
+        resp = client.get("/api/v1/admin/federation/instances", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+
+        inst1_data = next((d for d in data if d["domain"] == "unilateral-trusted.fed.org"), None)
+        assert inst1_data is not None
+        assert inst1_data["peering_direction"] == "outbound_only"
+        assert inst1_data["effective_capabilities"]["auto_metadata_sync"] is True
+        assert inst1_data["effective_capabilities"]["friend_follows"] is True
+        assert inst1_data["effective_capabilities"]["cross_instance_loans"] is False
+
+        inst2_data = next((d for d in data if d["domain"] == "reciprocal-peer.fed.org"), None)
+        assert inst2_data is not None
+        assert inst2_data["peering_direction"] == "reciprocal"
+        assert inst2_data["effective_capabilities"]["auto_metadata_sync"] is True
+        assert inst2_data["effective_capabilities"]["cross_instance_loans"] is True
+
+        inst3_data = next((d for d in data if d["domain"] == "blocked-peer.fed.org"), None)
+        assert inst3_data is not None
+        assert inst3_data["peering_direction"] == "blocked"
+        assert inst3_data["effective_capabilities"]["auto_metadata_sync"] is False
+        assert inst3_data["effective_capabilities"]["cross_instance_loans"] is False
