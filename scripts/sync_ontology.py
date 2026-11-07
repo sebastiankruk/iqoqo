@@ -179,6 +179,13 @@ MAPPED_PROPERTY_CONTRACT: dict[str, tuple[URIRef, URIRef, URIRef]] = {
     "followerLocalUser": (OWL.ObjectProperty, IQOQO.FederationFollower, IQOQO.User),
     "followerStatus": (OWL.DatatypeProperty, IQOQO.FederationFollower, XSD.string),
     "knowsFriend": (OWL.ObjectProperty, IQOQO.User, IQOQO.User),
+    # LEGO & Construction sets (v1.0.1)
+    "setNumber": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.string),
+    "pieceCount": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.integer),
+    "minifigCount": (OWL.DatatypeProperty, IQOQO.Manifestation, XSD.integer),
+    "buildStatus": (OWL.DatatypeProperty, IQOQO.Item, XSD.string),
+    "missingPiecesCount": (OWL.DatatypeProperty, IQOQO.Item, XSD.integer),
+    "instructionsIncluded": (OWL.DatatypeProperty, IQOQO.Item, XSD.boolean),
 }
 
 # Required shape identifier -> exact target class. This is selective: a shape
@@ -209,6 +216,8 @@ REQUIRED_SHAPE_CONTRACT: dict[str, URIRef | set[URIRef]] = {
     "SemanticLinkShape": IQOQO.SemanticLink,
     "WorkSeriesMembershipShape": IQOQO.WorkSeriesMembership,
     "DuplicateCandidateShape": IQOQO.DuplicateCandidate,
+    "LegoManifestationShape": IQOQO.Manifestation,
+    "LegoItemShape": IQOQO.Item,
 }
 
 

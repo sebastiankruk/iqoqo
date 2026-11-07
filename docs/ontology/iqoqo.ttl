@@ -104,6 +104,51 @@
     rdfs:comment "A specific manufacturer's cut of an artwork as a jigsaw puzzle." .
 
 # ---------------------------------------------------------------------------
+# LEGO & Construction Sets extensions (v1.0.1)
+# ---------------------------------------------------------------------------
+
+:LegoSet a owl:Class ;
+    rdfs:subClassOf frbroo:F16_Container_Work ;
+    rdfs:label "LegoSet" ;
+    rdfs:comment "FRBRoo F16 Container Work — models a LEGO or construction set aggregating pieces, minifigures, and instruction manuals." .
+
+iqoqo:setNumber a owl:DatatypeProperty ;
+    rdfs:label "set number" ;
+    rdfs:comment "Official manufacturer or catalog set number (e.g. '10318-1')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:pieceCount a owl:DatatypeProperty ;
+    rdfs:label "piece count" ;
+    rdfs:comment "Total number of construction pieces or bricks in the set." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:minifigCount a owl:DatatypeProperty ;
+    rdfs:label "minifigure count" ;
+    rdfs:comment "Number of minifigures included in the set." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:buildStatus a owl:DatatypeProperty ;
+    rdfs:label "build status" ;
+    rdfs:comment "Physical build or completeness state of the LEGO item ('sealed', 'built', 'incomplete', 'parted_out')." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
+iqoqo:missingPiecesCount a owl:DatatypeProperty ;
+    rdfs:label "missing pieces count" ;
+    rdfs:comment "Number of missing pieces for an incomplete physical set." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:integer .
+
+iqoqo:instructionsIncluded a owl:DatatypeProperty ;
+    rdfs:label "instructions included" ;
+    rdfs:comment "Whether the physical set includes paper building instruction booklets." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:boolean .
+
+# ---------------------------------------------------------------------------
 # Media vocabulary (v0.3.0)
 # Media vocabulary is auto-generated from shared/taxonomy.yaml
 # See: docs/ontology/taxonomy.ttl for individual instances.
