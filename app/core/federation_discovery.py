@@ -366,3 +366,73 @@ def probe_registered_instances(max_workers: int = 5, per_probe_timeout: float = 
             logger.debug("Failed initializing client for batch actor refresh: %s", client_exc)
 
     return results
+
+
+def compute_peering_direction(trust_level: str, shared_inbox_url: str | None, has_inbound: bool) -> str:
+    """Compute the peering directionality for a federation instance.
+
+    Parameters
+    ----------
+    trust_level:
+        Instance trust setting ('trusted', 'untrusted', 'blocked').
+    shared_inbox_url:
+        Outbound shared inbox URL if discovered, or None.
+    has_inbound:
+        Whether inbound traffic or an accepted follower handshake was observed.
+
+    Returns
+    -------
+    str
+        One of: 'reciprocal', 'outbound_only', 'inbound_only', 'blocked'.
+    """
+    if trust_level == TrustLevel.BLOCKED or trust_level == "blocked":
+        return "blocked"
+    if has_inbound and not shared_inbox_url:
+        return "inbound_only"
+    if has_inbound:
+        if trust_level in (TrustLevel.TRUSTED, "trusted"):
+            return "reciprocal"
+        return "inbound_only"
+    return "outbound_only"
+
+
+def compute_effective_capabilities(trust_level: str, peering_direction: str) -> dict[str, bool]:
+    """Calculate the active capabilities matrix for a peer instance.
+
+    Parameters
+    ----------
+    trust_level:
+        Instance trust setting ('trusted', 'untrusted', 'blocked').
+    peering_direction:
+        Computed peering direction ('reciprocal', 'outbound_only', 'inbound_only', 'blocked').
+
+    Returns
+    -------
+    dict[str, bool]
+        Summary containing:
+        - auto_metadata_sync
+        - custodian_merge_queue
+        - friend_follows
+        - cross_instance_loans
+    """
+    if trust_level == TrustLevel.BLOCKED or trust_level == "blocked" or peering_direction == "blocked":
+        return {
+            "auto_metadata_sync": False,
+            "custodian_merge_queue": False,
+            "friend_follows": False,
+            "cross_instance_loans": False,
+        }
+    if trust_level == TrustLevel.TRUSTED or trust_level == "trusted":
+        return {
+            "auto_metadata_sync": True,
+            "custodian_merge_queue": False,
+            "friend_follows": True,
+            "cross_instance_loans": peering_direction == "reciprocal",
+        }
+    # untrusted
+    return {
+        "auto_metadata_sync": False,
+        "custodian_merge_queue": True,
+        "friend_follows": False,
+        "cross_instance_loans": False,
+    }

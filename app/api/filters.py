@@ -297,6 +297,27 @@ class CatalogFilterBuilder:
                 )
             )
 
+    def _apply_has_map(self, has_map: bool) -> None:
+        if has_map:
+            has_map_cond = db.or_(
+                Manifestation.meta["has_map"].as_string().in_(["true", "1"]),
+                Manifestation.meta["format"].as_string().in_(["cartographic_map", "atlas"]),
+                Manifestation.format_type.in_(["cartographic_map", "atlas"]),
+                Manifestation.format.in_(["cartographic_map", "atlas"]),
+                db.and_(
+                    Manifestation.meta["map_attachments"].isnot(None),
+                    Manifestation.meta["map_attachments"].as_string() != "[]",
+                    Manifestation.meta["map_attachments"].as_string() != "null",
+                    Manifestation.meta["map_attachments"].as_string() != "",
+                ),
+            )
+            if self.root == self.ROOT_ITEM:
+                has_map_cond = db.or_(
+                    has_map_cond,
+                    Item.meta["map_insert_present"].as_string().in_(["true", "1"]),
+                )
+            self.query = self.query.filter(has_map_cond)
+
     def _apply_ownership(self, ownership: list[str] | None) -> None:
         """Apply ``owned`` / ``not_owned`` filtering.
 
@@ -441,6 +462,7 @@ class CatalogFilterBuilder:
         missing_id: bool = False,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
     ):
         """Apply every supplied filter group and return the built query."""
         needs_frbr = bool(
@@ -450,6 +472,7 @@ class CatalogFilterBuilder:
             or genres
             or missing_cover
             or missing_id
+            or has_map
             or lod_authority
             or lod_status
             or (self.root == self.ROOT_ITEM and (tags or collections or statuses or ownership))
@@ -461,6 +484,7 @@ class CatalogFilterBuilder:
         self._apply_format(fmt)
         self._apply_missing_cover(missing_cover)
         self._apply_missing_id(missing_id)
+        self._apply_has_map(has_map)
         self._apply_ownership(ownership)
         self._apply_tags(tags)
         self._apply_collections(collections)

@@ -135,3 +135,6 @@ def test_system_status_endpoint_reports_all_integrations(client, normal_user_hea
     assert "bgg" in payload
     assert "configured" in payload["bgg"]
     assert payload["bgg"]["status"] in ("CONFIGURED_VALID", "DISABLED")
+    assert "rebrickable" in payload
+    assert "configured" in payload["rebrickable"]
+    assert payload["rebrickable"]["status"] in ("CONFIGURED_VALID", "DISABLED")

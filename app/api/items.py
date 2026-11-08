@@ -29,6 +29,7 @@ from flask import Response, current_app, g, jsonify, request, send_file, stream_
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
@@ -265,6 +266,7 @@ def get_items():
     owner_only = request.args.get("owner_only", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
     # When include_public=true, also include non-hidden available items from other users.
     # This enables the social lending catalogue: borrowers can discover lendable items.
     include_public = request.args.get("include_public", "false").lower() == "true"
@@ -316,6 +318,7 @@ def get_items():
             publishers=publishers_list,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
             scope=scope,
             friend_ids=friend_ids_list,
         )
@@ -387,7 +390,7 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or lod_authority or lod_status)
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
@@ -416,6 +419,7 @@ def get_items():
             missing_id=missing_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         total_physical = query.order_by(None).count()
@@ -549,6 +553,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
+        "map_insert_present": (item.meta or {}).get("map_insert_present"),
     }
 
     if is_owner or is_admin or is_borrowed:
@@ -563,7 +568,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
-        item_data["display"] = build_display_projection(manifestation.meta)
+        item_data["display"] = build_display_projection(manifestation.meta, item.meta)
         item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
@@ -697,11 +702,39 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
     if validation_error is not None:
         return validation_error
 
-    if metadata:
-        if item.manifestation:
-            item.manifestation.update_meta(**metadata)
-        # Also update item.meta if needed, but usually extra fields are for manifestation
-        item.meta = {**item.meta, **metadata} if item.meta else metadata
+    _ITEM_ONLY_KEYS = {
+        "build_status",
+        "missing_pieces_count",
+        "instructions_included",
+        "box_condition",
+        "map_insert_present",
+    }
+
+    item_meta = dict(item.meta or {})
+    if payload.build_status is not None:
+        item_meta["build_status"] = payload.build_status
+    if payload.missing_pieces_count is not None:
+        item_meta["missing_pieces_count"] = payload.missing_pieces_count
+    if payload.instructions_included is not None:
+        item_meta["instructions_included"] = payload.instructions_included
+    if payload.box_condition is not None:
+        item_meta["box_condition"] = payload.box_condition
+    if payload.map_insert_present is not None:
+        item_meta["map_insert_present"] = payload.map_insert_present
+
+    for k in _ITEM_ONLY_KEYS:
+        if k in metadata:
+            item_meta[k] = metadata[k]
+
+    # Only forward non-item-specific metadata to manifestation (FRBR F5 -> F3 boundary)
+    manifestation_meta = {k: v for k, v in metadata.items() if k not in _ITEM_ONLY_KEYS and k not in forbidden}
+    if manifestation_meta and item.manifestation:
+        item.manifestation.update_meta(**manifestation_meta)
+
+    # Persist all allowed metadata into item.meta as well
+    item_meta.update({k: v for k, v in metadata.items() if k not in forbidden})
+    item.meta = item_meta
+    flag_modified(item, "meta")
 
     sync_tags(item.id, user_id, payload.tags)
 
@@ -729,6 +762,11 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
                     "condition": item.condition,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
+                    "map_insert_present": (item.meta or {}).get("map_insert_present"),
+                    "build_status": (item.meta or {}).get("build_status"),
+                    "missing_pieces_count": (item.meta or {}).get("missing_pieces_count"),
+                    "instructions_included": (item.meta or {}).get("instructions_included"),
+                    "box_condition": (item.meta or {}).get("box_condition"),
                 },
                 "error": None,
             }

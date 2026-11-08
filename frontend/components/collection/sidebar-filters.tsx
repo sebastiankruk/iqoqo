@@ -24,8 +24,10 @@ import {
   Film,
   Puzzle as PuzzleIcon,
   LayoutGrid,
+  Boxes,
   Search,
   Check,
+  Map as MapIcon,
 } from "lucide-react";
 import type { ActiveFilter } from "./filter-bar";
 import { MEDIA_HIERARCHY, CATEGORY_STATUS_MAP } from "@/types/frbr";
@@ -77,6 +79,9 @@ const progressLabels: Record<string, { label: string; dot: string }> = {
   want_to_play: { label: "Want to Play", dot: "bg-purple-500" },
   playing: { label: "Playing", dot: "bg-green-500" },
   played: { label: "Played", dot: "bg-blue-500" },
+  want_to_build: { label: "Want to Build", dot: "bg-purple-500" },
+  building: { label: "Building", dot: "bg-green-500" },
+  built: { label: "Built", dot: "bg-blue-500" },
 };
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -85,6 +90,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
   movie: <Film className="h-3.5 w-3.5" />,
   board_game: <LayoutGrid className="h-3.5 w-3.5" />,
   puzzle: <PuzzleIcon className="h-3.5 w-3.5" />,
+  lego: <Boxes className="h-3.5 w-3.5" />,
 };
 
 /**
@@ -518,6 +524,35 @@ export function SidebarFilters({
               </label>
             );
           })}
+        </div>
+      </AccordionSection>
+
+      <AccordionSection title={t("secMaps") || "Maps & Supplements"} defaultOpen={true}>
+        <div className="flex flex-col gap-1">
+          {(() => {
+            const hasMapActive = activeFilters.some(f => f.type === "has_map");
+            return (
+              <label
+                className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  hasMapActive
+                    ? "bg-muted text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  name="has_map_filter"
+                  aria-label={t("hasMap") || "Includes Map"}
+                  checked={hasMapActive}
+                  onChange={() => onToggleFilter({ type: "has_map", value: "true" })}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
+                />
+                <MapIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1 truncate">{t("hasMap") || "Includes Map"}</span>
+                {hasMapActive && <Check className="h-3 w-3 text-primary" />}
+              </label>
+            );
+          })()}
         </div>
       </AccordionSection>
 

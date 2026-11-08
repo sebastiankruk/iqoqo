@@ -15,6 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
+from typing import Any
+
+from sqlalchemy import or_, select
+
 from app.core.frbr_service import (
     add_expression_contribution,
     add_work_contribution,
@@ -165,25 +169,90 @@ class IngestService:
 
         from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
+        is_lego = (
+            meta.get("category") == MediaCategory.LEGO
+            or FORMAT_ALIAS_TO_CATEGORY.get(raw_format) == MediaCategory.LEGO
+            or raw_format
+            in (
+                "standard_set",
+                "ucs_collector_set",
+                "technic_set",
+                "minifigure_series",
+                "polybag",
+                "modular_building",
+                "unknown_lego",
+                "lego",
+                "construction_set",
+                "brick_set",
+                "brick",
+            )
+        )
+
         # Map format string → FRBR content type (canonical formats + aliases)
-        content_type = FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
+        content_type = MediaCategory.LEGO if is_lego else FORMAT_ALIAS_TO_CATEGORY.get(raw_format, MediaCategory.MUSIC)
+
+        candidate_barcode = meta.get("barcode") or meta.get("identifier")
+        candidate_ean = meta.get("ean") or (
+            candidate_barcode if candidate_barcode and len(str(candidate_barcode)) == 13 and str(candidate_barcode).isdigit() else None
+        )
+        candidate_upc = meta.get("upc") or (
+            candidate_barcode if candidate_barcode and len(str(candidate_barcode)) == 12 and str(candidate_barcode).isdigit() else None
+        )
+        candidate_set_num = meta.get("set_number") or meta.get("set_num")
+
+        # Deduplicate existing manifestation
+        conditions = []
+        if candidate_barcode:
+            b_str = str(candidate_barcode).strip()
+            conditions.extend([Manifestation.barcode == b_str, Manifestation.meta["barcode"].as_string() == b_str])
+        if candidate_ean:
+            e_str = str(candidate_ean).strip()
+            conditions.extend([Manifestation.ean == e_str, Manifestation.meta["ean"].as_string() == e_str])
+        if candidate_upc:
+            u_str = str(candidate_upc).strip()
+            conditions.extend([Manifestation.upc == u_str, Manifestation.meta["upc"].as_string() == u_str])
+        if is_lego and candidate_set_num:
+            s_clean = str(candidate_set_num).strip()
+            conditions.extend(
+                [
+                    Manifestation.meta["set_number"].as_string() == s_clean,
+                    Manifestation.barcode == s_clean,
+                ]
+            )
+            if "-" in s_clean:
+                base_s = s_clean.split("-")[0]
+                conditions.append(Manifestation.meta["set_number"].as_string() == base_s)
+
+        if conditions:
+            stmt = select(Manifestation).where(or_(*conditions))
+            existing_manifestation = db.session.execute(stmt).scalars().first()
+            if existing_manifestation:
+                return existing_manifestation
 
         raw_payload = meta.get("raw_payload") or meta
 
         from app.core.frbr_service import derive_sort_title
 
+        theme = meta.get("theme")
         work_genres = _extract_genres(meta)
+        if is_lego and theme and theme not in work_genres:
+            work_genres.append(theme)
+
         work_meta: dict = {"authors": [author_name] if author_name else []}
+        if is_lego and theme:
+            work_meta["theme"] = theme
         if work_genres:
             work_meta["genres"] = work_genres
+
         work = Work(title=title, sort_title=derive_sort_title(title), meta=work_meta, raw_payload=raw_payload)
         db.session.add(work)
         db.session.flush()
 
         if author_name:
+            role = "designer" if is_lego else "author"
             contributor = get_or_create_contributor(author_name, "person")
             if contributor:
-                add_work_contribution(work.id, contributor.id, "author")
+                add_work_contribution(work.id, contributor.id, role)
 
         expression = Expression(
             work=work,
@@ -204,12 +273,18 @@ class IngestService:
                 "format": raw_format,
             }
         )
+        if is_lego and candidate_set_num:
+            man_meta.setdefault("set_number", str(candidate_set_num).strip())
 
         manifestation = Manifestation(
             expression=expression,
             format=raw_format,
+            format_type=raw_format,
             label=meta.get("publisher") or meta.get("label"),
-            barcode=meta.get("barcode") or meta.get("identifier"),
+            barcode=candidate_barcode,
+            ean=candidate_ean,
+            upc=candidate_upc,
+            cover_url=cover_url,
             catalog_number=meta.get("catalog_number") or meta.get("catno"),
             meta=man_meta,
             raw_payload=raw_payload,
@@ -567,6 +642,117 @@ class IngestService:
         manifestation = Manifestation(
             expression=expression,
             meta=man_meta,
+        )
+        db.session.add(manifestation)
+        db.session.commit()
+
+        start_cover_processing(manifestation_id=manifestation.id, identifier=query, title=title, author=author_name or "")
+        return manifestation
+
+    @staticmethod
+    def ingest_lego_from_barcode(query: str) -> Manifestation:
+        """Ingest LEGO set by set number or barcode (via Rebrickable and UPC resolution)."""
+        from app.strategies.lego import LegoLookupStrategy
+
+        strategy = LegoLookupStrategy()
+        meta, _ = strategy.lookup(query)
+
+        if not meta:
+            raise ValueError("LEGO set metadata not found in external services.")
+
+        is_barcode = len(query) in (8, 12, 13, 14) and query.isdigit()
+        stored_barcode = query if is_barcode else meta.get("barcode")
+        set_num = meta.get("set_number") or (query if not is_barcode else None)
+        ean_val = meta.get("ean") or (
+            stored_barcode if stored_barcode and len(str(stored_barcode)) == 13 and str(stored_barcode).isdigit() else None
+        )
+        upc_val = meta.get("upc") or (
+            stored_barcode if stored_barcode and len(str(stored_barcode)) == 12 and str(stored_barcode).isdigit() else None
+        )
+
+        # Deduplicate existing manifestation
+        conditions = []
+        if stored_barcode:
+            b_str = str(stored_barcode).strip()
+            conditions.extend([Manifestation.barcode == b_str, Manifestation.meta["barcode"].as_string() == b_str])
+        if ean_val:
+            e_str = str(ean_val).strip()
+            conditions.extend([Manifestation.ean == e_str, Manifestation.meta["ean"].as_string() == e_str])
+        if upc_val:
+            u_str = str(upc_val).strip()
+            conditions.extend([Manifestation.upc == u_str, Manifestation.meta["upc"].as_string() == u_str])
+        if set_num:
+            s_clean = str(set_num).strip()
+            conditions.extend(
+                [
+                    Manifestation.meta["set_number"].as_string() == s_clean,
+                    Manifestation.barcode == s_clean,
+                ]
+            )
+            if "-" in s_clean:
+                base_s = s_clean.split("-")[0]
+                conditions.append(Manifestation.meta["set_number"].as_string() == base_s)
+
+        if conditions:
+            stmt = select(Manifestation).where(or_(*conditions))
+            existing_manifestation = db.session.execute(stmt).scalars().first()
+            if existing_manifestation:
+                return existing_manifestation
+
+        title = meta.get("title") or "Unknown LEGO Set"
+        author_name = meta.get("author") or meta.get("designer")
+        cover_url = meta.get("cover_url")
+        theme = meta.get("theme")
+        work_genres = _extract_genres(meta)
+        if theme and theme not in work_genres:
+            work_genres.append(theme)
+
+        work_meta: dict[str, Any] = {"theme": theme} if theme else {}
+        if author_name:
+            work_meta["authors"] = [author_name]
+        if work_genres:
+            work_meta["genres"] = work_genres
+
+        from app.core.frbr_service import derive_sort_title
+
+        work = Work(title=title, sort_title=derive_sort_title(title), meta=work_meta)
+        db.session.add(work)
+        db.session.flush()
+
+        expression = Expression(work=work, language=meta.get("language", "en"), content_type=MediaCategory.LEGO)
+        db.session.add(expression)
+        db.session.flush()
+
+        if author_name:
+            contributor = get_or_create_contributor(author_name, "person")
+            if contributor:
+                add_work_contribution(work.id, contributor.id, "designer")
+
+        format_val = meta.get("format", MediaFormat.STANDARD_SET)
+
+        man_meta = meta.copy()
+        man_meta.update(
+            {
+                "barcode": stored_barcode,
+                "format": format_val,
+                "title": title,
+                "cover_url": cover_url,
+            }
+        )
+        if set_num:
+            man_meta.setdefault("set_number", str(set_num).strip())
+
+        manifestation = Manifestation(
+            expression=expression,
+            format=format_val,
+            format_type=format_val,
+            label=meta.get("publisher") or meta.get("label"),
+            barcode=stored_barcode,
+            ean=ean_val,
+            upc=upc_val,
+            cover_url=cover_url,
+            meta=man_meta,
+            raw_payload=meta.get("raw_payload") or meta,
         )
         db.session.add(manifestation)
         db.session.commit()

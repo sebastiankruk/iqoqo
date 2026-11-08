@@ -60,6 +60,9 @@ export function getAdminTargetHref(esc: EscalationRequest): string | null {
  * @returns Formatted target label string.
  */
 export function getTargetLabel(esc: EscalationRequest): string {
+  if (esc.request_type === "new_media_type" || esc.target_type === "new_media_type") {
+    return "New Media Type Proposal";
+  }
   if (esc.manifestation_id) return `Manifestation #${esc.manifestation_id}`;
   if (esc.work_id) return `Work #${esc.work_id}`;
   if (esc.expression_id) return `Expression #${esc.expression_id}`;

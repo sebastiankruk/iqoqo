@@ -63,3 +63,55 @@ def test_payload_schema_rejects_id_zero():
     with pytest.raises(ValidationError) as exc_info:
         ItemCreateSchema(id=0, status="read")
     assert "Item identifier must be a positive integer" in str(exc_info.value)
+
+
+def test_lego_item_update_frbr_boundary(client, app, normal_user_headers):
+    """Assert that PUT /api/items/<id> stores LEGO copy attributes strictly in item.meta, not manifestation.meta."""
+    from app.db.models import Expression, Item, Manifestation, Work
+
+    with app.app_context():
+        user = User.query.first()
+        work = Work(title="LEGO Test Set", meta={"theme": "Technic"})
+        db.session.add(work)
+        db.session.flush()
+
+        expr = Expression(work=work, language="en", content_type="lego")
+        db.session.add(expr)
+        db.session.flush()
+
+        man = Manifestation(expression=expr, format="standard_set", format_type="standard_set", meta={"set_number": "42100"})
+        db.session.add(man)
+        db.session.flush()
+
+        item = Item(manifestation=man, owner_id=user.id, status="want_to_build", collection_status="available", meta={})
+        db.session.add(item)
+        db.session.commit()
+        item_id = item.id
+        man_id = man.id
+
+    payload = {
+        "build_status": "incomplete",
+        "missing_pieces_count": 5,
+        "instructions_included": False,
+        "box_condition": "damaged",
+    }
+    resp = client.put(f"/api/items/{item_id}", json=payload, headers=normal_user_headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["build_status"] == "incomplete"
+    assert data["missing_pieces_count"] == 5
+    assert data["instructions_included"] is False
+    assert data["box_condition"] == "damaged"
+
+    with app.app_context():
+        updated_item = db.session.get(Item, item_id)
+        assert updated_item.meta["build_status"] == "incomplete"
+        assert updated_item.meta["missing_pieces_count"] == 5
+        assert updated_item.meta["instructions_included"] is False
+        assert updated_item.meta["box_condition"] == "damaged"
+
+        parent_man = db.session.get(Manifestation, man_id)
+        assert "build_status" not in parent_man.meta
+        assert "missing_pieces_count" not in parent_man.meta
+        assert "instructions_included" not in parent_man.meta
+        assert "box_condition" not in parent_man.meta

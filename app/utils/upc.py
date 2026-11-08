@@ -8,11 +8,11 @@
 """Universal UPC/EAN metadata fetcher orchestrating the waterfall strategy."""
 
 import logging
-import os
 from typing import Any
 
 import requests
 
+from app.core.config_service import ConfigService
 from app.utils.allegro import fetch_allegro_metadata
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ _TIMEOUT = 5
 
 def fetch_upcdatabase_org(barcode: str) -> dict[str, Any] | None:
     """Tier 1a: Fetch from upcdatabase.org (Open, Free).."""
-    api_key = os.getenv("UPC_DATABASE_ORG_KEY")
+    api_key = ConfigService.get("UPC_DATABASE_ORG_KEY")
     if not api_key:
         return None
 
@@ -51,7 +51,7 @@ def fetch_upcdatabase_org(barcode: str) -> dict[str, Any] | None:
 
 def fetch_upc_metadata(barcode: str) -> dict[str, Any] | None:
     """Tier 1b: Fetch product metadata using UPCitemdb (High Quality, Strict Rate Limits)."""
-    api_key = os.getenv("UPC_ITEM_DB_KEY")
+    api_key = ConfigService.get("UPC_ITEM_DB_KEY")
     try:
         if api_key:
             url = f"https://api.upcitemdb.com/prod/v1/lookup?upc={barcode}"

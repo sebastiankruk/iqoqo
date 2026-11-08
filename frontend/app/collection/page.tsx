@@ -252,6 +252,7 @@ function CollectionContent() {
   }, [sortBy, activeFilters, appliedQuery, viewMode, missingCoverOnly, missingIdOnly, pathname, router]);
 
   const physicalStatusFilters = useMemo(() => statusFilters.filter(status => status !== "wish_list"), [statusFilters]);
+  const hasMapActive = useMemo(() => activeFilters.some(f => f.type === "has_map"), [activeFilters]);
 
   const {
     data: itemsData,
@@ -277,7 +278,8 @@ function CollectionContent() {
     false,
     lodAuthorityFilter,
     lodStatusFilter,
-    currentScope
+    currentScope,
+    hasMapActive
   );
 
   const {
@@ -301,7 +303,8 @@ function CollectionContent() {
     statusFilters,
     ownershipFilters,
     lodAuthorityFilter,
-    lodStatusFilter
+    lodStatusFilter,
+    hasMapActive
   );
 
   const {
@@ -358,6 +361,7 @@ function CollectionContent() {
     if (isBorrowedFilterActive) f.borrowed = "true";
     if (missingCoverOnly) f.missing_cover = "true";
     if (missingIdOnly) f.missing_id = "true";
+    if (hasMapActive) f.has_map = "true";
     f.scope = isLoggedIn
       ? currentScope === "global"
         ? "global"
@@ -381,6 +385,7 @@ function CollectionContent() {
     isBorrowedFilterActive,
     missingCoverOnly,
     missingIdOnly,
+    hasMapActive,
     viewMode,
     isLoggedIn,
     currentScope,

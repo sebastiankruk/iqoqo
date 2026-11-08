@@ -15,12 +15,14 @@
 
 """API routes for social feedback (ratings and comments) on FRBR levels."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
 import bleach
 from flask import Response, g, jsonify, request
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
@@ -28,6 +30,7 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.frbr_service import update_frbr_entity_type
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, User, Work, db
 
@@ -111,6 +114,22 @@ def _resolve_target_entity(escalation: EscalationRequest) -> dict[str, Any] | No
                 "type": "Item",
                 "current_state": entity.status,
             }
+    if escalation.request_type == "new_media_type":
+        title = "New Media Type"
+        category = "custom"
+        if escalation.suggested_value:
+            try:
+                payload = json.loads(escalation.suggested_value)
+                title = payload.get("proposed_format") or title
+                category = payload.get("proposed_category") or category
+            except Exception:
+                title = escalation.suggested_value or title
+        return {
+            "id": None,
+            "title": title,
+            "type": "NewMediaType",
+            "current_state": category,
+        }
     return None
 
 
@@ -425,6 +444,7 @@ def _validate_escalation_input(data: dict | None) -> tuple[dict | None, str | No
 
 @api_bp.route("/escalations/<level>/<int:target_id>", methods=["POST"])
 @require_auth
+@limiter.limit("10 per minute")
 @require_permission(PermissionName.ESCALATE_REQUEST)
 def create_escalation_request(level: str, target_id: int) -> Response | tuple[Response, int]:
     """Submit a custodian escalation request targeting a FRBR entity field."""
@@ -462,6 +482,141 @@ def create_escalation_request(level: str, target_id: int) -> Response | tuple[Re
     return jsonify({"success": True, "data": escalation.to_dict()}), 201
 
 
+class NewMediaTypeEscalationPayload(BaseModel):
+    """Schema for validating user proposals for new media types / physical formats."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    proposed_category: str = Field(..., min_length=1, max_length=100)
+    proposed_format: str = Field(..., min_length=1, max_length=100)
+    parent_frbr_class: str = Field(default="F1_Work")
+    sample_identifier_or_url: str | None = Field(default=None, max_length=500)
+    suggested_properties: list[str] | None = None
+    rationale: str = Field(..., min_length=1, max_length=MAX_SOCIAL_TEXT_LENGTH)
+
+    @field_validator("proposed_category", "proposed_format", "rationale", mode="before")
+    @classmethod
+    def sanitize_strings(cls, v: Any) -> str:
+        if v is None:
+            raise ValueError("Field cannot be null")
+        cleaned = _sanitize_text(str(v))
+        if not cleaned:
+            raise ValueError("Field cannot be empty")
+        return cleaned
+
+    @field_validator("sample_identifier_or_url", mode="before")
+    @classmethod
+    def sanitize_sample(cls, v: Any) -> str | None:
+        if v is None or not str(v).strip():
+            return None
+        return _sanitize_text(str(v))
+
+    @field_validator("suggested_properties", mode="before")
+    @classmethod
+    def validate_suggested_properties(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError("suggested_properties must be a list of strings")
+        if len(v) > 20:
+            raise ValueError("suggested_properties cannot contain more than 20 items")
+        cleaned_list: list[str] = []
+        for item in v:
+            if not isinstance(item, str):
+                continue
+            cleaned = _sanitize_text(item).strip()
+            if cleaned:
+                if len(cleaned) > 100:
+                    raise ValueError("Each suggested property must be at most 100 characters")
+                cleaned_list.append(cleaned)
+        return cleaned_list
+
+    @field_validator("parent_frbr_class")
+    @classmethod
+    def validate_frbr_class(cls, v: str) -> str:
+        cleaned = v.strip()
+        if cleaned not in {"F1_Work", "F16_Container_Work", "F3_Manifestation_Product_Type"}:
+            raise ValueError("parent_frbr_class must be 'F1_Work', 'F16_Container_Work', or 'F3_Manifestation_Product_Type'")
+        return cleaned
+
+
+def _notify_custodians_of_new_media_type(escalation: EscalationRequest, payload: dict[str, Any]) -> None:
+    """Send in-app notification to all admins/custodians when a new media type proposal is submitted."""
+    try:
+        from app.core.notifications import create_notification
+        from app.db.models import Role, User
+
+        custodians = db.session.query(User).join(User.roles).filter(Role.name.in_(["admin", "custodian"])).distinct().all()
+        for custodian in custodians:
+            create_notification(
+                user_id=custodian.id,
+                notification_type="new_media_type_requested",
+                payload={
+                    "escalation_id": escalation.id,
+                    "proposed_format": payload.get("proposed_format"),
+                    "proposed_category": payload.get("proposed_category"),
+                    "message": f"New media type proposed: {payload.get('proposed_format')}",
+                },
+                target_iri="/admin/content?tab=escalations",
+            )
+    except Exception as err:
+        logger.warning("Failed to notify custodians of new media type escalation: %s", err)
+
+
+@api_bp.route("/escalations", methods=["POST"])
+@api_bp.route("/social/escalations", methods=["POST"])
+@api_bp.route("/escalations/new-type", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+@require_permission(PermissionName.ESCALATE_REQUEST)
+def create_general_escalation_request() -> Response | tuple[Response, int]:
+    """Submit a general escalation request not bound to an existing FRBR entity (e.g. new_media_type)."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    data = request.get_json(silent=True) or {}
+    req_type = str(data.get("request_type", "")).strip().lower()
+
+    if req_type != "new_media_type":
+        return (
+            jsonify(
+                {
+                    "error": "General escalation must specify request_type='new_media_type'. For entity escalations, use /api/escalations/<level>/<target_id>",
+                    "code": 400,
+                }
+            ),
+            400,
+        )
+
+    try:
+        validated = NewMediaTypeEscalationPayload.model_validate(data)
+    except ValidationError as e:
+        first_err = e.errors()[0]
+        field = ".".join(str(loc) for loc in first_err.get("loc", []))
+        msg = first_err.get("msg", "Validation error")
+        return jsonify({"error": f"{field}: {msg}" if field else msg, "code": 400}), 400
+
+    payload_dict = validated.model_dump()
+    kwargs = {
+        "user_id": user_id,
+        "request_type": "new_media_type",
+        "target_type": "new_media_type",
+        "field_name": "new_media_type",
+        "current_value": None,
+        "suggested_value": json.dumps(payload_dict),
+        "note": validated.rationale,
+        "status": "pending",
+    }
+    escalation = EscalationRequest(**kwargs)
+    db.session.add(escalation)
+    db.session.commit()
+
+    _notify_custodians_of_new_media_type(escalation, payload_dict)
+
+    return jsonify({"success": True, "data": {**escalation.to_dict(), "target_entity": _resolve_target_entity(escalation)}}), 201
+
+
 @api_bp.route("/escalations/mine", methods=["GET"])
 @require_auth
 def list_my_escalation_requests() -> Response | tuple[Response, int]:
@@ -469,6 +624,15 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
+
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+    except (ValueError, TypeError):
+        limit = 50
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
 
     stmt = (
         select(EscalationRequest)
@@ -480,12 +644,16 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
         )
         .where(EscalationRequest.user_id == user_id)
         .order_by(EscalationRequest.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     requests = db.session.scalars(stmt).all()
     return jsonify(
         {
             "success": True,
             "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+            "limit": limit,
+            "offset": offset,
         }
     )
 
@@ -512,6 +680,15 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
         if s not in allowed_statuses:
             return jsonify({"error": f"Invalid status '{s}'. Must be one of {sorted(allowed_statuses)}", "code": 400}), 400
 
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+    except (ValueError, TypeError):
+        limit = 50
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
+
     stmt = (
         select(EscalationRequest)
         .options(
@@ -524,12 +701,16 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
         )
         .where(EscalationRequest.status.in_(statuses))
         .order_by(EscalationRequest.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     requests = db.session.scalars(stmt).all()
     return jsonify(
         {
             "success": True,
             "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+            "limit": limit,
+            "offset": offset,
         }
     )
 
@@ -710,14 +891,20 @@ def resolve_escalation_request(escalation_id: int) -> Response | tuple[Response,
             from app.core.notifications import create_notification
 
             if escalation.user_id:
+                notif_type = "new_media_type_resolved" if escalation.request_type == "new_media_type" else "escalation_resolved"
+                msg = (
+                    f"Your new media type proposal #{escalation.id} was {new_status}"
+                    if escalation.request_type == "new_media_type"
+                    else f"Your escalation request #{escalation.id} was {new_status}"
+                )
                 create_notification(
                     user_id=escalation.user_id,
-                    notification_type="escalation_resolved",
+                    notification_type=notif_type,
                     payload={
                         "escalation_id": escalation.id,
                         "status": new_status,
                         "resolution_note": resolution_note,
-                        "message": f"Your escalation request #{escalation.id} was {new_status}",
+                        "message": msg,
                     },
                     target_iri="/feedback?tab=my-escalations",
                 )

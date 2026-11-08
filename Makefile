@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
+.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain
 
 SHELL := /bin/bash
 
@@ -476,7 +476,10 @@ status: ## Show health status of all iQoQo services
 			deploy_arg="--deploy-dir $(DEPLOY_DIR)"; \
 		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg; \
+			status_code=0; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg || status_code=$$?; \
+			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
+			exit 0; \
 		else \
 			tmpdir=$$(mktemp -d); \
 			tmp_container=""; \
@@ -500,7 +503,10 @@ status: ## Show health status of all iQoQo services
 					echo "ERROR: backend image $$status_image does not contain /usr/src/app/scripts/iqoqo-status.sh." >&2; exit 2; \
 				fi; \
 			fi; \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack"; \
+			status_code=0; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack" || status_code=$$?; \
+			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
+			exit 0; \
 		fi
 
 # Linting targets
@@ -651,7 +657,7 @@ secret-scan: .venv/bin/activate ## Scan repository working tree and branch commi
 	@.venv/bin/python scripts/run_secret_scan.py
 
 # Compatibility baseline: executable checks that gate .github/workflows/quality.yml.
-lint: .venv/bin/activate
+lint: .venv/bin/activate lint-frontend
 	@PATH="$(NODE_DIR):$$PATH" .venv/bin/python scripts/run_lint.py
 
 # Stricter checks that are intentionally not part of the existing CI baseline.
@@ -714,7 +720,7 @@ test-backend-pg: .venv/bin/activate
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
 	.venv/bin/pytest tests/integration/db/ -v
 
-test-frontend:
+test-frontend: lint-ts
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 
@@ -864,7 +870,7 @@ _test-e2e-run:
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
 		echo "Running Playwright against the verified isolated E2E database..."; \
-		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
+		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true E2E_RESET_SECRET=e2e-reset-shared-secret ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 
 test: test-backend test-frontend test-scripts-bash test-scripts-python test-e2e
@@ -952,6 +958,40 @@ repair-authors: ## Repair empty or corrupted FRBR author metadata across catalog
 		echo "Error: No running Docker stack (iqoqo or iqoqo-preview) found and no .venv/bin/python available." >&2; \
 		exit 1; \
 	fi
+
+
+fix-ai-covers: ## Audit and unbind mismatched AI cover bindings (usage: make fix-ai-covers [preview|prod] [env=preview|prod] [apply=1|dry_run=1])
+	@target_env="$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(env),$(env),$(if $(ENV),$(ENV),$(if $(filter preview,$(MODE)),preview,$(if $(filter prod,$(MODE)),prod,))))))"; \
+	fix_args="$(if $(filter 1,$(apply)$(APPLY)),--apply,--dry-run) $(args)"; \
+	tty_flag="$$([ -t 0 ] && echo "" || echo "-T")"; \
+	env_flags="-e ALLOW_PROD_REPAIR=$${ALLOW_PROD_REPAIR:-0}"; \
+	if [ "$$target_env" = "preview" ]; then \
+		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Auditing/repairing AI covers in PREVIEW Docker stack (iqoqo-preview)..."; \
+		docker compose -p iqoqo-preview cp scripts/verify_ai_cover_bindings.py web:/usr/src/app/scripts/ 2>/dev/null || true; \
+		docker compose -p iqoqo-preview exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+	elif [ "$$target_env" = "prod" ]; then \
+		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Auditing/repairing AI covers in PRODUCTION Docker stack (iqoqo)..."; \
+		docker compose -p iqoqo exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+	elif [ -n "$$(docker compose -p iqoqo-preview ps -q web 2>/dev/null)" ]; then \
+		docker compose -p iqoqo-preview cp scripts/verify_ai_cover_bindings.py web:/usr/src/app/scripts/ 2>/dev/null || true; \
+		if docker compose -p iqoqo-preview exec -T web test -f scripts/verify_ai_cover_bindings.py 2>/dev/null; then \
+			[ "$$IQOQO_AI_MODE" = "1" ] || echo "Detected running PREVIEW Docker stack (iqoqo-preview); running..."; \
+			docker compose -p iqoqo-preview exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+		elif [ -f .venv/bin/python ]; then \
+			[ "$$IQOQO_AI_MODE" = "1" ] || echo "Falling back to local Python venv..."; \
+			.venv/bin/python scripts/verify_ai_cover_bindings.py $$fix_args; \
+		fi; \
+	elif [ -n "$$(docker compose -p iqoqo ps -q web 2>/dev/null)" ]; then \
+		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Detected running PRODUCTION Docker stack (iqoqo); running dry-run..."; \
+		docker compose -p iqoqo exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py --dry-run $(args); \
+	elif [ -f .venv/bin/python ]; then \
+		[ "$$IQOQO_AI_MODE" = "1" ] || echo "No running Docker container detected; falling back to local Python venv..."; \
+		.venv/bin/python scripts/verify_ai_cover_bindings.py $$fix_args; \
+	else \
+		echo "Error: No running Docker stack (iqoqo or iqoqo-preview) found and no .venv/bin/python available." >&2; \
+		exit 1; \
+	fi
+
 
 
 backup-run:

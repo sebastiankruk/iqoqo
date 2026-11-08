@@ -54,22 +54,34 @@ def _sanitize_error_message(err: Any) -> str:
     return msg[:200]
 
 
+def _get_igdb_client_id() -> str | None:
+    """Resolve IGDB/Twitch Client ID from ConfigService (DB settings) or environment."""
+    from app.core.config_service import ConfigService
+
+    return (
+        ConfigService.get("IGDB_CLIENT_ID")
+        or ConfigService.get("TWITCH_CLIENT_ID")
+        or os.getenv("IGDB_CLIENT_ID")
+        or os.getenv("TWITCH_CLIENT_ID")
+    )
+
+
+def _get_igdb_client_secret() -> str | None:
+    """Resolve IGDB/Twitch Client Secret from ConfigService (DB settings) or environment."""
+    from app.core.config_service import ConfigService
+
+    return (
+        ConfigService.get("IGDB_CLIENT_SECRET")
+        or ConfigService.get("TWITCH_CLIENT_SECRET")
+        or os.getenv("IGDB_CLIENT_SECRET")
+        or os.getenv("TWITCH_CLIENT_SECRET")
+    )
+
+
 def get_igdb_token() -> str | None:
     """Obtains a client credentials OAuth token from Twitch and caches it locally."""
-    from app.db.models import InstanceSettings
-
-    client_id = (
-        os.getenv("IGDB_CLIENT_ID")
-        or os.getenv("TWITCH_CLIENT_ID")
-        or InstanceSettings.get_value("IGDB_CLIENT_ID")
-        or InstanceSettings.get_value("TWITCH_CLIENT_ID")
-    )
-    client_secret = (
-        os.getenv("IGDB_CLIENT_SECRET")
-        or os.getenv("TWITCH_CLIENT_SECRET")
-        or InstanceSettings.get_value("IGDB_CLIENT_SECRET")
-        or InstanceSettings.get_value("TWITCH_CLIENT_SECRET")
-    )
+    client_id = _get_igdb_client_id()
+    client_secret = _get_igdb_client_secret()
 
     if not client_id or not client_secret:
         logger.warning("IGDB / Twitch Client ID or Secret not set in environment or database.")
@@ -245,7 +257,7 @@ def fetch_game_metadata(query: str) -> dict[str, Any] | None:
     if not query:
         return None
 
-    client_id = os.getenv("IGDB_CLIENT_ID")
+    client_id = _get_igdb_client_id()
     token = get_igdb_token()
 
     if not client_id or not token:

@@ -152,13 +152,9 @@ class TestFallbackResolution:
         assert normalize_format("audio") == "unknown_audio"
 
     def test_boardgame_falls_to_unknown_board_game_category(self):
-        # "boardgame" → board_game category, but no specific unknown_board_game format
-        # Since there's no unknown_board_game, it falls through to the alias category
+        # "boardgame" → board_game category, resolves to unknown_board_game
         result = normalize_format("boardgame")
-        # boardgame → board_game category → FORMAT_TO_CATEGORY lookup for unknown
-        # The _category_to_unknown_placeholder maps "board_game" → None,
-        # so ultimate fallback is unknown_text
-        assert result in ("unknown_text", "board_game")
+        assert result == "unknown_board_game"
 
     def test_completely_unrecognized_ultimate_fallback(self):
         assert normalize_format("xyz123", None) == "unknown_text"

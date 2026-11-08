@@ -117,6 +117,7 @@ export default function ScanPage() {
     if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
     if (fmt === "music" || fmt === "audio") return "music";
+    if (fmt === "lego") return "lego";
     if (fmt === "book") return "book";
     return "";
   };

@@ -43,6 +43,7 @@ Talk like caveman
 
 ### 🤖 AiOps Environment Mode Directive
 - **Universal Standard for AI**: ALWAYS set `IQOQO_AI_MODE=1` in your environment before running any commands (e.g. `IQOQO_AI_MODE=1 make lint`, `IQOQO_AI_MODE=1 make test`, `IQOQO_AI_MODE=1 make status`, `IQOQO_AI_MODE=1 pytest`, `IQOQO_AI_MODE=1 make codegraph-sync`).
+- **Parallel Testing Directive**: ALWAYS prefer `IQOQO_AI_MODE=1 make test-parallel` (or `make test-fast`) over sequential `make test` for pre-commit verification to utilize all CPU cores concurrently across all 4 test streams.
 - **Behavior**: Enables terse, token-efficient output mode across pytest (quiet, short traceback, no header), Vitest (dot reporter), Makefile linters and test targets (concise format, no decorative echo banners), and the status check script (skips ASCII banners and passing checks).
 
 # iqoqo Global Project Rules

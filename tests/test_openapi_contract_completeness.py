@@ -73,6 +73,8 @@ def test_openapi_core_component_schemas_registered(app):
         "Notification",
         "ErrorResponse",
         "SuccessEnvelope",
+        "MapAttachment",
+        "NewMediaTypeEscalation",
     ]
     for expected in expected_schemas:
         assert expected in schemas, f"Missing required OpenAPI component schema: {expected}"

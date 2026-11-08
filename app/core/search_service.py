@@ -192,6 +192,7 @@ class ItemSearchFilters:
     borrowed_only: bool = False
     missing_cover: bool = False
     missing_id: bool = False
+    has_map: bool = False
     tags: list[str] | None = None
     collections: list[str] | None = None
     genres: list[str] | None = None
@@ -230,6 +231,7 @@ class SearchService:
         user_id: Any = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
     ) -> tuple[int, list[int]]:
         """Returns (total_count, list_of_manifestation_ids) ordered by relevance."""
         q = sanitize_search_query(q)
@@ -237,7 +239,7 @@ class SearchService:
             return 0, []
 
         if db.engine.dialect.name == "postgresql" and not (
-            tags or collections or genres or publishers or statuses or ownership or lod_authority or lod_status
+            tags or collections or genres or publishers or statuses or ownership or has_map or lod_authority or lod_status
         ):
             try:
                 return SearchService._pg_manifestation_fts(q, limit, offset, category, format_filter, missing_cover, missing_id)
@@ -262,6 +264,7 @@ class SearchService:
             user_id=user_id,
             lod_authority=lod_authority,
             lod_status=lod_status,
+            has_map=has_map,
         )
 
     @staticmethod
@@ -302,7 +305,13 @@ class SearchService:
         # Full-text search cannot express the facet filters, so a query carrying
         # any of them is routed to ILIKE rather than silently dropping them.
         has_facets = bool(
-            filters.tags or filters.collections or filters.genres or filters.publishers or filters.lod_authority or filters.lod_status
+            filters.tags
+            or filters.collections
+            or filters.genres
+            or filters.publishers
+            or filters.has_map
+            or filters.lod_authority
+            or filters.lod_status
         )
 
         if db.engine.dialect.name == "postgresql" and not has_facets:
@@ -422,6 +431,7 @@ class SearchService:
         user_id: Any = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
     ) -> tuple[int, list[int]]:
         base_query = (
             db.session.query(Manifestation.id)
@@ -443,6 +453,7 @@ class SearchService:
             ownership=ownership,
             missing_cover=missing_cover,
             missing_id=missing_id,
+            has_map=has_map,
             lod_authority=lod_authority,
             lod_status=lod_status,
         )
@@ -606,6 +617,7 @@ class SearchService:
             borrowed_only,
             missing_cover,
             missing_id,
+            has_map,
             tags,
             collections,
             genres,
@@ -701,6 +713,7 @@ class SearchService:
             publishers=publishers,
             missing_cover=missing_cover,
             missing_id=missing_id,
+            has_map=has_map,
             lod_authority=lod_authority,
             lod_status=lod_status,
         )

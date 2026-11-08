@@ -210,7 +210,7 @@ test.describe("v0.7.0 Lending Tracking Lifecycle", () => {
     // to present it. The response is also asserted now: it used to be discarded,
     // which meant a 403 from the guard was invisible and the suite carried on
     // believing the lending state had been cleared.
-    const resetSecret = process.env.E2E_RESET_SECRET || "";
+    const resetSecret = process.env.E2E_RESET_SECRET || "e2e-reset-shared-secret";
     const resetResponse = await fetch(`${flaskApiUrl.replace(/\/$/, "")}/lending/test/reset`, {
       method: "POST",
       headers: { "X-E2E-Reset-Secret": resetSecret },

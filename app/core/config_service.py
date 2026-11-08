@@ -31,6 +31,16 @@ CONFIG_KEY_BLOCKLIST: frozenset[str] = frozenset(
 )
 
 
+def sanitize_credential_string(val: Any) -> Any:
+    """Strip whitespace and unwrap accidental surrounding single or double quotes."""
+    if not isinstance(val, str):
+        return val
+    cleaned = val.strip()
+    if len(cleaned) >= 2 and ((cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'"))):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
+
 class ConfigService:
     """Service to fetch configuration values uniformly across the application.
 
@@ -53,6 +63,8 @@ class ConfigService:
         Returns:
             The configuration value from highest priority source
         """
+        raw_env = os.environ.get(key)
+
         if key not in CONFIG_KEY_BLOCKLIST:
             try:
                 from flask import current_app
@@ -62,19 +74,25 @@ class ConfigService:
 
                     val = InstanceSettings.get_value(key)
                     if val is not None:
-                        return val
+                        return sanitize_credential_string(val)
             except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
                 pass  # DB context might not be fully initialized
+
+        # If not in DB, check os.environ if non-empty (allows test monkeypatching)
+        if raw_env is not None and raw_env != "":
+            return sanitize_credential_string(raw_env)
 
         try:
             from flask import current_app
 
-            if current_app and key in current_app.config:
-                return current_app.config[key]
+            if current_app and current_app.config.get(key) is not None:
+                return sanitize_credential_string(current_app.config[key])
         except (ValueError, AttributeError, KeyError, RuntimeError):
             pass
 
-        return os.environ.get(key, default)
+        if raw_env is not None:
+            return sanitize_credential_string(raw_env)
+        return default
 
     @staticmethod
     def get_list(key: str, default: list | None = None) -> list:

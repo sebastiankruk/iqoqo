@@ -953,6 +953,7 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ):
@@ -1173,6 +1174,26 @@ class DataManager:
                 )
             )
 
+        if has_map:
+            has_map_cond = or_(
+                Manifestation.meta["has_map"].as_string().in_(["true", "1"]),
+                Manifestation.meta["format"].as_string().in_(["cartographic_map", "atlas"]),
+                Manifestation.format_type.in_(["cartographic_map", "atlas"]),
+                Manifestation.format.in_(["cartographic_map", "atlas"]),
+                and_(
+                    Manifestation.meta["map_attachments"].isnot(None),
+                    Manifestation.meta["map_attachments"].as_string() != "[]",
+                    Manifestation.meta["map_attachments"].as_string() != "null",
+                    Manifestation.meta["map_attachments"].as_string() != "",
+                ),
+            )
+            if target_entity == "items":
+                has_map_cond = or_(
+                    has_map_cond,
+                    Item.meta["map_insert_present"].as_string().in_(["true", "1"]),
+                )
+            base_query = base_query.where(has_map_cond)
+
         return base_query.subquery()
 
     @staticmethod
@@ -1193,6 +1214,7 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1233,6 +1255,8 @@ class DataManager:
             "tags": tags,
             "view": view,
         }
+        if has_map:
+            cache_params["has_map"] = True
         if scope != "own":
             cache_params["scope"] = scope
         cache_key = normalize_facet_cache_key(cache_params, owner_id)
@@ -1267,6 +1291,7 @@ class DataManager:
             ownership=ownership,
             lod_authority=lod_authority,
             lod_status=lod_status,
+            has_map=has_map,
             scope=scope,
             friend_ids=friend_ids,
         )
@@ -1291,6 +1316,7 @@ class DataManager:
         ownership: list[str] | None = None,
         lod_authority: str | None = None,
         lod_status: str | None = None,
+        has_map: bool = False,
         scope: str = "own",
         friend_ids: list[uuid.UUID] | None = None,
     ) -> dict[str, Any]:
@@ -1383,6 +1409,7 @@ class DataManager:
                 ownership=ownership,
                 lod_authority=None if exclude_lod else lod_authority,
                 lod_status=None if exclude_lod else lod_status,
+                has_map=has_map,
                 scope=scope,
                 friend_ids=friend_ids,
             )

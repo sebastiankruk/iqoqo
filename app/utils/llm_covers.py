@@ -34,6 +34,7 @@ from PIL import Image, ImageEnhance
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Config
+from app.core.config_service import ConfigService
 from app.core.permissions import PermissionName
 from app.core.s3_service import BUCKET_COVERS, get_s3_service, warn_if_legacy_rclone_configured
 from app.db import db
@@ -198,7 +199,7 @@ def generate_cover_cloud(
     genre = request.genre
     format_type = request.format_type
     return_bytes = request.return_bytes
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = ConfigService.get("OPENAI_API_KEY")
     if not api_key:
         return None
 
@@ -265,7 +266,7 @@ def generate_cover_gemini(
     genre = request.genre
     format_type = request.format_type
     return_bytes = request.return_bytes
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = ConfigService.get("GEMINI_API_KEY")
     if not api_key:
         return None
 
@@ -330,7 +331,7 @@ def generate_cover_local(
     genre = request.genre
     format_type = request.format_type
     return_bytes = request.return_bytes
-    sd_url = os.environ.get("LOCAL_SD_URL")
+    sd_url = ConfigService.get("LOCAL_SD_URL")
     if not sd_url:
         return None
 

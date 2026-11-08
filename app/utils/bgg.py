@@ -82,6 +82,7 @@ def get_bgg_headers() -> dict[str, str]:
             token = InstanceSettings.get_value("BGG_API_TOKEN")
         except Exception:
             token = None
+
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
@@ -197,11 +198,10 @@ def fetch_bgg_metadata(query: str) -> dict[str, Any] | None:
     if not query:
         return None
 
-    token = os.getenv("BGG_API_TOKEN")
-    if not token:
+    headers = get_bgg_headers()
+    if "Authorization" not in headers:
         logger.warning("BGG_API_TOKEN not found in environment. BoardGameGeek lookups will likely result in 401 Unauthorized.")
 
-    headers = get_bgg_headers()
     cleaned_query = clean_bgg_query(query)
     if not cleaned_query:
         return None

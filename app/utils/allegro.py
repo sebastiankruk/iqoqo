@@ -10,6 +10,7 @@
 import json
 import logging
 import os
+import re
 import time
 import urllib.parse
 from typing import Any, cast
@@ -302,6 +303,9 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
     genres: list[str] = []
     format_label: str | None = None
     language: str | None = None
+    set_number: str | None = None
+    piece_count: int | None = None
+    theme: str | None = None
 
     for param in params or []:
         p_name = (param.get("name") or "").strip()
@@ -313,6 +317,21 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
         if p_name in ("EAN", "ISBN", "GTIN", "Kod producenta"):
             if not barcode:
                 barcode = vals[0]
+            if p_name == "Kod producenta" and not set_number:
+                if vals[0].isdigit() and len(vals[0]) in (4, 5, 6):
+                    set_number = vals[0]
+        elif p_name in ("Numer produktu", "Numer zestawu"):
+            if not set_number:
+                set_number = vals[0]
+        elif p_name in ("Liczba elementów", "Liczba klocków"):
+            if piece_count is None:
+                try:
+                    piece_count = int(re.sub(r"[^\d]", "", vals[0]))
+                except (ValueError, TypeError):
+                    pass
+        elif p_name in ("Seria", "Linia"):
+            if not theme:
+                theme = vals[0]
         elif p_name in ("Autor", "Autorzy", "Wykonawca", "Twórca", "Reżyser"):
             authors.extend(vals)
         elif p_name in ("Tytuł", "Tytuł oryginalny"):
@@ -351,6 +370,9 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
         "genres": genres,
         "format": format_label,
         "language": language,
+        "set_number": set_number,
+        "piece_count": piece_count,
+        "theme": theme,
     }
 
 
@@ -386,6 +408,9 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
+        "set_number": extracted.get("set_number"),
+        "piece_count": extracted.get("piece_count"),
+        "theme": extracted.get("theme"),
         "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Catalog",
         "data_source": "allegro",
@@ -408,6 +433,9 @@ def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
+        "set_number": extracted.get("set_number"),
+        "piece_count": extracted.get("piece_count"),
+        "theme": extracted.get("theme"),
         "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Listing",
         "data_source": "allegro",

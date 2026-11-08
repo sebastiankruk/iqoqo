@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-08
+
+### Added
+
+- **LEGO & Construction Sets FRBRoo Ontology & Format Normalizer (C103)**:
+  - Extended `docs/ontology/iqoqo.ttl`, `docs/ontology/iqoqo-shapes.ttl`, `docs/ontology/taxonomy.ttl`, and `shared/format_mappings.yaml` with `MediaCategory.LEGO` (`lego`) mapped to FRBRoo `F16_Container_Work` and `F3_Manifestation_Product_Type`.
+  - Added canonical LEGO formats (`standard_set`, `ucs_collector_set`, `technic_set`, `modular_building`) and properties (`piece_count`, `minifig_count`, `set_number`, `theme`, `age_range`, and Item-level `build_status`: `sealed | built | incomplete | parted_out`).
+
+- **Rebrickable LEGO Ingestion & UI Projections (C104)**:
+  - Implemented SSRF-safe `app/utils/rebrickable.py` with Fernet-encrypted `REBRICKABLE_API_KEY` support in `InstanceSettings` and outbound telemetry.
+  - Added `LegoLookupStrategy` (`app/strategies/lego.py`) supporting direct LEGO Set Number (`10318` / `10318-1`) and EAN/UPC barcode resolution.
+  - Added LEGO metadata display projections (`app/core/meta_display.py`, `frontend/lib/meta.ts`), collection facets, and physical `build_status` controls.
+
+- **Allegro Retail Catalog Fallback for LEGO Barcodes & Searches (C108b)**:
+  - Extended `app/utils/allegro.py` (`_extract_allegro_parameters`) to extract LEGO set numbers (`Numer produktu`, `Numer zestawu`, 4–6 digit `Kod producenta`), piece counts (`Liczba elementów`, `Liczba klocków`), and themes (`Seria`, `Linia`) from Polish/European retail catalog listings.
+  - Upgraded `LegoLookupStrategy.lookup()` and `lookup_candidates()` to fall back to Allegro when Rebrickable is unconfigured or does not index a European EAN-13 barcode (`570201...`), with secondary Rebrickable enrichment when a set number is discovered.
+  - Enabled automatic LEGO strategy routing for official LEGO Group GS1 barcodes (`570201xxxxxxx`).
+
+- **Cartographic Maps & Map Supplements (C105)**:
+  - Extended FRBR ontology (`docs/ontology/iqoqo.ttl`, `docs/ontology/iqoqo-shapes.ttl`, `docs/ontology/taxonomy.ttl`) with standalone `cartographic_map` and `atlas` formats under `text`, `iqoqo:mapScale`, `iqoqo:mapProjection`, and `iqoqo:hasMapAttachment` linking to `iqoqo:MapAttachment` (`frbroo:R15_has_part`).
+  - Added physical item exemplar tracking for map completeness via `iqoqo:mapInsertPresent` on `Item` (`F5`).
+  - Implemented map attachment endpoints (`GET`, `POST`, `DELETE /manifestations/<id>/map-attachments`) with validated multipart image uploads, secure filename sanitization, and structured metadata.
+  - Added physical item update support for `map_insert_present` on `PUT / PATCH /items/<id>`.
+  - Extended metadata display projection (`app/core/meta_display.py` and `frontend/lib/meta.ts`) and RDF export (`app/core/frbr_service.py`) emitting full cartographic properties and `schema:Map` mapping.
+
+- **Interactive Map Viewer & Collection Gallery Filter (C106)**:
+  - Created `<MapViewerModal />` dialog supporting smooth zoom (`1x`–`5x`), pan/touch drag, 90-degree rotation, view reset, and multi-map navigation controls.
+  - Added cartographic metadata section and map attachment cards in item detail tabs with "Inspect Map" button and map attachment upload dialog.
+  - Implemented physical item `map_insert_present` toggle in `EditItemDialog`.
+  - Added `has_map` query parameter and SQL filter support in `CatalogFilterBuilder` and `SearchService` (manifestation- and item-rooted queries).
+  - Exposed `"Includes Map"` checkbox and filter chip in collection sidebar and filter bar with complete English and Polish localizations.
+
+- **Requesting New Media Type Collector-to-Custodian Workflow (C107, C108)**:
+  - Extended `EscalationRequest` (`app/db/social.py`, `app/api/social.py`) with `request_type="new_media_type"`, nullable `work_id`/`manifestation_id`, and structured ontology proposal validation (`proposed_category`, `proposed_format`, `parent_frbr_class`, `sample_identifier`, `rationale`).
+  - Built `<RequestNewTypeModal />` wired into the Scanner bottom sheet, Manual Entry form, and `/help` header, paired with structured Custodian triage badges in `/admin/content` (`escalation-queue.tsx`).
+
+- **Federation Peering Directionality & Bilateral Capabilities Matrix (C102)**:
+  - Enhanced `frontend/components/admin/federation-instances.tsx` and `/help` with an interactive Peering Directionality & Effective Capabilities Matrix clarifying unilateral outbound trust vs. bilateral (reciprocal) peering for metadata sync, custodian review queue, friend follows, and cross-instance loans.
+
+- **Security Hardening, FRBR Boundaries & Release Review Remediation (C108c)**:
+  - Sanitized map attachment URLs against SSRF/XSS, generated collision-proof filenames with attachment UUIDs, added audit logging (`EntityAuditLog`), and enforced length/count bounds (`C-01`).
+  - Guarded Rebrickable set lookups against path traversal via strict regex validation, URL-encoding, bounded theme cache (512 items), and eliminated search N+1 HTTP calls (`C-02`).
+  - Hardened LEGO FRBR ingestion with deduplication by barcode/set number, populated first-class Manifestation columns, made set number extraction year-safe (`1990..2035` filter), and prioritized LEGO GS1 barcodes (`570201xxxxxxx`) over default book category (`C-03`).
+  - Fixed LEGO Item-level update FRBR boundary violation (F5 copy-specific attributes like `build_status`, `missing_pieces_count` stored strictly in `item.meta`, stripped before manifestation updates) (`C-04`).
+  - Replaced offset pagination with keyset pagination in AI cover repair script (`scripts/verify_ai_cover_bindings.py`) and guarded interactive TTY execution in `Makefile` (`M-01`).
+  - Added unknown format placeholders for LEGO, Board Game, Puzzle, and Audiobook in `FormatNormalizer` (`M-02`).
+  - Added suggested properties bounds validation, `F3_Manifestation_Product_Type` parent class support, rate limiting (10/min), and SQL pagination to escalation endpoints (`M-03`).
+  - Anchored federation host matching to exact parsed hostnames and fixed untrusted peer reciprocity (`M-04`).
+  - Added Rebrickable API key status tracking in `GET /api/system/status` and `scripts/iqoqo-status.sh` (`M-05`).
+  - Synchronized OpenAPI 3.1 specification components with LEGO/board game/puzzle expression content types, map attachments, and escalation schemas (`M-06`).
+  - Added `has_map` facet filtering in data manager, map attachment deletion UI, and map viewer keyboard shortcuts (`M-07`).
+
+### Changed
+
+- **In-Product Help Center Documentation (`frontend/lib/help-articles.ts`)**:
+  - Updated `frbr-hierarchy`, `camera-to-catalog`, and `curators-handbook` in both English (`en`) and Polish (`pl`) with full guides for LEGO sets, Rebrickable + Allegro barcode resolution, standalone vs. attached Cartographic Maps, interactive `<MapViewerModal />`, and proposing/triaging new media types (`NEW_MEDIA_TYPE`).
+
+### Fixed
+
+- **Post-Migration AI Cover Manifestation Binding Audit & Repair (C101)**:
+  - Added `scripts/verify_ai_cover_bindings.py` and `make fix-ai-covers` to detect, unbind, and re-queue AI-generated covers (`_gemini.jpg`, `_openai.jpg`, `_localsd.jpg`) attached to mismatched manifestations after database migration.
+
+- **DB-Backed Lookup Credential Resolution & `make status` Visibility (C101b)**:
+  - Fixed `ConfigService.get()` (`app/core/config_service.py`) so `None` attributes on `Config` never shadow `os.environ`, stripped surrounding quotes from sensitive string credentials in `app/db/settings.py`, and wired `discogs.py`, `tmdb.py`, `upc.py`, `igdb.py`, `bgg.py`, `vision.py`, `llm_covers.py`, and `scripts/allegro_auth.py` to resolve encrypted credentials from `InstanceSettings`.
+  - Updated `GET /api/system/status` and `scripts/iqoqo-status.sh` (`make status`) to report DB-backed provider credentials (`db` vs `env`) accurately.
+
+- **Scanner Quick-Lookup LEGO Format Preservation & Normalization (C108b)**:
+  - Fixed `formatToApiParam()` in `frontend/app/scan/page.tsx` and `_normalize_preview_meta()` in `app/api/scanner.py` so scanning or looking up a LEGO barcode with the LEGO icon selected preserves `?format=lego` and normalizes to `standard_set` (`Expression.content_type = "lego"`) instead of defaulting to `book`.
+
 ## [1.0.0] - 2026-11-04
 
 ### Added

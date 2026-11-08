@@ -110,6 +110,7 @@ SENSITIVE_SETTING_KEYS = {
     # is a live SMTP credential for the account-deletion mail path, so leaving
     # it out would store it in cleartext in `instance_settings`.
     "MAIL_PASSWORD",
+    "REBRICKABLE_API_KEY",
 }
 
 
@@ -161,7 +162,17 @@ def normalise_setting_value(key: str, value: Any) -> Any:
     a dict, a list, a number. For a browser-bound token that would mean the
     value reaches the client component and breaks the RUM SDK at runtime, so
     validate the type and shape here and treat a mismatch as unset.
+
+    For sensitive strings, strip whitespace and unwrap accidental surrounding quotes.
     """
+    if is_sensitive_key(key) and isinstance(value, str):
+        cleaned = value.strip()
+        if len(cleaned) >= 2 and (
+            (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'"))
+        ):
+            cleaned = cleaned[1:-1].strip()
+        value = cleaned
+
     if key not in BROWSER_BOUND_TOKEN_KEYS:
         return value
     if value is None:
@@ -280,6 +291,20 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
             return default if value is None else value
         except (SQLAlchemyError, DBAPIError, RuntimeError, AttributeError):
             return default
+
+    @classmethod
+    def get_configured_keys(cls) -> list[str]:
+        """Return a list of setting keys that have non-empty decrypted values."""
+        from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+        from . import db
+
+        try:
+            stmt = db.select(cls)
+            settings = db.session.execute(stmt).scalars().all()
+            return [s.key for s in settings if s.decrypted_value not in (None, "")]
+        except (SQLAlchemyError, DBAPIError, RuntimeError, AttributeError):
+            return []
 
     @classmethod
     def set_value(cls, key: str, value: Any, commit: bool = True) -> None:

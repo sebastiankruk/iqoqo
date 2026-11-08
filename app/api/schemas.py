@@ -15,7 +15,7 @@
 #
 """Pydantic schemas for API payload validation."""
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -160,6 +160,11 @@ class ItemUpdateSchema(BaseModel):
     visibility: str | None = None
     is_hidden: bool | None = None
     tags: list[str] | None = None
+    map_insert_present: bool | None = None
+    build_status: Literal["sealed", "built", "incomplete", "parted_out"] | None = None
+    missing_pieces_count: int | None = Field(default=None, ge=0)
+    instructions_included: bool | None = None
+    box_condition: str | None = None
     meta: dict[str, Any] | None = None
 
     @model_validator(mode="before")
