@@ -66,7 +66,7 @@ class LegoLookupStrategy(LookupStrategy):
                 if allegro_meta and allegro_meta.get("title"):
                     meta = allegro_meta.copy()
                     meta["category"] = "lego"
-                    meta["format"] = "construction_set"
+                    meta["format"] = "standard_set"
                     meta["data_source"] = "allegro"
                     provider = "allegro"
 
@@ -133,7 +133,7 @@ class LegoLookupStrategy(LookupStrategy):
                 if allegro_cands:
                     meta = allegro_cands[0].copy()
                     meta["category"] = "lego"
-                    meta["format"] = "construction_set"
+                    meta["format"] = "standard_set"
                     meta["data_source"] = "allegro"
                     provider = "allegro"
                     return meta, provider
@@ -157,7 +157,7 @@ class LegoLookupStrategy(LookupStrategy):
                 allegro_cands = fetch_allegro_candidates(query, max_results=max_results - len(candidates))
                 for c in allegro_cands:
                     c.setdefault("category", "lego")
-                    c.setdefault("format", "construction_set")
+                    c.setdefault("format", "standard_set")
                     c.setdefault("data_source", "allegro")
                     candidates.append(c)
             except Exception as exc:

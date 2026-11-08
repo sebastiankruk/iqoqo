@@ -13,10 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
+import * as apiClient from "@/lib/api/client";
+
+vi.mock("@/lib/api/client", () => ({
+  apiFetch: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn().mockReturnValue("/"),
@@ -197,5 +202,33 @@ describe("ScanPage", () => {
 
     fireEvent.click(batchButton);
     expect(batchButton).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("passes ?format=lego when quick lookup is submitted with LEGO media type selected", async () => {
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+    vi.mocked(apiClient.apiFetch).mockResolvedValue({
+      title: "LEGO Speed Champions 77256",
+      barcode: "5702018068229",
+      format: "standard_set",
+    } as any);
+
+    render(<ScanPage />);
+
+    act(() => {
+      if (mockSetMediaType) {
+        mockSetMediaType("lego");
+      }
+    });
+
+    const input = screen.getByTestId("unified-lookup-input");
+    fireEvent.change(input, { target: { value: "5702018068229" } });
+    fireEvent.click(screen.getByTestId("unified-lookup-submit"));
+
+    await waitFor(() => {
+      expect(apiClient.apiFetch).toHaveBeenCalledWith("/lookup/5702018068229?format=lego");
+    });
   });
 });

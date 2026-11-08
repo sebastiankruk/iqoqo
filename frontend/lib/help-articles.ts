@@ -100,6 +100,8 @@ In iqoqo, our ontology adapts dynamically across your entire cultural life:
 | **Board Games** | Core Game Design / Expansion | 1st Edition Rules, Revised 2nd Edition Rules | Multilingual Retail Box, Kickstarter Deluxe | Your box (with custom 3D-printed inserts!) |
 | **Video Games** | Game Title | Original Release, Game of the Year Patch | PS5 Physical Disc, Switch Cartridge, Steam Digital | Your cartridge lent to a friend |
 | **Puzzles** | Artwork / Illustration | 1000-Piece Cut Layout, Panoramic Cut | Ravensburger 2022 Retail Box | Your box (missing 1 piece!) |
+| **LEGO & Construction Sets** | Set Design & Theme (\`F16_Container_Work\`) | Building Instruction Specification | Retail Box (\`10318-1\`), Piece & Minifig Count, EAN | Your box (\`sealed\`, \`built\`, \`incomplete\`, or \`parted_out\`) |
+| **Cartographic Maps & Atlases** | Geographic Survey / Fantasy World Map | Cartographic Scale, Projection & Layer Edition | Folded Topographic Sheet, Bound Atlas, Cloth Map Insert | Your copy (with \`map_insert_present\` verified & high-res pan/zoom viewer) |
 
 ---
 
@@ -178,6 +180,8 @@ W iqoqo ontologia dopasowuje się naturalnie do całego Twojego życia kulturaln
 | **Gry planszowe** | Gra podstawowa / Dodatek | Zasady 1. edycji, Zasady 2. edycji | Wydanie sklepowe wielojęzyczne, Kickstarter Deluxe | Twoje pudełko (z własnym insertem 3D!) |
 | **Gry wideo** | Tytuł gry | Wydanie premierowe, Edycja Gry Roku (GOTY) | Fizyczna płyta PS5, Kartridż Switch, Wersja Steam | Twój kartridż pożyczony znajomemu |
 | **Puzzle** | Grafika / Ilustracja | Układ 1000 elementów, Wersja panoramiczna | Pudełko Ravensburger 2022 | Twoje pudełko (z brakującym 1 elementem!) |
+| **Zestawy LEGO i konstrukcyjne** | Projekt zestawu i seria (\`F16_Container_Work\`) | Specyfikacja instrukcji budowy | Pudełko sklepowe (\`10318-1\`), liczba klocków i minifigurek, EAN | Twój egzemplarz (\`zaplombowany\`, \`zbudowany\`, \`niekompletny\`) |
+| **Mapy kartograficzne i atlasy** | Opracowanie kartograficzne / Mapa świata fantasy | Skala, odwzorowanie i wersja warstw | Arkusz topograficzny, Atlas, Płócienna mapa w grze/książce | Twój egzemplarz (z kontrolą obecności wkładki i podglądem zoom/obrót) |
 
 ---
 
@@ -238,17 +242,19 @@ Barcodes can be messy. Sometimes a publisher reuses an EAN barcode across three 
 
 ### Step A: The Disambiguation Sheet
 
-If your scan or title search returns multiple plausible matches across our upstream providers (OpenLibrary, Google Books, Allegro, BGG, Discogs, MusicBrainz, IGDB, TMDB), iqoqo slides up the **Disambiguation Sheet**.
+If your scan or title search returns multiple plausible matches across our upstream providers (OpenLibrary, Google Books, Biblioteka Narodowa, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo slides up the **Disambiguation Sheet**.
 
-* Compare cover thumbnails, publication years, publishers, and media badges (\`Book\`, \`Board Game\`, \`Vinyl\`, \`Video Game\`).
+* Compare cover thumbnails, publication years, publishers, and media badges (\`Book\`, \`Board Game\`, \`LEGO\`, \`Vinyl\`, \`Video Game\`).
 
 * Tap the exact edition you hold in your hands to bind it to your catalog.
 
+* **Pro-Tip for LEGO Collectors:** When the **LEGO** icon is selected in the scanner top bar, you can scan standard European/Polish retail EAN-13 barcodes (\`570201...\`) or type the 4–6 digit LEGO Set Number (e.g., \`10318\` or \`77256\`) directly into the quick-lookup bar. iqoqo queries **Rebrickable** and automatically falls back to the **Allegro** retail catalog to extract the set number, piece count, minifigures, and theme!
+
 ### Step B: Going All the Way to Manual Entry
 
-If an item is completely unknown to global databases—such as a local indie zine, a self-published chapbook, a bootleg concert recording, or a vintage puzzle—click **Add Manually** in the scanner bottom sheet:
-1. **Select the Media Kind:** Choose whether you are adding a \`Book\`, \`Audio\`, \`Video\`, \`Board Game\`, \`Video Game\`, or \`Puzzle\`. The form dynamically adjusts its fields to match your medium!
-2. **Enter Core Bibliographic Details:** Provide the Title, Creator/Author, Publisher, Publication Year, and Language.
+If an item is completely unknown to global databases—such as a local indie zine, a self-published chapbook, a bootleg concert recording, a vintage map, or a custom MOC / puzzle—click **Add Manually** in the scanner bottom sheet:
+1. **Select the Media Kind:** Choose whether you are adding a \`Book\`, \`Audio\`, \`Video\`, \`Board Game\`, \`Video Game\`, \`Puzzle\`, \`LEGO Set\`, or \`Cartographic Map / Atlas\`. The form dynamically adjusts its fields to match your medium!
+2. **Enter Core Bibliographic Details:** Provide the Title, Creator/Author, Publisher, Publication Year, and Language (plus format-specific details like LEGO piece count or cartographic scale/projection).
 3. **Dual-Source Cover Picker:** You don't have to leave your manual entry with a blank placeholder! Use the Cover Upload Picker right inside the form to either snap a live photo with your camera or pick an existing image file from your device.
 4. **Save & Construct WEMI:** When you submit the form, iqoqo automatically constructs the full 4-tier FRBR hierarchy (Work -> Expression -> Manifestation -> Item) and applies your cover art.
 
@@ -265,7 +271,7 @@ Instead, iqoqo uses a collaborative **Curator Escalation System**:
 ### What You Can Do Yourself (Instant)
 
 
-* Edit your **Item's** private notes, physical location/shelf, condition, purchase price, lending status, and visibility.
+* Edit your **Item's** private notes, physical location/shelf, condition, purchase price, lending status, visibility, LEGO build status (\`sealed\`, \`built\`, \`incomplete\`, \`parted_out\`), or map insert completeness (\`map_insert_present\`).
 
 * Contribute a missing cover photo to a coverless Manifestation.
 
@@ -277,6 +283,7 @@ On any Item, Manifestation, Expression, or Work page, click the **Request Curato
 1. **Remove an Item or Duplicate Record (DELETION_REQUEST):** Need to remove a mistaken scan or delete an item from your inventory? Submit a deletion request—a Curator will verify whether only your F4 Item should be removed or if an orphaned F3 Manifestation should be cleaned up too.
 2. **Fix Bibliographic Metadata (METADATA_FIX):** Spotted a typo in a title, a missing translator, the wrong publication year, or a book categorized as a board game? Flag it for a Curator, who can use the FRBR Editor or trigger a multi-provider metadata refetch.
 3. **Merge Duplicates (DUPLICATE_REPORT):** Noticed two separate Work pages for the same novel? Let the Curators know so they can merge them cleanly in the Duplicate Reviewer.
+4. **Request a New Media Type or Format (NEW_MEDIA_TYPE):** Collecting a medium not yet in iqoqo's taxonomy (such as postage stamps, tabletop miniatures, or laserdiscs)? Click **Request New Media Type** in the Scanner bottom sheet, the Manual Entry format selector, or the Help Center header to submit a structured ontology proposal (category, format, parent FRBR class, and sample identifier) directly to your instance Curators!
 
 > 💡 **Track Your Requests:** Open your **Requests** page (or check the Notification Center bell in the top navigation bar) to see real-time status updates and read resolution notes from your instance Curators!
 
@@ -336,17 +343,19 @@ Kody kreskowe bywają niejednoznaczne. Czasami wydawca używa tego samego kodu E
 
 ### Krok A: Arkusz ujednoznaczniania (Disambiguation Sheet)
 
-Jeśli skanowanie lub wyszukiwanie po tytule zwróci kilka prawdopodobnych dopasowań z zewnętrznych źródeł (OpenLibrary, Google Books, Allegro, BGG, Discogs, MusicBrainz, IGDB, TMDB), iqoqo wysunie **Arkusz ujednoznaczniania**.
+Jeśli skanowanie lub wyszukiwanie po tytule zwróci kilka prawdopodobnych dopasowań z zewnętrznych źródeł (OpenLibrary, Google Books, Biblioteka Narodowa, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo wysunie **Arkusz ujednoznaczniania**.
 
-* Porównaj miniatury okładek, lata wydania, wydawców i etykiety mediów (\`Książka\`, \`Gra planszowa\`, \`Winyl\`, \`Gra wideo\`).
+* Porównaj miniatury okładek, lata wydania, wydawców i etykiety mediów (\`Książka\`, \`Gra planszowa\`, \`LEGO\`, \`Winyl\`, \`Gra wideo\`).
 
 * Dotknij dokładnie tego wydania, które trzymasz w dłoni, aby dołączyć je do swojej kolekcji.
 
+* **Wskazówka dla kolekcjonerów LEGO:** Gdy na górnym pasku skanera wybierzesz ikonę **LEGO**, możesz zeskanować europejski kod EAN-13 z pudełka (\`570201...\`) lub wpisać 4–6-cyfrowy numer zestawu (np. \`10318\` lub \`77256\`) w pasku szybkiego wyszukiwania. iqoqo odpyta bazę **Rebrickable**, a w razie braku dopasowania automatycznie sięgnie do katalogu **Allegro**, pobierając numer zestawu, liczbę klocków, serię i zdjęcie pudełka!
+
 ### Krok B: Ręczne wprowadzanie danych
 
-Jeśli pozycja jest zupełnie nieznana globalnym bazom — jak lokalny zin, tomik poezji wydany własnym sumptem czy unikatowe puzzle — kliknij **Wprowadź ręcznie** w dolnym panelu skanera:
-1. **Wybierz rodzaj nośnika:** Określ, czy dodajesz \`Książkę\`, \`Muzykę\`, \`Wideo\`, \`Grę planszową\`, \`Grę wideo\` czy \`Puzzle\`. Formularz dynamicznie dopasuje pola do Twojego wyboru!
-2. **Wprowadź podstawowe dane bibliograficzne:** Podaj tytuł, autora/twórcę, wydawcę, rok wydania i język.
+Jeśli pozycja jest zupełnie nieznana globalnym bazom — jak lokalny zin, tomik poezji wydany własnym sumptem, mapa turystyczna czy unikatowe puzzle — kliknij **Wprowadź ręcznie** w dolnym panelu skanera:
+1. **Wybierz rodzaj nośnika:** Określ, czy dodajesz \`Książkę\`, \`Muzykę\`, \`Wideo\`, \`Grę planszową\`, \`Grę wideo\`, \`Puzzle\`, \`Zestaw LEGO\` czy \`Mapę kartograficzną / Atlas\`. Formularz dynamicznie dopasuje pola do Twojego wyboru!
+2. **Wprowadź podstawowe dane bibliograficzne:** Podaj tytuł, autora/twórcę, wydawcę, rok wydania i język (oraz pola specyficzne dla formatu, np. liczbę klocków LEGO lub skalę mapy).
 3. **Dodaj okładkę:** Nie musisz zostawiać pustego szarego pola! Skorzystaj z przełącznika źródła okładki, aby zrobić zdjęcie aparatem lub wybrać plik graficzny z pamięci urządzenia.
 4. **Zapisz i zbuduj drzewo WEMI:** Po zatwierdzeniu formularza iqoqo automatycznie zbuduje pełną hierarchię FRBR (Dzieło -> Ekspresja -> Manifestacja -> Egzemplarz) wraz z okładką.
 
@@ -363,7 +372,7 @@ Dlatego iqoqo stosuje **System Zgłoszeń do Kustoszy**:
 ### Co możesz zrobić samodzielnie (natychmiast)
 
 
-* Edytować prywatne notatki, półkę/lokalizację, stan zachowania, cenę zakupu, status wypożyczenia i widoczność **Egzemplarza**.
+* Edytować prywatne notatki, półkę/lokalizację, stan zachowania, cenę zakupu, status wypożyczenia, widoczność, stan zbudowania zestawu LEGO (\`zaplombowany\`, \`zbudowany\`, \`niekompletny\`, \`na części\`) lub obecność dołączonej mapy (\`map_insert_present\`) dla swojego **Egzemplarza**.
 
 * Dodać brakujące zdjęcie okładki do Manifestacji.
 
@@ -375,6 +384,7 @@ Na stronie dowolnego Egzemplarza, Manifestacji, Ekspresji lub Dzieła kliknij pr
 1. **Usunąć rekord lub błędny skan:** Chcesz skasować błędnie dodany rekord? Wyślij prośbę — Kustosz zweryfikuje, czy usunąć tylko Twój egzemplarz, czy także osieroconą Manifestację.
 2. **Poprawić metadane bibliograficzne:** Zauważyłeś literówkę w tytule, brakującego tłumacza lub błędny rok wydania? Zgłoś to Kustoszowi, który poprawi wpis w Edytorze FRBR lub pobierze świeże dane od dostawców.
 3. **Połączyć duplikaty:** Widzisz dwa osobne Dzieła dla tej samej powieści? Daj znać Kustoszom, aby połączyli je w module deduplikacji.
+4. **Zaproponować nowy typ mediów lub format (NEW_MEDIA_TYPE):** Kolekcjonujesz nośnik, którego nie ma jeszcze w taksonomii iqoqo (np. znaczki pocztowe, figurki bitewne czy płyty LaserDisc)? Kliknij **Zaproponuj nowy typ mediów** w dolnym panelu skanera, w formularzu ręcznego dodawania lub w nagłówku Centrum Pomocy, aby przesłać ustrukturyzowaną propozycję ontologiczną bezpośrednio do Kustoszy!
 
 > 💡 **Śledź swoje zgłoszenia:** Wejdź na stronę **Zgłoszenia** w menu użytkownika (lub kliknij ikonę dzwonka w powiadomieniach), aby w czasie rzeczywistym widzieć status rozpatrzenia i notatki kustosza!
 
@@ -965,6 +975,37 @@ If a Manifestation has a valid ISBN/Barcode but is missing cover art, page count
 ### Linked Open Data (LOD) Reconciliation
 
 Finally, visit the LOD Reconciliation Dashboard to link local Works and Contributors to global Semantic Web authorities (**Wikidata**, **VIAF**, **MusicBrainz**, **GeoNames**). Establishing an \`owl:sameAs\` link at the Work level allows iqoqo to automatically federated-match your catalog with other iqoqo instances around the world!
+
+---
+
+## 6. Cartographic Maps, Map Supplements & LEGO Construction Sets
+
+Release \`1.0.1\` expands the FRBRoo ontology with two rich collector domains that require careful curatorial judgment: **Cartographic Maps** and **LEGO Construction Sets**.
+
+### A. Standalone Cartographic Maps vs. Attached Map Supplements
+
+Collectors encounter maps in two distinct ways:
+1. **Standalone Cartographic Media (\`cartographic_map\`, \`atlas\`, \`topographic_map\`):** A tourist trail map, historical wall map, or world atlas published as an independent work. Model these as first-class **Works** with an **Expression** \`content_type\` of \`text\` (or cartographic format) and a **Manifestation** carrying \`cartographic_scale\` (e.g., \`1:50 000\`), \`map_projection\` (e.g., \`WGS84 / Mercator\`), \`coordinates\`, and an optional **GeoNames** URI.
+2. **Included Map Supplements (\`iqoqo:hasMapAttachment\` / \`frbroo:R15_has_part\`):** A fold-out map of Middle-earth tucked inside a fantasy hardcover, a scenario map board inside a wargame, or a cloth map bundled in an RPG collector's box.
+   * **Do not** create a separate retail Manifestation for an included insert! Instead, enable \`has_map_attachment\` on the parent Book, Board Game, or Video Game **Manifestation** and attach the high-resolution scan of the map.
+   * Collectors can then inspect the map on the Work, Manifestation, or Item page using the interactive **Map Viewer Modal** (supporting 1x–4x zoom, drag-to-pan, and 90° rotation), filter their shelf with the **"Has Map"** facet, and track whether their personal physical **Item (F4)** still includes the insert via the \`map_insert_present\` completeness toggle.
+
+### B. LEGO & Construction Sets (\`F16_Container_Work\`)
+
+LEGO sets map cleanly onto the four FRBRoo tiers:
+* **Work (\`F16_Container_Work\`):** The abstract set design, theme/subtheme (e.g., *LEGO Icons*, *Speed Champions*), and original release year.
+* **Expression (\`F2_Expression\`):** The building instruction specification (\`content_type = "lego"\`).
+* **Manifestation (\`F3_Manifestation_Product_Type\`):** The retail box (\`standard_set\`, \`ucs_collector_set\`, \`technic_set\`, \`modular_building\`) identified by its official LEGO Set Number (\`10318-1\`) and EAN/UPC barcode (\`570201...\`), storing \`piece_count\`, \`minifig_count\`, and \`age_range\`.
+* **Item (\`F5_Item\`):** The collector's physical copy, tracking \`build_status\` (\`sealed\`, \`built\`, \`incomplete\`, or \`parted_out\`), \`missing_pieces_count\`, \`instructions_included\`, and \`box_condition\`.
+
+---
+
+## 7. Triaging Community New Media Type Requests
+
+When a collector submits a **Request New Media Type / Format (\`NEW_MEDIA_TYPE\`)** proposal from the Scanner, Manual Entry form, or Help Center, it appears in the **Escalation Queue** (\`/admin/content\`) with a structured ontology badge:
+* Review the proposed **Category**, **Format**, **Parent FRBRoo Class** (\`F1_Work\`, \`F16_Container_Work\`, \`F3_Manifestation_Product_Type\`), **Sample Identifier**, and **Collector Rationale**.
+* If the medium can already be represented using an existing category and format alias, resolve the ticket with curatorial guidance explaining which format to pick.
+* If the proposal represents a genuine gap in the instance taxonomy, approve the escalation and include the structured specification in the next ontology update (\`shared/format_mappings.yaml\` and \`docs/ontology/taxonomy.ttl\`).
 `,
       pl: `Witaj w zespole Kustoszy! Choć automatyczny potok pobierania danych w iqoqo bez trudu radzi sobie z 90% codziennych skanów kodów kreskowych, odpytując OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB i TMDB, prawdziwa siła katalogu semantycznego tkwi w modelowaniu **nietrywialnych 10%**.
 
@@ -1083,6 +1124,37 @@ Jeśli Manifestacja posiada poprawny kod kreskowy, ale brakuje jej okładki lub 
 ### Uzgadnianie z Otwartymi Danymi Powiązanymi (LOD)
 
 Wreszcie odwiedź Panel Uzgadniania LOD, aby powiązać lokalne Dzieła i Twórców z globalnymi autorytetami Semantic Web (**Wikidane**, **VIAF**, **MusicBrainz**, **GeoNames**). Relacja \`owl:sameAs\` pozwala iqoqo na automatyczne dopasowywanie zbiorów z innymi bibliotekami na całym świecie!
+
+---
+
+## 6. Mapy kartograficzne, załączniki mapowe i zestawy LEGO
+
+Wydanie \`1.0.1\` rozszerza ontologię FRBRoo o dwie domeny kolekcjonerskie wymagające precyzji kustosza: **Mapy kartograficzne** oraz **Zestawy konstrukcyjne LEGO**.
+
+### A. Samodzielne mapy a dołączone wkładki mapowe
+
+Mapy występują w kolekcjach w dwóch rolach:
+1. **Samodzielne publikacje kartograficzne (\`cartographic_map\`, \`atlas\`, \`topographic_map\`):** Turystyczna mapa szlaków, historyczna mapa ścienna lub atlas geograficzny wydany jako niezależna publikacja. Modeluj je jako pełnoprawne **Dzieła** i **Manifestacje** przechowujące skalę (\`cartographic_scale\`, np. \`1:50 000\`), odwzorowanie (\`map_projection\`, np. \`WGS84 / Mercator\`), współrzędne oraz opcjonalny identyfikator **GeoNames**.
+2. **Dołączone wkładki i suplementy mapowe (\`iqoqo:hasMapAttachment\` / \`frbroo:R15_has_part\`):** Rozkładana mapa Śródziemia wklejona do wydania powieści fantasy, mapa scenariusza w grze planszowej lub płócienna mapa w edycji kolekcjonerskiej gry RPG.
+   * **Nie twórz** osobnej Manifestacji dla wkładki niesprzedawanej oddzielnie! Zamiast tego włącz opcję \`has_map_attachment\` na nadrzędnej **Manifestacji** książki, gry planszowej lub gry wideo i dołącz skan mapy w wysokiej rozdzielczości.
+   * Kolekcjonerzy mogą oglądać mapę w interaktywnym **Podglądzie Mapy (Map Viewer Modal)** z obsługą powiększenia 1x–4x, przesuwania i obrotu o 90°, filtrować kolekcję przełącznikiem **„Zawiera mapę” (Has Map)** oraz oznaczać kompletność wkładki na poziomie własnego **Egzemplarza (F4)** (\`map_insert_present\`).
+
+### B. Zestawy konstrukcyjne LEGO (\`F16_Container_Work\`)
+
+Zestawy LEGO odwzorowują się na cztery poziomy FRBRoo:
+* **Dzieło (\`F16_Container_Work\`):** Projekt zestawu, seria/podseria (np. *LEGO Icons*, *Speed Champions*) oraz rok premiery.
+* **Ekspresja (\`F2_Expression\`):** Specyfikacja instrukcji budowy (\`content_type = "lego"\`).
+* **Manifestacja (\`F3_Manifestation_Product_Type\`):** Pudełko sklepowe (\`standard_set\`, \`ucs_collector_set\`, \`technic_set\`, \`modular_building\`) identyfikowane oficjalnym numerem zestawu (\`10318-1\`) oraz kodem EAN/UPC (\`570201...\`), przechowujące liczbę elementów (\`piece_count\`), liczbę minifigurek (\`minifig_count\`) i przedział wiekowy.
+* **Egzemplarz (\`F5_Item\`):** Fizyczne pudełko w rękach kolekcjonera, śledzące stan zbudowania (\`build_status\`: \`sealed\` / zaplombowany, \`built\` / zbudowany, \`incomplete\` / niekompletny, \`parted_out\` / na części), brakujące klocki, obecność instrukcji oraz stan pudełka.
+
+---
+
+## 7. Rozpatrywanie propozycji nowych typów mediów
+
+Gdy kolekcjoner prześle zgłoszenie **Zaproponuj nowy typ mediów (\`NEW_MEDIA_TYPE\`)** ze Skanera, formularza ręcznego lub Centrum Pomocy, trafia ono do **Kolejki Zgłoszeń** (\`/admin/content\`) ze szczegółową plakietką ontologiczną:
+* Przejrzyj proponowaną **Kategorię**, **Format**, **Nadrzędną klasę FRBRoo** (\`F1_Work\`, \`F16_Container_Work\`, \`F3_Manifestation_Product_Type\`), **Przykładowy identyfikator** oraz **Uzasadnienie kolekcjonera**.
+* Jeśli dany nośnik mieści się już w istniejącej taksonomii jako alias formatu, zamknij zgłoszenie z instrukcją dla użytkownika.
+* Jeśli propozycja wskazuje na rzeczywistą lukę w taksonomii, zatwierdź zgłoszenie, aby uwzględnić nowy format w słowniku \`shared/format_mappings.yaml\` oraz \`docs/ontology/taxonomy.ttl\`.
 `,
     },
   },
