@@ -143,14 +143,13 @@ with app.app_context():
             if hasattr(consent, 'auto_accept_follows'):
                 consent.auto_accept_follows = True
 
+        # Ensure seed lendable item fixture
+        item = Item.query.filter_by(local_barcode='PEER-LEND-001').first()
         from app.core import federation_keys
         if not federation_keys.get_actor_public_key(str(u.id)):
             _, pub_key = federation_keys.generate_actor_keypair(str(u.id))
             u.federation_public_key = pub_key
-            u.federation_key_id = f"https://peer.iqoqo.cc/api/federation/actor/u/{u.id}#main-key"
-
-        # Ensure seed lendable item fixture
-        item = Item.query.filter_by(local_barcode='PEER-LEND-001').first()
+            u.federation_key_id = 'https://peer.iqoqo.cc/api/federation/actor/u/' + str(u.id) + '#main-key'
         if not item:
             w = Work(title='Solaris')
             db.session.add(w)
@@ -208,7 +207,7 @@ with app.app_context():
         if not federation_keys.get_actor_public_key(str(u.id)):
             _, pub_key = federation_keys.generate_actor_keypair(str(u.id))
             u.federation_public_key = pub_key
-            u.federation_key_id = f"https://peer.iqoqo.cc/api/federation/actor/u/{u.id}#main-key"
+            u.federation_key_id = 'https://pre.iqoqo.cc/api/federation/actor/u/' + str(u.id) + '#main-key'
         db.session.commit()
 
     skruk_user = User.query.filter_by(email='sebastian.kruk@gmail.com').first()
