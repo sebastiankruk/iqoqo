@@ -434,6 +434,8 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
                 "puzzle": MediaFormat.JIGSAW_PUZZLE,
                 "jigsaw": MediaFormat.JIGSAW_PUZZLE,
                 "audiobook": MediaFormat.AUDIOBOOK_CD,
+                "lego": MediaFormat.STANDARD_SET,
+                "construction_set": MediaFormat.STANDARD_SET,
             }
             meta["format"] = hint_to_format.get(format_hint, canonical_format)
         else:
