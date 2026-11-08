@@ -44,7 +44,22 @@ iqoqo: a sh:Ontology ;
 iqoqo:WorkShape a sh:NodeShape ;
     sh:targetClass frbr:Work ;
     sh:name "Work is an FRBR Work" ;
-    sh:description "Every canonical FRBR Work is validated against the shared Work contract." .
+    sh:description "Every canonical FRBR Work is validated against the shared Work contract." ;
+    sh:property [
+        sh:path iqoqo:buildStatus ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:buildStatus cannot be attached to a Work; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:setNumber ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:setNumber cannot be attached to a Work; it belongs to a Manifestation." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapInsertPresent ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:mapInsertPresent cannot be attached to a Work; it belongs to an Item." ;
+    ] .
 
 # ---------------------------------------------------------------------------
 # Work-to-Work expansion links
@@ -208,6 +223,16 @@ iqoqo:FRBRManifestationShape a sh:NodeShape ;
         sh:datatype xsd:string ;
         sh:pattern "^\\d{13}$" ;
         sh:message "ISBN must be exactly 13 digits." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:buildStatus ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:buildStatus cannot be attached to a Manifestation; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapInsertPresent ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:mapInsertPresent cannot be attached to a Manifestation; it belongs to an Item." ;
     ] .
 
 iqoqo:FRBRItemShape a sh:NodeShape ;
@@ -227,6 +252,21 @@ iqoqo:FRBRWorkShape a sh:NodeShape ;
         sh:nodeKind sh:BlankNodeOrIRI ;
         sh:node iqoqo:ContributorAgentShape ;
         sh:message "Work creator must be a Person or Organization resource." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:buildStatus ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:buildStatus cannot be attached to a Work; it belongs to an Item." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:setNumber ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:setNumber cannot be attached to a Work; it belongs to a Manifestation." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapInsertPresent ;
+        sh:maxCount 0 ;
+        sh:message "iqoqo:mapInsertPresent cannot be attached to a Work; it belongs to an Item." ;
     ] .
 
 iqoqo:ContributorAgentShape a sh:NodeShape ;
@@ -645,4 +685,127 @@ iqoqo:DuplicateCandidateShape a sh:NodeShape ;
             }
         """ ;
     ] .
+
+# ---------------------------------------------------------------------------
+# LEGO & Construction Sets Shapes (v1.0.1)
+# ---------------------------------------------------------------------------
+
+iqoqo:LegoManifestationShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Manifestation ;
+    sh:name "LEGO Manifestation shape" ;
+    sh:description "A LEGO Manifestation declares piece counts and official set number." ;
+    sh:property [
+        sh:path iqoqo:setNumber ;
+        sh:datatype xsd:string ;
+        sh:message "setNumber must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:pieceCount ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "pieceCount must be a non-negative integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:minifigCount ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "minifigCount must be a non-negative integer." ;
+    ] .
+
+iqoqo:LegoItemShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Item ;
+    sh:name "LEGO Item shape" ;
+    sh:description "A physical LEGO Item tracks build status and piece completeness." ;
+    sh:property [
+        sh:path iqoqo:buildStatus ;
+        sh:in ( "sealed" "built" "incomplete" "parted_out" "sealed"^^xsd:string "built"^^xsd:string "incomplete"^^xsd:string "parted_out"^^xsd:string ) ;
+        sh:message "buildStatus must be one of: sealed, built, incomplete, parted_out." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:missingPiecesCount ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "missingPiecesCount must be a non-negative integer." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:instructionsIncluded ;
+        sh:datatype xsd:boolean ;
+        sh:message "instructionsIncluded must be a boolean." ;
+    ] .
+
+iqoqo:LegoBuildStatusTargetShape a sh:NodeShape ;
+    sh:targetSubjectsOf iqoqo:buildStatus ;
+    sh:name "LEGO buildStatus subject restriction" ;
+    sh:description "iqoqo:buildStatus may only be attached to an Item entity." ;
+    sh:or (
+        [ sh:class iqoqo:Item ]
+        [ sh:class frbr:Item ]
+    ) ;
+    sh:message "iqoqo:buildStatus cannot be attached to a Work or Manifestation; it belongs exclusively to an Item." .
+
+# ---------------------------------------------------------------------------
+# Cartographic Maps & Map Supplements Shapes (v1.0.1 - C105)
+# ---------------------------------------------------------------------------
+
+iqoqo:MapAttachmentShape a sh:NodeShape ;
+    sh:targetClass iqoqo:MapAttachment ;
+    sh:name "Map Attachment shape" ;
+    sh:description "A map supplement attached to a Work or Manifestation." ;
+    sh:property [
+        sh:path iqoqo:mapTitle ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:message "A map attachment must have a title string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapType ;
+        sh:datatype xsd:string ;
+        sh:in ( "world_map" "fold_out_insert" "cloth_map" "game_board" "topographic" "world_map"^^xsd:string "fold_out_insert"^^xsd:string "cloth_map"^^xsd:string "game_board"^^xsd:string "topographic"^^xsd:string ) ;
+        sh:message "mapType must be one of: world_map, fold_out_insert, cloth_map, game_board, topographic." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapImageUrl ;
+        sh:datatype xsd:string ;
+        sh:message "mapImageUrl must be a string." ;
+    ] .
+
+iqoqo:CartographicManifestationShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Manifestation ;
+    sh:name "Cartographic Manifestation shape" ;
+    sh:description "A Manifestation with cartographic scale, projection, or map attachments." ;
+    sh:property [
+        sh:path iqoqo:mapScale ;
+        sh:datatype xsd:string ;
+        sh:message "mapScale must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:mapProjection ;
+        sh:datatype xsd:string ;
+        sh:message "mapProjection must be a string." ;
+    ] ;
+    sh:property [
+        sh:path iqoqo:hasMapAttachment ;
+        sh:class iqoqo:MapAttachment ;
+        sh:message "hasMapAttachment must link to a MapAttachment." ;
+    ] .
+
+iqoqo:CartographicItemShape a sh:NodeShape ;
+    sh:targetClass iqoqo:Item ;
+    sh:name "Cartographic Item shape" ;
+    sh:description "An Item tracking map insert completeness." ;
+    sh:property [
+        sh:path iqoqo:mapInsertPresent ;
+        sh:datatype xsd:boolean ;
+        sh:message "mapInsertPresent must be a boolean." ;
+    ] .
+
+iqoqo:MapInsertPresentTargetShape a sh:NodeShape ;
+    sh:targetSubjectsOf iqoqo:mapInsertPresent ;
+    sh:name "mapInsertPresent subject restriction" ;
+    sh:description "iqoqo:mapInsertPresent may only be attached to an Item entity." ;
+    sh:or (
+        [ sh:class iqoqo:Item ]
+        [ sh:class frbr:Item ]
+    ) ;
+    sh:message "iqoqo:mapInsertPresent cannot be attached to a Work or Manifestation; it belongs exclusively to an Item." .
 

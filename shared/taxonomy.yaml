@@ -43,6 +43,10 @@ media_categories:
         label: "Magazine"
       - id: ebook
         label: "eBook"
+      - id: cartographic_map
+        label: "Cartographic Map"
+      - id: atlas
+        label: "Atlas"
       - id: unknown_text
         label: "Unknown Text Format"
 
@@ -145,6 +149,28 @@ media_categories:
       - id: unknown_puzzle
         label: "Unknown Puzzle Format"
 
+  lego:
+    label: "LEGO & Construction Sets"
+    default_image_type: "box"
+    image_types: ["box", "built_model", "minifigures", "instructions"]
+    ui_icon: "Boxes"
+    ui_aspect_ratio: 1.0
+    formats:
+      - id: standard_set
+        label: "Standard Set"
+      - id: ucs_collector_set
+        label: "UCS / Collector Set"
+      - id: technic_set
+        label: "Technic Set"
+      - id: minifigure_series
+        label: "Collectible Minifigure (CMF)"
+      - id: polybag
+        label: "Polybag / Promo"
+      - id: modular_building
+        label: "Modular Building"
+      - id: unknown_lego
+        label: "Unknown LEGO Format"
+
 # Non-canonical strings that external APIs, legacy data, or user input may
 # send.  Each alias resolves to its canonical media category.  The generator
 # merges these into FORMAT_TO_CATEGORY / FORMAT_ALIAS_TO_CATEGORY so that
@@ -157,8 +183,12 @@ format_aliases:
   movie: movie
   board_game: board_game
   puzzle: puzzle
+  lego: lego
   # text aliases
   standard: text
+  map: text
+  cartographic_map: text
+  atlas: text
   # music aliases
   audio: music
   sound: music
@@ -174,6 +204,10 @@ format_aliases:
   game: board_game
   boardgame: board_game
   "three-dimensional object": board_game
+  # lego aliases
+  construction_set: lego
+  brick_set: lego
+  brick: lego
 
 collection_statuses:
   - id: wish_list
@@ -196,9 +230,10 @@ progress_statuses:
   movie: ["want_to_watch", "watching", "watched", "dnf"]
   board_game: ["want_to_play", "playing", "played"]
   puzzle: ["want_to_play", "playing", "played"]
+  lego: ["want_to_build", "building", "built"]
 
 # Scanner top-bar formats (categories shown in scanner UI)
-scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle"]
+scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle", "lego"]
 
 # Mapping of media categories to their respective lookup strategy classes
 lookup_strategies:
@@ -217,6 +252,9 @@ lookup_strategies:
   puzzle:
     class: PuzzleLookupStrategy
     waterfall_order: 5
+  lego:
+    class: LegoLookupStrategy
+    waterfall_order: 6
   text:
     class: BookLookupStrategy
     waterfall_order: 3
@@ -227,6 +265,7 @@ ingest_methods:
   movie: ingest_video_from_barcode
   board_game: ingest_game_from_barcode
   puzzle: ingest_puzzle_from_barcode
+  lego: ingest_lego_from_barcode
 
 genres:
   text:
@@ -294,3 +333,14 @@ genres:
     - 3D
     - Logic
     - Mechanical
+  lego:
+    - Star Wars
+    - Icons
+    - Technic
+    - City
+    - Harry Potter
+    - Architecture
+    - Creator Expert
+    - Ideas
+    - Speed Champions
+    - Classic

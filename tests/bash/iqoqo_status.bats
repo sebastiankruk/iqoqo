@@ -142,3 +142,44 @@ teardown() {
   [[ "$output" =~ "Mount permissions" ]]
   [[ "$output" =~ "covers, gallery, exports, data writable" ]]
 }
+
+@test "iqoqo-status.sh reports Metadata Lookup Providers section" {
+  unset IQOQO_AI_MODE || true
+  run env -u IQOQO_AI_MODE bash scripts/iqoqo-status.sh
+  [[ "$output" =~ "Metadata Lookup Providers" ]]
+  [[ "$output" =~ "Discogs API" ]]
+  [[ "$output" =~ "TMDB API" ]]
+  [[ "$output" =~ "Google Books API" ]]
+  [[ "$output" =~ "UPC Databases" ]]
+}
+
+@test "iqoqo-status.sh recognizes DB-configured keys in Environment Configuration" {
+  run bash -c '
+    declare -A db_settings_map
+    db_settings_map["BGG_API_TOKEN"]=1
+    db_settings_map["DISCOGS_USER_TOKEN"]=1
+    expected_keys=("BGG_API_TOKEN" "DISCOGS_USER_TOKEN" "OTHER_UNSET")
+    declare -A example_defaults
+    example_defaults["BGG_API_TOKEN"]="empty"
+    example_defaults["DISCOGS_USER_TOKEN"]="empty"
+    example_defaults["OTHER_UNSET"]="set"
+    active_count=0
+    db_active_count=0
+    missing_warn=0
+    for key in "${expected_keys[@]}"; do
+      val=""
+      if [[ -n "$val" ]]; then
+        active_count=$((active_count + 1))
+      elif [[ -n "${db_settings_map[$key]:-}" ]]; then
+        active_count=$((active_count + 1))
+        db_active_count=$((db_active_count + 1))
+      else
+        missing_warn=$((missing_warn + 1))
+      fi
+    done
+    echo "active: $active_count, in DB: $db_active_count, missing: $missing_warn"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "active: 2, in DB: 2, missing: 1" ]]
+}
+

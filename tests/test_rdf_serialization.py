@@ -73,6 +73,37 @@ class TestSchemaOrgTypeMapping:
         assert SCHEMA_TYPE_MAP["board_game"] == SCHEMA.Game
         assert SCHEMA_TYPE_MAP["puzzle"] == SCHEMA.Product
         assert SCHEMA_TYPE_MAP["concert"] == SCHEMA.MusicEvent
+        assert SCHEMA_TYPE_MAP["lego"] == SCHEMA.Product
+
+    def test_serialization_emits_lego_manifestation_and_item_triples(self):
+        items = [
+            {
+                "id": "item-lego-1",
+                "manifestation_id": "m-lego-1",
+                "expression_id": "e-lego-1",
+                "work_id": "w-lego-1",
+                "title": "Concorde",
+                "content_type": "lego",
+                "set_number": "10318-1",
+                "piece_count": 2083,
+                "minifig_count": 0,
+                "build_status": "built",
+                "missing_pieces_count": 0,
+                "instructions_included": True,
+            }
+        ]
+        ttl = serialize_collection_to_rdf(items, "http://testserver", output_format="turtle")
+        g = Graph()
+        g.parse(data=ttl, format="turtle")
+        m_uri = URIRef("http://testserver/manifestations/m-lego-1")
+        i_uri = URIRef("http://testserver/items/item-lego-1")
+
+        assert (m_uri, IQOQO.setNumber, Literal("10318-1", datatype=XSD.string)) in g
+        assert (m_uri, IQOQO.pieceCount, Literal(2083, datatype=XSD.integer)) in g
+        assert (m_uri, IQOQO.minifigCount, Literal(0, datatype=XSD.integer)) in g
+        assert (i_uri, IQOQO.buildStatus, Literal("built", datatype=XSD.string)) in g
+        assert (i_uri, IQOQO.missingPiecesCount, Literal(0, datatype=XSD.integer)) in g
+        assert (i_uri, IQOQO.instructionsIncluded, Literal(True, datatype=XSD.boolean)) in g
 
     def test_serialization_asserts_both_frbr_and_schema_types(self):
         items = [

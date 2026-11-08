@@ -104,6 +104,102 @@
     rdfs:comment "A specific manufacturer's cut of an artwork as a jigsaw puzzle." .
 
 # ---------------------------------------------------------------------------
+# LEGO & Construction Sets extensions (v1.0.1)
+# ---------------------------------------------------------------------------
+
+:LegoSet a owl:Class ;
+    rdfs:subClassOf frbroo:F16_Container_Work ;
+    rdfs:label "LegoSet" ;
+    rdfs:comment "FRBRoo F16 Container Work — models a LEGO or construction set aggregating pieces, minifigures, and instruction manuals." .
+
+iqoqo:setNumber a owl:DatatypeProperty ;
+    rdfs:label "set number" ;
+    rdfs:comment "Official manufacturer or catalog set number (e.g. '10318-1')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:pieceCount a owl:DatatypeProperty ;
+    rdfs:label "piece count" ;
+    rdfs:comment "Total number of construction pieces or bricks in the set." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:minifigCount a owl:DatatypeProperty ;
+    rdfs:label "minifigure count" ;
+    rdfs:comment "Number of minifigures included in the set." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:buildStatus a owl:DatatypeProperty ;
+    rdfs:label "build status" ;
+    rdfs:comment "Physical build or completeness state of the LEGO item ('sealed', 'built', 'incomplete', 'parted_out')." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:string .
+
+iqoqo:missingPiecesCount a owl:DatatypeProperty ;
+    rdfs:label "missing pieces count" ;
+    rdfs:comment "Number of missing pieces for an incomplete physical set." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:integer .
+
+iqoqo:instructionsIncluded a owl:DatatypeProperty ;
+    rdfs:label "instructions included" ;
+    rdfs:comment "Whether the physical set includes paper building instruction booklets." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:boolean .
+
+# ---------------------------------------------------------------------------
+# Cartographic Maps & Map Supplements (v1.0.1 - C105)
+# ---------------------------------------------------------------------------
+
+iqoqo:MapAttachment a owl:Class ;
+    rdfs:label "MapAttachment" ;
+    rdfs:comment "A cartographic map supplement, world map, or insert attached to a Work or Manifestation." .
+
+iqoqo:mapScale a owl:DatatypeProperty ;
+    rdfs:label "map scale" ;
+    rdfs:comment "Representative fraction or scale ratio of a cartographic resource (e.g. '1:50000')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:mapProjection a owl:DatatypeProperty ;
+    rdfs:label "map projection" ;
+    rdfs:comment "Name or EPSG code of the cartographic projection (e.g. 'Mercator', 'Lambert Conformal Conic')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:hasMapAttachment a owl:ObjectProperty ;
+    rdfs:subPropertyOf frbroo:R15_has_part ;
+    rdfs:label "has map attachment" ;
+    rdfs:comment "Associates a Manifestation or Work with an included cartographic map attachment." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range iqoqo:MapAttachment .
+
+iqoqo:mapInsertPresent a owl:DatatypeProperty ;
+    rdfs:label "map insert present" ;
+    rdfs:comment "Whether the physical exemplar (Item) contains the included map insert." ;
+    rdfs:domain iqoqo:Item ;
+    rdfs:range xsd:boolean .
+
+iqoqo:mapTitle a owl:DatatypeProperty ;
+    rdfs:label "map title" ;
+    rdfs:comment "Title or descriptive label of the attached map." ;
+    rdfs:domain iqoqo:MapAttachment ;
+    rdfs:range xsd:string .
+
+iqoqo:mapType a owl:DatatypeProperty ;
+    rdfs:label "map type" ;
+    rdfs:comment "Type classification of the attached map ('world_map', 'fold_out_insert', 'cloth_map', 'game_board', 'topographic')." ;
+    rdfs:domain iqoqo:MapAttachment ;
+    rdfs:range xsd:string .
+
+iqoqo:mapImageUrl a owl:DatatypeProperty ;
+    rdfs:label "map image URL" ;
+    rdfs:comment "High-resolution image URL or internal storage URI for the map attachment." ;
+    rdfs:domain iqoqo:MapAttachment ;
+    rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
 # Media vocabulary (v0.3.0)
 # Media vocabulary is auto-generated from shared/taxonomy.yaml
 # See: docs/ontology/taxonomy.ttl for individual instances.

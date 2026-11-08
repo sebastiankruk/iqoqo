@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from datetime import UTC, datetime
@@ -389,7 +390,7 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
 
     def to_dict(self) -> dict:
         """Serialize the escalation request details."""
-        return {
+        res = {
             "id": self.id,
             "user_id": str(self.user_id),
             "user_display_name": self.user.display_name if self.user else "Anonymous",
@@ -403,7 +404,15 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
             or (
                 "manifestation"
                 if self.manifestation_id
-                else "item" if self.item_id else "work" if self.work_id else "expression" if self.expression_id else None
+                else (
+                    "item"
+                    if self.item_id
+                    else (
+                        "work"
+                        if self.work_id
+                        else "expression" if self.expression_id else "new_media_type" if self.request_type == "new_media_type" else None
+                    )
+                )
             ),
             "field_name": self.field_name,
             "current_value": self.current_value,
@@ -418,6 +427,12 @@ class EscalationRequest(db.Model):  # type: ignore[name-defined]
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if self.request_type == "new_media_type":
+            try:
+                res["payload"] = json.loads(self.suggested_value)
+            except Exception:
+                res["payload"] = {"proposed_format": self.suggested_value}
+        return res
 
 
 class Notification(db.Model):  # type: ignore[name-defined]

@@ -17,11 +17,12 @@
 #
 
 import logging
-import os
 import re
 from typing import Any
 
 import requests
+
+from app.core.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,8 @@ def fetch_video_metadata(query: str) -> dict[str, Any] | None:
     so this function supports title-based lookups only. It does not resolve
     UPC, EAN, or other barcode identifiers directly.
     """
-    api_key = os.environ.get("TMDB_API_KEY")
-    bearer_token = os.environ.get("TMDB_API_READ_ACCESS_TOKEN")
+    api_key = ConfigService.get("TMDB_API_KEY")
+    bearer_token = ConfigService.get("TMDB_API_READ_ACCESS_TOKEN")
 
     if not api_key and not bearer_token:
         logger.warning("TMDB_API_KEY or TMDB_API_READ_ACCESS_TOKEN is not set.")

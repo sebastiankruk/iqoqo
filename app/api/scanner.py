@@ -140,6 +140,12 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
         return IngestService.ingest_from_isbn(barcode)
 
     # Auto-fallback strategy
+    if len(barcode) == 13 and barcode.startswith("570201"):
+        try:
+            return IngestService.ingest_lego_from_barcode(barcode)
+        except ValueError:
+            pass
+
     is_isbn_like = len(barcode) == 13 and (barcode.startswith("978") or barcode.startswith("979")) or len(barcode) == 10
     if is_isbn_like:
         try:
@@ -152,6 +158,7 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
         IngestService.ingest_audio_from_barcode,
         IngestService.ingest_video_from_barcode,
         IngestService.ingest_game_from_barcode,
+        IngestService.ingest_lego_from_barcode,
         IngestService.ingest_puzzle_from_barcode,
         IngestService.ingest_from_isbn,
     ]:
@@ -275,6 +282,12 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 allegro_cands = fetch_allegro_candidates(query, max_results=10 - len(candidates))
                 candidates.extend(allegro_cands)
 
+        if category_hint == "lego" or format_hint in ("lego", "construction_set"):
+            from app.strategies.lego import LegoLookupStrategy
+
+            lego_strategy = LegoLookupStrategy()
+            candidates.extend(lego_strategy.lookup_candidates(query, max_results=10))
+
         if len(candidates) >= 1:
             normalized_candidates = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates]
             for cand in normalized_candidates:
@@ -293,8 +306,11 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
             return jsonify({"success": True, "data": response_data, "error": None}), 200
 
     # Leverage the Strategy Pattern for format-specific metadata lookups
-    # (e.g., ISBN for books, UPC for music/movies, BGG for games)
-    strategy = LookupStrategyFactory.get_strategy(category_hint)
+    # (e.g., ISBN for books, UPC for music/movies, BGG for games, Rebrickable/Allegro for LEGO)
+    effective_category = category_hint
+    if not effective_category and len(barcode) == 13 and barcode.startswith("570201"):
+        effective_category = "lego"
+    strategy = LookupStrategyFactory.get_strategy(effective_category)
     meta, provider = strategy.lookup(barcode, query)
 
     if not meta:
@@ -428,6 +444,8 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
                 "puzzle": MediaFormat.JIGSAW_PUZZLE,
                 "jigsaw": MediaFormat.JIGSAW_PUZZLE,
                 "audiobook": MediaFormat.AUDIOBOOK_CD,
+                "lego": MediaFormat.STANDARD_SET,
+                "construction_set": MediaFormat.STANDARD_SET,
             }
             meta["format"] = hint_to_format.get(format_hint, canonical_format)
         else:

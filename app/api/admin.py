@@ -2004,10 +2004,28 @@ def get_federation_instances() -> tuple[Response, int] | Response:
         if fp and fp != "Not configured":
             fingerprint_map[actor.instance_id] = fp
 
+    from app.core.federation_discovery import compute_effective_capabilities, compute_peering_direction
+    from app.db.federation import FederationActivity, FederationFollower, FollowStatus
+
+    inbound_stmt = select(FederationActivity.actor_uri).where(FederationActivity.direction == "inbound")
+    inbound_actor_uris = db.session.execute(inbound_stmt).scalars().all()
+
+    followers_stmt = select(FederationFollower.remote_actor_id).where(FederationFollower.status == FollowStatus.ACCEPTED)
+    accepted_remote_actor_ids = set(db.session.execute(followers_stmt).scalars().all())
+
     data = []
     for inst in instances:
         item = inst.to_dict()
         item["key_fingerprint"] = fingerprint_map.get(inst.id)
+
+        domain_lower = inst.domain.lower()
+        has_inbound_activity = any(domain_lower in uri.lower() for uri in inbound_actor_uris)
+        has_accepted_follower = any(a.id in accepted_remote_actor_ids for a in actors if a.instance_id == inst.id)
+        has_inbound = has_inbound_activity or has_accepted_follower
+
+        direction = compute_peering_direction(inst.trust_level, inst.shared_inbox_url, has_inbound)
+        item["peering_direction"] = direction
+        item["effective_capabilities"] = compute_effective_capabilities(inst.trust_level, direction)
         data.append(item)
 
     return jsonify({"success": True, "data": data})
@@ -2065,6 +2083,10 @@ def add_federation_instance() -> tuple[Response, int] | Response:
             if fp and fp != "Not configured":
                 data["key_fingerprint"] = fp
 
+    direction = federation_discovery.compute_peering_direction(instance.trust_level, instance.shared_inbox_url, has_inbound=False)
+    data["peering_direction"] = direction
+    data["effective_capabilities"] = federation_discovery.compute_effective_capabilities(instance.trust_level, direction)
+
     return jsonify({"success": True, "data": data, "probe_succeeded": probe_succeeded}), 201
 
 
@@ -2106,7 +2128,34 @@ def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
     )
     db.session.add(audit)
     db.session.commit()
-    return jsonify({"success": True, "data": instance.to_dict()})
+
+    from app.core import federation_discovery
+    from app.db.federation import FederationActivity, FederationActor, FederationFollower, FollowStatus
+
+    domain_lower = instance.domain.lower()
+    inbound_stmt = select(FederationActivity.id).where(
+        FederationActivity.direction == "inbound",
+        FederationActivity.actor_uri.like(f"%{domain_lower}%"),
+    )
+    has_inbound_activity = db.session.execute(inbound_stmt).first() is not None
+
+    accepted_follower_stmt = (
+        select(FederationFollower.id)
+        .join(FederationActor, FederationFollower.remote_actor_id == FederationActor.id)
+        .where(
+            FederationActor.instance_id == instance.id,
+            FederationFollower.status == FollowStatus.ACCEPTED,
+        )
+    )
+    has_accepted_follower = db.session.execute(accepted_follower_stmt).first() is not None
+    has_inbound = has_inbound_activity or has_accepted_follower
+
+    direction = federation_discovery.compute_peering_direction(instance.trust_level, instance.shared_inbox_url, has_inbound)
+    data = instance.to_dict()
+    data["peering_direction"] = direction
+    data["effective_capabilities"] = federation_discovery.compute_effective_capabilities(instance.trust_level, direction)
+
+    return jsonify({"success": True, "data": data})
 
 
 @admin_bp.route("/federation/instances/<int:instance_id>", methods=["DELETE"])

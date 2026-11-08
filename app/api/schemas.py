@@ -160,6 +160,7 @@ class ItemUpdateSchema(BaseModel):
     visibility: str | None = None
     is_hidden: bool | None = None
     tags: list[str] | None = None
+    map_insert_present: bool | None = None
     meta: dict[str, Any] | None = None
 
     @model_validator(mode="before")

@@ -29,6 +29,7 @@ from flask import Response, current_app, g, jsonify, request, send_file, stream_
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
@@ -265,6 +266,7 @@ def get_items():
     owner_only = request.args.get("owner_only", "false").lower() == "true"
     missing_cover = request.args.get("missing_cover", "false").lower() == "true"
     missing_id = request.args.get("missing_id", "false").lower() == "true"
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
     # When include_public=true, also include non-hidden available items from other users.
     # This enables the social lending catalogue: borrowers can discover lendable items.
     include_public = request.args.get("include_public", "false").lower() == "true"
@@ -316,6 +318,7 @@ def get_items():
             publishers=publishers_list,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
             scope=scope,
             friend_ids=friend_ids_list,
         )
@@ -387,7 +390,7 @@ def get_items():
         else:
             query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
-        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or lod_authority or lod_status)
+        needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
@@ -416,6 +419,7 @@ def get_items():
             missing_id=missing_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         total_physical = query.order_by(None).count()
@@ -549,6 +553,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
+        "map_insert_present": (item.meta or {}).get("map_insert_present"),
     }
 
     if is_owner or is_admin or is_borrowed:
@@ -563,7 +568,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
         item_data["manifestation_meta"] = manifestation.meta
-        item_data["display"] = build_display_projection(manifestation.meta)
+        item_data["display"] = build_display_projection(manifestation.meta, item.meta)
         item_data["publisher"] = manifestation.publisher
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
@@ -703,6 +708,12 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
         # Also update item.meta if needed, but usually extra fields are for manifestation
         item.meta = {**item.meta, **metadata} if item.meta else metadata
 
+    if payload.map_insert_present is not None:
+        item_meta = dict(item.meta or {})
+        item_meta["map_insert_present"] = payload.map_insert_present
+        item.meta = item_meta
+        flag_modified(item, "meta")
+
     sync_tags(item.id, user_id, payload.tags)
 
     try:
@@ -729,6 +740,7 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
                     "condition": item.condition,
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
+                    "map_insert_present": (item.meta or {}).get("map_insert_present"),
                 },
                 "error": None,
             }

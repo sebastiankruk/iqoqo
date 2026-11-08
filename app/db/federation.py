@@ -106,6 +106,8 @@ class FederationInstance(db.Model):  # type: ignore[name-defined]
             "trust_level": self.trust_level,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "key_fingerprint": getattr(self, "key_fingerprint", None),
+            "peering_direction": getattr(self, "peering_direction", None),
+            "effective_capabilities": getattr(self, "effective_capabilities", None),
         }
 
 

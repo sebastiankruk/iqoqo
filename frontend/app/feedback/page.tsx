@@ -27,6 +27,7 @@ import { FeedbackModal } from "@/components/feedback/feedback-modal";
 import { FeedbackDetailModal, type FeedbackItemDetail } from "@/components/feedback/feedback-detail-modal";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MyEscalations } from "@/components/escalation/my-escalations";
+import { RequestNewTypeModal } from "@/components/social/request-new-type-modal";
 import { useMyEscalations } from "@/lib/api/escalations";
 import {
   Bug,
@@ -370,7 +371,10 @@ function FeedbackPageContent() {
         </div>
 
         {activeTab === "escalations" ? (
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex justify-end">
+              <RequestNewTypeModal />
+            </div>
             <MyEscalations />
           </div>
         ) : (

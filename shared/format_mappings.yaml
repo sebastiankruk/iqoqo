@@ -61,6 +61,21 @@ format_normalizations:
   "bd-a": bluray_audio
   "bluray hifi": bluray_audio
   "pure audio blu-ray": bluray_audio
+  # Cartographic Maps normalizations
+  map: cartographic_map
+  topographic_map: cartographic_map
+  folding_map: cartographic_map
+  road_map: cartographic_map
+  world_atlas: atlas
+  # LEGO & Construction Sets normalizations
+  lego_set: standard_set
+  lego: standard_set
+  set: standard_set
+  ucs: ucs_collector_set
+  technic: technic_set
+  cmf: minifigure_series
+  minifigures: minifigure_series
+  minifigure: minifigure_series
   "null":
     movie: unknown_video
     music: unknown_audio
@@ -68,3 +83,4 @@ format_normalizations:
     audiobook: unknown_audiobook
     board_game: unknown_board_game
     puzzle: unknown_puzzle
+    lego: standard_set

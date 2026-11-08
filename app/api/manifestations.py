@@ -17,6 +17,7 @@
 #
 import logging
 import os
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -118,6 +119,7 @@ def get_manifestations() -> tuple[Response, int]:
     format_list = expand_format_filter(format_list_raw)
     missing_cover = request.args.get("missing_cover") == "true"
     missing_id = request.args.get("missing_id") == "true"
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
     tags_filter = request.args.get("tags")
     collections_filter = request.args.get("collections")
     genres_filter = request.args.get("genres")
@@ -190,6 +192,7 @@ def get_manifestations() -> tuple[Response, int]:
             user_id=user_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         if result_ids:
@@ -224,6 +227,7 @@ def get_manifestations() -> tuple[Response, int]:
             missing_id=missing_id,
             lod_authority=lod_authority or None,
             lod_status=lod_status or None,
+            has_map=has_map,
         )
 
         query = query.order_by(Manifestation.id.desc())
@@ -913,6 +917,155 @@ def upload_manifestation_image(manifestation_id: int) -> tuple[Response, int]:
         ),
         201,
     )
+
+
+ALLOWED_MAP_TYPES = {"world_map", "fold_out_insert", "cloth_map", "game_board", "topographic"}
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/map-attachments", methods=["GET"])
+@optional_auth
+def get_map_attachments(manifestation_id: int) -> tuple[Response, int]:
+    """Get all map attachments for a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    meta = manifestation.meta or {}
+    attachments = meta.get("map_attachments") or []
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "has_map": bool(meta.get("has_map") or attachments),
+                    "map_scale": meta.get("map_scale"),
+                    "map_projection": meta.get("map_projection"),
+                    "attachments": attachments,
+                },
+                "error": None,
+            }
+        ),
+        200,
+    )
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/map-attachments", methods=["POST"])
+@require_auth
+def add_map_attachment(manifestation_id: int) -> tuple[Response, int]:
+    """Attach a map supplement (file upload or structured JSON metadata) to a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    user_id = getattr(g, "user_id", None)
+    user_obj = db.session.get(User, user_id) if user_id else None
+    is_admin = any(role.name == "admin" for role in getattr(user_obj, "roles", [])) if user_obj else False
+    has_perm = user_obj.has_permission(PermissionName.WRITE_METADATA) if user_obj else False
+    user_owns = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first() is not None if user_id else False
+
+    if not (is_admin or has_perm or user_owns):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    image_url: str | None = None
+    title: str = "Map Supplement"
+    map_type: str = "fold_out_insert"
+    scale: str | None = None
+    projection: str | None = None
+
+    if request.is_json or (request.content_type and "application/json" in request.content_type):
+        data = request.get_json(silent=True) or {}
+        title = data.get("title") or title
+        map_type = data.get("type") or map_type
+        image_url = data.get("image_url")
+        scale = data.get("scale") or data.get("map_scale")
+        projection = data.get("projection") or data.get("map_projection")
+    else:
+        title = request.form.get("title") or title
+        map_type = request.form.get("type") or map_type
+        scale = request.form.get("scale") or request.form.get("map_scale")
+        projection = request.form.get("projection") or request.form.get("map_projection")
+        image_url = request.form.get("image_url")
+
+        file = request.files.get("file") or request.files.get("image") or request.files.get("map")
+        if file and file.filename:
+            try:
+                validate_upload_file(file)
+                filename = secure_filename(f"manifestation_{manifestation_id}_map_{file.filename}")
+                image_url = save_upload_image(file, subfolder="gallery", filename=filename)
+            except ValueError as e:
+                msg = str(e)
+                return jsonify({"success": False, "error": msg}), (413 if "too large" in msg.lower() else 400)
+            except (OSError, SyntaxError):
+                return jsonify({"success": False, "error": "Invalid or corrupted image file"}), 400
+
+    if map_type not in ALLOWED_MAP_TYPES:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"Invalid map type '{map_type}'. Must be one of: {sorted(ALLOWED_MAP_TYPES)}",
+                }
+            ),
+            400,
+        )
+
+    attachment_id = str(uuid.uuid4())[:8]
+    attachment = {
+        "id": attachment_id,
+        "title": title,
+        "type": map_type,
+        "image_url": image_url,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+    meta = dict(manifestation.meta or {})
+    attachments = list(meta.get("map_attachments") or [])
+    attachments.append(attachment)
+    meta["map_attachments"] = attachments
+    meta["has_map"] = True
+    if scale:
+        meta["map_scale"] = scale
+    if projection:
+        meta["map_projection"] = projection
+
+    manifestation.meta = meta
+    flag_modified(manifestation, "meta")
+    db.session.commit()
+
+    return jsonify({"success": True, "data": attachment}), 201
+
+
+@api_bp.route("/manifestations/<int:manifestation_id>/map-attachments/<string:attachment_id>", methods=["DELETE"])
+@require_auth
+def delete_map_attachment(manifestation_id: int, attachment_id: str) -> tuple[Response, int]:
+    """Remove a map supplement from a manifestation."""
+    manifestation = db.session.get(Manifestation, manifestation_id)
+    if not manifestation:
+        return jsonify({"success": False, "error": "Manifestation not found"}), 404
+
+    user_id = getattr(g, "user_id", None)
+    user_obj = db.session.get(User, user_id) if user_id else None
+    is_admin = any(role.name == "admin" for role in getattr(user_obj, "roles", [])) if user_obj else False
+    has_perm = user_obj.has_permission(PermissionName.WRITE_METADATA) if user_obj else False
+    user_owns = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first() is not None if user_id else False
+
+    if not (is_admin or has_perm or user_owns):
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    meta = dict(manifestation.meta or {})
+    attachments = list(meta.get("map_attachments") or [])
+    updated_attachments = [a for a in attachments if str(a.get("id")) != attachment_id]
+
+    if len(updated_attachments) == len(attachments):
+        return jsonify({"success": False, "error": "Map attachment not found"}), 404
+
+    meta["map_attachments"] = updated_attachments
+    meta["has_map"] = bool(updated_attachments)
+    manifestation.meta = meta
+    flag_modified(manifestation, "meta")
+    db.session.commit()
+
+    return jsonify({"success": True, "message": "Map attachment removed"}), 200
 
 
 @api_bp.route("/manifestations/<int:manifestation_id>/regenerate-cover", methods=["POST"])

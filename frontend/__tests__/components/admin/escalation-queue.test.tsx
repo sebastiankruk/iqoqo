@@ -485,4 +485,40 @@ describe("EscalationQueue Component", () => {
 
     expect(screen.getByText("Change Type")).toBeInTheDocument();
   });
+
+  it("renders new_media_type proposal with badges, fields and resolve actions", () => {
+    const newTypeRequest: EscalationRequest = {
+      id: 99,
+      user_id: "user-uuid-1",
+      user_display_name: "LegoBuilder",
+      field_name: "new_media_type",
+      suggested_value: JSON.stringify({
+        proposed_category: "Lego Sets",
+        proposed_format: "Standard Box",
+        parent_frbr_class: "F1_Work",
+        sample_identifier_or_url: "5702016913507",
+        rationale: "Collector needs tracking for brick counts and manuals",
+      }),
+      request_type: "new_media_type",
+      status: "pending",
+      created_at: "2026-11-07T12:00:00Z",
+      updated_at: "2026-11-07T12:00:00Z",
+    };
+
+    vi.mocked(escalationHooks.useEscalationQueue).mockReturnValue({
+      data: [newTypeRequest],
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof escalationHooks.useEscalationQueue>);
+
+    render(<EscalationQueue />);
+
+    expect(screen.getByText("New Media Type")).toBeInTheDocument();
+    expect(screen.getByText("Lego Sets")).toBeInTheDocument();
+    expect(screen.getByText("Standard Box")).toBeInTheDocument();
+    expect(screen.getByText("5702016913507")).toBeInTheDocument();
+    expect(screen.getByText("Collector needs tracking for brick counts and manuals")).toBeInTheDocument();
+    expect(screen.getByTestId("resolve-buttons")).toBeInTheDocument();
+  });
 });

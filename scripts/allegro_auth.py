@@ -29,6 +29,24 @@ import requests
 CLIENT_ID = os.getenv("ALLEGRO_CLIENT_ID")
 CLIENT_SECRET = os.getenv("ALLEGRO_CLIENT_SECRET")
 
+if not CLIENT_ID or not CLIENT_SECRET:
+    try:
+        from app.core.config_service import ConfigService
+
+        CLIENT_ID = CLIENT_ID or ConfigService.get("ALLEGRO_CLIENT_ID")
+        CLIENT_SECRET = CLIENT_SECRET or ConfigService.get("ALLEGRO_CLIENT_SECRET")
+    except Exception:
+        pass
+
+if not CLIENT_ID or not CLIENT_SECRET:
+    try:
+        from app.db.models import InstanceSettings
+
+        CLIENT_ID = CLIENT_ID or InstanceSettings.get_value("ALLEGRO_CLIENT_ID")
+        CLIENT_SECRET = CLIENT_SECRET or InstanceSettings.get_value("ALLEGRO_CLIENT_SECRET")
+    except Exception:
+        pass
+
 DEVICE_AUTH_URL = "https://allegro.pl/auth/oauth/device"
 TOKEN_URL = "https://allegro.pl/auth/oauth/token"
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", ".allegro_token.json")

@@ -59,6 +59,7 @@ const MULTI_VALUE_PARAMS: ReadonlyArray<readonly [FilterType, string]> = [
 const SINGLE_VALUE_PARAMS: ReadonlyArray<readonly [FilterType, string]> = [
   ["lod_authority", "lod_authority"],
   ["lod_status", "lod_status"],
+  ["has_map", "has_map"],
 ];
 
 /** Sort order that means "unspecified", and so is omitted from the URL. */

@@ -46,6 +46,14 @@
     rdfs:label "ebook" ;
     :belongsToCategory :MediaCategoryText ;
     rdfs:comment "eBook" .
+:MediaFormatCartographicMap a :MediaFormat ;
+    rdfs:label "cartographic_map" ;
+    :belongsToCategory :MediaCategoryText ;
+    rdfs:comment "Cartographic Map" .
+:MediaFormatAtlas a :MediaFormat ;
+    rdfs:label "atlas" ;
+    :belongsToCategory :MediaCategoryText ;
+    rdfs:comment "Atlas" .
 :MediaFormatUnknownText a :MediaFormat ;
     rdfs:label "unknown_text" ;
     :belongsToCategory :MediaCategoryText ;
@@ -178,6 +186,38 @@
     rdfs:label "unknown_puzzle" ;
     :belongsToCategory :MediaCategoryPuzzle ;
     rdfs:comment "Unknown Puzzle Format" .
+:MediaCategoryLego a :MediaCategory ;
+    rdfs:label "lego" ;
+    :defaultImageType "box" ;
+    rdfs:comment "LEGO & Construction Sets" .
+:MediaFormatStandardSet a :MediaFormat ;
+    rdfs:label "standard_set" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Standard Set" .
+:MediaFormatUcsCollectorSet a :MediaFormat ;
+    rdfs:label "ucs_collector_set" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "UCS / Collector Set" .
+:MediaFormatTechnicSet a :MediaFormat ;
+    rdfs:label "technic_set" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Technic Set" .
+:MediaFormatMinifigureSeries a :MediaFormat ;
+    rdfs:label "minifigure_series" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Collectible Minifigure (CMF)" .
+:MediaFormatPolybag a :MediaFormat ;
+    rdfs:label "polybag" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Polybag / Promo" .
+:MediaFormatModularBuilding a :MediaFormat ;
+    rdfs:label "modular_building" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Modular Building" .
+:MediaFormatUnknownLego a :MediaFormat ;
+    rdfs:label "unknown_lego" ;
+    :belongsToCategory :MediaCategoryLego ;
+    rdfs:comment "Unknown LEGO Format" .
 
 # Format Aliases (non-canonical names)
 :FormatAliasText a :FormatAlias ;
@@ -198,8 +238,20 @@
 :FormatAliasPuzzle a :FormatAlias ;
     rdfs:label "puzzle" ;
     :resolvesToCategory :MediaCategoryPuzzle .
+:FormatAliasLego a :FormatAlias ;
+    rdfs:label "lego" ;
+    :resolvesToCategory :MediaCategoryLego .
 :FormatAliasStandard a :FormatAlias ;
     rdfs:label "standard" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasMap a :FormatAlias ;
+    rdfs:label "map" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasCartographicMap a :FormatAlias ;
+    rdfs:label "cartographic_map" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasAtlas a :FormatAlias ;
+    rdfs:label "atlas" ;
     :resolvesToCategory :MediaCategoryText .
 :FormatAliasAudio a :FormatAlias ;
     rdfs:label "audio" ;
@@ -237,6 +289,15 @@
 :FormatAliasThreeDimensionalObject a :FormatAlias ;
     rdfs:label "three-dimensional object" ;
     :resolvesToCategory :MediaCategoryBoardGame .
+:FormatAliasConstructionSet a :FormatAlias ;
+    rdfs:label "construction_set" ;
+    :resolvesToCategory :MediaCategoryLego .
+:FormatAliasBrickSet a :FormatAlias ;
+    rdfs:label "brick_set" ;
+    :resolvesToCategory :MediaCategoryLego .
+:FormatAliasBrick a :FormatAlias ;
+    rdfs:label "brick" ;
+    :resolvesToCategory :MediaCategoryLego .
 
 :StatusWishList a :CollectionStatus ; rdfs:label "wish_list" .
 :StatusOrdered a :CollectionStatus ; rdfs:label "ordered" .
@@ -244,6 +305,14 @@
 :StatusLent a :CollectionStatus ; rdfs:label "lent" .
 :StatusDamaged a :CollectionStatus ; rdfs:label "damaged" .
 :StatusLost a :CollectionStatus ; rdfs:label "lost" .
+
+:StatusBuilding a :ProgressStatus ;
+    rdfs:label "building" ;
+    :applicableToCategory :MediaCategoryLego .
+
+:StatusBuilt a :ProgressStatus ;
+    rdfs:label "built" ;
+    :applicableToCategory :MediaCategoryLego .
 
 :StatusDnf a :ProgressStatus ;
     rdfs:label "dnf" ;
@@ -281,6 +350,10 @@
 :StatusUnread a :ProgressStatus ;
     rdfs:label "unread" ;
     :applicableToCategory :MediaCategoryText .
+
+:StatusWantToBuild a :ProgressStatus ;
+    rdfs:label "want_to_build" ;
+    :applicableToCategory :MediaCategoryLego .
 
 :StatusWantToListen a :ProgressStatus ;
     rdfs:label "want_to_listen" ;
@@ -334,6 +407,11 @@
     :strategyClass "PuzzleLookupStrategy" ;
     :waterfallOrder 5 ;
     :forCategory :MediaCategoryPuzzle .
+:LookupStrategyLego a :LookupStrategy ;
+    rdfs:label "lego" ;
+    :strategyClass "LegoLookupStrategy" ;
+    :waterfallOrder 6 ;
+    :forCategory :MediaCategoryLego .
 :LookupStrategyText a :LookupStrategy ;
     rdfs:label "text" ;
     :strategyClass "BookLookupStrategy" ;

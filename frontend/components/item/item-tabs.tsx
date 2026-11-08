@@ -64,6 +64,8 @@ function DetailsTab({ item }: { item: Item }) {
         workMeta={item.work?.meta as Record<string, unknown> | undefined}
         owner_name={item.owner_name}
         owner_count={item.owner_count}
+        manifestationId={item.manifestation_id}
+        canEdit={canEdit}
       />
 
       {/* Multi-series badges */}

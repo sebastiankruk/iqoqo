@@ -116,6 +116,48 @@ DISPLAY_FIELD_DEFINITIONS: dict[str, DisplayFieldDef] = {
         section="header",
         label="Subtitle",
     ),
+    "set_number": DisplayFieldDef(
+        field="set_number",
+        spellings=("set_number", "set_num", "SetNumber", "set_no"),
+        section="header",
+        label="Set Number",
+    ),
+    "piece_count": DisplayFieldDef(
+        field="piece_count",
+        spellings=("piece_count", "num_parts", "PieceCount", "pieces"),
+        section="header",
+        label="Piece Count",
+    ),
+    "minifig_count": DisplayFieldDef(
+        field="minifig_count",
+        spellings=("minifig_count", "num_minifigs", "MinifigCount", "minifigs"),
+        section="header",
+        label="Minifigures",
+    ),
+    "theme": DisplayFieldDef(
+        field="theme",
+        spellings=("theme", "Theme", "lego_theme"),
+        section="header",
+        label="Theme",
+    ),
+    "map_scale": DisplayFieldDef(
+        field="map_scale",
+        spellings=("map_scale", "scale", "MapScale"),
+        section="cartographic",
+        label="Map Scale",
+    ),
+    "map_projection": DisplayFieldDef(
+        field="map_projection",
+        spellings=("map_projection", "projection", "MapProjection"),
+        section="cartographic",
+        label="Map Projection",
+    ),
+    "has_map": DisplayFieldDef(
+        field="has_map",
+        spellings=("has_map", "has_map_attachment", "has_maps"),
+        section="cartographic",
+        label="Includes Map",
+    ),
 }
 
 # Explicit precedence orders for sections (design decision 4)
@@ -168,6 +210,25 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
     "artist",
     "manufacturer",
     "puzzle_type",
+    # LEGO & Construction Sets
+    "set_number",
+    "set_num",
+    "SetNumber",
+    "set_no",
+    "num_parts",
+    "minifig_count",
+    "num_minifigs",
+    "MinifigCount",
+    "minifigs",
+    "theme",
+    "Theme",
+    "lego_theme",
+    "build_status",
+    "missing_pieces_count",
+    "instructions_included",
+    # Cartographic & Map Supplements
+    "map_attachments",
+    "map_insert_present",
     # Identifiers & Covers handled structurally
     "barcode",
     "Barcode",
@@ -215,8 +276,11 @@ def is_primitive_value(value: Any) -> bool:
     return isinstance(value, (str, int, float, bool))
 
 
-def build_display_projection(meta: dict[str, Any] | None) -> dict[str, Any]:
-    """Build an ordered display projection from raw manifestation metadata.
+def build_display_projection(
+    meta: dict[str, Any] | None,
+    item_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an ordered display projection from raw manifestation and item metadata.
 
     Applies server-side normalization and value-level display rules so that:
     1. Each logical field is extracted with its canonical label and section.
@@ -264,7 +328,51 @@ def build_display_projection(meta: dict[str, Any] | None) -> dict[str, Any]:
     elif header_pub_val is not None:
         fields["publisher"] = header_pub_val
 
-    # 5. Additional Details (catch-all for primitive values not rendered in dedicated sections)
+    # 5. LEGO Manifestation Fields (Set Number, Piece Count, Minifigures, Theme)
+    for lego_field in ("set_number", "piece_count", "minifig_count", "theme"):
+        lego_val = read_first_present_value(meta, DISPLAY_FIELD_DEFINITIONS[lego_field].spellings)
+        if lego_val is not None:
+            sections[lego_field] = lego_val
+            fields[lego_field] = lego_val
+
+    # 6. LEGO Item Fields (Build Status, Missing Pieces, Instructions Included)
+    source_item_meta = item_meta if isinstance(item_meta, dict) else meta
+    if isinstance(source_item_meta, dict):
+        build_status = read_first_present_value(source_item_meta, ("build_status", "buildStatus", "BuildStatus"))
+        if build_status is not None:
+            sections["build_status"] = build_status
+            fields["build_status"] = build_status
+
+        missing_pieces = read_first_present_value(source_item_meta, ("missing_pieces_count", "missingPiecesCount"))
+        if missing_pieces is not None:
+            sections["missing_pieces_count"] = missing_pieces
+            fields["missing_pieces_count"] = missing_pieces
+
+        instructions = read_first_present_value(source_item_meta, ("instructions_included", "instructionsIncluded"))
+        if instructions is not None:
+            sections["instructions_included"] = instructions
+            fields["instructions_included"] = instructions
+
+        map_insert = read_first_present_value(source_item_meta, ("map_insert_present", "mapInsertPresent"))
+        if map_insert is not None:
+            sections["map_insert_present"] = map_insert
+            fields["map_insert_present"] = map_insert
+
+    # 7. Cartographic Manifestation Fields (Map Scale, Projection, Includes Map, Map Attachments)
+    for carto_field in ("map_scale", "map_projection", "has_map"):
+        carto_val = read_first_present_value(meta, DISPLAY_FIELD_DEFINITIONS[carto_field].spellings)
+        if carto_val is not None:
+            sections[carto_field] = carto_val
+            fields[carto_field] = carto_val
+
+    map_attachments = meta.get("map_attachments")
+    if isinstance(map_attachments, list) and map_attachments:
+        sections["map_attachments"] = map_attachments
+        fields["map_attachments"] = map_attachments
+        sections["has_map"] = True
+        fields["has_map"] = True
+
+    # 8. Additional Details (catch-all for primitive values not rendered in dedicated sections)
     additional_details: list[dict[str, Any]] = []
     for raw_key, raw_val in meta.items():
         if not isinstance(raw_key, str):

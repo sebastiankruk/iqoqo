@@ -87,3 +87,126 @@ def test_validate_container_not_linked_as_expansion_raises_when_aggregating(app)
 
         with pytest.raises(ValueError, match="is an F16 Container Work and cannot be declared an expansion"):
             validate_container_not_linked_as_expansion(container.id)
+
+
+def test_lego_shacl_validation_conforming():
+    """Valid LEGO Manifestation and Item conform to SHACL shapes with zero violations."""
+    from rdflib import Graph, Literal, Namespace, URIRef
+    from rdflib.namespace import RDF, XSD
+
+    from app.core.shacl_service import clear_cache, validate_graph
+
+    clear_cache()
+
+    IQOQO = Namespace("https://iqoqo.org/ontology#")
+    FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+    FRBRER = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+    SCHEMA = Namespace("https://schema.org/")
+
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("frbr", FRBR)
+    g.bind("frbrer", FRBRER)
+    g.bind("schema", SCHEMA)
+
+    w = URIRef("https://iqoqo.org/works/101")
+    e = URIRef("https://iqoqo.org/expressions/101")
+    m = URIRef("https://iqoqo.org/manifestations/101")
+    item = URIRef("https://iqoqo.org/items/101")
+
+    # FRBR hierarchy
+    g.add((w, RDF.type, FRBR.Work))
+    g.add((e, RDF.type, FRBR.Expression))
+    g.add((e, FRBRER.expressionOf, w))
+    g.add((m, RDF.type, FRBR.Manifestation))
+    g.add((m, RDF.type, IQOQO.Manifestation))
+    g.add((m, FRBRER.embodimentOf, e))
+    g.add((m, SCHEMA.name, Literal("Concorde")))
+    g.add((item, RDF.type, FRBR.Item))
+    g.add((item, RDF.type, IQOQO.Item))
+    g.add((item, FRBRER.exemplarOf, m))
+
+    # LEGO Manifestation attributes
+    g.add((m, IQOQO.setNumber, Literal("10318-1", datatype=XSD.string)))
+    g.add((m, IQOQO.pieceCount, Literal(2083, datatype=XSD.integer)))
+    g.add((m, IQOQO.minifigCount, Literal(0, datatype=XSD.integer)))
+
+    # LEGO Item attributes
+    g.add((item, IQOQO.buildStatus, Literal("built", datatype=XSD.string)))
+    g.add((item, IQOQO.missingPiecesCount, Literal(0, datatype=XSD.integer)))
+    g.add((item, IQOQO.instructionsIncluded, Literal(True, datatype=XSD.boolean)))
+
+    conforms, _, report = validate_graph(g)
+    assert conforms is True, f"Expected conforming graph, got violations: {report}"
+
+
+def test_lego_shacl_validation_rejects_build_status_on_work():
+    """Attaching iqoqo:buildStatus directly to a Work is rejected by SHACL validation."""
+    from rdflib import Graph, Literal, Namespace, URIRef
+    from rdflib.namespace import RDF, XSD
+
+    from app.core.shacl_service import clear_cache, validate_graph
+
+    clear_cache()
+
+    IQOQO = Namespace("https://iqoqo.org/ontology#")
+    FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+
+    g = Graph()
+    g.bind("iqoqo", IQOQO)
+    g.bind("frbr", FRBR)
+
+    w = URIRef("https://iqoqo.org/works/102")
+    g.add((w, RDF.type, FRBR.Work))
+    g.add((w, RDF.type, IQOQO.Work))
+    g.add((w, IQOQO.buildStatus, Literal("built", datatype=XSD.string)))
+
+    conforms, _, report = validate_graph(g)
+    assert conforms is False, "Expected SHACL failure when buildStatus is attached directly to a Work"
+    assert "buildStatus" in report
+
+
+def test_lego_shacl_validation_rejects_invalid_build_status():
+    """Invalid buildStatus value violates SHACL controlled vocabulary constraint."""
+    from rdflib import Graph, Literal, Namespace, URIRef
+    from rdflib.namespace import RDF, XSD
+
+    from app.core.shacl_service import clear_cache, validate_graph
+
+    clear_cache()
+
+    IQOQO = Namespace("https://iqoqo.org/ontology#")
+    FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+
+    g = Graph()
+    item = URIRef("https://iqoqo.org/items/103")
+    g.add((item, RDF.type, FRBR.Item))
+    g.add((item, RDF.type, IQOQO.Item))
+    g.add((item, IQOQO.buildStatus, Literal("invalid_status_value", datatype=XSD.string)))
+
+    conforms, _, report = validate_graph(g)
+    assert conforms is False, "Expected SHACL failure for invalid buildStatus value"
+    assert "buildStatus" in report
+
+
+def test_lego_shacl_validation_rejects_negative_piece_count():
+    """Negative pieceCount violates sh:minInclusive 0 constraint."""
+    from rdflib import Graph, Literal, Namespace, URIRef
+    from rdflib.namespace import RDF, XSD
+
+    from app.core.shacl_service import clear_cache, validate_graph
+
+    clear_cache()
+
+    IQOQO = Namespace("https://iqoqo.org/ontology#")
+    FRBR = Namespace("http://purl.org/vocab/frbr/core#")
+
+    g = Graph()
+    m = URIRef("https://iqoqo.org/manifestations/104")
+    g.add((m, RDF.type, FRBR.Manifestation))
+    g.add((m, RDF.type, IQOQO.Manifestation))
+    g.add((m, IQOQO.pieceCount, Literal(-5, datatype=XSD.integer)))
+
+    conforms, _, report = validate_graph(g)
+    assert conforms is False, "Expected SHACL failure for negative pieceCount"
+    assert "pieceCount" in report
