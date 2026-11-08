@@ -476,7 +476,10 @@ status: ## Show health status of all iQoQo services
 			deploy_arg="--deploy-dir $(DEPLOY_DIR)"; \
 		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg; \
+			status_code=0; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg || status_code=$$?; \
+			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
+			exit 0; \
 		else \
 			tmpdir=$$(mktemp -d); \
 			tmp_container=""; \
@@ -500,7 +503,10 @@ status: ## Show health status of all iQoQo services
 					echo "ERROR: backend image $$status_image does not contain /usr/src/app/scripts/iqoqo-status.sh." >&2; exit 2; \
 				fi; \
 			fi; \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack"; \
+			status_code=0; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$tmpdir/iqoqo-status.sh" --stack "$$status_stack" || status_code=$$?; \
+			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
+			exit 0; \
 		fi
 
 # Linting targets

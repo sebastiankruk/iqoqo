@@ -156,7 +156,7 @@ done
 if [ "$PREVIEW_READY" -ne 1 ]; then
     echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
 fi
-make status preview || [ $? -le 1 ]
+make status preview
 
 # 6. Run automated federation verification if federation pair is active
 if [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
