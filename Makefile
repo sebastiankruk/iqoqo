@@ -651,7 +651,7 @@ secret-scan: .venv/bin/activate ## Scan repository working tree and branch commi
 	@.venv/bin/python scripts/run_secret_scan.py
 
 # Compatibility baseline: executable checks that gate .github/workflows/quality.yml.
-lint: .venv/bin/activate
+lint: .venv/bin/activate lint-ts
 	@PATH="$(NODE_DIR):$$PATH" .venv/bin/python scripts/run_lint.py
 
 # Stricter checks that are intentionally not part of the existing CI baseline.
@@ -714,7 +714,7 @@ test-backend-pg: .venv/bin/activate
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
 	.venv/bin/pytest tests/integration/db/ -v
 
-test-frontend:
+test-frontend: lint-ts
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
 	cd frontend && $(NPM) run test $(if $(VITEST_FLAGS),-- $(VITEST_FLAGS),)
 

@@ -143,6 +143,12 @@ with app.app_context():
             if hasattr(consent, 'auto_accept_follows'):
                 consent.auto_accept_follows = True
 
+        from app.core import federation_keys
+        if not federation_keys.get_actor_public_key(str(u.id)):
+            _, pub_key = federation_keys.generate_actor_keypair(str(u.id))
+            u.federation_public_key = pub_key
+            u.federation_key_id = f"https://peer.iqoqo.cc/api/federation/actor/u/{u.id}#main-key"
+
         # Ensure seed lendable item fixture
         item = Item.query.filter_by(local_barcode='PEER-LEND-001').first()
         if not item:
@@ -197,6 +203,12 @@ with app.app_context():
             consent.federated_collection = True
             if hasattr(consent, 'auto_accept_follows'):
                 consent.auto_accept_follows = True
+
+        from app.core import federation_keys
+        if not federation_keys.get_actor_public_key(str(u.id)):
+            _, pub_key = federation_keys.generate_actor_keypair(str(u.id))
+            u.federation_public_key = pub_key
+            u.federation_key_id = f"https://peer.iqoqo.cc/api/federation/actor/u/{u.id}#main-key"
         db.session.commit()
 
     skruk_user = User.query.filter_by(email='sebastian.kruk@gmail.com').first()

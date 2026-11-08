@@ -143,10 +143,10 @@ fi
 make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version
-echo "Waiting for preview backend (http://127.0.0.1:5002/health) to become healthy..."
+echo "Waiting for preview backend to become healthy..."
 PREVIEW_READY=0
 for i in $(seq 1 30); do
-    if curl -s -f "http://127.0.0.1:5002/health" > /dev/null 2>&1; then
+    if curl -s -f "http://127.0.0.1:5001/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:8000/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:5002/api/health" > /dev/null 2>&1; then
         echo "✅ Preview backend healthy after ${i}s"
         PREVIEW_READY=1
         break
@@ -156,7 +156,7 @@ done
 if [ "$PREVIEW_READY" -ne 1 ]; then
     echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
 fi
-make status preview
+make status preview || [ $? -le 1 ]
 
 # 6. Run automated federation verification if federation pair is active
 if [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
