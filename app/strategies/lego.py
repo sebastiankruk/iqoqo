@@ -21,6 +21,7 @@ import re
 from typing import Any
 
 from app.strategies.base import LookupStrategy
+from app.utils.allegro import fetch_allegro_candidates, fetch_allegro_metadata
 from app.utils.rebrickable import (
     fetch_rebrickable_metadata,
     fetch_rebrickable_set,
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class LegoLookupStrategy(LookupStrategy):
-    """LEGO sets lookup via Rebrickable API and EAN/UPC barcode resolution."""
+    """LEGO sets lookup via Rebrickable API, Allegro retail fallback, and EAN/UPC barcode resolution."""
 
     def lookup(self, barcode: str, query: str | None = None) -> tuple[dict[str, Any] | None, str | None]:
         """Look up LEGO set metadata by set number, EAN/UPC barcode, or title query."""
@@ -60,7 +61,42 @@ class LegoLookupStrategy(LookupStrategy):
                     provider = "rebrickable"
                     return meta, provider
 
-                # 2b. Fallback to UPC database waterfall
+                # 2b. Allegro retail product fallback for European/Polish LEGO barcodes
+                allegro_meta = fetch_allegro_metadata(cleaned_barcode)
+                if allegro_meta and allegro_meta.get("title"):
+                    meta = allegro_meta.copy()
+                    meta["category"] = "lego"
+                    meta["format"] = "construction_set"
+                    meta["data_source"] = "allegro"
+                    provider = "allegro"
+
+                    # Try to extract set number from parameters or title
+                    set_num = meta.get("set_number")
+                    if not set_num and meta.get("title"):
+                        match = re.search(r"\b(\d{4,6})\b", meta["title"])
+                        if match:
+                            set_num = match.group(1)
+                            meta["set_number"] = set_num
+
+                    # Enrich with Rebrickable if set number found and Rebrickable is configured
+                    if set_num:
+                        try:
+                            reb_meta = fetch_rebrickable_set(set_num, barcode=cleaned_barcode)
+                            if reb_meta:
+                                if not meta.get("piece_count") and reb_meta.get("piece_count"):
+                                    meta["piece_count"] = reb_meta["piece_count"]
+                                if not meta.get("minifig_count") and reb_meta.get("minifig_count"):
+                                    meta["minifig_count"] = reb_meta["minifig_count"]
+                                if not meta.get("theme") and reb_meta.get("theme"):
+                                    meta["theme"] = reb_meta["theme"]
+                                if not meta.get("cover_url") and reb_meta.get("cover_url"):
+                                    meta["cover_url"] = reb_meta["cover_url"]
+                        except Exception as exc:
+                            logger.debug("Rebrickable enrichment skipped for set %s: %s", set_num, exc)
+
+                    return meta, provider
+
+                # 2c. Fallback to UPC database waterfall
                 upc_meta = resolve_physical_media(cleaned_barcode)
                 if upc_meta and upc_meta.get("title"):
                     title = upc_meta["title"]
@@ -92,15 +128,39 @@ class LegoLookupStrategy(LookupStrategy):
                     provider = "rebrickable"
                     return meta, provider
 
+                # Query Allegro for candidates if Rebrickable returned nothing
+                allegro_cands = fetch_allegro_candidates(cleaned_query, max_results=1)
+                if allegro_cands:
+                    meta = allegro_cands[0].copy()
+                    meta["category"] = "lego"
+                    meta["format"] = "construction_set"
+                    meta["data_source"] = "allegro"
+                    provider = "allegro"
+                    return meta, provider
+
         except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError) as exc:
             logger.warning("Unexpected error during LEGO lookup for '%s': %s", barcode, exc)
 
         return None, None
 
     def lookup_candidates(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
-        """Look up multiple candidate metadata dictionaries for a LEGO set query."""
+        """Look up multiple candidate metadata dictionaries for a LEGO set query from Rebrickable and Allegro."""
+        candidates: list[dict[str, Any]] = []
         try:
-            return search_rebrickable_sets(query, max_results=max_results)
+            reb_cands = search_rebrickable_sets(query, max_results=max_results)
+            candidates.extend(reb_cands)
         except Exception as exc:
-            logger.warning("Error searching LEGO candidates for '%s': %s", query, exc)
-            return []
+            logger.warning("Error searching Rebrickable LEGO candidates for '%s': %s", query, exc)
+
+        if len(candidates) < max_results:
+            try:
+                allegro_cands = fetch_allegro_candidates(query, max_results=max_results - len(candidates))
+                for c in allegro_cands:
+                    c.setdefault("category", "lego")
+                    c.setdefault("format", "construction_set")
+                    c.setdefault("data_source", "allegro")
+                    candidates.append(c)
+            except Exception as exc:
+                logger.warning("Error searching Allegro LEGO candidates for '%s': %s", query, exc)
+
+        return candidates[:max_results]

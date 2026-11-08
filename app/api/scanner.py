@@ -275,6 +275,12 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
                 allegro_cands = fetch_allegro_candidates(query, max_results=10 - len(candidates))
                 candidates.extend(allegro_cands)
 
+        if category_hint == "lego" or format_hint in ("lego", "construction_set"):
+            from app.strategies.lego import LegoLookupStrategy
+
+            lego_strategy = LegoLookupStrategy()
+            candidates.extend(lego_strategy.lookup_candidates(query, max_results=10))
+
         if len(candidates) >= 1:
             normalized_candidates = [_normalize_preview_meta(copy.deepcopy(c), format_hint) for c in candidates]
             for cand in normalized_candidates:
