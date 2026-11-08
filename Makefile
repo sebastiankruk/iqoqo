@@ -657,7 +657,7 @@ secret-scan: .venv/bin/activate ## Scan repository working tree and branch commi
 	@.venv/bin/python scripts/run_secret_scan.py
 
 # Compatibility baseline: executable checks that gate .github/workflows/quality.yml.
-lint: .venv/bin/activate lint-ts
+lint: .venv/bin/activate lint-frontend
 	@PATH="$(NODE_DIR):$$PATH" .venv/bin/python scripts/run_lint.py
 
 # Stricter checks that are intentionally not part of the existing CI baseline.

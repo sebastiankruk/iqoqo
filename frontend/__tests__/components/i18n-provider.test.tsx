@@ -17,7 +17,6 @@ import { render, screen, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ClientI18nProvider } from "@/components/i18n-provider";
 import { setLocaleCookie } from "@/lib/locale-cookie";
-import * as nextIntl from "next-intl";
 
 describe("ClientI18nProvider", () => {
   beforeEach(() => {

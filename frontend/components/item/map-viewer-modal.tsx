@@ -54,6 +54,13 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.5;
 
+/**
+ * Validates that an image URL is safe to display in an image tag or modal.
+ * Rejects javascript:, data:, blob: protocols and protocol-relative links.
+ *
+ * @param url - URL string candidate to check.
+ * @returns True if the URL is a safe http(s) or absolute same-origin path.
+ */
 function isSafeDisplayUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   const trimmed = url.trim();
