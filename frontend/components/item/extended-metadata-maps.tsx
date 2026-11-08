@@ -231,7 +231,9 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                         variant="ghost"
                         size="sm"
                         className="h-7 text-xs flex items-center gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteAttachment(att.id)}
+                        onClick={() => {
+                          if (att.id) handleDeleteAttachment(att.id);
+                        }}
                         disabled={isDeleting === att.id}
                         aria-label="Delete map attachment"
                       >

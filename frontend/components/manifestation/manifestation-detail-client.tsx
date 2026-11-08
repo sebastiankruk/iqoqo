@@ -40,6 +40,7 @@ import { CoverProvenance } from "@/components/cover/cover-provenance";
 import { SemanticLinks } from "@/components/manifestation/semantic-links";
 import { TagCloud } from "@/components/ui/tag-cloud";
 import { useTranslations } from "next-intl";
+import { PermissionName } from "@/lib/permissions";
 
 /** Props for the client manifestation detail view. */
 export interface ManifestationDetailClientProps {
@@ -372,9 +373,9 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 manifestationId={manifestation.id}
                 canEdit={Boolean(
                   userProfile &&
-                  (userProfile.is_admin ||
-                    userProfile.role === "admin" ||
-                    userProfile.role === "custodian" ||
+                  (userProfile.roles?.includes("admin") ||
+                    userProfile.roles?.includes("custodian") ||
+                    userProfile.permissions?.includes(PermissionName.WRITE_METADATA) ||
                     manifestation.user_owns)
                 )}
               />
