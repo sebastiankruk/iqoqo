@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Compass, Map as MapIcon, Maximize2, Plus, CheckCircle2, AlertCircle } from "lucide-react";
+import { Compass, Map as MapIcon, Maximize2, Plus, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -60,8 +60,12 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadType, setUploadType] = useState("fold_out_insert");
+  const [uploadScale, setUploadScale] = useState("");
+  const [uploadProjection, setUploadProjection] = useState("");
+  const [uploadImageUrl, setUploadImageUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const hasMaps = Boolean(meta["has_map"]) || attachments.length > 0 || Boolean(mapScale) || Boolean(mapProjection);
 
@@ -74,27 +78,65 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
     setViewerOpen(true);
   };
 
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!manifestationId) return;
+    setIsDeleting(attachmentId);
+    try {
+      const res = await apiClient.delete(`/manifestations/${manifestationId}/map-attachments/${attachmentId}`);
+      if (res.data?.success) {
+        toast.success("Map attachment removed");
+        queryClient.invalidateQueries({ queryKey: ["item"] });
+        queryClient.invalidateQueries({ queryKey: ["manifestation"] });
+      } else {
+        toast.error(res.data?.error || "Failed to remove map attachment");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to remove map attachment";
+      toast.error(msg);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manifestationId) return;
+    if (!uploadFile && !uploadImageUrl.trim()) {
+      toast.error("Please provide either a map image file or an image URL");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
-      const formData = new FormData();
-      formData.append("title", uploadTitle.trim() || "Map Supplement");
-      formData.append("type", uploadType);
+      let res;
       if (uploadFile) {
+        const formData = new FormData();
+        formData.append("title", uploadTitle.trim() || "Map Supplement");
+        formData.append("type", uploadType);
+        if (uploadScale.trim()) formData.append("scale", uploadScale.trim());
+        if (uploadProjection.trim()) formData.append("projection", uploadProjection.trim());
         formData.append("file", uploadFile);
-      }
 
-      const res = await apiClient.post(`/manifestations/${manifestationId}/map-attachments`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+        res = await apiClient.post(`/manifestations/${manifestationId}/map-attachments`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        res = await apiClient.post(`/manifestations/${manifestationId}/map-attachments`, {
+          title: uploadTitle.trim() || "Map Supplement",
+          type: uploadType,
+          scale: uploadScale.trim() || null,
+          projection: uploadProjection.trim() || null,
+          image_url: uploadImageUrl.trim(),
+        });
+      }
 
       if (res.data?.success) {
         toast.success("Map attachment uploaded successfully");
         setUploadOpen(false);
         setUploadTitle("");
+        setUploadScale("");
+        setUploadProjection("");
+        setUploadImageUrl("");
         setUploadFile(null);
         queryClient.invalidateQueries({ queryKey: ["item"] });
         queryClient.invalidateQueries({ queryKey: ["manifestation"] });
@@ -182,7 +224,22 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                   </div>
                 </div>
 
-                <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-end">
+                <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between">
+                  <div>
+                    {canEdit && manifestationId && att.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs flex items-center gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteAttachment(att.id)}
+                        disabled={isDeleting === att.id}
+                        aria-label="Delete map attachment"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {isDeleting === att.id ? "Deleting..." : "Delete"}
+                      </Button>
+                    )}
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -250,13 +307,53 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
               </select>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold">Scale (optional)</label>
+                <input
+                  type="text"
+                  value={uploadScale}
+                  onChange={e => setUploadScale(e.target.value)}
+                  placeholder="e.g. 1:50,000"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold">Projection (optional)</label>
+                <input
+                  type="text"
+                  value={uploadProjection}
+                  onChange={e => setUploadProjection(e.target.value)}
+                  placeholder="e.g. Mercator"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-semibold">Map Image File</label>
               <input
                 type="file"
                 accept="image/*"
-                onChange={e => setUploadFile(e.target.files?.[0] || null)}
+                onChange={e => {
+                  setUploadFile(e.target.files?.[0] || null);
+                  if (e.target.files?.[0]) setUploadImageUrl("");
+                }}
                 className="mt-1 flex w-full text-xs file:mr-4 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold">Or Image URL</label>
+              <input
+                type="url"
+                value={uploadImageUrl}
+                onChange={e => {
+                  setUploadImageUrl(e.target.value);
+                  if (e.target.value) setUploadFile(null);
+                }}
+                placeholder="https://example.com/map.jpg or /static/gallery/..."
+                className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
               />
             </div>
 
@@ -264,7 +361,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
               <Button type="button" variant="outline" size="sm" onClick={() => setUploadOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={isSubmitting}>
+              <Button type="submit" size="sm" disabled={isSubmitting || (!uploadFile && !uploadImageUrl.trim())}>
                 {isSubmitting ? "Uploading..." : "Save Attachment"}
               </Button>
             </div>

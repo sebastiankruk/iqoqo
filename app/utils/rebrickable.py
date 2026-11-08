@@ -23,6 +23,7 @@ using Fernet-encrypted credentials from InstanceSettings and recording field-lev
 import logging
 import os
 import re
+import urllib.parse
 from typing import Any
 
 import requests
@@ -35,8 +36,12 @@ logger = logging.getLogger(__name__)
 _REBRICKABLE_BASE_URL = "https://rebrickable.com/api/v3/lego"
 _TIMEOUT = (3, 7)  # (connect, read)
 
-# In-memory cache for theme ID to name mappings
+# In-memory cache for theme ID to name mappings (bounded to 512 entries)
 _THEME_CACHE: dict[int, str] = {}
+_MAX_THEME_CACHE_SIZE = 512
+
+#: Strict syntax for valid LEGO set numbers (e.g., '10318', '10318-1', '75192-2')
+_VALID_SET_NUM_RE = re.compile(r"^\d{3,7}(?:-\d{1,2})?$")
 
 
 def normalize_set_number(raw: str) -> str:
@@ -49,14 +54,14 @@ def normalize_set_number(raw: str) -> str:
         Canonical set number with hyphenated version suffix.
     """
     cleaned = raw.strip()
-    if re.match(r"^\d{4,6}$", cleaned):
+    if re.match(r"^\d{3,7}$", cleaned):
         return f"{cleaned}-1"
     return cleaned
 
 
 def is_set_number_format(query: str) -> bool:
     """Check if a query string matches LEGO set number syntax (e.g. '10318' or '10318-1')."""
-    return bool(re.match(r"^\d{4,6}(-\d+)?$", query.strip()))
+    return bool(_VALID_SET_NUM_RE.match(query.strip()))
 
 
 def get_rebrickable_api_key() -> str | None:
@@ -83,7 +88,7 @@ def get_rebrickable_api_key() -> str | None:
 
 
 def _fetch_theme_name(theme_id: int, headers: dict[str, str]) -> str | None:
-    """Resolve theme name from Rebrickable theme API with in-memory caching."""
+    """Resolve theme name from Rebrickable theme API with bounded in-memory caching."""
     if theme_id in _THEME_CACHE:
         return _THEME_CACHE[theme_id]
 
@@ -94,6 +99,11 @@ def _fetch_theme_name(theme_id: int, headers: dict[str, str]) -> str | None:
         if response.status_code == 200:
             name = response.json().get("name")
             if name:
+                if len(_THEME_CACHE) >= _MAX_THEME_CACHE_SIZE:
+                    try:
+                        _THEME_CACHE.pop(next(iter(_THEME_CACHE)))
+                    except KeyError:
+                        pass
                 _THEME_CACHE[theme_id] = name
                 return name
     except (requests.RequestException, SSRFError, ValueError) as exc:
@@ -103,7 +113,10 @@ def _fetch_theme_name(theme_id: int, headers: dict[str, str]) -> str | None:
 
 def _fetch_minifig_count(set_num: str, headers: dict[str, str]) -> int:
     """Fetch count of minifigures included with a set."""
-    url = f"{_REBRICKABLE_BASE_URL}/sets/{set_num}/minifigs/"
+    if not _VALID_SET_NUM_RE.match(set_num):
+        return 0
+    safe_set_num = urllib.parse.quote(set_num, safe="")
+    url = f"{_REBRICKABLE_BASE_URL}/sets/{safe_set_num}/minifigs/"
     try:
         record_outbound_telemetry("rebrickable", headers, url=url)
         response = safe_get(url, headers=headers, timeout=_TIMEOUT)
@@ -138,6 +151,8 @@ def _format_rebrickable_set_payload(
     set_data: dict[str, Any],
     headers: dict[str, str],
     barcode: str | None = None,
+    *,
+    fetch_minifigs: bool = True,
 ) -> dict[str, Any]:
     """Format raw Rebrickable set API dictionary into canonical iqoqo metadata dictionary."""
     set_num = set_data.get("set_num", "")
@@ -149,7 +164,7 @@ def _format_rebrickable_set_payload(
     theme_id = set_data.get("theme_id")
 
     theme_name = _fetch_theme_name(theme_id, headers) if isinstance(theme_id, int) else None
-    minifig_count = _fetch_minifig_count(set_num, headers) if set_num else 0
+    minifig_count = _fetch_minifig_count(set_num, headers) if (set_num and fetch_minifigs) else 0
     format_val = _infer_lego_format(title, theme_name)
 
     meta: dict[str, Any] = {
@@ -197,7 +212,12 @@ def fetch_rebrickable_set(set_num_or_query: str, barcode: str | None = None) -> 
         return None
 
     normalized = normalize_set_number(set_num_or_query)
-    url = f"{_REBRICKABLE_BASE_URL}/sets/{normalized}/"
+    if not _VALID_SET_NUM_RE.match(normalized):
+        logger.debug("Query '%s' does not match valid LEGO set number syntax; skipping direct set lookup.", set_num_or_query)
+        return None
+
+    safe_set_num = urllib.parse.quote(normalized, safe="")
+    url = f"{_REBRICKABLE_BASE_URL}/sets/{safe_set_num}/"
     headers = {"Authorization": f"key {api_key}", "Accept": "application/json"}
 
     try:
@@ -205,7 +225,7 @@ def fetch_rebrickable_set(set_num_or_query: str, barcode: str | None = None) -> 
         response = safe_get(url, headers=headers, timeout=_TIMEOUT)
         if response.status_code == 200:
             set_data = response.json()
-            return _format_rebrickable_set_payload(set_data, headers, barcode=barcode)
+            return _format_rebrickable_set_payload(set_data, headers, barcode=barcode, fetch_minifigs=True)
         if response.status_code == 404:
             logger.debug("LEGO set %s not found in Rebrickable (404).", normalized)
             return None
@@ -241,7 +261,8 @@ def search_rebrickable_sets(query: str, max_results: int = 10, barcode: str | No
             results = response.json().get("results", [])
             candidates: list[dict[str, Any]] = []
             for item in results[:max_results]:
-                formatted = _format_rebrickable_set_payload(item, headers, barcode=barcode)
+                # Skip per-candidate minifig HTTP requests during candidate listing to prevent N+1 waterfall
+                formatted = _format_rebrickable_set_payload(item, headers, barcode=barcode, fetch_minifigs=False)
                 candidates.append(formatted)
             return candidates
     except (requests.RequestException, SSRFError, ValueError) as exc:

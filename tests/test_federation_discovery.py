@@ -302,3 +302,20 @@ class TestActorEndpoints:
         assert actor_data["type"] == "Application"
         assert actor_data["publicKey"]["id"].endswith("/api/federation/actor#main-key")
         assert "BEGIN PUBLIC KEY" in actor_data["publicKey"]["publicKeyPem"]
+
+
+def test_compute_peering_direction_untrusted_reciprocal_fix() -> None:
+    """Verify untrusted instance with inbound traffic is inbound_only, not reciprocal."""
+    from app.core.federation_discovery import compute_peering_direction
+
+    # Blocked
+    assert compute_peering_direction("blocked", "https://peer.local/inbox", True) == "blocked"
+
+    # Untrusted with inbound and shared inbox -> inbound_only
+    assert compute_peering_direction("untrusted", "https://peer.local/inbox", True) == "inbound_only"
+
+    # Trusted with inbound and shared inbox -> reciprocal
+    assert compute_peering_direction("trusted", "https://peer.local/inbox", True) == "reciprocal"
+
+    # Trusted with outbound only
+    assert compute_peering_direction("trusted", "https://peer.local/inbox", False) == "outbound_only"

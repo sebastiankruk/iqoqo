@@ -390,7 +390,9 @@ def compute_peering_direction(trust_level: str, shared_inbox_url: str | None, ha
     if has_inbound and not shared_inbox_url:
         return "inbound_only"
     if has_inbound:
-        return "reciprocal"
+        if trust_level in (TrustLevel.TRUSTED, "trusted"):
+            return "reciprocal"
+        return "inbound_only"
     return "outbound_only"
 
 

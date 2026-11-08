@@ -260,12 +260,15 @@ def create_spec() -> APISpec:
                         "movie",
                         "music",
                         "game",
+                        "board_game",
                         "boardgame",
                         "sound",
                         "video",
                         "notated_music",
                         "book",
                         "audiobook",
+                        "lego",
+                        "puzzle",
                     ],
                     "description": "Media domain tier.",
                 },
@@ -355,6 +358,46 @@ def create_spec() -> APISpec:
                 "read_at": {"type": ["string", "null"], "format": "date-time", "description": "Timestamp event was acknowledged."},
             },
             "required": ["id", "recipient_id", "notification_type", "title", "is_read", "created_at"],
+        },
+    )
+
+    spec.components.schema(
+        "MapAttachment",
+        {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Unique attachment identifier."},
+                "title": {"type": "string", "description": "Descriptive title for the map attachment."},
+                "image_url": {"type": "string", "description": "Relative static gallery URL or safe HTTP(S) image URL."},
+                "scale": {"type": ["string", "null"], "description": "Cartographic scale (e.g. 1:50,000)."},
+                "projection": {"type": ["string", "null"], "description": "Cartographic projection name or EPSG code."},
+                "created_at": {"type": "string", "format": "date-time", "description": "Attachment creation timestamp."},
+            },
+            "required": ["id", "title", "image_url"],
+        },
+    )
+
+    spec.components.schema(
+        "NewMediaTypeEscalation",
+        {
+            "type": "object",
+            "properties": {
+                "proposed_category": {"type": "string", "description": "Target media category label."},
+                "proposed_format": {"type": "string", "description": "Target physical format label."},
+                "parent_frbr_class": {
+                    "type": "string",
+                    "enum": ["F1_Work", "F16_Container_Work", "F3_Manifestation_Product_Type"],
+                    "description": "Parent FRBR class tier.",
+                },
+                "sample_identifier_or_url": {"type": ["string", "null"], "description": "Sample identifier, barcode or URL."},
+                "suggested_properties": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Suggested domain-specific metadata properties.",
+                },
+                "rationale": {"type": "string", "description": "Justification for adding the new media type."},
+            },
+            "required": ["proposed_category", "proposed_format", "rationale"],
         },
     )
 

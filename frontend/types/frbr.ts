@@ -249,6 +249,10 @@ export interface Item {
   display?: DisplayProjection;
   content_type?: string | null;
   map_insert_present?: boolean | null;
+  build_status?: "sealed" | "built" | "incomplete" | "parted_out" | null;
+  missing_pieces_count?: number | null;
+  instructions_included?: boolean | null;
+  box_condition?: string | null;
   work_type?: string | null;
   medium_type?: string | null;
   work_id?: number | null;

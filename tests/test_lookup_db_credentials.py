@@ -242,6 +242,7 @@ def test_system_status_endpoint_reports_db_source(client, normal_user_headers, a
                 "GOOGLE_BOOKS_API_KEY": "",
                 "UPC_ITEM_DB_KEY": "",
                 "UPC_DATABASE_ORG_KEY": "",
+                "REBRICKABLE_API_KEY": "",
             },
             clear=True,
         ):
@@ -250,6 +251,7 @@ def test_system_status_endpoint_reports_db_source(client, normal_user_headers, a
             InstanceSettings.set_value("TMDB_API_KEY", "tmdb-key-val")
             InstanceSettings.set_value("GOOGLE_BOOKS_API_KEY", "gb-key-val")
             InstanceSettings.set_value("UPC_ITEM_DB_KEY", "upc-key-val")
+            InstanceSettings.set_value("REBRICKABLE_API_KEY", "reb-key-val")
 
             response = client.get("/api/system/status", headers=normal_user_headers)
             assert response.status_code == 200
@@ -259,6 +261,9 @@ def test_system_status_endpoint_reports_db_source(client, normal_user_headers, a
             payload = data["data"]
             assert payload["bgg"]["source"] == "db"
             assert payload["bgg"]["configured"] is True
+
+            assert payload["rebrickable"]["source"] == "db"
+            assert payload["rebrickable"]["configured"] is True
 
             assert payload["discogs"]["source"] == "db"
             assert payload["discogs"]["configured"] is True

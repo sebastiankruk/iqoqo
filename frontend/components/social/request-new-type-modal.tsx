@@ -66,7 +66,9 @@ export function RequestNewTypeModal({
 
   const [proposedCategory, setProposedCategory] = useState("");
   const [proposedFormat, setProposedFormat] = useState("");
-  const [parentFrbrClass, setParentFrbrClass] = useState<"F1_Work" | "F16_Container_Work">("F1_Work");
+  const [parentFrbrClass, setParentFrbrClass] = useState<
+    "F1_Work" | "F16_Container_Work" | "F3_Manifestation_Product_Type"
+  >("F1_Work");
   const [sampleIdentifier, setSampleIdentifier] = useState(defaultSampleIdentifier);
   const [rationale, setRationale] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -253,11 +255,18 @@ export function RequestNewTypeModal({
                 id="parent-frbr-class"
                 data-testid="parent-frbr-class-select"
                 value={parentFrbrClass}
-                onChange={e => setParentFrbrClass(e.target.value as "F1_Work" | "F16_Container_Work")}
+                onChange={e =>
+                  setParentFrbrClass(
+                    e.target.value as "F1_Work" | "F16_Container_Work" | "F3_Manifestation_Product_Type"
+                  )
+                }
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="F1_Work">F1 Work (Individual creative / physical object)</option>
                 <option value="F16_Container_Work">F16 Container Work (Boxed set / multi-item container)</option>
+                <option value="F3_Manifestation_Product_Type">
+                  F3 Manifestation Product Type (Physical media format / carrier)
+                </option>
               </select>
             </div>
 

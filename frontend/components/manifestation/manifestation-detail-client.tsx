@@ -366,7 +366,18 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
 
             {/* Rich metadata including audio tracklists and descriptions */}
             <div className="pt-6 border-t border-border">
-              <ExtendedMetadata meta={manifestation.meta ?? {}} owner_count={manifestation.owner_count} />
+              <ExtendedMetadata
+                meta={manifestation.meta ?? {}}
+                owner_count={manifestation.owner_count}
+                manifestationId={manifestation.id}
+                canEdit={Boolean(
+                  userProfile &&
+                  (userProfile.is_admin ||
+                    userProfile.role === "admin" ||
+                    userProfile.role === "custodian" ||
+                    manifestation.user_owns)
+                )}
+              />
             </div>
 
             {tags.length > 0 && (

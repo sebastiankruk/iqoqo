@@ -2004,11 +2004,22 @@ def get_federation_instances() -> tuple[Response, int] | Response:
         if fp and fp != "Not configured":
             fingerprint_map[actor.instance_id] = fp
 
+    from urllib.parse import urlparse
+
     from app.core.federation_discovery import compute_effective_capabilities, compute_peering_direction
     from app.db.federation import FederationActivity, FederationFollower, FollowStatus
 
-    inbound_stmt = select(FederationActivity.actor_uri).where(FederationActivity.direction == "inbound")
+    inbound_stmt = select(func.distinct(FederationActivity.actor_uri)).where(FederationActivity.direction == "inbound")
     inbound_actor_uris = db.session.execute(inbound_stmt).scalars().all()
+    inbound_hosts = set()
+    for uri in inbound_actor_uris:
+        if uri:
+            try:
+                h = urlparse(uri).hostname
+                if h:
+                    inbound_hosts.add(h.lower())
+            except Exception:
+                continue
 
     followers_stmt = select(FederationFollower.remote_actor_id).where(FederationFollower.status == FollowStatus.ACCEPTED)
     accepted_remote_actor_ids = set(db.session.execute(followers_stmt).scalars().all())
@@ -2019,7 +2030,7 @@ def get_federation_instances() -> tuple[Response, int] | Response:
         item["key_fingerprint"] = fingerprint_map.get(inst.id)
 
         domain_lower = inst.domain.lower()
-        has_inbound_activity = any(domain_lower in uri.lower() for uri in inbound_actor_uris)
+        has_inbound_activity = domain_lower in inbound_hosts
         has_accepted_follower = any(a.id in accepted_remote_actor_ids for a in actors if a.instance_id == inst.id)
         has_inbound = has_inbound_activity or has_accepted_follower
 
@@ -2135,7 +2146,12 @@ def update_instance_trust(instance_id: int) -> tuple[Response, int] | Response:
     domain_lower = instance.domain.lower()
     inbound_stmt = select(FederationActivity.id).where(
         FederationActivity.direction == "inbound",
-        FederationActivity.actor_uri.like(f"%{domain_lower}%"),
+        or_(
+            FederationActivity.actor_uri.like(f"https://{domain_lower}/%"),
+            FederationActivity.actor_uri.like(f"http://{domain_lower}/%"),
+            FederationActivity.actor_uri == f"https://{domain_lower}",
+            FederationActivity.actor_uri == f"http://{domain_lower}",
+        ),
     )
     has_inbound_activity = db.session.execute(inbound_stmt).first() is not None
 

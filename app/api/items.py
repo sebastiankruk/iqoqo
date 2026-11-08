@@ -702,17 +702,39 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
     if validation_error is not None:
         return validation_error
 
-    if metadata:
-        if item.manifestation:
-            item.manifestation.update_meta(**metadata)
-        # Also update item.meta if needed, but usually extra fields are for manifestation
-        item.meta = {**item.meta, **metadata} if item.meta else metadata
+    _ITEM_ONLY_KEYS = {
+        "build_status",
+        "missing_pieces_count",
+        "instructions_included",
+        "box_condition",
+        "map_insert_present",
+    }
 
+    item_meta = dict(item.meta or {})
+    if payload.build_status is not None:
+        item_meta["build_status"] = payload.build_status
+    if payload.missing_pieces_count is not None:
+        item_meta["missing_pieces_count"] = payload.missing_pieces_count
+    if payload.instructions_included is not None:
+        item_meta["instructions_included"] = payload.instructions_included
+    if payload.box_condition is not None:
+        item_meta["box_condition"] = payload.box_condition
     if payload.map_insert_present is not None:
-        item_meta = dict(item.meta or {})
         item_meta["map_insert_present"] = payload.map_insert_present
-        item.meta = item_meta
-        flag_modified(item, "meta")
+
+    for k in _ITEM_ONLY_KEYS:
+        if k in metadata:
+            item_meta[k] = metadata[k]
+
+    # Only forward non-item-specific metadata to manifestation (FRBR F5 -> F3 boundary)
+    manifestation_meta = {k: v for k, v in metadata.items() if k not in _ITEM_ONLY_KEYS and k not in forbidden}
+    if manifestation_meta and item.manifestation:
+        item.manifestation.update_meta(**manifestation_meta)
+
+    # Persist all allowed metadata into item.meta as well
+    item_meta.update({k: v for k, v in metadata.items() if k not in forbidden})
+    item.meta = item_meta
+    flag_modified(item, "meta")
 
     sync_tags(item.id, user_id, payload.tags)
 
@@ -741,6 +763,10 @@ def _update_physical_item(item_id: int, user_id: uuid.UUID | None, user: User | 
                     "visibility": item.visibility,
                     "is_hidden": item.is_hidden,
                     "map_insert_present": (item.meta or {}).get("map_insert_present"),
+                    "build_status": (item.meta or {}).get("build_status"),
+                    "missing_pieces_count": (item.meta or {}).get("missing_pieces_count"),
+                    "instructions_included": (item.meta or {}).get("instructions_included"),
+                    "box_condition": (item.meta or {}).get("box_condition"),
                 },
                 "error": None,
             }

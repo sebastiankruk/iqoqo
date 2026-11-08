@@ -30,6 +30,7 @@ from sqlalchemy.orm import selectinload
 from app.api.core import api_bp
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.core.frbr_service import update_frbr_entity_type
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.models import EscalationRequest, Expression, Item, Manifestation, SocialFeedback, SocialNote, User, Work, db
 
@@ -443,6 +444,7 @@ def _validate_escalation_input(data: dict | None) -> tuple[dict | None, str | No
 
 @api_bp.route("/escalations/<level>/<int:target_id>", methods=["POST"])
 @require_auth
+@limiter.limit("10 per minute")
 @require_permission(PermissionName.ESCALATE_REQUEST)
 def create_escalation_request(level: str, target_id: int) -> Response | tuple[Response, int]:
     """Submit a custodian escalation request targeting a FRBR entity field."""
@@ -509,12 +511,32 @@ class NewMediaTypeEscalationPayload(BaseModel):
             return None
         return _sanitize_text(str(v))
 
+    @field_validator("suggested_properties", mode="before")
+    @classmethod
+    def validate_suggested_properties(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError("suggested_properties must be a list of strings")
+        if len(v) > 20:
+            raise ValueError("suggested_properties cannot contain more than 20 items")
+        cleaned_list: list[str] = []
+        for item in v:
+            if not isinstance(item, str):
+                continue
+            cleaned = _sanitize_text(item).strip()
+            if cleaned:
+                if len(cleaned) > 100:
+                    raise ValueError("Each suggested property must be at most 100 characters")
+                cleaned_list.append(cleaned)
+        return cleaned_list
+
     @field_validator("parent_frbr_class")
     @classmethod
     def validate_frbr_class(cls, v: str) -> str:
         cleaned = v.strip()
-        if cleaned not in {"F1_Work", "F16_Container_Work"}:
-            raise ValueError("parent_frbr_class must be 'F1_Work' or 'F16_Container_Work'")
+        if cleaned not in {"F1_Work", "F16_Container_Work", "F3_Manifestation_Product_Type"}:
+            raise ValueError("parent_frbr_class must be 'F1_Work', 'F16_Container_Work', or 'F3_Manifestation_Product_Type'")
         return cleaned
 
 
@@ -545,6 +567,7 @@ def _notify_custodians_of_new_media_type(escalation: EscalationRequest, payload:
 @api_bp.route("/social/escalations", methods=["POST"])
 @api_bp.route("/escalations/new-type", methods=["POST"])
 @require_auth
+@limiter.limit("10 per minute")
 @require_permission(PermissionName.ESCALATE_REQUEST)
 def create_general_escalation_request() -> Response | tuple[Response, int]:
     """Submit a general escalation request not bound to an existing FRBR entity (e.g. new_media_type)."""
@@ -602,6 +625,15 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"error": "Unauthorized", "code": 401}), 401
 
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+    except (ValueError, TypeError):
+        limit = 50
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
+
     stmt = (
         select(EscalationRequest)
         .options(
@@ -612,12 +644,16 @@ def list_my_escalation_requests() -> Response | tuple[Response, int]:
         )
         .where(EscalationRequest.user_id == user_id)
         .order_by(EscalationRequest.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     requests = db.session.scalars(stmt).all()
     return jsonify(
         {
             "success": True,
             "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+            "limit": limit,
+            "offset": offset,
         }
     )
 
@@ -644,6 +680,15 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
         if s not in allowed_statuses:
             return jsonify({"error": f"Invalid status '{s}'. Must be one of {sorted(allowed_statuses)}", "code": 400}), 400
 
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+    except (ValueError, TypeError):
+        limit = 50
+    try:
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except (ValueError, TypeError):
+        offset = 0
+
     stmt = (
         select(EscalationRequest)
         .options(
@@ -656,12 +701,16 @@ def list_escalation_queue() -> Response | tuple[Response, int]:
         )
         .where(EscalationRequest.status.in_(statuses))
         .order_by(EscalationRequest.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     requests = db.session.scalars(stmt).all()
     return jsonify(
         {
             "success": True,
             "data": [{**req.to_dict(), "target_entity": _resolve_target_entity(req)} for req in requests],
+            "limit": limit,
+            "offset": offset,
         }
     )
 

@@ -175,4 +175,51 @@ describe("MapViewerModal", () => {
     expect(screen.getByText("Middle-earth West")).toBeInTheDocument();
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
   });
+
+  it("handles keyboard shortcuts for zoom, rotation, reset, and navigation", () => {
+    render(<MapViewerModal isOpen={true} onClose={vi.fn()} maps={sampleMaps} initialIndex={0} />);
+
+    // Press '+' to zoom in
+    fireEvent.keyDown(window, { key: "+" });
+    expect(screen.getByText("150%")).toBeInTheDocument();
+
+    // Press 'r' to rotate
+    fireEvent.keyDown(window, { key: "r" });
+    const transformDiv = screen.getByTestId("map-transform");
+    expect(transformDiv).toHaveStyle({
+      transform: "translate3d(0px, 0px, 0px) scale(1.5) rotate(90deg)",
+    });
+
+    // Press '0' to reset
+    fireEvent.keyDown(window, { key: "0" });
+    expect(screen.getByText("100%")).toBeInTheDocument();
+
+    // Press 'ArrowRight' to switch to next map
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByText("Mordor Regional Detail")).toBeInTheDocument();
+
+    // Press 'ArrowLeft' to switch back
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(screen.getByText("Middle-earth West")).toBeInTheDocument();
+  });
+
+  it("rejects unsafe URLs such as javascript: or data: URIs", () => {
+    const dangerousMaps: MapAttachmentItem[] = [
+      {
+        id: "bad-map",
+        title: "Malicious Map",
+        type: "world_map",
+        image_url: "javascript:alert(1)",
+      },
+    ];
+
+    render(<MapViewerModal isOpen={true} onClose={vi.fn()} maps={dangerousMaps} />);
+
+    expect(screen.getByText("Malicious Map")).toBeInTheDocument();
+    // Image should not be rendered with javascript: URL
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("No map image available for this supplement.")).toBeInTheDocument();
+    // Open in new tab link should not be rendered
+    expect(screen.queryByLabelText("Open Full Image in New Tab")).not.toBeInTheDocument();
+  });
 });

@@ -191,6 +191,66 @@ class TestMapAttachmentsAPI:
         assert data["type"] == "cloth_map"
         assert data["image_url"] == "/static/gallery/uploaded_map.jpg"
 
+    def test_add_map_attachment_rejects_dangerous_urls(self, client, normal_user_headers, sample_book_hierarchy):
+        m_id = sample_book_hierarchy["manifestation_id"]
+        for bad_url in [
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "file:///etc/passwd",
+            "//evil.com/map.jpg",
+            "/invalid/internal/path.jpg",
+        ]:
+            res = client.post(
+                f"/api/manifestations/{m_id}/map-attachments",
+                json={"title": "Bad Map", "type": "world_map", "image_url": bad_url},
+                headers=normal_user_headers,
+            )
+            assert res.status_code == 400
+            assert "error" in res.get_json()
+
+    def test_add_map_attachment_audit_log_and_bounds(self, client, normal_user_headers, sample_book_hierarchy, app):
+        from app.db.models import EntityAuditLog, db
+
+        m_id = sample_book_hierarchy["manifestation_id"]
+
+        # Rejects oversized title
+        res = client.post(
+            f"/api/manifestations/{m_id}/map-attachments",
+            json={"title": "A" * 201, "type": "world_map"},
+            headers=normal_user_headers,
+        )
+        assert res.status_code == 400
+
+        # Successfully creates valid attachment and records audit log
+        res = client.post(
+            f"/api/manifestations/{m_id}/map-attachments",
+            json={
+                "title": "Valid Audit Map",
+                "type": "world_map",
+                "scale": "1:50,000",
+                "projection": "Mercator",
+                "image_url": "https://example.com/valid.jpg",
+            },
+            headers=normal_user_headers,
+        )
+        assert res.status_code == 201
+        att_id = res.get_json()["data"]["id"]
+
+        with app.app_context():
+            logs = db.session.query(EntityAuditLog).filter_by(entity_type="manifestation", entity_id=m_id).all()
+            assert any(log.change_type == "map_attachment_added" for log in logs)
+
+        # Deleting also records audit log
+        del_res = client.delete(
+            f"/api/manifestations/{m_id}/map-attachments/{att_id}",
+            headers=normal_user_headers,
+        )
+        assert del_res.status_code == 200
+
+        with app.app_context():
+            logs = db.session.query(EntityAuditLog).filter_by(entity_type="manifestation", entity_id=m_id).all()
+            assert any(log.change_type == "map_attachment_deleted" for log in logs)
+
 
 class TestItemMapInsertPresentAPI:
     """Test tracking map insert completeness on physical items."""

@@ -1069,6 +1069,16 @@ else
     check "UPC Databases" info "optional (not configured)"
 fi
 
+# Rebrickable (LEGO)
+reb_key=$(load_env "REBRICKABLE_API_KEY")
+if [[ -n "${db_settings_map['REBRICKABLE_API_KEY']:-}" ]]; then
+    check "Rebrickable API" pass "configured (DB: InstanceSettings)"
+elif [[ -n "$reb_key" ]]; then
+    check "Rebrickable API" pass "configured (.env)"
+else
+    check "Rebrickable API" info "optional (not configured)"
+fi
+
 # ─── Linked Open Data & Gazetteer ────────────────────────────────
 header "Linked Open Data & Gazetteer"
 

@@ -198,15 +198,15 @@ def verify_and_repair_ai_covers(
     mode_label = "APPLY" if apply_changes else "DRY RUN"
     print(f"Scanning {inspected} manifestations (Mode: {mode_label})...")
 
-    offset = 0
+    last_id = 0
     while True:
         stmt = (
             select(Manifestation)
             .options(
                 selectinload(Manifestation.items),
             )
+            .where(Manifestation.id > last_id)
             .order_by(Manifestation.id)
-            .offset(offset)
             .limit(batch_size)
         )
         batch: Sequence[Manifestation] = db.session.execute(stmt).scalars().all()
@@ -253,7 +253,7 @@ def verify_and_repair_ai_covers(
         if apply_changes and batch_repaired > 0:
             db.session.commit()
 
-        offset += len(batch)
+        last_id = batch[-1].id
         if len(batch) < batch_size:
             break
 

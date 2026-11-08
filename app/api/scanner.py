@@ -128,6 +128,9 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
     """Waterfall helper to ingest based on format hint. Drastically reduces cyclomatic complexity."""
     from app.core.taxonomy import CATEGORY_INGEST_METHOD
 
+    if len(barcode) == 13 and barcode.startswith("570201"):
+        category_hint = "lego"
+
     ingest_map = {cat: getattr(IngestService, method) for cat, method in CATEGORY_INGEST_METHOD.items()}
 
     current_app.logger.info("Ingesting barcode=%s format_hint=%s category_hint=%s", barcode, format_hint, category_hint)
@@ -199,7 +202,12 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
     from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-    category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
+    cleaned_query = query.strip()
+    is_lego_gs1 = len(cleaned_query) == 13 and cleaned_query.startswith("570201")
+    if is_lego_gs1:
+        category_hint = "lego"
+    else:
+        category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
     # Filter by format if hint is provided to avoid cross-media collisions
     if category_hint:
@@ -307,9 +315,10 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
     # Leverage the Strategy Pattern for format-specific metadata lookups
     # (e.g., ISBN for books, UPC for music/movies, BGG for games, Rebrickable/Allegro for LEGO)
-    effective_category = category_hint
-    if not effective_category and len(barcode) == 13 and barcode.startswith("570201"):
+    if is_lego_gs1 or (len(barcode) == 13 and barcode.startswith("570201")):
         effective_category = "lego"
+    else:
+        effective_category = category_hint
     strategy = LookupStrategyFactory.get_strategy(effective_category)
     meta, provider = strategy.lookup(barcode, query)
 
@@ -425,7 +434,12 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
             meta["cover_url"] = cover_val
 
     # 5. Format
-    if "format" not in meta or not meta["format"]:
+    if meta.get("category") == "lego" or "set_number" in meta or "set_num" in meta:
+        from app.db.core import MediaFormat
+
+        if not meta.get("format") or meta.get("format") in ("BOOK", "book", "audio", "music", "movie"):
+            meta["format"] = MediaFormat.STANDARD_SET
+    elif "format" not in meta or not meta["format"]:
         if format_hint:
             from app.core.taxonomy import FORMAT_TO_CATEGORY
             from app.db.core import MediaFormat

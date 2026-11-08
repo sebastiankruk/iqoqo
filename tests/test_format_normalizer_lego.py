@@ -87,6 +87,9 @@ class TestLegoFormatMappings:
 
         assert normalize_format("totally_unknown_custom_brick", content_type=MediaCategory.LEGO) == MediaFormat.UNKNOWN_LEGO
         assert normalize_format(None, content_type=MediaCategory.LEGO) == MediaFormat.UNKNOWN_LEGO
+        assert normalize_format("mystery_box", content_type=MediaCategory.BOARD_GAME) == MediaFormat.UNKNOWN_BOARD_GAME
+        assert normalize_format("mystery_pieces", content_type=MediaCategory.PUZZLE) == MediaFormat.UNKNOWN_PUZZLE
+        assert normalize_format("mystery_audio", content_type=MediaCategory.AUDIOBOOK) == MediaFormat.UNKNOWN_AUDIOBOOK
 
 
 class TestLegoExpandFormatFilter:

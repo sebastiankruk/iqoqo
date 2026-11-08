@@ -138,4 +138,69 @@ def test_scanner_lookup_lego_barcode_auto_saves_as_lego_category(client, normal_
         saved = db.session.get(Manifestation, data["manifestation_id"])
         assert saved is not None
         assert saved.format == "standard_set"
+        assert saved.format_type == "standard_set"
         assert saved.expression.content_type == MediaCategory.LEGO
+        assert saved.ean == barcode
+
+
+def test_extract_set_number_from_title_ignores_release_year() -> None:
+    """Verify _extract_set_number_from_title prefers set number over 4-digit release year."""
+    from app.strategies.lego import _extract_set_number_from_title
+
+    assert _extract_set_number_from_title("LEGO 2024 Speed Champions 76924") == "76924"
+    assert _extract_set_number_from_title("LEGO Icons 10318 Concorde (2023)") == "10318"
+    assert _extract_set_number_from_title("LEGO City 60300") == "60300"
+    assert _extract_set_number_from_title("LEGO Vintage 1985") == "1985"
+
+
+def test_scanner_lookup_lego_gs1_routes_to_lego_even_with_book_hint(client, normal_user_headers) -> None:
+    """Verify 570201 GS1 prefix routes to LEGO even when format_hint is 'book'."""
+    barcode = "5702018068229"
+    allegro_mock = {
+        "title": "LEGO Speed Champions 77256 Wehikuł czasu",
+        "barcode": barcode,
+        "cover_url": "https://a.allegroimg.com/s1024/lego-77256.jpg",
+        "publisher": "LEGO",
+        "set_number": "77256",
+        "piece_count": 290,
+        "theme": "Speed Champions",
+        "data_source": "allegro",
+    }
+
+    with (
+        patch("app.strategies.lego.search_rebrickable_sets", return_value=[]),
+        patch("app.strategies.lego.fetch_allegro_metadata", return_value=allegro_mock),
+        patch("app.strategies.lego.fetch_rebrickable_set", return_value=None),
+        patch("app.core.ingest.start_cover_processing"),
+    ):
+        resp = client.get(f"/api/lookup/{barcode}?format=book", headers=normal_user_headers)
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["format"] == "standard_set"
+        assert data["set_number"] == "77256"
+
+
+def test_lego_ingest_deduplication(app) -> None:
+    """Verify IngestService.ingest_from_meta deduplicates existing LEGO set."""
+    from app.core.ingest import IngestService
+
+    with app.app_context():
+        meta = {
+            "title": "LEGO Technic Bugatti 42083",
+            "format": "standard_set",
+            "category": "lego",
+            "barcode": "5702016116977",
+            "set_number": "42083",
+            "theme": "Technic",
+            "cover_url": "https://img.rebrickable.com/42083.jpg",
+        }
+
+        with patch("app.core.ingest.start_cover_processing"):
+            m1 = IngestService.ingest_from_meta(meta)
+            m2 = IngestService.ingest_from_meta(meta)
+
+            assert m1.id == m2.id
+            assert m1.format_type == "standard_set"
+            assert m1.barcode == "5702016116977"
+            assert m1.expression.content_type == MediaCategory.LEGO
+            assert m1.expression.work.meta.get("theme") == "Technic"

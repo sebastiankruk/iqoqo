@@ -44,6 +44,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Federation Peering Directionality & Bilateral Capabilities Matrix (C102)**:
   - Enhanced `frontend/components/admin/federation-instances.tsx` and `/help` with an interactive Peering Directionality & Effective Capabilities Matrix clarifying unilateral outbound trust vs. bilateral (reciprocal) peering for metadata sync, custodian review queue, friend follows, and cross-instance loans.
 
+- **Security Hardening, FRBR Boundaries & Release Review Remediation (C108c)**:
+  - Sanitized map attachment URLs against SSRF/XSS, generated collision-proof filenames with attachment UUIDs, added audit logging (`EntityAuditLog`), and enforced length/count bounds (`C-01`).
+  - Guarded Rebrickable set lookups against path traversal via strict regex validation, URL-encoding, bounded theme cache (512 items), and eliminated search N+1 HTTP calls (`C-02`).
+  - Hardened LEGO FRBR ingestion with deduplication by barcode/set number, populated first-class Manifestation columns, made set number extraction year-safe (`1990..2035` filter), and prioritized LEGO GS1 barcodes (`570201xxxxxxx`) over default book category (`C-03`).
+  - Fixed LEGO Item-level update FRBR boundary violation (F5 copy-specific attributes like `build_status`, `missing_pieces_count` stored strictly in `item.meta`, stripped before manifestation updates) (`C-04`).
+  - Replaced offset pagination with keyset pagination in AI cover repair script (`scripts/verify_ai_cover_bindings.py`) and guarded interactive TTY execution in `Makefile` (`M-01`).
+  - Added unknown format placeholders for LEGO, Board Game, Puzzle, and Audiobook in `FormatNormalizer` (`M-02`).
+  - Added suggested properties bounds validation, `F3_Manifestation_Product_Type` parent class support, rate limiting (10/min), and SQL pagination to escalation endpoints (`M-03`).
+  - Anchored federation host matching to exact parsed hostnames and fixed untrusted peer reciprocity (`M-04`).
+  - Added Rebrickable API key status tracking in `GET /api/system/status` and `scripts/iqoqo-status.sh` (`M-05`).
+  - Synchronized OpenAPI 3.1 specification components with LEGO/board game/puzzle expression content types, map attachments, and escalation schemas (`M-06`).
+  - Added `has_map` facet filtering in data manager, map attachment deletion UI, and map viewer keyboard shortcuts (`M-07`).
+
 ### Changed
 
 - **In-Product Help Center Documentation (`frontend/lib/help-articles.ts`)**:

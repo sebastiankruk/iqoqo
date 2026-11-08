@@ -106,12 +106,9 @@ function EditItemForm({ item, onOpenChange, onSuccess }: EditItemFormProps) {
       };
 
       if (isLego) {
-        payload.meta = {
-          ...(item.meta || {}),
-          build_status: buildStatus,
-          missing_pieces_count: parseInt(missingPiecesCount, 10) || 0,
-          instructions_included: instructionsIncluded,
-        };
+        payload.build_status = buildStatus;
+        payload.missing_pieces_count = parseInt(missingPiecesCount, 10) || 0;
+        payload.instructions_included = instructionsIncluded;
       }
 
       if (hasMapAttachment) {

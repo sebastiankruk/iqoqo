@@ -166,11 +166,13 @@ def get_system_status():
     allegro_status = get_allegro_token_status()
     igdb_status = get_igdb_token_status(probe_remote=probe_remote)
 
+    configured_keys = set(InstanceSettings.get_configured_keys())
+
     # BGG status
-    bgg_db = InstanceSettings.get_value("BGG_API_TOKEN")
-    bgg_env = os.getenv("BGG_API_TOKEN")
+    bgg_db = "BGG_API_TOKEN" in configured_keys
+    bgg_env = bool(os.getenv("BGG_API_TOKEN"))
     bgg_source = "db" if bgg_db else ("env" if bgg_env else "missing")
-    bgg_configured = bool(bgg_db or bgg_env)
+    bgg_configured = bgg_db or bgg_env
     bgg_status = {
         "configured": bgg_configured,
         "source": bgg_source,
@@ -181,12 +183,12 @@ def get_system_status():
     discogs_status = get_discogs_status()
 
     # TMDB status
-    tmdb_key_db = InstanceSettings.get_value("TMDB_API_KEY")
-    tmdb_token_db = InstanceSettings.get_value("TMDB_API_READ_ACCESS_TOKEN")
-    tmdb_key_env = os.getenv("TMDB_API_KEY")
-    tmdb_token_env = os.getenv("TMDB_API_READ_ACCESS_TOKEN")
+    tmdb_key_db = "TMDB_API_KEY" in configured_keys
+    tmdb_token_db = "TMDB_API_READ_ACCESS_TOKEN" in configured_keys
+    tmdb_key_env = bool(os.getenv("TMDB_API_KEY"))
+    tmdb_token_env = bool(os.getenv("TMDB_API_READ_ACCESS_TOKEN"))
     tmdb_source = "db" if (tmdb_key_db or tmdb_token_db) else ("env" if (tmdb_key_env or tmdb_token_env) else "missing")
-    tmdb_configured = bool(tmdb_key_db or tmdb_token_db or tmdb_key_env or tmdb_token_env)
+    tmdb_configured = tmdb_key_db or tmdb_token_db or tmdb_key_env or tmdb_token_env
     tmdb_auth_mode = "bearer" if (tmdb_token_db or tmdb_token_env) else ("api_key" if (tmdb_key_db or tmdb_key_env) else "none")
     tmdb_status = {
         "configured": tmdb_configured,
@@ -196,10 +198,10 @@ def get_system_status():
     }
 
     # Google Books status
-    gb_db = InstanceSettings.get_value("GOOGLE_BOOKS_API_KEY")
-    gb_env = os.getenv("GOOGLE_BOOKS_API_KEY")
+    gb_db = "GOOGLE_BOOKS_API_KEY" in configured_keys
+    gb_env = bool(os.getenv("GOOGLE_BOOKS_API_KEY"))
     gb_source = "db" if gb_db else ("env" if gb_env else "missing")
-    gb_configured = bool(gb_db or gb_env)
+    gb_configured = gb_db or gb_env
     google_books_status = {
         "configured": gb_configured,
         "source": gb_source,
@@ -207,18 +209,29 @@ def get_system_status():
     }
 
     # UPC status
-    upc_org_db = InstanceSettings.get_value("UPC_DATABASE_ORG_KEY")
-    upc_item_db = InstanceSettings.get_value("UPC_ITEM_DB_KEY")
-    upc_org_env = os.getenv("UPC_DATABASE_ORG_KEY")
-    upc_item_env = os.getenv("UPC_ITEM_DB_KEY")
+    upc_org_db = "UPC_DATABASE_ORG_KEY" in configured_keys
+    upc_item_db = "UPC_ITEM_DB_KEY" in configured_keys
+    upc_org_env = bool(os.getenv("UPC_DATABASE_ORG_KEY"))
+    upc_item_env = bool(os.getenv("UPC_ITEM_DB_KEY"))
     upc_source = "db" if (upc_org_db or upc_item_db) else ("env" if (upc_org_env or upc_item_env) else "missing")
-    upc_configured = bool(upc_org_db or upc_item_db or upc_org_env or upc_item_env)
+    upc_configured = upc_org_db or upc_item_db or upc_org_env or upc_item_env
     upc_status = {
         "configured": upc_configured,
         "source": upc_source,
-        "upcdatabase_org": bool(upc_org_db or upc_org_env),
-        "upcitemdb": bool(upc_item_db or upc_item_env),
+        "upcdatabase_org": upc_org_db or upc_org_env,
+        "upcitemdb": upc_item_db or upc_item_env,
         "status": "CONFIGURED_VALID" if upc_configured else "DISABLED",
+    }
+
+    # Rebrickable status
+    reb_db = "REBRICKABLE_API_KEY" in configured_keys
+    reb_env = bool(os.getenv("REBRICKABLE_API_KEY"))
+    reb_source = "db" if reb_db else ("env" if reb_env else "missing")
+    reb_configured = reb_db or reb_env
+    rebrickable_status = {
+        "configured": reb_configured,
+        "source": reb_source,
+        "status": "CONFIGURED_VALID" if reb_configured else "DISABLED",
     }
 
     payload = {
@@ -233,6 +246,7 @@ def get_system_status():
         "tmdb": tmdb_status,
         "google_books": google_books_status,
         "upc": upc_status,
+        "rebrickable": rebrickable_status,
     }
     return jsonify({"success": True, "data": payload, "error": None}), 200
 
@@ -294,6 +308,7 @@ def get_faceted_stats():
     missing_id = request.args.get("missing_id", "false").lower() == "true"
     lod_authority = request.args.get("lod_authority")
     lod_status = request.args.get("lod_status")
+    has_map = request.args.get("has_map", "false").lower() in ("true", "1")
 
     category_list = parse_csv_param(category_str)
     fmt_list_raw = parse_csv_param(fmt_str)
@@ -324,6 +339,7 @@ def get_faceted_stats():
         ownership=ownership_list,
         lod_authority=lod_authority,
         lod_status=lod_status,
+        has_map=has_map,
         scope=resolved_scope,
     )
     return jsonify({"success": True, "data": stats, "error": None})

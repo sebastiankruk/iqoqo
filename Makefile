@@ -957,25 +957,27 @@ repair-authors: ## Repair empty or corrupted FRBR author metadata across catalog
 fix-ai-covers: ## Audit and unbind mismatched AI cover bindings (usage: make fix-ai-covers [preview|prod] [env=preview|prod] [apply=1|dry_run=1])
 	@target_env="$(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(env),$(env),$(if $(ENV),$(ENV),$(if $(filter preview,$(MODE)),preview,$(if $(filter prod,$(MODE)),prod,))))))"; \
 	fix_args="$(if $(filter 1,$(apply)$(APPLY)),--apply,--dry-run) $(args)"; \
+	tty_flag="$$([ -t 0 ] && echo "" || echo "-T")"; \
+	env_flags="-e ALLOW_PROD_REPAIR=$${ALLOW_PROD_REPAIR:-0}"; \
 	if [ "$$target_env" = "preview" ]; then \
 		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Auditing/repairing AI covers in PREVIEW Docker stack (iqoqo-preview)..."; \
 		docker compose -p iqoqo-preview cp scripts/verify_ai_cover_bindings.py web:/usr/src/app/scripts/ 2>/dev/null || true; \
-		docker compose -p iqoqo-preview exec -T web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+		docker compose -p iqoqo-preview exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
 	elif [ "$$target_env" = "prod" ]; then \
 		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Auditing/repairing AI covers in PRODUCTION Docker stack (iqoqo)..."; \
-		docker compose -p iqoqo exec -T web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+		docker compose -p iqoqo exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
 	elif [ -n "$$(docker compose -p iqoqo-preview ps -q web 2>/dev/null)" ]; then \
 		docker compose -p iqoqo-preview cp scripts/verify_ai_cover_bindings.py web:/usr/src/app/scripts/ 2>/dev/null || true; \
 		if docker compose -p iqoqo-preview exec -T web test -f scripts/verify_ai_cover_bindings.py 2>/dev/null; then \
 			[ "$$IQOQO_AI_MODE" = "1" ] || echo "Detected running PREVIEW Docker stack (iqoqo-preview); running..."; \
-			docker compose -p iqoqo-preview exec -T web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
+			docker compose -p iqoqo-preview exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py $$fix_args; \
 		elif [ -f .venv/bin/python ]; then \
 			[ "$$IQOQO_AI_MODE" = "1" ] || echo "Falling back to local Python venv..."; \
 			.venv/bin/python scripts/verify_ai_cover_bindings.py $$fix_args; \
 		fi; \
 	elif [ -n "$$(docker compose -p iqoqo ps -q web 2>/dev/null)" ]; then \
 		[ "$$IQOQO_AI_MODE" = "1" ] || echo "Detected running PRODUCTION Docker stack (iqoqo); running dry-run..."; \
-		docker compose -p iqoqo exec -T web python3 scripts/verify_ai_cover_bindings.py --dry-run $(args); \
+		docker compose -p iqoqo exec $$tty_flag $$env_flags web python3 scripts/verify_ai_cover_bindings.py --dry-run $(args); \
 	elif [ -f .venv/bin/python ]; then \
 		[ "$$IQOQO_AI_MODE" = "1" ] || echo "No running Docker container detected; falling back to local Python venv..."; \
 		.venv/bin/python scripts/verify_ai_cover_bindings.py $$fix_args; \

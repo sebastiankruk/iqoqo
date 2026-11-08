@@ -220,3 +220,46 @@ def test_rebrickable_lookup_candidates(app):
                 assert candidates[0]["set_number"] == "75192-1"
                 assert candidates[0]["piece_count"] == 7541
                 assert candidates[1]["set_number"] == "75257-1"
+
+
+def test_rebrickable_rejects_path_traversal_and_invalid_set_syntax(app):
+    """Verify fetch_rebrickable_set rejects path traversal attempts without making HTTP requests."""
+    from app.utils.rebrickable import fetch_rebrickable_set
+
+    with app.app_context():
+        with patch("app.utils.rebrickable.get_rebrickable_api_key", return_value="rb_test_key"):
+            with patch("app.utils.rebrickable.safe_get") as mock_get:
+                assert fetch_rebrickable_set("../../users/profile") is None
+                assert fetch_rebrickable_set("10318/../../evil") is None
+                assert fetch_rebrickable_set("not-a-number") is None
+                # Must not have executed outbound HTTP call for invalid set numbers
+                mock_get.assert_not_called()
+
+
+def test_search_rebrickable_sets_skips_n_plus_one_minifig_calls(app):
+    """Verify search_rebrickable_sets does NOT trigger per-candidate _fetch_minifig_count calls."""
+    from app.utils.rebrickable import search_rebrickable_sets
+
+    mock_search_results = {
+        "results": [
+            {
+                "set_num": f"1000{i}-1",
+                "name": f"Set {i}",
+                "year": 2020 + i,
+                "theme_id": 1,
+                "num_parts": 100 * i,
+            }
+            for i in range(5)
+        ]
+    }
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = mock_search_results
+
+    with app.app_context():
+        with patch("app.utils.rebrickable.get_rebrickable_api_key", return_value="rb_test_key"):
+            with patch("app.utils.rebrickable.safe_get", return_value=mock_resp):
+                with patch("app.utils.rebrickable._fetch_minifig_count") as mock_minifigs:
+                    candidates = search_rebrickable_sets("Test Sets", max_results=5)
+                    assert len(candidates) == 5
+                    # Per-candidate minifig queries must be skipped
+                    mock_minifigs.assert_not_called()

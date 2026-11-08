@@ -33,6 +33,34 @@ from app.utils.upc import resolve_physical_media
 logger = logging.getLogger(__name__)
 
 
+def _extract_set_number_from_title(title: str) -> str | None:
+    """Extract a 4-7 digit LEGO set number from a title string.
+
+    Avoids capturing 4-digit calendar years (1990..2035) when other
+    candidates exist or when the 4-digit number is plausibly a release year.
+    Prefers 5-6 digit tokens over 4-digit tokens.
+    """
+    if not title:
+        return None
+    tokens = re.findall(r"\b(\d{4,7})\b", title)
+    if not tokens:
+        return None
+    non_years: list[str] = []
+    possible_years: list[str] = []
+    for tok in tokens:
+        if len(tok) == 4 and 1990 <= int(tok) <= 2035:
+            possible_years.append(tok)
+        else:
+            non_years.append(tok)
+
+    if non_years:
+        five_to_six = [t for t in non_years if 5 <= len(t) <= 6]
+        if five_to_six:
+            return five_to_six[0]
+        return non_years[0]
+    return possible_years[0]
+
+
 class LegoLookupStrategy(LookupStrategy):
     """LEGO sets lookup via Rebrickable API, Allegro retail fallback, and EAN/UPC barcode resolution."""
 
@@ -73,9 +101,9 @@ class LegoLookupStrategy(LookupStrategy):
                     # Try to extract set number from parameters or title
                     set_num = meta.get("set_number")
                     if not set_num and meta.get("title"):
-                        match = re.search(r"\b(\d{4,6})\b", meta["title"])
-                        if match:
-                            set_num = match.group(1)
+                        extracted = _extract_set_number_from_title(meta["title"])
+                        if extracted:
+                            set_num = extracted
                             meta["set_number"] = set_num
 
                     # Enrich with Rebrickable if set number found and Rebrickable is configured
@@ -100,10 +128,9 @@ class LegoLookupStrategy(LookupStrategy):
                 upc_meta = resolve_physical_media(cleaned_barcode)
                 if upc_meta and upc_meta.get("title"):
                     title = upc_meta["title"]
-                    # Extract 4-6 digit set number from product title if present (e.g. 'LEGO 10318 Concorde')
-                    match = re.search(r"\b(\d{4,6})\b", title)
-                    if match:
-                        set_num = match.group(1)
+                    # Extract 4-7 digit set number from product title if present (e.g. 'LEGO 10318 Concorde')
+                    set_num = _extract_set_number_from_title(title)
+                    if set_num:
                         meta = fetch_rebrickable_set(set_num, barcode=cleaned_barcode)
                         if meta:
                             provider = "rebrickable"

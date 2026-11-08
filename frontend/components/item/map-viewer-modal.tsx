@@ -15,7 +15,7 @@
 //
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import {
   ZoomIn,
@@ -53,6 +53,30 @@ export interface MapViewerModalProps {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.5;
+
+function isSafeDisplayUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (
+    trimmed === "/api" ||
+    trimmed.toLowerCase().startsWith("javascript:") ||
+    trimmed.toLowerCase().startsWith("data:") ||
+    trimmed.toLowerCase().startsWith("file:") ||
+    trimmed.toLowerCase().startsWith("vbscript:") ||
+    trimmed.toLowerCase().startsWith("blob:")
+  ) {
+    return false;
+  }
+  if (trimmed.startsWith("/")) {
+    return !trimmed.startsWith("//") && !trimmed.startsWith("/\\");
+  }
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Interactive zoom/pan/rotate modal dialog for exploring high-resolution map attachments.
@@ -146,12 +170,58 @@ export function MapViewerModal({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        setZoom(prev => Math.min(MAX_ZOOM, prev + ZOOM_STEP));
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setZoom(prev => {
+          const next = Math.max(MIN_ZOOM, prev - ZOOM_STEP);
+          if (next === 1) setPan({ x: 0, y: 0 });
+          return next;
+        });
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        setRotation(prev => (prev + 90) % 360);
+      } else if (e.key === "0") {
+        e.preventDefault();
+        resetView();
+      } else if (e.key === "ArrowLeft") {
+        if (maps.length > 1) {
+          e.preventDefault();
+          setCurrentIndex(prev => (prev > 0 ? prev - 1 : maps.length - 1));
+          resetView();
+        }
+      } else if (e.key === "ArrowRight") {
+        if (maps.length > 1) {
+          e.preventDefault();
+          setCurrentIndex(prev => (prev < maps.length - 1 ? prev + 1 : 0));
+          resetView();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, maps.length, resetView]);
+
   const currentMap = maps[currentIndex] || maps[0];
 
   if (!currentMap) return null;
 
   const rawUrl = currentMap.image_url;
-  const imageUrl = rawUrl ? resolveApiUrl(rawUrl) : "";
+  const isSafe = isSafeDisplayUrl(rawUrl);
+  const resolved = isSafe && rawUrl ? resolveApiUrl(rawUrl) : "";
+  const imageUrl = isSafe && resolved && resolved !== "/api" ? resolved : "";
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>

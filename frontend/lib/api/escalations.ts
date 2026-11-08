@@ -69,7 +69,7 @@ export async function createEscalation(
 export async function createNewMediaTypeEscalation(data: {
   proposed_category: string;
   proposed_format: string;
-  parent_frbr_class: "F1_Work" | "F16_Container_Work";
+  parent_frbr_class: "F1_Work" | "F16_Container_Work" | "F3_Manifestation_Product_Type";
   sample_identifier_or_url?: string;
   suggested_properties?: string[];
   rationale: string;

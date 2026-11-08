@@ -269,3 +269,84 @@ def test_custodian_resolves_new_media_type(client, new_media_type_setup):
     ).all()
     assert len(member_notifs) >= 1
     assert f"#{esc_id} was accepted" in member_notifs[0].payload_json.get("message", "")
+
+
+def test_new_media_type_allows_f3_manifestation_product_type(client, new_media_type_setup):
+    """Verify F3_Manifestation_Product_Type is an allowed parent_frbr_class."""
+    member_headers = new_media_type_setup["member_headers"]
+    resp = client.post(
+        "/api/escalations",
+        json={
+            "request_type": "new_media_type",
+            "proposed_category": "video",
+            "proposed_format": "Betamax",
+            "parent_frbr_class": "F3_Manifestation_Product_Type",
+            "rationale": "Legacy magnetic tape video format",
+        },
+        headers=member_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json["success"] is True
+
+
+def test_new_media_type_suggested_properties_bounds(client, new_media_type_setup):
+    """Verify bounds checking on suggested_properties (max 20 items, max 100 chars)."""
+    member_headers = new_media_type_setup["member_headers"]
+
+    # Over 20 items
+    resp_too_many = client.post(
+        "/api/escalations",
+        json={
+            "request_type": "new_media_type",
+            "proposed_category": "audio",
+            "proposed_format": "ReelToReel",
+            "rationale": "Vintage audio tapes",
+            "suggested_properties": [f"prop_{i}" for i in range(21)],
+        },
+        headers=member_headers,
+    )
+    assert resp_too_many.status_code == 400
+
+    # Item with > 100 chars
+    resp_too_long = client.post(
+        "/api/escalations",
+        json={
+            "request_type": "new_media_type",
+            "proposed_category": "audio",
+            "proposed_format": "ReelToReel",
+            "rationale": "Vintage audio tapes",
+            "suggested_properties": ["x" * 105],
+        },
+        headers=member_headers,
+    )
+    assert resp_too_long.status_code == 400
+
+    # Valid properties
+    resp_valid = client.post(
+        "/api/escalations",
+        json={
+            "request_type": "new_media_type",
+            "proposed_category": "audio",
+            "proposed_format": "ReelToReel",
+            "rationale": "Vintage audio tapes",
+            "suggested_properties": ["tape_width", "ips_speed", "track_count"],
+        },
+        headers=member_headers,
+    )
+    assert resp_valid.status_code == 201
+
+
+def test_escalations_pagination(client, new_media_type_setup):
+    """Verify limit and offset query parameters in escalations mine and queue endpoints."""
+    member_headers = new_media_type_setup["member_headers"]
+    custodian_headers = new_media_type_setup["custodian_headers"]
+
+    mine_resp = client.get("/api/escalations/mine?limit=5&offset=0", headers=member_headers)
+    assert mine_resp.status_code == 200
+    assert mine_resp.json["limit"] == 5
+    assert mine_resp.json["offset"] == 0
+
+    queue_resp = client.get("/api/escalations/queue?limit=10&offset=0", headers=custodian_headers)
+    assert queue_resp.status_code == 200
+    assert queue_resp.json["limit"] == 10
+    assert queue_resp.json["offset"] == 0

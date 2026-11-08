@@ -304,6 +304,12 @@ class CatalogFilterBuilder:
                 Manifestation.meta["format"].as_string().in_(["cartographic_map", "atlas"]),
                 Manifestation.format_type.in_(["cartographic_map", "atlas"]),
                 Manifestation.format.in_(["cartographic_map", "atlas"]),
+                db.and_(
+                    Manifestation.meta["map_attachments"].isnot(None),
+                    Manifestation.meta["map_attachments"].as_string() != "[]",
+                    Manifestation.meta["map_attachments"].as_string() != "null",
+                    Manifestation.meta["map_attachments"].as_string() != "",
+                ),
             )
             if self.root == self.ROOT_ITEM:
                 has_map_cond = db.or_(

@@ -189,9 +189,11 @@ class FormatNormalizer:
         mapping = {
             "movie": MediaFormat.UNKNOWN_VIDEO,
             "music": MediaFormat.UNKNOWN_AUDIO,
-            "audiobook": MediaFormat.UNKNOWN_AUDIO,
+            "audiobook": MediaFormat.UNKNOWN_AUDIOBOOK,
             "text": MediaFormat.UNKNOWN_TEXT,
             "lego": MediaFormat.UNKNOWN_LEGO,
+            "board_game": MediaFormat.UNKNOWN_BOARD_GAME,
+            "puzzle": MediaFormat.UNKNOWN_PUZZLE,
         }
         return mapping.get(category_lower)
 
@@ -317,4 +319,14 @@ def normalize_format_counts(
 
 
 # The set of unknown_* format strings (used in filter expansion)
-_UNKNOWN_FORMATS: frozenset[str] = frozenset({MediaFormat.UNKNOWN_VIDEO, MediaFormat.UNKNOWN_AUDIO, MediaFormat.UNKNOWN_TEXT})
+_UNKNOWN_FORMATS: frozenset[str] = frozenset(
+    {
+        MediaFormat.UNKNOWN_VIDEO,
+        MediaFormat.UNKNOWN_AUDIO,
+        MediaFormat.UNKNOWN_AUDIOBOOK,
+        MediaFormat.UNKNOWN_TEXT,
+        MediaFormat.UNKNOWN_LEGO,
+        MediaFormat.UNKNOWN_BOARD_GAME,
+        MediaFormat.UNKNOWN_PUZZLE,
+    }
+)
