@@ -5,13 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - TBD
+## [1.0.2] - 2026-11-10
 
 ### Added
 
-### Changed
-
-### Fixed
+- **i18n & SQLAlchemy 2.0 Hardening (C111)**:
+  - Standardized sentence-case Polish localization across all admin settings and user profile views.
+  - Eliminated legacy SQLAlchemy `session.query()` patterns in favor of canonical `select()` queries.
+- **Read-Only Federation Showcase Hub Instance Mode (C112)**:
+  - Added `FEDERATION_READ_ONLY_HEAD` profile and instance flag.
+  - Rendered explicit read-only badges and disabled local item additions while allowing federated catalog exploration.
+- **Ownership Reassignment Filtering & Single-Item Deep Link (C113)**:
+  - Implemented SQL filtering on `GET /api/admin/ownership/items` by query, format, and collection status.
+  - Added `"Reassign Owner"` deep-link button from `/item/[id]` to admin ownership manager.
+- **Interactive CLI Setup Wizard & Pre-Sync Verification (C114)**:
+  - Implemented `scripts/iqoqo_installer.py` standard-library CLI wizard with 256-bit secret generator, `0600` permission enforcement, and deployment profiles (`standard`, `preview`, `federation_head`).
+  - Added standalone `scripts/install.sh` bootstrap installer for curl-pipe installation.
+  - Added `--presync-check` readiness validator (`iqopresync`) and Makefile targets (`make install-wizard`, `make presync-check`).
+- **Mobile Offline Collection Cache & Notification Deep-Links (C109)**:
+  - Implemented read-only local caching of user collection and wishlist snapshots (`frontend/lib/capacitor/offline-cache.ts`).
+  - Added offline fallback hydration and `"Offline Mode — Viewing Cached Library"` banner on `/collection`.
+  - Added offline duplicate checking in barcode lookup and `/scan`.
+  - Resolved `iqoqo://` notification deep links cleanly on native mobile.
+  - Purged offline snapshots automatically on logout and server switch.
+- **Mobile Store Submission Privacy Manifest & LTS Release Gate (C110)**:
+  - Added Apple iOS 17+ privacy manifest `frontend/ios/App/App/PrivacyInfo.xcprivacy` with `NSPrivacyTracking = false` and `CA92.1` for `UserDefaults`.
+  - Documented App Store Connect and Google Play Data Safety declaration questionnaires in `docs/STORE_SUBMISSION.md`.
 
 ## [1.0.1] - 2026-11-08
 
