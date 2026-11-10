@@ -178,6 +178,7 @@ function CollectionContent() {
   const [offlineSnapshot, setOfflineSnapshot] = useState<OfflineCollectionSnapshot | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     if (typeof navigator !== "undefined") {
       setIsOffline(!navigator.onLine);
@@ -477,7 +478,7 @@ function CollectionContent() {
 
   const total =
     effectiveOffline && viewMode === "items"
-      ? filteredItems.length
+      ? (offlineSnapshot?.items?.length ?? 0)
       : viewMode === "works"
         ? (worksData?.pages?.[0]?.pagination?.total ?? 0)
         : viewMode === "expressions"
