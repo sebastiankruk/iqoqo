@@ -227,6 +227,14 @@ else
       docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB"
 fi
 
+# Ensure destination database user password matches destination environment configuration
+DST_POSTGRES_PASSWORD=$(get_env_var "$DST_ENV" "POSTGRES_PASSWORD" "")
+if [ -n "$DST_POSTGRES_PASSWORD" ]; then
+    echo "🔑 Synchronizing destination database password..."
+    docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c \
+        "ALTER USER \"$DST_POSTGRES_USER\" WITH PASSWORD '$DST_POSTGRES_PASSWORD';" >/dev/null 2>&1 || true
+fi
+
 echo "✅ Database cloned successfully!"
 
 
