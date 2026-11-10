@@ -106,7 +106,7 @@ done
 
 # 1. Verify project version
 make version
-make preview-down
+make preview-down DEPLOY_DIR="$DST_LOC"
 
 # 2. Build local Docker images tagged with 'preview'
 echo "🔨 Building preview Docker images..."
@@ -133,14 +133,14 @@ else
 fi
 
 # 4. Restart preview stack cleanly (optionally with federation peer)
-make preview-down
+make preview-down DEPLOY_DIR="$DST_LOC"
 
 if [ "$SKIP_CLONE" != "1" ] && [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
     echo "🧹 Resetting peer database volumes for clean paired federation preview..."
     docker volume rm -f iqoqo-preview_peer_postgres_data iqoqo-preview_peer_data 2>/dev/null || true
 fi
 
-make preview-up FEDERATION_PAIR="$FEDERATION_PAIR"
+make preview-up DEPLOY_DIR="$DST_LOC" FEDERATION_PAIR="$FEDERATION_PAIR"
 
 # 5. Verify final version
 echo "Waiting for preview backend to become healthy..."

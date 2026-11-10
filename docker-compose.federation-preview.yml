@@ -75,6 +75,9 @@ services:
       - REDIS_URL=redis://redis:6379/1
       - FEDERATION_ENABLED=true
       - FEDERATION_ALLOW_LOOPBACK=true
+      - FEDERATION_HEAD_MODE=true
+      - FEDERATION_SHOWCASE_ENABLED=true
+      - APP_NAME=iqoqo Federation Hub
     volumes:
       - peer_data:/usr/src/app/data
     ports:
@@ -127,6 +130,7 @@ services:
       - FLASK_API_URL=http://peer-web:5000/api
       - NEXT_PUBLIC_API_URL=${PEER_NEXT_PUBLIC_API_URL:-/api}
       - NEXT_PUBLIC_FRONTEND_URL=${PEER_FRONTEND_URL:-https://peer.iqoqo.cc}
+      - NEXT_PUBLIC_FEDERATION_HEAD=true
       - PORT=3000
     ports:
       - "127.0.0.1:${PEER_FRONTEND_PORT:-3001}:3000"
