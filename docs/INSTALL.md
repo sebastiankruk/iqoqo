@@ -9,11 +9,14 @@ This document provides comprehensive instructions for setting up iqoqo for devel
 To bootstrap and configure an iQoQo deployment directly without manually cloning the repository:
 
 ```bash
-# Bootstrap wizard into current or target deployment directory
-curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/release/1.0.2/scripts/install.sh | bash
+# Bootstrap wizard into current or target deployment directory (defaults to main branch)
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash
 
 # Or specify a custom deployment directory and profile (e.g., preview / federation head)
-curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/release/1.0.2/scripts/install.sh | bash -s -- -d /opt/pre.iqoqo --mode preview
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/preview.iqoqo --mode preview
+
+# Or test a specific release branch/tag before merge:
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -b feat/c110-store-submission-lts-audit-v102 -d /opt/preview.iqoqo --mode preview
 ```
 
 ### Guided CLI Setup (From Clone)
