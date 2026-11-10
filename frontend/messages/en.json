@@ -1010,7 +1010,8 @@
       "provideImageOrUrl": "Please provide either a map image file or an image URL",
       "failedToAdd": "Failed to add map attachment",
       "failedToRemove": "Failed to remove map attachment"
-    }
+    },
+    "reassignOwner": "Reassign Owner"
   },
   "MapViewer": {
     "title": "Map Inspector",
@@ -1025,5 +1026,14 @@
     "rotate": "Rotate 90°",
     "resetView": "Reset View",
     "openFullImage": "Open Full Image in New Tab"
+  },
+  "AdminOwnership": {
+    "title": "Item Ownership Reassignment",
+    "description": "Audit and reassign physical item ownership across user accounts with atomic provenance tracking.",
+    "searchPlaceholder": "Search title, ISBN, barcode, local barcode...",
+    "filterStatus": "Filter by collection status",
+    "allStatuses": "All statuses",
+    "clearFilters": "Clear Filters",
+    "reassignOwner": "Reassign Owner"
   }
 }

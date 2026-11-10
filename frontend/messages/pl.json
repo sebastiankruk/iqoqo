@@ -1010,7 +1010,8 @@
       "provideImageOrUrl": "Podaj plik obrazu mapy lub adres URL obrazu",
       "failedToAdd": "Nie udało się dodać załącznika mapowego",
       "failedToRemove": "Nie udało się usunąć załącznika mapowego"
-    }
+    },
+    "reassignOwner": "Zmień właściciela"
   },
   "MapViewer": {
     "title": "Przeglądarka map",
@@ -1025,5 +1026,14 @@
     "rotate": "Obróć o 90°",
     "resetView": "Resetuj widok",
     "openFullImage": "Otwórz pełny obraz w nowej karcie"
+  },
+  "AdminOwnership": {
+    "title": "Przepisywanie własności egzemplarzy",
+    "description": "Audytuj i przepisuj własność fizycznych egzemplarzy pomiędzy kontami użytkowników z atomowym śledzeniem proweniencji.",
+    "searchPlaceholder": "Szukaj tytułu, ISBN, kodu kreskowego...",
+    "filterStatus": "Filtruj wg statusu kolekcji",
+    "allStatuses": "Wszystkie statusy",
+    "clearFilters": "Wyczyść filtry",
+    "reassignOwner": "Zmień właściciela"
   }
 }

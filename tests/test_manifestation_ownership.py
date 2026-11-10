@@ -155,3 +155,87 @@ def test_expressions_shelf_filter_by_ownership(client, ownership_setup):
     expr_ids_unowned = [e["expression_id"] for e in resp_unowned.json["data"]]
     assert ownership_setup["owned_expr_id"] not in expr_ids_unowned
     assert ownership_setup["unowned_expr_id"] in expr_ids_unowned
+
+
+def test_admin_ownership_source_items_filtering(client, admin_headers, app):
+    """Verify GET /api/admin/ownership/items filtering by q, wildcards, collection_status, format, and item_id."""
+    with app.app_context():
+        user = User(email="source_filt@iqoqo.local", display_name="Filter Source", is_active=True)
+        user.set_password("pass-filt")
+        db.session.add(user)
+        db.session.flush()
+
+        w1 = Work(title="Dune Special 100% Edition")
+        w2 = Work(title="Neuromancer Cyber")
+        db.session.add_all([w1, w2])
+        db.session.flush()
+
+        e1 = Expression(work_id=w1.id, content_type="text", language="en")
+        e2 = Expression(work_id=w2.id, content_type="text", language="en")
+        db.session.add_all([e1, e2])
+        db.session.flush()
+
+        m1 = Manifestation(expression_id=e1.id, isbn13="9780123456789", format="Hardcover", label="Dune Deluxe")
+        m2 = Manifestation(expression_id=e2.id, isbn13="9780987654321", format="Paperback", label="Neuromancer Standard")
+        db.session.add_all([m1, m2])
+        db.session.flush()
+
+        item1 = Item(
+            manifestation_id=m1.id,
+            owner_id=user.id,
+            status="available",
+            collection_status="available",
+            local_barcode="DUNE_100_BC",
+        )
+        item2 = Item(
+            manifestation_id=m2.id,
+            owner_id=user.id,
+            status="available",
+            collection_status="lent",
+            local_barcode="NEURO_001_BC",
+        )
+        db.session.add_all([item1, item2])
+        db.session.commit()
+
+        user_id_str = str(user.id)
+        item1_id = item1.id
+        item2_id = item2.id
+
+    # 1. Without filters, returns both items
+    res = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}", headers=admin_headers)
+    assert res.status_code == 200
+    assert res.json["success"] is True
+    assert res.json["pagination"]["total"] == 2
+    item_ids = [it["id"] for it in res.json["data"]]
+    assert item1_id in item_ids
+    assert item2_id in item_ids
+
+    # 2. Filter by exact item_id
+    res_id = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}&item_id={item1_id}", headers=admin_headers)
+    assert res_id.status_code == 200
+    assert res_id.json["pagination"]["total"] == 1
+    assert res_id.json["data"][0]["id"] == item1_id
+
+    # 3. Filter by collection_status
+    res_status = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}&collection_status=lent", headers=admin_headers)
+    assert res_status.status_code == 200
+    assert res_status.json["pagination"]["total"] == 1
+    assert res_status.json["data"][0]["id"] == item2_id
+
+    # 4. Filter by text search q (title)
+    res_q = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}&q=Neuromancer", headers=admin_headers)
+    assert res_q.status_code == 200
+    assert res_q.json["pagination"]["total"] == 1
+    assert res_q.json["data"][0]["id"] == item2_id
+
+    # 5. Wildcard escaping in q (% metacharacter should not match everything)
+    res_wildcard = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}&q=100%", headers=admin_headers)
+    assert res_wildcard.status_code == 200
+    assert res_wildcard.json["pagination"]["total"] == 1
+    assert res_wildcard.json["data"][0]["id"] == item1_id
+
+    # 6. Wildcard _ escaping
+    res_underscore = client.get(f"/api/v1/admin/ownership/items?source_user_id={user_id_str}&q=DUNE_", headers=admin_headers)
+    assert res_underscore.status_code == 200
+    assert res_underscore.json["pagination"]["total"] == 1
+    assert res_underscore.json["data"][0]["id"] == item1_id

@@ -35,11 +35,13 @@ from sqlalchemy.orm import selectinload
 
 from app.api.core import api_bp
 from app.api.decorators import admin_or_custodian_required, admin_required, require_auth, require_permission
+from app.api.filters import escape_ilike_term
 from app.api.schemas import FrbrMergeSchema, FrbrReassignSchema, FrbrSplitSchema
 from app.core import duplicate_service, frbr_service
 from app.core.celery_app import celery
 from app.core.limiter import limiter
 from app.core.permissions import PROTECTED_ROLE_NAMES, PermissionName
+from app.core.search_service import build_ilike_search_clause
 from app.core.tasks import batch_link_catalog_lod_task
 from app.db.auth import User as AuthUser
 from app.db.core import (
@@ -1855,15 +1857,53 @@ def get_ownership_source_items():
     limit = min(100, max(1, request.args.get("limit", 20, type=int)))
     offset = (page - 1) * limit
 
-    total = (
-        db.session.execute(select(func.count(Item.id)).where(Item.owner_id == source_uuid)).scalar() or 0  # pylint: disable=not-callable
+    q = (request.args.get("q") or "").strip()
+    collection_status = (request.args.get("collection_status") or "").strip()
+    format_filter = (request.args.get("format") or "").strip()
+    item_id_raw = request.args.get("item_id")
+
+    base_query = (
+        select(Item)
+        .outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
+        .outerjoin(Expression, Manifestation.expression_id == Expression.id)
+        .outerjoin(Work, Expression.work_id == Work.id)
+        .where(Item.owner_id == source_uuid)
     )
 
-    items = (
-        db.session.execute(select(Item).where(Item.owner_id == source_uuid).order_by(Item.id.asc()).offset(offset).limit(limit))
-        .scalars()
-        .all()
-    )
+    if item_id_raw:
+        try:
+            target_item_id = int(item_id_raw)
+            base_query = base_query.where(Item.id == target_item_id)
+        except (ValueError, TypeError):
+            pass
+
+    if collection_status:
+        base_query = base_query.where(Item.collection_status == collection_status)
+
+    if format_filter:
+        base_query = base_query.where(
+            or_(
+                Manifestation.format == format_filter,
+                Manifestation.format_type == format_filter,
+            )
+        )
+
+    if q:
+        escaped_q = escape_ilike_term(q)
+        search_pattern = f"%{escaped_q}%"
+        catalog_search_clause = build_ilike_search_clause(q)
+        base_query = base_query.where(
+            or_(
+                catalog_search_clause,
+                Item.local_barcode.ilike(search_pattern, escape="\\"),
+            )
+        )
+
+    count_subquery = base_query.subquery()
+    count_query = select(func.count(count_subquery.c.id))
+    total = db.session.execute(count_query).scalar() or 0  # pylint: disable=not-callable
+
+    items = db.session.execute(base_query.order_by(Item.id.asc()).offset(offset).limit(limit)).scalars().all()
 
     items_data = []
     for it in items:

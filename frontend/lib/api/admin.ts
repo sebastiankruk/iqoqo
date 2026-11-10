@@ -958,25 +958,44 @@ export async function getOwnershipAccounts(): Promise<OwnershipAccount[]> {
   return res.data.data;
 }
 
+export interface GetOwnershipItemsOptions {
+  q?: string;
+  collection_status?: string;
+  format?: string;
+  item_id?: number | string;
+}
+
 /**
  * Fetch paginated physical items owned by a source account.
  *
  * @param sourceUserId - UUID of current owner.
  * @param page - Target page index (1-based).
  * @param limit - Page size.
+ * @param options - Optional search and filtering parameters.
  * @returns Paginated source items.
  */
 export async function getOwnershipItems(
   sourceUserId: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
+  options?: GetOwnershipItemsOptions
 ): Promise<{ items: OwnershipSourceItem[]; total: number; pages: number }> {
+  const params = new URLSearchParams({
+    source_user_id: sourceUserId,
+    page: String(page),
+    limit: String(limit),
+  });
+  if (options?.q) params.set("q", options.q);
+  if (options?.collection_status) params.set("collection_status", options.collection_status);
+  if (options?.format) params.set("format", options.format);
+  if (options?.item_id) params.set("item_id", String(options.item_id));
+
   const res = await apiClient.get<{
     success: boolean;
     data: OwnershipSourceItem[];
     pagination: { total: number; page: number; limit: number; pages: number };
     error?: string;
-  }>(`/v1/admin/ownership/items?source_user_id=${encodeURIComponent(sourceUserId)}&page=${page}&limit=${limit}`);
+  }>(`/v1/admin/ownership/items?${params.toString()}`);
   if (!res.data.success) {
     throw new Error(res.data.error ?? "Failed to fetch source items");
   }

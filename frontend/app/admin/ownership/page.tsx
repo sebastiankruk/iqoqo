@@ -15,6 +15,7 @@
 //
 "use client";
 
+import { Suspense } from "react";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { OwnershipManagement } from "@/components/admin/ownership-management";
@@ -82,7 +83,15 @@ export default function OwnershipPage() {
                 Audit and reassign physical item ownership across user accounts with atomic provenance tracking.
               </p>
             </div>
-            <OwnershipManagement />
+            <Suspense
+              fallback={
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              }
+            >
+              <OwnershipManagement />
+            </Suspense>
           </div>
         </div>
       </main>
