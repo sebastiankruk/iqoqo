@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "../client";
 import type { ApiResponse, UserProfile } from "@/types/frbr";
 import { queryKeys } from "./query-keys";
+import { saveProfileSnapshot, getCachedProfileSnapshot } from "@/lib/capacitor/offline-cache";
 import axios from "axios";
 
 /**
@@ -31,10 +32,20 @@ export function useProfile() {
     queryKey: queryKeys.profile,
     queryFn: async () => {
       try {
-        return await apiFetch<UserProfile>("/profile/");
+        const profile = await apiFetch<UserProfile>("/profile/");
+        if (profile) {
+          saveProfileSnapshot(profile).catch(() => {});
+        }
+        return profile;
       } catch (err) {
         if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 404)) {
           await fetch("/api/auth/logout", { method: "POST" });
+          return null;
+        }
+        // If offline or network error without server response, preserve cached profile
+        const cached = await getCachedProfileSnapshot();
+        if (cached) {
+          return cached;
         }
         return null;
       }
