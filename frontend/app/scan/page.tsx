@@ -42,7 +42,11 @@ import { useRouter } from "next/navigation";
 import type { IsbnMeta, ScanFormat, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
-import { findOfflineDuplicate } from "@/lib/capacitor/offline-cache";
+import {
+  findOfflineDuplicate,
+  enqueueOfflineManualEntry,
+  flushOfflineManualQueue,
+} from "@/lib/capacitor/offline-cache";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -115,6 +119,31 @@ export default function ScanPage() {
 
   const [quickQuery, setQuickQuery] = useState("");
   const [isQuickSearching, setIsQuickSearching] = useState(false);
+
+  // Auto-flush pending offline manual entries when back online
+  useEffect(() => {
+    const handleSync = async () => {
+      try {
+        const res = await flushOfflineManualQueue(async payload => {
+          return await apiClient.post("/items/manual", payload);
+        });
+        if (res.synced > 0) {
+          toast.success(`Synced ${res.synced} offline manual item${res.synced > 1 ? "s" : ""} to your library!`);
+          queryClient.invalidateQueries({ queryKey: queryKeys.itemsRoot });
+        }
+      } catch {
+        // Ignore background sync errors
+      }
+    };
+
+    window.addEventListener("online", handleSync);
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      handleSync();
+    }
+    return () => {
+      window.removeEventListener("online", handleSync);
+    };
+  }, [queryClient]);
 
   const formatToApiParam = (fmt?: string): string => {
     if (fmt === "movie" || fmt === "video") return "movie";
@@ -293,6 +322,14 @@ export default function ScanPage() {
       Publisher: data.publisher || undefined,
     };
 
+    const isCurrentlyOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (isCurrentlyOffline) {
+      await enqueueOfflineManualEntry(payload);
+      toast.success(`"${payload.Title}" saved locally! Will sync when back online.`);
+      setShowManual(false);
+      return;
+    }
+
     addManualMutation.mutate(payload, {
       onSuccess: async response => {
         const item = response.data;
@@ -321,8 +358,11 @@ export default function ScanPage() {
           router.push(`/item/${response.data.item_id}`);
         }
       },
-      onError: err => {
-        toast.error((err as Error).message || "Failed to add item manually");
+      onError: async () => {
+        // If network error occurred during submission, save to offline manual queue
+        await enqueueOfflineManualEntry(payload);
+        toast.info(`Network unreachable: "${payload.Title}" queued locally for sync.`);
+        setShowManual(false);
       },
     });
   };

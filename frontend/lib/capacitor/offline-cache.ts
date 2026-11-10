@@ -15,10 +15,12 @@
 //
 import { Preferences } from "@capacitor/preferences";
 import { isNativeApp } from "./platform";
-import type { Item, WishlistItem } from "@/types/frbr";
+import type { Item, WishlistItem, UserProfile } from "@/types/frbr";
 
 export const OFFLINE_COLLECTION_CACHE_KEY = "iqoqo_offline_collection_snapshot";
 export const OFFLINE_WISHLIST_CACHE_KEY = "iqoqo_offline_wishlist_snapshot";
+export const OFFLINE_PROFILE_CACHE_KEY = "iqoqo_offline_profile_snapshot";
+export const OFFLINE_MANUAL_QUEUE_KEY = "iqoqo_offline_manual_queue";
 
 export interface OfflineCollectionSnapshot {
   timestamp: number;
@@ -28,6 +30,93 @@ export interface OfflineCollectionSnapshot {
 export interface OfflineWishlistSnapshot {
   timestamp: number;
   items: WishlistItem[];
+}
+
+export interface OfflineProfileSnapshot {
+  timestamp: number;
+  profile: UserProfile;
+}
+
+export interface OfflineManualEntry {
+  id: string; // client-generated uuid/timestamp
+  timestamp: number;
+  payload: {
+    Title: string;
+    Authors: string[];
+    Format: string;
+    ISBN?: string;
+    PublicationDate?: string;
+    Publisher?: string;
+  };
+}
+
+/**
+ * Save user profile snapshot to local storage for offline session preservation.
+ *
+ * @param profile - Active user profile
+ */
+export async function saveProfileSnapshot(profile: UserProfile): Promise<void> {
+  const payload: OfflineProfileSnapshot = {
+    timestamp: Date.now(),
+    profile,
+  };
+  const serialized = JSON.stringify(payload);
+
+  if (isNativeApp()) {
+    try {
+      await Preferences.set({ key: OFFLINE_PROFILE_CACHE_KEY, value: serialized });
+    } catch {
+      // Ignore preferences write failure
+    }
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(OFFLINE_PROFILE_CACHE_KEY, serialized);
+    } catch {
+      // Ignore localStorage quotas
+    }
+  }
+}
+
+/**
+ * Retrieve cached user profile snapshot if available.
+ *
+ * @returns Cached UserProfile or null
+ */
+export async function getCachedProfileSnapshot(): Promise<UserProfile | null> {
+  let serialized: string | null = null;
+
+  if (isNativeApp()) {
+    try {
+      const res = await Preferences.get({ key: OFFLINE_PROFILE_CACHE_KEY });
+      serialized = res.value;
+    } catch {
+      serialized = null;
+    }
+  }
+
+  if (!serialized && typeof window !== "undefined" && window.localStorage) {
+    try {
+      serialized = window.localStorage.getItem(OFFLINE_PROFILE_CACHE_KEY);
+    } catch {
+      serialized = null;
+    }
+  }
+
+  if (!serialized) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(serialized) as OfflineProfileSnapshot;
+    if (parsed && parsed.profile && (parsed.profile.id || parsed.profile.email)) {
+      return parsed.profile;
+    }
+  } catch {
+    // Malformed JSON
+  }
+  return null;
 }
 
 /**
@@ -212,7 +301,150 @@ export async function findOfflineDuplicate(
 }
 
 /**
- * Purge all cached collection and wishlist offline snapshots.
+ * Retrieve the queued offline manual entries awaiting synchronization.
+ *
+ * @returns Array of queued offline manual scan entries
+ */
+export async function getOfflineManualQueue(): Promise<OfflineManualEntry[]> {
+  let serialized: string | null = null;
+
+  if (isNativeApp()) {
+    try {
+      const res = await Preferences.get({ key: OFFLINE_MANUAL_QUEUE_KEY });
+      serialized = res.value;
+    } catch {
+      serialized = null;
+    }
+  }
+
+  if (!serialized && typeof window !== "undefined" && window.localStorage) {
+    try {
+      serialized = window.localStorage.getItem(OFFLINE_MANUAL_QUEUE_KEY);
+    } catch {
+      serialized = null;
+    }
+  }
+
+  if (!serialized) return [];
+
+  try {
+    const parsed = JSON.parse(serialized);
+    if (Array.isArray(parsed)) {
+      return parsed as OfflineManualEntry[];
+    }
+  } catch {
+    // Ignore malformed JSON
+  }
+  return [];
+}
+
+/**
+ * Enqueue a manual item entry locally when offline and optimistically update cached snapshot.
+ *
+ * @param payload - The manual item payload submitted by the user
+ * @returns The enqueued entry with timestamp and client id
+ */
+export async function enqueueOfflineManualEntry(payload: OfflineManualEntry["payload"]): Promise<OfflineManualEntry> {
+  const queue = await getOfflineManualQueue();
+  const entry: OfflineManualEntry = {
+    id: `offline-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: Date.now(),
+    payload,
+  };
+
+  queue.push(entry);
+  const serialized = JSON.stringify(queue);
+
+  if (isNativeApp()) {
+    try {
+      await Preferences.set({ key: OFFLINE_MANUAL_QUEUE_KEY, value: serialized });
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(OFFLINE_MANUAL_QUEUE_KEY, serialized);
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Optimistically add to cached collection snapshot
+  const snapshot = await getCachedCollectionSnapshot();
+  const provisionalItem: Item = {
+    id: -entry.timestamp, // Negative ID marks provisional item
+    manifestation_id: -entry.timestamp,
+    owner_id: "offline_user",
+    status: "completed",
+    collection_status: "own",
+    title: payload.Title,
+    authors: payload.Authors,
+    isbn: payload.ISBN,
+    local_barcode: payload.ISBN,
+    publisher: payload.Publisher,
+    content_type: payload.Format,
+    added_at: new Date(entry.timestamp).toISOString(),
+    updated_at: new Date(entry.timestamp).toISOString(),
+    meta: {},
+  };
+
+  const existingItems = snapshot?.items || [];
+  await saveCollectionSnapshot([provisionalItem, ...existingItems]);
+
+  return entry;
+}
+
+/**
+ * Flush queued offline manual entries to the backend API.
+ *
+ * @param submitFn - The async function that submits each payload to the server
+ * @returns Counts of synced and failed items
+ */
+export async function flushOfflineManualQueue(
+  submitFn: (payload: OfflineManualEntry["payload"]) => Promise<unknown>
+): Promise<{ synced: number; failed: number }> {
+  const queue = await getOfflineManualQueue();
+  if (queue.length === 0) return { synced: 0, failed: 0 };
+
+  const remaining: OfflineManualEntry[] = [];
+  let synced = 0;
+  let failed = 0;
+
+  for (const entry of queue) {
+    try {
+      await submitFn(entry.payload);
+      synced++;
+    } catch (e) {
+      console.warn("Failed to flush offline manual entry:", entry.id, e);
+      failed++;
+      remaining.push(entry);
+    }
+  }
+
+  const serialized = JSON.stringify(remaining);
+  if (isNativeApp()) {
+    try {
+      await Preferences.set({ key: OFFLINE_MANUAL_QUEUE_KEY, value: serialized });
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(OFFLINE_MANUAL_QUEUE_KEY, serialized);
+    } catch {
+      // Ignore
+    }
+  }
+
+  return { synced, failed };
+}
+
+/**
+ * Purge all cached collection, wishlist, profile, and manual queue offline records.
  * Called on logout, server switch, or explicit cache clearance.
  */
 export async function clearOfflineCache(): Promise<void> {
@@ -220,6 +452,8 @@ export async function clearOfflineCache(): Promise<void> {
     try {
       await Preferences.remove({ key: OFFLINE_COLLECTION_CACHE_KEY });
       await Preferences.remove({ key: OFFLINE_WISHLIST_CACHE_KEY });
+      await Preferences.remove({ key: OFFLINE_PROFILE_CACHE_KEY });
+      await Preferences.remove({ key: OFFLINE_MANUAL_QUEUE_KEY });
     } catch {
       // Ignore removal errors
     }
@@ -229,6 +463,8 @@ export async function clearOfflineCache(): Promise<void> {
     try {
       window.localStorage.removeItem(OFFLINE_COLLECTION_CACHE_KEY);
       window.localStorage.removeItem(OFFLINE_WISHLIST_CACHE_KEY);
+      window.localStorage.removeItem(OFFLINE_PROFILE_CACHE_KEY);
+      window.localStorage.removeItem(OFFLINE_MANUAL_QUEUE_KEY);
     } catch {
       // Ignore
     }
