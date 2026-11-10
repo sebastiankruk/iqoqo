@@ -42,6 +42,7 @@ import { useRouter } from "next/navigation";
 import type { IsbnMeta, ScanFormat, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
+import { findOfflineDuplicate } from "@/lib/capacitor/offline-cache";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -221,7 +222,13 @@ export default function ScanPage() {
       setQuickQuery("");
       await handleFound(query, data);
     } catch {
-      toast.info(t("bottomSheet.lookupFailed"));
+      // Check offline cache when lookup fails or network offline
+      const offlineMatch = await findOfflineDuplicate(query);
+      if (offlineMatch) {
+        toast.info(offlineMatch.matchType === "collection" ? t("offlineMatchCollection") : t("offlineMatchWishlist"));
+      } else {
+        toast.info(t("bottomSheet.lookupFailed"));
+      }
       handleShowManualForm(query);
     } finally {
       setIsQuickSearching(false);

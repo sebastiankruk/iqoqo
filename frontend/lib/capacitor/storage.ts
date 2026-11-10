@@ -16,6 +16,7 @@
 import { Preferences } from "@capacitor/preferences";
 import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 import { isNativeApp } from "./platform";
+import { clearOfflineCache } from "./offline-cache";
 
 export const INSTANCE_URL_KEY = "iqoqo_instance_url";
 export const INSTANCE_NAME_KEY = "iqoqo_instance_name";
@@ -207,6 +208,7 @@ export async function setAuthToken(token: string): Promise<void> {
  * @returns {Promise<void>}
  */
 export async function removeAuthToken(): Promise<void> {
+  await clearOfflineCache();
   if (isNativeApp()) {
     try {
       await SecureStoragePlugin.remove({ key: AUTH_TOKEN_KEY });
@@ -225,6 +227,7 @@ export async function removeAuthToken(): Promise<void> {
  */
 export async function clearAllMobileStorage(): Promise<void> {
   inMemoryInstanceUrl = null;
+  await clearOfflineCache();
   await removeAuthToken();
   await removeInstanceUrl();
   await removeInstanceName();

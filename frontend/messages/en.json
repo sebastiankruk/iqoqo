@@ -229,7 +229,9 @@
     "edition": "Edition",
     "myItem": "My Item",
     "noExpressionsMatching": "No expressions matching \"{query}\"",
-    "noExpressionsInCollection": "No expressions in collection"
+    "noExpressionsInCollection": "No expressions in collection",
+    "offlineModeBanner": "Offline Mode — Viewing Cached Library (Last synced: {lastSynced})",
+    "offlineUnknownSync": "recently"
   },
   "CollectionFilters": {
     "title": "Filters",
@@ -556,6 +558,8 @@
       "searchButton": "Lookup",
       "searching": "Searching..."
     },
+    "offlineMatchCollection": "Found matching item in your offline library cache!",
+    "offlineMatchWishlist": "Found matching item in your offline wishlist cache!",
     "federationHub": {
       "badge": "Federation Hub",
       "title": "Read-Only Federation Hub",
