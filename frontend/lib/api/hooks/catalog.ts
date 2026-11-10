@@ -41,7 +41,13 @@ import { queryKeys } from "./query-keys";
 export function useAppConfig() {
   return useQuery({
     queryKey: queryKeys.config,
-    queryFn: () => apiFetch<{ federation_enabled: boolean; version: string; maintenance_mode: boolean }>("/config"),
+    queryFn: () =>
+      apiFetch<{
+        federation_enabled: boolean;
+        federation_head_mode: boolean;
+        version: string;
+        maintenance_mode: boolean;
+      }>("/config"),
     staleTime: 60 * 60 * 1000,
   });
 }

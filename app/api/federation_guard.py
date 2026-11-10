@@ -23,7 +23,25 @@ from typing import Any
 
 from flask import current_app, jsonify
 
+from app.core.config_service import is_federation_head_mode
 from app.db.settings import InstanceSettings
+
+FEDERATION_HEAD_READONLY_MESSAGE = (
+    "This instance operates as a read-only Federation Hub. "
+    "Physical items are synchronized from connected community nodes; "
+    "you may still add works to your Wishlist."
+)
+
+
+def reject_if_federation_head_item_write() -> tuple[Any, int] | None:
+    """Check if the instance is in read-only Federation Head mode and reject physical item creation.
+
+    Returns:
+        A (JSON response, 403) tuple if FEDERATION_HEAD_MODE is enabled, or None if write is allowed.
+    """
+    if is_federation_head_mode():
+        return jsonify({"error": FEDERATION_HEAD_READONLY_MESSAGE, "code": 403}), 403
+    return None
 
 
 def is_federation_enabled() -> bool:

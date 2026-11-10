@@ -38,6 +38,11 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api/hooks", () => ({
   useAddManualItem: vi.fn(),
+  useAppConfig: vi.fn(() => ({ data: { federation_head_mode: false }, isLoading: false })),
+}));
+
+vi.mock("@/lib/api/hooks/catalog", () => ({
+  useAppConfig: vi.fn(() => ({ data: { federation_head_mode: false }, isLoading: false })),
 }));
 
 vi.mock("sonner", () => ({

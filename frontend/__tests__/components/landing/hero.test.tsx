@@ -14,8 +14,20 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Hero } from "@/components/landing/hero";
+
+vi.mock("@/lib/api/hooks/catalog", () => ({
+  useAppConfig: () => ({
+    data: {
+      federation_enabled: false,
+      federation_head_mode: false,
+      version: "1.0.2",
+      maintenance_mode: false,
+    },
+    isLoading: false,
+  }),
+}));
 
 describe("Hero Component", () => {
   it("renders the main heading", () => {

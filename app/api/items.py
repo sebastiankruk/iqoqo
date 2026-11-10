@@ -33,6 +33,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
+from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
@@ -1337,6 +1338,10 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
 @require_auth
 def add_items_bulk() -> Response | tuple[Response, int]:
     """Bulk add multiple manifestations to user's collection."""
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -1417,6 +1422,10 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 @require_permission(PermissionName.WRITE_ITEM)
 def add_item_manual() -> Response | tuple[Response, int]:
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -1538,6 +1547,10 @@ def add_item_manual() -> Response | tuple[Response, int]:
 @require_permission(PermissionName.WRITE_ITEM)
 def create_item() -> Response | tuple[Response, int]:
     """Create a new physical item under an existing manifestation."""
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401

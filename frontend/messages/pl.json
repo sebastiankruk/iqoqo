@@ -1,6 +1,11 @@
 {
   "Navbar": {
     "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
+    "federationHubBadge": "Węzeł Federacji · Tylko do odczytu",
+    "federationHubBanner": "Ta instancja działa jako węzeł federacji tylko do odczytu. Egzemplarze są federowane z węzłów społeczności.",
+    "federationHubExploreDirectory": "Przeglądaj katalog federacji",
+    "dismissBanner": "Zamknij powiadomienie",
+    "directory": "Katalog węzłów",
     "searchPlaceholder": "Szukaj w swojej kolekcji...",
     "collection": "Kolekcja",
     "scan": "Skanuj",
@@ -30,6 +35,9 @@
   "Hero": {
     "title": "Biblioteka wszystkiego",
     "description": "iqoqo pozwala Ci tworzyć, udostępniać i odkrywać osobiste katalogi książek, muzyki, filmów i gier planszowych. Zbudowane na otwartej sieci semantycznej, zaprojektowane z myślą o rozproszonej przyszłości.",
+    "federationHubTitle": "Federacyjna Sieć Bibliotek",
+    "federationHubDescription": "iqoqo.cc łączy niezależne, lokalne biblioteki na całym świecie. Przeszukuj wspólne dzieła, prowadź osobistą listę życzeń i odkrywaj federowane kolekcje społeczności.",
+    "exploreFederatedCatalog": "Przeglądaj federacyjny katalog",
     "startCatalog": "Rozpocznij swój katalog",
     "browseInstance": "Przeglądaj instancję",
     "github": "GitHub"
@@ -547,6 +555,14 @@
       "placeholder": "Szybkie szukanie po tytule lub kodzie...",
       "searchButton": "Szukaj",
       "searching": "Szukanie..."
+    },
+    "federationHub": {
+      "badge": "Węzeł Federacji",
+      "title": "Węzeł Federacji – Tylko do odczytu",
+      "description": "Ta instancja działa jako centralny węzeł i pokazowy hub federacyjny. Bezpośrednie skanowanie i dodawanie fizycznych egzemplarzy jest tu wyłączone. Fizyczne egzemplarze są katalogowane w połączonych bibliotekach i synchronizowane z tym węzłem.",
+      "exploreCatalog": "Przeglądaj federacyjny katalog",
+      "viewDirectory": "Połączone biblioteki",
+      "wishlistHint": "Chcesz zapisać interesujące pozycje? Wciąż możesz dodawać dzieła do swojej Listy życzeń."
     }
   },
   "SemanticLinks": {

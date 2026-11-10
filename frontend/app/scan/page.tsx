@@ -29,11 +29,12 @@ import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
-import { useAddManualItem, queryKeys } from "@/lib/api/hooks";
+import { useAddManualItem, queryKeys, useAppConfig } from "@/lib/api/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Radio, Library, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { useBatchMode, BatchScanToggle } from "@/components/scanner/batch-scan-toggle";
 import { triggerScanHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 import { toast } from "sonner";
@@ -106,6 +107,8 @@ export default function ScanPage() {
   const router = useRouter();
   const t = useTranslations("scanner");
   const queryClient = useQueryClient();
+  const { data: config } = useAppConfig();
+  const isFederationHead = config?.federation_head_mode === true;
 
   const { isBatchMode, setBatchMode, scannedQueue, isCooldownActive, recordScan, clearQueue } = useBatchMode();
 
@@ -320,6 +323,49 @@ export default function ScanPage() {
   const handleToggleTorch = useCallback(() => {
     setTorchOn(prev => !prev);
   }, []);
+
+  if (isFederationHead) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-background">
+        <div
+          data-testid="federation-head-scan-notice"
+          className="max-w-md w-full p-6 rounded-2xl border border-border/80 bg-card shadow-lg text-center space-y-5"
+        >
+          <div className="h-12 w-12 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center mx-auto text-accent">
+            <Radio className="h-6 w-6 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent/15 text-accent border border-accent/30">
+              {t("federationHub.badge")}
+            </span>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{t("federationHub.title")}</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t("federationHub.description")}</p>
+          </div>
+          <p className="text-xs text-muted-foreground/80 italic">{t("federationHub.wishlistHint")}</p>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <Button asChild size="default" className="w-full bg-accent text-accent-foreground font-semibold">
+              <Link href="/collection" className="flex items-center justify-center gap-2">
+                <Library className="h-4 w-4" />
+                {t("federationHub.exploreCatalog")}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="default" className="w-full">
+              <Link href="/federation/directory" className="flex items-center justify-center gap-2">
+                <Radio className="h-4 w-4" />
+                {t("federationHub.viewDirectory")}
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground">
+              <Link href="/wishlist" className="flex items-center justify-center gap-2">
+                <BookmarkCheck className="h-4 w-4" />
+                Wishlist
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ScannerErrorBoundary>

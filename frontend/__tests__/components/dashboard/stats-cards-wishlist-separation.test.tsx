@@ -33,6 +33,11 @@ vi.mock("@/lib/api/hooks", () => ({
   useRecentManifestations: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
   useVelocityInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
   useDistributionInsights: vi.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useAppConfig: vi.fn(() => ({ data: { federation_head_mode: false }, isLoading: false })),
+}));
+
+vi.mock("@/lib/api/hooks/catalog", () => ({
+  useAppConfig: vi.fn(() => ({ data: { federation_head_mode: false }, isLoading: false })),
 }));
 
 vi.mock("@/components/dashboard/collection-insights", () => ({

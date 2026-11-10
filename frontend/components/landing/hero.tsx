@@ -19,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
+import { useAppConfig } from "@/lib/api/hooks/catalog";
 
 /**
  * GitHub SVG icon component.
@@ -42,6 +43,8 @@ function GithubIcon({ className }: { className?: string }) {
  */
 export function Hero() {
   const t = useTranslations("Hero");
+  const { data: config } = useAppConfig();
+  const isFederationHead = config?.federation_head_mode === true;
 
   return (
     <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl mb-12">
@@ -57,19 +60,40 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 text-center px-4 max-w-3xl">
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">{t("title")}</h1>
-        <p className="text-xl text-muted-foreground mb-8">{t("description")}</p>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          {isFederationHead ? t("federationHubTitle") : t("title")}
+        </h1>
+        <p className="text-xl text-muted-foreground mb-8">
+          {isFederationHead ? t("federationHubDescription") : t("description")}
+        </p>
         <div className="flex gap-4 justify-center items-center flex-wrap">
-          <Button
-            asChild
-            size="default"
-            className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md px-6"
-          >
-            <Link href="/register">{t("startCatalog")}</Link>
-          </Button>
-          <Button asChild variant="outline" size="default">
-            <Link href="/collection">{t("browseInstance")}</Link>
-          </Button>
+          {isFederationHead ? (
+            <>
+              <Button
+                asChild
+                size="default"
+                className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md px-6"
+              >
+                <Link href="/collection">{t("exploreFederatedCatalog")}</Link>
+              </Button>
+              <Button asChild variant="outline" size="default">
+                <Link href="/federation/directory">{t("browseInstance")}</Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                asChild
+                size="default"
+                className="bg-accent text-accent-foreground hover:opacity-90 font-bold border-none shadow-md px-6"
+              >
+                <Link href="/register">{t("startCatalog")}</Link>
+              </Button>
+              <Button asChild variant="outline" size="default">
+                <Link href="/collection">{t("browseInstance")}</Link>
+              </Button>
+            </>
+          )}
           <Button asChild variant="ghost" size="default" className="text-muted-foreground hover:text-foreground">
             <Link href="https://github.com/sebastiankruk/iqoqo" target="_blank" rel="noopener noreferrer">
               <GithubIcon className="w-4 h-4 mr-2" />

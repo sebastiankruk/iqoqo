@@ -34,6 +34,8 @@ import {
   HelpCircle,
   BookOpen,
   X,
+  Radio,
+  ExternalLink,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
@@ -102,6 +104,20 @@ export function Navbar() {
   }, []);
 
   const isMaintenanceMode = config?.maintenance_mode === true;
+  const isFederationHead = config?.federation_head_mode === true;
+  const [bannerDismissed, setBannerDismissed] = useState(() => {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      return window.sessionStorage.getItem("iqoqo_fed_hub_banner_dismissed") === "true";
+    }
+    return false;
+  });
+
+  const handleDismissBanner = () => {
+    setBannerDismissed(true);
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.setItem("iqoqo_fed_hub_banner_dismissed", "true");
+    }
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -172,6 +188,32 @@ export function Navbar() {
             {t("maintenanceMode")}
           </div>
         )}
+        {isFederationHead && !bannerDismissed && (
+          <div
+            data-testid="federation-head-banner"
+            className="bg-accent/15 dark:bg-accent/20 border-b border-accent/30 py-2 px-4 text-xs flex items-center justify-between gap-4 text-foreground transition-all"
+          >
+            <div className="flex items-center gap-2 max-w-4xl mx-auto flex-1 justify-center text-center">
+              <Radio className="h-3.5 w-3.5 text-accent animate-pulse shrink-0" />
+              <span>{t("federationHubBanner")}</span>
+              <Link
+                href="/federation/directory"
+                className="font-semibold underline underline-offset-2 hover:opacity-80 inline-flex items-center gap-1 shrink-0 ml-1"
+              >
+                {t("federationHubExploreDirectory")}
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissBanner}
+              aria-label={t("dismissBanner")}
+              className="text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors shrink-0"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
           {/* Brand */}
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -184,6 +226,15 @@ export function Navbar() {
               </svg>
             </div>
             <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
+            {isFederationHead && (
+              <span
+                data-testid="federation-hub-badge"
+                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-accent/20 text-accent border border-accent/30"
+              >
+                <Radio className="h-3 w-3 animate-pulse" />
+                {t("federationHubBadge")}
+              </span>
+            )}
           </Link>
 
           {/* Search – visible on all screens with max-width on mobile */}
@@ -218,7 +269,7 @@ export function Navbar() {
                 {t("profile")}
               </Link>
             )}
-            {mounted && profile && (
+            {mounted && profile && !isFederationHead && (
               <div className="hidden sm:flex items-center gap-2">
                 <Link
                   href="/scan"
@@ -226,6 +277,17 @@ export function Navbar() {
                 >
                   <ScanLine className="h-4 w-4" />
                   <span>{t("scan")}</span>
+                </Link>
+              </div>
+            )}
+            {mounted && profile && isFederationHead && (
+              <div className="hidden sm:flex items-center gap-2">
+                <Link
+                  href="/federation/directory"
+                  className="flex h-9 items-center gap-1.5 rounded-full bg-accent/20 border border-accent/40 px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+                >
+                  <Radio className="h-4 w-4 text-accent" />
+                  <span>{t("directory")}</span>
                 </Link>
               </div>
             )}
@@ -401,15 +463,29 @@ export function Navbar() {
           <span className="text-[10px] mt-1">{t("home")}</span>
         </Link>
 
-        <Link
-          href="/scan"
-          className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-            pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ScanLine className="h-5 w-5" />
-          <span className="text-[10px] mt-1">{t("scan")}</span>
-        </Link>
+        {isFederationHead ? (
+          <Link
+            href="/federation/directory"
+            className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+              pathname === "/federation/directory"
+                ? "text-accent font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Radio className="h-5 w-5" />
+            <span className="text-[10px] mt-1">{t("directory")}</span>
+          </Link>
+        ) : (
+          <Link
+            href="/scan"
+            className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+              pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ScanLine className="h-5 w-5" />
+            <span className="text-[10px] mt-1">{t("scan")}</span>
+          </Link>
+        )}
 
         <Link
           href="/collection"

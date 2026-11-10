@@ -1,6 +1,11 @@
 {
   "Navbar": {
     "maintenanceMode": "Maintenance Mode Active – Some features may be limited",
+    "federationHubBadge": "Federation Hub · Read-Only",
+    "federationHubBanner": "This instance operates as a read-only Federation Hub. Items are federated from community nodes.",
+    "federationHubExploreDirectory": "Explore Directory",
+    "dismissBanner": "Dismiss banner",
+    "directory": "Directory",
     "searchPlaceholder": "Search your collection...",
     "collection": "Collection",
     "scan": "Scan",
@@ -30,6 +35,9 @@
   "Hero": {
     "title": "The Library of Everything",
     "description": "iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games. Built on the open Semantic Web, designed for a distributed future.",
+    "federationHubTitle": "The Federated Library Network",
+    "federationHubDescription": "iqoqo.cc connects independent, self-hosted libraries across the globe. Search shared works, track your personal wishlist, and explore federated community collections.",
+    "exploreFederatedCatalog": "Explore Federated Catalog",
     "startCatalog": "Start Your Catalog",
     "browseInstance": "Browse Instance",
     "github": "GitHub"
@@ -547,6 +555,14 @@
       "placeholder": "Quick search title, code or barcode...",
       "searchButton": "Lookup",
       "searching": "Searching..."
+    },
+    "federationHub": {
+      "badge": "Federation Hub",
+      "title": "Read-Only Federation Hub",
+      "description": "This instance operates as a central showcase and federation hub. Direct physical item scanning and additions are disabled here. Physical items are cataloged on connected community libraries and synchronized to this hub.",
+      "exploreCatalog": "Explore Federated Catalog",
+      "viewDirectory": "Connected Libraries",
+      "wishlistHint": "Looking to keep track of items? You can still add works to your Wishlist."
     }
   },
   "SemanticLinks": {

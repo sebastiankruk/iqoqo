@@ -30,6 +30,7 @@ from sqlalchemy import or_, select
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
+from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
 from app.core.limiter import limiter
@@ -852,6 +853,10 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
 
     if policy == "wishlist" or collection_status == "wish_list":
         return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
+
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
 
     return _scan_to_library(
         barcode,

@@ -169,3 +169,12 @@ class ConfigService:
             return float(val)
         except (TypeError, ValueError):
             return default
+
+
+def is_federation_head_mode() -> bool:
+    """Check whether this instance operates in read-only Federation Head mode.
+
+    Returns:
+        True if FEDERATION_HEAD_MODE is enabled in InstanceSettings, Flask config, or environment.
+    """
+    return ConfigService.get_bool("FEDERATION_HEAD_MODE", False)
