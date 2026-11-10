@@ -377,8 +377,8 @@ export async function enqueueOfflineManualEntry(payload: OfflineManualEntry["pay
     id: -entry.timestamp, // Negative ID marks provisional item
     manifestation_id: -entry.timestamp,
     owner_id: "offline_user",
-    status: "completed",
-    collection_status: "own",
+    status: "read",
+    collection_status: "available",
     title: payload.Title,
     authors: payload.Authors,
     isbn: payload.ISBN,

@@ -190,7 +190,6 @@ describe("offline-cache", () => {
       display_name: "Archive Keeper",
       roles: ["user"],
       permissions: ["read:items"],
-      settings: {},
     };
 
     await saveProfileSnapshot(mockProfile);
