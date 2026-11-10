@@ -169,7 +169,7 @@ def test_run_presync_check_success_and_failure(tmp_path: Path) -> None:
     # Passes when secrets secure
     s = generate_secure_secret(32)
     env_file.write_text(
-        f"SECRET_KEY={s}\nJWT_SECRET_KEY={s}\nPOSTGRES_PASSWORD={s}\nREDIS_PASSWORD={s}\nNEXT_PUBLIC_FRONTEND_URL=http://localhost:5000\n",
+        f"SECRET_KEY={s}\nJWT_SECRET_KEY={s}\nPOSTGRES_PASSWORD={s}\nREDIS_PASSWORD={s}\nADMIN_PASSWORD={s}\nNEXT_PUBLIC_FRONTEND_URL=http://localhost:5000\n",
         encoding="utf-8",
     )
     assert run_presync_check(env_file) == 0
