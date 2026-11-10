@@ -135,20 +135,24 @@ if [ "$DST_NAME" = "prod" ] || [ "$DST_NAME" = "dev" ]; then
     DST_PROJECT="iqoqo"
 fi
 
+# Extract filenames for docker compose commands
+SRC_ENV_FILE="$(basename "$SRC_ENV")"
+DST_ENV_FILE="$(basename "$DST_ENV")"
+
 # Find source database container
 if [ -n "$SRC_HOST" ]; then
     echo "🔍 Finding remote source database container on host '$SRC_HOST' for project '$SRC_PROJECT'..."
     # shellcheck disable=SC2029
     SRC_DB_CONTAINER=$(
-        ssh "$SRC_HOST" "cd \"$SRC_DIR\" && export ENV_FILE=\".env.${SRC_NAME}\" && docker compose -p \"$SRC_PROJECT\" --env-file \".env.${SRC_NAME}\" ps -q db 2>/dev/null"
+        ssh "$SRC_HOST" "cd \"$SRC_DIR\" && export ENV_FILE=\"$SRC_ENV_FILE\" && docker compose -p \"$SRC_PROJECT\" --env-file \"$SRC_ENV_FILE\" ps -q db 2>/dev/null"
     )
 else
     echo "🔍 Finding source database container for project '$SRC_PROJECT'..."
     # shellcheck disable=SC2030
     SRC_DB_CONTAINER=$(
         cd "$SRC_DIR"
-        export ENV_FILE=".env.${SRC_NAME}"
-        docker compose -p "$SRC_PROJECT" --env-file ".env.${SRC_NAME}" ps -q db 2>/dev/null
+        export ENV_FILE="$SRC_ENV_FILE"
+        docker compose -p "$SRC_PROJECT" --env-file "$SRC_ENV_FILE" ps -q db 2>/dev/null
     )
 fi
 
@@ -166,8 +170,8 @@ echo "🚀 Ensuring destination database container is running for project '$DST_
 # shellcheck disable=SC2030,SC2031
 (
     cd "$DST_DIR"
-    export ENV_FILE=".env.${DST_NAME}"
-    docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" up -d db
+    export ENV_FILE="$DST_ENV_FILE"
+    docker compose -p "$DST_PROJECT" --env-file "$DST_ENV_FILE" up -d db
 )
 
 # Wait for destination database to be ready
@@ -177,8 +181,8 @@ for _ in {1..30}; do
     # shellcheck disable=SC2031
     DST_DB_CONTAINER=$(
         cd "$DST_DIR"
-        export ENV_FILE=".env.${DST_NAME}"
-        docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" ps -q db 2>/dev/null
+        export ENV_FILE="$DST_ENV_FILE"
+        docker compose -p "$DST_PROJECT" --env-file "$DST_ENV_FILE" ps -q db 2>/dev/null
     )
     if [ -n "$DST_DB_CONTAINER" ]; then
         if docker exec "$DST_DB_CONTAINER" pg_isready -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB" &>/dev/null; then
