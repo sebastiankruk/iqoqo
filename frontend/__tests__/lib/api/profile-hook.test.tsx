@@ -70,4 +70,28 @@ describe("useProfile error handling", () => {
     expect(result.current.data).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("hydrates cached profile on network error", async () => {
+    const cachedProfile = {
+      id: "cached-user-99",
+      email: "offline@iqoqo.cc",
+      display_name: "Offline Reader",
+      roles: ["user"],
+      permissions: [],
+      settings: {},
+    };
+    localStorage.setItem(
+      "iqoqo_offline_profile_snapshot",
+      JSON.stringify({ timestamp: Date.now(), profile: cachedProfile })
+    );
+
+    // Network error without HTTP status
+    vi.spyOn(api, "apiFetch").mockRejectedValueOnce(new axios.AxiosError("Network Error", "ERR_NETWORK"));
+
+    const { result } = renderHook(() => useProfile(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual(cachedProfile);
+    localStorage.removeItem("iqoqo_offline_profile_snapshot");
+  });
 });
