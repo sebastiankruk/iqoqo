@@ -54,6 +54,12 @@ import { RoadmapView } from "@/components/collection/roadmap-view";
 import { useTranslations } from "next-intl";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
+import {
+  saveCollectionSnapshot,
+  getCachedCollectionSnapshot,
+  type OfflineCollectionSnapshot,
+} from "@/lib/capacitor/offline-cache";
+import { WifiOff } from "lucide-react";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -168,9 +174,36 @@ function CollectionContent() {
   const isCurator = isLoggedIn && !!profile?.permissions?.includes(PermissionName.WRITE_METADATA);
 
   const [mounted, setMounted] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineSnapshot, setOfflineSnapshot] = useState<OfflineCollectionSnapshot | null>(null);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    if (typeof navigator !== "undefined") {
+      setIsOffline(!navigator.onLine);
+    }
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => {
+      setIsOffline(true);
+      getCachedCollectionSnapshot().then(snapshot => {
+        if (snapshot) setOfflineSnapshot(snapshot);
+      });
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Initial check for offline cache hydration
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      getCachedCollectionSnapshot().then(snapshot => {
+        if (snapshot) setOfflineSnapshot(snapshot);
+      });
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
   const showClientContent = mounted && isLoggedIn;
   const showCuratorContent = mounted && isCurator;
@@ -417,13 +450,22 @@ function CollectionContent() {
 
   const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
     if (viewMode === "items") {
-      return itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      const liveItems = itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      if (liveItems.length > 0) {
+        // Asynchronously update offline snapshot when online
+        saveCollectionSnapshot(liveItems as Item[]).catch(() => {});
+        return liveItems;
+      }
+      if (isOffline && offlineSnapshot?.items) {
+        return offlineSnapshot.items;
+      }
+      return liveItems;
     }
     if (viewMode === "manifestations") {
       return manifestationsData?.pages.flatMap(page => page.data || []) ?? [];
     }
     return [];
-  }, [itemsData, manifestationsData, viewMode]);
+  }, [itemsData, manifestationsData, viewMode, isOffline, offlineSnapshot]);
 
   const allWorks = useMemo(() => {
     return worksData?.pages.flatMap(page => page.data || []) ?? [];
@@ -534,7 +576,19 @@ function CollectionContent() {
   const statusCounts = useMemo(() => facetStatsData?.status_counts, [facetStatsData]);
 
   const filteredItems = useMemo(() => {
-    const items = [...allItems];
+    let items = [...allItems];
+
+    // When offline, filter by appliedQuery locally
+    if (isOffline && appliedQuery) {
+      const q = appliedQuery.toLowerCase();
+      items = items.filter(it => {
+        const title = (it.title || "").toLowerCase();
+        const author = (it.authors?.[0] || "").toLowerCase();
+        const isbn = ((it as Item).isbn || "").toLowerCase();
+        return title.includes(q) || author.includes(q) || isbn.includes(q);
+      });
+    }
+
     items.sort((a, b) => {
       const ta = a.title ?? "";
       const tb = b.title ?? "";
@@ -562,7 +616,7 @@ function CollectionContent() {
       }
     });
     return items;
-  }, [allItems, sortBy]);
+  }, [allItems, sortBy, isOffline, appliedQuery]);
 
   const ariaLiveText = useMemo(() => {
     if (activeFilters.length === 0) return `All filters cleared. ${total} results found.`;
@@ -577,6 +631,27 @@ function CollectionContent() {
         {ariaLiveText}
       </div>
       <Navbar />
+
+      {isOffline && (
+        <div
+          data-testid="offline-mode-banner"
+          className="bg-amber-500/15 border-b border-amber-500/30 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm flex items-center justify-center gap-2"
+        >
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            {t("offlineModeBanner", {
+              lastSynced: offlineSnapshot
+                ? new Date(offlineSnapshot.timestamp).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : t("offlineUnknownSync"),
+            })}
+          </span>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">

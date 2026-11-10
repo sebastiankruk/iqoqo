@@ -229,7 +229,9 @@
     "edition": "Wydanie",
     "myItem": "Mój egzemplarz",
     "noExpressionsMatching": "Brak ekspresji pasujących do „{query}”",
-    "noExpressionsInCollection": "Brak ekspresji w kolekcji"
+    "noExpressionsInCollection": "Brak ekspresji w kolekcji",
+    "offlineModeBanner": "Tryb offline — przeglądanie zapisanej biblioteki (Ostatnia synchronizacja: {lastSynced})",
+    "offlineUnknownSync": "niedawno"
   },
   "CollectionFilters": {
     "title": "Filtry",
@@ -556,6 +558,8 @@
       "searchButton": "Szukaj",
       "searching": "Szukanie..."
     },
+    "offlineMatchCollection": "Znaleziono pasujący element w pamięci podręcznej biblioteki!",
+    "offlineMatchWishlist": "Znaleziono pasujący element w pamięci podręcznej listy życzeń!",
     "federationHub": {
       "badge": "Węzeł Federacji",
       "title": "Węzeł Federacji – Tylko do odczytu",
