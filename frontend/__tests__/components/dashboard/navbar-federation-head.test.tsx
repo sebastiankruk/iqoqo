@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Navbar } from "@/components/dashboard/navbar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -99,15 +99,12 @@ describe("Navbar Federation Head Mode", () => {
     expect(screen.getByTestId("federation-hub-badge")).toBeInTheDocument();
   });
 
-  it("renders dismissible Federation Hub banner and dismisses on click", () => {
+  it("does not render top banner bar and displays responsive federation hub badge", () => {
     renderWithClient(<Navbar />);
-    const banner = screen.getByTestId("federation-head-banner");
-    expect(banner).toBeInTheDocument();
-
-    const dismissBtn = screen.getByLabelText(/Dismiss banner/i);
-    fireEvent.click(dismissBtn);
-
     expect(screen.queryByTestId("federation-head-banner")).not.toBeInTheDocument();
+    const badge = screen.getByTestId("federation-hub-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute("title", "Federation Hub · Read-Only");
   });
 
   it("replaces Scan CTA with Directory in desktop and mobile bottom navigation", () => {
