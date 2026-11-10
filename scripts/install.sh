@@ -104,6 +104,43 @@ else
   INSTALLER_EXEC="./iqoqo_installer.py"
 fi
 
-# 4. Execute installer
+# 4. Download compose specifications if not in git checkout
+if [[ ! -f "./docker-compose.yml" ]]; then
+  echo "Fetching Docker Compose specifications..."
+  curl -fsSL "${RAW_BASE_URL}/docker-compose.yml" -o docker-compose.yml 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/docker-compose.yml" -o docker-compose.yml
+fi
+if [[ ! -f "./docker-compose.prebuilt.yml" ]]; then
+  curl -fsSL "${RAW_BASE_URL}/docker-compose.prebuilt.yml" -o docker-compose.prebuilt.yml 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/docker-compose.prebuilt.yml" -o docker-compose.prebuilt.yml
+fi
+if [[ ! -f "./docker-compose.monitoring.yml" ]]; then
+  curl -fsSL "${RAW_BASE_URL}/docker-compose.monitoring.yml" -o docker-compose.monitoring.yml 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/docker-compose.monitoring.yml" -o docker-compose.monitoring.yml
+fi
+mkdir -p deploy
+if [[ ! -f "./deploy/nginx.conf" ]]; then
+  curl -fsSL "${RAW_BASE_URL}/deploy/nginx.conf" -o deploy/nginx.conf 2>/dev/null || \
+    curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/deploy/nginx.conf" -o deploy/nginx.conf
+fi
+
+# Ensure bind mount directory structures and permissions
+mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers data exports
+chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers data exports 2>/dev/null || true
+
+# 5. Execute installer
 echo "Launching iQoQo setup wizard..."
 python3 "${INSTALLER_EXEC}" "${FORWARD_ARGS[@]}"
+
+echo ""
+echo "=========================================================="
+echo "          Setup Complete!"
+echo "=========================================================="
+echo "Next step to start your iQoQo instance:"
+echo ""
+echo "  docker compose -f docker-compose.prebuilt.yml up -d"
+echo ""
+echo "To check logs and status:"
+echo "  docker compose logs -f"
+echo "  python3 ${INSTALLER_EXEC} --presync-check"
+echo "=========================================================="
