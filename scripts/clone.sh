@@ -52,22 +52,35 @@ fi
 SRC_ENV="${SRC_DIR}/.env.${SRC_NAME}"
 DST_ENV="${DST_DIR}/.env.${DST_NAME}"
 
+# Fall back to single .env in isolated deployment directories
 if [ -n "$SRC_HOST" ]; then
     # shellcheck disable=SC2029
     if ! ssh "$SRC_HOST" "[ -f '$SRC_ENV' ]"; then
-        echo "❌ Error: Remote source env file '$SRC_ENV' does not exist on host '$SRC_HOST'."
-        exit 1
+        if ssh "$SRC_HOST" "[ -f '${SRC_DIR}/.env' ]"; then
+            SRC_ENV="${SRC_DIR}/.env"
+        else
+            echo "❌ Error: Remote source env file '$SRC_ENV' (or '${SRC_DIR}/.env') does not exist on host '$SRC_HOST'."
+            exit 1
+        fi
     fi
 else
     if [ ! -f "$SRC_ENV" ]; then
-        echo "❌ Error: Source env file '$SRC_ENV' does not exist."
-        exit 1
+        if [ -f "${SRC_DIR}/.env" ]; then
+            SRC_ENV="${SRC_DIR}/.env"
+        else
+            echo "❌ Error: Source env file '$SRC_ENV' (or '${SRC_DIR}/.env') does not exist."
+            exit 1
+        fi
     fi
 fi
 
 if [ ! -f "$DST_ENV" ]; then
-    echo "❌ Error: Destination env file '$DST_ENV' does not exist."
-    exit 1
+    if [ -f "${DST_DIR}/.env" ]; then
+        DST_ENV="${DST_DIR}/.env"
+    else
+        echo "❌ Error: Destination env file '$DST_ENV' (or '${DST_DIR}/.env') does not exist."
+        exit 1
+    fi
 fi
 
 # Load DB config from env files
