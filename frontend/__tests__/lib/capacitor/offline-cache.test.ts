@@ -21,12 +21,17 @@ import {
   getCachedCollectionSnapshot,
   saveWishlistSnapshot,
   getCachedWishlistSnapshot,
+  saveProfileSnapshot,
+  getCachedProfileSnapshot,
+  enqueueOfflineManualEntry,
+  getOfflineManualQueue,
+  flushOfflineManualQueue,
   findOfflineDuplicate,
   clearOfflineCache,
   OFFLINE_COLLECTION_CACHE_KEY,
 } from "@/lib/capacitor/offline-cache";
 import { removeAuthToken, clearAllMobileStorage } from "@/lib/capacitor/storage";
-import type { Item, WishlistItem } from "@/types/frbr";
+import type { Item, WishlistItem, UserProfile } from "@/types/frbr";
 
 vi.mock("@capacitor/preferences", () => ({
   Preferences: {
@@ -176,5 +181,56 @@ describe("offline-cache", () => {
     await saveCollectionSnapshot(mockItems);
     await clearAllMobileStorage();
     expect(await getCachedCollectionSnapshot()).toBeNull();
+  });
+
+  it("persists and retrieves user profile snapshot offline", async () => {
+    const mockProfile: UserProfile = {
+      id: "user-42",
+      email: "collector@example.com",
+      display_name: "Archive Keeper",
+      roles: ["user"],
+      permissions: ["read:items"],
+      settings: {},
+    };
+
+    await saveProfileSnapshot(mockProfile);
+    const cached = await getCachedProfileSnapshot();
+    expect(cached).not.toBeNull();
+    expect(cached?.email).toBe("collector@example.com");
+    expect(cached?.display_name).toBe("Archive Keeper");
+
+    await clearOfflineCache();
+    expect(await getCachedProfileSnapshot()).toBeNull();
+  });
+
+  it("queues and flushes manual entries when offline", async () => {
+    const entryPayload = {
+      Title: "Rare Flea Market Find",
+      Authors: ["Anonymous"],
+      Format: "book",
+      ISBN: "9781234567890",
+    };
+
+    const enqueued = await enqueueOfflineManualEntry(entryPayload);
+    expect(enqueued.id).toMatch(/^offline-/);
+
+    const queue = await getOfflineManualQueue();
+    expect(queue.length).toBe(1);
+    expect(queue[0].payload.Title).toBe("Rare Flea Market Find");
+
+    // Check that optimistic item was added to collection snapshot
+    const snapshot = await getCachedCollectionSnapshot();
+    expect(snapshot?.items.some(i => i.title === "Rare Flea Market Find")).toBe(true);
+
+    // Flush queue successfully
+    const mockSubmit = vi.fn().mockResolvedValue({ success: true });
+    const result = await flushOfflineManualQueue(mockSubmit);
+    expect(result.synced).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(mockSubmit).toHaveBeenCalledWith(entryPayload);
+
+    // Queue is empty after flush
+    const remainingQueue = await getOfflineManualQueue();
+    expect(remainingQueue.length).toBe(0);
   });
 });
