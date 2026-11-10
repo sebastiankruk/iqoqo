@@ -246,7 +246,7 @@ export function Navbar() {
               <div className="hidden sm:flex items-center gap-2">
                 <Link
                   href="/federation/directory"
-                  className="flex h-9 items-center gap-1.5 rounded-full bg-accent/20 border border-accent/40 px-3.5 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+                  className="flex h-9 items-center gap-1.5 rounded-full bg-accent/20 border border-accent/40 px-3.5 text-xs font-semibold text-white dark:text-white transition-opacity hover:opacity-90"
                 >
                   <Radio className="h-4 w-4 text-accent" />
                   <span>{t("directory")}</span>
