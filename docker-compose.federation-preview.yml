@@ -80,6 +80,7 @@ services:
       - APP_NAME=iqoqo Federation Hub
     volumes:
       - peer_data:/usr/src/app/data
+      - ./app/static/covers:/usr/src/app/app/static/covers
     ports:
       - "127.0.0.1:${PEER_BACKEND_PORT:-5005}:5000"
     depends_on:
@@ -105,6 +106,7 @@ services:
       - FEDERATION_ALLOW_LOOPBACK=true
     volumes:
       - peer_data:/usr/src/app/data
+      - ./app/static/covers:/usr/src/app/app/static/covers
     depends_on:
       peer-db:
         condition: service_healthy
