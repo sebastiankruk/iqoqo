@@ -50,7 +50,14 @@ def test_sensitive_keys_in_api_keys_set():
     """Ensure sensitive OAuth and secret keys are included in API_KEYS registry."""
     from app.api.admin import API_KEYS
 
-    required_keys = {"ALLEGRO_TOKEN_DATA", "DISCOGS_CONSUMER_KEY", "DISCOGS_CONSUMER_SECRET"}
+    required_keys = {
+        "ALLEGRO_TOKEN_DATA",
+        "DISCOGS_CONSUMER_KEY",
+        "DISCOGS_CONSUMER_SECRET",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "REBRICKABLE_API_KEY",
+    }
     for key in required_keys:
         assert key in API_KEYS
         # Test that sample secret is masked

@@ -382,11 +382,15 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
         }
       }
       await updateInstanceSettings(toSave, category);
-      queryClient.invalidateQueries({ queryKey: queryKeys.config });
-      setSavedMessage(`Saved settings for ${groupId}`);
+      queryClient?.invalidateQueries?.({ queryKey: queryKeys.config });
+      const successMsg = `Saved settings for ${groupId === "all_apis" ? "External APIs" : groupId}`;
+      setSavedMessage(successMsg);
+      toast.success(successMsg);
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (e) {
       console.error("Failed to save settings", e);
+      const msg = e instanceof Error ? e.message : "Failed to save settings";
+      toast.error(msg);
     } finally {
       setSavingKey(null);
     }
