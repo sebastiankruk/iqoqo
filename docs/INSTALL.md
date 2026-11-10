@@ -6,17 +6,28 @@ This document provides comprehensive instructions for setting up iqoqo for devel
 
 ### One-Liner (Standalone Bootstrap)
 
-To bootstrap and configure an iQoQo deployment directly without manually cloning the repository:
+To bootstrap, configure, and start an isolated iQoQo production deployment directory (source-free) without manually cloning the git repository:
 
 ```bash
-# Bootstrap wizard into current or target deployment directory (defaults to main branch)
-curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash
+# 1. Run bootstrap installer into target deployment directory (e.g., /opt/iqoqo or current directory)
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/iqoqo --domain library.example.com --mode standard
 
-# Or specify a custom deployment directory and profile (e.g., preview / federation head)
+# 2. Enter deployment directory
+cd /opt/iqoqo
+
+# 3. Start services using official pre-built containers (migrations run automatically)
+docker compose -f docker-compose.prebuilt.yml up -d
+
+# 4. Check status and health
+python3 iqoqo_installer.py --presync-check
+```
+
+For preview or testing environments:
+
+```bash
+# Preview mode on custom port (5001 / 3001)
 curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/preview.iqoqo --mode preview
-
-# Or test a specific release branch/tag before merge:
-curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -b feat/c110-store-submission-lts-audit-v102 -d /opt/preview.iqoqo --mode preview
+cd /opt/preview.iqoqo && docker compose -f docker-compose.prebuilt.yml up -d
 ```
 
 ### Guided CLI Setup (From Clone)
