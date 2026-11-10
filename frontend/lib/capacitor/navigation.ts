@@ -27,8 +27,8 @@ export interface NavigationRouter {
 }
 
 /**
- * Parses custom scheme URLs (e.g. `iqoqo://auth-exchange?token=XYZ#token=XYZ`)
- * or universal links (`https://iqoqo.cc/item/123`).
+ * Parses custom scheme URLs (e.g. `iqoqo://auth-exchange?token=XYZ#token=XYZ`, `iqoqo://item/123`),
+ * notification deep links, or universal links (`https://iqoqo.cc/item/123`).
  *
  * @param rawUrl - Raw URL string from native launch or appUrlOpen event
  * @returns Parsed internal route path and any extracted auth token
@@ -37,9 +37,12 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
   try {
     let normalized = rawUrl;
     if (normalized.startsWith("iqoqo://")) {
-      normalized = normalized.replace("iqoqo://", "https://app.iqoqo.local/");
+      const rest = normalized.slice("iqoqo://".length);
+      // Ensure leading slash if missing (e.g. iqoqo://item/123 -> https://app.iqoqo.local/item/123)
+      normalized = "https://app.iqoqo.local/" + rest.replace(/^\/+/, "");
     } else if (normalized.startsWith("intent://")) {
-      normalized = normalized.replace("intent://", "https://app.iqoqo.local/");
+      const rest = normalized.slice("intent://".length);
+      normalized = "https://app.iqoqo.local/" + rest.replace(/^\/+/, "");
     }
 
     const parsed = new URL(normalized);
@@ -52,6 +55,10 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
     }
 
     let path = parsed.pathname + (parsed.search || "");
+    // If hash contains fragment for internal page anchors (not auth tokens), append it
+    if (parsed.hash && !parsed.hash.startsWith("#token=")) {
+      path += parsed.hash;
+    }
     // Open redirect safety guard: strictly reject protocol-relative '//' paths
     if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
       path = "/";
@@ -60,6 +67,45 @@ export function parseAppUrl(rawUrl: string): { path: string; token: string | nul
     return { path, token, code };
   } catch {
     return { path: "/", token: null, code: null };
+  }
+}
+
+/**
+ * Handle notification or internal route routing on native mobile.
+ * Navigates directly if within app boundary, otherwise opens external browser.
+ *
+ * @param targetUrl - Relative route (`/item/123`) or absolute URL (`https://...` or `iqoqo://...`)
+ * @param router - Navigation router interface
+ */
+export function navigateDeepLink(targetUrl: string, router: NavigationRouter): void {
+  if (!targetUrl) return;
+
+  if (targetUrl.startsWith("/")) {
+    router.push(targetUrl);
+    return;
+  }
+
+  if (targetUrl.startsWith("iqoqo://") || targetUrl.startsWith("intent://")) {
+    const { path } = parseAppUrl(targetUrl);
+    if (path && path !== "/") {
+      router.push(path);
+      return;
+    }
+  }
+
+  try {
+    const parsed = new URL(targetUrl);
+    // If destination matches current domain or local dummy host, route internally
+    if (typeof window !== "undefined" && (parsed.host === window.location.host || parsed.host === "app.iqoqo.local")) {
+      const internalPath = parsed.pathname + parsed.search + parsed.hash;
+      router.push(internalPath);
+      return;
+    }
+    // External link: open in system browser
+    openExternalUrl(targetUrl).catch(() => {});
+  } catch {
+    // If not a valid URL, fallback to pushing path directly
+    router.push(targetUrl);
   }
 }
 
