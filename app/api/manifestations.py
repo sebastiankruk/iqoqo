@@ -23,7 +23,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from flask import Response, current_app, g, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from werkzeug.utils import secure_filename
@@ -200,8 +200,12 @@ def get_manifestations() -> tuple[Response, int]:
 
         if result_ids:
             manifestations_unordered = (
-                Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
-                .filter(Manifestation.id.in_(result_ids))
+                db.session.execute(
+                    select(Manifestation)
+                    .options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                    .filter(Manifestation.id.in_(result_ids))
+                )
+                .scalars()
                 .all()
             )
             m_dict = {m.id: m for m in manifestations_unordered}
@@ -254,10 +258,10 @@ def get_manifestations() -> tuple[Response, int]:
     owned_manifestation_map = {}
     if user_id and manifestations:
         manifestation_ids = [m.id for m in manifestations]
-        owned_items_query = db.session.query(Item.manifestation_id, Item.id).filter(
+        owned_items_stmt = select(Item.manifestation_id, Item.id).filter(
             Item.owner_id == user_id, Item.manifestation_id.in_(manifestation_ids)
         )
-        for m_id, item_id in owned_items_query.all():
+        for m_id, item_id in db.session.execute(owned_items_stmt).all():
             owned_manifestation_map[m_id] = item_id
 
     data = []
@@ -353,7 +357,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     if user_id:
         from app.db.models import UserWorkIntent
 
-        owned_item = Item.query.filter_by(manifestation_id=m.id, owner_id=user_id).first()
+        owned_item = db.session.execute(select(Item).filter_by(manifestation_id=m.id, owner_id=user_id)).scalars().first()
         if owned_item:
             if owned_item.collection_status == "wish_list":
                 wishlist_item_id = owned_item.id
@@ -362,11 +366,16 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
                 item_id = owned_item.id
 
         if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
-            intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=m.expression.work.id).first()
+            intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=m.expression.work.id)).scalars().first()
             if intent:
                 wishlist_item_id = -intent.id
 
-    owner_count = Item.query.filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False)).count()
+    owner_count = (
+        db.session.execute(
+            select(func.count(Item.id)).filter(Item.manifestation_id == m.id, Item.is_hidden.is_(False))  # pylint: disable=not-callable
+        ).scalar()
+        or 0
+    )
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -449,9 +458,13 @@ def get_recent_manifestations() -> tuple[Response, int]:
         limit = request.args.get("limit", 10, type=int)
 
         recent = (
-            Manifestation.query.options(selectinload(Manifestation.expression).selectinload(Expression.work))
-            .order_by(Manifestation.id.desc())
-            .limit(limit)
+            db.session.execute(
+                select(Manifestation)
+                .options(selectinload(Manifestation.expression).selectinload(Expression.work))
+                .order_by(Manifestation.id.desc())
+                .limit(limit)
+            )
+            .scalars()
             .all()
         )
 
@@ -496,7 +509,7 @@ def lookup_isbn(isbn: str) -> tuple[Response, int]:
     jobs, which meant any crawler or prefetch traffic mutated the catalog and
     could be used to exhaust worker capacity.
     """
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).filter_by(isbn13=isbn)).scalars().first()
     if manifestation and manifestation.meta and manifestation.meta.get("Title"):
         return jsonify(**manifestation.meta), 200
 
@@ -560,7 +573,7 @@ def persist_isbn_manifestation(canonical_isbn: str, metadata: dict[str, Any]) ->
     Returns:
         The existing or newly created :class:`Manifestation`.
     """
-    manifestation = Manifestation.query.filter_by(isbn13=canonical_isbn).first()
+    manifestation = db.session.execute(select(Manifestation).filter_by(isbn13=canonical_isbn)).scalars().first()
     if manifestation:
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:
@@ -629,7 +642,7 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
     because those fields are shared across the FRBR hierarchy. The propagation is
     delegated to :mod:`app.core.frbr_service` so the API and the admin editor apply
     identical rules."""
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).filter_by(isbn13=isbn)).scalars().first()
     if not manifestation:
         return jsonify({"error": "Manifestation not found"}), 404
 
@@ -842,7 +855,11 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
 @optional_auth
 def get_manifestation_images(manifestation_id: int) -> tuple[Response, int]:
     """Get all additional scans for a manifestation."""
-    scans = ImageScan.query.filter_by(manifestation_id=manifestation_id).order_by(ImageScan.created_at.desc()).all()
+    scans = (
+        db.session.execute(select(ImageScan).filter_by(manifestation_id=manifestation_id).order_by(ImageScan.created_at.desc()))
+        .scalars()
+        .all()
+    )
     return (
         jsonify(
             {

@@ -431,7 +431,14 @@
     "newMediaTypeSubmittedToast": "Prośba o nowy typ mediów została wysłana do kustoszy",
     "newMediaTypeSubmittedDesc": "Dziękujemy! Kustosze instancji zostali powiadomieni. Możesz śledzić status prośby w zakładce Prośby.",
     "requestSubmittedTitle": "Propozycja wysłana",
-    "allRequiredFieldsError": "Proszę wypełnić wszystkie wymagane pola."
+    "allRequiredFieldsError": "Proszę wypełnić wszystkie wymagane pola.",
+    "changeType": "Zmiana typu",
+    "newMediaType": "Nowy typ mediów",
+    "proposedFormat": "Proponowany format",
+    "proposedCategory": "Proponowana kategoria",
+    "parentFrbrClass": "Klasa FRBR",
+    "sampleIdentifier": "Przykładowy identyfikator",
+    "rationale": "Uzasadnienie"
   },
   "Scanner": {
     "skipAndEnterManually": "Pomiń i wprowadź ręcznie"
@@ -524,7 +531,9 @@
       "manualCoverUpload": "Ręczne dodawanie okładki",
       "coverPreview": "Podgląd okładki",
       "uploadCover": "Dodaj okładkę",
-      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
+      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia.",
+      "cantFindFormat": "Nie możesz znaleźć formatu?",
+      "requestNewType": "Zgłoś nowy typ mediów"
     },
     "batchMode": {
       "toggleLabel": "Tryb seryjny",
@@ -926,8 +935,79 @@
     "continue": "Przejdź do logowania",
     "cancel": "Anuluj",
     "version": "Wersja: {version}"
+  },
+  "ItemDetail": {
+    "lego": {
+      "title": "Szczegóły zestawu LEGO",
+      "viewOnRebrickable": "Zobacz w serwisie Rebrickable",
+      "setNumber": "Numer zestawu",
+      "pieceCount": "Liczba elementów",
+      "pieces": "{count} elementów",
+      "minifigures": "Minifigurki",
+      "theme": "Seria",
+      "physicalState": "Stan fizycznego egzemplarza",
+      "status": "Stan",
+      "instructions": "Instrukcja",
+      "included": "W zestawie",
+      "missing": "Brak",
+      "missingPieces": "Brakuje: {count} elementów",
+      "statusSealed": "Fabrycznie zapieczętowany (w pudełku)",
+      "statusBuilt": "Złożony",
+      "statusIncomplete": "Niekompletny",
+      "statusPartedOut": "Rozłożony na części"
+    },
+    "maps": {
+      "title": "Kartografia i załączniki mapowe",
+      "addMap": "Dodaj mapę",
+      "scale": "Skala",
+      "projection": "Odwzorowanie",
+      "mapInsertPresent": "Wkładka mapowa obecna",
+      "missingMapInsert": "Brak wkładki mapowej",
+      "mapSupplement": "Załącznik mapowy",
+      "delete": "Usuń",
+      "deleting": "Usuwanie...",
+      "deleteAria": "Usuń załącznik mapowy",
+      "inspectMap": "Obejrzyj mapę",
+      "includesCartographic": "Zawiera materiały kartograficzne lub składane mapy.",
+      "addMapAttachmentTitle": "Dodaj załącznik mapowy",
+      "addMapAttachmentDesc": "Załącz wkładkę mapową w wysokiej rozdzielczości, rozkładówkę lub mapę świata.",
+      "mapTitleLabel": "Tytuł mapy",
+      "mapTitlePlaceholder": "np. Wkładka z mapą świata",
+      "mapTypeLabel": "Typ mapy",
+      "scaleLabel": "Skala (opcjonalnie)",
+      "scalePlaceholder": "np. 1:50 000",
+      "projectionLabel": "Odwzorowanie (opcjonalnie)",
+      "projectionPlaceholder": "np. Merkator",
+      "mapImageFileLabel": "Plik obrazu mapy",
+      "orImageUrlLabel": "Lub adres URL obrazu",
+      "imageUrlPlaceholder": "https://example.com/map.jpg lub /static/gallery/...",
+      "cancel": "Anuluj",
+      "saveAttachment": "Zapisz załącznik",
+      "uploading": "Przesyłanie...",
+      "typeWorldMap": "Mapa świata",
+      "typeFoldOutInsert": "Składana wkładka",
+      "typeClothMap": "Mapa na płótnie",
+      "typeGameBoard": "Plansza do gry",
+      "typeTopographic": "Mapa topograficzna",
+      "mapAttachmentRemoved": "Usunięto załącznik mapowy",
+      "mapAttachmentUploaded": "Pomyślnie przesłano załącznik mapowy",
+      "provideImageOrUrl": "Podaj plik obrazu mapy lub adres URL obrazu",
+      "failedToAdd": "Nie udało się dodać załącznika mapowego",
+      "failedToRemove": "Nie udało się usunąć załącznika mapowego"
+    }
+  },
+  "MapViewer": {
+    "title": "Przeglądarka map",
+    "cartographicMap": "mapa kartograficzna",
+    "scale": "Skala: {scale}",
+    "projection": "Odwzorowanie: {projection}",
+    "prevMap": "Poprzednia mapa",
+    "nextMap": "Następna mapa",
+    "noMapImage": "Brak dostępnego obrazu mapy dla tego załącznika.",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "rotate": "Obróć o 90°",
+    "resetView": "Resetuj widok",
+    "openFullImage": "Otwórz pełny obraz w nowej karcie"
   }
 }
-
-
-

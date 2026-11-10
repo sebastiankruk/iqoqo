@@ -20,7 +20,7 @@ import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
-import { useCreateNewMediaTypeEscalation, createNewMediaTypeEscalation } from "@/lib/api/escalations";
+import { useCreateNewMediaTypeEscalation } from "@/lib/api/escalations";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -73,15 +73,7 @@ export function RequestNewTypeModal({
   const [rationale, setRationale] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  let createMutation: ReturnType<typeof useCreateNewMediaTypeEscalation> | null = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    createMutation = useCreateNewMediaTypeEscalation();
-  } catch {
-    createMutation = null;
-  }
+  const createMutation = useCreateNewMediaTypeEscalation();
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -89,7 +81,6 @@ export function RequestNewTypeModal({
       setTimeout(() => {
         setSubmitted(false);
         setErrorMsg("");
-        setIsSubmitting(false);
         setProposedCategory("");
         setProposedFormat("");
         setParentFrbrClass("F1_Work");
@@ -119,39 +110,21 @@ export function RequestNewTypeModal({
       rationale: rationale.trim(),
     };
 
-    if (createMutation) {
-      createMutation.mutate(payload, {
-        onSuccess: () => {
-          setSubmitted(true);
-          toast.success(t("newMediaTypeSubmittedToast") || "New media type request submitted to custodians");
-          onSuccess?.();
-        },
-        onError: err => {
-          const msg = err instanceof Error ? err.message : t("failedToSubmit");
-          setErrorMsg(msg);
-          toast.error(msg);
-        },
-      });
-      return;
-    }
-
-    // Direct fallback if mounted without QueryClientProvider (e.g. lightweight isolated unit tests)
-    setIsSubmitting(true);
-    try {
-      await createNewMediaTypeEscalation(payload);
-      setSubmitted(true);
-      toast.success(t("newMediaTypeSubmittedToast") || "New media type request submitted to custodians");
-      onSuccess?.();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t("failedToSubmit");
-      setErrorMsg(msg);
-      toast.error(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    createMutation.mutate(payload, {
+      onSuccess: () => {
+        setSubmitted(true);
+        toast.success(t("newMediaTypeSubmittedToast") || "New media type request submitted to custodians");
+        onSuccess?.();
+      },
+      onError: err => {
+        const msg = err instanceof Error ? err.message : t("failedToSubmit");
+        setErrorMsg(msg);
+        toast.error(msg);
+      },
+    });
   };
 
-  const isPending = Boolean(createMutation?.isPending || isSubmitting);
+  const isPending = createMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

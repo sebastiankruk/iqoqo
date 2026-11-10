@@ -60,7 +60,7 @@ function RequestTypeBadge({ type }: { type?: "correction" | "deletion" | "change
   if (type === "new_media_type") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
-        New Media Type
+        {t("newMediaType") || "New Media Type"}
       </span>
     );
   }
@@ -195,19 +195,19 @@ export function MyEscalations() {
                   {esc.request_type === "new_media_type" ? (
                     <div className="text-xs space-y-1 bg-muted/40 p-2 rounded mt-1">
                       <div>
-                        <span className="font-semibold text-muted-foreground">Proposed Format:</span>{" "}
+                        <span className="font-semibold text-muted-foreground">{t("proposedFormat")}:</span>{" "}
                         <span className="font-medium text-foreground">
                           {String(esc.payload?.proposed_format || esc.suggested_value)}
                         </span>
                       </div>
                       {Boolean(esc.payload?.proposed_category) && (
                         <div>
-                          <span className="font-semibold text-muted-foreground">Category:</span>{" "}
+                          <span className="font-semibold text-muted-foreground">{t("proposedCategory")}:</span>{" "}
                           <span>{String(esc.payload?.proposed_category)}</span>
                         </div>
                       )}
                       <div>
-                        <span className="font-semibold text-muted-foreground">Rationale:</span>{" "}
+                        <span className="font-semibold text-muted-foreground">{t("rationale")}:</span>{" "}
                         <span className="text-foreground">{String(esc.payload?.rationale || esc.note || "—")}</span>
                       </div>
                     </div>

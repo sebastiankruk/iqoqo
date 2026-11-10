@@ -29,6 +29,7 @@ vi.mock("@/lib/api/hooks", () => ({
 
 vi.mock("@/lib/api/escalations", () => ({
   useMyEscalations: () => ({ data: [] }),
+  useCreateNewMediaTypeEscalation: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/components/dashboard/navbar-wrapper", () => ({

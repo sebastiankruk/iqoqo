@@ -431,7 +431,14 @@
     "newMediaTypeSubmittedToast": "New media type request submitted to custodians",
     "newMediaTypeSubmittedDesc": "Thank you! Instance custodians have been notified. You can track this request in your Requests tab.",
     "requestSubmittedTitle": "Proposal Submitted",
-    "allRequiredFieldsError": "Please fill in all required fields."
+    "allRequiredFieldsError": "Please fill in all required fields.",
+    "changeType": "Change Type",
+    "newMediaType": "New Media Type",
+    "proposedFormat": "Proposed Format",
+    "proposedCategory": "Proposed Category",
+    "parentFrbrClass": "FRBR Class",
+    "sampleIdentifier": "Sample",
+    "rationale": "Rationale"
   },
   "Scanner": {
     "skipAndEnterManually": "Skip and enter manually"
@@ -524,7 +531,9 @@
       "manualCoverUpload": "Manual Cover Upload",
       "coverPreview": "Cover preview",
       "uploadCover": "Upload Cover",
-      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
+      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device.",
+      "cantFindFormat": "Can't find your format?",
+      "requestNewType": "Request new media type"
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
@@ -926,8 +935,79 @@
     "continue": "Continue to login",
     "cancel": "Cancel",
     "version": "Version: {version}"
+  },
+  "ItemDetail": {
+    "lego": {
+      "title": "LEGO Set Details",
+      "viewOnRebrickable": "View on Rebrickable",
+      "setNumber": "Set Number",
+      "pieceCount": "Piece Count",
+      "pieces": "{count} Pieces",
+      "minifigures": "Minifigures",
+      "theme": "Theme",
+      "physicalState": "Physical Item State",
+      "status": "Status",
+      "instructions": "Instructions",
+      "included": "Included",
+      "missing": "Missing",
+      "missingPieces": "Missing: {count} pieces",
+      "statusSealed": "Sealed (In Box)",
+      "statusBuilt": "Built",
+      "statusIncomplete": "Incomplete",
+      "statusPartedOut": "Parted Out"
+    },
+    "maps": {
+      "title": "Cartography & Map Supplements",
+      "addMap": "Add Map",
+      "scale": "Scale",
+      "projection": "Projection",
+      "mapInsertPresent": "Map Insert Present",
+      "missingMapInsert": "Missing Map Insert",
+      "mapSupplement": "Map supplement",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "deleteAria": "Delete map attachment",
+      "inspectMap": "Inspect Map",
+      "includesCartographic": "Includes cartographic materials or folding maps.",
+      "addMapAttachmentTitle": "Add Map Attachment",
+      "addMapAttachmentDesc": "Attach a high-resolution map insert, fold-out, or world map.",
+      "mapTitleLabel": "Map Title",
+      "mapTitlePlaceholder": "e.g. World Map Insert",
+      "mapTypeLabel": "Map Type",
+      "scaleLabel": "Scale (optional)",
+      "scalePlaceholder": "e.g. 1:50,000",
+      "projectionLabel": "Projection (optional)",
+      "projectionPlaceholder": "e.g. Mercator",
+      "mapImageFileLabel": "Map Image File",
+      "orImageUrlLabel": "Or Image URL",
+      "imageUrlPlaceholder": "https://example.com/map.jpg or /static/gallery/...",
+      "cancel": "Cancel",
+      "saveAttachment": "Save Attachment",
+      "uploading": "Uploading...",
+      "typeWorldMap": "World Map",
+      "typeFoldOutInsert": "Fold-out Insert",
+      "typeClothMap": "Cloth Map",
+      "typeGameBoard": "Game Board",
+      "typeTopographic": "Topographic Map",
+      "mapAttachmentRemoved": "Map attachment removed",
+      "mapAttachmentUploaded": "Map attachment uploaded successfully",
+      "provideImageOrUrl": "Please provide either a map image file or an image URL",
+      "failedToAdd": "Failed to add map attachment",
+      "failedToRemove": "Failed to remove map attachment"
+    }
+  },
+  "MapViewer": {
+    "title": "Map Inspector",
+    "cartographicMap": "cartographic map",
+    "scale": "Scale: {scale}",
+    "projection": "Projection: {projection}",
+    "prevMap": "Previous Map",
+    "nextMap": "Next Map",
+    "noMapImage": "No map image available for this supplement.",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "rotate": "Rotate 90°",
+    "resetView": "Reset View",
+    "openFullImage": "Open Full Image in New Tab"
   }
 }
-
-
-

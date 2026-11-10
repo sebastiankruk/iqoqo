@@ -19,6 +19,14 @@ import ScanPage from "@/app/scan/page";
 import * as hooks from "@/lib/api/hooks";
 import * as apiClient from "@/lib/api/client";
 
+vi.mock("@/lib/api/escalations", () => ({
+  useCreateNewMediaTypeEscalation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+  }),
+}));
+
 vi.mock("@/lib/api/client", () => ({
   apiFetch: vi.fn(),
 }));

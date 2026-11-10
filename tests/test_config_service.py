@@ -114,3 +114,19 @@ def test_production_startup_accepts_strong_secret_key() -> None:
     result = _run_config_import("test-only-strong-secret-key-0123456789abcdef")
 
     assert result.returncode == 0, "strong production secret was unexpectedly rejected"
+
+
+def test_scoped_credential_quote_stripping(app) -> None:
+    """Ensure quote stripping is scoped only to sensitive/credential keys."""
+    with app.app_context():
+        with patch.dict(
+            os.environ,
+            {
+                "TMDB_API_KEY": '"secret_tmdb_key"',
+                "CUSTOM_SITE_TAGLINE": '"Preserving books"',
+            },
+        ):
+            # Credential key has quotes unwrapped
+            assert ConfigService.get("TMDB_API_KEY") == "secret_tmdb_key"
+            # Non-credential string preserves surrounding quotes untouched
+            assert ConfigService.get("CUSTOM_SITE_TAGLINE") == '"Preserving books"'

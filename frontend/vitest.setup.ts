@@ -184,8 +184,17 @@ vi.mock("next-intl", async () => {
   return {
     NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
     useLocale: () => "en",
-    useTranslations: (namespace: string) => {
-      const dictionary = messages[namespace as keyof typeof messages] as Record<string, unknown> | undefined;
+    useTranslations: (namespace?: string) => {
+      let dictionary: unknown = messages;
+      if (namespace) {
+        for (const segment of namespace.split(".")) {
+          if (!dictionary || typeof dictionary !== "object") {
+            dictionary = undefined;
+            break;
+          }
+          dictionary = (dictionary as Record<string, unknown>)[segment];
+        }
+      }
       return (key: string, values?: Record<string, string>) => {
         let translation: unknown = dictionary;
         for (const segment of key.split(".")) {

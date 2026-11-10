@@ -23,7 +23,7 @@ from typing import Any
 import bleach
 from flask import Response, g, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -546,7 +546,9 @@ def _notify_custodians_of_new_media_type(escalation: EscalationRequest, payload:
         from app.core.notifications import create_notification
         from app.db.models import Role, User
 
-        custodians = db.session.query(User).join(User.roles).filter(Role.name.in_(["admin", "custodian"])).distinct().all()
+        custodians = (
+            db.session.execute(select(User).join(User.roles).filter(Role.name.in_(["admin", "custodian"])).distinct()).scalars().all()
+        )
         for custodian in custodians:
             create_notification(
                 user_id=custodian.id,
@@ -761,9 +763,7 @@ def _delete_manifestation_target(escalation: EscalationRequest, user: User | Non
 
     from app.db.models import ScanTelemetry
 
-    ScanTelemetry.query.filter_by(manifestation_id=escalation.manifestation_id).update(
-        {"manifestation_id": None}, synchronize_session=False
-    )
+    db.session.execute(update(ScanTelemetry).filter_by(manifestation_id=escalation.manifestation_id).values(manifestation_id=None))
     db.session.delete(target_manif)
     return None
 
