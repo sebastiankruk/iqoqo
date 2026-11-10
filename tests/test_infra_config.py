@@ -294,6 +294,15 @@ exit 0
         for target in ["mobile-build", "mobile-sync", "mobile-android-apk", "mobile-android-aab", "mobile-adb-install", "test-e2e-mobile"]:
             self.assertIn(target, phony_line, f"Target {target} not in .PHONY")
 
+    def test_ios_privacy_manifest(self):
+        privacy_path = self.repo_root / "frontend" / "ios" / "App" / "App" / "PrivacyInfo.xcprivacy"
+        self.assertTrue(privacy_path.exists(), "PrivacyInfo.xcprivacy missing")
+        content = privacy_path.read_text()
+        self.assertIn("<key>NSPrivacyTracking</key>", content)
+        self.assertIn("<false/>", content)
+        self.assertIn("NSPrivacyAccessedAPITypeUserDefaults", content)
+        self.assertIn("CA92.1", content)
+
 
 if __name__ == "__main__":
     unittest.main()
