@@ -18,12 +18,15 @@
 # Downloads and invokes the iQoQo CLI wizard into a target deployment directory.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/release/1.0.2/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/release/1.0.2/scripts/install.sh | bash -s -- -d /opt/pre.iqoqo --mode preview
+#   curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/preview.iqoqo --mode preview
 
 set -euo pipefail
 
-BRANCH_OR_TAG="${IQOQO_BRANCH:-release/1.0.2}"
+# Accept IQOQO_BRANCH, BRANCH_OR_TAG, or default to main
+BRANCH_OR_TAG="${IQOQO_BRANCH:-${BRANCH_OR_TAG:-main}}"
+# Normalize if user passes refs/heads/ or full git ref
+BRANCH_OR_TAG="${BRANCH_OR_TAG#refs/heads/}"
 RAW_BASE_URL="https://raw.githubusercontent.com/sebastiankruk/iqoqo/${BRANCH_OR_TAG}"
 DEFAULT_TARGET_DIR="${IQOQO_DIR:-.}"
 
@@ -34,6 +37,12 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -d|--dir)
       TARGET_DIR="$2"
+      shift 2
+      ;;
+    -b|--branch)
+      BRANCH_OR_TAG="$2"
+      BRANCH_OR_TAG="${BRANCH_OR_TAG#refs/heads/}"
+      RAW_BASE_URL="https://raw.githubusercontent.com/sebastiankruk/iqoqo/${BRANCH_OR_TAG}"
       shift 2
       ;;
     *)
@@ -74,7 +83,23 @@ elif [[ -f "./iqoqo_installer.py" ]]; then
   INSTALLER_EXEC="./iqoqo_installer.py"
 else
   echo "Fetching installer wizard from ${BRANCH_OR_TAG}..."
-  curl -fsSL "${RAW_BASE_URL}/scripts/iqoqo_installer.py" -o iqoqo_installer.py
+  # Try primary branch URL first, fall back to release/1.0.2 or main if custom branch doesn't have it
+  if ! curl -fsSL "${RAW_BASE_URL}/scripts/iqoqo_installer.py" -o iqoqo_installer.py 2>/dev/null; then
+    echo "Notice: Branch ${BRANCH_OR_TAG} not found on remote. Trying fallback branches..."
+    FALLBACK_BRANCHES=("main" "release/1.0.2" "feat/c110-store-submission-lts-audit-v102")
+    FOUND=0
+    for FB in "${FALLBACK_BRANCHES[@]}"; do
+      if curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/${FB}/scripts/iqoqo_installer.py" -o iqoqo_installer.py 2>/dev/null; then
+        echo "Found installer wizard on branch ${FB}."
+        FOUND=1
+        break
+      fi
+    done
+    if [[ $FOUND -ne 1 ]]; then
+      echo "Error: Failed to download scripts/iqoqo_installer.py from ${BRANCH_OR_TAG} or fallback branches." >&2
+      exit 1
+    fi
+  fi
   chmod +x iqoqo_installer.py
   INSTALLER_EXEC="./iqoqo_installer.py"
 fi
