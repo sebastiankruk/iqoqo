@@ -129,7 +129,7 @@ export default function ScanPage() {
         });
         if (res.synced > 0) {
           toast.success(`Synced ${res.synced} offline manual item${res.synced > 1 ? "s" : ""} to your library!`);
-          queryClient.invalidateQueries({ queryKey: queryKeys.itemsRoot });
+          queryClient.invalidateQueries({ queryKey: queryKeys.itemsAll });
         }
       } catch {
         // Ignore background sync errors
