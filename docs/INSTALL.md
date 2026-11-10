@@ -4,7 +4,26 @@ This document provides comprehensive instructions for setting up iqoqo for devel
 
 ## Quick Start (Docker)
 
-For the fastest setup, use Docker Compose:
+For the fastest setup, use the interactive CLI installer wizard:
+
+```bash
+# 1. Clone and navigate to the repository
+git clone https://github.com/sebastiankruk/iqoqo.git
+cd iqoqo
+
+# 2. Run guided setup wizard (generates 256-bit secrets and hardened 0600 .env)
+make install-wizard
+# Or run non-interactively:
+# python3 scripts/iqoqo_installer.py --domain library.example.com --mode standard --non-interactive
+
+# 3. Verify pre-sync readiness
+make presync-check
+
+# 4. Build and start services (migrations run automatically on first start)
+./run.sh prod
+```
+
+Alternatively, configure manually:
 
 ```bash
 # 1. Clone and navigate to the repository
