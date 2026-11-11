@@ -71,3 +71,37 @@ def test_rate_limit_headers_emitted(rate_limited_client):
     assert "x-ratelimit-remaining" in headers_lower
     assert "x-ratelimit-reset" in headers_lower
     assert headers_lower["x-ratelimit-limit"] == "1000"
+
+
+def test_morning_scanning_50_items_load_scenario(rate_limited_client):
+    """Simulate a morning scanning session of 50 items with OPTIONS preflights and status polls.
+
+    Under the legacy miscalibrated rate limiter (50 per hour default, OPTIONS counted against quota),
+    scanning 50 items instantly triggered HTTP 429 lockouts after ~25 items.
+    Under the recalibrated limiter (1000 per hour default, OPTIONS exempt via request_filter):
+    - 50 items * 2 requests (CORS OPTIONS preflight + GET) = 100 requests.
+    - 10 periodic background status/profile polls = 10 requests.
+    - Total: 110 requests in a burst.
+    - Result: Zero HTTP 429s, OPTIONS consume 0 tokens, and >900 hourly quota remains.
+    """
+    for i in range(50):
+        # 1. Mobile WebView / Browser sends CORS OPTIONS preflight before each item operation
+        resp_opt = rate_limited_client.open("/api/health", method="OPTIONS")
+        assert resp_opt.status_code in (200, 204), f"Preflight {i+1} failed with {resp_opt.status_code}"
+        opt_headers = {k.lower(): v for k, v in resp_opt.headers.items()}
+        assert "x-ratelimit-remaining" not in opt_headers, "OPTIONS preflight must not consume quota"
+
+        # 2. Main item scan / lookup request
+        resp_item = rate_limited_client.get("/api/health")
+        assert resp_item.status_code == 200, f"Item request {i+1} failed with {resp_item.status_code}"
+
+    # 3. Simulate periodic background status/profile checks during scanning
+    for j in range(10):
+        resp_poll = rate_limited_client.get("/api/health")
+        assert resp_poll.status_code == 200, f"Poll {j+1} failed with {resp_poll.status_code}"
+
+    # Assert exact quota accounting on final response
+    final_headers = {k.lower(): v for k, v in resp_poll.headers.items()}
+    assert final_headers.get("x-ratelimit-limit") == "1000"
+    # Exactly 50 item requests + 10 poll requests = 60 consumed out of 1000
+    assert final_headers.get("x-ratelimit-remaining") == "940"
