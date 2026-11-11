@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - 2026-11-10
+## [1.0.2] - 2026-11-11
 
 ### Added
 
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Standardized sentence-case Polish localization across all admin settings and user profile views.
   - Eliminated legacy SQLAlchemy `session.query()` patterns in favor of canonical `select()` queries.
 - **Read-Only Federation Showcase Hub Instance Mode (C112)**:
-  - Added `FEDERATION_READ_ONLY_HEAD` profile and instance flag.
+  - Added `FEDERATION_HEAD_MODE` instance setting and `federation_head` deployment profile.
   - Rendered explicit read-only badges and disabled local item additions while allowing federated catalog exploration.
 - **Ownership Reassignment Filtering & Single-Item Deep Link (C113)**:
   - Implemented SQL filtering on `GET /api/admin/ownership/items` by query, format, and collection status.
@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Recalibrated default limits to `1000 per hour, 10000 per day` to accommodate SPA and mobile WebView traffic.
   - Exempted CORS `OPTIONS` preflight requests from consuming rate limit quota via `@limiter.request_filter`.
   - Hardened `useProfile()` with `staleTime: 30_000` and prevented HTTP `429`/`5xx` errors from triggering false-logout and infinite redirect loops.
+  - Added automated 50-item morning scanning load scenario test asserting zero HTTP 429 lockouts with full CORS OPTIONS preflight exemption.
 - **OpenObserve Telemetry Credential Sync, Status Verification & RUM Routing (C114d)**:
   - Stripped surrounding quotes and added `probe_openobserve_auth()` in `scripts/ensure_env_secrets.py` to detect credential drift against `openobserve_data` volume.
   - Added `make monitoring-reset-auth` to safely reset `/data/db` credentials while preserving `/data/stream` parquet telemetry.
