@@ -405,6 +405,10 @@ except Exception:
     pass
 " 2>/dev/null || true)
     fi
+    oo_auth="${oo_auth#\"}"
+    oo_auth="${oo_auth%\"}"
+    oo_auth="${oo_auth#\'}"
+    oo_auth="${oo_auth%\'}"
 
     if [[ -z "$oo_auth" ]]; then
         check "OpenObserve API" info "unconfigured (OPENOBSERVE_BASIC_AUTH not set in environment or DB) [${oo_status}]"
@@ -431,6 +435,36 @@ except Exception:
         else
             check "OpenObserve API" warn "container running but health endpoint unreachable (:${oo_host_port}/healthz) [${oo_status}]"
         fi
+
+        oo_auth_res=$(python3 -c "
+import urllib.request, urllib.error, sys
+req = urllib.request.Request(
+    'http://127.0.0.1:${oo_host_port}/api/default/_search',
+    data=b'{\"query\":{\"sql\":\"SELECT 1\",\"size\":1}}',
+    headers={'Authorization': 'Basic ${oo_auth}', 'Content-Type': 'application/json'},
+    method='POST'
+)
+try:
+    r = urllib.request.urlopen(req, timeout=3)
+    print(r.code)
+    sys.exit(0)
+except urllib.error.HTTPError as e:
+    print(e.code)
+    sys.exit(0)
+except Exception:
+    print('err')
+    sys.exit(0)
+" 2>/dev/null || echo "err")
+
+        if [[ "$oo_auth_res" == "200" || "$oo_auth_res" == "201" ]]; then
+            check "OpenObserve Auth" pass "authenticated SQL API ok (/api/default/_search)"
+        elif [[ "$oo_auth_res" == "401" || "$oo_auth_res" == "403" ]]; then
+            check "OpenObserve Auth" fail "HTTP ${oo_auth_res} Unauthenticated — .env OPENOBSERVE_BASIC_AUTH mismatches volume credentials (run 'make monitoring-reset-auth')"
+        elif [[ "$oo_auth_res" != "err" ]]; then
+            check "OpenObserve Auth" pass "auth accepted (HTTP ${oo_auth_res})"
+        else
+            check "OpenObserve Auth" warn "search endpoint probe error"
+        fi
     fi
 else
     check "OpenObserve" info "not running (optional default stack)"
@@ -445,6 +479,13 @@ if [[ -n "$otel_cname" ]]; then
                       docker exec "$otel_cname" wget -qO- http://127.0.0.1:8888/ 2>/dev/null || true)
     fi
     check "OTel Collector" pass "ready (:8888) [${otel_status}]"
+
+    recent_export_errors=$(docker logs "$otel_cname" --since 5m 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
+    if [[ "$recent_export_errors" -gt 0 ]]; then
+        check "OTel Collector Export" fail "${recent_export_errors} export failures in last 5m (dropped telemetry — check collector logs)"
+    else
+        check "OTel Collector Export" pass "clean (0 export errors in last 5m)"
+    fi
 else
     check "OTel Collector" info "not running (optional default stack)"
 fi

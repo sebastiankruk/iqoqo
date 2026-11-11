@@ -15,6 +15,8 @@
 //
 "use client";
 
+import { Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { useProfile } from "@/lib/api/hooks";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { OwnershipManagement } from "@/components/admin/ownership-management";
@@ -31,6 +33,7 @@ import { PermissionName } from "@/lib/permissions";
  * @returns The ownership reassignment page component
  */
 export default function OwnershipPage() {
+  const t = useTranslations("AdminOwnership");
   const { data: profile, isLoading } = useProfile();
 
   if (isLoading || !profile) {
@@ -77,12 +80,18 @@ export default function OwnershipPage() {
         <div className="flex-1 min-w-0 pb-20">
           <div className="flex flex-col gap-8">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Item Ownership Reassignment</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Audit and reassign physical item ownership across user accounts with atomic provenance tracking.
-              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{t("description")}</p>
             </div>
-            <OwnershipManagement />
+            <Suspense
+              fallback={
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              }
+            >
+              <OwnershipManagement />
+            </Suspense>
           </div>
         </div>
       </main>

@@ -25,6 +25,13 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@/lib/api/escalations", () => ({
+  useCreateNewMediaTypeEscalation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}));
+
 describe("ManualEntryForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();

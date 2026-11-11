@@ -65,4 +65,21 @@ describe("SidebarActions Unit Test (Plain Props)", () => {
 
     expect(screen.getByRole("button", { name: /Request Loan/i })).toBeInTheDocument();
   });
+
+  it("renders Reassign Owner action for admin or user with transfer:item permission", () => {
+    render(
+      <SidebarActions
+        item={{ ...mockItem, owner_id: "user-owner-1" } as unknown as Item}
+        canModifyItem={true}
+        isOwner={true}
+        profile={{ id: "user-admin", roles: ["admin"], permissions: ["transfer:item"] }}
+        collectionStatusInfo={{ label: "On Shelf", class: "bg-emerald-50" }}
+        progressStatusInfo={{ label: "Reading...", class: "bg-accent/10" }}
+      />
+    );
+
+    const reassignLink = screen.getByRole("link", { name: /Reassign Owner/i });
+    expect(reassignLink).toBeInTheDocument();
+    expect(reassignLink).toHaveAttribute("href", "/admin/ownership?sourceUserId=user-owner-1&itemId=10");
+  });
 });

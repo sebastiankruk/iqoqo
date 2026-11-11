@@ -139,7 +139,7 @@ def _get_fernet_cipher() -> Fernet:
 
 def is_sensitive_key(key: str) -> bool:
     """Check whether a configuration key contains sensitive credentials or tokens."""
-    return key in SENSITIVE_SETTING_KEYS or any(k in key for k in ("_KEY", "_SECRET", "_TOKEN", "_DATA"))
+    return key in SENSITIVE_SETTING_KEYS or any(k in key for k in ("_KEY", "_SECRET", "_TOKEN"))
 
 
 #: Keys whose value is a browser-bound credential rather than an operator

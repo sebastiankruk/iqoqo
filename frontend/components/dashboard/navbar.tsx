@@ -34,6 +34,7 @@ import {
   HelpCircle,
   BookOpen,
   X,
+  Radio,
 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
@@ -102,6 +103,7 @@ export function Navbar() {
   }, []);
 
   const isMaintenanceMode = config?.maintenance_mode === true;
+  const isFederationHead = config?.federation_head_mode === true;
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -184,6 +186,17 @@ export function Navbar() {
               </svg>
             </div>
             <span className="font-serif text-xl font-bold tracking-tight">iqoqo</span>
+            {isFederationHead && (
+              <span
+                data-testid="federation-hub-badge"
+                title={t("federationHubBadge")}
+                aria-label={t("federationHubBadge")}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 rounded-full text-[10px] font-semibold bg-accent/20 text-accent border border-accent/30"
+              >
+                <Radio className="h-3 w-3 animate-pulse shrink-0" />
+                <span className="hidden sm:inline">{t("federationHubBadge")}</span>
+              </span>
+            )}
           </Link>
 
           {/* Search – visible on all screens with max-width on mobile */}
@@ -218,7 +231,7 @@ export function Navbar() {
                 {t("profile")}
               </Link>
             )}
-            {mounted && profile && (
+            {mounted && profile && !isFederationHead && (
               <div className="hidden sm:flex items-center gap-2">
                 <Link
                   href="/scan"
@@ -226,6 +239,17 @@ export function Navbar() {
                 >
                   <ScanLine className="h-4 w-4" />
                   <span>{t("scan")}</span>
+                </Link>
+              </div>
+            )}
+            {mounted && profile && isFederationHead && (
+              <div className="hidden sm:flex items-center gap-2">
+                <Link
+                  href="/federation/directory"
+                  className="flex h-9 items-center gap-1.5 rounded-full bg-accent/20 border border-accent/40 px-3.5 text-xs font-semibold text-white dark:text-white transition-opacity hover:opacity-90"
+                >
+                  <Radio className="h-4 w-4 text-accent" />
+                  <span>{t("directory")}</span>
                 </Link>
               </div>
             )}
@@ -401,15 +425,29 @@ export function Navbar() {
           <span className="text-[10px] mt-1">{t("home")}</span>
         </Link>
 
-        <Link
-          href="/scan"
-          className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
-            pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ScanLine className="h-5 w-5" />
-          <span className="text-[10px] mt-1">{t("scan")}</span>
-        </Link>
+        {isFederationHead ? (
+          <Link
+            href="/federation/directory"
+            className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+              pathname === "/federation/directory"
+                ? "text-accent font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Radio className="h-5 w-5" />
+            <span className="text-[10px] mt-1">{t("directory")}</span>
+          </Link>
+        ) : (
+          <Link
+            href="/scan"
+            className={`flex flex-col items-center justify-center flex-1 py-1 active:scale-95 transition-transform ${
+              pathname === "/scan" ? "text-accent font-semibold" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ScanLine className="h-5 w-5" />
+            <span className="text-[10px] mt-1">{t("scan")}</span>
+          </Link>
+        )}
 
         <Link
           href="/collection"

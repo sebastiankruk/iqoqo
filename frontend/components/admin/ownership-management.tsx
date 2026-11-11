@@ -16,6 +16,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   getOwnershipAccounts,
   getOwnershipItems,
@@ -25,7 +27,17 @@ import {
   OwnershipSourceItem,
   OwnershipPreviewResponse,
 } from "@/lib/api/admin";
-import { Loader2, AlertCircle, ArrowRight, ShieldAlert, Lock, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  ArrowRight,
+  ShieldAlert,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -45,9 +57,16 @@ import { Button } from "@/components/ui/button";
  * all-scope acknowledgement, and conflict handling.
  */
 export function OwnershipManagement() {
+  const t = useTranslations("AdminOwnership");
+  const searchParams = useSearchParams();
+  const initialSourceUserId = searchParams.get("sourceUserId") || "";
+  const initialItemIdRaw = searchParams.get("itemId");
+  const initialParsedItemId = initialItemIdRaw ? parseInt(initialItemIdRaw, 10) : null;
+  const initialItemId = initialParsedItemId !== null && !isNaN(initialParsedItemId) ? initialParsedItemId : null;
+
   const [accounts, setAccounts] = useState<OwnershipAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [sourceUserId, setSourceUserId] = useState<string>("");
+  const [sourceUserId, setSourceUserId] = useState<string>(initialSourceUserId);
   const [targetUserId, setTargetUserId] = useState<string>("");
 
   // Items state
@@ -56,7 +75,12 @@ export function OwnershipManagement() {
   const [page, setPage] = useState(1);
   const [totalPages, setPages] = useState(1);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>(initialItemId !== null ? [initialItemId] : []);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [collectionStatusFilter, setCollectionStatusFilter] = useState<string>("");
+  const [targetItemId, setTargetItemId] = useState<number | null>(initialItemId);
 
   // Dialog and Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -84,7 +108,7 @@ export function OwnershipManagement() {
     fetchAccounts();
   }, [fetchAccounts]);
 
-  // Load items when sourceUserId or page changes
+  // Load items when sourceUserId, page, or filters change
   const fetchItems = useCallback(async () => {
     if (!sourceUserId) {
       setItems([]);
@@ -95,17 +119,26 @@ export function OwnershipManagement() {
     }
     setLoadingItems(true);
     try {
-      const res = await getOwnershipItems(sourceUserId, page, 20);
+      const res = await getOwnershipItems(sourceUserId, page, 20, {
+        q: searchQuery.trim() || undefined,
+        collection_status: collectionStatusFilter || undefined,
+        item_id: targetItemId ?? undefined,
+      });
       setItems(res.items);
       setTotalItems(res.total);
       setPages(res.pages);
+
+      // If targeted item was loaded, ensure it is selected
+      if (targetItemId && res.items.some(i => i.id === targetItemId)) {
+        setSelectedItemIds(prev => (prev.includes(targetItemId) ? prev : [...prev, targetItemId]));
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load items";
       toast.error(msg);
     } finally {
       setLoadingItems(false);
     }
-  }, [sourceUserId, page]);
+  }, [sourceUserId, page, searchQuery, collectionStatusFilter, targetItemId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -116,9 +149,31 @@ export function OwnershipManagement() {
     setSourceUserId(newSourceId);
     setPage(1);
     setSelectedItemIds([]);
+    setTargetItemId(null);
     if (targetUserId === newSourceId) {
       setTargetUserId("");
     }
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setPage(1);
+    // Clear item_id filter when user edits text search
+    if (targetItemId !== null) {
+      setTargetItemId(null);
+    }
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setCollectionStatusFilter(status);
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setCollectionStatusFilter("");
+    setTargetItemId(null);
+    setPage(1);
   };
 
   const toggleItemSelection = (id: number) => {
@@ -300,6 +355,59 @@ export function OwnershipManagement() {
                 Transfer All Source Items ({totalItems})
               </Button>
             </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder={t("searchPlaceholder")}
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => handleSearchChange("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="w-full sm:w-48">
+              <select
+                aria-label={t("filterStatus")}
+                value={collectionStatusFilter}
+                onChange={e => handleStatusFilterChange(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">{t("allStatuses")}</option>
+                <option value="available">Available</option>
+                <option value="lent">Lent</option>
+                <option value="borrowed">Borrowed</option>
+                <option value="lost">Lost</option>
+                <option value="sold">Sold</option>
+                <option value="donated">Donated</option>
+                <option value="damaged">Damaged</option>
+              </select>
+            </div>
+
+            {(searchQuery || collectionStatusFilter || targetItemId !== null) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                {t("clearFilters")}
+              </Button>
+            )}
           </div>
 
           {/* Items Table */}

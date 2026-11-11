@@ -33,9 +33,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
+from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.core.config_service import is_federation_head_mode
 from app.core.data_manager import invalidate_facets_cache
 from app.core.events import publish_transition_event
 from app.core.export_service import ExportService
@@ -1125,6 +1127,13 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         return error_response
     assert payload is not None
 
+    if payload.collection_status == "wish_list":
+        return _add_wishlist_by_manifestation(user_id, manifestation, payload)
+
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     metadata = payload.model_extra or {}
     if isinstance(payload.meta, dict):
         metadata.update(payload.meta)
@@ -1271,6 +1280,10 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
     if payload.collection_status == "wish_list":
         return _add_wishlist_by_manifestation(user_id, manifestation, payload)
 
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     visibility, is_hidden = _resolve_item_visibility_and_hidden(user_id, payload_json, payload.is_hidden, payload.visibility)
     item = Item(
         manifestation_id=manifestation.id,
@@ -1356,12 +1369,45 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         return error_response
     assert payload is not None
 
+    if payload.collection_status != "wish_list":
+        guard_err = reject_if_federation_head_item_write()
+        if guard_err:
+            return guard_err
+
     if payload.collection_status == "lent":
         return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
     manifestations = Manifestation.query.filter(Manifestation.id.in_(payload.manifestation_ids)).all()
     if not manifestations:
         return jsonify({"success": False, "data": None, "error": "No valid manifestations found"}), 404
+
+    if payload.collection_status == "wish_list" and is_federation_head_mode():
+        intents = []
+        for man in manifestations:
+            work = man.expression.work if man.expression and man.expression.work else None
+            if not work:
+                continue
+            intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
+            if not intent:
+                content_type = man.expression.content_type if man.expression else "text"
+                from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_ALIAS_TO_CATEGORY, MediaCategory
+
+                _fmt_lower = (content_type or "").lower()
+                category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
+                statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
+                status = payload.status or next((s for s in statuses if s.startswith("want_to_")), statuses[0])
+                intent = UserWorkIntent(user_id=user_id, work_id=work.id, status=status)
+                db.session.add(intent)
+                db.session.flush()
+            intents.append(intent)
+        db.session.commit()
+        return jsonify(
+            {
+                "success": True,
+                "data": {"item_ids": [], "intent_ids": [i.id for i in intents], "manifestation_ids": [m.id for m in manifestations]},
+                "error": None,
+            }
+        )
 
     bulk_visibility, bulk_is_hidden = _resolve_item_visibility_and_hidden(
         user_id, payload_json, schema_is_hidden=payload.is_hidden, schema_visibility=payload.visibility
@@ -1417,6 +1463,10 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 @require_permission(PermissionName.WRITE_ITEM)
 def add_item_manual() -> Response | tuple[Response, int]:
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -1558,6 +1608,13 @@ def create_item() -> Response | tuple[Response, int]:
     manifestation = db.session.get(Manifestation, manifestation_id)
     if not manifestation:
         return jsonify({"success": False, "data": None, "error": "Manifestation not found"}), 404
+
+    if payload.collection_status == "wish_list":
+        return _add_wishlist_by_manifestation(user_id, manifestation, payload)
+
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
 
     if payload.collection_status == "lent":
         if not payload.lent_to_user_id and not (payload.lent_to_name or "").strip():

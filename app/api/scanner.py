@@ -30,6 +30,7 @@ from sqlalchemy import or_, select
 
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import require_auth, require_permission
+from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.schemas import ScanBarcodeSchema
 from app.core.ingest import IngestService
 from app.core.limiter import limiter
@@ -111,7 +112,7 @@ def _find_locally(code: str) -> Manifestation | None:
     """Unified helper to find manifestation by identifier or item local barcode."""
     # pylint: disable=singleton-comparison
     clean_code = code.strip()
-    result = Manifestation.query.filter(or_(*_get_manifestation_filters(clean_code))).first()
+    result = db.session.execute(select(Manifestation).filter(or_(*_get_manifestation_filters(clean_code)))).scalars().first()
     if isinstance(result, Manifestation):
         return result
 
@@ -198,7 +199,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         current_app.logger.debug(f"Hashed search '{query}' to {canonical_id}")
 
     # Check DB first
-    query_obj = Manifestation.query.join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
+    stmt_manifestations = select(Manifestation).join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
 
     from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
@@ -211,9 +212,9 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
     # Filter by format if hint is provided to avoid cross-media collisions
     if category_hint:
-        query_obj = query_obj.filter(Expression.content_type == category_hint)
+        stmt_manifestations = stmt_manifestations.filter(Expression.content_type == category_hint)
 
-    all_manifestations = query_obj.all()
+    all_manifestations = db.session.execute(stmt_manifestations).scalars().all()
     matched_item: Item | None = None
     if not all_manifestations:
         user_id = getattr(g, "user_id", None)
@@ -232,7 +233,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
             user_id = getattr(g, "user_id", None)
             # Fetch all items owned by user for these manifestations in one go
             m_ids = [m.id for m in all_manifestations]
-            user_items = Item.query.filter(Item.manifestation_id.in_(m_ids), Item.owner_id == user_id).all()
+            user_items = db.session.execute(select(Item).filter(Item.manifestation_id.in_(m_ids), Item.owner_id == user_id)).scalars().all()
             owned_ids = {i.manifestation_id: i.id for i in user_items}
 
             for m in all_manifestations:
@@ -263,7 +264,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
 
             # Check if user owns it
             user_id = getattr(g, "user_id", None)
-            item = Item.query.filter_by(manifestation_id=manifestation.id, owner_id=user_id).first()
+            item = db.session.execute(select(Item).filter_by(manifestation_id=manifestation.id, owner_id=user_id)).scalars().first()
             data["already_in_collection"] = item is not None or matched_item is not None
             data["item_id"] = item.id if item else (matched_item.id if matched_item else None)
             if matched_item:
@@ -357,7 +358,7 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
     # Check collection ownership with the now-known manifestation_id
     if manifestation_id:
         user_id = getattr(g, "user_id", None)
-        item = Item.query.filter_by(manifestation_id=manifestation_id, owner_id=user_id).first()
+        item = db.session.execute(select(Item).filter_by(manifestation_id=manifestation_id, owner_id=user_id)).scalars().first()
         meta["already_in_collection"] = item is not None
         meta["item_id"] = item.id if item else None
 
@@ -563,7 +564,7 @@ def _scan_to_wishlist(
         return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
 
     # Check if intent already exists
-    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
+    intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=work.id)).scalars().first()
     if not intent:
         intent = UserWorkIntent(
             user_id=user_id,
@@ -852,6 +853,10 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
 
     if policy == "wishlist" or collection_status == "wish_list":
         return _scan_to_wishlist(barcode, manifestation, format_hint, is_new_manifestation, default_progress, user_id)
+
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
 
     return _scan_to_library(
         barcode,

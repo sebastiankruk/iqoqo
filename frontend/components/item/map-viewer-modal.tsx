@@ -31,6 +31,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useTranslations } from "next-intl";
 import { resolveApiUrl } from "@/lib/utils";
 
 export interface MapAttachmentItem {
@@ -91,13 +92,9 @@ function isSafeDisplayUrl(url: string | null | undefined): boolean {
  * @param {MapViewerModalProps} props - Component properties.
  * @returns {JSX.Element | null} Rendered map inspector modal.
  */
-export function MapViewerModal({
-  isOpen,
-  onClose,
-  maps,
-  initialIndex = 0,
-  title = "Map Inspector",
-}: MapViewerModalProps) {
+export function MapViewerModal({ isOpen, onClose, maps, initialIndex = 0, title }: MapViewerModalProps) {
+  const t = useTranslations("MapViewer");
+  const defaultTitle = title || t("title");
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [prevInitialIndex, setPrevInitialIndex] = useState(initialIndex);
@@ -239,12 +236,12 @@ export function MapViewerModal({
             <Compass className="h-5 w-5 text-primary shrink-0" />
             <div className="min-w-0">
               <DialogTitle className="text-base font-semibold truncate leading-tight">
-                {currentMap.title || title}
+                {currentMap.title || defaultTitle}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground truncate">
-                {currentMap.type ? currentMap.type.replace(/_/g, " ") : "cartographic map"}
-                {currentMap.scale ? ` • Scale: ${currentMap.scale}` : ""}
-                {currentMap.projection ? ` • Projection: ${currentMap.projection}` : ""}
+                {currentMap.type ? currentMap.type.replace(/_/g, " ") : t("cartographicMap")}
+                {currentMap.scale ? ` • ${t("scale", { scale: currentMap.scale })}` : ""}
+                {currentMap.projection ? ` • ${t("projection", { projection: currentMap.projection })}` : ""}
               </DialogDescription>
             </div>
           </div>
@@ -261,7 +258,7 @@ export function MapViewerModal({
                   setCurrentIndex(prev => Math.max(0, prev - 1));
                   resetView();
                 }}
-                aria-label="Previous Map"
+                aria-label={t("prevMap")}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -277,7 +274,7 @@ export function MapViewerModal({
                   setCurrentIndex(prev => Math.min(maps.length - 1, prev + 1));
                   resetView();
                 }}
-                aria-label="Next Map"
+                aria-label={t("nextMap")}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -319,7 +316,7 @@ export function MapViewerModal({
           ) : (
             <div className="flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
               <MapPin className="h-10 w-10 mb-2 opacity-50" />
-              <p className="text-sm">No map image available for this supplement.</p>
+              <p className="text-sm">{t("noMapImage")}</p>
             </div>
           )}
         </div>
@@ -343,7 +340,7 @@ export function MapViewerModal({
               className="h-8 w-8"
               onClick={handleZoomOut}
               disabled={zoom <= MIN_ZOOM}
-              aria-label="Zoom Out"
+              aria-label={t("zoomOut")}
             >
               <ZoomOut className="h-4 w-4" />
             </Button>
@@ -353,14 +350,14 @@ export function MapViewerModal({
               className="h-8 w-8"
               onClick={handleZoomIn}
               disabled={zoom >= MAX_ZOOM}
-              aria-label="Zoom In"
+              aria-label={t("zoomIn")}
             >
               <ZoomIn className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRotate} aria-label="Rotate 90°">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRotate} aria-label={t("rotate")}>
               <RotateCw className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetView} aria-label="Reset View">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetView} aria-label={t("resetView")}>
               <RotateCcw className="h-4 w-4" />
             </Button>
             {imageUrl && (
@@ -370,7 +367,7 @@ export function MapViewerModal({
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 asChild
               >
-                <a href={imageUrl} target="_blank" rel="noopener noreferrer" aria-label="Open Full Image in New Tab">
+                <a href={imageUrl} target="_blank" rel="noopener noreferrer" aria-label={t("openFullImage")}>
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>

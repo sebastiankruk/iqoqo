@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.decorators import require_auth
 from app.api.federation_guard import federation_required, is_federation_enabled
 from app.core import federation_keys
+from app.core.config_service import is_federation_head_mode
 from app.core.federation_client import FederationClient
 from app.core.federation_discovery import clean_instance_domain
 from app.core.http_signatures import SignatureVerificationError, verify_request
@@ -272,6 +273,7 @@ def federation_nodeinfo_2_1() -> Response:
             "federation": {
                 "enabled": is_federation_enabled(),
             },
+            "federationHead": is_federation_head_mode(),
             "instance_actor": f"{base_url}/api/federation/actor",
         },
     }

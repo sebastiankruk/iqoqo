@@ -1,6 +1,11 @@
 {
   "Navbar": {
     "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
+    "federationHubBadge": "Węzeł Federacji · Tylko do odczytu",
+    "federationHubBanner": "Ta instancja działa jako węzeł federacji tylko do odczytu. Egzemplarze są federowane z węzłów społeczności.",
+    "federationHubExploreDirectory": "Przeglądaj katalog federacji",
+    "dismissBanner": "Zamknij powiadomienie",
+    "directory": "Katalog węzłów",
     "searchPlaceholder": "Szukaj w swojej kolekcji...",
     "collection": "Kolekcja",
     "scan": "Skanuj",
@@ -30,6 +35,9 @@
   "Hero": {
     "title": "Biblioteka wszystkiego",
     "description": "iqoqo pozwala Ci tworzyć, udostępniać i odkrywać osobiste katalogi książek, muzyki, filmów i gier planszowych. Zbudowane na otwartej sieci semantycznej, zaprojektowane z myślą o rozproszonej przyszłości.",
+    "federationHubTitle": "Federacyjna Sieć Bibliotek",
+    "federationHubDescription": "iqoqo.cc łączy niezależne, lokalne biblioteki na całym świecie. Przeszukuj wspólne dzieła, prowadź osobistą listę życzeń i odkrywaj federowane kolekcje społeczności.",
+    "exploreFederatedCatalog": "Przeglądaj federacyjny katalog",
     "startCatalog": "Rozpocznij swój katalog",
     "browseInstance": "Przeglądaj instancję",
     "github": "GitHub"
@@ -221,7 +229,9 @@
     "edition": "Wydanie",
     "myItem": "Mój egzemplarz",
     "noExpressionsMatching": "Brak ekspresji pasujących do „{query}”",
-    "noExpressionsInCollection": "Brak ekspresji w kolekcji"
+    "noExpressionsInCollection": "Brak ekspresji w kolekcji",
+    "offlineModeBanner": "Tryb offline — przeglądanie zapisanej biblioteki (Ostatnia synchronizacja: {lastSynced})",
+    "offlineUnknownSync": "niedawno"
   },
   "CollectionFilters": {
     "title": "Filtry",
@@ -431,7 +441,14 @@
     "newMediaTypeSubmittedToast": "Prośba o nowy typ mediów została wysłana do kustoszy",
     "newMediaTypeSubmittedDesc": "Dziękujemy! Kustosze instancji zostali powiadomieni. Możesz śledzić status prośby w zakładce Prośby.",
     "requestSubmittedTitle": "Propozycja wysłana",
-    "allRequiredFieldsError": "Proszę wypełnić wszystkie wymagane pola."
+    "allRequiredFieldsError": "Proszę wypełnić wszystkie wymagane pola.",
+    "changeType": "Zmiana typu",
+    "newMediaType": "Nowy typ mediów",
+    "proposedFormat": "Proponowany format",
+    "proposedCategory": "Proponowana kategoria",
+    "parentFrbrClass": "Klasa FRBR",
+    "sampleIdentifier": "Przykładowy identyfikator",
+    "rationale": "Uzasadnienie"
   },
   "Scanner": {
     "skipAndEnterManually": "Pomiń i wprowadź ręcznie"
@@ -524,7 +541,9 @@
       "manualCoverUpload": "Ręczne dodawanie okładki",
       "coverPreview": "Podgląd okładki",
       "uploadCover": "Dodaj okładkę",
-      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia."
+      "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia.",
+      "cantFindFormat": "Nie możesz znaleźć formatu?",
+      "requestNewType": "Zgłoś nowy typ mediów"
     },
     "batchMode": {
       "toggleLabel": "Tryb seryjny",
@@ -538,6 +557,16 @@
       "placeholder": "Szybkie szukanie po tytule lub kodzie...",
       "searchButton": "Szukaj",
       "searching": "Szukanie..."
+    },
+    "offlineMatchCollection": "Znaleziono pasujący element w pamięci podręcznej biblioteki!",
+    "offlineMatchWishlist": "Znaleziono pasujący element w pamięci podręcznej listy życzeń!",
+    "federationHub": {
+      "badge": "Węzeł Federacji",
+      "title": "Węzeł Federacji – Tylko do odczytu",
+      "description": "Ta instancja działa jako centralny węzeł i pokazowy hub federacyjny. Bezpośrednie skanowanie i dodawanie fizycznych egzemplarzy jest tu wyłączone. Fizyczne egzemplarze są katalogowane w połączonych bibliotekach i synchronizowane z tym węzłem.",
+      "exploreCatalog": "Przeglądaj federacyjny katalog",
+      "viewDirectory": "Połączone biblioteki",
+      "wishlistHint": "Chcesz zapisać interesujące pozycje? Wciąż możesz dodawać dzieła do swojej Listy życzeń."
     }
   },
   "SemanticLinks": {
@@ -926,8 +955,89 @@
     "continue": "Przejdź do logowania",
     "cancel": "Anuluj",
     "version": "Wersja: {version}"
+  },
+  "ItemDetail": {
+    "lego": {
+      "title": "Szczegóły zestawu LEGO",
+      "viewOnRebrickable": "Zobacz w serwisie Rebrickable",
+      "setNumber": "Numer zestawu",
+      "pieceCount": "Liczba elementów",
+      "pieces": "{count} elementów",
+      "minifigures": "Minifigurki",
+      "theme": "Seria",
+      "physicalState": "Stan fizycznego egzemplarza",
+      "status": "Stan",
+      "instructions": "Instrukcja",
+      "included": "W zestawie",
+      "missing": "Brak",
+      "missingPieces": "Brakuje: {count} elementów",
+      "statusSealed": "Fabrycznie zapieczętowany (w pudełku)",
+      "statusBuilt": "Złożony",
+      "statusIncomplete": "Niekompletny",
+      "statusPartedOut": "Rozłożony na części"
+    },
+    "maps": {
+      "title": "Kartografia i załączniki mapowe",
+      "addMap": "Dodaj mapę",
+      "scale": "Skala",
+      "projection": "Odwzorowanie",
+      "mapInsertPresent": "Wkładka mapowa obecna",
+      "missingMapInsert": "Brak wkładki mapowej",
+      "mapSupplement": "Załącznik mapowy",
+      "delete": "Usuń",
+      "deleting": "Usuwanie...",
+      "deleteAria": "Usuń załącznik mapowy",
+      "inspectMap": "Obejrzyj mapę",
+      "includesCartographic": "Zawiera materiały kartograficzne lub składane mapy.",
+      "addMapAttachmentTitle": "Dodaj załącznik mapowy",
+      "addMapAttachmentDesc": "Załącz wkładkę mapową w wysokiej rozdzielczości, rozkładówkę lub mapę świata.",
+      "mapTitleLabel": "Tytuł mapy",
+      "mapTitlePlaceholder": "np. Wkładka z mapą świata",
+      "mapTypeLabel": "Typ mapy",
+      "scaleLabel": "Skala (opcjonalnie)",
+      "scalePlaceholder": "np. 1:50 000",
+      "projectionLabel": "Odwzorowanie (opcjonalnie)",
+      "projectionPlaceholder": "np. Merkator",
+      "mapImageFileLabel": "Plik obrazu mapy",
+      "orImageUrlLabel": "Lub adres URL obrazu",
+      "imageUrlPlaceholder": "https://example.com/map.jpg lub /static/gallery/...",
+      "cancel": "Anuluj",
+      "saveAttachment": "Zapisz załącznik",
+      "uploading": "Przesyłanie...",
+      "typeWorldMap": "Mapa świata",
+      "typeFoldOutInsert": "Składana wkładka",
+      "typeClothMap": "Mapa na płótnie",
+      "typeGameBoard": "Plansza do gry",
+      "typeTopographic": "Mapa topograficzna",
+      "mapAttachmentRemoved": "Usunięto załącznik mapowy",
+      "mapAttachmentUploaded": "Pomyślnie przesłano załącznik mapowy",
+      "provideImageOrUrl": "Podaj plik obrazu mapy lub adres URL obrazu",
+      "failedToAdd": "Nie udało się dodać załącznika mapowego",
+      "failedToRemove": "Nie udało się usunąć załącznika mapowego"
+    },
+    "reassignOwner": "Zmień właściciela"
+  },
+  "MapViewer": {
+    "title": "Przeglądarka map",
+    "cartographicMap": "mapa kartograficzna",
+    "scale": "Skala: {scale}",
+    "projection": "Odwzorowanie: {projection}",
+    "prevMap": "Poprzednia mapa",
+    "nextMap": "Następna mapa",
+    "noMapImage": "Brak dostępnego obrazu mapy dla tego załącznika.",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "rotate": "Obróć o 90°",
+    "resetView": "Resetuj widok",
+    "openFullImage": "Otwórz pełny obraz w nowej karcie"
+  },
+  "AdminOwnership": {
+    "title": "Przepisywanie własności egzemplarzy",
+    "description": "Audytuj i przepisuj własność fizycznych egzemplarzy pomiędzy kontami użytkowników z atomowym śledzeniem proweniencji.",
+    "searchPlaceholder": "Szukaj tytułu, ISBN, kodu kreskowego...",
+    "filterStatus": "Filtruj wg statusu kolekcji",
+    "allStatuses": "Wszystkie statusy",
+    "clearFilters": "Wyczyść filtry",
+    "reassignOwner": "Zmień właściciela"
   }
 }
-
-
-

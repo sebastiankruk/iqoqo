@@ -4,7 +4,54 @@ This document provides comprehensive instructions for setting up iqoqo for devel
 
 ## Quick Start (Docker)
 
-For the fastest setup, use Docker Compose:
+### One-Liner (Standalone Bootstrap)
+
+To bootstrap, configure, and start an isolated iQoQo production deployment directory (source-free) without manually cloning the git repository:
+
+```bash
+# 1. Run bootstrap installer into target deployment directory (e.g., /opt/iqoqo or current directory)
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/iqoqo --domain library.example.com --mode standard
+
+# 2. Enter deployment directory
+cd /opt/iqoqo
+
+# 3. Start services using official pre-built containers (migrations run automatically)
+docker compose -f docker-compose.prebuilt.yml up -d
+
+# 4. Check status and health
+python3 iqoqo_installer.py --presync-check
+```
+
+For preview or testing environments:
+
+```bash
+# Preview mode on custom port (5001 / 3001)
+curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/preview.iqoqo --mode preview
+cd /opt/preview.iqoqo && docker compose -f docker-compose.prebuilt.yml up -d
+```
+
+### Guided CLI Setup (From Clone)
+
+For the fastest setup from a local git repository, use the interactive CLI installer wizard:
+
+```bash
+# 1. Clone and navigate to the repository
+git clone https://github.com/sebastiankruk/iqoqo.git
+cd iqoqo
+
+# 2. Run guided setup wizard (generates 256-bit secrets and hardened 0600 .env)
+make install-wizard
+# Or run non-interactively:
+# python3 scripts/iqoqo_installer.py --domain library.example.com --mode standard --non-interactive
+
+# 3. Verify pre-sync readiness
+make presync-check
+
+# 4. Build and start services (migrations run automatically on first start)
+./run.sh prod
+```
+
+Alternatively, configure manually:
 
 ```bash
 # 1. Clone and navigate to the repository

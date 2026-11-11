@@ -18,6 +18,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Compass, Map as MapIcon, Maximize2, Plus, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -42,6 +43,7 @@ interface ExtendedMetadataMapsProps {
  * @returns {JSX.Element | null} Rendered cartographic metadata or null.
  */
 export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit = false }: ExtendedMetadataMapsProps) {
+  const t = useTranslations("ItemDetail.maps");
   const queryClient = useQueryClient();
   const fields = display?.fields || {};
 
@@ -84,14 +86,14 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
     try {
       const res = await apiClient.delete(`/manifestations/${manifestationId}/map-attachments/${attachmentId}`);
       if (res.data?.success) {
-        toast.success("Map attachment removed");
+        toast.success(t("mapAttachmentRemoved"));
         queryClient.invalidateQueries({ queryKey: ["item"] });
         queryClient.invalidateQueries({ queryKey: ["manifestation"] });
       } else {
-        toast.error(res.data?.error || "Failed to remove map attachment");
+        toast.error(res.data?.error || t("failedToRemove"));
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to remove map attachment";
+      const msg = err instanceof Error ? err.message : t("failedToRemove");
       toast.error(msg);
     } finally {
       setIsDeleting(null);
@@ -102,7 +104,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
     e.preventDefault();
     if (!manifestationId) return;
     if (!uploadFile && !uploadImageUrl.trim()) {
-      toast.error("Please provide either a map image file or an image URL");
+      toast.error(t("provideImageOrUrl"));
       return;
     }
     setIsSubmitting(true);
@@ -111,7 +113,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       let res;
       if (uploadFile) {
         const formData = new FormData();
-        formData.append("title", uploadTitle.trim() || "Map Supplement");
+        formData.append("title", uploadTitle.trim() || t("mapSupplement"));
         formData.append("type", uploadType);
         if (uploadScale.trim()) formData.append("scale", uploadScale.trim());
         if (uploadProjection.trim()) formData.append("projection", uploadProjection.trim());
@@ -122,7 +124,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
         });
       } else {
         res = await apiClient.post(`/manifestations/${manifestationId}/map-attachments`, {
-          title: uploadTitle.trim() || "Map Supplement",
+          title: uploadTitle.trim() || t("mapSupplement"),
           type: uploadType,
           scale: uploadScale.trim() || null,
           projection: uploadProjection.trim() || null,
@@ -131,7 +133,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       }
 
       if (res.data?.success) {
-        toast.success("Map attachment uploaded successfully");
+        toast.success(t("mapAttachmentUploaded"));
         setUploadOpen(false);
         setUploadTitle("");
         setUploadScale("");
@@ -141,10 +143,10 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
         queryClient.invalidateQueries({ queryKey: ["item"] });
         queryClient.invalidateQueries({ queryKey: ["manifestation"] });
       } else {
-        toast.error(res.data?.error || "Failed to add map attachment");
+        toast.error(res.data?.error || t("failedToAdd"));
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to add map attachment";
+      const msg = err instanceof Error ? err.message : t("failedToAdd");
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
@@ -156,7 +158,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Compass className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-          <h3 className="font-bold text-lg text-foreground font-serif">Cartography & Map Supplements</h3>
+          <h3 className="font-bold text-lg text-foreground font-serif">{t("title")}</h3>
         </div>
 
         {canEdit && manifestationId && (
@@ -167,7 +169,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
             className="flex items-center gap-1.5 h-8 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Map
+            {t("addMap")}
           </Button>
         )}
       </div>
@@ -176,12 +178,12 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       <div className="flex flex-wrap gap-2 text-xs">
         {mapScale && (
           <Badge variant="secondary" className="px-2.5 py-1">
-            Scale: <span className="font-mono font-bold ml-1">{mapScale}</span>
+            {t("scale")}: <span className="font-mono font-bold ml-1">{mapScale}</span>
           </Badge>
         )}
         {mapProjection && (
           <Badge variant="secondary" className="px-2.5 py-1">
-            Projection: <span className="font-medium ml-1">{mapProjection}</span>
+            {t("projection")}: <span className="font-medium ml-1">{mapProjection}</span>
           </Badge>
         )}
         {mapInsertPresent !== undefined && (
@@ -192,7 +194,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
             }`}
           >
             {mapInsertPresent ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-            {mapInsertPresent ? "Map Insert Present" : "Missing Map Insert"}
+            {mapInsertPresent ? t("mapInsertPresent") : t("missingMapInsert")}
           </Badge>
         )}
       </div>
@@ -219,7 +221,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate leading-tight">{att.title || `Map #${idx + 1}`}</p>
                     <p className="text-[11px] text-muted-foreground capitalize mt-0.5">
-                      {att.type ? att.type.replace(/_/g, " ") : "Map supplement"}
+                      {att.type ? att.type.replace(/_/g, " ") : t("mapSupplement")}
                     </p>
                   </div>
                 </div>
@@ -235,10 +237,10 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                           if (att.id) handleDeleteAttachment(att.id);
                         }}
                         disabled={isDeleting === att.id}
-                        aria-label="Delete map attachment"
+                        aria-label={t("deleteAria")}
                       >
                         <Trash2 className="h-3 w-3" />
-                        {isDeleting === att.id ? "Deleting..." : "Delete"}
+                        {isDeleting === att.id ? t("deleting") : t("delete")}
                       </Button>
                     )}
                   </div>
@@ -249,7 +251,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                     onClick={() => handleOpenViewer(idx)}
                   >
                     <Maximize2 className="h-3 w-3" />
-                    Inspect Map
+                    {t("inspectMap")}
                   </Button>
                 </div>
               </div>
@@ -259,7 +261,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       ) : (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground">
           <MapIcon className="h-5 w-5 shrink-0 opacity-60" />
-          <span>Includes cartographic materials or folding maps.</span>
+          <span>{t("includesCartographic")}</span>
         </div>
       )}
 
@@ -270,7 +272,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
           onClose={() => setViewerOpen(false)}
           maps={attachments}
           initialIndex={selectedMapIndex}
-          title={typeof meta["title"] === "string" ? meta["title"] : "Map Inspector"}
+          title={typeof meta["title"] === "string" ? meta["title"] : t("inspectMap")}
         />
       )}
 
@@ -278,62 +280,62 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Map Attachment</DialogTitle>
-            <DialogDescription>Attach a high-resolution map insert, fold-out, or world map.</DialogDescription>
+            <DialogTitle>{t("addMapAttachmentTitle")}</DialogTitle>
+            <DialogDescription>{t("addMapAttachmentDesc")}</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleUploadSubmit} className="space-y-4 pt-2">
             <div>
-              <label className="text-xs font-semibold">Map Title</label>
+              <label className="text-xs font-semibold">{t("mapTitleLabel")}</label>
               <input
                 type="text"
                 value={uploadTitle}
                 onChange={e => setUploadTitle(e.target.value)}
-                placeholder="e.g. World Map Insert"
+                placeholder={t("mapTitlePlaceholder")}
                 className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Map Type</label>
+              <label className="text-xs font-semibold">{t("mapTypeLabel")}</label>
               <select
                 value={uploadType}
                 onChange={e => setUploadType(e.target.value)}
                 className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
               >
-                <option value="world_map">World Map</option>
-                <option value="fold_out_insert">Fold-out Insert</option>
-                <option value="cloth_map">Cloth Map</option>
-                <option value="game_board">Game Board</option>
-                <option value="topographic">Topographic Map</option>
+                <option value="world_map">{t("typeWorldMap")}</option>
+                <option value="fold_out_insert">{t("typeFoldOutInsert")}</option>
+                <option value="cloth_map">{t("typeClothMap")}</option>
+                <option value="game_board">{t("typeGameBoard")}</option>
+                <option value="topographic">{t("typeTopographic")}</option>
               </select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold">Scale (optional)</label>
+                <label className="text-xs font-semibold">{t("scaleLabel")}</label>
                 <input
                   type="text"
                   value={uploadScale}
                   onChange={e => setUploadScale(e.target.value)}
-                  placeholder="e.g. 1:50,000"
+                  placeholder={t("scalePlaceholder")}
                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold">Projection (optional)</label>
+                <label className="text-xs font-semibold">{t("projectionLabel")}</label>
                 <input
                   type="text"
                   value={uploadProjection}
                   onChange={e => setUploadProjection(e.target.value)}
-                  placeholder="e.g. Mercator"
+                  placeholder={t("projectionPlaceholder")}
                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Map Image File</label>
+              <label className="text-xs font-semibold">{t("mapImageFileLabel")}</label>
               <input
                 type="file"
                 accept="image/*"
@@ -346,7 +348,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
             </div>
 
             <div>
-              <label className="text-xs font-semibold">Or Image URL</label>
+              <label className="text-xs font-semibold">{t("orImageUrlLabel")}</label>
               <input
                 type="url"
                 value={uploadImageUrl}
@@ -354,17 +356,17 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
                   setUploadImageUrl(e.target.value);
                   if (e.target.value) setUploadFile(null);
                 }}
-                placeholder="https://example.com/map.jpg or /static/gallery/..."
+                placeholder={t("imageUrlPlaceholder")}
                 className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setUploadOpen(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button type="submit" size="sm" disabled={isSubmitting || (!uploadFile && !uploadImageUrl.trim())}>
-                {isSubmitting ? "Uploading..." : "Save Attachment"}
+                {isSubmitting ? t("uploading") : t("saveAttachment")}
               </Button>
             </div>
           </form>

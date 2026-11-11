@@ -230,7 +230,7 @@ export function ManualEntryForm({
             ))}
           </select>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-0.5">
-            <span>Can&apos;t find your format?</span>
+            <span>{t("manualEntry.cantFindFormat") || "Can't find your format?"}</span>
             <RequestNewTypeModal
               defaultSampleIdentifier={formData.identifier}
               trigger={
@@ -239,7 +239,7 @@ export function ManualEntryForm({
                   className="font-medium text-primary hover:underline"
                   data-testid="scanner-request-new-type-link"
                 >
-                  Request new media type
+                  {t("manualEntry.requestNewType") || "Request new media type"}
                 </button>
               }
             />

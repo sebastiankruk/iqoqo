@@ -192,6 +192,7 @@ class Config:
     # ActivityPub Federation (v0.9.0)
     FEDERATION_ENABLED = os.environ.get("FEDERATION_ENABLED", "false").lower() in {"true", "1", "yes"}
     FEDERATION_BASE_URL = os.environ.get("FEDERATION_BASE_URL")
+    FEDERATION_HEAD_MODE = os.environ.get("FEDERATION_HEAD_MODE", "false").lower() in {"true", "1", "yes"}
 
     @staticmethod
     def _get_version():

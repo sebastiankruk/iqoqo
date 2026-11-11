@@ -52,22 +52,35 @@ fi
 SRC_ENV="${SRC_DIR}/.env.${SRC_NAME}"
 DST_ENV="${DST_DIR}/.env.${DST_NAME}"
 
+# Fall back to single .env in isolated deployment directories
 if [ -n "$SRC_HOST" ]; then
     # shellcheck disable=SC2029
     if ! ssh "$SRC_HOST" "[ -f '$SRC_ENV' ]"; then
-        echo "❌ Error: Remote source env file '$SRC_ENV' does not exist on host '$SRC_HOST'."
-        exit 1
+        if ssh "$SRC_HOST" "[ -f '${SRC_DIR}/.env' ]"; then
+            SRC_ENV="${SRC_DIR}/.env"
+        else
+            echo "❌ Error: Remote source env file '$SRC_ENV' (or '${SRC_DIR}/.env') does not exist on host '$SRC_HOST'."
+            exit 1
+        fi
     fi
 else
     if [ ! -f "$SRC_ENV" ]; then
-        echo "❌ Error: Source env file '$SRC_ENV' does not exist."
-        exit 1
+        if [ -f "${SRC_DIR}/.env" ]; then
+            SRC_ENV="${SRC_DIR}/.env"
+        else
+            echo "❌ Error: Source env file '$SRC_ENV' (or '${SRC_DIR}/.env') does not exist."
+            exit 1
+        fi
     fi
 fi
 
 if [ ! -f "$DST_ENV" ]; then
-    echo "❌ Error: Destination env file '$DST_ENV' does not exist."
-    exit 1
+    if [ -f "${DST_DIR}/.env" ]; then
+        DST_ENV="${DST_DIR}/.env"
+    else
+        echo "❌ Error: Destination env file '$DST_ENV' (or '${DST_DIR}/.env') does not exist."
+        exit 1
+    fi
 fi
 
 # Load DB config from env files
@@ -76,7 +89,7 @@ get_env_var() {
     local var="$2"
     local default="$3"
     local val
-    val=$(grep -E "^${var}=" "$file" | cut -d'=' -f2- | tr -d $'"\'\r')
+    val=$(grep -E "^${var}=" "$file" | cut -d'=' -f2- | sed -e 's/\r$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")
     echo "${val:-$default}"
 }
 
@@ -87,8 +100,17 @@ get_remote_env_var() {
     local default="$4"
     local val
     # shellcheck disable=SC2029
-    val=$(ssh "$host" "grep -E '^${var}=' '$file'" | cut -d'=' -f2- | tr -d $'"\'\r')
+    val=$(ssh "$host" "grep -E '^${var}=' '$file'" | cut -d'=' -f2- | sed -e 's/\r$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")
     echo "${val:-$default}"
+}
+
+validate_pg_identifier() {
+    local name="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "❌ Error: Invalid identifier for $name: '$value'. Must contain only alphanumeric characters, underscores, or hyphens."
+        exit 1
+    fi
 }
 
 if [ -n "$SRC_HOST" ]; then
@@ -101,6 +123,11 @@ fi
 
 DST_POSTGRES_USER=$(get_env_var "$DST_ENV" "POSTGRES_USER" "iqoqo")
 DST_POSTGRES_DB=$(get_env_var "$DST_ENV" "POSTGRES_DB" "iqoqo")
+
+validate_pg_identifier "SRC_POSTGRES_USER" "$SRC_POSTGRES_USER"
+validate_pg_identifier "SRC_POSTGRES_DB" "$SRC_POSTGRES_DB"
+validate_pg_identifier "DST_POSTGRES_USER" "$DST_POSTGRES_USER"
+validate_pg_identifier "DST_POSTGRES_DB" "$DST_POSTGRES_DB"
 
 # Production destination safety check
 if [ "$DST_NAME" = "prod" ] || [ "$DST_NAME" = "production" ] || [ "${FLASK_ENV:-}" = "production" ] || [ "${ENVIRONMENT:-}" = "production" ]; then
@@ -122,20 +149,24 @@ if [ "$DST_NAME" = "prod" ] || [ "$DST_NAME" = "dev" ]; then
     DST_PROJECT="iqoqo"
 fi
 
+# Extract filenames for docker compose commands
+SRC_ENV_FILE="$(basename "$SRC_ENV")"
+DST_ENV_FILE="$(basename "$DST_ENV")"
+
 # Find source database container
 if [ -n "$SRC_HOST" ]; then
     echo "🔍 Finding remote source database container on host '$SRC_HOST' for project '$SRC_PROJECT'..."
     # shellcheck disable=SC2029
     SRC_DB_CONTAINER=$(
-        ssh "$SRC_HOST" "cd \"$SRC_DIR\" && export ENV_FILE=\".env.${SRC_NAME}\" && docker compose -p \"$SRC_PROJECT\" --env-file \".env.${SRC_NAME}\" ps -q db 2>/dev/null"
+        ssh "$SRC_HOST" "cd \"$SRC_DIR\" && export ENV_FILE=\"$SRC_ENV_FILE\" && docker compose -p \"$SRC_PROJECT\" --env-file \"$SRC_ENV_FILE\" ps -q db 2>/dev/null"
     )
 else
     echo "🔍 Finding source database container for project '$SRC_PROJECT'..."
     # shellcheck disable=SC2030
     SRC_DB_CONTAINER=$(
         cd "$SRC_DIR"
-        export ENV_FILE=".env.${SRC_NAME}"
-        docker compose -p "$SRC_PROJECT" --env-file ".env.${SRC_NAME}" ps -q db 2>/dev/null
+        export ENV_FILE="$SRC_ENV_FILE"
+        docker compose -p "$SRC_PROJECT" --env-file "$SRC_ENV_FILE" ps -q db 2>/dev/null
     )
 fi
 
@@ -153,8 +184,8 @@ echo "🚀 Ensuring destination database container is running for project '$DST_
 # shellcheck disable=SC2030,SC2031
 (
     cd "$DST_DIR"
-    export ENV_FILE=".env.${DST_NAME}"
-    docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" up -d db
+    export ENV_FILE="$DST_ENV_FILE"
+    docker compose -p "$DST_PROJECT" --env-file "$DST_ENV_FILE" up -d db
 )
 
 # Wait for destination database to be ready
@@ -164,8 +195,8 @@ for _ in {1..30}; do
     # shellcheck disable=SC2031
     DST_DB_CONTAINER=$(
         cd "$DST_DIR"
-        export ENV_FILE=".env.${DST_NAME}"
-        docker compose -p "$DST_PROJECT" --env-file ".env.${DST_NAME}" ps -q db 2>/dev/null
+        export ENV_FILE="$DST_ENV_FILE"
+        docker compose -p "$DST_PROJECT" --env-file "$DST_ENV_FILE" ps -q db 2>/dev/null
     )
     if [ -n "$DST_DB_CONTAINER" ]; then
         if docker exec "$DST_DB_CONTAINER" pg_isready -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB" &>/dev/null; then
@@ -203,11 +234,19 @@ docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -c "
 echo "📥 Cloning database data..."
 if [ -n "$SRC_HOST" ]; then
     # shellcheck disable=SC2029
-    ssh "$SRC_HOST" "docker exec -i $SRC_DB_CONTAINER pg_dump -U $SRC_POSTGRES_USER --no-owner --no-privileges $SRC_POSTGRES_DB" | \
+    ssh "$SRC_HOST" "docker exec -i '$SRC_DB_CONTAINER' pg_dump -U '$SRC_POSTGRES_USER' --no-owner --no-privileges '$SRC_POSTGRES_DB'" | \
       docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB"
 else
     docker exec -i "$SRC_DB_CONTAINER" pg_dump -U "$SRC_POSTGRES_USER" --no-owner --no-privileges "$SRC_POSTGRES_DB" | \
       docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d "$DST_POSTGRES_DB"
+fi
+
+# Ensure destination database user password matches destination environment configuration
+DST_POSTGRES_PASSWORD=$(get_env_var "$DST_ENV" "POSTGRES_PASSWORD" "")
+if [ -n "$DST_POSTGRES_PASSWORD" ]; then
+    echo "🔑 Synchronizing destination database password..."
+    docker exec -i "$DST_DB_CONTAINER" psql -U "$DST_POSTGRES_USER" -d postgres -v pw="$DST_POSTGRES_PASSWORD" -c \
+        "ALTER USER \"$DST_POSTGRES_USER\" WITH PASSWORD :'pw';" >/dev/null 2>&1 || true
 fi
 
 echo "✅ Database cloned successfully!"

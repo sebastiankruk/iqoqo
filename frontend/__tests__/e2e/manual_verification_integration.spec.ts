@@ -409,8 +409,8 @@ test.describe("Manual Verification Integration E2E", () => {
     await maintenanceSelect.selectOption("true");
     await page.getByRole("button", { name: "Save Changes" }).first().click();
 
-    // Check saved state
-    await expect(page.getByText(/Saved settings for/i)).toBeVisible();
+    // Check saved state (target the main content message or toast notification)
+    await expect(page.getByText(/Saved settings for/i).first()).toBeVisible();
 
     await page.goto("/admin/settings?tab=apikeys");
     await page.waitForLoadState("networkidle");

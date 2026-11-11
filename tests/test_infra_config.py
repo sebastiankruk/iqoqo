@@ -32,7 +32,7 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.0.1"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.0.2"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
@@ -293,6 +293,42 @@ exit 0
         phony_line = [line for line in makefile_content.splitlines() if line.startswith(".PHONY:")][0]
         for target in ["mobile-build", "mobile-sync", "mobile-android-apk", "mobile-android-aab", "mobile-adb-install", "test-e2e-mobile"]:
             self.assertIn(target, phony_line, f"Target {target} not in .PHONY")
+
+    def test_ios_privacy_manifest(self):
+        privacy_path = self.repo_root / "frontend" / "ios" / "App" / "App" / "PrivacyInfo.xcprivacy"
+        self.assertTrue(privacy_path.exists(), "PrivacyInfo.xcprivacy missing")
+        content = privacy_path.read_text()
+        self.assertIn("<key>NSPrivacyTracking</key>", content)
+        self.assertIn("<false/>", content)
+        self.assertIn("NSPrivacyAccessedAPITypeUserDefaults", content)
+        self.assertIn("CA92.1", content)
+
+    def test_next_config_otel_and_rum_rewrites(self):
+        next_config = (self.repo_root / "frontend" / "next.config.ts").read_text()
+        self.assertIn("OPENOBSERVE_INTERNAL_URL", next_config)
+        self.assertIn("OTEL_COLLECTOR_HTTP_URL", next_config)
+        self.assertIn("/rum/:path*", next_config)
+        self.assertIn("/v1/traces", next_config)
+
+    def test_nginx_configs_contain_traces_proxy(self):
+        for conf_rel in ["deploy/nginx.conf", "deploy/nginx.conf.example"]:
+            conf_path = self.repo_root / conf_rel
+            self.assertTrue(conf_path.exists(), f"{conf_rel} missing")
+            content = conf_path.read_text()
+            self.assertIn("upstream iqoqo_otel_collector", content, f"Missing upstream iqoqo_otel_collector in {conf_rel}")
+            self.assertIn("location = /v1/traces", content, f"Missing location = /v1/traces in {conf_rel}")
+
+    def test_makefile_monitoring_reset_auth_target(self):
+        makefile = (self.repo_root / "Makefile").read_text()
+        self.assertIn("monitoring-reset-auth:", makefile)
+        phony_line = [line for line in makefile.splitlines() if line.startswith(".PHONY:")][0]
+        self.assertIn("monitoring-reset-auth", phony_line)
+
+    def test_status_script_observability_authenticated_checks(self):
+        status_sh = (self.repo_root / "scripts" / "iqoqo-status.sh").read_text()
+        self.assertIn("/api/default/_search", status_sh)
+        self.assertIn("Exporting failed", status_sh)
+        self.assertIn("make monitoring-reset-auth", status_sh)
 
 
 if __name__ == "__main__":

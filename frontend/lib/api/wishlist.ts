@@ -18,6 +18,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, apiFetch } from "./client";
 import type { ApiResponse, WishlistItem, WishlistCreateDTO, WishlistUpdateDTO } from "@/types/frbr";
+import { saveWishlistSnapshot } from "@/lib/capacitor/offline-cache";
 
 /* ── Query keys ─────────────────────────────────────────────────────────── */
 
@@ -38,9 +39,14 @@ export async function fetchWishlist(
   const res = await apiClient.get<ApiResponse<WishlistItem[]>>("/wishlist", {
     params,
   });
+  const data = res.data.data ?? [];
+  const total = res.data.pagination?.total ?? res.data.meta?.total ?? 0;
+  if (!params?.q && !params?.search && data.length > 0) {
+    saveWishlistSnapshot(data).catch(() => {});
+  }
   return {
-    data: res.data.data ?? [],
-    total: res.data.pagination?.total ?? res.data.meta?.total ?? 0,
+    data,
+    total,
   };
 }
 

@@ -127,6 +127,7 @@ def health_check():
 @api_bp.route("/config", methods=["GET"])
 def get_config():
     """Return public application configuration for the frontend (non-sensitive)."""
+    from app.core.config_service import is_federation_head_mode
     from app.db.models import InstanceSettings
 
     def is_true(v):
@@ -139,6 +140,7 @@ def get_config():
             "success": True,
             "data": {
                 "federation_enabled": Config.FEDERATION_ENABLED,
+                "federation_head_mode": is_federation_head_mode(),
                 "version": Config.VERSION,
                 "maintenance_mode": is_true(InstanceSettings.get_value("MAINTENANCE_MODE", False)),
             },

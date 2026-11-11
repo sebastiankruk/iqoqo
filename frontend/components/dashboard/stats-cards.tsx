@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { BookMarked, BookOpen, Globe, HandHelping, Target, User, Users } from "lucide-react";
 import { useStats } from "@/lib/api/hooks";
+import { useAppConfig } from "@/lib/api/hooks/catalog";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { CollectionInsights } from "./collection-insights";
@@ -29,8 +30,13 @@ import { CollectionInsights } from "./collection-insights";
  */
 export function StatsCards() {
   const t = useTranslations("StatsCards");
+  const { data: config } = useAppConfig();
   const [viewMode, setViewMode] = useState<"stats" | "insights">("stats");
-  const [scope, setScope] = useState<"personal" | "friends" | "global">("personal");
+  const [userScope, setUserScope] = useState<"personal" | "friends" | "global" | null>(null);
+
+  const scope: "personal" | "friends" | "global" =
+    userScope !== null ? userScope : config?.federation_head_mode ? "global" : "personal";
+
   const { data: stats, isLoading, isError } = useStats(scope);
 
   const topCards = [
@@ -136,7 +142,10 @@ export function StatsCards() {
               scope === "personal" ? t("scopePersonal") : scope === "friends" ? t("scopeFriends") : t("scopeGlobal")
             }
             onClick={() => {
-              setScope(prev => (prev === "personal" ? "friends" : prev === "friends" ? "global" : "personal"));
+              setUserScope(prev => {
+                const current = prev !== null ? prev : config?.federation_head_mode ? "global" : "personal";
+                return current === "personal" ? "friends" : current === "friends" ? "global" : "personal";
+              });
             }}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:text-foreground transition-colors"
           >

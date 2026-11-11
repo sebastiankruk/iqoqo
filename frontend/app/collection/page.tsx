@@ -54,6 +54,13 @@ import { RoadmapView } from "@/components/collection/roadmap-view";
 import { useTranslations } from "next-intl";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
+import {
+  saveCollectionSnapshot,
+  saveWishlistSnapshot,
+  getCachedCollectionSnapshot,
+  type OfflineCollectionSnapshot,
+} from "@/lib/capacitor/offline-cache";
+import { WifiOff } from "lucide-react";
 
 /**
  * A trigger component that uses IntersectionObserver to fetch more items when scrolled into view.
@@ -168,9 +175,34 @@ function CollectionContent() {
   const isCurator = isLoggedIn && !!profile?.permissions?.includes(PermissionName.WRITE_METADATA);
 
   const [mounted, setMounted] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineSnapshot, setOfflineSnapshot] = useState<OfflineCollectionSnapshot | null>(null);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    if (typeof navigator !== "undefined") {
+      setIsOffline(!navigator.onLine);
+    }
+    // Always load cached snapshot in background so it's ready if connection drops or network fails
+    getCachedCollectionSnapshot().then(snapshot => {
+      if (snapshot) setOfflineSnapshot(snapshot);
+    });
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => {
+      setIsOffline(true);
+      getCachedCollectionSnapshot().then(snapshot => {
+        if (snapshot) setOfflineSnapshot(snapshot);
+      });
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
   const showClientContent = mounted && isLoggedIn;
   const showCuratorContent = mounted && isCurator;
@@ -257,6 +289,7 @@ function CollectionContent() {
   const {
     data: itemsData,
     isLoading: itemsLoading,
+    isError: itemsError,
     fetchNextPage: fetchNextItems,
     hasNextPage: hasMoreItems,
     isFetchingNextPage: isFetchingMoreItems,
@@ -415,15 +448,57 @@ function CollectionContent() {
             ? worksLoading
             : exprsLoading;
 
+  const effectiveOffline = isOffline || (Boolean(itemsError) && Boolean(offlineSnapshot?.items?.length));
+
   const allItems = useMemo<Array<Item | CatalogEntry>>(() => {
     if (viewMode === "items") {
-      return itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      const liveItems = itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      if (effectiveOffline && offlineSnapshot?.items?.length) {
+        return offlineSnapshot.items;
+      }
+      return liveItems;
     }
     if (viewMode === "manifestations") {
       return manifestationsData?.pages.flatMap(page => page.data || []) ?? [];
     }
     return [];
-  }, [itemsData, manifestationsData, viewMode]);
+  }, [itemsData, manifestationsData, viewMode, effectiveOffline, offlineSnapshot]);
+
+  // Save collection snapshot only on unfiltered, default personal collection view while online
+  useEffect(() => {
+    if (
+      viewMode === "items" &&
+      !effectiveOffline &&
+      !appliedQuery &&
+      !searchQuery &&
+      activeFilters.length === 0 &&
+      !missingCoverOnly &&
+      !missingIdOnly &&
+      (currentScope === "personal" || !currentScope)
+    ) {
+      const liveItems = itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      if (liveItems.length > 0) {
+        saveCollectionSnapshot(liveItems as Item[]).catch(() => {});
+      }
+    }
+  }, [
+    itemsData,
+    viewMode,
+    effectiveOffline,
+    appliedQuery,
+    searchQuery,
+    activeFilters,
+    missingCoverOnly,
+    missingIdOnly,
+    currentScope,
+  ]);
+
+  // Save wishlist snapshot when online wishlist items are loaded
+  useEffect(() => {
+    if (isWishlistFilterActive && !effectiveOffline && wishlistData?.data && wishlistData.data.length > 0) {
+      saveWishlistSnapshot(wishlistData.data).catch(() => {});
+    }
+  }, [isWishlistFilterActive, effectiveOffline, wishlistData]);
 
   const allWorks = useMemo(() => {
     return worksData?.pages.flatMap(page => page.data || []) ?? [];
@@ -434,17 +509,19 @@ function CollectionContent() {
   }, [exprsData]);
 
   const total =
-    viewMode === "works"
-      ? (worksData?.pages?.[0]?.pagination?.total ?? 0)
-      : viewMode === "expressions"
-        ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
-        : viewMode === "items"
-          ? isWishlistFilterActive
-            ? (wishlistData?.total ?? 0)
-            : (itemsData?.pages?.[0]?.meta?.total ?? 0)
-          : viewMode === "manifestations"
-            ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
-            : 0;
+    effectiveOffline && viewMode === "items"
+      ? (offlineSnapshot?.items?.length ?? 0)
+      : viewMode === "works"
+        ? (worksData?.pages?.[0]?.pagination?.total ?? 0)
+        : viewMode === "expressions"
+          ? (exprsData?.pages?.[0]?.pagination?.total ?? 0)
+          : viewMode === "items"
+            ? isWishlistFilterActive
+              ? (wishlistData?.total ?? 0)
+              : (itemsData?.pages?.[0]?.meta?.total ?? 0)
+            : viewMode === "manifestations"
+              ? (manifestationsData?.pages?.[0]?.meta?.total ?? 0)
+              : 0;
 
   // Schema.org CollectionPage structured data for SEO
   const collectionJsonLd = useMemo(() => {
@@ -534,7 +611,82 @@ function CollectionContent() {
   const statusCounts = useMemo(() => facetStatsData?.status_counts, [facetStatsData]);
 
   const filteredItems = useMemo(() => {
-    const items = [...allItems];
+    let items = [...allItems];
+
+    // When offline, filter by appliedQuery / searchQuery and activeFilters locally
+    if (effectiveOffline) {
+      const activeQuery = (appliedQuery || searchQuery || "").trim().toLowerCase();
+      if (activeQuery) {
+        items = items.filter(it => {
+          const title = (it.title || "").toLowerCase();
+          const author = (it.authors?.[0] || "").toLowerCase();
+          const isbn = ((it as Item).isbn || "").toLowerCase();
+          const barcode = ((it as Item).local_barcode || "").toLowerCase();
+          return (
+            title.includes(activeQuery) ||
+            author.includes(activeQuery) ||
+            isbn.includes(activeQuery) ||
+            barcode.includes(activeQuery)
+          );
+        });
+      }
+
+      // Filter by category
+      if (categoryFilters.length > 0) {
+        items = items.filter(it => {
+          const itemCat = (it as Item).content_type || (it as Item).manifestation_meta?.content_type;
+          return itemCat && categoryFilters.includes(String(itemCat));
+        });
+      }
+
+      // Filter by format
+      if (formatFilters.length > 0) {
+        items = items.filter(it => {
+          const itemFmt =
+            (it as Item).manifestation_meta?.format || (it as CatalogEntry).format || (it as CatalogEntry).format_type;
+          return itemFmt && formatFilters.includes(String(itemFmt));
+        });
+      }
+
+      // Filter by status (e.g. own, wish_list, reading, completed)
+      if (statusFilters.length > 0) {
+        items = items.filter(it => {
+          const itemStatus = (it as Item).status;
+          const collStatus = (it as Item).collection_status;
+          return statusFilters.includes(itemStatus) || statusFilters.includes(collStatus);
+        });
+      }
+
+      // Filter by borrowed
+      if (isBorrowedFilterActive) {
+        items = items.filter(it => Boolean((it as Item).is_borrowed || (it as Item).lent_to_user_id));
+      }
+
+      // Filter by tag
+      if (tagFilters.length > 0) {
+        items = items.filter(it => {
+          const tags = (it as Item).tags || [];
+          return tagFilters.some(tf => tags.includes(tf));
+        });
+      }
+
+      // Filter by genre
+      if (genreFilters.length > 0) {
+        items = items.filter(it => {
+          const genres = (it as Item).genres || [];
+          return genreFilters.some(gf => genres.includes(gf));
+        });
+      }
+
+      // Filter by publisher
+      if (publisherFilters.length > 0) {
+        items = items.filter(it => {
+          const pub = (it as Item).publisher;
+          return pub && publisherFilters.includes(pub);
+        });
+      }
+    }
+
     items.sort((a, b) => {
       const ta = a.title ?? "";
       const tb = b.title ?? "";
@@ -562,7 +714,20 @@ function CollectionContent() {
       }
     });
     return items;
-  }, [allItems, sortBy]);
+  }, [
+    allItems,
+    sortBy,
+    effectiveOffline,
+    appliedQuery,
+    searchQuery,
+    categoryFilters,
+    formatFilters,
+    statusFilters,
+    isBorrowedFilterActive,
+    tagFilters,
+    genreFilters,
+    publisherFilters,
+  ]);
 
   const ariaLiveText = useMemo(() => {
     if (activeFilters.length === 0) return `All filters cleared. ${total} results found.`;
@@ -577,6 +742,27 @@ function CollectionContent() {
         {ariaLiveText}
       </div>
       <Navbar />
+
+      {effectiveOffline && (
+        <div
+          data-testid="offline-mode-banner"
+          className="bg-amber-500/15 border-b border-amber-500/30 text-amber-900 dark:text-amber-200 px-4 py-2 text-sm flex items-center justify-center gap-2"
+        >
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            {t("offlineModeBanner", {
+              lastSynced: offlineSnapshot
+                ? new Date(offlineSnapshot.timestamp).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : t("offlineUnknownSync"),
+            })}
+          </span>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-6 flex flex-col xl:flex-row xl:items-end justify-between gap-4">

@@ -2854,6 +2854,63 @@ def _enrich_graph_from_db(
         pass
 
 
+def _emit_lego_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any] | None) -> None:
+    """Emit LEGO set number, piece count, and minifigure count triples."""
+    if not meta:
+        return
+    set_num = meta.get("set_number") or meta.get("set_num")
+    if set_num:
+        g.add((m_uri, IQOQO.setNumber, Literal(str(set_num), datatype=XSD.string)))
+
+    piece_cnt = meta.get("piece_count") if meta.get("piece_count") is not None else meta.get("num_parts")
+    if piece_cnt is not None:
+        try:
+            g.add((m_uri, IQOQO.pieceCount, Literal(int(piece_cnt), datatype=XSD.integer)))
+        except (ValueError, TypeError):
+            pass
+
+    minifig_cnt = meta.get("minifig_count") if meta.get("minifig_count") is not None else meta.get("num_minifigs")
+    if minifig_cnt is not None:
+        try:
+            g.add((m_uri, IQOQO.minifigCount, Literal(int(minifig_cnt), datatype=XSD.integer)))
+        except (ValueError, TypeError):
+            pass
+
+
+def _emit_cartographic_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any] | None, base_url: str) -> None:
+    """Emit cartographic scale, projection, and map attachment triples without double-slash URLs."""
+    if not meta:
+        return
+    scale = meta.get("map_scale") or meta.get("scale")
+    proj = meta.get("map_projection") or meta.get("projection")
+    if scale:
+        g.add((m_uri, IQOQO.mapScale, Literal(str(scale), datatype=XSD.string)))
+    if proj:
+        g.add((m_uri, IQOQO.mapProjection, Literal(str(proj), datatype=XSD.string)))
+
+    raw_attachments = meta.get("map_attachments")
+    if isinstance(raw_attachments, list):
+        clean_base = base_url.rstrip("/")
+        for idx, att in enumerate(raw_attachments):
+            if not isinstance(att, dict):
+                continue
+            att_title = att.get("title") or f"Map Attachment #{idx + 1}"
+            att_type = att.get("type") or "fold_out_insert"
+            att_img = att.get("image_url")
+
+            att_node = BNode()
+            g.add((m_uri, IQOQO.hasMapAttachment, att_node))
+            g.add((att_node, RDF.type, IQOQO.MapAttachment))
+            g.add((att_node, IQOQO.mapTitle, Literal(str(att_title), datatype=XSD.string)))
+            g.add((att_node, IQOQO.mapType, Literal(str(att_type), datatype=XSD.string)))
+            if att_img:
+                safe_img = _safe_iri(str(att_img))
+                if safe_img:
+                    clean_img = safe_img.lstrip("/")
+                    img_val = safe_img if safe_img.startswith(("http://", "https://")) else f"{clean_base}/{clean_img}"
+                    g.add((att_node, IQOQO.mapImageUrl, Literal(str(img_val), datatype=XSD.string)))
+
+
 def build_collection_rdf_graph(
     items: list[Any],
     base_url: str,
@@ -2997,23 +3054,14 @@ def build_collection_rdf_graph(
                         g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                     if m_elem.isbn13:
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
-                    if getattr(m_elem, "meta", None):
-                        if m_elem.meta.get("set_number"):
-                            g.add((m_uri, IQOQO.setNumber, Literal(str(m_elem.meta["set_number"]), datatype=XSD.string)))
-                        if m_elem.meta.get("piece_count") is not None:
-                            try:
-                                g.add((m_uri, IQOQO.pieceCount, Literal(int(m_elem.meta["piece_count"]), datatype=XSD.integer)))
-                            except (ValueError, TypeError):
-                                pass
-                        if m_elem.meta.get("minifig_count") is not None:
-                            try:
-                                g.add((m_uri, IQOQO.minifigCount, Literal(int(m_elem.meta["minifig_count"]), datatype=XSD.integer)))
-                            except (ValueError, TypeError):
-                                pass
+                    _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
+                    _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
                     if m_elem.cover_url:
                         encoded_cover = _safe_iri(str(m_elem.cover_url))
                         if encoded_cover is not None:
-                            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                            clean_base = base_url.rstrip("/")
+                            clean_cover = encoded_cover.lstrip("/")
+                            img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{clean_base}/{clean_cover}"
                             g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
                         else:
                             _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", m_elem.id)
@@ -3050,24 +3098,15 @@ def build_collection_rdf_graph(
                             g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                         if m_elem.isbn13:
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
-                        if getattr(m_elem, "meta", None):
-                            if m_elem.meta.get("set_number"):
-                                g.add((m_uri, IQOQO.setNumber, Literal(str(m_elem.meta["set_number"]), datatype=XSD.string)))
-                            if m_elem.meta.get("piece_count") is not None:
-                                try:
-                                    g.add((m_uri, IQOQO.pieceCount, Literal(int(m_elem.meta["piece_count"]), datatype=XSD.integer)))
-                                except (ValueError, TypeError):
-                                    pass
-                            if m_elem.meta.get("minifig_count") is not None:
-                                try:
-                                    g.add((m_uri, IQOQO.minifigCount, Literal(int(m_elem.meta["minifig_count"]), datatype=XSD.integer)))
-                                except (ValueError, TypeError):
-                                    pass
+                        _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
+                        _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
                         if m_elem.cover_url:
                             encoded_cover = _safe_iri(str(m_elem.cover_url))
                             if encoded_cover is not None:
+                                clean_base = base_url.rstrip("/")
+                                clean_cover = encoded_cover.lstrip("/")
                                 img_iri = (
-                                    encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                                    encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{clean_base}/{clean_cover}"
                                 )
                                 g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
                             else:
@@ -3163,75 +3202,35 @@ def build_collection_rdf_graph(
         if cover_url:
             encoded_cover = _safe_iri(str(cover_url))
             if encoded_cover is not None:
-                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{base_url}/{encoded_cover}"
+                clean_base = base_url.rstrip("/")
+                clean_cover = encoded_cover.lstrip("/")
+                img_iri = encoded_cover if encoded_cover.startswith(("http://", "https://")) else f"{clean_base}/{clean_cover}"
                 g.add((m_uri, SCHEMA.image, URIRef(img_iri)))
             else:
                 _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
-        # LEGO Manifestation attributes (F3)
+        # LEGO & Cartographic Manifestation attributes (F3)
         m_meta_dict: dict[str, Any] = {}
         if isinstance(item, dict):
             m_meta_dict = item.get("manifestation_meta") or item.get("meta") or {}
-            lego_set_num = item["set_number"] if "set_number" in item else m_meta_dict.get("set_number")
-            lego_piece_cnt = item["piece_count"] if "piece_count" in item else m_meta_dict.get("piece_count")
-            lego_minifig_cnt = item["minifig_count"] if "minifig_count" in item else m_meta_dict.get("minifig_count")
+            for k in (
+                "set_number",
+                "piece_count",
+                "minifig_count",
+                "map_scale",
+                "scale",
+                "map_projection",
+                "projection",
+                "map_attachments",
+            ):
+                if k in item and k not in m_meta_dict:
+                    m_meta_dict[k] = item[k]
         else:
             m_inst = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
             m_meta_dict = (m_inst.meta or {}) if m_inst and hasattr(m_inst, "meta") and m_inst.meta else {}
-            lego_set_num = m_meta_dict.get("set_number")
-            lego_piece_cnt = m_meta_dict.get("piece_count")
-            lego_minifig_cnt = m_meta_dict.get("minifig_count")
 
-        if lego_set_num:
-            g.add((m_uri, IQOQO.setNumber, Literal(str(lego_set_num), datatype=XSD.string)))
-        if lego_piece_cnt is not None:
-            try:
-                g.add((m_uri, IQOQO.pieceCount, Literal(int(lego_piece_cnt), datatype=XSD.integer)))
-            except (ValueError, TypeError):
-                pass
-        if lego_minifig_cnt is not None:
-            try:
-                g.add((m_uri, IQOQO.minifigCount, Literal(int(lego_minifig_cnt), datatype=XSD.integer)))
-            except (ValueError, TypeError):
-                pass
-
-        # Cartographic Manifestation attributes & attachments (F3)
-        carto_scale = item.get("map_scale") if isinstance(item, dict) and "map_scale" in item else m_meta_dict.get("map_scale")
-        if not carto_scale:
-            carto_scale = item.get("scale") if isinstance(item, dict) and "scale" in item else m_meta_dict.get("scale")
-
-        carto_proj = (
-            item.get("map_projection") if isinstance(item, dict) and "map_projection" in item else m_meta_dict.get("map_projection")
-        )
-        if not carto_proj:
-            carto_proj = item.get("projection") if isinstance(item, dict) and "projection" in item else m_meta_dict.get("projection")
-
-        if carto_scale:
-            g.add((m_uri, IQOQO.mapScale, Literal(str(carto_scale), datatype=XSD.string)))
-        if carto_proj:
-            g.add((m_uri, IQOQO.mapProjection, Literal(str(carto_proj), datatype=XSD.string)))
-
-        raw_attachments = (
-            item.get("map_attachments") if isinstance(item, dict) and "map_attachments" in item else m_meta_dict.get("map_attachments")
-        )
-        if isinstance(raw_attachments, list):
-            for idx, att in enumerate(raw_attachments):
-                if not isinstance(att, dict):
-                    continue
-                att_title = att.get("title") or f"Map Attachment #{idx + 1}"
-                att_type = att.get("type") or "fold_out_insert"
-                att_img = att.get("image_url")
-
-                att_node = BNode()
-                g.add((m_uri, IQOQO.hasMapAttachment, att_node))
-                g.add((att_node, RDF.type, IQOQO.MapAttachment))
-                g.add((att_node, IQOQO.mapTitle, Literal(str(att_title), datatype=XSD.string)))
-                g.add((att_node, IQOQO.mapType, Literal(str(att_type), datatype=XSD.string)))
-                if att_img:
-                    safe_img = _safe_iri(str(att_img))
-                    if safe_img:
-                        img_val = safe_img if safe_img.startswith(("http://", "https://")) else f"{base_url}/{safe_img}"
-                        g.add((att_node, IQOQO.mapImageUrl, Literal(str(img_val), datatype=XSD.string)))
+        _emit_lego_rdf_triples(g, m_uri, m_meta_dict)
+        _emit_cartographic_rdf_triples(g, m_uri, m_meta_dict, base_url)
 
         # Format-specific Schema.org assertions
         m_format = item.get("format") if isinstance(item, dict) and "format" in item else m_meta_dict.get("format")

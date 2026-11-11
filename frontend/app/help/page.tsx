@@ -24,6 +24,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Search, ArrowRight, Layers, ScanLine, Share2, Shield, Wrench } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { RequestNewTypeModal } from "@/components/social/request-new-type-modal";
 
 /**
  * Help and documentation hub page rendering guide search and category navigation.
@@ -68,12 +69,15 @@ export default function HelpHubPage() {
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar />
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-serif font-bold tracking-tight">{t("title")}</h1>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-serif font-bold tracking-tight">{t("title")}</h1>
+            </div>
+            <p className="text-muted-foreground mt-2 max-w-2xl">{t("description")}</p>
           </div>
-          <p className="text-muted-foreground mt-2 max-w-2xl">{t("description")}</p>
+          <RequestNewTypeModal />
         </div>
 
         {/* Search & Category Filter Bar */}

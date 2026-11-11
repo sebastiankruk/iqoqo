@@ -41,6 +41,17 @@ def sanitize_credential_string(val: Any) -> Any:
     return cleaned
 
 
+def is_credential_or_sensitive_key(key: str) -> bool:
+    """Check whether a key represents a sensitive credential, secret, token, password, or identifier."""
+    if not isinstance(key, str):
+        return False
+    from app.db.settings import SENSITIVE_SETTING_KEYS, is_sensitive_key
+
+    if is_sensitive_key(key) or key in SENSITIVE_SETTING_KEYS:
+        return True
+    return key.upper().endswith(("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_CLIENT_ID"))
+
+
 class ConfigService:
     """Service to fetch configuration values uniformly across the application.
 
@@ -64,6 +75,10 @@ class ConfigService:
             The configuration value from highest priority source
         """
         raw_env = os.environ.get(key)
+        is_cred = is_credential_or_sensitive_key(key)
+
+        def _clean_val(val: Any) -> Any:
+            return sanitize_credential_string(val) if is_cred else val
 
         if key not in CONFIG_KEY_BLOCKLIST:
             try:
@@ -74,24 +89,24 @@ class ConfigService:
 
                     val = InstanceSettings.get_value(key)
                     if val is not None:
-                        return sanitize_credential_string(val)
+                        return _clean_val(val)
             except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError):
                 pass  # DB context might not be fully initialized
 
         # If not in DB, check os.environ if non-empty (allows test monkeypatching)
         if raw_env is not None and raw_env != "":
-            return sanitize_credential_string(raw_env)
+            return _clean_val(raw_env)
 
         try:
             from flask import current_app
 
             if current_app and current_app.config.get(key) is not None:
-                return sanitize_credential_string(current_app.config[key])
+                return _clean_val(current_app.config[key])
         except (ValueError, AttributeError, KeyError, RuntimeError):
             pass
 
         if raw_env is not None:
-            return sanitize_credential_string(raw_env)
+            return _clean_val(raw_env)
         return default
 
     @staticmethod
@@ -154,3 +169,12 @@ class ConfigService:
             return float(val)
         except (TypeError, ValueError):
             return default
+
+
+def is_federation_head_mode() -> bool:
+    """Check whether this instance operates in read-only Federation Head mode.
+
+    Returns:
+        True if FEDERATION_HEAD_MODE is enabled in InstanceSettings, Flask config, or environment.
+    """
+    return ConfigService.get_bool("FEDERATION_HEAD_MODE", False)

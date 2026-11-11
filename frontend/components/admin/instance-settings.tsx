@@ -16,9 +16,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { getInstanceSettings, updateInstanceSettings, revealSettingValue } from "@/lib/api/admin";
 import { getFederationKeyFingerprint, provisionFederationInstanceKey } from "@/lib/api/federation";
+import { queryKeys } from "@/lib/api/hooks/query-keys";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -202,6 +204,12 @@ const SETTING_GROUPS = {
   federation: [
     { key: "FEDERATION_BASE_URL", label: "Instance URL", type: "text" as const, placeholder: "https://..." },
     { key: "FEDERATION_ENABLED", label: "Enable Federation", type: "boolean" as const, placeholder: "" },
+    {
+      key: "FEDERATION_HEAD_MODE",
+      label: "Federation Head Mode (Read-Only Showcase)",
+      type: "boolean" as const,
+      placeholder: "",
+    },
   ],
   affiliate: [
     { key: "AFFILIATE_AMAZON", label: "Amazon Affiliate ID", type: "text" as const, placeholder: "e.g., iqoqo-20" },
@@ -279,6 +287,7 @@ function CardWrapper({
  * @returns InstanceSettings element.
  */
 export function InstanceSettings({ category = "external_apis", showApiKeys = false }: InstanceSettingsProps) {
+  const queryClient = useQueryClient();
   const tFed = useTranslations("AdminFederation");
   const [settings, setSettings] = useState<InstanceSettingsData>({});
   const [loading, setLoading] = useState(true);
@@ -373,10 +382,15 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
         }
       }
       await updateInstanceSettings(toSave, category);
-      setSavedMessage(`Saved settings for ${groupId}`);
+      queryClient?.invalidateQueries?.({ queryKey: queryKeys.config });
+      const successMsg = `Saved settings for ${groupId === "all_apis" ? "External APIs" : groupId}`;
+      setSavedMessage(successMsg);
+      toast.success(successMsg);
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (e) {
       console.error("Failed to save settings", e);
+      const msg = e instanceof Error ? e.message : "Failed to save settings";
+      toast.error(msg);
     } finally {
       setSavingKey(null);
     }

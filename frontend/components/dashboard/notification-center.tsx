@@ -17,6 +17,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Bell, Check, X, Loader2, UserPlus, UserCheck, BookOpen, AlertCircle, ArrowUpRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
+import { navigateDeepLink } from "@/lib/capacitor/navigation";
 import {
   useNotifications,
   useMarkNotificationsRead,
@@ -44,6 +46,7 @@ interface NotificationCenterProps {
  */
 export function NotificationCenter({ enabled = true }: NotificationCenterProps) {
   const t = useTranslations("Notifications");
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading } = useNotifications(false, enabled);
   const markReadMutation = useMarkNotificationsRead();
@@ -234,7 +237,13 @@ export function NotificationCenter({ enabled = true }: NotificationCenterProps) 
                     <Link
                       href={targetUrl}
                       className="block"
-                      onClick={() => handleNotificationClick(notif)}
+                      onClick={e => {
+                        handleNotificationClick(notif);
+                        if (targetUrl.startsWith("iqoqo://") || targetUrl.startsWith("intent://")) {
+                          e.preventDefault();
+                          navigateDeepLink(targetUrl, router);
+                        }
+                      }}
                       data-testid={`notification-link-${notif.id}`}
                     >
                       {content}

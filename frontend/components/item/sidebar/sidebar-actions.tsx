@@ -15,8 +15,11 @@
 //
 import * as React from "react";
 import { ChangeEvent } from "react";
-import { Pencil, QrCode, Eye, EyeOff, Folder, X, Plus, Loader2, ImagePlus } from "lucide-react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Pencil, QrCode, Eye, EyeOff, Folder, X, Plus, Loader2, ImagePlus, ArrowRightLeft } from "lucide-react";
 import type { Item, MediaFormat } from "@/types/frbr";
+import { PermissionName } from "@/lib/permissions";
 import { CoverUploadPicker } from "@/components/scanner/cover-upload-picker";
 import { MultiImageUploader } from "@/components/scanner/multi-image-uploader";
 import { TaxonomyEditor } from "@/components/item/taxonomy-editor";
@@ -103,6 +106,7 @@ export function SidebarActions({
   addToCollection = { isPending: false },
   handleAddToCollection = () => {},
 }: SidebarActionsProps) {
+  const t = useTranslations("ItemDetail");
   return (
     <>
       <div className="flex w-full flex-col gap-3 px-1">
@@ -471,6 +475,20 @@ export function SidebarActions({
         )}
 
         {canModifyItem && <TaxonomyEditor item={item} />}
+
+        {/* Ownership Reassignment deep-link */}
+        {profile &&
+          (profile.roles?.includes("admin") ||
+            profile.roles?.includes("custodian") ||
+            profile.permissions?.includes(PermissionName.TRANSFER_ITEM)) && (
+            <Link
+              href={`/admin/ownership?sourceUserId=${encodeURIComponent(item.owner_id || "")}&itemId=${item.id}`}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              {t("reassignOwner")}
+            </Link>
+          )}
       </div>
       <PrintQrCodeDialog isOpen={isQrOpen} onOpenChange={setIsQrOpen ?? (() => {})} item={item} />
     </>

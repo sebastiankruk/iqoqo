@@ -29,18 +29,25 @@ import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
-import { useAddManualItem, queryKeys } from "@/lib/api/hooks";
+import { useAddManualItem, queryKeys, useAppConfig } from "@/lib/api/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Radio, Library, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { useBatchMode, BatchScanToggle } from "@/components/scanner/batch-scan-toggle";
 import { triggerScanHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import type { IsbnMeta, ScanFormat, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
+import {
+  findOfflineDuplicate,
+  enqueueOfflineManualEntry,
+  flushOfflineManualQueue,
+} from "@/lib/capacitor/offline-cache";
 
 /**
  * The scan page component for scanning barcodes and manual entry.
@@ -106,11 +113,38 @@ export default function ScanPage() {
   const router = useRouter();
   const t = useTranslations("scanner");
   const queryClient = useQueryClient();
+  const { data: config } = useAppConfig();
+  const isFederationHead = config?.federation_head_mode === true;
 
   const { isBatchMode, setBatchMode, scannedQueue, isCooldownActive, recordScan, clearQueue } = useBatchMode();
 
   const [quickQuery, setQuickQuery] = useState("");
   const [isQuickSearching, setIsQuickSearching] = useState(false);
+
+  // Auto-flush pending offline manual entries when back online
+  useEffect(() => {
+    const handleSync = async () => {
+      try {
+        const res = await flushOfflineManualQueue(async payload => {
+          return await apiClient.post("/items/manual", payload);
+        });
+        if (res.synced > 0) {
+          toast.success(`Synced ${res.synced} offline manual item${res.synced > 1 ? "s" : ""} to your library!`);
+          queryClient.invalidateQueries({ queryKey: queryKeys.itemsAll });
+        }
+      } catch {
+        // Ignore background sync errors
+      }
+    };
+
+    window.addEventListener("online", handleSync);
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      handleSync();
+    }
+    return () => {
+      window.removeEventListener("online", handleSync);
+    };
+  }, [queryClient]);
 
   const formatToApiParam = (fmt?: string): string => {
     if (fmt === "movie" || fmt === "video") return "movie";
@@ -218,7 +252,13 @@ export default function ScanPage() {
       setQuickQuery("");
       await handleFound(query, data);
     } catch {
-      toast.info(t("bottomSheet.lookupFailed"));
+      // Check offline cache when lookup fails or network offline
+      const offlineMatch = await findOfflineDuplicate(query);
+      if (offlineMatch) {
+        toast.info(offlineMatch.matchType === "collection" ? t("offlineMatchCollection") : t("offlineMatchWishlist"));
+      } else {
+        toast.info(t("bottomSheet.lookupFailed"));
+      }
       handleShowManualForm(query);
     } finally {
       setIsQuickSearching(false);
@@ -283,6 +323,14 @@ export default function ScanPage() {
       Publisher: data.publisher || undefined,
     };
 
+    const isCurrentlyOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    if (isCurrentlyOffline) {
+      await enqueueOfflineManualEntry(payload);
+      toast.success(`"${payload.Title}" saved locally! Will sync when back online.`);
+      setShowManual(false);
+      return;
+    }
+
     addManualMutation.mutate(payload, {
       onSuccess: async response => {
         const item = response.data;
@@ -311,8 +359,20 @@ export default function ScanPage() {
           router.push(`/item/${response.data.item_id}`);
         }
       },
-      onError: err => {
-        toast.error((err as Error).message || "Failed to add item manually");
+      onError: async (error: unknown) => {
+        const isOffline =
+          (typeof navigator !== "undefined" && !navigator.onLine) || (axios.isAxiosError(error) && !error.response);
+
+        if (isOffline) {
+          // If network error occurred during submission, save to offline manual queue
+          await enqueueOfflineManualEntry(payload);
+          toast.info(`Network unreachable: "${payload.Title}" queued locally for sync.`);
+          setShowManual(false);
+        } else {
+          const errData = (error as { response?: { data?: { error?: string } } })?.response?.data;
+          const msg = errData?.error || (error as Error)?.message || "Failed to create item";
+          toast.error(`Error: ${msg}`);
+        }
       },
     });
   };
@@ -320,6 +380,49 @@ export default function ScanPage() {
   const handleToggleTorch = useCallback(() => {
     setTorchOn(prev => !prev);
   }, []);
+
+  if (isFederationHead) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-background">
+        <div
+          data-testid="federation-head-scan-notice"
+          className="max-w-md w-full p-6 rounded-2xl border border-border/80 bg-card shadow-lg text-center space-y-5"
+        >
+          <div className="h-12 w-12 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center mx-auto text-accent">
+            <Radio className="h-6 w-6 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent/15 text-accent border border-accent/30">
+              {t("federationHub.badge")}
+            </span>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{t("federationHub.title")}</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">{t("federationHub.description")}</p>
+          </div>
+          <p className="text-xs text-muted-foreground/80 italic">{t("federationHub.wishlistHint")}</p>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <Button asChild size="default" className="w-full bg-accent text-accent-foreground font-semibold">
+              <Link href="/collection" className="flex items-center justify-center gap-2">
+                <Library className="h-4 w-4" />
+                {t("federationHub.exploreCatalog")}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="default" className="w-full">
+              <Link href="/federation/directory" className="flex items-center justify-center gap-2">
+                <Radio className="h-4 w-4" />
+                {t("federationHub.viewDirectory")}
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="w-full text-muted-foreground">
+              <Link href="/wishlist" className="flex items-center justify-center gap-2">
+                <BookmarkCheck className="h-4 w-4" />
+                Wishlist
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ScannerErrorBoundary>

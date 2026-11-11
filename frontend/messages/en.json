@@ -1,6 +1,11 @@
 {
   "Navbar": {
     "maintenanceMode": "Maintenance Mode Active – Some features may be limited",
+    "federationHubBadge": "Federation Hub · Read-Only",
+    "federationHubBanner": "This instance operates as a read-only Federation Hub. Items are federated from community nodes.",
+    "federationHubExploreDirectory": "Explore Directory",
+    "dismissBanner": "Dismiss banner",
+    "directory": "Directory",
     "searchPlaceholder": "Search your collection...",
     "collection": "Collection",
     "scan": "Scan",
@@ -30,6 +35,9 @@
   "Hero": {
     "title": "The Library of Everything",
     "description": "iqoqo empowers you to create, share, and discover personal catalogs of books, music, movies, and board games. Built on the open Semantic Web, designed for a distributed future.",
+    "federationHubTitle": "The Federated Library Network",
+    "federationHubDescription": "iqoqo.cc connects independent, self-hosted libraries across the globe. Search shared works, track your personal wishlist, and explore federated community collections.",
+    "exploreFederatedCatalog": "Explore Federated Catalog",
     "startCatalog": "Start Your Catalog",
     "browseInstance": "Browse Instance",
     "github": "GitHub"
@@ -221,7 +229,9 @@
     "edition": "Edition",
     "myItem": "My Item",
     "noExpressionsMatching": "No expressions matching \"{query}\"",
-    "noExpressionsInCollection": "No expressions in collection"
+    "noExpressionsInCollection": "No expressions in collection",
+    "offlineModeBanner": "Offline Mode — Viewing Cached Library (Last synced: {lastSynced})",
+    "offlineUnknownSync": "recently"
   },
   "CollectionFilters": {
     "title": "Filters",
@@ -431,7 +441,14 @@
     "newMediaTypeSubmittedToast": "New media type request submitted to custodians",
     "newMediaTypeSubmittedDesc": "Thank you! Instance custodians have been notified. You can track this request in your Requests tab.",
     "requestSubmittedTitle": "Proposal Submitted",
-    "allRequiredFieldsError": "Please fill in all required fields."
+    "allRequiredFieldsError": "Please fill in all required fields.",
+    "changeType": "Change Type",
+    "newMediaType": "New Media Type",
+    "proposedFormat": "Proposed Format",
+    "proposedCategory": "Proposed Category",
+    "parentFrbrClass": "FRBR Class",
+    "sampleIdentifier": "Sample",
+    "rationale": "Rationale"
   },
   "Scanner": {
     "skipAndEnterManually": "Skip and enter manually"
@@ -524,7 +541,9 @@
       "manualCoverUpload": "Manual Cover Upload",
       "coverPreview": "Cover preview",
       "uploadCover": "Upload Cover",
-      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device."
+      "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device.",
+      "cantFindFormat": "Can't find your format?",
+      "requestNewType": "Request new media type"
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
@@ -538,6 +557,16 @@
       "placeholder": "Quick search title, code or barcode...",
       "searchButton": "Lookup",
       "searching": "Searching..."
+    },
+    "offlineMatchCollection": "Found matching item in your offline library cache!",
+    "offlineMatchWishlist": "Found matching item in your offline wishlist cache!",
+    "federationHub": {
+      "badge": "Federation Hub",
+      "title": "Read-Only Federation Hub",
+      "description": "This instance operates as a central showcase and federation hub. Direct physical item scanning and additions are disabled here. Physical items are cataloged on connected community libraries and synchronized to this hub.",
+      "exploreCatalog": "Explore Federated Catalog",
+      "viewDirectory": "Connected Libraries",
+      "wishlistHint": "Looking to keep track of items? You can still add works to your Wishlist."
     }
   },
   "SemanticLinks": {
@@ -926,8 +955,89 @@
     "continue": "Continue to login",
     "cancel": "Cancel",
     "version": "Version: {version}"
+  },
+  "ItemDetail": {
+    "lego": {
+      "title": "LEGO Set Details",
+      "viewOnRebrickable": "View on Rebrickable",
+      "setNumber": "Set Number",
+      "pieceCount": "Piece Count",
+      "pieces": "{count} Pieces",
+      "minifigures": "Minifigures",
+      "theme": "Theme",
+      "physicalState": "Physical Item State",
+      "status": "Status",
+      "instructions": "Instructions",
+      "included": "Included",
+      "missing": "Missing",
+      "missingPieces": "Missing: {count} pieces",
+      "statusSealed": "Sealed (In Box)",
+      "statusBuilt": "Built",
+      "statusIncomplete": "Incomplete",
+      "statusPartedOut": "Parted Out"
+    },
+    "maps": {
+      "title": "Cartography & Map Supplements",
+      "addMap": "Add Map",
+      "scale": "Scale",
+      "projection": "Projection",
+      "mapInsertPresent": "Map Insert Present",
+      "missingMapInsert": "Missing Map Insert",
+      "mapSupplement": "Map supplement",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "deleteAria": "Delete map attachment",
+      "inspectMap": "Inspect Map",
+      "includesCartographic": "Includes cartographic materials or folding maps.",
+      "addMapAttachmentTitle": "Add Map Attachment",
+      "addMapAttachmentDesc": "Attach a high-resolution map insert, fold-out, or world map.",
+      "mapTitleLabel": "Map Title",
+      "mapTitlePlaceholder": "e.g. World Map Insert",
+      "mapTypeLabel": "Map Type",
+      "scaleLabel": "Scale (optional)",
+      "scalePlaceholder": "e.g. 1:50,000",
+      "projectionLabel": "Projection (optional)",
+      "projectionPlaceholder": "e.g. Mercator",
+      "mapImageFileLabel": "Map Image File",
+      "orImageUrlLabel": "Or Image URL",
+      "imageUrlPlaceholder": "https://example.com/map.jpg or /static/gallery/...",
+      "cancel": "Cancel",
+      "saveAttachment": "Save Attachment",
+      "uploading": "Uploading...",
+      "typeWorldMap": "World Map",
+      "typeFoldOutInsert": "Fold-out Insert",
+      "typeClothMap": "Cloth Map",
+      "typeGameBoard": "Game Board",
+      "typeTopographic": "Topographic Map",
+      "mapAttachmentRemoved": "Map attachment removed",
+      "mapAttachmentUploaded": "Map attachment uploaded successfully",
+      "provideImageOrUrl": "Please provide either a map image file or an image URL",
+      "failedToAdd": "Failed to add map attachment",
+      "failedToRemove": "Failed to remove map attachment"
+    },
+    "reassignOwner": "Reassign Owner"
+  },
+  "MapViewer": {
+    "title": "Map Inspector",
+    "cartographicMap": "cartographic map",
+    "scale": "Scale: {scale}",
+    "projection": "Projection: {projection}",
+    "prevMap": "Previous Map",
+    "nextMap": "Next Map",
+    "noMapImage": "No map image available for this supplement.",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "rotate": "Rotate 90°",
+    "resetView": "Reset View",
+    "openFullImage": "Open Full Image in New Tab"
+  },
+  "AdminOwnership": {
+    "title": "Item Ownership Reassignment",
+    "description": "Audit and reassign physical item ownership across user accounts with atomic provenance tracking.",
+    "searchPlaceholder": "Search title, ISBN, barcode, local barcode...",
+    "filterStatus": "Filter by collection status",
+    "allStatuses": "All statuses",
+    "clearFilters": "Clear Filters",
+    "reassignOwner": "Reassign Owner"
   }
 }
-
-
-
