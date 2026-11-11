@@ -231,5 +231,38 @@ describe("offline-cache", () => {
     // Queue is empty after flush
     const remainingQueue = await getOfflineManualQueue();
     expect(remainingQueue.length).toBe(0);
+
+    // Provisional item was pruned from collection snapshot
+    const postFlushSnapshot = await getCachedCollectionSnapshot();
+    expect(postFlushSnapshot?.items.some(i => i.id === -enqueued.timestamp)).toBe(false);
+  });
+
+  it("serializes concurrent flushOfflineManualQueue calls with in-flight mutex", async () => {
+    const entryPayload = {
+      Title: "Unique Manual Entry",
+      Authors: ["Tester"],
+      Format: "book",
+    };
+    await enqueueOfflineManualEntry(entryPayload);
+
+    let resolveSubmission!: (val: unknown) => void;
+    const submissionPromise = new Promise(resolve => {
+      resolveSubmission = resolve;
+    });
+    const slowSubmit = vi.fn().mockImplementation(() => submissionPromise);
+
+    // Fire two flushes concurrently
+    const flushPromise1 = flushOfflineManualQueue(slowSubmit);
+    const flushPromise2 = flushOfflineManualQueue(slowSubmit);
+
+    // Mutex should return the exact same in-flight promise
+    expect(flushPromise1).toBe(flushPromise2);
+
+    resolveSubmission({ success: true });
+    const [res1, res2] = await Promise.all([flushPromise1, flushPromise2]);
+
+    expect(res1.synced).toBe(1);
+    expect(res2.synced).toBe(1);
+    expect(slowSubmit).toHaveBeenCalledTimes(1);
   });
 });

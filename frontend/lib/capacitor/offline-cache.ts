@@ -396,19 +396,19 @@ export async function enqueueOfflineManualEntry(payload: OfflineManualEntry["pay
   return entry;
 }
 
+let activeFlushPromise: Promise<{ synced: number; failed: number }> | null = null;
+
 /**
- * Flush queued offline manual entries to the backend API.
- *
- * @param submitFn - The async function that submits each payload to the server
- * @returns Counts of synced and failed items
+ * Internal worker for flushing queued offline manual entries.
  */
-export async function flushOfflineManualQueue(
+async function _performFlushOfflineManualQueue(
   submitFn: (payload: OfflineManualEntry["payload"]) => Promise<unknown>
 ): Promise<{ synced: number; failed: number }> {
   const queue = await getOfflineManualQueue();
   if (queue.length === 0) return { synced: 0, failed: 0 };
 
   const remaining: OfflineManualEntry[] = [];
+  const syncedTimestamps: number[] = [];
   let synced = 0;
   let failed = 0;
 
@@ -416,6 +416,7 @@ export async function flushOfflineManualQueue(
     try {
       await submitFn(entry.payload);
       synced++;
+      syncedTimestamps.push(entry.timestamp);
     } catch (e) {
       console.warn("Failed to flush offline manual entry:", entry.id, e);
       failed++;
@@ -440,7 +441,48 @@ export async function flushOfflineManualQueue(
     }
   }
 
+  // Prune synced provisional negative-ID items from cached collection snapshot
+  if (syncedTimestamps.length > 0) {
+    try {
+      const snapshot = await getCachedCollectionSnapshot();
+      if (snapshot && snapshot.items.length > 0) {
+        const syncedSet = new Set(syncedTimestamps.map(ts => -ts));
+        const filteredItems = snapshot.items.filter(item => !syncedSet.has(item.id));
+        if (filteredItems.length !== snapshot.items.length) {
+          await saveCollectionSnapshot(filteredItems);
+        }
+      }
+    } catch {
+      // Ignore snapshot pruning errors
+    }
+  }
+
   return { synced, failed };
+}
+
+/**
+ * Flush queued offline manual entries to the backend API.
+ * Protected by an in-flight mutex to avoid concurrent duplicate submissions.
+ *
+ * @param submitFn - The async function that submits each payload to the server
+ * @returns Counts of synced and failed items
+ */
+export function flushOfflineManualQueue(
+  submitFn: (payload: OfflineManualEntry["payload"]) => Promise<unknown>
+): Promise<{ synced: number; failed: number }> {
+  if (activeFlushPromise) {
+    return activeFlushPromise;
+  }
+
+  activeFlushPromise = (async () => {
+    try {
+      return await _performFlushOfflineManualQueue(submitFn);
+    } finally {
+      activeFlushPromise = null;
+    }
+  })();
+
+  return activeFlushPromise;
 }
 
 /**

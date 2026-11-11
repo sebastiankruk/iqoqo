@@ -124,9 +124,36 @@ def test_scoped_credential_quote_stripping(app) -> None:
             {
                 "TMDB_API_KEY": '"secret_tmdb_key"',
                 "CUSTOM_SITE_TAGLINE": '"Preserving books"',
+                "NEXT_PUBLIC_FRONTEND_URL": '"http://localhost:3000"',
+                "DATA_DIR": '"/var/lib/data"',
             },
         ):
             # Credential key has quotes unwrapped
             assert ConfigService.get("TMDB_API_KEY") == "secret_tmdb_key"
             # Non-credential string preserves surrounding quotes untouched
             assert ConfigService.get("CUSTOM_SITE_TAGLINE") == '"Preserving books"'
+            assert ConfigService.get("NEXT_PUBLIC_FRONTEND_URL") == '"http://localhost:3000"'
+            assert ConfigService.get("DATA_DIR") == '"/var/lib/data"'
+
+
+def test_is_credential_or_sensitive_key_classification():
+    """Verify is_credential_or_sensitive_key strict suffix and sensitive key rules."""
+    from app.core.config_service import is_credential_or_sensitive_key
+
+    # Sensitive or credential keys
+    assert is_credential_or_sensitive_key("TMDB_API_KEY") is True
+    assert is_credential_or_sensitive_key("TWITCH_CLIENT_SECRET") is True
+    assert is_credential_or_sensitive_key("JWT_SECRET_KEY") is True
+    assert is_credential_or_sensitive_key("MAIL_PASSWORD") is True
+    assert is_credential_or_sensitive_key("GOOGLE_CLIENT_ID") is True
+    assert is_credential_or_sensitive_key("ALLEGRO_TOKEN_DATA") is True
+    assert is_credential_or_sensitive_key("MY_APP_ACCESS_TOKEN") is True
+
+    # Non-credential keys that formerly matched broad substrings (_ID, _URL, _DATA)
+    assert is_credential_or_sensitive_key("NEXT_PUBLIC_FRONTEND_URL") is False
+    assert is_credential_or_sensitive_key("DATABASE_URL") is False
+    assert is_credential_or_sensitive_key("REDIS_URL") is False
+    assert is_credential_or_sensitive_key("PUBLIC_DATA_DIR") is False
+    assert is_credential_or_sensitive_key("COLLECTION_ID") is False
+    assert is_credential_or_sensitive_key("USER_ITEM_ID") is False
+    assert is_credential_or_sensitive_key("SITE_TITLE") is False

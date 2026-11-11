@@ -125,8 +125,9 @@ if [[ ! -f "./deploy/nginx.conf" ]]; then
 fi
 
 # Ensure bind mount directory structures and permissions
-mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers data exports
+mkdir -p app/static/covers app/static/gallery app/static/uploads/raw_covers data/keys exports
 chmod -R a+rwX app/static/covers app/static/gallery app/static/uploads/raw_covers data exports 2>/dev/null || true
+if [[ -d data/keys ]]; then chmod 1777 data/keys 2>/dev/null || true; chmod 600 data/keys/*.pem 2>/dev/null || true; fi
 
 # 5. Execute installer
 echo "Launching iQoQo setup wizard..."

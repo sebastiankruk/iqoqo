@@ -45,10 +45,18 @@ vi.mock("@/lib/api/hooks/catalog", () => ({
   useAppConfig: vi.fn(() => ({ data: { federation_head_mode: false }, isLoading: false })),
 }));
 
+const mockEnqueueOffline = vi.fn();
+vi.mock("@/lib/capacitor/offline-cache", () => ({
+  findOfflineDuplicate: vi.fn(),
+  enqueueOfflineManualEntry: (...args: any[]) => mockEnqueueOffline(...args),
+  flushOfflineManualQueue: vi.fn(),
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -243,5 +251,64 @@ describe("ScanPage", () => {
     await waitFor(() => {
       expect(apiClient.apiFetch).toHaveBeenCalledWith("/lookup/5702018068229?format=lego");
     });
+  });
+
+  it("displays toast error and does not enqueue offline when manual submission fails with server error", async () => {
+    let capturedOptions: any;
+    const mutateMock = vi.fn().mockImplementation((payload, options) => {
+      capturedOptions = options;
+    });
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    render(<ScanPage />);
+
+    // Open form & submit
+    fireEvent.click(screen.getByText(/Cannot find barcode\? Enter Manually/i));
+    fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Rejected Book" } });
+    fireEvent.click(screen.getByText(/Save Manual Entry/i));
+
+    // Simulate online HTTP 403 response
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    await act(async () => {
+      await capturedOptions.onError({
+        response: { status: 403, data: { error: "Physical items disabled in showcase mode" } },
+      });
+    });
+
+    const { toast } = await import("sonner");
+    expect(toast.error).toHaveBeenCalledWith("Error: Physical items disabled in showcase mode");
+    expect(mockEnqueueOffline).not.toHaveBeenCalled();
+  });
+
+  it("enqueues offline manual entry when offline during submission", async () => {
+    let capturedOptions: any;
+    const mutateMock = vi.fn().mockImplementation((payload, options) => {
+      capturedOptions = options;
+    });
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    render(<ScanPage />);
+
+    fireEvent.click(screen.getByText(/Cannot find barcode\? Enter Manually/i));
+    fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Offline Flea Market Book" } });
+    fireEvent.click(screen.getByText(/Save Manual Entry/i));
+
+    // Simulate network offline
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await act(async () => {
+      await capturedOptions.onError(new Error("Network Error"));
+    });
+
+    const { toast } = await import("sonner");
+    expect(mockEnqueueOffline).toHaveBeenCalledWith(expect.objectContaining({ Title: "Offline Flea Market Book" }));
+    expect(toast.info).toHaveBeenCalledWith(
+      expect.stringContaining('Network unreachable: "Offline Flea Market Book" queued locally')
+    );
   });
 });

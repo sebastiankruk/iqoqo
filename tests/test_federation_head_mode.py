@@ -153,3 +153,65 @@ def test_wishlist_additions_allowed_on_federation_head(client, app, enable_feder
         headers=normal_user_headers,
     )
     assert resp_scan.status_code in (200, 201)
+
+    # 3. POST /api/manifestations/<id>/add with collection_status="wish_list"
+    resp_manif_wish = client.post(
+        f"/api/manifestations/{sample_manifestation}/add",
+        json={"collection_status": "wish_list"},
+        headers=normal_user_headers,
+    )
+    assert resp_manif_wish.status_code == 200
+    assert resp_manif_wish.get_json()["data"]["intent_id"] is not None
+
+    # 4. POST /api/items with collection_status="wish_list"
+    resp_items_wish = client.post(
+        "/api/items",
+        json={"manifestation_id": sample_manifestation, "collection_status": "wish_list"},
+        headers=normal_user_headers,
+    )
+    assert resp_items_wish.status_code == 200
+    assert resp_items_wish.get_json()["data"]["intent_id"] is not None
+
+    # 5. POST /api/items/bulk with collection_status="wish_list"
+    resp_bulk_wish = client.post(
+        "/api/items/bulk",
+        json={"manifestation_ids": [sample_manifestation], "collection_status": "wish_list"},
+        headers=normal_user_headers,
+    )
+    assert resp_bulk_wish.status_code == 200
+    assert len(resp_bulk_wish.get_json()["data"]["intent_ids"]) == 1
+
+    # 6. POST /api/item/<isbn> with collection_status="wish_list"
+    resp_isbn_wish = client.post(
+        "/api/item/9780131429017",
+        json={"collection_status": "wish_list"},
+        headers=normal_user_headers,
+    )
+    assert resp_isbn_wish.status_code == 200
+    assert resp_isbn_wish.get_json()["data"]["intent_id"] is not None
+
+
+def test_add_item_by_manifestation_rejected_on_federation_head(client, enable_federation_head, normal_user_headers, sample_manifestation):
+    """POST /api/manifestations/<id>/add returns 403 Forbidden on federation head mode for physical items."""
+    resp = client.post(
+        f"/api/manifestations/{sample_manifestation}/add",
+        json={"collection_status": "available"},
+        headers=normal_user_headers,
+    )
+    assert resp.status_code == 403
+    payload = resp.get_json()
+    assert payload["code"] == 403
+    assert FEDERATION_HEAD_READONLY_MESSAGE in payload["error"]
+
+
+def test_add_item_by_isbn_rejected_on_federation_head(client, enable_federation_head, normal_user_headers, sample_manifestation):
+    """POST /api/item/<isbn> returns 403 Forbidden on federation head mode for physical items."""
+    resp = client.post(
+        "/api/item/9780131429017",
+        json={"collection_status": "available"},
+        headers=normal_user_headers,
+    )
+    assert resp.status_code == 403
+    payload = resp.get_json()
+    assert payload["code"] == 403
+    assert FEDERATION_HEAD_READONLY_MESSAGE in payload["error"]

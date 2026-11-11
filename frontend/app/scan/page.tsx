@@ -39,6 +39,7 @@ import { useBatchMode, BatchScanToggle } from "@/components/scanner/batch-scan-t
 import { triggerScanHaptic, triggerErrorHaptic } from "@/lib/capacitor/haptics";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import type { IsbnMeta, ScanFormat, ApiResponse } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
 import { mapFormatToApi } from "@/lib/media";
@@ -358,11 +359,20 @@ export default function ScanPage() {
           router.push(`/item/${response.data.item_id}`);
         }
       },
-      onError: async () => {
-        // If network error occurred during submission, save to offline manual queue
-        await enqueueOfflineManualEntry(payload);
-        toast.info(`Network unreachable: "${payload.Title}" queued locally for sync.`);
-        setShowManual(false);
+      onError: async (error: unknown) => {
+        const isOffline =
+          (typeof navigator !== "undefined" && !navigator.onLine) || (axios.isAxiosError(error) && !error.response);
+
+        if (isOffline) {
+          // If network error occurred during submission, save to offline manual queue
+          await enqueueOfflineManualEntry(payload);
+          toast.info(`Network unreachable: "${payload.Title}" queued locally for sync.`);
+          setShowManual(false);
+        } else {
+          const errData = (error as { response?: { data?: { error?: string } } })?.response?.data;
+          const msg = errData?.error || (error as Error)?.message || "Failed to create item";
+          toast.error(`Error: ${msg}`);
+        }
       },
     });
   };

@@ -56,6 +56,7 @@ import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
 import {
   saveCollectionSnapshot,
+  saveWishlistSnapshot,
   getCachedCollectionSnapshot,
   type OfflineCollectionSnapshot,
 } from "@/lib/capacitor/offline-cache";
@@ -455,11 +456,6 @@ function CollectionContent() {
       if (effectiveOffline && offlineSnapshot?.items?.length) {
         return offlineSnapshot.items;
       }
-      if (liveItems.length > 0) {
-        // Asynchronously update offline snapshot when online
-        saveCollectionSnapshot(liveItems as Item[]).catch(() => {});
-        return liveItems;
-      }
       return liveItems;
     }
     if (viewMode === "manifestations") {
@@ -467,6 +463,42 @@ function CollectionContent() {
     }
     return [];
   }, [itemsData, manifestationsData, viewMode, effectiveOffline, offlineSnapshot]);
+
+  // Save collection snapshot only on unfiltered, default personal collection view while online
+  useEffect(() => {
+    if (
+      viewMode === "items" &&
+      !effectiveOffline &&
+      !appliedQuery &&
+      !searchQuery &&
+      activeFilters.length === 0 &&
+      !missingCoverOnly &&
+      !missingIdOnly &&
+      (currentScope === "personal" || !currentScope)
+    ) {
+      const liveItems = itemsData?.pages.flatMap(page => page.data || []) ?? [];
+      if (liveItems.length > 0) {
+        saveCollectionSnapshot(liveItems as Item[]).catch(() => {});
+      }
+    }
+  }, [
+    itemsData,
+    viewMode,
+    effectiveOffline,
+    appliedQuery,
+    searchQuery,
+    activeFilters,
+    missingCoverOnly,
+    missingIdOnly,
+    currentScope,
+  ]);
+
+  // Save wishlist snapshot when online wishlist items are loaded
+  useEffect(() => {
+    if (isWishlistFilterActive && !effectiveOffline && wishlistData?.data && wishlistData.data.length > 0) {
+      saveWishlistSnapshot(wishlistData.data).catch(() => {});
+    }
+  }, [isWishlistFilterActive, effectiveOffline, wishlistData]);
 
   const allWorks = useMemo(() => {
     return worksData?.pages.flatMap(page => page.data || []) ?? [];

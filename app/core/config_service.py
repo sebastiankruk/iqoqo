@@ -49,7 +49,7 @@ def is_credential_or_sensitive_key(key: str) -> bool:
 
     if is_sensitive_key(key) or key in SENSITIVE_SETTING_KEYS:
         return True
-    return any(suffix in key for suffix in ("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_ID", "_URL", "_DATA"))
+    return key.upper().endswith(("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_CLIENT_ID"))
 
 
 class ConfigService:

@@ -172,7 +172,7 @@ def test_vision_and_llm_covers_db_resolution(app):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "", "OPENAI_API_KEY": "", "LOCAL_SD_URL": ""}, clear=True):
             InstanceSettings.set_value("GEMINI_API_KEY", '"db-gemini-key"')
             InstanceSettings.set_value("OPENAI_API_KEY", '"db-openai-key"')
-            InstanceSettings.set_value("LOCAL_SD_URL", '"http://127.0.0.1:7860"')
+            InstanceSettings.set_value("LOCAL_SD_URL", "http://127.0.0.1:7860")
 
             mock_client = MagicMock()
             mock_client.models.generate_content.return_value.text = '{"Title": "Sample Title"}'

@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   getOwnershipAccounts,
   getOwnershipItems,
@@ -56,6 +57,7 @@ import { Button } from "@/components/ui/button";
  * all-scope acknowledgement, and conflict handling.
  */
 export function OwnershipManagement() {
+  const t = useTranslations("AdminOwnership");
   const searchParams = useSearchParams();
   const initialSourceUserId = searchParams.get("sourceUserId") || "";
   const initialItemIdRaw = searchParams.get("itemId");
@@ -361,7 +363,7 @@ export function OwnershipManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search title, ISBN, barcode, local barcode..."
+                placeholder={t("searchPlaceholder")}
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
@@ -379,12 +381,12 @@ export function OwnershipManagement() {
 
             <div className="w-full sm:w-48">
               <select
-                aria-label="Filter by collection status"
+                aria-label={t("filterStatus")}
                 value={collectionStatusFilter}
                 onChange={e => handleStatusFilterChange(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">All statuses</option>
+                <option value="">{t("allStatuses")}</option>
                 <option value="available">Available</option>
                 <option value="lent">Lent</option>
                 <option value="borrowed">Borrowed</option>
@@ -403,7 +405,7 @@ export function OwnershipManagement() {
                 className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
               >
                 <X className="mr-1 h-3.5 w-3.5" />
-                Clear Filters
+                {t("clearFilters")}
               </Button>
             )}
           </div>
