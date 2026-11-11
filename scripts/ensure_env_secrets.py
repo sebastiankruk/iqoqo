@@ -21,7 +21,20 @@ import argparse
 import base64
 import re
 import secrets
+import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
+
+
+def strip_quotes(val: str | None) -> str:
+    """Strip surrounding single or double quotes from a string."""
+    if not val:
+        return ""
+    cleaned = val.strip()
+    if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
 
 
 def is_placeholder_or_empty(val: str | None, min_length: int = 16) -> bool:
@@ -110,15 +123,15 @@ def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
         modified = True
 
     # 4. OPENOBSERVE_ROOT_USER
-    oo_user = current.get("OPENOBSERVE_ROOT_USER")
-    if not oo_user or not oo_user.strip():
+    oo_user = strip_quotes(current.get("OPENOBSERVE_ROOT_USER"))
+    if not oo_user:
         oo_user = "admin@iqoqo.local"
         lines = update_env_lines(lines, "OPENOBSERVE_ROOT_USER", oo_user)
         current["OPENOBSERVE_ROOT_USER"] = oo_user
         modified = True
 
     # 5. OPENOBSERVE_ROOT_PASSWORD
-    oo_password = current.get("OPENOBSERVE_ROOT_PASSWORD")
+    oo_password = strip_quotes(current.get("OPENOBSERVE_ROOT_PASSWORD"))
     if is_placeholder_or_empty(oo_password, min_length=16):
         oo_password = secrets.token_urlsafe(32)
         lines = update_env_lines(lines, "OPENOBSERVE_ROOT_PASSWORD", oo_password)
@@ -127,7 +140,7 @@ def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
 
     # 6. OPENOBSERVE_BASIC_AUTH (base64(oo_user:oo_password))
     expected_auth = base64.b64encode(f"{oo_user}:{oo_password}".encode()).decode("utf-8")
-    oo_basic_auth = current.get("OPENOBSERVE_BASIC_AUTH")
+    oo_basic_auth = strip_quotes(current.get("OPENOBSERVE_BASIC_AUTH"))
     if not oo_basic_auth or is_placeholder_or_empty(oo_basic_auth, min_length=8) or oo_basic_auth != expected_auth:
         lines = update_env_lines(lines, "OPENOBSERVE_BASIC_AUTH", expected_auth)
         current["OPENOBSERVE_BASIC_AUTH"] = expected_auth
@@ -140,6 +153,44 @@ def ensure_secrets_in_env_file(file_path: Path) -> dict[str, str]:
         print(f"✅ Auto-provisioned missing secrets in {file_path}")
 
     return current
+
+
+def probe_openobserve_auth(basic_auth: str, host_port: int = 5080) -> tuple[bool, str]:
+    """Test OPENOBSERVE_BASIC_AUTH against a running local OpenObserve instance.
+
+    Returns (is_ok, message). If OpenObserve is not running or unreachable, returns (True, "not_running").
+    If OpenObserve is running and responds with 401 or 403, returns (False, warning_message).
+    """
+    clean_auth = strip_quotes(basic_auth)
+    if not clean_auth:
+        return False, "Empty basic auth"
+
+    url = f"http://127.0.0.1:{host_port}/api/default/_search"
+    req = urllib.request.Request(
+        url,
+        data=b'{"query":{"sql":"SELECT 1","size":1}}',
+        headers={
+            "Authorization": f"Basic {clean_auth}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status in (200, 201):
+                return True, "Authenticated"
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 403):
+            msg = (
+                f"⚠️ WARNING: OpenObserve rejected OPENOBSERVE_BASIC_AUTH (HTTP {err.code}). "
+                "The openobserve_data volume (/data/db) is locked to an older password. "
+                "Run 'make monitoring-reset-auth' to resync without losing /data/stream telemetry."
+            )
+            return False, msg
+        return True, f"HTTP {err.code}"
+    except (urllib.error.URLError, OSError, TimeoutError):
+        return True, "Unreachable (not running)"
+    return True, "OK"
 
 
 def sync_secrets_to_db(secrets_map: dict[str, str]) -> None:
@@ -190,6 +241,17 @@ def main() -> None:
 
     if args.sync_db:
         sync_secrets_to_db(resolved)
+
+    oo_auth = resolved.get("OPENOBSERVE_BASIC_AUTH", "")
+    port_str = strip_quotes(resolved.get("OPENOBSERVE_HOST_PORT", "5080"))
+    try:
+        oo_port = int(port_str) if port_str.isdigit() else 5080
+    except ValueError:
+        oo_port = 5080
+
+    is_ok, msg = probe_openobserve_auth(oo_auth, host_port=oo_port)
+    if not is_ok:
+        print(msg, file=sys.stderr)
 
 
 if __name__ == "__main__":

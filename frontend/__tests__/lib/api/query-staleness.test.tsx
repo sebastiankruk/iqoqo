@@ -61,14 +61,14 @@ describe("query staleness configuration", () => {
     expect(client.getDefaultOptions().queries).toMatchObject({ staleTime: 60_000, retry: 1 });
   });
 
-  it("keeps volatile profile and work-intent queries immediately stale", () => {
+  it("keeps work-intent query immediately stale and profile query cached for 30 seconds", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = makeWrapper(client);
 
     renderHook(() => useProfile(), { wrapper });
     renderHook(() => useWorkIntent(123), { wrapper });
 
-    expect(getQueryStaleTime(client, ["profile"])).toBe(0);
+    expect(getQueryStaleTime(client, ["profile"])).toBe(30_000);
     expect(getQueryStaleTime(client, ["workIntent", 123])).toBe(0);
   });
 

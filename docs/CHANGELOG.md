@@ -31,6 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mobile Store Submission Privacy Manifest & LTS Release Gate (C110)**:
   - Added Apple iOS 17+ privacy manifest `frontend/ios/App/App/PrivacyInfo.xcprivacy` with `NSPrivacyTracking = false` and `CA92.1` for `UserDefaults`.
   - Documented App Store Connect and Google Play Data Safety declaration questionnaires in `docs/STORE_SUBMISSION.md`.
+- **Pre-Merge Review Security & Offline Hardening (C114b)**:
+  - Closed `FEDERATION_HEAD_MODE` write bypasses in `add_item_by_manifestation` and `add_item` while allowing wishlists.
+  - Parameterized `clone.sh` destination PostgreSQL password synchronization via `psql -v`.
+  - Restored restrictive permissions (`1777` / `600`) for `data/keys` and federation key files.
+  - Protected offline collection cache from being overwritten by filtered search queries and added in-flight mutex to offline queue flushes.
+  - Narrowed credential masking heuristic and localized ownership management strings in Polish and English.
+- **Prod Rate-Limiter Redis Storage & 429 Lockout Resilience (C114c)**:
+  - Removed constructor `storage_uri="memory://"` from `Limiter` in `app/core/limiter.py` so Redis rate limiting configured in `create_app()` takes effect.
+  - Enabled standard `X-RateLimit-*` and `Retry-After` headers via `RATELIMIT_HEADERS_ENABLED = True`.
+  - Recalibrated default limits to `1000 per hour, 10000 per day` to accommodate SPA and mobile WebView traffic.
+  - Exempted CORS `OPTIONS` preflight requests from consuming rate limit quota via `@limiter.request_filter`.
+  - Hardened `useProfile()` with `staleTime: 30_000` and prevented HTTP `429`/`5xx` errors from triggering false-logout and infinite redirect loops.
+- **OpenObserve Telemetry Credential Sync, Status Verification & RUM Routing (C114d)**:
+  - Stripped surrounding quotes and added `probe_openobserve_auth()` in `scripts/ensure_env_secrets.py` to detect credential drift against `openobserve_data` volume.
+  - Added `make monitoring-reset-auth` to safely reset `/data/db` credentials while preserving `/data/stream` parquet telemetry.
+  - Upgraded `scripts/iqoqo-status.sh` to run authenticated `POST /api/default/_search` probes and inspect `otel-collector` logs for recent export errors.
+  - Resolved containerized `/v1/traces` and `/rum/:path*` rewrites dynamically in `frontend/next.config.ts`, `docker-compose.yml`, and edge/container Nginx proxies.
 
 ## [1.0.1] - 2026-11-08
 

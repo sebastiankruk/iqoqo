@@ -260,6 +260,7 @@ def create_app(config_class=Config, config_override=None):
         app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
         app.config.setdefault("CACHE_TYPE", "SimpleCache")
 
+    app.config.setdefault("RATELIMIT_HEADERS_ENABLED", True)
     limiter.init_app(app)
     cache.init_app(app)
 

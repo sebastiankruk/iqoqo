@@ -15,7 +15,7 @@
 #
 """Rate limiter configuration."""
 
-from flask import g
+from flask import g, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -30,9 +30,15 @@ def get_user_id_or_ip():
 
 limiter = Limiter(
     key_func=get_user_id_or_ip,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",  # Default to memory, but app init will override with Redis
+    default_limits=["1000 per hour", "10000 per day"],
 )
+
+
+@limiter.request_filter
+def exempt_options_preflight():
+    """Exempt unauthenticated CORS preflight OPTIONS requests from rate limits."""
+    return request.method == "OPTIONS"
+
 
 # ActivityPub federation limits and payload caps
 FEDERATION_INBOX_LIMIT = "60 per minute"

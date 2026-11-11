@@ -220,6 +220,8 @@ export async function removeAuthToken(): Promise<void> {
   }
 }
 
+export const clearAuthToken = removeAuthToken;
+
 /**
  * Wipe all mobile credentials and instance settings.
  *

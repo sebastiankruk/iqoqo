@@ -709,3 +709,56 @@ def test_migrate_wishlist_intents_script(app):
 
         # Check item deleted
         assert db.session.get(Item, item_id) is None
+
+
+def test_ensure_env_secrets_quote_stripping(tmp_path):
+    """Ensure surrounding quotes in .env variables are stripped and auth is generated cleanly."""
+    from scripts.ensure_env_secrets import ensure_secrets_in_env_file, strip_quotes
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        'OPENOBSERVE_ROOT_USER="admin@iqoqo.local"\n'
+        'OPENOBSERVE_ROOT_PASSWORD="test_strong_password_123"\n'
+        'OPENOBSERVE_BASIC_AUTH="stale_or_quoted_token"\n'
+    )
+
+    assert strip_quotes('"hello"') == "hello"
+    assert strip_quotes("'world'") == "world"
+
+    resolved = ensure_secrets_in_env_file(env_file)
+    assert resolved["OPENOBSERVE_ROOT_USER"] == "admin@iqoqo.local"
+    assert resolved["OPENOBSERVE_ROOT_PASSWORD"] == "test_strong_password_123"
+    import base64
+
+    expected = base64.b64encode(b"admin@iqoqo.local:test_strong_password_123").decode()
+    assert resolved["OPENOBSERVE_BASIC_AUTH"] == expected
+
+
+def test_probe_openobserve_auth_handles_responses():
+    """Verify probe_openobserve_auth detects 401/403 and handles offline instances gracefully."""
+    import urllib.error
+    from unittest.mock import patch
+
+    from scripts.ensure_env_secrets import probe_openobserve_auth
+
+    # 1. When OpenObserve returns HTTP 401
+    err_401 = urllib.error.HTTPError("http://127.0.0.1:5080/api/default/_search", 401, "Unauthorized", {}, None)
+    with patch("urllib.request.urlopen", side_effect=err_401):
+        is_ok, msg = probe_openobserve_auth("bad_auth", host_port=5080)
+        assert is_ok is False
+        assert "401" in msg
+        assert "make monitoring-reset-auth" in msg
+
+    # 2. When OpenObserve returns HTTP 200
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.__enter__.return_value = mock_resp
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        is_ok, msg = probe_openobserve_auth("good_auth", host_port=5080)
+        assert is_ok is True
+
+    # 3. When OpenObserve is unreachable (not running)
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
+        is_ok, msg = probe_openobserve_auth("any_auth", host_port=5080)
+        assert is_ok is True
+        assert "Unreachable" in msg

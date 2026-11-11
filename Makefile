@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 #
-.PHONY: help status start stop monitoring-start monitoring-stop ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
+.PHONY: help status start stop monitoring-start monitoring-stop monitoring-reset-auth ensure-secrets ensure-mount-perms preview-up preview-down preview-verify-federation secret-scan lint lint-all lint-python lint-format lint-js lint-ts lint-css lint-markdown lint-frontend format format-python format-js test test-backend test-backend-pg test-frontend test-scripts test-scripts-bash test-scripts-python test-e2e test-e2e-federation test-e2e-db-up _test-e2e-run test-merge-integrity-pg clean db-init db-seed db-reset db-export backup-run backup-install backup-uninstall backup-check archive-run archive-install archive-uninstall archive-check db-stats init-auth build-frontend mobile-build mobile-sync mobile-icons mobile-android-apk mobile-android-aab mobile-adb-install mobile-ios-setup mobile-ios-open test-e2e-mobile generate-taxonomy pg-create-schemas retry-missing-covers fetch-covers refetch-metadata repair-authors fix-ai-covers db-stamp db-upgrade dev allegro-auth fix-physical-kinds mempalace-index mempalace-scope mempalace-status codegraph-sync codegraph-index codegraph-status graphify-update graphify-index graphify-status memory-presync knowledge-sync knowledge-sync-full version audit-frbr etl-frbr sync-ontology init-geonames geonames-sync lint-shell validate-nginx validate-openspec deploy-validate deploy-sync deploy-verify deploy-maintain install-wizard presync-check
 
 SHELL := /bin/bash
 
@@ -447,6 +447,44 @@ validate-release: ## Validate release invariants (versions, CHANGELOG, image siz
 # monitoring-start and monitoring-stop removed — the monitoring stack is now
 # always composed together with the main stack via run.sh (line 751-754).
 # Use `make start <mode>` and `make stop` to manage the full lifecycle.
+
+monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while preserving /data/stream telemetry
+	@set -euo pipefail; \
+	stack="$(MODE)"; \
+	if [ "$$stack" = "preview" ]; then \
+		cproject="iqoqo-preview"; \
+		cfile="$(DEPLOY_DIR)/docker-compose.monitoring.yml"; \
+		cenv="$(DEPLOY_ENV_FILE)"; \
+	else \
+		cproject="$(COMPOSE_PROJECT)"; \
+		cfile="docker-compose.monitoring.yml"; \
+		cenv="$(COMPOSE_ENV_FILE)"; \
+	fi; \
+	echo "🔄 Resetting OpenObserve authentication state for $$cproject..."; \
+	docker stop "$${cproject}-openobserve" 2>/dev/null || true; \
+	vol_name=$$(docker volume ls -q | grep -E "^$${cproject}_openobserve_data$$|^openobserve_data$$" | head -1 || echo ""); \
+	if [ -z "$$vol_name" ]; then \
+		vol_name="$${cproject}_openobserve_data"; \
+	fi; \
+	echo "📦 Backing up and clearing /data/db in volume $$vol_name..."; \
+	docker run --rm -v "$$vol_name":/data alpine sh -c '\
+		if [ -d /data/db ]; then \
+			ts=$$(date +%s); \
+			cp -r /data/db /data/db.bak.$$ts && rm -rf /data/db; \
+			echo "Backed up /data/db to /data/db.bak.$$ts and reset database directory."; \
+		else \
+			echo "No existing /data/db found in volume."; \
+		fi'; \
+	if [ -f "$$cenv" ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file "$$cenv"; \
+	fi; \
+	echo "🚀 Restarting OpenObserve and OTel Collector..."; \
+	docker start "$${cproject}-openobserve" 2>/dev/null || \
+		docker compose -p "$$cproject" -f "$$cfile" --env-file "$$cenv" up -d openobserve; \
+	docker restart "$${cproject}-otel-collector" 2>/dev/null || true; \
+	echo "🔑 Re-provisioning OpenObserve RUM token..."; \
+	python3 scripts/provision_rum_token.py --env-file "$$cenv" || true; \
+	echo "✅ OpenObserve root authentication successfully reset from $$cenv!"
 
 
 STATUS_STACK = $(if $(filter preview,$(MAKECMDGOALS)),preview,$(if $(filter prod,$(MAKECMDGOALS)),prod,$(if $(filter dev,$(MAKECMDGOALS)),dev,$(if $(STACK),$(STACK),$(if $(STAGE),$(STAGE),$(MODE))))))

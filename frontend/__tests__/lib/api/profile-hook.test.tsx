@@ -62,12 +62,12 @@ describe("useProfile error handling", () => {
 
   it("does not log out for an unrelated failure", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true } as Response);
-    vi.spyOn(api, "apiFetch").mockRejectedValueOnce(new Error("Token expired"));
+    vi.spyOn(api, "apiFetch").mockRejectedValue(new Error("Token expired"));
 
     const { result } = renderHook(() => useProfile(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
-    expect(result.current.data).toBeNull();
+    expect(result.current.data).toBeUndefined();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

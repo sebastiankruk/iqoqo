@@ -66,6 +66,9 @@ RENDER_VALUES = {
     # location degrades to a 502 rather than blocking nginx startup.
     "OPENOBSERVE_UPSTREAM": "127.0.0.1",
     "OPENOBSERVE_PORT": "5080",
+    # OpenTelemetry Collector HTTP receiver upstream (:4318).
+    "OTEL_COLLECTOR_UPSTREAM": "127.0.0.1",
+    "OTEL_COLLECTOR_PORT": "4318",
 }
 
 # nginx image used for the parse. Pinned to a digest-free tag on purpose: this

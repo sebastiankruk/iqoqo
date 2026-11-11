@@ -136,12 +136,12 @@ const nextConfig: NextConfig = {
             {
               // Proxy OpenObserve RUM & Logs to avoid CORS preflight 401s
               source: "/rum/:path*",
-              destination: "http://127.0.0.1:5080/rum/:path*",
+              destination: `${(process.env.OPENOBSERVE_INTERNAL_URL || "http://127.0.0.1:5080").replace(/\/+$/, "")}/rum/:path*`,
             },
             {
               // Proxy OTel Collector traces to avoid CORS origin mismatches
               source: "/v1/traces",
-              destination: "http://127.0.0.1:4318/v1/traces",
+              destination: `${(process.env.OTEL_COLLECTOR_HTTP_URL || process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://127.0.0.1:4318").replace(/\/+$/, "")}/v1/traces`,
             },
           ],
         };

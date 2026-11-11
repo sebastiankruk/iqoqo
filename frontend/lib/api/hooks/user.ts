@@ -20,6 +20,7 @@ import { apiClient, apiFetch } from "../client";
 import type { ApiResponse, UserProfile } from "@/types/frbr";
 import { queryKeys } from "./query-keys";
 import { saveProfileSnapshot, getCachedProfileSnapshot } from "@/lib/capacitor/offline-cache";
+import { clearAuthToken } from "@/lib/capacitor/storage";
 import axios from "axios";
 
 /**
@@ -37,21 +38,34 @@ export function useProfile() {
           saveProfileSnapshot(profile).catch(() => {});
         }
         return profile;
-      } catch (err) {
-        if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 404)) {
-          await fetch("/api/auth/logout", { method: "POST" });
+      } catch (err: unknown) {
+        const status = axios.isAxiosError(err)
+          ? err.response?.status
+          : typeof err === "object" && err !== null && "status" in err
+            ? (err as { status: number }).status
+            : undefined;
+
+        if (status === 401 || status === 403 || status === 404) {
+          if (status === 401) {
+            await clearAuthToken().catch(() => {});
+          }
+          if (status === 401 || status === 404) {
+            await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+          }
           return null;
         }
-        // If offline or network error without server response, preserve cached profile
+
+        // If offline or network error without server response, or 429/5xx, check cached profile first
         const cached = await getCachedProfileSnapshot();
         if (cached) {
           return cached;
         }
-        return null;
+        // Rethrow error so TanStack Query preserves prior data/error state instead of resolving null
+        throw err;
       }
     },
     retry: false,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 }
 
