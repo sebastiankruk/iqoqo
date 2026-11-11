@@ -24,5 +24,5 @@ The deferred `v1.0.1` Low-severity findings MUST be resolved in `v1.0.2` (`C111`
 #### Scenario: SQLAlchemy 2.0 `select()` queries and scoped credential sanitization (`L-03`, `L-04`)
 
 - **GIVEN** `app/api/manifestations.py`, `app/api/scanner.py`, `app/api/social.py`, and `app/core/config_service.py`
-- **WHEN** database queries execute or non-credential JSON settings are fetched from `ConfigService.get()`
-- **THEN** queries MUST use SQLAlchemy 2.0 `select()` syntax and `sanitize_credential_string()` MUST NOT alter non-credential JSON settings.
+- **WHEN** database queries execute or non-credential settings (such as keys ending in `_URL`, `_DATA`, or non-client `_ID`) are fetched from `ConfigService.get()`
+- **THEN** queries MUST use SQLAlchemy 2.0 `select()` syntax and `is_credential_or_sensitive_key()` MUST only match `is_sensitive_key(key)`, `SENSITIVE_SETTING_KEYS`, or keys ending with `("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_CLIENT_ID")`.
