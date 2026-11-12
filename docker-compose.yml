@@ -69,6 +69,7 @@ services:
     env_file:
       - ${ENV_FILE:-.env}
     environment:
+      - APP_VERSION=${APP_VERSION:-prod}
       - DATABASE_URL=${DATABASE_URL}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
@@ -234,6 +235,7 @@ services:
     env_file:
       - ${ENV_FILE:-.env}
     environment:
+      - APP_VERSION=${APP_VERSION:-prod}
       - DATABASE_URL=${DATABASE_URL}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}

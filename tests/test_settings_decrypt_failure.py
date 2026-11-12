@@ -169,3 +169,33 @@ def test_storing_under_one_key_and_reading_under_another_yields_unset(app, monke
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
     assert decrypt_setting_value("OPENOBSERVE_RUM_CLIENT_TOKEN", envelope) is None
     monkeypatch.setattr(settings_mod, "_get_fernet_cipher", real)
+
+
+def test_startup_drift_probe_logs_aggregated_error_without_leaking_secret(app, monkeypatch, caplog):
+    """Startup drift probe logs one aggregated ERROR naming keys only and leaves rows intact."""
+    import logging
+
+    from app.db.settings import check_encrypted_settings_drift
+
+    secret_val = "SENTINEL-SUPER-SECRET-OAUTH-VALUE"
+    envelope = encrypt_setting_value("GOOGLE_CLIENT_SECRET", secret_val)
+    db.session.add(InstanceSettings(key="GOOGLE_CLIENT_SECRET", value=dict(envelope)))
+    db.session.add(InstanceSettings(key="DISCOGS_API_TOKEN", value=dict(ENVELOPE)))
+    db.session.commit()
+
+    monkeypatch.setattr(settings_mod, "_get_fernet_cipher", rotated_cipher)
+    with caplog.at_level(logging.ERROR):
+        failed = check_encrypted_settings_drift(app.logger)
+
+    assert sorted(failed) == ["DISCOGS_API_TOKEN", "GOOGLE_CLIENT_SECRET"]
+    error_msgs = [r.message for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(error_msgs) == 1
+    assert "DISCOGS_API_TOKEN" in error_msgs[0]
+    assert "GOOGLE_CLIENT_SECRET" in error_msgs[0]
+    assert "make migrate-secrets" in error_msgs[0]
+    assert secret_val not in error_msgs[0]
+    assert envelope["ciphertext"] not in error_msgs[0]
+
+    # Rows remain untouched in DB so restoring ENV_FILE recovers them
+    stored_row = db.session.execute(db.select(InstanceSettings).filter_by(key="GOOGLE_CLIENT_SECRET")).scalar_one()
+    assert stored_row.value == envelope
