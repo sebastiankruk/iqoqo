@@ -33,6 +33,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -152,9 +153,10 @@ def configure_env_content(
         lines = update_or_append_env_line(lines, sec_key, val)
         result_vars[sec_key] = val
 
-    # 3. Update database URL using postgres password
+    # 3. Update database URL using percent-encoded postgres password
     pg_pass = result_vars["POSTGRES_PASSWORD"]
-    db_url = f"postgresql://iqoqo:{pg_pass}@db:5432/iqoqo"
+    encoded_pg_pass = urllib.parse.quote(pg_pass, safe="")
+    db_url = f"postgresql://iqoqo:{encoded_pg_pass}@db:5432/iqoqo"
     lines = update_or_append_env_line(lines, "DATABASE_URL", db_url)
     result_vars["DATABASE_URL"] = db_url
 
@@ -267,29 +269,25 @@ def run_presync_check(target_env_path: Path, base_url_override: str | None = Non
     base_url = base_url_override or env_map.get("NEXT_PUBLIC_FRONTEND_URL") or "http://localhost:5000"
     base_url = base_url.rstrip("/")
 
-    # Probe /api/health
-    health_url = f"{base_url}/api/health"
-    try:
-        req = urllib.request.Request(health_url, headers={"User-Agent": "iqopresync/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            if response.status == 200:
-                if not ai_mode:
-                    log_msg(f"  ✓ /api/health reachable ({response.status})")
-            else:
-                warnings.append(f"/api/health returned non-200 status: {response.status}")
-    except Exception:
-        warnings.append(f"/api/health unreachable at {health_url} (Stack may not be started yet)")
-
-    # Probe /.well-known/nodeinfo
-    nodeinfo_url = f"{base_url}/.well-known/nodeinfo"
-    try:
-        req = urllib.request.Request(nodeinfo_url, headers={"User-Agent": "iqopresync/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            if response.status == 200:
-                if not ai_mode:
-                    log_msg(f"  ✓ NodeInfo discovery reachable ({response.status})")
-    except Exception:
-        pass
+    probes = (
+        ("/api/health", "/api/health", True),
+        ("/api/system/status", "/api/system/status", False),
+        ("/.well-known/nodeinfo", "NodeInfo discovery", False),
+        ("/.well-known/webfinger", "WebFinger discovery", False),
+    )
+    for path, label, warn_on_unreachable in probes:
+        probe_url = f"{base_url}{path}"
+        try:
+            req = urllib.request.Request(probe_url, headers={"User-Agent": "iqopresync/1.0"})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                if response.status == 200:
+                    if not ai_mode:
+                        log_msg(f"  ✓ {label} reachable ({response.status})")
+                elif warn_on_unreachable:
+                    warnings.append(f"{label} returned non-200 status: {response.status}")
+        except Exception:
+            if warn_on_unreachable:
+                warnings.append(f"{label} unreachable at {probe_url} (Stack may not be started yet)")
 
     # Print summary
     if issues:

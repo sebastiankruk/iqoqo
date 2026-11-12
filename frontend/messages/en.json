@@ -2,9 +2,6 @@
   "Navbar": {
     "maintenanceMode": "Maintenance Mode Active – Some features may be limited",
     "federationHubBadge": "Federation Hub · Read-Only",
-    "federationHubBanner": "This instance operates as a read-only Federation Hub. Items are federated from community nodes.",
-    "federationHubExploreDirectory": "Explore Directory",
-    "dismissBanner": "Dismiss banner",
     "directory": "Directory",
     "searchPlaceholder": "Search your collection...",
     "collection": "Collection",

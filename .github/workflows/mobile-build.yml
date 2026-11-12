@@ -32,6 +32,8 @@ jobs:
   # ---------------------------------------------------------------------------
   build-android:
     runs-on: ubuntu-latest
+    env:
+      HAS_SIGNING_SECRET: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -69,12 +71,38 @@ jobs:
           path: frontend/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
+      - name: Build signed release AAB (optional, secret-gated)
+        if: ${{ env.HAS_SIGNING_SECRET == 'true' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > frontend/android/app/release.keystore
+          cd frontend/android && ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=app/release.keystore \
+            -Pandroid.injected.signing.store.password="${ANDROID_KEYSTORE_PASSWORD}" \
+            -Pandroid.injected.signing.key.alias="${ANDROID_KEY_ALIAS}" \
+            -Pandroid.injected.signing.key.password="${ANDROID_KEY_PASSWORD}"
+          rm -f app/release.keystore
+
+      - name: Upload signed AAB artifact (optional)
+        if: ${{ env.HAS_SIGNING_SECRET == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqoqo-android-release-${{ steps.vars.outputs.tag }}
+          path: frontend/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
   # ---------------------------------------------------------------------------
   # iOS — produces an unsigned .xcarchive and .ipa for sideloading.
   # Sideload with AltStore / Sideloadly or sign locally with Xcode.
   # ---------------------------------------------------------------------------
   build-ios:
     runs-on: macos-15
+    env:
+      HAS_SIGNING_SECRET: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,4 +153,40 @@ jobs:
           path: |
             ${{ runner.temp }}/iqoqo-ios-sideload-*.ipa
             ${{ runner.temp }}/iqoqo-ios-xcarchive-*.zip
+          retention-days: 30
+
+      - name: Sign iOS archive (optional, secret-gated)
+        if: ${{ env.HAS_SIGNING_SECRET == 'true' }}
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "Signing certificate configured; preparing signed IPA export."
+          KEYCHAIN_PATH="${{ runner.temp }}/build.keychain-db"
+          echo "${APPLE_CERTIFICATE_P12}" | base64 -d > "${{ runner.temp }}/cert.p12"
+          security create-keychain -p ci-temp-keychain "${KEYCHAIN_PATH}"
+          security import "${{ runner.temp }}/cert.p12" -k "${KEYCHAIN_PATH}" -P "${APPLE_CERTIFICATE_PASSWORD}" -T /usr/bin/codesign
+          rm -f "${{ runner.temp }}/cert.p12"
+
+  # ---------------------------------------------------------------------------
+  # Standalone Installer — packages iqoqo_installer.py + sha256sum checksum
+  # ---------------------------------------------------------------------------
+  package-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute installer SHA-256 checksum
+        run: |
+          mkdir -p "${{ runner.temp }}/installer"
+          cp scripts/iqoqo_installer.py "${{ runner.temp }}/installer/iqoqo_installer.py"
+          (cd "${{ runner.temp }}/installer" && sha256sum iqoqo_installer.py > iqoqo_installer.py.sha256)
+
+      - name: Upload installer & checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqoqo-installer-${{ github.ref_name }}
+          path: |
+            ${{ runner.temp }}/installer/iqoqo_installer.py
+            ${{ runner.temp }}/installer/iqoqo_installer.py.sha256
           retention-days: 30

@@ -173,3 +173,54 @@ def test_run_presync_check_success_and_failure(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert run_presync_check(env_file) == 0
+
+
+def test_configure_env_content_percent_encodes_postgres_password(tmp_path: Path) -> None:
+    """Verify preserved POSTGRES_PASSWORD with URI-reserved chars is percent-encoded in DATABASE_URL."""
+    example_env = tmp_path / ".env.example"
+    example_env.write_text("POSTGRES_USER=iqoqo\nDATABASE_URL=postgresql://iqoqo:changeme@db:5432/iqoqo\n", encoding="utf-8")
+    target_env = tmp_path / ".env"
+
+    _, vars_out = configure_env_content(
+        example_env,
+        target_env,
+        domain="library.example.com",
+        mode="standard",
+        admin_email="curator@example.com",
+        rotate_secrets=False,
+        existing_vars={"POSTGRES_PASSWORD": "p@ss:w/o?rd#1234567890123456"},
+    )
+    assert vars_out["DATABASE_URL"] == "postgresql://iqoqo:p%40ss%3Aw%2Fo%3Frd%231234567890123456@db:5432/iqoqo"
+
+
+def test_run_presync_check_probes_status_and_webfinger(tmp_path: Path, monkeypatch) -> None:
+    """Verify iqopresync probes /api/health, /api/system/status, nodeinfo, and webfinger."""
+    env_file = tmp_path / ".env"
+    s = generate_secure_secret(32)
+    env_file.write_text(
+        f"SECRET_KEY={s}\nJWT_SECRET_KEY={s}\nPOSTGRES_PASSWORD={s}\nREDIS_PASSWORD={s}\nADMIN_PASSWORD={s}\nNEXT_PUBLIC_FRONTEND_URL=https://node.example.com\n",
+        encoding="utf-8",
+    )
+    os.chmod(env_file, 0o600)
+
+    probed_urls: list[str] = []
+
+    class _FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def _fake_urlopen(req, timeout=3):  # noqa: ARG001
+        probed_urls.append(req.full_url)
+        return _FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    assert run_presync_check(env_file) == 0
+    assert "https://node.example.com/api/health" in probed_urls
+    assert "https://node.example.com/api/system/status" in probed_urls
+    assert "https://node.example.com/.well-known/nodeinfo" in probed_urls
+    assert "https://node.example.com/.well-known/webfinger" in probed_urls
