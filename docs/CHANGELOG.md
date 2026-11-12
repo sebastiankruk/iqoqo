@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Prebuilt `ENV_FILE` Propagation & Secret Decrypt Drift Guard (C119)**:
+  - Propagated `ENV_FILE=$(COMPOSE_ENV_FILE)` to `docker compose pull` and `up -d` in the `Makefile` `prebuilt` target so containers load `.env.prod` / `.env.preview` instead of silently falling back to `.env`.
+  - Declared `APP_VERSION=${APP_VERSION:-prod}` on `web` and `worker` services in `docker-compose.yml` to eliminate blank compose interpolation warnings.
+  - Added startup `check_encrypted_settings_drift()` probe in `app/db/settings.py` (invoked from `create_app()`) and an encrypted-row probe in `scripts/iqoqo-status.sh` to surface `SECRET_KEY` / `ENV_FILE` mismatches without mutating rows or leaking secret values.
+  - Updated `docs/INSTALL.md` with `make prebuilt prod start` / `make prebuilt preview start` and non-destructive upgrade recovery instructions.
+
 ## [1.0.2] - 2026-11-11
 
 ### Added

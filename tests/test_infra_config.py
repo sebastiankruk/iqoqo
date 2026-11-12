@@ -330,6 +330,22 @@ exit 0
         self.assertIn("Exporting failed", status_sh)
         self.assertIn("make monitoring-reset-auth", status_sh)
 
+    def test_prebuilt_makefile_propagates_env_file_and_compose_declares_app_version(self):
+        makefile = (self.repo_root / "Makefile").read_text()
+        prebuilt_block = makefile.split("ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)", 1)[1].split("\nelse\n", 1)[0]
+        self.assertIn("ENV_FILE=$(COMPOSE_ENV_FILE)", prebuilt_block)
+        self.assertGreaterEqual(prebuilt_block.count("ENV_FILE=$(COMPOSE_ENV_FILE)"), 2)
+
+        compose = (self.repo_root / "docker-compose.yml").read_text()
+        web_section = compose.split("  web:", 1)[1].split("  frontend:", 1)[0]
+        worker_section = compose.split("  worker:", 1)[1]
+        self.assertIn("APP_VERSION=${APP_VERSION:-prod}", web_section)
+        self.assertIn("APP_VERSION=${APP_VERSION:-prod}", worker_section)
+
+        status_sh = (self.repo_root / "scripts" / "iqoqo-status.sh").read_text()
+        self.assertIn("INVALID_TOKEN:", status_sh)
+        self.assertIn("NO_ENCRYPTED_ROWS", status_sh)
+
 
 if __name__ == "__main__":
     unittest.main()

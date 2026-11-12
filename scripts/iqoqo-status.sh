@@ -719,6 +719,37 @@ print(count)
         else
             check "Gunicorn" info "${gunicorn_workers} worker process(es)"
         fi
+
+        probe_out=$(docker exec "$web_cname" python3 -c "
+from cryptography.fernet import InvalidToken
+try:
+    from app import create_app
+    from app.db import db
+    from app.db.settings import InstanceSettings, _get_fernet_cipher
+    app = create_app()
+    with app.app_context():
+        rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
+        sample = next((r for r in rows if isinstance(r.value, dict) and r.value.get('_encrypted') is True and isinstance(r.value.get('ciphertext'), str)), None)
+        if sample is None:
+            print('NO_ENCRYPTED_ROWS')
+        else:
+            try:
+                _get_fernet_cipher().decrypt(sample.value['ciphertext'].encode('utf-8'))
+                print('OK:' + sample.key)
+            except InvalidToken:
+                print('INVALID_TOKEN:' + sample.key)
+except Exception as e:
+    print('ERR:' + type(e).__name__)
+" 2>/dev/null || echo "ERR:docker_exec")
+        if [[ "$probe_out" == OK:* ]]; then
+            check "Encrypted settings" pass "decrypted sample key (${probe_out#OK:})"
+        elif [[ "$probe_out" == "NO_ENCRYPTED_ROWS" ]]; then
+            check "Encrypted settings" pass "no encrypted rows present"
+        elif [[ "$probe_out" == INVALID_TOKEN:* ]]; then
+            check "Encrypted settings" fail "InvalidToken decrypting ${probe_out#INVALID_TOKEN:} (ENV_FILE / --env-file SECRET_KEY mismatch or run 'make migrate-secrets')"
+        else
+            check "Encrypted settings" info "probe skipped (${probe_out})"
+        fi
     else
         check "Container" fail "not running"
     fi
