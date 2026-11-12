@@ -277,3 +277,17 @@ def test_oauth_and_maintenance_request_bodies_and_redirects(app):
     props = repair_authors["requestBody"]["content"]["application/json"]["schema"]["properties"]
     assert "dry_run" in props
     assert "batch_size" in props
+
+
+def test_admin_ownership_items_query_parameters_documented(app):
+    """Verify GET /api/admin/ownership/items documents all supported query parameters."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    paths = spec.get("paths", {})
+    ownership_op = paths.get("/api/admin/ownership/items", {}).get("get") or paths.get("/api/v1/admin/ownership/items", {}).get("get")
+    assert ownership_op is not None, "GET ownership/items route missing from OpenAPI paths"
+
+    param_names = {p.get("name") for p in ownership_op.get("parameters", []) if isinstance(p, dict)}
+    for expected in ("source_user_id", "page", "limit", "q", "collection_status", "format", "item_id"):
+        assert expected in param_names, f"Missing query parameter '{expected}' on ownership/items"

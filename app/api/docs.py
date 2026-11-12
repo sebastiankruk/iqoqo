@@ -595,6 +595,64 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                                 }
                             },
                         }
+                elif openapi_path in ("/api/admin/ownership/items", "/api/v1/admin/ownership/items") and method == "get":
+                    ownership_query_params = [
+                        {
+                            "name": "source_user_id",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                            "description": "UUID of the source user account whose physical items are listed.",
+                        },
+                        {
+                            "name": "page",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1, "minimum": 1},
+                            "description": "Page number (1-indexed).",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
+                            "description": "Maximum number of items per page (1-100).",
+                        },
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Search query matching work title, manifestation title, or barcode.",
+                        },
+                        {
+                            "name": "collection_status",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Filter by item collection_status.",
+                        },
+                        {
+                            "name": "format",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Filter by manifestation format or format_type.",
+                        },
+                        {
+                            "name": "item_id",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer"},
+                            "description": "Filter to a specific physical item ID.",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in ownership_query_params:
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                            op_param_names.add(q_param["name"])
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

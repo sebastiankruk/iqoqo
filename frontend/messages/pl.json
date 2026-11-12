@@ -2,9 +2,6 @@
   "Navbar": {
     "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
     "federationHubBadge": "Węzeł Federacji · Tylko do odczytu",
-    "federationHubBanner": "Ta instancja działa jako węzeł federacji tylko do odczytu. Egzemplarze są federowane z węzłów społeczności.",
-    "federationHubExploreDirectory": "Przeglądaj katalog federacji",
-    "dismissBanner": "Zamknij powiadomienie",
     "directory": "Katalog węzłów",
     "searchPlaceholder": "Szukaj w swojej kolekcji...",
     "collection": "Kolekcja",
