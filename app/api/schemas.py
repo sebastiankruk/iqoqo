@@ -554,3 +554,22 @@ class FrbrSplitSchema(BaseModel):
         if any(cid <= 0 for cid in v):
             raise ValueError("All child_ids must be positive integers")
         return v
+
+
+class ReadingSessionCreateSchema(BaseModel):
+    """Request body for logging a reading session on an owned physical item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    duration_minutes: int = Field(..., ge=1, le=1440, description="Active reading session duration in minutes (1-1440)")
+    pages_read: int | None = Field(default=None, ge=1, le=5000, description="Optional number of pages read in this session")
+    note: str | None = Field(default=None, max_length=280, description="Optional short session note")
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, v: str | None) -> str | None:
+        """Trim surrounding whitespace and normalize empty notes to None."""
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped if stripped else None

@@ -377,6 +377,23 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         or 0
     )
 
+    dialect_name = db.session.bind.dialect.name if db.session.bind is not None else "sqlite"
+    if dialect_name == "postgresql":
+        minutes_expr = func.cast(Item.meta["total_reading_minutes"].astext, db.Integer)
+    else:
+        minutes_expr = func.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+
+    avg_reading_raw = db.session.execute(
+        select(func.avg(minutes_expr)).filter(
+            Item.manifestation_id == m.id,
+            Item.is_hidden.is_(False),
+            Item.visibility == "public",
+            minutes_expr.isnot(None),
+            minutes_expr > 0,
+        )
+    ).scalar()
+    average_reading_minutes = round(float(avg_reading_raw), 1) if avg_reading_raw is not None else None
+
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
     # FRBRoo event contributions (creators / performers / publishers) +
@@ -431,6 +448,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "item_id": item_id,
         "wishlist_item_id": wishlist_item_id,
         "owner_count": owner_count,
+        "average_reading_minutes": average_reading_minutes,
         "content_type": m.expression.content_type if m.expression else None,
         "expression_kind": expression_kind,
         "is_live_performance": is_live_performance(expression),

@@ -976,6 +976,23 @@
       "statusIncomplete": "Incomplete",
       "statusPartedOut": "Parted Out"
     },
+    "readingDuration": {
+      "title": "Reading Duration",
+      "logButton": "Log Reading Time",
+      "dialogTitle": "Log Reading Session",
+      "dialogDescription": "Record active reading time for this copy.",
+      "quickPresets": "Quick presets",
+      "durationLabel": "Minutes read",
+      "pagesLabel": "Pages read (optional)",
+      "noteLabel": "Note (optional)",
+      "submit": "Save Session",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "summary": "{duration} read across {count} sessions",
+      "summaryOne": "{duration} read across 1 session",
+      "elapsedDays": " ({days} days)",
+      "elapsedDaysOne": " (1 day)"
+    },
     "maps": {
       "title": "Cartography & Map Supplements",
       "addMap": "Add Map",

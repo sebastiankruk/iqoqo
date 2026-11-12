@@ -34,6 +34,7 @@ vi.mock("@/lib/api/hooks", () => ({
   useAddItemToCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
   useRemoveItemFromCollection: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
   useUserCollections: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useLogReadingSession: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 vi.mock("sonner", () => ({

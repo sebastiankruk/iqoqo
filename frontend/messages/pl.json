@@ -976,6 +976,23 @@
       "statusIncomplete": "Niekompletny",
       "statusPartedOut": "Rozłożony na części"
     },
+    "readingDuration": {
+      "title": "Czas czytania",
+      "logButton": "Zapisz czas czytania",
+      "dialogTitle": "Zapisz sesję czytania",
+      "dialogDescription": "Zarejestruj aktywny czas czytania tego egzemplarza.",
+      "quickPresets": "Szybki wybór",
+      "durationLabel": "Przeczytane minuty",
+      "pagesLabel": "Przeczytane strony (opcjonalnie)",
+      "noteLabel": "Notatka (opcjonalnie)",
+      "submit": "Zapisz sesję",
+      "saving": "Zapisywanie...",
+      "cancel": "Anuluj",
+      "summary": "{duration} czytania w {count} sesjach",
+      "summaryOne": "{duration} czytania w 1 sesji",
+      "elapsedDays": " ({days} dni)",
+      "elapsedDaysOne": " (1 dzień)"
+    },
     "maps": {
       "title": "Kartografia i załączniki mapowe",
       "addMap": "Dodaj mapę",
