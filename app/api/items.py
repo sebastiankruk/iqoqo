@@ -36,7 +36,14 @@ from app.api.decorators import optional_auth, require_auth, require_permission, 
 from app.api.federation_guard import reject_if_federation_head_item_write
 from app.api.filters import CatalogFilterBuilder, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
-from app.api.schemas import ItemBulkCreateSchema, ItemCollectionLinkSchema, ItemCreateSchema, ItemManualCreateSchema, ItemUpdateSchema
+from app.api.schemas import (
+    ItemBulkCreateSchema,
+    ItemCollectionLinkSchema,
+    ItemCreateSchema,
+    ItemManualCreateSchema,
+    ItemUpdateSchema,
+    ReadingSessionCreateSchema,
+)
 from app.core.config_service import is_federation_head_mode
 from app.core.data_manager import invalidate_facets_cache
 from app.core.events import publish_transition_event
@@ -556,6 +563,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
         "meta": item.meta,
         "map_insert_present": (item.meta or {}).get("map_insert_present"),
+        "reading_duration_summary": _compute_reading_duration_summary(item),
     }
 
     if is_owner or is_admin or is_borrowed:
@@ -615,6 +623,106 @@ def get_item_detail(item_id: int):
     if item_id <= 0:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
     return _get_physical_item_detail(item_id)
+
+
+_MAX_READING_SESSIONS_STORED = 200
+
+
+def _compute_reading_duration_summary(item: Item) -> dict[str, Any]:
+    """Build FRBR Item-scoped reading duration and transition elapsed-days summary."""
+    meta = item.meta if isinstance(item.meta, dict) else {}
+    raw_sessions = meta.get("reading_sessions")
+    sessions = raw_sessions if isinstance(raw_sessions, list) else []
+    total_minutes = int(meta.get("total_reading_minutes") or 0)
+    sessions_count = int(meta.get("reading_sessions_count") or len(sessions))
+
+    logs = (
+        db.session.execute(
+            select(ItemStatusLog)
+            .filter(ItemStatusLog.item_id == item.id, ItemStatusLog.new_status.in_(["reading", "currently_reading", "read"]))
+            .order_by(ItemStatusLog.changed_at.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    started_dt: datetime | None = None
+    finished_dt: datetime | None = None
+    for log in logs:
+        if log.new_status in ("reading", "currently_reading") and started_dt is None:
+            started_dt = log.changed_at
+        elif log.new_status == "read":
+            finished_dt = log.changed_at
+
+    elapsed_days: int | None = None
+    if started_dt is not None and finished_dt is not None and finished_dt >= started_dt:
+        elapsed_days = max(0, (finished_dt - started_dt).days)
+
+    return {
+        "total_minutes": total_minutes,
+        "sessions_count": sessions_count,
+        "started_at": started_dt.isoformat() if started_dt is not None else None,
+        "finished_at": finished_dt.isoformat() if finished_dt is not None else None,
+        "elapsed_days": elapsed_days,
+    }
+
+
+@api_bp.route("/items/<int:item_id>/reading-sessions", methods=["POST"])
+@limiter.limit("60 per hour", override_defaults=True)
+@require_auth
+def log_reading_session(item_id: int) -> tuple[Response, int]:
+    """Log an active reading session on an owned physical Item."""
+    if item_id <= 0:
+        return jsonify({"error": "Item not found", "code": 404}), 404
+
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"error": "Item not found", "code": 404}), 404
+
+    user_id = getattr(g, "user_id", None)
+    if not user_id or str(item.owner_id) != str(user_id):
+        return jsonify({"error": "Forbidden: you do not own this item.", "code": 403}), 403
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = ReadingSessionCreateSchema(**data)
+    except ValidationError as exc:
+        return jsonify({"error": f"Invalid payload: {exc}", "code": 400}), 400
+
+    meta = dict(item.meta) if isinstance(item.meta, dict) else {}
+    raw_sessions = meta.get("reading_sessions")
+    sessions = list(raw_sessions) if isinstance(raw_sessions, list) else []
+    sessions.append(
+        {
+            "duration_minutes": payload.duration_minutes,
+            "pages_read": payload.pages_read,
+            "note": payload.note,
+            "logged_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    if len(sessions) > _MAX_READING_SESSIONS_STORED:
+        sessions = sessions[-_MAX_READING_SESSIONS_STORED:]
+
+    meta["reading_sessions"] = sessions
+    meta["total_reading_minutes"] = int(meta.get("total_reading_minutes") or 0) + payload.duration_minutes
+    meta["reading_sessions_count"] = int(meta.get("reading_sessions_count") or 0) + 1
+    item.meta = meta
+    flag_modified(item, "meta")
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {"reading_duration_summary": _compute_reading_duration_summary(item)},
+                "error": None,
+            }
+        ),
+        201,
+    )
 
 
 def _parse_update_payload(req) -> tuple[ItemUpdateSchema | None, Response | tuple[Response, int] | None]:

@@ -715,6 +715,33 @@ export function useItem(id: number, initialData?: Item | null) {
   });
 }
 
+/** Payload for logging a reading session on an owned physical item. */
+export interface LogReadingSessionPayload {
+  duration_minutes: number;
+  pages_read?: number;
+  note?: string;
+}
+
+/**
+ * Custom hook to log a reading session on an owned physical item.
+ *
+ * @param itemId - Item ID
+ * @returns Mutation for logging a reading session
+ */
+export function useLogReadingSession(itemId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: LogReadingSessionPayload) => {
+      const response = await apiClient.post(`/items/${itemId}/reading-sessions`, payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.item(itemId) });
+      queryClient.invalidateQueries({ queryKey: ["manifestation"] });
+    },
+  });
+}
+
 /* ── Rest of the hooks ─────────────────────────────────────────────────────── */
 
 /**

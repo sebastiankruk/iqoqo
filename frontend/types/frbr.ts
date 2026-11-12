@@ -211,6 +211,17 @@ export interface CatalogEntry extends Manifestation {
   expression_kind?: string | null;
   /** Convenience flag: true when the Expression is a live performance. */
   is_live_performance?: boolean;
+  /** Anonymized average reading duration in minutes across public items. */
+  average_reading_minutes?: number | null;
+}
+
+/** Item-scoped reading duration and transition elapsed-days summary. */
+export interface ReadingDurationSummary {
+  total_minutes: number;
+  sessions_count: number;
+  started_at?: string | null;
+  finished_at?: string | null;
+  elapsed_days?: number | null;
 }
 
 /**
@@ -260,6 +271,7 @@ export interface Item {
   expression_id?: number | null;
   expression?: Pick<Expression, "id" | "content_type" | "language" | "kind">;
   work?: Pick<Work, "id" | "title" | "authors" | "meta" | "container_work_id" | "series_memberships">;
+  reading_duration_summary?: ReadingDurationSummary;
 }
 
 /**
