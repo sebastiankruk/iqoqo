@@ -29,7 +29,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 #
 import bleach
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
-from rdflib.namespace import OWL, RDF, XSD
+from rdflib.namespace import OWL, RDF, RDFS, XSD
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -2819,6 +2819,18 @@ def _enrich_graph_from_db(
                     g.add((m_uri, OWL.sameAs, ext_ref))
                     g.add((m_uri, SCHEMA.sameAs, ext_ref))
 
+            m_rows = db.session.execute(select(Manifestation).where(Manifestation.id.in_(seen_manifestations))).scalars().all()
+            for m_obj in m_rows:
+                lod_links = (m_obj.meta or {}).get("lod_links") if isinstance(m_obj.meta, dict) else None
+                oc_uri = lod_links.get("opencollections_uri") if isinstance(lod_links, dict) else None
+                safe_oc = _safe_iri(str(oc_uri)) if oc_uri else None
+                if safe_oc is not None:
+                    m_uri = _frbr_uri("manifestation", m_obj.id, base_url)
+                    oc_ref = URIRef(safe_oc)
+                    g.add((m_uri, OWL.sameAs, oc_ref))
+                    g.add((m_uri, SCHEMA.sameAs, oc_ref))
+                    g.add((m_uri, RDFS.seeAlso, oc_ref))
+
         if seen_works:
             w_links = (
                 db.session.execute(
@@ -2838,6 +2850,18 @@ def _enrich_graph_from_db(
                     ext_ref = URIRef(ext_iri)
                     g.add((w_uri, OWL.sameAs, ext_ref))
                     g.add((w_uri, SCHEMA.sameAs, ext_ref))
+
+            w_rows = db.session.execute(select(Work).where(Work.id.in_(seen_works))).scalars().all()
+            for w_obj in w_rows:
+                lod_links = (w_obj.meta or {}).get("lod_links") if isinstance(w_obj.meta, dict) else None
+                oc_uri = lod_links.get("opencollections_uri") if isinstance(lod_links, dict) else None
+                safe_oc = _safe_iri(str(oc_uri)) if oc_uri else None
+                if safe_oc is not None:
+                    w_uri = _frbr_uri("work", w_obj.id, base_url)
+                    oc_ref = URIRef(safe_oc)
+                    g.add((w_uri, OWL.sameAs, oc_ref))
+                    g.add((w_uri, SCHEMA.sameAs, oc_ref))
+                    g.add((w_uri, RDFS.seeAlso, oc_ref))
 
         # WorkSeriesMembership (schema:partOfSeries and schema:position on Work)
         if seen_works:
