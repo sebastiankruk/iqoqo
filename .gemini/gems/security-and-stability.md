@@ -28,12 +28,12 @@ The system architecture includes:
 
 ## Current State
 
-We are in the **v1.0.x stream (Native Mobile Ecosystem & Format Expansion)**; `main` is at **v0.9.4**, feature-complete across all OpenSpec changes `C71`–`C94` (ActivityPub federation, social loans, TOTP 2FA, PATs, OpenAPI 3.1, native S3 backups, Cloudflare rules, and C90 pre-1.0 review). The `v1.0.0` native mobile milestone (`C95`–`C100`) establishes Capacitor 7 Android and iOS projects, mobile bottom navigation, zero-URL-rewrite conditional static export, HASS server selector, secure storage, native camera/haptics/batch scanning, Ubuntu Android SDK/ADB pipeline, multi-platform GitHub Actions mobile CI, and AI skills harmonization.
+We are in the **v1.0.x stream (Native Mobile Ecosystem, Format Expansion & Federation Hub)**; `main` has shipped **v1.0.0**, **v1.0.1**, and **v1.0.2** across OpenSpec changes `C95`–`C114d`. **v1.0.0** delivered Capacitor 7 Android/iOS native apps, 5-tab mobile navigation, zero-URL-rewrite conditional static export, HASS-style server selector, secure token storage, Flask-free mobile OAuth, native scanner/haptics/batch mode, and mobile CI/CD. **v1.0.1** added LEGO & Construction Sets FRBRoo ontology (`F16_Container_Work` / `F3_Manifestation_Product_Type`) with Rebrickable + Allegro lookup, standalone & attached Cartographic Maps with interactive `<MapViewerModal />`, Request New Media Type workflows, DB-backed lookup credentials, and AI cover repair. **v1.0.2** shipped `FEDERATION_HEAD_MODE` read-only showcase hub mode (`iqoqo.cc`), offline collection/wishlist caching and `iqoqo://` notification deep links, iOS privacy manifest & store gate, ownership reassignment filtering, interactive CLI installer (`iqoqo_installer.py` / `iqopresync`), Redis rate-limiter storage & 429 resilience, and OpenObserve telemetry credential sync & RUM routing.
 
-## Upcoming (v1.0.1 & Beyond)
+## Upcoming (v1.0.3 & Beyond)
 
-- **v1.0.1: FRBR Format Expansion (LEGO & Maps), New Type Requests & Post-0.9.x Fixes** (`C101`–`C108`): AI cover repair script, federation peering directionality matrix, LEGO Sets FRBRoo ontology, Cartographic Maps, format request governance, and mobile responsive polish.
-- **v1.0.2: Offline Cache & Store Readiness Gate** (`C109`–`C110`): SQLite offline collection cache, background barcode sync queue, and App Store / Google Play metadata & compliance checklists.
+- **v1.0.3: Reading Duration, OpenCollections.org, AI-Fetchable Shares & Prebuilt Env Fix** (`C115`–`C120`): FRBR `Item`-scoped reading duration and session tracking (`POST /api/items/<id>/reading-sessions`, `<ReadingDurationCard />`, anonymized `Manifestation` average read time), SSRF-safe `opencollections.org` ingestion strategy & JSON-LD/RDF `owl:sameAs` bridge, `v1.0.2` review deferrals, AI-fetchable shared collections (audio pressing RDF, `?format=jsonld&limit=`, full SSR JSON-LD), prebuilt `ENV_FILE` propagation & secret-decryption guard (P0), and connected-server footer / batch-scan state indicator / `make status` hygiene.
+- **v1.1.0: Infrastructure & Catalog Breadth**: Redis-to-Valkey drop-in migration and serials/journals ISSN ontology design (serial `Work` vs. issue `Manifestation`).
 
 ## Key Security Risk Areas
 

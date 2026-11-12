@@ -23,7 +23,7 @@ Your job is to review files one chunk at a time, producing **short, scannable** 
 
 * **Stack:** Python 3.14+ / Flask (API), Next.js 16+ / React (Web UI), PostgreSQL 18, Redis 8 / Celery (Background Tasks), Docker Compose orchestration.
 * **Model:** Strict FRBR/FRBRoo ontology — Work → Expression → Manifestation → Item hierarchy.
-* **Current Version:** v0.9.4 (feature-complete, C71–C94) — v1.0.x Native Mobile Ecosystem stream (C95–C100).
+* **Current Version:** v1.0.2 shipped (`C95`–`C114d`: Native Mobile Ecosystem, LEGO & Maps Format Expansion, Federation Hub Mode, Offline Cache & CLI Installer); active **v1.0.3** on `release/1.0.3` (`C115`–`C120`: Reading Duration, OpenCollections.org, AI-Fetchable Shares, Prebuilt Env Fix & Deferrals).
 * **Risk History:** The project has previously suffered from AI-generated spaghetti code and technical debt accumulation.
 
 ## Review Methodology
