@@ -35,7 +35,9 @@ vi.mock("@/components/ui/share-button", () => ({
 }));
 
 vi.mock("@/components/ui/public-feed-button", () => ({
-  PublicFeedButton: () => <button>RSS</button>,
+  PublicFeedButton: ({ feedPath, label }: { feedPath: string; label?: string }) => (
+    <a href={feedPath}>{label || "RSS"}</a>
+  ),
 }));
 
 vi.mock("@/components/collection/collection-grid", () => ({
@@ -118,5 +120,30 @@ describe("SharedCollectionClient", () => {
     await waitFor(() => {
       expect(screen.getByText("Collection Not Found")).toBeInTheDocument();
     });
+  });
+
+  it("renders JSON-LD / AI Feed link alongside RSS feed for shared collections", () => {
+    render(
+      <SharedCollectionClient
+        initialToken="tok-123"
+        initialData={{
+          author: "audiophile",
+          collection_name: "Jazz Vinyl",
+          items: [
+            {
+              id: 1,
+              manifestation_id: 10,
+              title: "Kind of Blue",
+              authors: ["Miles Davis"],
+              content_type: "music",
+              format: "vinyl",
+            },
+          ],
+        }}
+      />
+    );
+
+    const jsonLdLink = screen.getByRole("link", { name: "jsonLdFeed" });
+    expect(jsonLdLink).toHaveAttribute("href", "/api/public/share/tok-123?format=jsonld&limit=1000");
   });
 });

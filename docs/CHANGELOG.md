@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AI-Fetchable Shared Collections & Audio Pressing RDF Graph (C118)**:
+  - Added `_emit_audio_rdf_triples()` in `app/core/frbr_service.py` to emit `schema:MusicAlbum` / `schema:MusicRelease`, `musicReleaseFormat`, `recordLabel`, `catalogNumber`, `gtin13`, `datePublished`, `countryOfOrigin`, `iqoqo:matrixRunout`, and Discogs/MusicBrainz `owl:sameAs` links.
+  - Enriched `GET /api/public/share/<token>` and added `GET /api/public/rdf/share/<token>` with `?format=jsonld|turtle|rdfxml` and `?limit=` (up to `2000`).
+  - Embedded full SSR JSON-LD pressing metadata on `/share/[token]` (up to 1,000 items), added a `JSON-LD / AI Feed` link next to RSS, and fixed top-level `format` resolution in `ItemCard` so audio items render their true format badge instead of falling back to `"Book"`.
+
 ### Changed
 
 ### Fixed

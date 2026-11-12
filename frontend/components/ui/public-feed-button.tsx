@@ -17,7 +17,7 @@
 "use client";
 
 import * as React from "react";
-import { Rss } from "lucide-react";
+import { Braces, Rss } from "lucide-react";
 import { openExternalUrl } from "@/lib/capacitor/navigation";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { resolvePublicUrl } from "@/lib/utils";
@@ -27,10 +27,11 @@ interface PublicFeedButtonProps {
   label?: string;
   className?: string;
   title?: string;
+  variant?: "rss" | "jsonld";
 }
 
 /**
- * Client-side RSS feed link button. On native mobile (Capacitor), opens
+ * Client-side RSS or JSON-LD feed link button. On native mobile (Capacitor), opens
  * via the system browser instead of the internal WebView.
  */
 export function PublicFeedButton({
@@ -38,6 +39,7 @@ export function PublicFeedButton({
   label = "RSS Feed",
   className = "inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground shadow-sm transition-all",
   title = "Subscribe to RSS feed",
+  variant = "rss",
 }: PublicFeedButtonProps) {
   const url = isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
 
@@ -50,7 +52,7 @@ export function PublicFeedButton({
 
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" onClick={handleClick} className={className} title={title}>
-      <Rss className="h-4 w-4 text-orange-500" />
+      {variant === "jsonld" ? <Braces className="h-4 w-4 text-primary" /> : <Rss className="h-4 w-4 text-orange-500" />}
       <span>{label}</span>
     </a>
   );

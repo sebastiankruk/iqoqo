@@ -21,14 +21,14 @@ for Work, Expression, Manifestation, and Item entities.
 
 from typing import Any, cast
 
-from flask import Blueprint, Response, current_app, jsonify, redirect, request, url_for
+from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context, url_for
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, XSD
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.frbr_merge import get_entity_tombstone
-from app.core.frbr_service import serialize_collection_to_rdf
+from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import canonical_frbr_iri, get_lod_base_url
 from app.core.limiter import limiter
 from app.db.federation import FederationFollower, FollowStatus
@@ -56,6 +56,7 @@ lod_bp = Blueprint("lod", __name__)
 
 # Public RDF request policy constants
 MAX_PUBLIC_RDF_LIMIT = 1000  # Maximum items allowed in a single public RDF request
+MAX_SHARED_COLLECTION_LIMIT = 2000  # Maximum items allowed when exporting a shared collection graph
 DEFAULT_PUBLIC_RDF_LIMIT = 100  # Default limit when not specified
 MIN_PUBLIC_RDF_LIMIT = 1  # Minimum valid limit
 
@@ -95,10 +96,10 @@ def add_cors_headers(response: Response) -> Response:
     return response
 
 
-def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT) -> int:
+def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT, max_limit: int = MAX_PUBLIC_RDF_LIMIT) -> int:
     """Parse and validate the 'limit' query parameter with safe bounds.
 
-    Returns a clamped limit value between MIN_PUBLIC_RDF_LIMIT and MAX_PUBLIC_RDF_LIMIT.
+    Returns a clamped limit value between MIN_PUBLIC_RDF_LIMIT and max_limit.
     Non-positive or malformed values are replaced with the default.
     """
     try:
@@ -109,8 +110,8 @@ def _parse_safe_rdf_limit(default: int = DEFAULT_PUBLIC_RDF_LIMIT) -> int:
     # Clamp to safe bounds
     if limit < MIN_PUBLIC_RDF_LIMIT:
         limit = default
-    elif limit > MAX_PUBLIC_RDF_LIMIT:
-        limit = MAX_PUBLIC_RDF_LIMIT
+    elif limit > max_limit:
+        limit = max_limit
 
     return limit
 
@@ -803,3 +804,56 @@ def get_public_federation_instance_info() -> Response:
         ),
         200,
     )
+
+
+@public_bp.route("/rdf/share/<string:token>", methods=["GET"])
+@limiter.limit("60 per minute")
+def get_shared_collection_rdf(token: str) -> Response | tuple[Response, int]:
+    """Export a shared collection RDF graph via query-param or Accept negotiation."""
+    from app.api.public_items import fetch_shared_collection_by_token
+
+    format_arg = (request.args.get("format") or "").strip().lower()
+    accept_header = request.headers.get("Accept", "")
+
+    format_map = {
+        "jsonld": ("json-ld", "application/ld+json"),
+        "json-ld": ("json-ld", "application/ld+json"),
+        "turtle": ("turtle", "text/turtle"),
+        "ttl": ("turtle", "text/turtle"),
+        "rdfxml": ("xml", "application/rdf+xml"),
+        "xml": ("xml", "application/rdf+xml"),
+        "rdf+xml": ("xml", "application/rdf+xml"),
+        "nt": ("nt", "application/n-triples"),
+        "n-triples": ("nt", "application/n-triples"),
+    }
+
+    if format_arg:
+        if format_arg not in format_map:
+            return jsonify({"error": f"Unsupported format: {format_arg}", "code": 400}), 400
+        rdf_format, rdf_mimetype = format_map[format_arg]
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header:
+        rdf_format, rdf_mimetype = ("turtle", "text/turtle")
+    elif "application/rdf+xml" in accept_header:
+        rdf_format, rdf_mimetype = ("xml", "application/rdf+xml")
+    elif "application/n-triples" in accept_header:
+        rdf_format, rdf_mimetype = ("nt", "application/n-triples")
+    else:
+        rdf_format, rdf_mimetype = ("json-ld", "application/ld+json")
+
+    limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
+    is_stream = request.args.get("stream", "").lower() in ("true", "1")
+    base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
+    collection_uri = f"{base_url}/share/{token}"
+    items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
+
+    if is_stream:
+        return Response(
+            stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
+            mimetype=rdf_mimetype,
+            headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+        )
+
+    if not isinstance(items, list):
+        items = list(items)
+    rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
+    return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})

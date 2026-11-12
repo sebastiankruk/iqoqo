@@ -37,6 +37,15 @@ export interface SharedCollectionItem {
   cover_url?: string;
   status?: string;
   collection_status?: string;
+  content_type?: string | null;
+  format?: string | null;
+  ean?: string | null;
+  upc?: string | null;
+  publisher?: string | null;
+  publication_year?: string | number | null;
+  catalog_number?: string | null;
+  country?: string | null;
+  lod_links?: Record<string, string> | null;
 }
 
 export interface SharedCollectionData {
@@ -171,12 +180,20 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
               </p>
             )}
 
-            <div className="flex justify-center gap-4">
+            <div className="flex flex-wrap justify-center gap-4">
               <ShareButton
                 title={collection.collection_name}
                 text={`Check out this shared collection by ${collection.author} on iqoqo!`}
               />
               {resolvedToken && <PublicFeedButton feedPath={`/api/public/share/${resolvedToken}/feed.xml`} />}
+              {resolvedToken && (
+                <PublicFeedButton
+                  feedPath={`/api/public/share/${resolvedToken}?format=jsonld&limit=1000`}
+                  label={t("jsonLdFeed")}
+                  title={t("jsonLdFeedTitle")}
+                  variant="jsonld"
+                />
+              )}
             </div>
           </div>
         </div>

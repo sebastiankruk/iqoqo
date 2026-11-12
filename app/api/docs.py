@@ -653,6 +653,32 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/public/share/{token}", "/api/public/rdf/share/{token}") and method == "get":
+                    share_query_params = [
+                        {
+                            "name": "format",
+                            "in": "query",
+                            "required": False,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["json", "jsonld", "json-ld", "turtle", "ttl", "rdfxml", "xml", "nt", "n-triples"],
+                            },
+                            "description": "Output serialization format for headerless clients and AI fetchers.",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1000, "minimum": 1, "maximum": 2000},
+                            "description": "Maximum number of shared collection items to return (clamped to 2000).",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in share_query_params:
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                            op_param_names.add(q_param["name"])
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

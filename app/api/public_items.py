@@ -27,7 +27,7 @@ from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.decorators import optional_auth
-from app.api.public_rdf import _parse_safe_rdf_limit, public_bp
+from app.api.public_rdf import MAX_SHARED_COLLECTION_LIMIT, _parse_safe_rdf_limit, public_bp
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import get_lod_base_url
 from app.core.limiter import limiter
@@ -288,7 +288,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
     if not user:
         return [] if not stream else iter([])
 
-    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False))
+    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False), Item.visibility == "public")
     filters = collection.filters
 
     if "status" in filters:
@@ -508,16 +508,71 @@ def get_public_items(username: str):
     )
 
 
+def _serialize_shared_collection_item(item: Item) -> dict[str, Any]:
+    """Serialize a shared collection Item with top-level FRBR F2/F3 pressing metadata."""
+    m = item.manifestation
+    m_meta = (m.meta if m and isinstance(m.meta, dict) else None) or {}
+    expr = m.expression if m else None
+    work = expr.work if expr else None
+
+    authors = (work.meta.get("authors") if work and isinstance(work.meta, dict) else None) or m_meta.get("authors") or []
+    cover_url = (m.cover_url if m else None) or m_meta.get("cover_url")
+    content_type = (expr.content_type if expr else None) or m_meta.get("content_type")
+    item_format = (
+        (getattr(m, "format", None) if m else None)
+        or (getattr(m, "format_type", None) if m else None)
+        or m_meta.get("format")
+        or m_meta.get("music_release_format")
+    )
+    ean = m_meta.get("ean") or (m.isbn13 if m and m.isbn13 and len(str(m.isbn13)) == 13 else None)
+    upc = m_meta.get("upc")
+    publisher = (
+        (getattr(m, "publisher", None) if m else None) or m_meta.get("record_label") or m_meta.get("label") or m_meta.get("publisher")
+    )
+    publication_year = (
+        m_meta.get("release_year")
+        or m_meta.get("publication_year")
+        or m_meta.get("year")
+        or (getattr(m, "publication_date", None) if m else None)
+    )
+    catalog_number = m_meta.get("catalog_number") or m_meta.get("catno")
+    country = m_meta.get("country") or m_meta.get("country_of_origin")
+    lod_links = m_meta.get("lod_links") if isinstance(m_meta.get("lod_links"), dict) else None
+
+    return {
+        "id": item.id,
+        "manifestation_id": item.manifestation_id,
+        "status": item.status,
+        "collection_status": item.collection_status,
+        "title": m.title if m else "Untitled",
+        "authors": authors,
+        "cover_url": cover_url,
+        "content_type": content_type,
+        "format": item_format,
+        "ean": ean,
+        "upc": upc,
+        "publisher": publisher,
+        "publication_year": publication_year,
+        "catalog_number": catalog_number,
+        "country": country,
+        "lod_links": lod_links,
+    }
+
+
 @public_bp.route("/share/<string:token>", methods=["GET"])
 @limiter.limit("60 per minute")
 def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
-    format_arg = request.args.get("format", "").lower()
+    format_arg = request.args.get("format", "").strip().lower()
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
 
-    # Content negotiation for RDF formats (JSON-LD, Turtle, N-Triples)
+    valid_formats = {"", "json", "nt", "n-triples", "json-ld", "jsonld", "turtle", "ttl", "rdfxml", "xml", "rdf+xml"}
+    if format_arg not in valid_formats:
+        return jsonify({"error": f"Unsupported format: {format_arg}", "code": 400}), 400
+
+    # Content negotiation for RDF formats (JSON-LD, Turtle, RDF/XML, N-Triples)
     rdf_format: str | None = None
     rdf_mimetype: str = ""
 
@@ -527,12 +582,15 @@ def get_shared_collection(token: str):
     elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
         rdf_format = "json-ld"
         rdf_mimetype = "application/ld+json"
-    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg == "turtle":
+    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg in ("turtle", "ttl"):
         rdf_format = "turtle"
         rdf_mimetype = "text/turtle"
+    elif "application/rdf+xml" in accept_header or format_arg in ("rdfxml", "xml", "rdf+xml"):
+        rdf_format = "xml"
+        rdf_mimetype = "application/rdf+xml"
 
     if rdf_format:
-        limit_val = _parse_safe_rdf_limit()
+        limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
         items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
         collection_uri = f"{base_url}/share/{token}"
         if is_stream:
@@ -558,7 +616,7 @@ def get_shared_collection(token: str):
     if not user:
         return jsonify({"error": "Author not found"}), 404
 
-    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False))
+    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False), Item.visibility == "public")
 
     filters = collection.filters
 
@@ -617,35 +675,19 @@ def get_shared_collection(token: str):
                 query = query.outerjoin(Work, Expression.work_id == Work.id)
                 query = query.where(build_ilike_search_clause(search_query))
 
+    limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
     items = list(
         db.session.execute(
-            query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+            query.order_by(Item.updated_at.desc())
+            .limit(limit_val)
+            .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
         )
         .scalars()
         .unique()
         .all()
     )
 
-    items_list = [
-        {
-            "id": item.id,
-            "manifestation_id": item.manifestation_id,
-            "status": item.status,
-            "collection_status": item.collection_status,
-            "title": item.manifestation.title,
-            "authors": (
-                (
-                    item.manifestation.expression.work.meta.get("authors")
-                    if item.manifestation.expression and item.manifestation.expression.work and item.manifestation.expression.work.meta
-                    else None
-                )
-                or (item.manifestation.meta.get("authors") if item.manifestation.meta else None)
-                or []
-            ),
-            "cover_url": item.manifestation.cover_url or (item.manifestation.meta.get("cover_url") if item.manifestation.meta else None),
-        }
-        for item in items
-    ]
+    items_list = [_serialize_shared_collection_item(item) for item in items]
 
     status_filter = filters.get("status")
     status_list: list[str] = []

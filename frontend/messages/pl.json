@@ -344,7 +344,9 @@
     "foundManifestation": "Znalezione wydanie",
     "notFound": "Brak pozycji w tej kolekcji.",
     "profileTitle": "Kolekcja użytkownika {name}",
-    "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności."
+    "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności.",
+    "jsonLdFeed": "Kanał JSON-LD / AI",
+    "jsonLdFeedTitle": "Maszynowy graf Schema.org JSON-LD dla agentów AI"
   },
   "CoverProvenance": {
     "sourcePrefix": "Źródło",
