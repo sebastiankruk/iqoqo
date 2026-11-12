@@ -2878,6 +2878,102 @@ def _enrich_graph_from_db(
         pass
 
 
+_AUDIO_CONTENT_TYPES = {"music", "audio"}
+_AUDIO_RELEASE_FORMATS = {
+    "vinyl",
+    "cd",
+    "sacd",
+    "cassette",
+    "audio_cd",
+    "lp",
+    "7_inch",
+    "12_inch",
+    "minidisc",
+    "reel_to_reel",
+    "tape",
+    "8_track",
+}
+
+
+def _emit_audio_rdf_triples(
+    g: Graph,
+    m_uri: URIRef,
+    m_elem: Any,
+    meta: dict[str, Any] | None,
+    content_type: str | None = None,
+) -> None:
+    """Emit Schema.org MusicAlbum/MusicRelease and pressing triples for audio manifestations."""
+    meta_dict = meta if isinstance(meta, dict) else {}
+    raw_format = (
+        meta_dict.get("music_release_format")
+        or meta_dict.get("format")
+        or (getattr(m_elem, "format", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+        or (m_elem.get("format") if isinstance(m_elem, dict) else None)
+    )
+    norm_ct = (content_type or "").strip().lower()
+    norm_fmt = str(raw_format or "").strip().lower()
+
+    has_audio_hint = any(meta_dict.get(k) for k in ("catalog_number", "catno", "record_label", "matrix_runout", "music_release_format"))
+    if norm_ct not in _AUDIO_CONTENT_TYPES and norm_fmt not in _AUDIO_RELEASE_FORMATS and not has_audio_hint:
+        return
+
+    g.add((m_uri, RDF.type, SCHEMA.MusicAlbum))
+    g.add((m_uri, RDF.type, SCHEMA.MusicRelease))
+
+    if raw_format:
+        g.add((m_uri, SCHEMA.musicReleaseFormat, Literal(str(raw_format))))
+
+    record_label = (
+        meta_dict.get("record_label")
+        or meta_dict.get("label")
+        or meta_dict.get("publisher")
+        or (getattr(m_elem, "publisher", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+        or (m_elem.get("publisher") if isinstance(m_elem, dict) else None)
+    )
+    if record_label:
+        g.add((m_uri, SCHEMA.recordLabel, Literal(str(record_label))))
+
+    catno = meta_dict.get("catalog_number") or meta_dict.get("catno")
+    if catno:
+        g.add((m_uri, SCHEMA.catalogNumber, Literal(str(catno))))
+
+    gtin = (
+        meta_dict.get("ean")
+        or meta_dict.get("upc")
+        or meta_dict.get("gtin13")
+        or (getattr(m_elem, "isbn13", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+        or (m_elem.get("ean") or m_elem.get("upc") if isinstance(m_elem, dict) else None)
+    )
+    if gtin:
+        g.add((m_uri, SCHEMA.gtin13, Literal(str(gtin))))
+
+    pub_date = (
+        meta_dict.get("release_year")
+        or meta_dict.get("publication_year")
+        or meta_dict.get("publication_date")
+        or meta_dict.get("year")
+        or (getattr(m_elem, "publication_date", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+    )
+    if pub_date:
+        g.add((m_uri, SCHEMA.datePublished, Literal(str(pub_date))))
+
+    country = meta_dict.get("country") or meta_dict.get("country_of_origin")
+    if country:
+        g.add((m_uri, SCHEMA.countryOfOrigin, Literal(str(country))))
+
+    matrix_runout = meta_dict.get("matrix_runout")
+    if matrix_runout:
+        g.add((m_uri, IQOQO.matrixRunout, Literal(str(matrix_runout))))
+
+    lod_links = meta_dict.get("lod_links") if isinstance(meta_dict.get("lod_links"), dict) else {}
+    for uri_key in ("discogs_uri", "musicbrainz_uri"):
+        raw_uri = lod_links.get(uri_key) or meta_dict.get(uri_key)
+        if raw_uri:
+            safe_uri = _safe_iri(str(raw_uri))
+            if safe_uri:
+                g.add((m_uri, OWL.sameAs, URIRef(safe_uri)))
+
+
 def _emit_lego_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any] | None) -> None:
     """Emit LEGO set number, piece count, and minifigure count triples."""
     if not meta:
@@ -3080,6 +3176,7 @@ def build_collection_rdf_graph(
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                     _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
                     _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
+                    _emit_audio_rdf_triples(g, m_uri, m_elem, getattr(m_elem, "meta", None), content_type=content_type)
                     if m_elem.cover_url:
                         encoded_cover = _safe_iri(str(m_elem.cover_url))
                         if encoded_cover is not None:
@@ -3124,6 +3221,13 @@ def build_collection_rdf_graph(
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
                         _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
                         _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
+                        _emit_audio_rdf_triples(
+                            g,
+                            m_uri,
+                            m_elem,
+                            getattr(m_elem, "meta", None),
+                            content_type=getattr(expr_elem, "content_type", None),
+                        )
                         if m_elem.cover_url:
                             encoded_cover = _safe_iri(str(m_elem.cover_url))
                             if encoded_cover is not None:
@@ -3233,10 +3337,12 @@ def build_collection_rdf_graph(
             else:
                 _logger_frbr.warning("Skipping malformed cover URL for manifestation %s", manifestation_id)
 
-        # LEGO & Cartographic Manifestation attributes (F3)
+        # LEGO, Cartographic & Audio Manifestation attributes (F3)
         m_meta_dict: dict[str, Any] = {}
+        m_inst_for_audio: Any = None
         if isinstance(item, dict):
-            m_meta_dict = item.get("manifestation_meta") or item.get("meta") or {}
+            m_meta_dict = dict(item.get("manifestation_meta") or item.get("meta") or {})
+            m_inst_for_audio = item
             for k in (
                 "set_number",
                 "piece_count",
@@ -3246,15 +3352,37 @@ def build_collection_rdf_graph(
                 "map_projection",
                 "projection",
                 "map_attachments",
+                "format",
+                "music_release_format",
+                "record_label",
+                "label",
+                "publisher",
+                "catalog_number",
+                "catno",
+                "ean",
+                "upc",
+                "gtin13",
+                "publication_year",
+                "release_year",
+                "publication_date",
+                "year",
+                "country",
+                "country_of_origin",
+                "matrix_runout",
+                "lod_links",
+                "discogs_uri",
+                "musicbrainz_uri",
             ):
                 if k in item and k not in m_meta_dict:
                     m_meta_dict[k] = item[k]
         else:
             m_inst = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+            m_inst_for_audio = m_inst
             m_meta_dict = (m_inst.meta or {}) if m_inst and hasattr(m_inst, "meta") and m_inst.meta else {}
 
         _emit_lego_rdf_triples(g, m_uri, m_meta_dict)
         _emit_cartographic_rdf_triples(g, m_uri, m_meta_dict, base_url)
+        _emit_audio_rdf_triples(g, m_uri, m_inst_for_audio, m_meta_dict, content_type=content_type)
 
         # Format-specific Schema.org assertions
         m_format = item.get("format") if isinstance(item, dict) and "format" in item else m_meta_dict.get("format")

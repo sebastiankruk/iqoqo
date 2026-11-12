@@ -32,6 +32,15 @@ interface SharedCollectionItem {
   cover_url?: string;
   status?: string;
   collection_status?: string;
+  content_type?: string | null;
+  format?: string | null;
+  ean?: string | null;
+  upc?: string | null;
+  publisher?: string | null;
+  publication_year?: string | number | null;
+  catalog_number?: string | null;
+  country?: string | null;
+  lod_links?: Record<string, string> | null;
 }
 
 interface SharedCollectionData {
@@ -65,7 +74,7 @@ export function generateStaticParams() {
  */
 async function getSharedCollection(token: string): Promise<SharedCollectionResult> {
   try {
-    const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
+    const res = await fetch(resolveApiUrl(`/public/share/${token}?limit=1000`, true), {
       next: { revalidate: 60 },
     });
     if (res.status === 404) return { kind: "not-found" };
@@ -158,11 +167,29 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
     description: collection.collection_description || undefined,
     totalCount: items.length,
     authorName: collection.author,
-    items: items.map((item: SharedCollectionItem) => ({
-      id: item.manifestation_id || item.id,
-      title: item.title,
-      url: `/manifestation/${item.manifestation_id || item.id}`,
-    })),
+    items: items.slice(0, 1000).map((item: SharedCollectionItem) => {
+      const sameAs: string[] = [];
+      if (item.lod_links) {
+        for (const key of ["discogs_uri", "musicbrainz_uri", "wikidata_uri", "opencollections_uri"]) {
+          if (item.lod_links[key]) sameAs.push(item.lod_links[key]);
+        }
+      }
+      return {
+        id: item.manifestation_id || item.id,
+        title: item.title,
+        url: `/manifestation/${item.manifestation_id || item.id}`,
+        contentType: item.content_type,
+        format: item.format,
+        authors: item.authors,
+        ean: item.ean,
+        upc: item.upc,
+        publisher: item.publisher,
+        catalogNumber: item.catalog_number,
+        publicationYear: item.publication_year,
+        country: item.country,
+        sameAs: sameAs.length > 0 ? sameAs : undefined,
+      };
+    }),
   });
 
   return (

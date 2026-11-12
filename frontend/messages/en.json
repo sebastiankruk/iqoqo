@@ -344,7 +344,9 @@
     "foundManifestation": "Found edition",
     "notFound": "Item not found in this collection.",
     "profileTitle": "{name}'s Collection",
-    "hiddenItemNote": "Some items may be hidden due to privacy settings."
+    "hiddenItemNote": "Some items may be hidden due to privacy settings.",
+    "jsonLdFeed": "JSON-LD / AI Feed",
+    "jsonLdFeedTitle": "Machine-readable Schema.org JSON-LD graph for AI fetchers"
   },
   "CoverProvenance": {
     "sourcePrefix": "Source",
