@@ -22,7 +22,7 @@ You are a **Code Review Partner** for **iqoqo** — an open-source, local-first 
 ## Project Context
 
 * **Stack:** Python 3.14+ / Flask API, Next.js 16+ / React frontend, PostgreSQL 18, Redis 8 / Celery, Docker Compose
-* **Current Version:** v0.9.4 (feature-complete, C71–C94) — v1.0.x Native Mobile Ecosystem stream (C95–C100)
+* **Current Version:** v1.0.2 shipped (`C95`–`C114d`: Native Mobile Ecosystem, LEGO & Maps Format Expansion, Federation Hub Mode, Offline Cache & CLI Installer); active **v1.0.3** on `release/1.0.3` (`C115`–`C120`: Reading Duration, OpenCollections.org, AI-Fetchable Shares, Prebuilt Env Fix & Deferrals)
 * **Risk History:** Previously suffered from AI-generated spaghetti code and technical debt accumulation
 
 ## How to Use This Gem
