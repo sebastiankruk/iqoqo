@@ -142,11 +142,13 @@ fi
 
 make preview-up DEPLOY_DIR="$DST_LOC" FEDERATION_PAIR="$FEDERATION_PAIR"
 
-# 5. Verify final version
+# 5. Wait for preview backend and observability readiness before running make status
 echo "Waiting for preview backend to become healthy..."
 PREVIEW_READY=0
-for i in $(seq 1 30); do
-    if curl -s -f "http://127.0.0.1:5001/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:8000/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:5002/api/health" > /dev/null 2>&1; then
+for i in $(seq 1 45); do
+    if curl -s -f --max-time 2 "http://127.0.0.1:5001/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:5002/api/health" >/dev/null 2>&1; then
         echo "✅ Preview backend healthy after ${i}s"
         PREVIEW_READY=1
         break
@@ -154,8 +156,31 @@ for i in $(seq 1 30); do
     sleep 1
 done
 if [ "$PREVIEW_READY" -ne 1 ]; then
-    echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
+    echo "💥 ERROR: Preview backend healthcheck timed out after 45s" >&2
+    exit 1
 fi
+
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'openobserve\|otel-collector'; then
+    echo "Waiting for OpenObserve & OTel Collector readiness..."
+    OBS_READY=0
+    for j in $(seq 1 30); do
+        oo_ok=0
+        otel_ok=0
+        curl -s -f --max-time 2 "http://127.0.0.1:5080/healthz" >/dev/null 2>&1 && oo_ok=1
+        curl -s -f --max-time 2 "http://127.0.0.1:8888/metrics" >/dev/null 2>&1 && otel_ok=1
+        if [ "$oo_ok" -eq 1 ] && [ "$otel_ok" -eq 1 ]; then
+            echo "✅ Observability stack ready after ${j}s"
+            OBS_READY=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$OBS_READY" -ne 1 ]; then
+        echo "💥 ERROR: Observability stack readiness timed out after 30s" >&2
+        exit 1
+    fi
+fi
+
 make status preview
 
 # 6. Run automated federation verification if federation pair is active

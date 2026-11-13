@@ -100,7 +100,8 @@
     "libraryOfEverything": "Biblioteka wszystkiego",
     "githubSponsors": "Sponsorzy GitHub",
     "buyMeACoffee": "Kup mi kawę",
-    "rules": "Twoja biblioteka, Twoje zasady."
+    "rules": "Twoja biblioteka, Twoje zasady.",
+    "connectedServer": "Serwer: {host}"
   },
   "Login": {
     "title": "Zaloguj się do iqoqo",
@@ -546,6 +547,10 @@
     },
     "batchMode": {
       "toggleLabel": "Tryb seryjny",
+      "stateOn": "WŁ.",
+      "stateOff": "WYŁ.",
+      "statusOn": "Skanowanie seryjne: WŁ.",
+      "statusOff": "Skanowanie seryjne: WYŁ.",
       "viewQueue": "Zobacz kolejkę skanowania seryjnego",
       "recentScans": "Ostatnie skany ({count})",
       "clearQueue": "Wyczyść kolejkę",

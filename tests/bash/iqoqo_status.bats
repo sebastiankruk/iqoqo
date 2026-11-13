@@ -183,3 +183,91 @@ teardown() {
   [[ "$output" =~ "active: 2, in DB: 2, missing: 1" ]]
 }
 
+@test "env.status-classes covers every key in .env.example with valid class" {
+  run python3 -c '
+example_keys = set()
+with open(".env.example") as f:
+    for line in f:
+        s = line.strip()
+        if s and not s.startswith("#") and "=" in s:
+            example_keys.add(s.split("=", 1)[0].strip())
+
+classes = {}
+with open(".env.status-classes") as f:
+    for line in f:
+        s = line.strip()
+        if s and not s.startswith("#") and "=" in s:
+            k, v = s.split("=", 1)
+            classes[k.strip()] = v.strip()
+
+missing = sorted(example_keys - set(classes))
+invalid = sorted(k for k, v in classes.items() if v not in ("required", "default", "optional"))
+assert not missing, f"Unclassified .env.example keys: {missing}"
+assert not invalid, f"Invalid classes: {invalid}"
+print(f"classified {len(example_keys)} keys")
+'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "classified" ]]
+}
+
+@test "iqoqo-status.sh treats missing defaulted vars as info and missing required vars as warn" {
+  tmp_root="${TEST_TEMP_DIR}/env_class_test"
+  mkdir -p "${tmp_root}/scripts"
+  cp scripts/iqoqo-status.sh "${tmp_root}/scripts/iqoqo-status.sh"
+  printf 'DATABASE_URL=postgresql://u:p@db:5432/app\nAPP_PORT=5000\n' > "${tmp_root}/.env.example"
+  printf 'DATABASE_URL=required\nAPP_PORT=default\n' > "${tmp_root}/.env.status-classes"
+  printf '# empty\n' > "${tmp_root}/.env"
+
+  run env -u IQOQO_AI_MODE ENV_FILE="${tmp_root}/.env" IQOQO_ROOT="${tmp_root}" ENV_STATUS_CLASSES_FILE="${tmp_root}/.env.status-classes" bash "${tmp_root}/scripts/iqoqo-status.sh" dev
+  [[ "$output" =~ "Missing (required)" ]]
+  [[ "$output" =~ "1 variable(s): DATABASE_URL" ]]
+  [[ "$output" =~ "Defaulted" ]]
+  [[ "$output" =~ "1 variable(s) (using code/compose defaults): APP_PORT" ]]
+}
+
+@test "iqoqo-status.sh ignores OTel export errors during grace window and fails on sustained errors" {
+  mock_bin_grace="${TEST_TEMP_DIR}/mock_bin_grace"
+  mkdir -p "${mock_bin_grace}"
+  started_recent=$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat().replace('+00:00', 'Z'))")
+  cat > "${mock_bin_grace}/docker" <<EOF
+#!/bin/bash
+if [[ "\$*" == *"ps --format"* ]]; then
+  echo "iqoqo-otel-collector-1"
+  exit 0
+elif [[ "\$*" == *"inspect -f"* ]]; then
+  echo "${started_recent}"
+  exit 0
+elif [[ "\$*" == *"logs "* ]]; then
+  echo "Exporting failed. Dropping data."
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${mock_bin_grace}/docker"
+
+  run env -u IQOQO_AI_MODE OTEL_EXPORT_GRACE_SECONDS=60 PATH="${mock_bin_grace}:$PATH" bash scripts/iqoqo-status.sh prod
+  [[ "$output" =~ "transient export failure(s) during startup grace" ]]
+
+  mock_bin_sustained="${TEST_TEMP_DIR}/mock_bin_sustained"
+  mkdir -p "${mock_bin_sustained}"
+  started_old=$(python3 -c "from datetime import datetime, timezone, timedelta; print((datetime.now(timezone.utc) - timedelta(seconds=180)).isoformat().replace('+00:00', 'Z'))")
+  cat > "${mock_bin_sustained}/docker" <<EOF
+#!/bin/bash
+if [[ "\$*" == *"ps --format"* ]]; then
+  echo "iqoqo-otel-collector-1"
+  exit 0
+elif [[ "\$*" == *"inspect -f"* ]]; then
+  echo "${started_old}"
+  exit 0
+elif [[ "\$*" == *"logs "* ]]; then
+  echo "Exporting failed. Dropping data."
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${mock_bin_sustained}/docker"
+
+  run env -u IQOQO_AI_MODE OTEL_EXPORT_GRACE_SECONDS=60 PATH="${mock_bin_sustained}:$PATH" bash scripts/iqoqo-status.sh prod
+  [[ "$output" =~ "export failures in last" ]]
+}
+

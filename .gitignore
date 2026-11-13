@@ -26,6 +26,7 @@ backups/*
 .env.*
 !.env.example
 !.env.test
+!.env.status-classes
 
 #npm
 node_modules/

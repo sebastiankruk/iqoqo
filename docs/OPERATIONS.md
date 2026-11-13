@@ -563,6 +563,18 @@ In Next.js 16+, the Edge Runtime is deprecated for middleware and route executio
 
 ---
 
+## Status Check & Environment Classification (`make status`)
+
+`scripts/iqoqo-status.sh` classifies every variable in `.env.example` using `.env.status-classes`:
+
+- **`Missing (required)` (warning):** Core database, security, or auth keys (`DATABASE_URL`, `SECRET_KEY`, `AUTH_SECRET`, `ADMIN_EMAIL`, etc.) that must be configured in `.env` or `InstanceSettings`.
+- **`Defaulted` (info):** Variables that have safe defaults in application code or `docker-compose.yml` (`APP_PORT`, `BACKUP_*`, `S3_*`, `BASE_URL`, `FEDERATION_HEAD_MODE`, etc.).
+- **`Optional` (info):** Feature-specific integrations, OAuth providers, and dev/test flags.
+- **OTel Collector Export:** Transient export errors during the first `OTEL_EXPORT_GRACE_SECONDS` (default `60s`) of collector startup are reported as `info`; sustained failures after the grace window fail the check.
+- **Recent 5xx errors:** `0` passes, `1–10` reports `info` (below warn threshold), and `> 10` reports a warning.
+
+---
+
 ## 📚 Further Reading
 
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries and Linked Data endpoints

@@ -100,7 +100,8 @@
     "libraryOfEverything": "The Library of Everything",
     "githubSponsors": "GitHub Sponsors",
     "buyMeACoffee": "Buy Me a Coffee",
-    "rules": "Your library, your rules."
+    "rules": "Your library, your rules.",
+    "connectedServer": "Server: {host}"
   },
   "Login": {
     "title": "Sign in to iqoqo",
@@ -546,6 +547,10 @@
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
+      "stateOn": "ON",
+      "stateOff": "OFF",
+      "statusOn": "Batch scan: ON",
+      "statusOff": "Batch scan: OFF",
       "viewQueue": "View scanned batch queue",
       "recentScans": "Recent scans ({count})",
       "clearQueue": "Clear queue",
