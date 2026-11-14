@@ -364,8 +364,10 @@ exit 0
         self.assertTrue(all(v in {"required", "default", "optional"} for v in classes.values()))
 
         iqopretest = (self.repo_root / "scripts" / "iqopretest.sh").read_text()
-        self.assertIn("5080/healthz", iqopretest)
-        self.assertIn("8888/metrics", iqopretest)
+        self.assertIn("/healthz", iqopretest)
+        self.assertIn("oo_port", iqopretest)
+        self.assertIn("/v1/traces", iqopretest)
+        self.assertIn("otel_http_port", iqopretest)
         self.assertIn("exit 1", iqopretest)
 
 

@@ -334,10 +334,19 @@ def validate_with_nginx(rendered: str) -> str:
             .replace("/etc/letsencrypt/live/iqoqo.example.com/privkey.pem", str(key))
             .replace("/etc/letsencrypt/live/iqoqo.example.com/chain.pem", str(cert))
         )
-        conf_path.write_text(wrap_as_http_conf(concrete))
+        conf_path.write_text(wrap_as_http_conf(concrete).replace("http {\n", "http {\n    access_log off;\n", 1))
 
         result = subprocess.run(
-            [binary, "-t", "-c", str(conf_path), "-p", str(conf_dir)],
+            [
+                binary,
+                "-t",
+                "-c",
+                str(conf_path),
+                "-p",
+                str(conf_dir),
+                "-g",
+                f"error_log {conf_dir / 'error.log'}; pid {conf_dir / 'nginx.pid'};",
+            ],
             capture_output=True,
             text=True,
             check=False,
