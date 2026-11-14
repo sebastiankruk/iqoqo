@@ -36,7 +36,8 @@ from app.core.ingest import IngestService
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, UserWorkIntent, db
+from app.core.wishlist_service import fulfill_wishlist_intent_for_manifestation, upsert_wishlist_intent_for_manifestation
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
@@ -559,20 +560,11 @@ def _scan_to_wishlist(
     user_id: uuid.UUID | None,
 ) -> tuple[Response, int]:
     """Helper to save intent to wishlist."""
-    work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
-    if not work:
-        return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
-
-    # Check if intent already exists
-    intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=work.id)).scalars().first()
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+    intent = upsert_wishlist_intent_for_manifestation(user_id, manifestation, status=default_progress)
     if not intent:
-        intent = UserWorkIntent(
-            user_id=user_id,
-            work_id=work.id,
-            status=default_progress,
-        )
-        db.session.add(intent)
-        db.session.flush()
+        return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
 
     # For name-based lookups (no barcode), store the hash_id in meta
     if barcode:
@@ -697,6 +689,9 @@ def _scan_to_library(
             updated_meta = dict(manifestation.meta)
             updated_meta["hash_id"] = computed_hash
             manifestation.meta = updated_meta
+
+    if collection_status != "wish_list":
+        fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
 
     db.session.commit()
 

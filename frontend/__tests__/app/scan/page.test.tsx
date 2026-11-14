@@ -311,4 +311,42 @@ describe("ScanPage", () => {
       expect.stringContaining('Network unreachable: "Offline Flea Market Book" queued locally')
     );
   });
+
+  it("initializes wishlist policy from ?policy=wishlist and includes collection_status on manual submit", () => {
+    const mutateMock = vi.fn();
+    vi.mocked(hooks.useAddManualItem).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    } as unknown as ReturnType<typeof hooks.useAddManualItem>);
+
+    const onlineSpy = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { ...originalLocation, search: "?policy=wishlist" },
+    });
+
+    try {
+      render(<ScanPage />);
+      fireEvent.click(screen.getByText(/Cannot find barcode\? Enter Manually/i));
+      fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Wishlist Manual Book" } });
+      fireEvent.change(screen.getByLabelText(/Creator\(s\)/i), { target: { value: "Wishlist Author" } });
+      fireEvent.click(screen.getByText(/Save Manual Entry/i));
+
+      expect(mutateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Title: "Wishlist Manual Book",
+          Authors: ["Wishlist Author"],
+          collection_status: "wish_list",
+        }),
+        expect.any(Object)
+      );
+    } finally {
+      onlineSpy.mockRestore();
+      Object.defineProperty(window, "location", {
+        writable: true,
+        value: originalLocation,
+      });
+    }
+  });
 });

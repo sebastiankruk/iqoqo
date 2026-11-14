@@ -44,7 +44,6 @@ from app.api.schemas import (
     ItemUpdateSchema,
     ReadingSessionCreateSchema,
 )
-from app.core.config_service import is_federation_head_mode
 from app.core.data_manager import invalidate_facets_cache
 from app.core.events import publish_transition_event
 from app.core.export_service import ExportService
@@ -54,6 +53,7 @@ from app.core.limiter import limiter
 from app.core.meta_display import build_display_projection
 from app.core.permissions import PermissionName
 from app.core.tasks import enqueue_fts_reindex
+from app.core.wishlist_service import fulfill_wishlist_intent_for_manifestation, upsert_wishlist_intent_for_manifestation
 from app.db.models import (
     Expression,
     Item,
@@ -64,7 +64,6 @@ from app.db.models import (
     User,
     UserCollection,
     UserCollectionItem,
-    UserWorkIntent,
     Work,
     db,
 )
@@ -1280,6 +1279,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         db.session.flush()
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
+        fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
         db.session.commit()
         # A new item changes this user's facet counts.
         invalidate_facets_cache(user_id)
@@ -1314,26 +1314,23 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Failed to create item"}), 500
 
 
-def _add_wishlist_by_manifestation(user_id: uuid.UUID, manifestation: Manifestation, payload: ItemCreateSchema) -> tuple[Response, int]:
+def _add_wishlist_by_manifestation(
+    user_id: uuid.UUID,
+    manifestation: Manifestation,
+    payload: ItemCreateSchema | ItemManualCreateSchema,
+) -> tuple[Response, int]:
     """Helper to route wishlist creation to UserWorkIntent."""
-    work = manifestation.expression.work if manifestation.expression and manifestation.expression.work else None
-    if not work:
+    intent = upsert_wishlist_intent_for_manifestation(
+        user_id,
+        manifestation,
+        status=payload.status,
+        is_hidden=bool(payload.is_hidden),
+    )
+    if not intent:
         return (
             jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}),
             500,
         )
-
-    from app.db.core import CATEGORY_PROGRESS_STATUSES
-
-    content_type = manifestation.expression.content_type if manifestation.expression else "text"
-    statuses = CATEGORY_PROGRESS_STATUSES.get(content_type, ("want_to_read",))
-    default_progress = payload.status or next((s for s in statuses if s.startswith("want_to_")), statuses[0])
-
-    intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
-    if not intent:
-        intent = UserWorkIntent(user_id=user_id, work_id=work.id, status=default_progress)
-        db.session.add(intent)
-        db.session.flush()
 
     db.session.commit()
     return (
@@ -1424,6 +1421,7 @@ def add_item_by_manifestation(manifestation_id: int) -> Response | tuple[Respons
         link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
+    fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
     db.session.commit()
     invalidate_facets_cache(user_id)
     from app.core.events import publish_transition_event
@@ -1485,29 +1483,21 @@ def add_items_bulk() -> Response | tuple[Response, int]:
     if payload.collection_status == "lent":
         return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
-    manifestations = Manifestation.query.filter(Manifestation.id.in_(payload.manifestation_ids)).all()
+    manifestations = db.session.execute(select(Manifestation).where(Manifestation.id.in_(payload.manifestation_ids))).scalars().all()
     if not manifestations:
         return jsonify({"success": False, "data": None, "error": "No valid manifestations found"}), 404
 
-    if payload.collection_status == "wish_list" and is_federation_head_mode():
+    if payload.collection_status == "wish_list":
         intents = []
         for man in manifestations:
-            work = man.expression.work if man.expression and man.expression.work else None
-            if not work:
-                continue
-            intent = UserWorkIntent.query.filter_by(user_id=user_id, work_id=work.id).first()
-            if not intent:
-                content_type = man.expression.content_type if man.expression else "text"
-                from app.core.taxonomy import CATEGORY_PROGRESS_STATUSES, FORMAT_ALIAS_TO_CATEGORY, MediaCategory
-
-                _fmt_lower = (content_type or "").lower()
-                category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
-                statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
-                status = payload.status or next((s for s in statuses if s.startswith("want_to_")), statuses[0])
-                intent = UserWorkIntent(user_id=user_id, work_id=work.id, status=status)
-                db.session.add(intent)
-                db.session.flush()
-            intents.append(intent)
+            intent = upsert_wishlist_intent_for_manifestation(
+                user_id,
+                man,
+                status=payload.status,
+                is_hidden=bool(payload.is_hidden),
+            )
+            if intent is not None:
+                intents.append(intent)
         db.session.commit()
         return jsonify(
             {
@@ -1530,10 +1520,7 @@ def add_items_bulk() -> Response | tuple[Response, int]:
             _fmt_lower = (content_type or "").lower()
             category = _fmt_lower if _fmt_lower in MediaCategory.ALL else FORMAT_ALIAS_TO_CATEGORY.get(_fmt_lower, MediaCategory.TEXT)
             statuses = CATEGORY_PROGRESS_STATUSES.get(category, ("want_to_read",))
-            if payload.collection_status == "wish_list":
-                status = next((s for s in statuses if s.startswith("want_to_")), statuses[0])
-            else:
-                status = statuses[0]
+            status = statuses[0]
 
         item = Item(
             manifestation_id=man.id,
@@ -1551,6 +1538,8 @@ def add_items_bulk() -> Response | tuple[Response, int]:
         db.session.flush()
         for item in created_items:
             log_initial_item_status(item.id, user_id, item.status, item.collection_status)
+        for man in manifestations:
+            fulfill_wishlist_intent_for_manifestation(user_id, man)
         db.session.commit()
         invalidate_facets_cache(user_id)
         return jsonify(
@@ -1571,10 +1560,6 @@ def add_items_bulk() -> Response | tuple[Response, int]:
 @require_permission(PermissionName.WRITE_ITEM)
 def add_item_manual() -> Response | tuple[Response, int]:
     """Add a new item manually when ISBN is not available. Expects JSON with Title, Authors, Format."""
-    guard_err = reject_if_federation_head_item_write()
-    if guard_err:
-        return guard_err
-
     user_id = getattr(g, "user_id", None)
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
@@ -1587,6 +1572,11 @@ def add_item_manual() -> Response | tuple[Response, int]:
         payload = ItemManualCreateSchema(**data)
     except (ValidationError, TypeError) as e:
         return jsonify({"error": f"Invalid payload: {str(e)}", "code": 400}), 400
+
+    if payload.collection_status != "wish_list":
+        guard_err = reject_if_federation_head_item_write()
+        if guard_err:
+            return guard_err
 
     title = payload.Title
     authors = payload.Authors
@@ -1647,6 +1637,9 @@ def add_item_manual() -> Response | tuple[Response, int]:
             db.session.add(manifestation)
             db.session.flush()
 
+        if payload.collection_status == "wish_list":
+            return _add_wishlist_by_manifestation(user_id, manifestation, payload)
+
         if payload.collection_status == "lent":
             lent_to_name = payload.lent_to_name
             if not payload.lent_to_user_id and not (lent_to_name and lent_to_name.strip()):
@@ -1671,6 +1664,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         db.session.flush()
         log_initial_item_status(item.id, user_id, item.status, item.collection_status)
         sync_tags(item.id, user_id, payload.tags)
+        fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
         db.session.commit()
         invalidate_facets_cache(user_id)
 
@@ -1760,6 +1754,7 @@ def create_item() -> Response | tuple[Response, int]:
         link = UserCollectionItem(collection_id=payload.collection_id, item_id=item.id)
         db.session.add(link)
     sync_tags(item.id, user_id, payload.tags)
+    fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
     db.session.commit()
     invalidate_facets_cache(user_id)
     from app.core.events import publish_transition_event

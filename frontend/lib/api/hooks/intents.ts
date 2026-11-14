@@ -48,6 +48,7 @@ export function useSetWorkIntent() {
     onSuccess: (_, variables) => {
       void qc.invalidateQueries({ queryKey: queryKeys.workIntent(variables.workId) });
       void qc.invalidateQueries({ queryKey: queryKeys.stats() });
+      void qc.invalidateQueries({ queryKey: ["wishlist"] });
       void qc.invalidateQueries({ queryKey: queryKeys.itemsAll });
       void qc.invalidateQueries({ queryKey: queryKeys.worksShelfAll });
       void qc.invalidateQueries({ queryKey: queryKeys.expressionsShelfAll });
@@ -69,6 +70,7 @@ export function useDeleteWorkIntent() {
     onSuccess: (_, workId) => {
       void qc.invalidateQueries({ queryKey: queryKeys.workIntent(workId) });
       void qc.invalidateQueries({ queryKey: queryKeys.stats() });
+      void qc.invalidateQueries({ queryKey: ["wishlist"] });
       void qc.invalidateQueries({ queryKey: queryKeys.itemsAll });
       void qc.invalidateQueries({ queryKey: queryKeys.worksShelfAll });
       void qc.invalidateQueries({ queryKey: queryKeys.expressionsShelfAll });

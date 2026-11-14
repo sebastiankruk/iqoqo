@@ -18,14 +18,30 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Disc, Film, Gamepad2, Layers, Loader2, Music, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  BookmarkCheck,
+  BookmarkPlus,
+  BookOpen,
+  Disc,
+  Film,
+  Gamepad2,
+  Layers,
+  Loader2,
+  Music,
+  Sparkles,
+} from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveSchemaType } from "@/lib/schema-org";
 import { getCoverUrl } from "@/lib/utils";
-import { useWork } from "@/lib/api/hooks";
+import { useProfile, useWork } from "@/lib/api/hooks";
+import { useCreateWishlistItem, useDeleteWishlistItem, useWishlist, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import type { WorkDetail, WorkDetailManifestation } from "@/types/frbr";
 
@@ -83,10 +99,41 @@ function getFormatIcon(format?: string | null, contentType?: string | null) {
  */
 export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const tWishlist = useTranslations("Wishlist");
   const routeId = useResolvedRouteParam("id");
   const effectiveId = workId && !isNaN(workId) && workId > 0 ? workId : routeId ? parseInt(routeId, 10) : 0;
   const { data: clientWork, isLoading } = useWork(effectiveId, initialWork);
   const work = clientWork ?? initialWork;
+  const { data: profile } = useProfile();
+  const { data: wishlistData } = useWishlist({ limit: 100 }, Boolean(profile && effectiveId > 0));
+  const createWishlistMutation = useCreateWishlistItem();
+  const deleteWishlistMutation = useDeleteWishlistItem();
+  const existingWishlistEntry = (wishlistData?.data ?? []).find(entry => entry.work_id === work?.id);
+  const isWishlistMutating = createWishlistMutation.isPending || deleteWishlistMutation.isPending;
+
+  const handleToggleWishlist = async () => {
+    if (!work?.id) return;
+    try {
+      if (existingWishlistEntry) {
+        await deleteWishlistMutation.mutateAsync(existingWishlistEntry.id);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
+          queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+        ]);
+        toast.success(tWishlist("removedFromWishlist"));
+      } else {
+        await createWishlistMutation.mutateAsync({ work_id: work.id });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
+          queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+        ]);
+        toast.success(tWishlist("addedToWishlist"));
+      }
+    } catch {
+      toast.error(existingWishlistEntry ? tWishlist("removeFromWishlistFailed") : "Failed to add to wishlist");
+    }
+  };
 
   if (isLoading || !work || !work.id) {
     return (
@@ -169,17 +216,38 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
 
               {/* Work Metadata Header */}
               <div className="flex flex-1 flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="secondary"
-                    className="gap-1.5 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    Conceptual Work
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {allManifestations.length} {allManifestations.length === 1 ? "edition" : "editions"}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className="gap-1.5 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Conceptual Work
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {allManifestations.length} {allManifestations.length === 1 ? "edition" : "editions"}
+                    </span>
+                  </div>
+                  {profile && (
+                    <Button
+                      type="button"
+                      variant={existingWishlistEntry ? "secondary" : "outline"}
+                      size="sm"
+                      disabled={isWishlistMutating}
+                      onClick={handleToggleWishlist}
+                      className="gap-1.5"
+                    >
+                      {isWishlistMutating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : existingWishlistEntry ? (
+                        <BookmarkCheck className="h-4 w-4 text-primary" />
+                      ) : (
+                        <BookmarkPlus className="h-4 w-4" />
+                      )}
+                      <span>{existingWishlistEntry ? tWishlist("onWishlistRemove") : tWishlist("addToWishlist")}</span>
+                    </Button>
+                  )}
                 </div>
 
                 <h1

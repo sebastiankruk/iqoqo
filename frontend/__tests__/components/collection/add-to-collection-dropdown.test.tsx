@@ -26,6 +26,7 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: {
     get: vi.fn(),
     post: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -129,7 +130,7 @@ describe("AddToCollectionDropdown", () => {
     });
   });
 
-  it("renders 'View Wishlist Item' when wishlistItemId is present", async () => {
+  it("renders 'View Wishlist' and 'Remove from Wishlist' when wishlistItemId is present", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: { success: true, collections: [] },
     });
@@ -138,11 +139,32 @@ describe("AddToCollectionDropdown", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
 
-    const viewWishlistBtn = screen.getByText("View Wishlist Item");
+    const viewWishlistBtn = screen.getByText("View Wishlist");
     expect(viewWishlistBtn).toBeInTheDocument();
 
     fireEvent.click(viewWishlistBtn);
 
-    expect(mockPush).toHaveBeenCalledWith("/item/789");
+    expect(mockPush).toHaveBeenCalledWith("/wishlist");
+  });
+
+  it("calls DELETE /api/wishlist/<id> when 'Remove from Wishlist' is clicked", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { success: true, collections: [] },
+    });
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({
+      data: { success: true, data: { id: 789 } },
+    });
+
+    renderComponent({ manifestationId: 123, wishlistItemId: 789 });
+
+    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
+
+    const removeBtn = screen.getByText("Remove from Wishlist");
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(apiClient.delete).toHaveBeenCalledWith("/wishlist/789");
+      expect(toast.success).toHaveBeenCalledWith("Removed from wishlist");
+    });
   });
 });

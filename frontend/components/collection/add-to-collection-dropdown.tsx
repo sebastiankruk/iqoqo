@@ -16,7 +16,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
+import { BookOpen, ChevronDown, HeartOff, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useUserCollections } from "@/lib/api/hooks";
@@ -44,6 +44,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
   const qc = useQueryClient();
   const router = useRouter();
   const { data: collections, isLoading: collectionsLoading } = useUserCollections();
+  const resolvedWishlistId = wishlistItemId ? Math.abs(wishlistItemId) : null;
 
   useEffect(() => {
     /**
@@ -82,6 +83,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
@@ -95,6 +97,25 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     },
     onError: (err: Error) => {
       toast.error(err.message ?? "Failed to add to collection");
+    },
+  });
+
+  const removeWishlistMutation = useMutation({
+    mutationFn: async (intentId: number) => {
+      await apiClient.delete(`/wishlist/${intentId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
+      qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
+      toast.success("Removed from wishlist");
+      setIsOpen(false);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? "Failed to remove from wishlist");
     },
   });
 
@@ -128,14 +149,29 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
         <div className="absolute left-0 top-full mt-2 min-w-56 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-50">
           {/* Wishlist option */}
           <div className="border-b border-border/50">
-            {wishlistItemId ? (
-              <button
-                onClick={() => router.push(`/item/${wishlistItemId}`)}
-                className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
-              >
-                <Eye className="h-4 w-4 shrink-0 text-primary" />
-                <span>View Wishlist Item</span>
-              </button>
+            {resolvedWishlistId ? (
+              <div className="divide-y divide-border/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push("/wishlist");
+                  }}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
+                >
+                  <Eye className="h-4 w-4 shrink-0 text-primary" />
+                  <span>View Wishlist</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeWishlistMutation.mutate(resolvedWishlistId)}
+                  disabled={removeWishlistMutation.isPending}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/5 transition-colors disabled:opacity-50"
+                >
+                  <HeartOff className="h-4 w-4 shrink-0" />
+                  <span>Remove from Wishlist</span>
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => addMutation.mutate({ collectionId: null, collectionStatus: "wish_list" })}

@@ -290,7 +290,7 @@ def test_bulk_add_items_success(client, items_for_quality_filters, app):
         man_ids = [m.id for m in manifestations]
 
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {"manifestation_ids": man_ids, "status": "want_to_read", "collection_status": "wish_list"}
+    payload = {"manifestation_ids": man_ids, "status": "reading", "collection_status": "available"}
 
     response = client.post("/api/items/bulk", json=payload, headers=headers)
 
@@ -303,8 +303,8 @@ def test_bulk_add_items_success(client, items_for_quality_filters, app):
     with app.app_context():
         created_items = db.session.query(Item).filter(Item.id.in_(data["data"]["item_ids"])).all()
         assert len(created_items) == 2
-        assert all(i.status == "want_to_read" for i in created_items)
-        assert all(i.collection_status == "wish_list" for i in created_items)
+        assert all(i.status == "reading" for i in created_items)
+        assert all(i.collection_status == "available" for i in created_items)
 
 
 def test_bulk_add_items_invalid_payload(client, items_for_quality_filters, app):

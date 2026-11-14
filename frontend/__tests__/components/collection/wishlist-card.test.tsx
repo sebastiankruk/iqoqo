@@ -23,14 +23,23 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WishlistItem } from "@/types/frbr";
 import { WishlistCard } from "@/components/collection/wishlist-card";
+import { apiClient } from "@/lib/api/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn().mockReturnValue("/"),
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
   }),
+}));
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    get: vi.fn().mockResolvedValue({ data: { federation_head_mode: false } }),
+    post: vi.fn(),
+  },
 }));
 
 const mockDeleteMutateAsync = vi.fn();
@@ -182,10 +191,35 @@ describe("WishlistCard", () => {
       expect(link).toHaveAttribute("href", "/manifestation/300");
     });
 
-    it("links to /wishlist when manifestation_id is missing", () => {
-      renderWithQuery(<WishlistCard item={makeWishlistItem({ manifestation_id: null })} variant="horizontal" />);
+    it("links to work detail page when manifestation_id is missing", () => {
+      renderWithQuery(
+        <WishlistCard item={makeWishlistItem({ manifestation_id: null, work_id: 100 })} variant="horizontal" />
+      );
+      const link = screen.getByRole("link");
+      expect(link).toHaveAttribute("href", "/work/100");
+    });
+
+    it("links to /wishlist when both manifestation_id and work_id are missing", () => {
+      renderWithQuery(
+        <WishlistCard
+          item={makeWishlistItem({ manifestation_id: null, work_id: undefined as unknown as number })}
+          variant="horizontal"
+        />
+      );
       const link = screen.getByRole("link");
       expect(link).toHaveAttribute("href", "/wishlist");
+    });
+
+    it("triggers remove action on horizontal variant", async () => {
+      mockDeleteMutateAsync.mockResolvedValueOnce({ id: 10 });
+      renderWithQuery(<WishlistCard item={makeWishlistItem({ id: 10 })} variant="horizontal" />);
+      const removeBtn = screen.getByRole("button", { name: /remove from wishlist/i });
+      fireEvent.click(removeBtn);
+
+      await waitFor(() => {
+        expect(mockDeleteMutateAsync).toHaveBeenCalledWith(10);
+        expect(toast.success).toHaveBeenCalledWith("Removed from wishlist");
+      });
     });
 
     it("displays title and author", () => {
@@ -242,6 +276,29 @@ describe("WishlistCard", () => {
         expect(mockDeleteMutateAsync).toHaveBeenCalledWith(10);
         expect(toast.success).toHaveBeenCalledWith("Removed from wishlist");
       });
+    });
+
+    it("moves edition-bound wishlist item to library", async () => {
+      vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { success: true } });
+      renderWithQuery(<WishlistCard item={makeWishlistItem({ id: 10, manifestation_id: 300 })} variant="grid" />);
+      const moveBtn = screen.getByRole("button", { name: /move to library/i });
+      fireEvent.click(moveBtn);
+
+      await waitFor(() => {
+        expect(apiClient.post).toHaveBeenCalledWith("/manifestations/300/add", {
+          collection_status: "available",
+        });
+        expect(toast.success).toHaveBeenCalledWith('Moved "The Hobbit" to your library!');
+      });
+    });
+
+    it("routes work-only wishlist item to work detail when moving to library", () => {
+      renderWithQuery(
+        <WishlistCard item={makeWishlistItem({ id: 11, work_id: 100, manifestation_id: null })} variant="grid" />
+      );
+      const moveBtn = screen.getByRole("button", { name: /move to library/i });
+      fireEvent.click(moveBtn);
+      expect(mockPush).toHaveBeenCalledWith("/work/100");
     });
   });
 });

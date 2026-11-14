@@ -368,7 +368,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
             intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=m.expression.work.id)).scalars().first()
             if intent:
-                wishlist_item_id = -intent.id
+                wishlist_item_id = intent.id
 
     owner_count = (
         db.session.execute(

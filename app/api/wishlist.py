@@ -29,6 +29,7 @@ from typing import Any
 
 from flask import Blueprint, Response, g, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.api.core import invalid_json_payload_response
@@ -268,6 +269,8 @@ def get_wishlist() -> Response | tuple[Response, int]:
     statuses_filter = request.args.get("statuses", request.args.get("status", None))
     work_type_filter = request.args.get("work_type", None)
     medium_type_filter = request.args.get("medium_type", None)
+    category_filter = request.args.get("category", None)
+    sort_by = request.args.get("sort", "updated")
     q = request.args.get("q", request.args.get("search", "")).strip()
 
     try:
@@ -294,7 +297,7 @@ def get_wishlist() -> Response | tuple[Response, int]:
 
     if statuses_filter:
         statuses_list = parse_csv_param(statuses_filter) or []
-        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play", "want_to_build"}
         intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
         if intent_statuses:
             query = query.filter(UserWorkIntent.status.in_(intent_statuses))
@@ -305,6 +308,7 @@ def get_wishlist() -> Response | tuple[Response, int]:
     else:
         query = query.filter(UserWorkIntent.status != "fulfilled")
 
+    joined_work = False
     if q:
         escaped_q = q.strip().lower().replace("%", r"\%").replace("_", r"\_")
         pattern = f"%{escaped_q}%"
@@ -314,16 +318,36 @@ def get_wishlist() -> Response | tuple[Response, int]:
                 db.cast(Work.meta["authors"], db.String).ilike(pattern, escape="\\"),
             )
         )
+        joined_work = True
 
-    if not (work_type_filter or medium_type_filter):
+    if sort_by in ("title", "title-desc") and not joined_work:
+        query = query.join(Work, UserWorkIntent.work_id == Work.id)
+
+    if sort_by == "title":
+        order_clauses: tuple[Any, ...] = (func.lower(Work.title).asc(), UserWorkIntent.id.desc())
+    elif sort_by == "title-desc":
+        order_clauses = (func.lower(Work.title).desc(), UserWorkIntent.id.desc())
+    elif sort_by == "added":
+        order_clauses = (UserWorkIntent.created_at.desc(), UserWorkIntent.id.desc())
+    else:
+        order_clauses = (UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc())
+
+    category_list = parse_csv_param(category_filter)
+    normalized_categories: set[str] | None = None
+    if category_list:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        normalized_categories = {FORMAT_ALIAS_TO_CATEGORY.get(c.strip().lower(), c.strip().lower()) for c in category_list if c.strip()}
+
+    if not (work_type_filter or medium_type_filter or normalized_categories):
         total = query.order_by(None).count()  # pylint: disable=not-callable
-        paginated_intents = (
-            query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).limit(limit).offset(offset).all()
-        )
+        paginated_intents = query.order_by(*order_clauses).limit(limit).offset(offset).all()
         paginated = [_serialize_intent(intent, user_id) for intent in paginated_intents]
     else:
-        # Pre-filter for work_type and medium_type (applied post-serialization)
-        all_intents = query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).all()
+        # Pre-filter for work_type, medium_type, and category (applied post-serialization)
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        all_intents = query.order_by(*order_clauses).all()
         data = []
         for intent in all_intents:
             serialized = _serialize_intent(intent, user_id)
@@ -331,6 +355,11 @@ def get_wishlist() -> Response | tuple[Response, int]:
                 continue
             if medium_type_filter and serialized.get("medium_type") != medium_type_filter:
                 continue
+            if normalized_categories:
+                raw_cat = (serialized.get("content_type") or "").strip().lower()
+                resolved_cat = FORMAT_ALIAS_TO_CATEGORY.get(raw_cat, raw_cat)
+                if resolved_cat not in normalized_categories and raw_cat not in normalized_categories:
+                    continue
             data.append(serialized)
         total = len(data)
         paginated = data[offset : offset + limit]

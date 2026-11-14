@@ -795,6 +795,7 @@ export function useAddItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
       qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
@@ -825,6 +826,7 @@ type ManualItemPayload = {
   PublicationDate?: string;
   Publisher?: string;
   Description?: string;
+  collection_status?: string;
   tags?: string[];
   genres?: string[];
 };
@@ -832,21 +834,28 @@ type ManualItemPayload = {
 /**
  * Custom hook to add a new item manually when ISBN is not available.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
  */
 export function useAddManualItem() {
   const qc = useQueryClient();
-  return useMutation<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>({
+  return useMutation<
+    ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>,
+    Error,
+    ManualItemPayload
+  >({
     mutationFn: async (metadata: ManualItemPayload) => {
-      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
-        "/items/manual",
-        metadata
-      );
+      const res = await apiClient.post<
+        ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>
+      >("/items/manual", metadata);
       return res.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
+      qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
   });
 }
