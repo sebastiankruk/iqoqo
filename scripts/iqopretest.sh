@@ -142,11 +142,13 @@ fi
 
 make preview-up DEPLOY_DIR="$DST_LOC" FEDERATION_PAIR="$FEDERATION_PAIR"
 
-# 5. Verify final version
+# 5. Wait for preview backend and observability readiness before running make status
 echo "Waiting for preview backend to become healthy..."
 PREVIEW_READY=0
-for i in $(seq 1 30); do
-    if curl -s -f "http://127.0.0.1:5001/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:8000/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:5002/api/health" > /dev/null 2>&1; then
+for i in $(seq 1 45); do
+    if curl -s -f --max-time 2 "http://127.0.0.1:5001/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:5002/api/health" >/dev/null 2>&1; then
         echo "✅ Preview backend healthy after ${i}s"
         PREVIEW_READY=1
         break
@@ -154,8 +156,100 @@ for i in $(seq 1 30); do
     sleep 1
 done
 if [ "$PREVIEW_READY" -ne 1 ]; then
-    echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
+    echo "💥 ERROR: Preview backend healthcheck timed out after 45s" >&2
+    exit 1
 fi
+
+running_obs=$(docker ps --format '{{.Names}}' 2>/dev/null || true)
+has_oo=0
+has_otel=0
+echo "$running_obs" | grep -q 'openobserve' && has_oo=1
+echo "$running_obs" | grep -q 'otel-collector' && has_otel=1
+
+if [ "$has_oo" -eq 1 ] || [ "$has_otel" -eq 1 ]; then
+    echo "Waiting for OpenObserve & OTel Collector readiness..."
+    oo_port="${OPENOBSERVE_HOST_PORT:-5080}"
+    otel_http_port="${OTEL_HTTP_HOST_PORT:-4318}"
+    if [ -f "$DST_LOC/.env" ]; then
+        env_oo_port=$(grep -E '^OPENOBSERVE_HOST_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        env_otel_port=$(grep -E '^OTEL_HTTP_HOST_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$env_oo_port" ] && oo_port="$env_oo_port"
+        [ -n "$env_otel_port" ] && otel_http_port="$env_otel_port"
+    fi
+    OBS_READY=0
+    for j in $(seq 1 30); do
+        oo_ok=1
+        otel_ok=1
+        if [ "$has_oo" -eq 1 ]; then
+            oo_ok=0
+            curl -s -f --max-time 2 "http://127.0.0.1:${oo_port}/healthz" >/dev/null 2>&1 && oo_ok=1
+        fi
+        if [ "$has_otel" -eq 1 ]; then
+            otel_ok=0
+            otel_code=$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${otel_http_port}/v1/traces" 2>/dev/null || echo "000")
+            case "$otel_code" in
+                200|204|405) otel_ok=1 ;;
+            esac
+        fi
+        if [ "$oo_ok" -eq 1 ] && [ "$otel_ok" -eq 1 ]; then
+            echo "✅ Observability stack ready after ${j}s"
+            OBS_READY=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$OBS_READY" -ne 1 ]; then
+        echo "💥 ERROR: Observability stack readiness timed out after 30s (oo_ok=${oo_ok}, otel_ok=${otel_ok})" >&2
+        exit 1
+    fi
+
+    if [ "$has_oo" -eq 1 ] && [ -f "$DST_LOC/.env" ]; then
+        oo_auth=$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        if [ -n "$oo_auth" ]; then
+            oo_auth_code=$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' -H "Authorization: Basic ${oo_auth}" "http://127.0.0.1:${oo_port}/api/default/streams" 2>/dev/null || echo "000")
+            if [ "$oo_auth_code" = "401" ]; then
+                echo "🔑 OpenObserve auth mismatch (HTTP 401); resetting OpenObserve auth state from $DST_LOC/.env..."
+                MODE=preview DEPLOY_DIR="$DST_LOC" make monitoring-reset-auth
+            fi
+        fi
+    fi
+fi
+
+# Reconcile cloned InstanceSettings rows encrypted with source SECRET_KEY
+if [ -f "$DST_LOC/.env" ] && [ -f "$DST_LOC/docker-compose.prebuilt.yml" ]; then
+    echo "🔐 Reconciling encrypted InstanceSettings with preview SECRET_KEY..."
+    COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory "$DST_LOC" --env-file "$DST_LOC/.env" -f "$DST_LOC/docker-compose.prebuilt.yml" exec -T web python3 -c "
+import os
+from cryptography.fernet import InvalidToken
+from app import create_app
+from app.db import db
+from app.db.models import InstanceSettings
+from app.db.settings import _get_fernet_cipher, encrypt_setting_value
+
+app = create_app()
+reencrypted = 0
+cleared = 0
+with app.app_context():
+    cipher = _get_fernet_cipher()
+    rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
+    for row in rows:
+        if isinstance(row.value, dict) and row.value.get('_encrypted') is True and isinstance(row.value.get('ciphertext'), str):
+            try:
+                cipher.decrypt(row.value['ciphertext'].encode('utf-8'))
+            except InvalidToken:
+                env_val = os.environ.get(row.key)
+                if env_val:
+                    row.value = encrypt_setting_value(row.key, env_val)
+                    reencrypted += 1
+                else:
+                    db.session.delete(row)
+                    cleared += 1
+    if reencrypted or cleared:
+        db.session.commit()
+print(f'✅ Encrypted settings reconciled (re-encrypted: {reencrypted}, cleared stale: {cleared})')
+"
+fi
+
 make status preview
 
 # 6. Run automated federation verification if federation pair is active

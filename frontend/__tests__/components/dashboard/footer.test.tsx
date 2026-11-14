@@ -18,8 +18,13 @@ import { describe, it, expect, vi } from "vitest";
 import { Footer } from "@/components/dashboard/footer";
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, params?: { host?: string }) =>
+    key === "connectedServer" && params?.host ? `Server: ${params.host}` : key,
   useLocale: () => "en",
+}));
+
+vi.mock("@/lib/capacitor/storage", () => ({
+  getSyncInstanceUrl: () => "https://library.example.org",
 }));
 
 describe("Footer", () => {
@@ -31,5 +36,14 @@ describe("Footer", () => {
 
     const librariesLink = screen.getByRole("link", { name: "Libraries" });
     expect(librariesLink).toHaveAttribute("href", "/federation/directory");
+  });
+
+  it("renders connected server host with truncation and tooltip", () => {
+    render(<Footer />);
+
+    const serverBadge = screen.getByTestId("footer-connected-server");
+    expect(serverBadge).toHaveTextContent("Server: library.example.org");
+    expect(serverBadge).toHaveAttribute("title", "Server: library.example.org");
+    expect(serverBadge).toHaveClass("truncate");
   });
 });

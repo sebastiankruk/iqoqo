@@ -480,11 +480,48 @@ if [[ -n "$otel_cname" ]]; then
     fi
     check "OTel Collector" pass "ready (:8888) [${otel_status}]"
 
-    recent_export_errors=$(docker logs "$otel_cname" --since 5m 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
-    if [[ "$recent_export_errors" -gt 0 ]]; then
-        check "OTel Collector Export" fail "${recent_export_errors} export failures in last 5m (dropped telemetry — check collector logs)"
+    OTEL_EXPORT_GRACE_SECONDS="${OTEL_EXPORT_GRACE_SECONDS:-60}"
+    otel_started_at=$(docker inspect -f '{{.State.StartedAt}}' "$otel_cname" 2>/dev/null || echo "")
+    otel_uptime=$(python3 -c "
+import sys
+from datetime import datetime, timezone
+raw = sys.argv[1].strip()
+if not raw:
+    print(-1)
+    sys.exit(0)
+try:
+    if raw.endswith('Z'):
+        raw = raw[:-1] + '+00:00'
+    if '.' in raw:
+        head, tail = raw.split('.', 1)
+        tz_idx = next((i for i, ch in enumerate(tail) if ch in '+-'), len(tail))
+        frac = tail[:tz_idx][:6]
+        raw = f'{head}.{frac}{tail[tz_idx:]}'
+    started = datetime.fromisoformat(raw)
+    print(max(0, int((datetime.now(timezone.utc) - started).total_seconds())))
+except Exception:
+    print(-1)
+" "$otel_started_at" 2>/dev/null || echo "-1")
+
+    if [[ "$otel_uptime" -ge 0 && "$otel_uptime" -le "$OTEL_EXPORT_GRACE_SECONDS" ]]; then
+        grace_export_errors=$(docker logs "$otel_cname" --since 5m 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
+        if [[ "$grace_export_errors" -gt 0 ]]; then
+            check "OTel Collector Export" info "${grace_export_errors} transient export failure(s) during startup grace (${otel_uptime}s/${OTEL_EXPORT_GRACE_SECONDS}s)"
+        else
+            check "OTel Collector Export" pass "clean (0 export errors in last 5m)"
+        fi
     else
-        check "OTel Collector Export" pass "clean (0 export errors in last 5m)"
+        since_arg="5m"
+        if [[ "$otel_uptime" -gt "$OTEL_EXPORT_GRACE_SECONDS" ]]; then
+            post_grace=$((otel_uptime - OTEL_EXPORT_GRACE_SECONDS))
+            [[ "$post_grace" -lt 300 ]] && since_arg="${post_grace}s"
+        fi
+        recent_export_errors=$(docker logs "$otel_cname" --since "$since_arg" 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
+        if [[ "$recent_export_errors" -gt 0 ]]; then
+            check "OTel Collector Export" fail "${recent_export_errors} export failures in last ${since_arg} (dropped telemetry — check collector logs)"
+        else
+            check "OTel Collector Export" pass "clean (0 export errors in last ${since_arg})"
+        fi
     fi
 else
     check "OTel Collector" info "not running (optional default stack)"
@@ -800,9 +837,11 @@ else
 
         recent_5xx=$(docker logs "$nginx_cname" --since 15m 2>&1 | grep -c '" 5[0-9][0-9] ' || true)
         if [[ "$recent_5xx" -gt 10 ]]; then
-            check "Recent 5xx errors" warn "${recent_5xx} in last 15min"
+            check "Recent 5xx errors" warn "${recent_5xx} in last 15min (threshold >10)"
+        elif [[ "$recent_5xx" -gt 0 ]]; then
+            check "Recent 5xx errors" info "${recent_5xx} in last 15min (below warn threshold 10)"
         else
-            check "Recent 5xx errors" pass "${recent_5xx} in last 15min"
+            check "Recent 5xx errors" pass "0 in last 15min"
         fi
     else
         check "Container" fail "not running"
@@ -1229,13 +1268,26 @@ else
     declare -A example_defaults
 fi
 
+CLASSES_FILE="${ENV_STATUS_CLASSES_FILE:-$IQOQO_ROOT/.env.status-classes}"
+declare -A env_classes
+if [[ -f "$CLASSES_FILE" ]]; then
+    while IFS='=' read -r ckey cval; do
+        [[ -z "$ckey" || "$ckey" == \#* ]] && continue
+        ckey=$(echo "$ckey" | tr -d '[:space:]')
+        cval=$(echo "$cval" | sed 's/[[:space:]]*#.*$//' | tr -d '[:space:]')
+        [[ -n "$ckey" && -n "$cval" ]] && env_classes["$ckey"]="$cval"
+    done < "$CLASSES_FILE"
+fi
+
 total_expected=${#expected_keys[@]}
 missing_warn=0
+missing_default=0
 missing_info=0
 empty_count=0
 active_count=0
 db_active_count=0
 missing_warn_vars=()
+missing_default_vars=()
 missing_info_vars=()
 empty_vars=()
 
@@ -1252,13 +1304,28 @@ for key in "${expected_keys[@]}"; do
         empty_count=$((empty_count + 1))
         empty_vars+=("$key")
     else
-        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
-            missing_info=$((missing_info + 1))
-            missing_info_vars+=("$key")
-        else
-            missing_warn=$((missing_warn + 1))
-            missing_warn_vars+=("$key")
+        key_class="${env_classes[$key]:-}"
+        if [[ -z "$key_class" ]]; then
+            if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
+                key_class="optional"
+            else
+                key_class="required"
+            fi
         fi
+        case "$key_class" in
+            required)
+                missing_warn=$((missing_warn + 1))
+                missing_warn_vars+=("$key")
+                ;;
+            default)
+                missing_default=$((missing_default + 1))
+                missing_default_vars+=("$key")
+                ;;
+            *)
+                missing_info=$((missing_info + 1))
+                missing_info_vars+=("$key")
+                ;;
+        esac
     fi
 done
 
@@ -1269,7 +1336,11 @@ else
 fi
 
 if [[ "$missing_warn" -gt 0 ]]; then
-    check "Missing" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
+    check "Missing (required)" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
+fi
+
+if [[ "$missing_default" -gt 0 ]]; then
+    check "Defaulted" info "${missing_default} variable(s) (using code/compose defaults): ${missing_default_vars[*]}"
 fi
 
 if [[ "$missing_info" -gt 0 ]]; then

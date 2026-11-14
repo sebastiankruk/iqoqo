@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `_emit_audio_rdf_triples()` in `app/core/frbr_service.py` to emit `schema:MusicAlbum` / `schema:MusicRelease`, `musicReleaseFormat`, `recordLabel`, `catalogNumber`, `gtin13`, `datePublished`, `countryOfOrigin`, `iqoqo:matrixRunout`, and Discogs/MusicBrainz `owl:sameAs` links.
   - Enriched `GET /api/public/share/<token>` and added `GET /api/public/rdf/share/<token>` with `?format=jsonld|turtle|rdfxml` and `?limit=` (up to `2000`).
   - Embedded full SSR JSON-LD pressing metadata on `/share/[token]` (up to 1,000 items), added a `JSON-LD / AI Feed` link next to RSS, and fixed top-level `format` resolution in `ItemCard` so audio items render their true format badge instead of falling back to `"Book"`.
+- **Connected Server Footer, Batch-Scan Indicator & Status Hygiene (C120)**:
+  - Displayed the connected server host in the shared `Footer` with small-screen truncation and tooltip (`en.json` / `pl.json`).
+  - Added an explicit `ON`/`OFF` state badge and `aria-live="polite"` status announcement to `BatchScanToggle` on `/scan` (default `OFF`).
+  - Added `.env.status-classes` classifying every `.env.example` key (`required` / `default` / `optional`), updated `scripts/iqoqo-status.sh` to warn only on missing `required` keys, apply a startup grace window (`OTEL_EXPORT_GRACE_SECONDS`) to OTel Collector export checks, and align `Recent 5xx errors` status with its threshold.
+  - Brought `scripts/iqopretest.sh` under version control with bounded readiness waits for the preview backend, OpenObserve, and OTel Collector before `make status preview`.
 
 ### Changed
 

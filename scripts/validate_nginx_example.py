@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -334,7 +335,12 @@ def validate_with_nginx(rendered: str) -> str:
             .replace("/etc/letsencrypt/live/iqoqo.example.com/privkey.pem", str(key))
             .replace("/etc/letsencrypt/live/iqoqo.example.com/chain.pem", str(cert))
         )
-        conf_path.write_text(wrap_as_http_conf(concrete))
+        # Non-root `nginx -t` still attempts bind() on privileged ports (80/443).
+        # Remap to unprivileged ports on the throwaway copy so syntax & TLS are still validated.
+        if os.geteuid() != 0:
+            concrete = re.sub(r"\blisten\s+(\[::\]:)?80\b", r"listen \g<1>18080", concrete)
+            concrete = re.sub(r"\blisten\s+(\[::\]:)?443\b", r"listen \g<1>18443", concrete)
+        conf_path.write_text(wrap_as_http_conf(concrete).replace("http {\n", "http {\n    access_log off;\n", 1))
 
         result = subprocess.run(
             [binary, "-t", "-c", str(conf_path), "-p", str(conf_dir)],

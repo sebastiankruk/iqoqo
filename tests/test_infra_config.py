@@ -346,6 +346,30 @@ exit 0
         self.assertIn("INVALID_TOKEN:", status_sh)
         self.assertIn("NO_ENCRYPTED_ROWS", status_sh)
 
+    def test_env_status_classes_covers_env_example_and_iqopretest_waits_for_readiness(self):
+        example_keys = set()
+        for line in (self.repo_root / ".env.example").read_text().splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                example_keys.add(s.split("=", 1)[0].strip())
+
+        classes = {}
+        for line in (self.repo_root / ".env.status-classes").read_text().splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                k, v = s.split("=", 1)
+                classes[k.strip()] = v.strip()
+
+        self.assertEqual(example_keys - set(classes), set())
+        self.assertTrue(all(v in {"required", "default", "optional"} for v in classes.values()))
+
+        iqopretest = (self.repo_root / "scripts" / "iqopretest.sh").read_text()
+        self.assertIn("/healthz", iqopretest)
+        self.assertIn("oo_port", iqopretest)
+        self.assertIn("/v1/traces", iqopretest)
+        self.assertIn("otel_http_port", iqopretest)
+        self.assertIn("exit 1", iqopretest)
+
 
 if __name__ == "__main__":
     unittest.main()
