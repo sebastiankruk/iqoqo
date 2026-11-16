@@ -380,9 +380,10 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	@if [ -f $(DEPLOY_ENV_FILE) ]; then chmod 0600 $(DEPLOY_ENV_FILE) 2>/dev/null || true; fi
 	@set -a; . $(DEPLOY_ENV_FILE); set +a; \
 	 export MODE="$${MODE:-preview}"; \
-	 if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$${NEXT_PUBLIC_FRONTEND_URL:-}" ]; then \
-		case "$$NEXT_PUBLIC_FRONTEND_URL" in \
-			https://*) export OPENOBSERVE_RUM_SITE="$$NEXT_PUBLIC_FRONTEND_URL" ;; \
+	 origin_url="$${NEXT_PUBLIC_FRONTEND_URL:-$${BASE_URL:-}}"; \
+	 if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$$origin_url" ]; then \
+		case "$$origin_url" in \
+			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
 		esac; \
 	 fi; \
 	 mon_file="$(DEPLOY_DIR)/docker-compose.monitoring.yml"; \
@@ -514,8 +515,9 @@ deploy-maintain: ## Inspect debris and secret snapshots in deployment directory 
 install-wizard: ## Run interactive guided configuration installer and secret generator
 	@python3 scripts/iqoqo_installer.py $(ARGS)
 
-presync-check: ## Run iqopresync readiness and verification check
-	@python3 scripts/iqoqo_installer.py --presync-check $(ARGS)
+presync-check: ## Run iqopresync readiness and verification check (supports DIR=/path/to/deploy or ENV_FILE=/path/to/.env)
+	@env_target="$(if $(ENV_FILE),$(ENV_FILE),$(if $(DIR),$(DIR)/.env,$(if $(filter-out /opt/pre.iqoqo,$(DEPLOY_DIR)),$(DEPLOY_DIR)/.env,.env)))"; \
+	python3 scripts/iqoqo_installer.py --presync-check --env-file "$$env_target" $(ARGS)
 
 status: ## Show health status of all iQoQo services
 	@set -euo pipefail; \

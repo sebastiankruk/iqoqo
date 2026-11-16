@@ -53,6 +53,12 @@ if [ -e "${HOME}/.config/rclone/rclone.conf" ]; then
   echo "      mounting a plaintext S3 secret into the container." >&2
 fi
 
+# Derive DATABASE_URL from POSTGRES_* if omitted, then rewrite localhost -> db.
+if [ -z "${DATABASE_URL:-}" ] && [ -n "${POSTGRES_PASSWORD:-}" ]; then
+  DATABASE_URL=$(python3 -c 'from app.db.env import resolve_database_url; print(resolve_database_url() or "")' 2>/dev/null || true)
+  [ -n "$DATABASE_URL" ] && export DATABASE_URL
+fi
+
 # Auto-rewrite localhost database and redis URLs to docker service names.
 #
 # These run before every container start, so they avoid forking `sed` and

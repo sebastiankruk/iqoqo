@@ -224,3 +224,34 @@ def test_run_presync_check_probes_status_and_webfinger(tmp_path: Path, monkeypat
     assert "https://node.example.com/api/system/status" in probed_urls
     assert "https://node.example.com/.well-known/nodeinfo" in probed_urls
     assert "https://node.example.com/.well-known/webfinger" in probed_urls
+
+
+def test_run_presync_check_falls_back_to_base_url(tmp_path: Path, monkeypatch) -> None:
+    """Verify iqopresync uses BASE_URL when NEXT_PUBLIC_FRONTEND_URL is omitted."""
+    env_file = tmp_path / ".env"
+    s = generate_secure_secret(32)
+    env_file.write_text(
+        f"SECRET_KEY={s}\nJWT_SECRET_KEY={s}\nPOSTGRES_PASSWORD={s}\nREDIS_PASSWORD={s}\nADMIN_PASSWORD={s}\nBASE_URL=https://preview.iqoqo.cc\n",
+        encoding="utf-8",
+    )
+    os.chmod(env_file, 0o600)
+
+    probed_urls: list[str] = []
+
+    class _FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def _fake_urlopen(req, timeout=3):  # noqa: ARG001
+        probed_urls.append(req.full_url)
+        return _FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    assert run_presync_check(env_file) == 0
+    assert "https://preview.iqoqo.cc/api/health" in probed_urls
+    assert "https://preview.iqoqo.cc/.well-known/webfinger" in probed_urls

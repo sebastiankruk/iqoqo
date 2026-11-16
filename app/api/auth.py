@@ -321,7 +321,9 @@ def google_login():
     verifies before issuing a session."""
     if not _ensure_google_oauth():
         logger.warning("Google OAuth login attempted but Google client is not configured")
-        frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+        from app.db.env import resolve_frontend_url
+
+        frontend_url = resolve_frontend_url()
         return redirect(f"{frontend_url}/login?error=oauth_not_configured")
 
     callback_url = _safe_oauth_callback_path(request.args.get("callbackUrl") or request.args.get("redirect"))
@@ -354,7 +356,9 @@ def google_callback():
     Verifies the signed state value first. An unverified callback would let an attacker
     attach their own Google identity to a victim's session, so this is the security
     boundary of the whole flow."""
-    frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    from app.db.env import resolve_frontend_url
+
+    frontend_url = resolve_frontend_url()
     error_code = None
 
     if not _ensure_google_oauth():
@@ -480,7 +484,9 @@ def apple_login():
     """Start the Apple OAuth flow."""
     if not _ensure_apple_oauth():
         logger.warning("Apple OAuth login attempted but Apple client is not configured")
-        frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+        from app.db.env import resolve_frontend_url
+
+        frontend_url = resolve_frontend_url()
         return redirect(f"{frontend_url}/login?error=apple_oauth_not_configured")
 
     from app.core.config_service import ConfigService
@@ -512,7 +518,9 @@ def apple_login():
 @limiter.limit("20 per minute")
 def apple_callback():
     """Complete Apple Sign In flow."""
-    frontend_url = os.getenv("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    from app.db.env import resolve_frontend_url
+
+    frontend_url = resolve_frontend_url()
 
     if not _ensure_apple_oauth():
         logger.warning("Apple OAuth callback received but Apple client is not configured")

@@ -363,6 +363,24 @@ exit 0
         self.assertEqual(example_keys - set(classes), set())
         self.assertTrue(all(v in {"required", "default", "optional", "internal"} for v in classes.values()))
         self.assertNotIn("IQOQO_SECRET_KEY", example_keys)
+        self.assertEqual(classes["BASE_URL"], "required")
+        self.assertEqual(classes["DATABASE_URL"], "default")
+        self.assertEqual(classes["NEXT_PUBLIC_FRONTEND_URL"], "default")
+        self.assertEqual(classes["PUBLIC_APP_URL"], "default")
+        self.assertEqual(classes["NEXTAUTH_URL"], "internal")
+
+        makefile = (self.repo_root / "Makefile").read_text()
+        self.assertIn("presync-check:", makefile)
+        presync_block = makefile.split("presync-check:", 1)[1].split("status:", 1)[0]
+        self.assertIn("$(DIR)/.env", presync_block)
+        self.assertIn("$(DEPLOY_DIR)/.env", presync_block)
+
+        compose = (self.repo_root / "docker-compose.yml").read_text()
+        self.assertIn("${NEXT_PUBLIC_FRONTEND_URL:-${BASE_URL:-https://iqoqo.kruk.cc}}", compose)
+        self.assertIn("${DATABASE_URL:-}", compose)
+
+        entrypoint = (self.repo_root / "deploy" / "docker-entrypoint.sh").read_text()
+        self.assertIn("resolve_database_url", entrypoint)
 
         iqopretest = (self.repo_root / "scripts" / "iqopretest.sh").read_text()
         self.assertIn("/healthz", iqopretest)

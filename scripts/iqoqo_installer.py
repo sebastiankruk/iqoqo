@@ -160,10 +160,12 @@ def configure_env_content(
     lines = update_or_append_env_line(lines, "DATABASE_URL", db_url)
     result_vars["DATABASE_URL"] = db_url
 
-    # 4. Domain & URLs
+    # 4. Domain & URLs (BASE_URL is the single canonical origin default)
+    lines = update_or_append_env_line(lines, "BASE_URL", base_url)
     lines = update_or_append_env_line(lines, "NEXT_PUBLIC_FRONTEND_URL", base_url)
     lines = update_or_append_env_line(lines, "FEDERATION_BASE_URL", base_url)
     lines = update_or_append_env_line(lines, "NEXT_PUBLIC_INSTANCE_URL", base_url)
+    result_vars["BASE_URL"] = base_url
     result_vars["NEXT_PUBLIC_FRONTEND_URL"] = base_url
     result_vars["FEDERATION_BASE_URL"] = base_url
 
@@ -266,7 +268,7 @@ def run_presync_check(target_env_path: Path, base_url_override: str | None = Non
             warnings.append(f"Failed to probe docker daemon: {e}")
 
     # 3. HTTP Endpoints probe if base_url is available
-    base_url = base_url_override or env_map.get("NEXT_PUBLIC_FRONTEND_URL") or "http://localhost:5000"
+    base_url = base_url_override or env_map.get("NEXT_PUBLIC_FRONTEND_URL") or env_map.get("BASE_URL") or "http://localhost:5000"
     base_url = base_url.rstrip("/")
 
     probes = (

@@ -58,3 +58,32 @@ Defines reliable preview database clone re-encryption, authoritative destination
 
 - **WHEN** `scripts/iqoqo-status.sh --all-env` (or `--verbose`) runs
 - **THEN** the Environment Configuration section MUST display the `Defaulted`, `Optional`, `Internal`, and `Empty` lists for operator inspection.
+
+### Requirement: BASE_URL Acts as Canonical Origin Default
+
+All instance origin settings (`NEXT_PUBLIC_FRONTEND_URL`, `NEXT_PUBLIC_APP_URL`, `APP_URL`, `PUBLIC_APP_URL`) SHALL fall back to `BASE_URL` when unset across backend services, Docker Compose, RUM provisioning, status checks, and installer probes, while preserving `https://` validation for email links and never trusting request `Host` headers.
+
+#### Scenario: Setting only BASE_URL configures frontend, email links, and RUM site
+
+- **GIVEN** an environment with `BASE_URL=https://preview.iqoqo.cc` and `NEXT_PUBLIC_FRONTEND_URL`, `PUBLIC_APP_URL`, and `NEXTAUTH_URL` unset
+- **WHEN** the backend resolves `public_origin()`, OAuth redirect URLs, or `preview-up` RUM site
+- **THEN** they MUST resolve to `https://preview.iqoqo.cc` without requiring duplicate URL variables.
+
+### Requirement: DATABASE_URL Derives from POSTGRES_* Variables When Unset
+
+When `DATABASE_URL` is unset and `POSTGRES_PASSWORD` is configured, the backend and container entrypoint SHALL derive `postgresql://<user>:<percent-encoded-password>@<host>:<port>/<db>` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` before SQLAlchemy models evaluate schema prefixes.
+
+#### Scenario: Omitting DATABASE_URL works with POSTGRES_* credentials
+
+- **GIVEN** `DATABASE_URL` is unset and `POSTGRES_USER=iqoqo`, `POSTGRES_PASSWORD=p@ss:word`, `POSTGRES_DB=iqoqo` are set
+- **WHEN** `resolve_database_url()` runs
+- **THEN** it MUST return `postgresql://iqoqo:p%40ss%3Aword@db:5432/iqoqo` and populate `DATABASE_URL` before model schema binding.
+
+### Requirement: Makefile presync-check Respects Target Directory
+
+`make presync-check` SHALL pass `--env-file` pointing to `ENV_FILE`, else `$(DIR)/.env`, else overridden `$(DEPLOY_DIR)/.env`, else `.env`.
+
+#### Scenario: Running make presync-check with DIR targets that directory
+
+- **WHEN** `make presync-check DIR=/opt/preview.iqoqo` is invoked
+- **THEN** `scripts/iqoqo_installer.py --presync-check` MUST validate `/opt/preview.iqoqo/.env` rather than repo-root `.env`.

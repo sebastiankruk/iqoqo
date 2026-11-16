@@ -564,7 +564,11 @@ def resolve_browser_target(port: int) -> IngestTarget | None:
             return None
         return IngestTarget(site=f"{LOOPBACK_HOST}:{port}", insecure=True, topology="loopback")
 
-    public_origin = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "").strip() or os.environ.get("NEXTAUTH_URL", "").strip()
+    public_origin = (
+        os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "").strip()
+        or os.environ.get("BASE_URL", "").strip()
+        or os.environ.get("NEXTAUTH_URL", "").strip()
+    )
     try:
         return validate_ingest_site(site, public_origin or None, local_only=resolve_local_only())
     except ProvisionError as exc:

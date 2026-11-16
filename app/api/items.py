@@ -1898,15 +1898,14 @@ def get_item_qrcode(item_id: int) -> Response | tuple[Response, int]:
     Generates a QR code image for a specific item to allow physical copy tracking.
     Supports ?format=svg and ?format=png (default).
     """
-    import os
-
+    from app.db.env import resolve_frontend_url
     from app.utils.qrcode import generate_item_qrcode
 
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"success": False, "data": None, "error": "Item not found"}), 404
 
-    frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL", "http://localhost:3000")
+    frontend_url = resolve_frontend_url()
     item_url = f"{frontend_url}/item/{item_id}"
     img_format = request.args.get("format", "png").lower()
 

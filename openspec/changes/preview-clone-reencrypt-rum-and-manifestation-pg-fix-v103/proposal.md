@@ -19,8 +19,12 @@ A real preview run (`scripts/iqopretest.sh --dst-loc /opt/preview.iqoqo`) uncove
 - **Preview RUM provisioning (`Makefile`):** Pre-start `docker-compose.monitoring.yml` in `preview-up` whenever `OTEL_TRACES_EXPORTER` is not `none`, pass `MODE=preview`, and default `OPENOBSERVE_RUM_SITE` from `https://` `NEXT_PUBLIC_FRONTEND_URL` when unset so `OPENOBSERVE_RUM_CLIENT_TOKEN` is provisioned into `frontend`.
 - **`make status` hygiene (`scripts/iqoqo-status.sh`, `.env.status-classes`, `.env.example`):**
   - Suppress `Defaulted`, `Optional`, `Internal`, and `Empty` variable lists by default; expose them via `--all-env` / `--verbose` (or `IQOQO_STATUS_VERBOSE=1`).
-  - Add `internal` classification in `.env.status-classes` for dev/test/runtime-injected flags (`IQOQO_AI_MODE`, `TESTING`, `E2E_RESET_SECRET`, `DATABASE_URL_TEST`, `FLASK_DEBUG`, `SQLALCHEMY_ECHO`, `RATELIMIT_ENABLED`, `ALLOW_PROD_*`, `MODE`, `APP_VERSION`, `OPENOBSERVE_RUM_CLIENT_TOKEN`) and remove unused `IQOQO_SECRET_KEY` from `.env.example` and `.env.status-classes`.
+  - Add `internal` classification in `.env.status-classes` for dev/test/runtime-injected flags (`IQOQO_AI_MODE`, `TESTING`, `E2E_RESET_SECRET`, `DATABASE_URL_TEST`, `FLASK_DEBUG`, `SQLALCHEMY_ECHO`, `RATELIMIT_ENABLED`, `ALLOW_PROD_*`, `MODE`, `APP_VERSION`, `OPENOBSERVE_RUM_CLIENT_TOKEN`, `NEXTAUTH_URL`) and remove unused `IQOQO_SECRET_KEY` from `.env.example` and `.env.status-classes`.
   - Probe live `frontend` container for `OPENOBSERVE_RUM_CLIENT_TOKEN` in the Observability Stack section instead of reporting an empty `.env` placeholder.
+- **Canonical `BASE_URL` & `DATABASE_URL` derivation + `presync-check` `DIR` support:**
+  - Treat `BASE_URL` as the single canonical public origin default across backend (`PUBLIC_APP_URL`, `NEXT_PUBLIC_FRONTEND_URL` fallbacks), Docker Compose (`NEXT_PUBLIC_FRONTEND_URL`, `NEXT_PUBLIC_APP_URL`, `APP_URL`, OpenObserve CORS), `Makefile` (`preview-up` RUM site), `scripts/provision_rum_token.py`, `scripts/iqoqo-status.sh`, and `scripts/iqoqo_installer.py`.
+  - Derive `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` (percent-encoded) when `DATABASE_URL` is unset, in `app/db/env.py`, `app/config.py`, and `deploy/docker-entrypoint.sh`.
+  - Wire `DIR=` / `DEPLOY_DIR=` / `ENV_FILE=` into `make presync-check` so operators can verify isolated deploy directories cleanly.
 
 ## Capabilities
 

@@ -380,9 +380,9 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     bind = db.session.get_bind()
     dialect_name = bind.dialect.name if bind is not None else "sqlite"
     if dialect_name == "postgresql":
-        minutes_expr = func.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
+        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
     else:
-        minutes_expr = func.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
 
     avg_reading_raw = db.session.execute(
         select(func.avg(minutes_expr)).filter(

@@ -148,8 +148,11 @@ load_env() {
     sed -n "s/^[[:space:]]*${key}=\(.*\)/\1/p" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
 }
 
+BASE_URL=$(load_env "BASE_URL")
 FRONTEND_URL=$(load_env "NEXT_PUBLIC_FRONTEND_URL")
+FRONTEND_URL="${FRONTEND_URL:-$BASE_URL}"
 API_URL=$(load_env "NEXT_PUBLIC_APP_URL")
+API_URL="${API_URL:-$FRONTEND_URL}"
 DB_PORT=$(load_env "DB_PORT")
 REDIS_PORT=$(load_env "REDIS_PORT")
 NGINX_PORT=$(load_env "NGINX_PORT")
