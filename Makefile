@@ -379,8 +379,16 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	fi
 	@if [ -f $(DEPLOY_ENV_FILE) ]; then chmod 0600 $(DEPLOY_ENV_FILE) 2>/dev/null || true; fi
 	@set -a; . $(DEPLOY_ENV_FILE); set +a; \
-	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
-		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+	 export MODE="$${MODE:-preview}"; \
+	 if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$${NEXT_PUBLIC_FRONTEND_URL:-}" ]; then \
+		case "$$NEXT_PUBLIC_FRONTEND_URL" in \
+			https://*) export OPENOBSERVE_RUM_SITE="$$NEXT_PUBLIC_FRONTEND_URL" ;; \
+		esac; \
+	 fi; \
+	 mon_file="$(DEPLOY_DIR)/docker-compose.monitoring.yml"; \
+	 [ -f "$$mon_file" ] || mon_file="docker-compose.monitoring.yml"; \
+	 if [ -f "$$mon_file" ] && [ "$${OTEL_TRACES_EXPORTER:-otlp}" != "none" ]; then \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f "$$mon_file" up -d || true; \
 	 fi; \
 	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(DEPLOY_ENV_FILE))"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
@@ -519,7 +527,7 @@ status: ## Show health status of all iQoQo services
 		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
 			status_code=0; \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg || status_code=$$?; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg $(ARGS) || status_code=$$?; \
 			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
 			exit 0; \
 		else \

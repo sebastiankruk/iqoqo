@@ -377,9 +377,10 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         or 0
     )
 
-    dialect_name = db.session.bind.dialect.name if db.session.bind is not None else "sqlite"
+    bind = db.session.get_bind()
+    dialect_name = bind.dialect.name if bind is not None else "sqlite"
     if dialect_name == "postgresql":
-        minutes_expr = func.cast(Item.meta["total_reading_minutes"].astext, db.Integer)
+        minutes_expr = func.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
     else:
         minutes_expr = func.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
 

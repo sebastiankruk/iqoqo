@@ -45,6 +45,8 @@ Check health status of all iQoQo services.
 Options:
   --stack STACK     Stack to check: dev, preview, or prod (default: auto-detect from .env / mode)
   --deploy-dir DIR  Read deployment environment strictly from DIR/.env (no fallback)
+  --all-env         Show defaulted, optional, internal, and empty environment variable lists
+  --verbose         Alias for --all-env
   --help            Show this help
 
 Exit codes:
@@ -57,10 +59,12 @@ EOF
 
 DEPLOY_DIR=""
 STACK=""
+SHOW_ALL_ENV="${IQOQO_STATUS_VERBOSE:-0}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy-dir) DEPLOY_DIR="$2"; shift 2 ;;
         --stack) STACK="$2"; shift 2 ;;
+        --all-env|--verbose|-v) SHOW_ALL_ENV=1; shift ;;
         dev|preview|prod) STACK="$1"; shift ;;
         --help) usage ;;
         *) echo "Unknown option: $1"; usage ;;
@@ -546,6 +550,17 @@ if [[ ${#active_exporters[@]} -gt 0 ]]; then
         check "Telemetry Ingestion" pass "active exporters: ${active_exporters[*]}"
     else
         check "Telemetry Ingestion" warn "exporters active (${active_exporters[*]}) but OTel Collector endpoint (:4318) unreachable"
+    fi
+fi
+
+if [[ "$STACK" != "dev" ]]; then
+    frontend_cname=$(find_container "frontend")
+    if [[ -n "$frontend_cname" ]]; then
+        if docker exec "$frontend_cname" sh -c 'test -n "${OPENOBSERVE_RUM_CLIENT_TOKEN:-}"' 2>/dev/null; then
+            check "Browser RUM" pass "OPENOBSERVE_RUM_CLIENT_TOKEN provisioned in frontend"
+        elif [[ -n "$oo_cname" ]]; then
+            check "Browser RUM" info "OPENOBSERVE_RUM_CLIENT_TOKEN not active in frontend (set OPENOBSERVE_RUM_SITE or RUM_LOCAL_ONLY=true)"
+        fi
     fi
 fi
 
@@ -1283,35 +1298,41 @@ total_expected=${#expected_keys[@]}
 missing_warn=0
 missing_default=0
 missing_info=0
+missing_internal=0
 empty_count=0
 active_count=0
 db_active_count=0
 missing_warn_vars=()
 missing_default_vars=()
 missing_info_vars=()
+missing_internal_vars=()
 empty_vars=()
 
 get_db_configured_keys
 
 for key in "${expected_keys[@]}"; do
     val=$(load_env "$key")
+    key_class="${env_classes[$key]:-}"
+    if [[ -z "$key_class" ]]; then
+        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
+            key_class="optional"
+        else
+            key_class="required"
+        fi
+    fi
+
     if [[ -n "$val" ]]; then
         active_count=$((active_count + 1))
     elif [[ -n "${db_settings_map[$key]:-}" ]]; then
         active_count=$((active_count + 1))
         db_active_count=$((db_active_count + 1))
+    elif [[ "$key_class" == "internal" ]]; then
+        missing_internal=$((missing_internal + 1))
+        missing_internal_vars+=("$key")
     elif [[ "$val" == "" ]] && grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
         empty_count=$((empty_count + 1))
         empty_vars+=("$key")
     else
-        key_class="${env_classes[$key]:-}"
-        if [[ -z "$key_class" ]]; then
-            if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
-                key_class="optional"
-            else
-                key_class="required"
-            fi
-        fi
         case "$key_class" in
             required)
                 missing_warn=$((missing_warn + 1))
@@ -1339,16 +1360,22 @@ if [[ "$missing_warn" -gt 0 ]]; then
     check "Missing (required)" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
 fi
 
-if [[ "$missing_default" -gt 0 ]]; then
-    check "Defaulted" info "${missing_default} variable(s) (using code/compose defaults): ${missing_default_vars[*]}"
-fi
+if [[ "$SHOW_ALL_ENV" == "1" ]]; then
+    if [[ "$missing_default" -gt 0 ]]; then
+        check "Defaulted" info "${missing_default} variable(s) (using code/compose defaults): ${missing_default_vars[*]}"
+    fi
 
-if [[ "$missing_info" -gt 0 ]]; then
-    check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
-fi
+    if [[ "$missing_info" -gt 0 ]]; then
+        check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
+    fi
 
-if [[ "$empty_count" -gt 0 ]]; then
-    check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+    if [[ "$missing_internal" -gt 0 ]]; then
+        check "Internal" info "${missing_internal} variable(s) (dev/test/runtime): ${missing_internal_vars[*]}"
+    fi
+
+    if [[ "$empty_count" -gt 0 ]]; then
+        check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+    fi
 fi
 
 # Danger zone: values that silently disable features

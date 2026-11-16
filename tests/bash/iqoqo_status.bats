@@ -201,7 +201,7 @@ with open(".env.status-classes") as f:
             classes[k.strip()] = v.strip()
 
 missing = sorted(example_keys - set(classes))
-invalid = sorted(k for k, v in classes.items() if v not in ("required", "default", "optional"))
+invalid = sorted(k for k, v in classes.items() if v not in ("required", "default", "optional", "internal"))
 assert not missing, f"Unclassified .env.example keys: {missing}"
 assert not invalid, f"Invalid classes: {invalid}"
 print(f"classified {len(example_keys)} keys")
@@ -210,19 +210,29 @@ print(f"classified {len(example_keys)} keys")
   [[ "$output" =~ "classified" ]]
 }
 
-@test "iqoqo-status.sh treats missing defaulted vars as info and missing required vars as warn" {
+@test "iqoqo-status.sh hides defaulted, optional, and internal vars by default and reveals them with --all-env" {
   tmp_root="${TEST_TEMP_DIR}/env_class_test"
   mkdir -p "${tmp_root}/scripts"
   cp scripts/iqoqo-status.sh "${tmp_root}/scripts/iqoqo-status.sh"
-  printf 'DATABASE_URL=postgresql://u:p@db:5432/app\nAPP_PORT=5000\n' > "${tmp_root}/.env.example"
-  printf 'DATABASE_URL=required\nAPP_PORT=default\n' > "${tmp_root}/.env.status-classes"
+  printf 'DATABASE_URL=postgresql://u:p@db:5432/app\nAPP_PORT=5000\nOPENAI_API_KEY=\nTESTING=\n' > "${tmp_root}/.env.example"
+  printf 'DATABASE_URL=required\nAPP_PORT=default\nOPENAI_API_KEY=optional\nTESTING=internal\n' > "${tmp_root}/.env.status-classes"
   printf '# empty\n' > "${tmp_root}/.env"
 
-  run env -u IQOQO_AI_MODE ENV_FILE="${tmp_root}/.env" IQOQO_ROOT="${tmp_root}" ENV_STATUS_CLASSES_FILE="${tmp_root}/.env.status-classes" bash "${tmp_root}/scripts/iqoqo-status.sh" dev
+  run env -u IQOQO_AI_MODE -u IQOQO_STATUS_VERBOSE ENV_FILE="${tmp_root}/.env" IQOQO_ROOT="${tmp_root}" ENV_STATUS_CLASSES_FILE="${tmp_root}/.env.status-classes" bash "${tmp_root}/scripts/iqoqo-status.sh" dev
   [[ "$output" =~ "Missing (required)" ]]
   [[ "$output" =~ "1 variable(s): DATABASE_URL" ]]
+  [[ ! "$output" =~ "Defaulted" ]]
+  [[ ! "$output" =~ "Optional" ]]
+  [[ ! "$output" =~ "Internal" ]]
+
+  run env -u IQOQO_AI_MODE ENV_FILE="${tmp_root}/.env" IQOQO_ROOT="${tmp_root}" ENV_STATUS_CLASSES_FILE="${tmp_root}/.env.status-classes" bash "${tmp_root}/scripts/iqoqo-status.sh" dev --all-env
+  [[ "$output" =~ "Missing (required)" ]]
   [[ "$output" =~ "Defaulted" ]]
   [[ "$output" =~ "1 variable(s) (using code/compose defaults): APP_PORT" ]]
+  [[ "$output" =~ "Optional" ]]
+  [[ "$output" =~ "1 variable(s) (not configured): OPENAI_API_KEY" ]]
+  [[ "$output" =~ "Internal" ]]
+  [[ "$output" =~ "1 variable(s) (dev/test/runtime): TESTING" ]]
 }
 
 @test "iqoqo-status.sh ignores OTel export errors during grace window and fails on sustained errors" {

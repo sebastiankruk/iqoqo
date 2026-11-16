@@ -361,7 +361,8 @@ exit 0
                 classes[k.strip()] = v.strip()
 
         self.assertEqual(example_keys - set(classes), set())
-        self.assertTrue(all(v in {"required", "default", "optional"} for v in classes.values()))
+        self.assertTrue(all(v in {"required", "default", "optional", "internal"} for v in classes.values()))
+        self.assertNotIn("IQOQO_SECRET_KEY", example_keys)
 
         iqopretest = (self.repo_root / "scripts" / "iqopretest.sh").read_text()
         self.assertIn("/healthz", iqopretest)
@@ -369,6 +370,8 @@ exit 0
         self.assertIn("/v1/traces", iqopretest)
         self.assertIn("otel_http_port", iqopretest)
         self.assertIn("exit 1", iqopretest)
+        self.assertIn('DEPLOY_DIR="$DST_LOC" make status preview', iqopretest)
+        self.assertIn("reconcile_preview_settings.py", iqopretest)
 
 
 if __name__ == "__main__":

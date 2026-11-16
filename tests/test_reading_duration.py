@@ -192,3 +192,46 @@ def test_item_detail_elapsed_days_and_manifestation_average(client, app, normal_
     assert man_resp.status_code == 200
     # Average of 120 and 180 = 150.0 (900 from hidden/private item3 excluded)
     assert man_resp.get_json()["data"]["average_reading_minutes"] == 150.0
+
+
+def test_manifestation_detail_uses_postgresql_json_operator_when_session_bind_is_none(app, client, normal_user_headers, monkeypatch):
+    """Regression: SQLAlchemy 2.0 sets db.session.bind to None, so get_bind() must be used for PostgreSQL JSON queries."""
+    from types import SimpleNamespace
+
+    from sqlalchemy.dialects import postgresql
+
+    _, man_id = _create_frbr_item(
+        app, owner_id=client.application.test_user_id if hasattr(client.application, "test_user_id") else _get_normal_user_id(app)
+    )
+    captured_sqls: list[str] = []
+    orig_execute = db.session.execute
+
+    def _spy_execute(stmt, *args, **kwargs):
+        sql = str(stmt.compile(dialect=postgresql.dialect()))
+        captured_sqls.append(sql)
+        if "avg(" in sql.lower() and "items.meta" in sql.lower():
+            return SimpleNamespace(scalar=lambda: 42.0)
+        return orig_execute(stmt, *args, **kwargs)
+
+    pg_bind = SimpleNamespace(dialect=postgresql.dialect())
+    monkeypatch.setattr(db.session, "get_bind", lambda *args, **kwargs: pg_bind)
+    monkeypatch.setattr(db.session, "execute", _spy_execute)
+
+    with app.app_context():
+        assert db.session.bind is None
+
+    resp = client.get(f"/api/manifestations/{man_id}", headers=normal_user_headers)
+    assert resp.status_code == 200
+    avg_sqls = [sql for sql in captured_sqls if "avg(" in sql.lower() and "items.meta" in sql.lower()]
+    assert avg_sqls, "Expected reading-minutes aggregate SQL to be executed"
+    assert all("json_extract" not in sql.lower() for sql in avg_sqls)
+    assert any("->>" in sql for sql in avg_sqls)
+    assert resp.get_json()["data"]["average_reading_minutes"] == 42.0
+
+
+def _get_normal_user_id(app):
+    """Fetch the seeded normal user ID from the test database."""
+    with app.app_context():
+        user = db.session.execute(select(User)).scalars().first()
+        assert user is not None
+        return user.id

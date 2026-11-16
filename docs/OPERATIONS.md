@@ -565,11 +565,12 @@ In Next.js 16+, the Edge Runtime is deprecated for middleware and route executio
 
 ## Status Check & Environment Classification (`make status`)
 
-`scripts/iqoqo-status.sh` classifies every variable in `.env.example` using `.env.status-classes`:
+`scripts/iqoqo-status.sh` classifies every variable in `.env.example` using `.env.status-classes`. By default, `make status` surfaces only `Configured` counts and `Missing (required)` warnings; pass `--all-env` / `--verbose` (or `make status ARGS=--all-env`) to expand `Defaulted`, `Optional`, `Internal`, and `Empty` lists:
 
 - **`Missing (required)` (warning):** Core database, security, or auth keys (`DATABASE_URL`, `SECRET_KEY`, `AUTH_SECRET`, `ADMIN_EMAIL`, etc.) that must be configured in `.env` or `InstanceSettings`.
-- **`Defaulted` (info):** Variables that have safe defaults in application code or `docker-compose.yml` (`APP_PORT`, `BACKUP_*`, `S3_*`, `BASE_URL`, `FEDERATION_HEAD_MODE`, etc.).
-- **`Optional` (info):** Feature-specific integrations, OAuth providers, and dev/test flags.
+- **`Defaulted` (info, `--all-env` only):** Variables that have safe defaults in application code or `docker-compose.yml` (`APP_PORT`, `BACKUP_*`, `S3_*`, `BASE_URL`, `FEDERATION_HEAD_MODE`, etc.).
+- **`Optional` (info, `--all-env` only):** Feature-specific integrations and OAuth providers (including optional AI cover/dedupe keys).
+- **`Internal` (info, `--all-env` only):** Dev/test flags (`TESTING`, `E2E_RESET_SECRET`, `IQOQO_AI_MODE`, `ALLOW_PROD_*`) and runtime-injected tokens (`OPENOBSERVE_RUM_CLIENT_TOKEN`, probed directly from the running `frontend` container under Observability Stack).
 - **OTel Collector Export:** Transient export errors during the first `OTEL_EXPORT_GRACE_SECONDS` (default `60s`) of collector startup are reported as `info`; sustained failures after the grace window fail the check.
 - **Recent 5xx errors:** `0` passes, `1–10` reports `info` (below warn threshold), and `> 10` reports a warning.
 
