@@ -197,7 +197,24 @@ test.describe("Advanced Organization & Views - Step 2", () => {
       const bulkJson = await bulkRes.json();
 
       expect(bulkJson.success).toBe(true);
-      expect(bulkJson.data.item_ids.length).toBe(2);
+      expect(bulkJson.data.item_ids.length).toBe(0);
+      expect(bulkJson.data.intent_ids.length).toBeGreaterThanOrEqual(1);
+      expect(bulkJson.data.manifestation_ids.length).toBe(2);
+
+      const physicalBulkRes = await request.post(`${flaskApiUrl}/items/bulk`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          manifestation_ids: ids,
+          status: "reading",
+          collection_status: "available",
+        },
+      });
+
+      expect(physicalBulkRes.status()).toBe(200);
+      const physicalBulkJson = await physicalBulkRes.json();
+
+      expect(physicalBulkJson.success).toBe(true);
+      expect(physicalBulkJson.data.item_ids.length).toBe(2);
 
       const badBulkRes = await request.post(`${flaskApiUrl}/items/bulk`, {
         headers: { Authorization: `Bearer ${token}` },
