@@ -129,11 +129,11 @@ def prepare_deploy_mounts(deploy_dir_path: Path) -> int:
             except OSError as exc:
                 errors.append(f"Cannot create mount directory '{target_dir}': {exc}")
 
-    # 5. Protect actor private keys directory (0700) and keys (0600)
+    # 5. Allow container UID 10001 to write sticky-protected actor keys (1777) while keeping *.pem 0600
     keys_dir = deploy_dir / "data" / "keys"
     if keys_dir.exists() and keys_dir.is_dir():
         try:
-            os.chmod(keys_dir, 0o700)
+            os.chmod(keys_dir, 0o1777)
             for pem in keys_dir.glob("*.pem"):
                 os.chmod(pem, 0o600)
         except OSError:
