@@ -61,6 +61,23 @@ interface SharedCollectionClientProps {
 }
 
 /**
+ * Formats a single compact line summarizing an item and its pressing metadata
+ * for the lightweight SSR catalog index.
+ */
+function formatCatalogIndexEntry(item: SharedCollectionItem): string {
+  const authorText = item.authors && item.authors.length > 0 ? ` — ${item.authors.join(", ")}` : "";
+  const details = [
+    item.format || item.content_type,
+    item.publisher,
+    item.catalog_number,
+    item.publication_year != null && item.publication_year !== "" ? String(item.publication_year) : null,
+    item.ean || item.upc,
+  ].filter((part): part is string => Boolean(part && String(part).trim()));
+
+  return details.length > 0 ? `${item.title}${authorText} [${details.join(" · ")}]` : `${item.title}${authorText}`;
+}
+
+/**
  * Client-hydrated shared collection view for web and native Capacitor shells.
  *
  * @param {SharedCollectionClientProps} props - Component props.
@@ -185,10 +202,10 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
                 title={collection.collection_name}
                 text={`Check out this shared collection by ${collection.author} on iqoqo!`}
               />
-              {resolvedToken && <PublicFeedButton feedPath={`/api/public/share/${resolvedToken}/feed.xml`} />}
+              {resolvedToken && <PublicFeedButton feedPath={`/share/${resolvedToken}/feed.xml`} />}
               {resolvedToken && (
                 <PublicFeedButton
-                  feedPath={`/api/public/share/${resolvedToken}?format=jsonld&limit=1000`}
+                  feedPath={`/share/${resolvedToken}/catalog.jsonld`}
                   label={t("jsonLdFeed")}
                   title={t("jsonLdFeedTitle")}
                   variant="jsonld"
@@ -208,7 +225,19 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
           </div>
 
           {items.length > 0 ? (
-            <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
+            <>
+              <details open data-testid="shared-catalog-index" className="mb-8 rounded-lg border bg-muted/20 px-4 py-3">
+                <summary className="cursor-pointer text-sm font-medium text-foreground">
+                  {t("catalogIndex", { count: items.length })}
+                </summary>
+                <ol className="mt-3 max-h-56 overflow-y-auto space-y-1 text-xs text-muted-foreground list-decimal list-inside">
+                  {items.map(item => (
+                    <li key={item.id}>{formatCatalogIndexEntry(item)}</li>
+                  ))}
+                </ol>
+              </details>
+              <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
+            </>
           ) : (
             <EmptyState
               title="Empty Collection"

@@ -42,14 +42,25 @@ The system SHALL emit audio pressing properties for audio `Manifestation` record
 - **WHEN** a client requests `?format=unknown`
 - **THEN** the API MUST return a JSON error with code `400`.
 
-### Requirement: Share Page SSR JSON-LD, Feed Link, and Correct Badges
+### Requirement: Share Page SSR JSON-LD, Compact Catalog Index, Non-API Feed Links, and Correct Badges
 
-`/share/[token]` SHALL server-render JSON-LD covering the shared collection (up to 1,000 items), SHALL expose a "JSON-LD / AI Feed" link next to the RSS link plus `<link rel="alternate" type="application/ld+json">` in the head, and SHALL NOT label audio items "Book".
+`/share/[token]` SHALL server-render JSON-LD covering the shared collection (up to 1,000 items) **after** `<SharedCollectionClient>`, SHALL render a compact visible SSR catalog index (`shared-catalog-index`) above `<CollectionGrid>` containing all fetched items with pressing metadata so HTML truncation (~150 KB) never cuts off items beyond ~45, SHALL expose non-`/api/` feed links (`/share/[token]/catalog.jsonld` and `/share/[token]/feed.xml`) plus `<link rel="alternate">` tags while keeping `Disallow: /api/` in `frontend/public/robots.txt`, and SHALL NOT label audio items "Book".
 
 #### Scenario: JSON-LD in server HTML
 
 - **WHEN** `/share/[token]` is rendered on the server
-- **THEN** the HTML MUST include an `application/ld+json` script containing `MusicAlbum` nodes with `musicReleaseFormat`, `gtin13`, `catalogNumber`, and `recordLabel`.
+- **THEN** the HTML MUST include an `application/ld+json` script containing `MusicAlbum` nodes with `musicReleaseFormat`, `gtin13`, `catalogNumber`, and `recordLabel`, placed after `<SharedCollectionClient>`.
+
+#### Scenario: Compact SSR catalog index prevents HTML truncation
+
+- **GIVEN** a shared collection with 365+ audio items
+- **WHEN** `/share/[token]` is rendered on the server
+- **THEN** `shared-catalog-index` MUST render all items before `collection-grid` with title, artists, format, label, catalog number, year, and EAN/UPC in compact text.
+
+#### Scenario: Non-API share feed paths respect robots boundary
+
+- **WHEN** a crawler or AI fetcher inspects `robots.txt` and `/share/[token]` feed links
+- **THEN** `robots.txt` MUST keep `Disallow: /api/` and `Allow: /share/`, and `/share/[token]` feed links MUST target `/share/[token]/catalog.jsonld` and `/share/[token]/feed.xml`.
 
 #### Scenario: Audio badge
 

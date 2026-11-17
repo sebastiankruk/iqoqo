@@ -10,7 +10,8 @@ AI web fetchers (NotebookLM, Gemini) read `/share/[token]` with a plain `GET` (`
 ## What Changes
 
 - **Batch 1 — Backend:** Add `_emit_audio_rdf_triples(g, m_uri, m_elem, meta)` emitting `schema:MusicAlbum`/`schema:MusicRelease`, `schema:musicReleaseFormat`, `schema:recordLabel`, `schema:catalogNumber`, `schema:gtin13`, `schema:datePublished`, `schema:countryOfOrigin`, `iqoqo:matrixRunout`, and `owl:sameAs` (Discogs/MusicBrainz). Enrich `fetch_shared_collection_by_token()` (`app/api/public_items.py`) so each item carries top-level `content_type`, `format`, `ean`, `upc`, `publisher`, `publication_year`, `catalog_number`, `country`. Accept `?format=jsonld|turtle|rdfxml` and `?limit=` (up to `2000`) on `GET /api/public/share/<token>` and `GET /api/public/rdf/share/<token>`.
-- **Batch 2 — Frontend:** Fix badge resolution so audio shows Vinyl/CD/SACD, never "Book". Make `/share/[token]` SSR embed the whole shared collection (up to 1,000 items) in JSON-LD via `buildCollectionJsonLd()`. Add a "JSON-LD / AI Feed" link next to the RSS icon in `public-feed-button.tsx` and `<link rel="alternate" type="application/ld+json">` in the page head.
+- **Batch 2 — Frontend:** Fix badge resolution so audio shows Vinyl/CD/SACD, never "Book". Make `/share/[token]` SSR embed the whole shared collection (up to 1,000 items) in JSON-LD via `buildCollectionJsonLd()` placed **after** the visible content, and render a compact SSR **Catalog Index** (`<details open>`) above `<CollectionGrid>` (~100 bytes/item) so headerless AI HTML readers see all 365+ items before ~150 KB truncation thresholds. Expose non-`/api/` share feed aliases (`/share/[token]/catalog.jsonld` and `/share/[token]/feed.xml`) via Next.js rewrites in `frontend/next.config.ts`, keep `Disallow: /api/` in `frontend/public/robots.txt`, and update `public-feed-button.tsx` plus `<link rel="alternate" type="application/ld+json">` in the page head.
+- **Batch 2b — SRE & Cloudflare Edge Rules:** Document Cloudflare WAF Custom Rule 2 (`/share/` + `/api/public/share/`) and **AI Crawl Control / Managed `robots.txt`** remediation (`Google-Extended`, `GoogleOther`, `Google-CloudVertexBot`) in `deploy/cloudflare-semantic-federation-rules.md`, `docs/DEPLOYMENT.md`, `docs/SECURITY.md`, `docs/OPERATIONS.md`, and `scripts/verify_cloudflare_rules.sh`.
 - **Batch 3 — Tests:** `tests/test_public_rdf_audio.py`, `tests/test_api_public_extended.py`, `shared-collection-client.test.tsx`, `schema-org.test.ts`.
 - **Unchanged:** `feed.xml` stays capped at 50 items (documented).
 
@@ -27,6 +28,7 @@ AI web fetchers (NotebookLM, Gemini) read `/share/[token]` with a plain `GET` (`
 ## Impact
 
 - **Backend:** `app/core/frbr_service.py`, `app/api/public_items.py`, `app/api/public_rdf.py`, `app/api/docs.py`
-- **Frontend:** `frontend/app/share/[token]/page.tsx`, `frontend/components/public/shared-collection-client.tsx`, `frontend/lib/schema-org.ts`, `frontend/components/ui/public-feed-button.tsx`
+- **Frontend:** `frontend/app/share/[token]/page.tsx`, `frontend/components/public/shared-collection-client.tsx`, `frontend/lib/schema-org.ts`, `frontend/components/ui/public-feed-button.tsx`, `frontend/next.config.ts`, `frontend/public/robots.txt`
+- **Ops & Docs:** `deploy/cloudflare-semantic-federation-rules.md`, `scripts/verify_cloudflare_rules.sh`, `docs/DEPLOYMENT.md`, `docs/SECURITY.md`, `docs/OPERATIONS.md`
 - **Privacy:** only `is_hidden == False` items in `visibility == "public"` collections are emitted
 - **FRBR:** `content_type` stays `music`/`audio` on Expression; pressing properties live on Manifestation

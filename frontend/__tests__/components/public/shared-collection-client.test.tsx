@@ -122,7 +122,7 @@ describe("SharedCollectionClient", () => {
     });
   });
 
-  it("renders JSON-LD / AI Feed link alongside RSS feed for shared collections", () => {
+  it("renders non-API JSON-LD / AI Feed and RSS links for shared collections", () => {
     render(
       <SharedCollectionClient
         initialToken="tok-123"
@@ -137,6 +137,10 @@ describe("SharedCollectionClient", () => {
               authors: ["Miles Davis"],
               content_type: "music",
               format: "vinyl",
+              publisher: "Columbia",
+              catalog_number: "CL 1355",
+              publication_year: 1959,
+              ean: "886973355220",
             },
           ],
         }}
@@ -144,6 +148,46 @@ describe("SharedCollectionClient", () => {
     );
 
     const jsonLdLink = screen.getByRole("link", { name: "jsonLdFeed" });
-    expect(jsonLdLink).toHaveAttribute("href", "/api/public/share/tok-123?format=jsonld&limit=1000");
+    expect(jsonLdLink).toHaveAttribute("href", "/share/tok-123/catalog.jsonld");
+
+    const rssLink = screen.getByRole("link", { name: "RSS" });
+    expect(rssLink).toHaveAttribute("href", "/share/tok-123/feed.xml");
+  });
+
+  it("renders compact SSR catalog index with all 400 items before the collection grid", () => {
+    const items = Array.from({ length: 400 }, (_, i) => ({
+      id: i + 1,
+      manifestation_id: 1000 + i,
+      title: `Album ${i + 1}`,
+      authors: [`Artist ${i + 1}`],
+      content_type: "music",
+      format: i % 2 === 0 ? "vinyl" : "cd",
+      publisher: "Blue Note",
+      catalog_number: `BN-${i + 1}`,
+      publication_year: 1965,
+    }));
+
+    const { container } = render(
+      <SharedCollectionClient
+        initialToken="tok-400"
+        initialData={{
+          author: "collector",
+          collection_name: "Large Jazz Catalog",
+          items,
+        }}
+      />
+    );
+
+    const indexEl = screen.getByTestId("shared-catalog-index");
+    expect(indexEl).toHaveAttribute("open");
+    const listItems = indexEl.querySelectorAll("li");
+    expect(listItems).toHaveLength(400);
+    expect(listItems[0].textContent).toContain("Album 1 — Artist 1 [vinyl · Blue Note · BN-1 · 1965]");
+    expect(listItems[399].textContent).toContain("Album 400 — Artist 400 [cd · Blue Note · BN-400 · 1965]");
+
+    const gridEl = screen.getByTestId("collection-grid");
+    const html = container.innerHTML;
+    expect(html.indexOf("shared-catalog-index")).toBeLessThan(html.indexOf("collection-grid"));
+    expect(gridEl).toHaveTextContent("Items count: 400");
   });
 });

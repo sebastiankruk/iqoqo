@@ -9,8 +9,10 @@
 ## 2. Batch 2 — Frontend SSR and Badge
 
 - [x] 2.1 Fix badge resolution in `shared-collection-client.tsx` / item card (top-level `format`, then `manifestation_meta.format`, then `content_type`).
-- [x] 2.2 Update `frontend/app/share/[token]/page.tsx` and `buildCollectionJsonLd()` in `frontend/lib/schema-org.ts` to embed up to 1,000 items with `MusicAlbum`/`MusicRelease` properties.
-- [x] 2.3 Add the "JSON-LD / AI Feed" link in `public-feed-button.tsx` and `<link rel="alternate" type="application/ld+json">` in the page head; add `en.json`/`pl.json` strings.
+- [x] 2.2 Update `frontend/app/share/[token]/page.tsx` and `buildCollectionJsonLd()` in `frontend/lib/schema-org.ts` to embed up to 1,000 items with `MusicAlbum`/`MusicRelease` properties, placing `<JsonLdScript>` after `<SharedCollectionClient>`.
+- [x] 2.3 Add the "JSON-LD / AI Feed" link in `public-feed-button.tsx` and `<link rel="alternate" type="application/ld+json">` in the page head targeting non-`/api/` `/share/[token]/catalog.jsonld` and `/share/[token]/feed.xml` (Next.js rewrites in `frontend/next.config.ts`); keep `Disallow: /api/` in `frontend/public/robots.txt`; add `en.json`/`pl.json` strings.
+- [x] 2.4 Render compact SSR `<details open data-testid="shared-catalog-index">` above `<CollectionGrid>` in `shared-collection-client.tsx` so 365+ items fit before ~150 KB HTML fetcher truncation limits.
+- [x] 2.5 Update `deploy/cloudflare-semantic-federation-rules.md`, `scripts/verify_cloudflare_rules.sh`, `docs/DEPLOYMENT.md`, `docs/SECURITY.md`, and `docs/OPERATIONS.md` with Cloudflare WAF + AI Crawl Control / Managed `robots.txt` SRE deployment guidance.
 
 ## 3. Batch 3 — Tests
 

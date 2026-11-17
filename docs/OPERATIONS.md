@@ -578,6 +578,8 @@ In Next.js 16+, the Edge Runtime is deprecated for middleware and route executio
 
 ## 📚 Further Reading
 
+- **[Cloudflare WAF & AI Crawl Control Rules](../deploy/cloudflare-semantic-federation-rules.md)** — Edge proxy rules for ActivityPub, Semantic Web, and AI-readable `/share/*` feeds
+- **[Deployment Directory Contract](DEPLOYMENT.md)** — Source-free deployment layout, mount guards, and Cloudflare checklist
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries and Linked Data endpoints
 - **[Architecture Guide](ARCHITECTURE.md)** — System architecture and data model
 - **[Upgrade Guide](UPGRADE_0.8.0.md)** — Version migration procedures

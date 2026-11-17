@@ -114,12 +114,10 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
       collection.collection_description || `A shared collection on iqoqo with ${collection.items.length} items.`,
     alternates: {
       types: {
-        "application/rss+xml": [
-          { url: `/api/public/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` },
-        ],
+        "application/rss+xml": [{ url: `/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` }],
         "application/ld+json": [
           {
-            url: `/api/public/share/${token}?format=json-ld`,
+            url: `/share/${token}/catalog.jsonld`,
             title: `${collection.collection_name} - Schema.org JSON-LD`,
           },
         ],
@@ -194,8 +192,8 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   return (
     <>
-      <JsonLdScript data={collectionJsonLd} />
       <SharedCollectionClient initialData={collection} initialToken={token} />
+      <JsonLdScript data={collectionJsonLd} />
     </>
   );
 }

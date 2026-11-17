@@ -347,7 +347,8 @@
     "profileTitle": "{name}'s Collection",
     "hiddenItemNote": "Some items may be hidden due to privacy settings.",
     "jsonLdFeed": "JSON-LD / AI Feed",
-    "jsonLdFeedTitle": "Machine-readable Schema.org JSON-LD graph for AI fetchers"
+    "jsonLdFeedTitle": "Machine-readable Schema.org JSON-LD graph for AI fetchers",
+    "catalogIndex": "Full Catalog Index ({count})"
   },
   "CoverProvenance": {
     "sourcePrefix": "Source",

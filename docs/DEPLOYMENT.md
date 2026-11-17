@@ -124,3 +124,14 @@ When deploying OpenObserve in `docker-compose.monitoring.yml`:
 
 - **Password Policy**: `ZO_ROOT_USER_PASSWORD` requires minimum 8 characters with at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g. `!@#$%^&*()`). Passwords violating this policy cause OpenObserve to crash-loop on initialisation.
 - **Initialisation-Only**: `ZO_ROOT_USER_PASSWORD` is evaluated only during the initial volume bootstrap. Changing `OPENOBSERVE_ROOT_PASSWORD` in `.env` afterwards will not update an existing database. If resetting credentials, reset via OpenObserve UI or recreate the `openobserve_data` volume.
+
+---
+
+## 6. Deploying Behind Cloudflare (WAF, AI Crawl Control & Shared Links)
+
+When placing an iqoqo instance behind Cloudflare on any domain or subdomain:
+
+1. **Apply Semantic & Fediverse Custom WAF Rules:** Configure the Custom Rules in `deploy/cloudflare-semantic-federation-rules.md` so ActivityPub (`/.well-known/*`, `/api/federation/*`), Semantic Web (`/api/public/rdf/*`), and shared collection routes (`/share/*`, including `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`) skip Bot Fight Mode and Browser Integrity Check.
+2. **Disable Cloudflare Managed `robots.txt` / AI Scraper Block on Assistant Fetchers:** Cloudflare AI Crawl Control prepends `# BEGIN Cloudflare Managed content` above `frontend/public/robots.txt`, blocking `Google-Extended`, `GoogleOther`, and `Google-CloudVertexBot` with `Disallow: /` and preventing Gemini/NotebookLM from reading shared collections. Turn off Managed `robots.txt` injection (or allow `/share/`).
+3. **Keep `/api/` Private from Crawlers:** `frontend/public/robots.txt` disallows `/api/`; crawler-facing share feeds live under `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`.
+4. **Verify Live Edge Rules:** Run `bash scripts/verify_cloudflare_rules.sh https://<your-domain>` after DNS/proxy cutover.

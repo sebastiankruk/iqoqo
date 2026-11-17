@@ -161,6 +161,10 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
     expect(parsed["author"]["name"]).toBe("Collector </script>");
     const itemList = (parsed["mainEntity"] as any).itemListElement;
     expect(itemList[0].item.name).toBe("Item </script>");
+
+    const html = container.innerHTML;
+    expect(html.indexOf("shared-catalog-index")).toBeGreaterThan(-1);
+    expect(html.indexOf("shared-catalog-index")).toBeLessThan(html.indexOf("application/ld+json"));
   });
 
   it("public profile page preserves bio with Unicode separators and multiline text", async () => {

@@ -118,6 +118,16 @@ const nextConfig: NextConfig = {
         return {
           afterFiles: [
             {
+              // Non-/api/ alias for shared collection Schema.org JSON-LD graph (crawlers & AI fetchers)
+              source: "/share/:token/catalog.jsonld",
+              destination: `${backendBase}/api/public/share/:token?format=jsonld`,
+            },
+            {
+              // Non-/api/ alias for shared collection RSS feed
+              source: "/share/:token/feed.xml",
+              destination: `${backendBase}/api/public/share/:token/feed.xml`,
+            },
+            {
               // Proxy to Flask backend for any API routes not handled locally by Next.js app/api/
               source: "/api/:path*",
               destination: `${backendBase}/api/:path*`,
