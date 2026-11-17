@@ -152,9 +152,15 @@ curl http://localhost:8000/api/public/feed.xml
 curl http://localhost:8000/api/public/u/alice/feed.xml
 ```
 
-### Shared Collection Feed
+### Shared Collection Feeds (Crawler & AI-Friendly)
 
 ```bash
+# Non-/api/ routes (allowed in robots.txt under /share/)
+curl http://localhost:8000/share/TOKEN/catalog.jsonld
+curl http://localhost:8000/share/TOKEN/feed.xml
+
+# Direct API equivalents (for programmatic clients)
+curl "http://localhost:8000/api/public/share/TOKEN?format=jsonld&limit=1000"
 curl http://localhost:8000/api/public/share/TOKEN/feed.xml
 ```
 

@@ -44,41 +44,57 @@ To prevent communication drops while maintaining DDoS protection on user-facing 
 
 ### Rule 2: Semantic Web, Linked Open Data & Shared Collection AI Feed Whitelist
 
-- **Rule Name**: `Allow Semantic Web Linked Data Crawlers`
+- **Rule Name**: `Allow Semantic Web Linked Data Crawlers` (or `Semantic Access`)
 - **Phase**: `http_request_firewall_custom`
 - **Action**: `Skip`
-  - *Skip Components*:
-    - Bot Fight Mode / Super Bot Fight Mode
-    - Browser Integrity Check
+  - *WAF components to skip*:
+    - **All Super Bot Fight Mode Rules** (checked)
+    - **Browser Integrity Check** (checked)
+    - **Security Level** (checked)
+  - *Keep active (unchecked)*: `All managed rules`, `All rate limiting rules`, `All remaining custom rules`
 
 #### Expression (Wireshark / Ruleset Filter Syntax)
 
+To apply across an apex domain and all subdomains (replace `iqoqo.cc` with your zone domain if self-hosting elsewhere):
+
 ```text
-(starts_with(http.request.uri.path, "/share/")) or
-(starts_with(http.request.uri.path, "/api/public/rdf/")) or
-(starts_with(http.request.uri.path, "/api/public/share/")) or
-(http.request.uri.path eq "/api/sparql") or
-(any(http.request.headers["accept"][*] contains "application/ld+json")) or
-(any(http.request.headers["accept"][*] contains "text/turtle")) or
-(any(http.request.headers["accept"][*] contains "application/n-triples"))
+(starts_with(http.request.uri.path, "/share/") or
+ starts_with(http.request.uri.path, "/manifestation/") or
+ starts_with(http.request.uri.path, "/work/") or
+ starts_with(http.request.uri.path, "/expression/") or
+ starts_with(http.request.uri.path, "/item/") or
+ starts_with(http.request.uri.path, "/u/") or
+ starts_with(http.request.uri.path, "/.well-known/") or
+ starts_with(http.request.uri.path, "/federation/") or
+ starts_with(http.request.uri.path, "/api/public/") or
+ starts_with(http.request.uri.path, "/api/public/rdf/") or
+ starts_with(http.request.uri.path, "/api/public/share/") or
+ starts_with(http.request.uri.path, "/api/federation/") or
+ http.request.uri.path eq "/api/sparql" or
+ any(http.request.headers["accept"][*] contains "application/ld+json") or
+ any(http.request.headers["accept"][*] contains "text/turtle") or
+ any(http.request.headers["accept"][*] contains "application/n-triples")) and
+(http.host eq "iqoqo.cc" or ends_with(http.host, ".iqoqo.cc"))
 ```
 
 > [!IMPORTANT]
-> Headerless AI web fetchers (Gemini, NotebookLM, Perplexity) issue plain `GET` requests with `Accept: */*` or `Accept: text/html` — they do NOT send `Accept: application/ld+json`. Path matching on `/share/` (which serves `/share/<token>`, `/share/<token>/catalog.jsonld`, and `/share/<token>/feed.xml`) ensures they bypass Bot Fight Mode without exposing general `/api/` routes to crawlers.
+> Headerless AI web fetchers (Gemini, NotebookLM, Perplexity) issue plain `GET` requests with `Accept: */*` or `Accept: text/html` — they do NOT send `Accept: application/ld+json`. Path matching on `/share/` (which serves `/share/<token>`, `/share/<token>/catalog.jsonld`, and `/share/<token>/feed.xml`) ensures they bypass Super Bot Fight Mode without exposing general `/api/` endpoints (like `/api/auth`, `/api/admin`, `/api/items`). Using `(http.host eq "<domain>" or ends_with(http.host, ".<domain>"))` with the leading dot covers apex + all subdomains while preventing lookalike-domain matches.
 
 ---
 
-## Cloudflare AI Crawl Control & Managed `robots.txt` (SRE Deployment Checklist)
+## Cloudflare AI Crawl Control & Bot Preference Sync (SRE Deployment Checklist)
 
 When deploying iQoQo behind Cloudflare on a new domain or subdomain (`iqoqo.cc`, `preview.iqoqo.cc`, `iqoqo.kruk.cc`, or any self-hosted zone):
 
-1. **Disable Cloudflare Managed `robots.txt` / AI Scraper Blocking for Assistant Fetchers:**
-   - By default, Cloudflare **AI Crawl Control** ("Block AI Scrapers and Crawlers" / "Manage robots.txt") prepends a `# BEGIN Cloudflare Managed content` block **above** the origin `frontend/public/robots.txt`, emitting:
+1. **Configure Cloudflare AI Crawler and Agent Access Policies:**
+   - By default, Cloudflare **AI Crawl Control** with **Enable Bot Preference Sync** turned on prepends a `# BEGIN Cloudflare Managed content` block **above** the origin `frontend/public/robots.txt`, emitting:
      - `User-agent: Google-Extended` -> `Disallow: /`
      - `User-agent: GoogleOther` -> `Disallow: /`
      - `User-agent: Google-CloudVertexBot` -> `Disallow: /`
-   - Because Cloudflare prepends this block at the top of `/robots.txt`, Google/Gemini URL fetchers see `Disallow: /` before any origin `Allow:` directives and refuse to read shared collection pages or feeds.
-   - **Action in Cloudflare Dashboard:** Navigate to **Security -> Bots / AI Crawl Control** (or **Scrape Shield / Robots.txt**) and disable **Managed robots.txt** injection (or explicitly set AI Assistant / `Google-Extended`, `GoogleOther`, and `Google-CloudVertexBot` to **Allow** for `/share/`).
+   - Even if `Personal Agents` (`Gemini Spark, Google`) is set to `Allow (do not block)`, Cloudflare places `Google-Extended`, `GoogleOther`, and `Google-CloudVertexBot` under **Training** crawlers — causing Google/Gemini fetchers to reject shared collection links or feeds.
+   - **Action in Cloudflare Dashboard (**AI Crawl Control -> Settings -> AI Crawler and Agent access policies**):**
+     - Set **Search**, **Training**, and **Agents** (including `Gemini Spark, Google`, `Claude Duet, Anthropic`, `dots, OpenAI`, `Muse, Meta`) to **`Allow (do not block)`**, **OR**
+     - Toggle **`Enable Bot Preference Sync`** **OFF** and click **Save** so Cloudflare does not prepend managed blocks onto `frontend/public/robots.txt`.
 2. **Keep `/api/` Disallowed to Crawlers in `robots.txt`:**
    - iQoQo intentionally sets `Disallow: /api/` in `frontend/public/robots.txt` so internal/authenticated API surfaces stay off crawler paths.
    - Public share feeds are exposed under `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml` (Next.js rewrites to Flask), which sit under `Allow: /share/`.
