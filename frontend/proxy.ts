@@ -16,6 +16,30 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const RDF_ACCEPT_MIME_TYPES = [
+  "application/ld+json",
+  "application/json+ld",
+  "text/turtle",
+  "application/x-turtle",
+  "application/n-triples",
+  "application/rdf+xml",
+];
+
+/**
+ * Resolves the internal Flask backend base URL at request time (never baked at build time).
+ */
+function resolveRuntimeBackendBase(): string {
+  const candidates = [process.env.FLASK_API_URL, process.env.NEXT_PUBLIC_API_URL];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const stripped = raw.replace(/\/api\/?$/, "");
+    if (stripped.startsWith("http://") || stripped.startsWith("https://")) {
+      return stripped;
+    }
+  }
+  return "http://127.0.0.1:5000";
+}
+
 /**
  * Middleware function for routing and auth checks.
  *
@@ -23,10 +47,46 @@ import type { NextRequest } from "next/server";
  * @returns {NextResponse} The Next.js response
  */
 export function proxy(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+
+  // Runtime rewrite for non-/api/ shared collection semantic feeds so prebuilt
+  // standalone Docker images respect runtime FLASK_API_URL (e.g. http://web:5000/api).
+  const shareFeedMatch = pathname.match(/^\/share\/([^/]+)\/(catalog\.jsonld|feed\.xml)$/);
+  if (shareFeedMatch) {
+    const [, token, feedFile] = shareFeedMatch;
+    const backendBase = resolveRuntimeBackendBase();
+    const target =
+      feedFile === "catalog.jsonld"
+        ? new URL(`${backendBase}/api/public/share/${encodeURIComponent(token)}`)
+        : new URL(`${backendBase}/api/public/share/${encodeURIComponent(token)}/feed.xml`);
+    req.nextUrl.searchParams.forEach((value, key) => {
+      target.searchParams.set(key, value);
+    });
+    if (feedFile === "catalog.jsonld" && !target.searchParams.has("format")) {
+      target.searchParams.set("format", "jsonld");
+    }
+    return NextResponse.rewrite(target);
+  }
+
+  // HTTP Content Negotiation on canonical /share/<token> (and ?page=N):
+  // clients requesting application/ld+json, application/json+ld, or RDF formats
+  // are routed directly to Flask's RDF/JSON-LD serializer.
+  const canonicalShareMatch = pathname.match(/^\/share\/([^/]+)\/?$/);
+  if (canonicalShareMatch) {
+    const acceptHeader = (req.headers.get("accept") || "").toLowerCase();
+    if (RDF_ACCEPT_MIME_TYPES.some(mime => acceptHeader.includes(mime))) {
+      const [, token] = canonicalShareMatch;
+      const target = new URL(`${resolveRuntimeBackendBase()}/api/public/share/${encodeURIComponent(token)}`);
+      req.nextUrl.searchParams.forEach((value, key) => {
+        target.searchParams.set(key, value);
+      });
+      return NextResponse.rewrite(target);
+    }
+  }
+
   // Check for the cookie we set in the /api/auth-exchange route
   const sessionCookie = req.cookies.get("iqoqo_session");
   const isLoggedIn = !!sessionCookie?.value;
-  const pathname = req.nextUrl.pathname;
 
   // Protected routes – require authentication
   const protectedRoutes = ["/profile", "/collection", "/scan", "/admin"];

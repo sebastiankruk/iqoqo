@@ -16,6 +16,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SharedCollectionClient } from "@/components/public/shared-collection-client";
+import { buildPaginationWindow } from "@/lib/pagination";
 import * as routeParams from "@/lib/capacitor/route-params";
 
 vi.mock("next-intl", () => ({
@@ -122,13 +123,18 @@ describe("SharedCollectionClient", () => {
     });
   });
 
-  it("renders non-API JSON-LD / AI Feed and RSS links for shared collections", () => {
-    render(
+  it("renders subtle RDF icon button linking to full absolute ?format=jsonld&page=1 and omits raw text dump", () => {
+    const { container } = render(
       <SharedCollectionClient
         initialToken="tok-123"
+        publicBaseUrl="https://preview.iqoqo.cc"
         initialData={{
           author: "audiophile",
           collection_name: "Jazz Vinyl",
+          total: 365,
+          page: 1,
+          per_page: 48,
+          pages: 8,
           items: [
             {
               id: 1,
@@ -137,57 +143,89 @@ describe("SharedCollectionClient", () => {
               authors: ["Miles Davis"],
               content_type: "music",
               format: "vinyl",
-              publisher: "Columbia",
-              catalog_number: "CL 1355",
-              publication_year: 1959,
-              ean: "886973355220",
             },
           ],
         }}
       />
     );
 
+    expect(container.querySelector('[data-testid="shared-catalog-index"]')).toBeNull();
+    expect(screen.getByText("365 Items")).toBeInTheDocument();
+
     const jsonLdLink = screen.getByRole("link", { name: "jsonLdFeed" });
-    expect(jsonLdLink).toHaveAttribute("href", "/share/tok-123/catalog.jsonld");
+    expect(jsonLdLink).toHaveAttribute("href", "https://preview.iqoqo.cc/share/tok-123?format=jsonld&page=1");
 
     const rssLink = screen.getByRole("link", { name: "RSS" });
     expect(rssLink).toHaveAttribute("href", "/share/tok-123/feed.xml");
   });
 
-  it("renders compact SSR catalog index with all 400 items before the collection grid", () => {
-    const items = Array.from({ length: 400 }, (_, i) => ({
-      id: i + 1,
-      manifestation_id: 1000 + i,
-      title: `Album ${i + 1}`,
-      authors: [`Artist ${i + 1}`],
-      content_type: "music",
-      format: i % 2 === 0 ? "vinyl" : "cd",
-      publisher: "Blue Note",
-      catalog_number: `BN-${i + 1}`,
-      publication_year: 1965,
-    }));
+  it("caps pagination links to at most 10 pages (first, 8 around current, last)", () => {
+    expect(buildPaginationWindow(1, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(buildPaginationWindow(12, 25)).toEqual([1, 9, 10, 11, 12, 13, 14, 15, 16, 25]);
+    expect(buildPaginationWindow(25, 25)).toEqual([1, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
 
-    const { container } = render(
+    render(
       <SharedCollectionClient
-        initialToken="tok-400"
+        initialToken="tok-25p"
+        publicBaseUrl="https://preview.iqoqo.cc"
         initialData={{
           author: "collector",
-          collection_name: "Large Jazz Catalog",
-          items,
+          collection_name: "Huge Collection",
+          total: 1200,
+          page: 12,
+          per_page: 48,
+          pages: 25,
+          items: [{ id: 1, manifestation_id: 10, title: "Album 1", authors: ["Artist"] }],
         }}
       />
     );
 
-    const indexEl = screen.getByTestId("shared-catalog-index");
-    expect(indexEl).toHaveAttribute("open");
-    const listItems = indexEl.querySelectorAll("li");
-    expect(listItems).toHaveLength(400);
-    expect(listItems[0].textContent).toContain("Album 1 — Artist 1 [vinyl · Blue Note · BN-1 · 1965]");
-    expect(listItems[399].textContent).toContain("Album 400 — Artist 400 [cd · Blue Note · BN-400 · 1965]");
+    const navs = screen.getAllByRole("navigation", { name: "Collection pagination" });
+    const pageLinks = navs[0].querySelectorAll("a[href^='/share/tok-25p?page=']");
+    // 10 numbered pages + Prev + Next = 12 links
+    expect(pageLinks).toHaveLength(12);
+    expect(navs[0].querySelector('a[aria-current="page"]')).toHaveTextContent("12");
+  });
 
-    const gridEl = screen.getByTestId("collection-grid");
-    const html = container.innerHTML;
-    expect(html.indexOf("shared-catalog-index")).toBeLessThan(html.indexOf("collection-grid"));
-    expect(gridEl).toHaveTextContent("Items count: 400");
+  it("updates displayed page immediately when initialData changes on client navigation", () => {
+    const { rerender } = render(
+      <SharedCollectionClient
+        initialToken="tok-nav"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "collector",
+          collection_name: "Jazz",
+          total: 96,
+          page: 1,
+          per_page: 48,
+          pages: 2,
+          items: [{ id: 1, manifestation_id: 10, title: "Page 1 Album", authors: ["Artist 1"] }],
+        }}
+      />
+    );
+
+    expect(
+      screen.getAllByRole("navigation", { name: "Collection pagination" })[0].querySelector('a[aria-current="page"]')
+    ).toHaveTextContent("1");
+
+    rerender(
+      <SharedCollectionClient
+        initialToken="tok-nav"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "collector",
+          collection_name: "Jazz",
+          total: 96,
+          page: 2,
+          per_page: 48,
+          pages: 2,
+          items: [{ id: 2, manifestation_id: 20, title: "Page 2 Album", authors: ["Artist 2"] }],
+        }}
+      />
+    );
+
+    expect(
+      screen.getAllByRole("navigation", { name: "Collection pagination" })[0].querySelector('a[aria-current="page"]')
+    ).toHaveTextContent("2");
   });
 });

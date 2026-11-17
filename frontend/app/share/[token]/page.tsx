@@ -18,6 +18,7 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 
 import { resolveApiUrl } from "@/lib/utils";
+import { buildPaginationWindow } from "@/lib/pagination";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
 import { JsonLdScript } from "@/components/json-ld-script";
 import { SharedCollectionClient } from "@/components/public/shared-collection-client";
@@ -47,6 +48,10 @@ interface SharedCollectionData {
   author: string;
   collection_name: string;
   collection_description?: string;
+  total?: number;
+  page?: number;
+  per_page?: number;
+  pages?: number;
   items: SharedCollectionItem[];
 }
 
@@ -60,6 +65,18 @@ type SharedCollectionResult =
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{ page?: string; format?: string }>;
+}
+
+/** Resolves the public origin for absolute links in SSR HTML and JSON-LD pagination. */
+function resolvePublicOrigin(): string {
+  for (const raw of [process.env.NEXT_PUBLIC_FRONTEND_URL, process.env.BASE_URL]) {
+    const trimmed = raw?.trim();
+    if (trimmed && (trimmed.startsWith("http://") || trimmed.startsWith("https://"))) {
+      return trimmed.replace(/\/+$/, "");
+    }
+  }
+  return "https://iqoqo.cc";
 }
 
 /** Generates static placeholder params for Capacitor static export builds. */
@@ -68,13 +85,15 @@ export function generateStaticParams() {
 }
 
 /**
- * Fetches a shared collection by its secure token.
+ * Fetches a paginated shared collection by its secure token.
  * @param token - The unique share token.
+ * @param page - 1-based page number.
+ * @param perPage - Items per page.
  * @returns The shared collection data, a not-found result, or a server error result.
  */
-async function getSharedCollection(token: string): Promise<SharedCollectionResult> {
+async function getSharedCollection(token: string, page = 1, perPage = 48): Promise<SharedCollectionResult> {
   try {
-    const res = await fetch(resolveApiUrl(`/public/share/${token}?limit=1000`, true), {
+    const res = await fetch(resolveApiUrl(`/public/share/${token}?page=${page}&per_page=${perPage}`, true), {
       next: { revalidate: 60 },
     });
     if (res.status === 404) return { kind: "not-found" };
@@ -108,10 +127,10 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
   }
 
   const collection = collectionRes.response.data;
+  const totalCount = collection.total ?? collection.items.length;
   return {
     title: `${collection.collection_name} - Shared by ${collection.author} - iqoqo`,
-    description:
-      collection.collection_description || `A shared collection on iqoqo with ${collection.items.length} items.`,
+    description: collection.collection_description || `A shared collection on iqoqo with ${totalCount} items.`,
     alternates: {
       types: {
         "application/rss+xml": [{ url: `/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` }],
@@ -132,13 +151,20 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
  * @param props.params - The route parameters.
  * @returns The rendered page.
  */
-export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
+export default async function SharedCollectionPage({ params, searchParams }: SharedCollectionPageProps) {
   const { token } = await params;
   if (token === "_placeholder") {
     return <SharedCollectionClient initialData={null} initialToken="_placeholder" />;
   }
 
-  const collectionRes = await getSharedCollection(token);
+  const resolvedSearch = process.env.CAPACITOR_BUILD === "true" ? undefined : await searchParams;
+  const formatParam = (resolvedSearch?.format || "").trim().toLowerCase();
+  const isJsonLdHtmlView = formatParam === "jsonld" || formatParam === "json-ld";
+  const parsedPage = Number.parseInt(resolvedSearch?.page || "1", 10);
+  const requestedPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const perPage = isJsonLdHtmlView ? 60 : 48;
+
+  const collectionRes = await getSharedCollection(token, requestedPage, perPage);
   if (collectionRes.kind === "not-found") {
     notFound();
   }
@@ -159,11 +185,70 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   const collection = collectionRes.response.data;
   const items = collection.items || [];
+  const totalItems = collection.total ?? items.length;
+  const currentPage = collection.page ?? requestedPage;
+  const totalPages = collection.pages ?? (totalItems > 0 ? Math.ceil(totalItems / perPage) : 0);
+  const publicBaseUrl = resolvePublicOrigin();
+
+  if (isJsonLdHtmlView) {
+    const windowPages = buildPaginationWindow(currentPage, totalPages);
+    const pageUrl = (p: number) => `${publicBaseUrl}/share/${token}?format=jsonld&page=${p}`;
+    const compactPayload = {
+      "@context": {
+        "@vocab": "https://schema.org/",
+        t: "name",
+        a: "byArtist",
+        f: "musicReleaseFormat",
+        l: "recordLabel",
+        c: "catalogNumber",
+        y: "datePublished",
+        g: "gtin13",
+      },
+      "@type": "CollectionPage",
+      name: collection.collection_name,
+      author: collection.author,
+      totalItems,
+      page: currentPage,
+      perPage,
+      totalPages,
+      ...(currentPage < totalPages ? { nextPage: pageUrl(currentPage + 1) } : {}),
+      pages: windowPages.map(pageUrl),
+      itemListElement: items.map((item: SharedCollectionItem) => ({
+        t: item.title,
+        ...(item.authors && item.authors.length > 0 ? { a: item.authors.join(", ") } : {}),
+        ...(item.format || item.content_type ? { f: item.format || item.content_type } : {}),
+        ...(item.publisher ? { l: item.publisher } : {}),
+        ...(item.catalog_number ? { c: item.catalog_number } : {}),
+        ...(item.publication_year !== null && item.publication_year !== undefined && item.publication_year !== ""
+          ? { y: String(item.publication_year) }
+          : {}),
+        ...(item.ean || item.upc ? { g: String(item.ean || item.upc) } : {}),
+      })),
+    };
+
+    return (
+      <main className="mx-auto max-w-4xl p-4 font-mono text-xs">
+        {windowPages.length > 0 && (
+          <nav aria-label="JSON-LD Pages" className="mb-3 flex flex-wrap gap-2">
+            {windowPages.map(p => (
+              <a key={p} href={pageUrl(p)} aria-current={p === currentPage ? "page" : undefined}>
+                Page {p}
+              </a>
+            ))}
+            {currentPage < totalPages && <a href={pageUrl(currentPage + 1)}>Next Page</a>}
+          </nav>
+        )}
+        <pre id="jsonld-payload" className="whitespace-pre-wrap break-all">
+          {JSON.stringify(compactPayload)}
+        </pre>
+      </main>
+    );
+  }
 
   const collectionJsonLd = buildCollectionJsonLd({
     name: collection.collection_name,
     description: collection.collection_description || undefined,
-    totalCount: items.length,
+    totalCount: totalItems,
     authorName: collection.author,
     items: items.slice(0, 1000).map((item: SharedCollectionItem) => {
       const sameAs: string[] = [];
@@ -192,7 +277,7 @@ export default async function SharedCollectionPage({ params }: SharedCollectionP
 
   return (
     <>
-      <SharedCollectionClient initialData={collection} initialToken={token} />
+      <SharedCollectionClient initialData={collection} initialToken={token} publicBaseUrl={publicBaseUrl} />
       <JsonLdScript data={collectionJsonLd} />
     </>
   );

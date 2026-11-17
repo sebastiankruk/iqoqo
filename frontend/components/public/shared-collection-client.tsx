@@ -16,10 +16,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Library, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Library, Share2 } from "lucide-react";
 
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
+import { buildPaginationWindow } from "@/lib/pagination";
 import { resolveApiUrl } from "@/lib/utils";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
@@ -52,29 +54,17 @@ export interface SharedCollectionData {
   author: string;
   collection_name: string;
   collection_description?: string;
+  total?: number;
+  page?: number;
+  per_page?: number;
+  pages?: number;
   items: SharedCollectionItem[];
 }
 
 interface SharedCollectionClientProps {
   initialData?: SharedCollectionData | null;
   initialToken?: string;
-}
-
-/**
- * Formats a single compact line summarizing an item and its pressing metadata
- * for the lightweight SSR catalog index.
- */
-function formatCatalogIndexEntry(item: SharedCollectionItem): string {
-  const authorText = item.authors && item.authors.length > 0 ? ` — ${item.authors.join(", ")}` : "";
-  const details = [
-    item.format || item.content_type,
-    item.publisher,
-    item.catalog_number,
-    item.publication_year != null && item.publication_year !== "" ? String(item.publication_year) : null,
-    item.ean || item.upc,
-  ].filter((part): part is string => Boolean(part && String(part).trim()));
-
-  return details.length > 0 ? `${item.title}${authorText} [${details.join(" · ")}]` : `${item.title}${authorText}`;
+  publicBaseUrl?: string;
 }
 
 /**
@@ -83,11 +73,12 @@ function formatCatalogIndexEntry(item: SharedCollectionItem): string {
  * @param {SharedCollectionClientProps} props - Component props.
  * @returns {JSX.Element} Rendered shared collection page.
  */
-export function SharedCollectionClient({ initialData, initialToken }: SharedCollectionClientProps) {
+export function SharedCollectionClient({ initialData, initialToken, publicBaseUrl }: SharedCollectionClientProps) {
   const resolvedToken = useResolvedRouteParam("token") || initialToken;
   const t = useTranslations("Public");
 
   const [collection, setCollection] = useState<SharedCollectionData | null>(initialData || null);
+  const activeCollection = initialData ?? collection;
   const [isLoading, setIsLoading] = useState<boolean>(!initialData && !!resolvedToken);
   const [isError, setIsError] = useState<boolean>(false);
   const [isNotFound, setIsNotFound] = useState<boolean>(false);
@@ -158,7 +149,7 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
     );
   }
 
-  if (isLoading || !collection) {
+  if (isLoading || !activeCollection) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
@@ -170,7 +161,66 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
     );
   }
 
-  const items = collection.items || [];
+  const items = activeCollection.items || [];
+  const totalItems = activeCollection.total ?? items.length;
+  const currentPage = activeCollection.page ?? 1;
+  const totalPages = activeCollection.pages ?? (totalItems > 0 ? 1 : 0);
+  const paginationWindow = buildPaginationWindow(currentPage, totalPages);
+  const normalizedBaseUrl = (publicBaseUrl || "").replace(/\/+$/, "");
+  const jsonLdPageUrl = resolvedToken
+    ? normalizedBaseUrl
+      ? `${normalizedBaseUrl}/share/${resolvedToken}?format=jsonld&page=1`
+      : `/share/${resolvedToken}?format=jsonld&page=1`
+    : "";
+
+  const renderPagination = () => {
+    if (totalPages <= 1 || !resolvedToken) return null;
+    return (
+      <nav aria-label="Collection pagination" className="my-6 flex flex-wrap items-center justify-center gap-1.5">
+        {currentPage > 1 && (
+          <Link
+            href={`/share/${resolvedToken}?page=${currentPage - 1}`}
+            aria-label="Previous page"
+            className="inline-flex h-9 items-center gap-1 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Prev</span>
+          </Link>
+        )}
+        {paginationWindow.map((pageNum, idx) => {
+          const prevNum = idx > 0 ? paginationWindow[idx - 1] : null;
+          const showEllipsis = prevNum !== null && pageNum - prevNum > 1;
+          const isCurrent = pageNum === currentPage;
+          return (
+            <span key={pageNum} className="inline-flex items-center gap-1.5">
+              {showEllipsis && <span className="px-1 text-sm text-muted-foreground">…</span>}
+              <Link
+                href={`/share/${resolvedToken}?page=${pageNum}`}
+                aria-current={isCurrent ? "page" : undefined}
+                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2.5 text-sm font-medium transition-colors ${
+                  isCurrent
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {pageNum}
+              </Link>
+            </span>
+          );
+        })}
+        {currentPage < totalPages && (
+          <Link
+            href={`/share/${resolvedToken}?page=${currentPage + 1}`}
+            aria-label="Next page"
+            className="inline-flex h-9 items-center gap-1 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
+      </nav>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -184,28 +234,28 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
             </div>
 
             <h1 className="text-3xl md:text-4xl font-serif font-bold tracking-tight mb-4">
-              {collection.collection_name}
+              {activeCollection.collection_name}
             </h1>
 
             <p className="text-muted-foreground text-sm uppercase tracking-[0.2em] font-bold mb-6">
-              Shared by <span className="text-foreground">@{collection.author}</span>
+              Shared by <span className="text-foreground">@{activeCollection.author}</span>
             </p>
 
-            {collection.collection_description && (
+            {activeCollection.collection_description && (
               <p className="text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-                {collection.collection_description}
+                {activeCollection.collection_description}
               </p>
             )}
 
-            <div className="flex flex-wrap justify-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <ShareButton
-                title={collection.collection_name}
-                text={`Check out this shared collection by ${collection.author} on iqoqo!`}
+                title={activeCollection.collection_name}
+                text={`Check out this shared collection by ${activeCollection.author} on iqoqo!`}
               />
               {resolvedToken && <PublicFeedButton feedPath={`/share/${resolvedToken}/feed.xml`} />}
               {resolvedToken && (
                 <PublicFeedButton
-                  feedPath={`/share/${resolvedToken}/catalog.jsonld`}
+                  feedPath={jsonLdPageUrl}
                   label={t("jsonLdFeed")}
                   title={t("jsonLdFeedTitle")}
                   variant="jsonld"
@@ -220,23 +270,15 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
           <div className="flex items-center justify-between border-b pb-4 mb-8">
             <h2 className="text-xl font-serif font-bold">Items in this Collection</h2>
             <span className="text-sm font-medium bg-muted px-2 py-1 rounded">
-              {items.length} {items.length === 1 ? "Item" : "Items"}
+              {totalItems} {totalItems === 1 ? "Item" : "Items"}
             </span>
           </div>
 
           {items.length > 0 ? (
             <>
-              <details open data-testid="shared-catalog-index" className="mb-8 rounded-lg border bg-muted/20 px-4 py-3">
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
-                  {t("catalogIndex", { count: items.length })}
-                </summary>
-                <ol className="mt-3 max-h-56 overflow-y-auto space-y-1 text-xs text-muted-foreground list-decimal list-inside">
-                  {items.map(item => (
-                    <li key={item.id}>{formatCatalogIndexEntry(item)}</li>
-                  ))}
-                </ol>
-              </details>
+              {renderPagination()}
               <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
+              {renderPagination()}
             </>
           ) : (
             <EmptyState

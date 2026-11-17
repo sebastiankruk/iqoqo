@@ -79,7 +79,11 @@ export function ShareButton({ url, title, text }: ShareButtonProps) {
   };
 
   return (
-    <Button onClick={handleShare} variant="outline" size="sm" className="flex items-center gap-2 transition-all">
+    <Button
+      onClick={handleShare}
+      variant="outline"
+      className="inline-flex h-9 items-center gap-2 px-3.5 text-sm font-medium transition-all"
+    >
       {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
       <span>{copied ? t("copied") : t("share")}</span>
     </Button>

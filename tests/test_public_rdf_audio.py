@@ -199,3 +199,33 @@ def test_shared_collection_json_and_rdf_negotiation(client, app) -> None:
     res_bad_rdf = client.get(f"/api/public/rdf/share/{token}?format=unknown-fmt")
     assert res_bad_rdf.status_code == 400
     assert res_bad_rdf.get_json()["code"] == 400
+
+
+@pytest.mark.usefixtures("app")
+def test_shared_collection_sql_pagination_and_accept_jsonld(client, app) -> None:
+    """Verify SQL page/per_page pagination and Accept: application/ld+json | application/json+ld."""
+    with app.app_context():
+        token = _seed_audio_share(count=5, include_hidden=True)
+
+    page1 = client.get(f"/api/public/share/{token}?page=1&per_page=2")
+    assert page1.status_code == 200
+    d1 = page1.get_json()["data"]
+    assert d1["total"] == 5
+    assert d1["page"] == 1
+    assert d1["per_page"] == 2
+    assert d1["pages"] == 3
+    assert len(d1["items"]) == 2
+
+    page3 = client.get(f"/api/public/share/{token}?page=3&per_page=2")
+    assert page3.status_code == 200
+    d3 = page3.get_json()["data"]
+    assert d3["page"] == 3
+    assert len(d3["items"]) == 1
+
+    for accept_hdr in ("application/ld+json", "application/json+ld"):
+        res_ld = client.get(f"/api/public/share/{token}?page=1&per_page=2", headers={"Accept": accept_hdr})
+        assert res_ld.status_code == 200
+        assert "application/ld+json" in res_ld.headers.get("Content-Type", "")
+        assert res_ld.headers.get("Cache-Control") == "public, max-age=300"
+        parsed = json.loads(res_ld.data.decode("utf-8"))
+        assert parsed

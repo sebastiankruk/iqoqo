@@ -267,13 +267,14 @@ def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = 
     return list(db.session.execute(stmt).scalars().unique().all())
 
 
-def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool = False) -> list[Any] | Any:
+def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool = False, offset: int = 0) -> list[Any] | Any:
     """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
 
     Args:
         token: The share token to look up.
         limit: Maximum number of items to return.
         stream: If True, returns an iterator instead of a list for memory-efficient streaming.
+        offset: SQL offset for paginated queries.
 
     Returns:
         List of items or iterator if stream=True.
@@ -334,7 +335,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                 query = query.outerjoin(Work, Expression.work_id == Work.id)
                 query = query.where(build_ilike_search_clause(search_query))
 
-    query = query.order_by(Item.updated_at.desc()).limit(limit)
+    query = query.order_by(Item.updated_at.desc()).limit(limit).offset(max(0, offset))
 
     if stream:
         # Return an iterator for memory-efficient streaming
@@ -368,7 +369,11 @@ def global_fresh_feed():
         description="Live tracking stream of global physical catalog updates.",
         items=items,
     )
-    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
+    return Response(
+        rss_data,
+        mimetype="application/rss+xml",
+        headers={"Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300"},
+    )
 
 
 @public_bp.route("/u/<string:username>/feed.xml", methods=["GET"])
@@ -384,7 +389,11 @@ def user_collection_feed(username: str):
         items=items,
         use_item_guid=True,
     )
-    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
+    return Response(
+        rss_data,
+        mimetype="application/rss+xml",
+        headers={"Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300"},
+    )
 
 
 @public_bp.route("/share/<string:token>/feed.xml", methods=["GET"])
@@ -400,7 +409,11 @@ def shared_collection_feed(token: str):
         items=items,
         use_item_guid=True,
     )
-    return Response(rss_data, mimetype="application/rss+xml", headers={"Content-Type": "application/rss+xml; charset=utf-8"})
+    return Response(
+        rss_data,
+        mimetype="application/rss+xml",
+        headers={"Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300"},
+    )
 
 
 @public_bp.route("/u/<string:username>/items", methods=["GET"])
@@ -564,9 +577,16 @@ def _serialize_shared_collection_item(item: Item) -> dict[str, Any]:
 def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
     accept_header = request.headers.get("Accept", "")
+    accept_lower = accept_header.lower()
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     format_arg = request.args.get("format", "").strip().lower()
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
+    page_arg = request.args.get("page", type=int)
+    per_page_arg = request.args.get("per_page", type=int)
+
+    page_num = max(1, page_arg) if page_arg is not None else None
+    per_page_num = max(1, min(per_page_arg if per_page_arg is not None else 48, 200)) if page_num is not None else None
+    offset_val = (page_num - 1) * per_page_num if (page_num is not None and per_page_num is not None) else 0
 
     valid_formats = {"", "json", "nt", "n-triples", "json-ld", "jsonld", "turtle", "ttl", "rdfxml", "xml", "rdf+xml"}
     if format_arg not in valid_formats:
@@ -576,34 +596,41 @@ def get_shared_collection(token: str):
     rdf_format: str | None = None
     rdf_mimetype: str = ""
 
-    if "application/n-triples" in accept_header or format_arg in ("nt", "n-triples") or accept_header == "text/plain":
+    if "application/n-triples" in accept_lower or format_arg in ("nt", "n-triples") or accept_lower == "text/plain":
         rdf_format = "nt"
         rdf_mimetype = "application/n-triples"
-    elif "application/ld+json" in accept_header or format_arg in ("json-ld", "jsonld"):
+    elif "application/ld+json" in accept_lower or "application/json+ld" in accept_lower or format_arg in ("json-ld", "jsonld"):
         rdf_format = "json-ld"
         rdf_mimetype = "application/ld+json"
-    elif "text/turtle" in accept_header or "application/x-turtle" in accept_header or format_arg in ("turtle", "ttl"):
+    elif "text/turtle" in accept_lower or "application/x-turtle" in accept_lower or format_arg in ("turtle", "ttl"):
         rdf_format = "turtle"
         rdf_mimetype = "text/turtle"
-    elif "application/rdf+xml" in accept_header or format_arg in ("rdfxml", "xml", "rdf+xml"):
+    elif "application/rdf+xml" in accept_lower or format_arg in ("rdfxml", "xml", "rdf+xml"):
         rdf_format = "xml"
         rdf_mimetype = "application/rdf+xml"
 
     if rdf_format:
-        limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
-        items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
+        if page_num is not None and per_page_num is not None:
+            items = fetch_shared_collection_by_token(token=token, limit=per_page_num, offset=offset_val, stream=is_stream)
+        else:
+            limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
+            items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
         collection_uri = f"{base_url}/share/{token}"
         if is_stream:
             return Response(
                 stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
                 mimetype=rdf_mimetype,
-                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8", "Cache-Control": "public, max-age=300"},
             )
         # For non-streaming, convert iterator to list if needed
         if not isinstance(items, list):
             items = list(items)
         rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
-        return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
+        return Response(
+            rdf_payload,
+            mimetype=rdf_mimetype,
+            headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8", "Cache-Control": "public, max-age=300"},
+        )
 
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
@@ -675,11 +702,19 @@ def get_shared_collection(token: str):
                 query = query.outerjoin(Work, Expression.work_id == Work.id)
                 query = query.where(build_ilike_search_clause(search_query))
 
-    limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
+    total_count = int(
+        db.session.execute(select(func.count()).select_from(query.subquery())).scalar_one() or 0
+    )  # pylint: disable=not-callable
+    limit_val = (
+        per_page_num
+        if (page_num is not None and per_page_num is not None)
+        else _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
+    )
     items = list(
         db.session.execute(
             query.order_by(Item.updated_at.desc())
             .limit(limit_val)
+            .offset(offset_val)
             .options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
         )
         .scalars()
@@ -797,6 +832,10 @@ def get_shared_collection(token: str):
                 }
             )
 
+    effective_per_page = per_page_num if per_page_num is not None else limit_val
+    total_items = total_count + (len(items_list) - len(items) if is_wish_list else 0)
+    total_pages = (total_items + effective_per_page - 1) // effective_per_page if total_items else 0
+
     return jsonify(
         {
             "success": True,
@@ -804,6 +843,10 @@ def get_shared_collection(token: str):
                 "collection_name": collection.name,
                 "collection_description": collection.description,
                 "author": user.public_username or user.display_name or "A user",
+                "total": total_items,
+                "page": page_num if page_num is not None else 1,
+                "per_page": effective_per_page,
+                "pages": total_pages,
                 "items": items_list,
             },
         }

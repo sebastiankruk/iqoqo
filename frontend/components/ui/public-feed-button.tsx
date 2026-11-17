@@ -17,7 +17,7 @@
 "use client";
 
 import * as React from "react";
-import { Braces, Rss } from "lucide-react";
+import { Rss } from "lucide-react";
 import { openExternalUrl } from "@/lib/capacitor/navigation";
 import { isNativeApp } from "@/lib/capacitor/platform";
 import { resolvePublicUrl } from "@/lib/utils";
@@ -31,29 +31,80 @@ interface PublicFeedButtonProps {
 }
 
 /**
- * Client-side RSS or JSON-LD feed link button. On native mobile (Capacitor), opens
+ * Official W3C RDF Flyer icon (https://www.w3.org/RDF/icons/rdf_flyer.svg).
+ */
+function RdfGraphIcon() {
+  return (
+    <svg viewBox="0 0 94.332 101.883" className="h-4 w-4" aria-hidden="true">
+      <g shapeRendering="geometricPrecision">
+        <path
+          d="M84.45,66.836c-0.636-0.337-1.284-0.624-1.936-0.879l0.466-0.038c0,0-4.151-1.838-4.514-15.18 c-0.359-13.344,3.957-15.62,3.957-15.62l-0.62,0.027c3.261-1.673,6.066-4.316,7.917-7.804c4.823-9.072,1.372-20.341-7.702-25.165 C72.94-2.641,61.674,0.802,56.854,9.883c-1.982,3.725-2.545,7.817-1.919,11.683l-0.212-0.326c0,0,1.093,4.842-10.258,11.888 c-11.349,7.05-16.469,3.54-16.469,3.54l0.326,0.48c-0.325-0.201-0.636-0.406-0.975-0.583C18.269,31.741,7,35.188,2.178,44.266 c-4.82,9.077-1.372,20.341,7.703,25.167c6.766,3.591,14.744,2.59,20.365-1.914l-0.122,0.236c0,0,4.132-3.399,16.04,2.994 c9.4,5.044,10.796,9.988,10.975,11.846c-0.246,6.893,3.347,13.654,9.847,17.107c9.075,4.825,20.344,1.375,25.164-7.701 C96.974,82.926,93.528,71.656,84.45,66.836z M63.466,69.282c-1.504,0.532-5.801,1.121-14.847-3.73 c-9.797-5.26-11.251-9.654-11.464-10.973c0.139-1.6,0.05-3.197-0.223-4.755l0.06,0.09c0,0-0.798-4.274,10.412-11.235 c10.033-6.228,14.594-4.989,15.443-4.664c0.546,0.371,1.112,0.717,1.706,1.033c1.129,0.6,2.293,1.07,3.472,1.418 c1.38,1.314,3.92,5.045,4.184,14.854c0.27,9.883-2.634,13.694-4.217,15.042C66.362,67.1,64.836,68.085,63.466,69.282z"
+          fill="#0C479C"
+        />
+        <path
+          d="M62.239,8.1c-5.415,5.923-5.529,14.636-0.312,19.566c-2.579-2.483-2.523-7.651,0.083-12.597 c0.335-0.443,1.306-1.49,2.725-1.014c0.143,0.049,0.237,0.062,0.292,0.053c0.321,0.069,0.65,0.11,0.99,0.095 c2.155-0.098,3.822-1.921,3.725-4.077c-0.044-0.967-0.445-1.823-1.065-2.48c5.002-3.277,10.742-3.652,13.094-1.504l0.09,0.006 C76.488,1.242,67.705,2.119,62.239,8.1z"
+          fill="#FFFFFF"
+        />
+        <path
+          d="M7.805,43.13c-5.416,5.924-5.529,14.635-0.313,19.566c-2.578-2.484-2.523-7.652,0.083-12.598 c0.336-0.444,1.308-1.49,2.727-1.014c0.141,0.049,0.236,0.061,0.292,0.054c0.321,0.069,0.651,0.11,0.99,0.095 c2.156-0.099,3.822-1.922,3.725-4.076c-0.045-0.967-0.445-1.824-1.063-2.48c4.999-3.276,10.74-3.654,13.092-1.505l0.089,0.008 C22.054,36.271,13.269,37.147,7.805,43.13z"
+          fill="#FFFFFF"
+        />
+        <path
+          d="M65.428,72.786c-5.416,5.926-5.529,14.639-0.313,19.569c-2.58-2.483-2.523-7.653,0.082-12.597 c0.336-0.445,1.307-1.49,2.727-1.014c0.143,0.047,0.235,0.061,0.292,0.053c0.32,0.069,0.651,0.11,0.99,0.096 c2.154-0.1,3.82-1.924,3.723-4.08c-0.044-0.966-0.445-1.822-1.063-2.479c5-3.275,10.739-3.652,13.093-1.504l0.088,0.007 C79.677,65.93,70.891,66.807,65.428,72.786z"
+          fill="#FFFFFF"
+        />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Client-side RSS or RDF/JSON-LD feed link button. On native mobile (Capacitor), opens
  * via the system browser instead of the internal WebView.
  */
 export function PublicFeedButton({
   feedPath,
   label = "RSS Feed",
-  className = "inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground shadow-sm transition-all",
+  className,
   title = "Subscribe to RSS feed",
   variant = "rss",
 }: PublicFeedButtonProps) {
-  const url = isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
+  const isAbsolute = /^https?:\/\//i.test(feedPath);
+  const url = isAbsolute ? feedPath : isNativeApp() ? resolvePublicUrl(feedPath) : feedPath;
+
+  const defaultClassName =
+    variant === "jsonld"
+      ? "inline-flex h-9 w-9 items-center justify-center rounded-md border bg-background text-muted-foreground hover:text-foreground shadow-sm transition-all"
+      : "inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3.5 text-sm font-medium text-muted-foreground hover:text-foreground shadow-sm transition-all";
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (isNativeApp()) {
       e.preventDefault();
-      openExternalUrl(resolvePublicUrl(feedPath));
+      openExternalUrl(isAbsolute ? feedPath : resolvePublicUrl(feedPath));
     }
   };
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" onClick={handleClick} className={className} title={title}>
-      {variant === "jsonld" ? <Braces className="h-4 w-4 text-primary" /> : <Rss className="h-4 w-4 text-orange-500" />}
-      <span>{label}</span>
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={handleClick}
+      className={className || defaultClassName}
+      title={title}
+      aria-label={label}
+    >
+      {variant === "jsonld" ? (
+        <>
+          <RdfGraphIcon />
+          <span className="sr-only">{label}</span>
+        </>
+      ) : (
+        <>
+          <Rss className="h-4 w-4 text-orange-500" />
+          <span>{label}</span>
+        </>
+      )}
     </a>
   );
 }

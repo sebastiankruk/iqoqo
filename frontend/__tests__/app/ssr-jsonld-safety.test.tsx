@@ -161,10 +161,68 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
     expect(parsed["author"]["name"]).toBe("Collector </script>");
     const itemList = (parsed["mainEntity"] as any).itemListElement;
     expect(itemList[0].item.name).toBe("Item </script>");
+    expect(container.querySelector('[data-testid="shared-catalog-index"]')).toBeNull();
+  });
 
-    const html = container.innerHTML;
-    expect(html.indexOf("shared-catalog-index")).toBeGreaterThan(-1);
-    expect(html.indexOf("shared-catalog-index")).toBeLessThan(html.indexOf("application/ld+json"));
+  it("shared collection ?format=jsonld&page=1 renders chromeless minified JSON-LD with absolute pagination URLs", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          collection_name: "Jazz Vinyl",
+          author: "skruk",
+          total: 365,
+          page: 1,
+          per_page: 60,
+          pages: 7,
+          items: [
+            {
+              id: 1,
+              manifestation_id: 10,
+              title: "Kind of Blue",
+              authors: ["Miles Davis"],
+              content_type: "music",
+              format: "vinyl",
+              publisher: "Columbia",
+              catalog_number: "CL 1355",
+              publication_year: 1959,
+            },
+          ],
+        },
+      }),
+    } as unknown as Response);
+
+    const pageJsx = await SharedCollectionPage({
+      params: Promise.resolve({ token: "tok-ai" }),
+      searchParams: Promise.resolve({ format: "jsonld", page: "1" }),
+    });
+    const { container, queryByTestId } = renderWithClient(pageJsx);
+
+    expect(queryByTestId("navbar")).toBeNull();
+    expect(queryByTestId("footer")).toBeNull();
+
+    const nav = container.querySelector('nav[aria-label="JSON-LD Pages"]');
+    expect(nav).not.toBeNull();
+    const links = Array.from(nav!.querySelectorAll("a")).map(a => a.getAttribute("href"));
+    expect(links.some(href => href?.includes("/share/tok-ai?format=jsonld&page=2"))).toBe(true);
+
+    const pre = container.querySelector("pre#jsonld-payload");
+    expect(pre).not.toBeNull();
+    const payload = JSON.parse(pre!.textContent || "{}");
+    expect(payload.totalItems).toBe(365);
+    expect(payload.perPage).toBe(60);
+    expect(payload.totalPages).toBe(7);
+    expect(payload.pages).toHaveLength(7);
+    expect(payload.nextPage).toMatch(/^https?:\/\/.*\/share\/tok-ai\?format=jsonld&page=2$/);
+    expect(payload.itemListElement[0]).toEqual({
+      t: "Kind of Blue",
+      a: "Miles Davis",
+      f: "vinyl",
+      l: "Columbia",
+      c: "CL 1355",
+      y: "1959",
+    });
   });
 
   it("public profile page preserves bio with Unicode separators and multiline text", async () => {
