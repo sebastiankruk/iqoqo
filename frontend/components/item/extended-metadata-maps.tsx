@@ -36,6 +36,38 @@ interface ExtendedMetadataMapsProps {
   canEdit?: boolean;
 }
 
+/** Whether the maps panel has visible content for the current viewer. */
+export function hasMapsMetadata(
+  meta: Record<string, unknown>,
+  display?: DisplayProjection | null,
+  manifestationId?: number,
+  canEdit = false
+): boolean {
+  const fields = display?.fields || {};
+  const mapScale = (fields["map_scale"] ?? meta["map_scale"] ?? meta["scale"]) as string | undefined;
+  const mapProjection = (fields["map_projection"] ?? meta["map_projection"] ?? meta["projection"]) as
+    string | undefined;
+  const rawAttachments = (fields["map_attachments"] ?? meta["map_attachments"]) as MapAttachmentItem[] | undefined;
+  const attachments: MapAttachmentItem[] = Array.isArray(rawAttachments) ? rawAttachments : [];
+  const mapInsertPresent = fields["map_insert_present"] as boolean | undefined;
+
+  const isMapContext =
+    Boolean(meta["has_map"]) ||
+    Boolean(display?.fields?.has_map) ||
+    meta["format"] === "cartographic_map" ||
+    meta["format"] === "atlas" ||
+    attachments.length > 0 ||
+    Boolean(mapScale) ||
+    Boolean(mapProjection);
+  const hasVisibleContent =
+    Boolean(mapScale) ||
+    Boolean(mapProjection) ||
+    mapInsertPresent !== undefined ||
+    attachments.length > 0 ||
+    (canEdit && Boolean(manifestationId));
+  return isMapContext && hasVisibleContent;
+}
+
 /**
  * Extended metadata component for displaying cartographic map data and attachments.
  *
@@ -69,9 +101,7 @@ export function ExtendedMetadataMaps({ meta, display, manifestationId, canEdit =
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  const hasMaps = Boolean(meta["has_map"]) || attachments.length > 0 || Boolean(mapScale) || Boolean(mapProjection);
-
-  if (!hasMaps && meta["format"] !== "cartographic_map" && meta["format"] !== "atlas") {
+  if (!hasMapsMetadata(meta, display, manifestationId, canEdit)) {
     return null;
   }
 

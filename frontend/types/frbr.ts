@@ -213,6 +213,8 @@ export interface CatalogEntry extends Manifestation {
   is_live_performance?: boolean;
   /** Anonymized average reading duration in minutes across public items. */
   average_reading_minutes?: number | null;
+  /** Server-derived display projection for manifestation metadata. */
+  display?: DisplayProjection | null;
 }
 
 /** Item-scoped reading duration and transition elapsed-days summary. */

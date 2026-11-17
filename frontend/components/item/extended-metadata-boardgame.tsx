@@ -22,6 +22,17 @@ interface ExtendedMetadataBoardGameProps {
   meta: Record<string, unknown>;
 }
 
+/** Whether the metadata carries any displayable board-game fields or cover. */
+export function hasBoardGameMetadata(meta: Record<string, unknown>): boolean {
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
+  const minPlayers = (meta.min_players || meta.MinPlayers) as number | undefined;
+  const maxPlayers = (meta.max_players || meta.MaxPlayers) as number | undefined;
+  const playingTime = (meta.playing_time || meta.playtime || meta.max_playtime || meta.PlayTime) as number | undefined;
+  const mechanics = (meta.mechanics || meta.Mechanics) as string[] | undefined;
+  return Boolean(minPlayers || maxPlayers || playingTime || mechanics?.length || coverUrl);
+}
+
 /**
  * Extended metadata component for board game items.
  *
@@ -38,16 +49,7 @@ export function ExtendedMetadataBoardGame({ meta }: ExtendedMetadataBoardGamePro
   const mechanics = (meta.mechanics || meta.Mechanics) as string[] | undefined;
   const source = meta.Source as string | undefined;
 
-  if (
-    !minPlayers &&
-    !maxPlayers &&
-    !playingTime &&
-    !mechanics?.length &&
-    source !== "BGG" &&
-    source !== "IGDB" &&
-    !coverUrl
-  )
-    return null;
+  if (!hasBoardGameMetadata(meta)) return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

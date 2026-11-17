@@ -193,4 +193,56 @@ describe("ExtendedMetadata", () => {
     expect(screen.queryByText("Google Books")).not.toBeInTheDocument();
     expect(screen.queryByText("Open Library")).not.toBeInTheDocument();
   });
+
+  it("does not render LEGO Set Details or empty Video Details for a movie with null/empty LEGO keys and TMDB source", () => {
+    render(
+      <ExtendedMetadata
+        meta={{
+          format: "dvd",
+          Source: "TMDB",
+          set_number: null,
+          piece_count: null,
+        }}
+      />
+    );
+    expect(screen.queryByText("LEGO Set Details")).not.toBeInTheDocument();
+    expect(screen.queryByText("Video Details")).not.toBeInTheDocument();
+  });
+
+  it("renders empty DOM for a DVD with zero displayable metadata and null LEGO keys", () => {
+    const { container } = render(
+      <ExtendedMetadata
+        meta={{
+          format: "dvd",
+          set_number: null,
+          piece_count: null,
+        }}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("does not render LEGO Set Details for a movie with empty-string LEGO keys", () => {
+    render(
+      <ExtendedMetadata
+        meta={{
+          format: "video",
+          Source: "TMDB",
+          set_number: "",
+          piece_count: "",
+        }}
+      />
+    );
+    expect(screen.queryByText("LEGO Set Details")).not.toBeInTheDocument();
+    expect(screen.queryByText("Video Details")).not.toBeInTheDocument();
+  });
+
+  it("does not render empty Puzzle Details or read-only Maps card when no fields are present", () => {
+    const { unmount } = render(<ExtendedMetadata meta={{ format: "puzzle" }} />);
+    expect(screen.queryByText("Puzzle Details")).not.toBeInTheDocument();
+    unmount();
+
+    render(<ExtendedMetadata meta={{ format: "cartographic_map" }} canEdit={false} />);
+    expect(screen.queryByText("Cartography & Map Supplements")).not.toBeInTheDocument();
+  });
 });

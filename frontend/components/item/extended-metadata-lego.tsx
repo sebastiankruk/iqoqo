@@ -26,26 +26,96 @@ interface ExtendedMetadataLegoProps {
   display?: DisplayProjection | null;
 }
 
+/** Return the first candidate that is neither nullish nor blank/whitespace-only. */
+function pickPresent<T>(...candidates: unknown[]): T | undefined {
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null) continue;
+    if (typeof candidate === "string" && candidate.trim() === "") continue;
+    return candidate as T;
+  }
+  return undefined;
+}
+
+/**
+ * Extract normalized LEGO fields and render flags from raw metadata and display projection.
+ *
+ * @param meta - The manifestation metadata record
+ * @param display - Optional server-derived display projection
+ * @returns Normalized LEGO fields and presence flags
+ */
+function extractLegoFields(meta: Record<string, unknown>, display?: DisplayProjection | null) {
+  const fields = display?.fields || {};
+  const setNumber = pickPresent<string>(fields["set_number"], meta["set_number"], meta["set_num"]);
+  const pieceCount = pickPresent<number | string>(fields["piece_count"], meta["piece_count"], meta["num_parts"]);
+  const minifigCount = pickPresent<number | string>(
+    fields["minifig_count"],
+    meta["minifig_count"],
+    meta["num_minifigs"]
+  );
+  const theme = pickPresent<string>(fields["theme"], meta["theme"]);
+  const buildStatus = pickPresent<string>(fields["build_status"], meta["build_status"]);
+  const missingPieces = pickPresent<number | string>(fields["missing_pieces_count"], meta["missing_pieces_count"]);
+  const instructionsIncluded = pickPresent<boolean>(fields["instructions_included"], meta["instructions_included"]);
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
+  const externalUrl = pickPresent<string>(meta["external_url"], meta["set_url"]);
+
+  const hasPhysicalState =
+    Boolean(buildStatus) ||
+    instructionsIncluded !== undefined ||
+    (missingPieces !== undefined && Number(missingPieces) > 0);
+  const hasAnyContent =
+    Boolean(coverUrl) ||
+    Boolean(externalUrl) ||
+    Boolean(setNumber) ||
+    pieceCount !== undefined ||
+    minifigCount !== undefined ||
+    Boolean(theme) ||
+    hasPhysicalState;
+
+  return {
+    setNumber,
+    pieceCount,
+    minifigCount,
+    theme,
+    buildStatus,
+    missingPieces,
+    instructionsIncluded,
+    coverUrl,
+    externalUrl,
+    hasPhysicalState,
+    hasAnyContent,
+  };
+}
+
+/** Whether the metadata carries any displayable LEGO fields, cover, or link. */
+export function hasLegoMetadata(meta: Record<string, unknown>, display?: DisplayProjection | null): boolean {
+  return extractLegoFields(meta, display).hasAnyContent;
+}
+
 /**
  * Extended metadata component for LEGO & construction set items.
  *
  * @param props - Component props
  * @param props.meta - The metadata record
  * @param props.display - Display projection from backend
- * @returns {JSX.Element} The rendered component
+ * @returns {JSX.Element | null} The rendered component or null if no LEGO metadata
  */
 export function ExtendedMetadataLego({ meta, display }: ExtendedMetadataLegoProps) {
   const t = useTranslations("ItemDetail.lego");
-  const fields = display?.fields || {};
-  const setNumber = (fields["set_number"] ?? meta["set_number"] ?? meta["set_num"]) as string | undefined;
-  const pieceCount = (fields["piece_count"] ?? meta["piece_count"] ?? meta["num_parts"]) as number | string | undefined;
-  const minifigCount = (fields["minifig_count"] ?? meta["minifig_count"] ?? meta["num_minifigs"]) as
-    number | string | undefined;
-  const theme = (fields["theme"] ?? meta["theme"]) as string | undefined;
-  const buildStatus = (fields["build_status"] ?? meta["build_status"]) as string | undefined;
-  const missingPieces = (fields["missing_pieces_count"] ?? meta["missing_pieces_count"]) as number | string | undefined;
-  const instructionsIncluded = (fields["instructions_included"] ?? meta["instructions_included"]) as
-    boolean | undefined;
+  const {
+    setNumber,
+    pieceCount,
+    minifigCount,
+    theme,
+    buildStatus,
+    missingPieces,
+    instructionsIncluded,
+    coverUrl,
+    externalUrl,
+    hasPhysicalState,
+    hasAnyContent,
+  } = extractLegoFields(meta, display);
 
   const buildStatusLabels: Record<string, string> = {
     sealed: t("statusSealed"),
@@ -54,9 +124,9 @@ export function ExtendedMetadataLego({ meta, display }: ExtendedMetadataLegoProp
     parted_out: t("statusPartedOut"),
   };
 
-  const timestamp = getCoverTimestamp(meta);
-  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
-  const externalUrl = (meta["external_url"] ?? meta["set_url"]) as string | undefined;
+  if (!hasAnyContent) {
+    return null;
+  }
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
@@ -131,7 +201,7 @@ export function ExtendedMetadataLego({ meta, display }: ExtendedMetadataLegoProp
         )}
       </div>
 
-      {(buildStatus || missingPieces !== undefined || instructionsIncluded !== undefined) && (
+      {hasPhysicalState && (
         <div className="pt-2 border-t border-border/40 space-y-2">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("physicalState")}</span>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">

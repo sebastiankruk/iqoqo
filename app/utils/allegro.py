@@ -307,6 +307,8 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
     piece_count: int | None = None
     theme: str | None = None
 
+    manufacturer_code: str | None = None
+
     for param in params or []:
         p_name = (param.get("name") or "").strip()
         vals = param.get("valuesLabels") or param.get("values") or []
@@ -317,9 +319,9 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
         if p_name in ("EAN", "ISBN", "GTIN", "Kod producenta"):
             if not barcode:
                 barcode = vals[0]
-            if p_name == "Kod producenta" and not set_number:
+            if p_name == "Kod producenta" and not manufacturer_code:
                 if vals[0].isdigit() and len(vals[0]) in (4, 5, 6):
-                    set_number = vals[0]
+                    manufacturer_code = vals[0]
         elif p_name in ("Numer produktu", "Numer zestawu"):
             if not set_number:
                 set_number = vals[0]
@@ -360,6 +362,13 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
             seen.add(a_clean)
             unique_authors.append(a_clean)
 
+    if (
+        not set_number
+        and manufacturer_code
+        and (piece_count is not None or theme is not None or (publisher and "lego" in publisher.lower()))
+    ):
+        set_number = manufacturer_code
+
     return {
         "barcode": barcode,
         "authors": unique_authors,
@@ -374,6 +383,15 @@ def _extract_allegro_parameters(params: list[dict[str, Any]]) -> dict[str, Any]:
         "piece_count": piece_count,
         "theme": theme,
     }
+
+
+def _attach_optional_lego_fields(normalized: dict[str, Any], extracted: dict[str, Any]) -> dict[str, Any]:
+    """Attach LEGO-specific fields only when non-None so non-LEGO items are not polluted."""
+    for key in ("set_number", "piece_count", "theme"):
+        val = extracted.get(key)
+        if val is not None and val != "":
+            normalized[key] = val
+    return normalized
 
 
 def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[str, Any]:
@@ -396,7 +414,7 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
     pub_obj = item.get("publication")
     publisher = extracted["publisher"] or (pub_obj.get("publisher") if isinstance(pub_obj, dict) else None)
 
-    return {
+    normalized: dict[str, Any] = {
         "title": extracted["title"] or item.get("name", "Unknown Media"),
         "barcode": barcode,
         "cover_url": item.get("images", [{}])[0].get("url") if item.get("images") else None,
@@ -408,21 +426,19 @@ def _normalize_allegro_product(item: dict[str, Any], query: str = "") -> dict[st
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
-        "set_number": extracted.get("set_number"),
-        "piece_count": extracted.get("piece_count"),
-        "theme": extracted.get("theme"),
         "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Catalog",
         "data_source": "allegro",
         "raw_payload": item,
     }
+    return _attach_optional_lego_fields(normalized, extracted)
 
 
 def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str, Any]:
     """Normalize an offer item from Allegro Listing API."""
     extracted = _extract_allegro_parameters(offer.get("parameters", []))
     barcode = extracted["barcode"] or query
-    return {
+    normalized: dict[str, Any] = {
         "title": extracted["title"] or offer.get("name", "Unknown Media"),
         "barcode": barcode,
         "cover_url": offer.get("images", [{}])[0].get("url") if offer.get("images") else None,
@@ -433,14 +449,12 @@ def _normalize_allegro_offer(offer: dict[str, Any], query: str = "") -> dict[str
         "genres": extracted["genres"],
         "format": extracted["format"],
         "language": extracted["language"],
-        "set_number": extracted.get("set_number"),
-        "piece_count": extracted.get("piece_count"),
-        "theme": extracted.get("theme"),
         "affiliate_url": f"https://allegro.pl/listing?string={urllib.parse.quote_plus(str(barcode or query))}",
         "source": "Allegro Listing",
         "data_source": "allegro",
         "raw_payload": offer,
     }
+    return _attach_optional_lego_fields(normalized, extracted)
 
 
 def fetch_allegro_candidates(query: str, max_results: int = 10) -> list[dict[str, Any]]:

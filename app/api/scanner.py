@@ -436,10 +436,17 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
             meta["cover_url"] = cover_val
 
     # 5. Format
-    if meta.get("category") == "lego" or "set_number" in meta or "set_num" in meta:
+    has_lego_set_num = bool(
+        (isinstance(meta.get("set_number"), str) and meta["set_number"].strip())
+        or (isinstance(meta.get("set_num"), str) and meta["set_num"].strip())
+        or (isinstance(meta.get("set_number"), (int, float)) and not isinstance(meta.get("set_number"), bool))
+        or (isinstance(meta.get("set_num"), (int, float)) and not isinstance(meta.get("set_num"), bool))
+    )
+    non_lego_hints = {"video", "movie", "book", "text", "audio", "music", "game", "boardgame", "puzzle", "jigsaw", "audiobook"}
+    if meta.get("category") == "lego" or (has_lego_set_num and format_hint not in non_lego_hints):
         from app.db.core import MediaFormat
 
-        if not meta.get("format") or meta.get("format") in ("BOOK", "book", "audio", "music", "movie"):
+        if not meta.get("format") or (meta.get("category") == "lego" and meta.get("format") in ("BOOK", "book", "audio", "music", "movie")):
             meta["format"] = MediaFormat.STANDARD_SET
     elif "format" not in meta or not meta["format"]:
         if format_hint:

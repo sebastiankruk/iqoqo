@@ -369,6 +369,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
             <div className="pt-6 border-t border-border">
               <ExtendedMetadata
                 meta={manifestation.meta ?? {}}
+                display={manifestation.display}
                 owner_count={manifestation.owner_count}
                 manifestationId={manifestation.id}
                 canEdit={Boolean(
