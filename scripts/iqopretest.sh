@@ -280,5 +280,15 @@ DEPLOY_DIR="$DST_LOC" make status preview
 # 6. Run automated federation verification if federation pair is active
 if [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
     echo "🔗 Running automated federation preview verification..."
-    bash scripts/verify_federation_preview.sh
+    preview_web_port="${WEB_PORT:-5000}"
+    preview_nginx_port="${NGINX_PORT:-8000}"
+    if [ -f "$DST_LOC/.env" ]; then
+        env_web_port=$(grep -E '^WEB_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        env_nginx_port=$(grep -E '^NGINX_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$env_web_port" ] && preview_web_port="$env_web_port"
+        [ -n "$env_nginx_port" ] && preview_nginx_port="$env_nginx_port"
+    fi
+    PRIMARY_API_PORT="${PRIMARY_API_PORT:-$preview_web_port}" \
+    PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-$preview_nginx_port}" \
+        bash scripts/verify_federation_preview.sh
 fi

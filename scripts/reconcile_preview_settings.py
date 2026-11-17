@@ -37,6 +37,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -212,7 +213,14 @@ def main() -> int:
     raw_env = payload.get("dst_env")
     dst_env: dict[str, str] = raw_env if isinstance(raw_env, dict) else {}
 
-    app = create_app()
+    # Suppress expected pre-reconciliation InvalidToken startup logs while building the app
+    app_logger = logging.getLogger("app")
+    prev_level = app_logger.level
+    app_logger.setLevel(logging.CRITICAL)
+    try:
+        app = create_app()
+    finally:
+        app_logger.setLevel(prev_level)
     with app.app_context():
         summary = reconcile_preview_state(dst_env=dst_env, src_secret_key=src_secret_key)
 
