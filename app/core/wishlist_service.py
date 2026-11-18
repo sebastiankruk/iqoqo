@@ -71,10 +71,13 @@ def upsert_wishlist_intent_for_manifestation(
         db.session.add(intent)
         db.session.flush()
     else:
-        if intent.expression_id is None and expr_id is not None:
+        if expr_id is not None:
             intent.expression_id = expr_id
-        if intent.manifestation_id is None and manif_id is not None:
+        if manif_id is not None:
             intent.manifestation_id = manif_id
+        if intent.status == "fulfilled" or status is not None:
+            intent.status = default_progress
+        intent.is_hidden = is_hidden
 
     return intent
 

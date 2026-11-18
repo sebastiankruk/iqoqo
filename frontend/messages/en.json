@@ -1093,6 +1093,18 @@
     "removeFromWishlistFailed": "Failed to remove from wishlist",
     "viewWishlist": "View Wishlist",
     "onWishlistRemove": "On Wishlist · Remove",
-    "addedToWishlist": "Added to wishlist"
+    "addedToWishlist": "Added to wishlist",
+    "categoryText": "Books & Text",
+    "categoryMusic": "Music",
+    "categoryMovie": "Movies",
+    "categoryBoardGame": "Board Games",
+    "categoryPuzzle": "Puzzles",
+    "categoryLego": "LEGO Sets",
+    "addToCollection": "Add to Collection",
+    "addToMyLibrary": "Add to My Library",
+    "noFolder": "No folder",
+    "noNamedFolders": "No named folders yet. Create one below.",
+    "addedToCollection": "Added to your collection!",
+    "addToCollectionFailed": "Failed to add to collection"
   }
 }

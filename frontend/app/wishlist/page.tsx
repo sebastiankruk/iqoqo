@@ -91,12 +91,12 @@ export default function WishlistPage() {
               className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">{t("allCategories")}</option>
-              <option value="text">Books &amp; Text</option>
-              <option value="music">Music</option>
-              <option value="movie">Movies</option>
-              <option value="board_game">Board Games</option>
-              <option value="puzzle">Puzzles</option>
-              <option value="lego">LEGO Sets</option>
+              <option value="text">{t("categoryText")}</option>
+              <option value="music">{t("categoryMusic")}</option>
+              <option value="movie">{t("categoryMovie")}</option>
+              <option value="board_game">{t("categoryBoardGame")}</option>
+              <option value="puzzle">{t("categoryPuzzle")}</option>
+              <option value="lego">{t("categoryLego")}</option>
             </select>
             <select
               value={sortBy}

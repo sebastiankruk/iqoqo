@@ -103,6 +103,18 @@ describe("WishlistPage", () => {
     expect(mockUseWishlist).toHaveBeenLastCalledWith({ limit: 100 }, undefined);
   });
 
+  it("renders localized category filter options", () => {
+    mockUseWishlist.mockReturnValue({
+      data: { data: [], total: 0 },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithQuery(<WishlistPage />);
+    expect(screen.getByRole("option", { name: "Books & Text" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "LEGO Sets" })).toBeInTheDocument();
+  });
+
   it("renders empty-state CTAs when wishlist has no items", () => {
     mockUseWishlist.mockReturnValue({
       data: { data: [], total: 0 },

@@ -291,3 +291,24 @@ def test_admin_ownership_items_query_parameters_documented(app):
     param_names = {p.get("name") for p in ownership_op.get("parameters", []) if isinstance(p, dict)}
     for expected in ("source_user_id", "page", "limit", "q", "collection_status", "format", "item_id"):
         assert expected in param_names, f"Missing query parameter '{expected}' on ownership/items"
+
+
+def test_v103_reading_sessions_and_share_pagination_documented(app):
+    """Verify reading-sessions requestBody, share page/per_page params, and cartographic_map enum in OpenAPI 3.1 (L-03)."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    paths = spec.get("paths", {})
+    reading_op = paths.get("/api/items/{item_id}/reading-sessions", {}).get("post", {})
+    assert "requestBody" in reading_op
+    req_props = reading_op["requestBody"]["content"]["application/json"]["schema"]["properties"]
+    assert {"duration_minutes", "pages_read", "note"}.issubset(req_props.keys())
+    assert "201" in reading_op.get("responses", {})
+
+    share_op = paths.get("/api/public/share/{token}", {}).get("get", {})
+    share_params = {p.get("name") for p in share_op.get("parameters", []) if isinstance(p, dict)}
+    for expected in ("format", "limit", "page", "per_page"):
+        assert expected in share_params, f"Missing '{expected}' on /api/public/share/{{token}}"
+
+    expr_enum = spec["components"]["schemas"]["Expression"]["properties"]["content_type"]["enum"]
+    assert "cartographic_map" in expr_enum

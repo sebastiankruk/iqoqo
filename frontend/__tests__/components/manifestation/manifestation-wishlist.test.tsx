@@ -137,8 +137,13 @@ describe("ManifestationDetailClient wishlist awareness", () => {
     renderWithQuery(<ManifestationDetailClient manifestationId={123} initialManifestation={baseManifestation} />);
 
     expect(screen.queryByTestId("on-wishlist-badge")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add to collection/i })).toBeInTheDocument();
+    const addBtn = screen.getByRole("button", { name: /add to collection/i });
+    expect(addBtn).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /remove from wishlist/i })).not.toBeInTheDocument();
+
+    fireEvent.click(addBtn);
+    expect(screen.getByRole("button", { name: /add to wishlist/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to my library/i })).toBeInTheDocument();
   });
 
   it("hides wishlist badge and shows owned actions when user owns the item", () => {

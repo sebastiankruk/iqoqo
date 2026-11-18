@@ -229,3 +229,102 @@ def test_shared_collection_sql_pagination_and_accept_jsonld(client, app) -> None
         assert res_ld.headers.get("Cache-Control") == "public, max-age=300"
         parsed = json.loads(res_ld.data.decode("utf-8"))
         assert parsed
+
+
+@pytest.mark.usefixtures("app")
+def test_shared_wishlist_paginates_intents_and_includes_want_to_build(client, app) -> None:
+    """Shared wishlist collections include want_to_build intents and slice results by page/per_page (L-04)."""
+    from app.db.models import UserWorkIntent
+
+    with app.app_context():
+        user = User(
+            email=f"wish_{uuid.uuid4().hex[:8]}@iqoqo.local",
+            public_username=f"wishuser_{uuid.uuid4().hex[:6]}",
+            visibility="public",
+        )
+        db.session.add(user)
+        db.session.flush()
+
+        for idx, (content_type, status) in enumerate(
+            [("lego", "want_to_build"), ("text", "want_to_read"), ("music", "want_to_listen")], start=1
+        ):
+            w = Work(title=f"Wishlist Work {idx}", meta={"authors": ["Builder"]})
+            db.session.add(w)
+            db.session.flush()
+            e = Expression(work_id=w.id, content_type=content_type, language="en")
+            db.session.add(e)
+            db.session.flush()
+            m = Manifestation(expression_id=e.id, format="standard_set" if content_type == "lego" else "book", meta={})
+            db.session.add(m)
+            db.session.flush()
+            db.session.add(
+                UserWorkIntent(
+                    user_id=user.id,
+                    work_id=w.id,
+                    expression_id=e.id,
+                    manifestation_id=m.id,
+                    status=status,
+                    is_hidden=False,
+                )
+            )
+
+        token = f"share-wish-{uuid.uuid4().hex[:12]}"
+        db.session.add(SharedCollection(user_id=user.id, name="Wishlist Share", share_token=token, filters={"status": "wish_list"}))
+        db.session.commit()
+
+    page1 = client.get(f"/api/public/share/{token}?page=1&per_page=2").get_json()["data"]
+    assert page1["total"] == 3
+    assert page1["pages"] == 2
+    assert len(page1["items"]) == 2
+
+    page2 = client.get(f"/api/public/share/{token}?page=2&per_page=2").get_json()["data"]
+    assert len(page2["items"]) == 1
+
+    all_statuses = {item["status"] for item in page1["items"] + page2["items"]}
+    assert "want_to_build" in all_statuses
+
+
+@pytest.mark.usefixtures("app")
+def test_fetch_shared_collection_by_token_pg_search_offset(app, monkeypatch) -> None:
+    """fetch_shared_collection_by_token passes offset to SearchService without double-offsetting (L-02)."""
+    from app.api.public_items import fetch_shared_collection_by_token
+    from app.core.search_service import SearchService
+
+    with app.app_context():
+        user = User(
+            email=f"pg_{uuid.uuid4().hex[:8]}@iqoqo.local",
+            public_username=f"pguser_{uuid.uuid4().hex[:6]}",
+            visibility="public",
+        )
+        db.session.add(user)
+        db.session.flush()
+        work = Work(title="PG Search Item", meta={"authors": ["Author"]})
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id, content_type="text", language="en")
+        db.session.add(expr)
+        db.session.flush()
+        man = Manifestation(expression_id=expr.id, format="book", meta={})
+        db.session.add(man)
+        db.session.flush()
+        item = Item(
+            manifestation_id=man.id, owner_id=user.id, status="read", collection_status="available", is_hidden=False, visibility="public"
+        )
+        db.session.add(item)
+        db.session.flush()
+        token = f"share-pg-{uuid.uuid4().hex[:12]}"
+        db.session.add(SharedCollection(user_id=user.id, name="PG Search", share_token=token, filters={"query": "PG"}))
+        db.session.commit()
+
+        captured_calls: list[dict[str, object]] = []
+
+        def _fake_search(q, user_id, limit, offset, **kwargs):
+            captured_calls.append({"limit": limit, "offset": offset})
+            return 2, [{"item_id": item.id}]
+
+        monkeypatch.setattr(SearchService, "search_items", staticmethod(_fake_search))
+        monkeypatch.setattr(db.engine.dialect, "name", "postgresql")
+        results = fetch_shared_collection_by_token(token=token, limit=1, offset=1)
+
+        assert captured_calls == [{"limit": 1, "offset": 1}]
+        assert [r.id for r in results] == [item.id]

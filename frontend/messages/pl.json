@@ -1093,6 +1093,18 @@
     "removeFromWishlistFailed": "Nie udało się usunąć z listy życzeń",
     "viewWishlist": "Zobacz listę życzeń",
     "onWishlistRemove": "Na liście życzeń · Usuń",
-    "addedToWishlist": "Dodano do listy życzeń"
+    "addedToWishlist": "Dodano do listy życzeń",
+    "categoryText": "Książki i tekst",
+    "categoryMusic": "Muzyka",
+    "categoryMovie": "Filmy",
+    "categoryBoardGame": "Gry planszowe",
+    "categoryPuzzle": "Puzzle",
+    "categoryLego": "Zestawy LEGO",
+    "addToCollection": "Dodaj do kolekcji",
+    "addToMyLibrary": "Dodaj do mojej biblioteki",
+    "noFolder": "Bez folderu",
+    "noNamedFolders": "Brak nazwanych folderów. Utwórz poniżej.",
+    "addedToCollection": "Dodano do kolekcji!",
+    "addToCollectionFailed": "Nie udało się dodać do kolekcji"
   }
 }

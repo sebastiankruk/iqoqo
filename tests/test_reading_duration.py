@@ -235,3 +235,64 @@ def _get_normal_user_id(app):
         user = db.session.execute(select(User)).scalars().first()
         assert user is not None
         return user.id
+
+
+def test_reading_session_rejects_readonly_pat_and_federation_head(client, app, normal_user_headers, monkeypatch):
+    """Read-only PATs and FEDERATION_HEAD_MODE instances must receive 403 on reading-session writes (M-01)."""
+    owner_id = _get_normal_user_id(app)
+    item_id, _ = _create_frbr_item(app, owner_id, status="reading")
+
+    # 1. Read-only PAT cannot log reading sessions
+    pat_resp = client.post(
+        "/api/auth/tokens",
+        headers=normal_user_headers,
+        json={"name": "ReadOnlyPAT", "scopes": ["read:catalog"], "expires_in_days": 7},
+    )
+    assert pat_resp.status_code == 201
+    raw_pat = pat_resp.get_json()["token"]
+
+    denied_pat = client.post(
+        f"/api/items/{item_id}/reading-sessions",
+        json={"duration_minutes": 25},
+        headers={"Authorization": f"Bearer {raw_pat}"},
+    )
+    assert denied_pat.status_code == 403
+
+    # 2. FEDERATION_HEAD_MODE blocks physical item session writes
+    monkeypatch.setenv("FEDERATION_HEAD_MODE", "true")
+    denied_hub = client.post(
+        f"/api/items/{item_id}/reading-sessions",
+        json={"duration_minutes": 25},
+        headers=normal_user_headers,
+    )
+    assert denied_hub.status_code == 403
+
+
+def test_public_item_detail_redacts_reading_session_notes_for_non_owners(client, app, normal_user_headers):
+    """GET /api/items/<id> strips private reading_sessions notes for non-owners while keeping summary (M-02)."""
+    owner_id = _get_normal_user_id(app)
+    item_id, _ = _create_frbr_item(app, owner_id, status="reading", visibility="public", is_hidden=False)
+    other_headers, _ = _create_other_user_headers(app)
+
+    log_resp = client.post(
+        f"/api/items/{item_id}/reading-sessions",
+        json={"duration_minutes": 35, "pages_read": 20, "note": "Private journal reflection"},
+        headers=normal_user_headers,
+    )
+    assert log_resp.status_code == 201
+
+    # Owner sees full reading_sessions in meta
+    owner_get = client.get(f"/api/items/{item_id}", headers=normal_user_headers)
+    assert owner_get.status_code == 200
+    owner_data = owner_get.get_json()["data"]
+    assert len(owner_data["meta"]["reading_sessions"]) == 1
+    assert owner_data["meta"]["reading_sessions"][0]["note"] == "Private journal reflection"
+
+    # Unauthenticated and non-owner callers do NOT receive reading_sessions
+    for caller_headers in (None, other_headers):
+        resp = client.get(f"/api/items/{item_id}", headers=caller_headers)
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["reading_duration_summary"]["total_minutes"] == 35
+        assert data["reading_duration_summary"]["sessions_count"] == 1
+        assert "reading_sessions" not in (data.get("meta") or {})

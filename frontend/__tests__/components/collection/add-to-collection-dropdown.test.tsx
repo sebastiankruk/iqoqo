@@ -102,7 +102,7 @@ describe("AddToCollectionDropdown", () => {
     });
 
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith("Added to your wishlist!");
+      expect(toast.success).toHaveBeenCalledWith("Added to wishlist");
     });
   });
 
@@ -179,7 +179,7 @@ describe("AddToCollectionDropdown", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /move to collection/i }));
 
-    const removeBtn = screen.getByText("Remove from Wishlist");
+    const removeBtn = screen.getByText("Remove from wishlist");
     fireEvent.click(removeBtn);
 
     await waitFor(() => {

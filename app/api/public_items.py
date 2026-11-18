@@ -308,6 +308,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
         if tags_list:
             query = query.where(Expression.content_type.in_(tags_list))
 
+    pg_search_paginated = False
     if "query" in filters:
         search_query = filters["query"]
         if search_query:
@@ -318,7 +319,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                     q=search_query,
                     user_id=user.id,
                     limit=limit,
-                    offset=0,
+                    offset=max(0, offset),
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
@@ -328,6 +329,7 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                 if not item_ids:
                     return [] if not stream else iter([])
                 query = query.where(Item.id.in_(item_ids))
+                pg_search_paginated = True
             else:
                 if "tags" not in filters:
                     query = query.outerjoin(Manifestation, Item.manifestation_id == Manifestation.id)
@@ -335,7 +337,9 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                 query = query.outerjoin(Work, Expression.work_id == Work.id)
                 query = query.where(build_ilike_search_clause(search_query))
 
-    query = query.order_by(Item.updated_at.desc()).limit(limit).offset(max(0, offset))
+    query = query.order_by(Item.updated_at.desc())
+    if not pg_search_paginated:
+        query = query.limit(limit).offset(max(0, offset))
 
     if stream:
         # Return an iterator for memory-efficient streaming
@@ -683,7 +687,7 @@ def get_shared_collection(token: str):
                 _, results = SearchService.search_items(
                     q=search_query,
                     user_id=user.id,
-                    limit=1000,
+                    limit=MAX_SHARED_COLLECTION_LIMIT,
                     offset=0,
                     statuses=statuses_list,
                     category=tags_list,
@@ -730,9 +734,10 @@ def get_shared_collection(token: str):
         raw_list = status_filter if isinstance(status_filter, list) else [status_filter]
         status_list = [s for s in raw_list if isinstance(s, str) and s]
 
-    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+    _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play", "want_to_build"}
     wish_list_statuses = _INTENT_LEVEL_STATUSES | {"wish_list"}
     is_wish_list = any(s in wish_list_statuses for s in status_list)
+    intent_total = 0
 
     if is_wish_list:
         # Query UserWorkIntent directly for shared collection visibility.
@@ -806,7 +811,20 @@ def get_shared_collection(token: str):
                     )
                 )
 
-        intents = db.session.execute(intent_stmt).scalars().all()
+        intent_total = int(
+            db.session.execute(select(func.count()).select_from(intent_stmt.subquery())).scalar_one() or 0
+        )  # pylint: disable=not-callable
+        ordered_intent_stmt = intent_stmt.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc())
+        if page_num is not None and per_page_num is not None:
+            remaining_limit = max(0, limit_val - len(items_list))
+            intent_offset = max(0, offset_val - total_count)
+            intents = (
+                list(db.session.execute(ordered_intent_stmt.limit(remaining_limit).offset(intent_offset)).scalars().all())
+                if remaining_limit > 0
+                else []
+            )
+        else:
+            intents = list(db.session.execute(ordered_intent_stmt.limit(limit_val)).scalars().all())
         for intent in intents:
             work = intent.work
             manifestation = None
@@ -833,7 +851,7 @@ def get_shared_collection(token: str):
             )
 
     effective_per_page = per_page_num if per_page_num is not None else limit_val
-    total_items = total_count + (len(items_list) - len(items) if is_wish_list else 0)
+    total_items = total_count + (intent_total if is_wish_list else 0)
     total_pages = (total_items + effective_per_page - 1) // effective_per_page if total_items else 0
 
     return jsonify(

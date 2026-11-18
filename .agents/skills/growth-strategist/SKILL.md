@@ -25,7 +25,7 @@ We are in the **v1.0.x stream (Native Mobile Ecosystem, Format Expansion & Feder
 
 ## Upcoming (v1.0.3 & Beyond)
 
-- **v1.0.3: Reading Duration, OpenCollections.org, AI-Fetchable Shares & Prebuilt Env Fix** (`C115`–`C120`): FRBR `Item`-scoped reading duration and session tracking (`POST /api/items/<id>/reading-sessions`, `<ReadingDurationCard />`, anonymized `Manifestation` average read time), SSRF-safe `opencollections.org` ingestion strategy & JSON-LD/RDF `owl:sameAs` bridge, `v1.0.2` review deferrals, AI-fetchable shared collections (audio pressing RDF, `?format=jsonld&limit=`, full SSR JSON-LD), prebuilt `ENV_FILE` propagation & secret-decryption guard (P0), and connected-server footer / batch-scan state indicator / `make status` hygiene.
+- **v1.0.3: Reading Duration, OpenCollections.org, AI-Fetchable Shares & Prebuilt Env Fix** (`C115`–`C125`): FRBR `Item`-scoped reading duration and session tracking (`POST /api/items/<id>/reading-sessions`, `<ReadingDurationCard />`, anonymized `Manifestation` average read time), SSRF-safe `opencollections.org` ingestion strategy & JSON-LD/RDF `owl:sameAs` bridge, `v1.0.2` review deferrals, AI-fetchable shared collections (audio pressing RDF, `?format=jsonld&limit=`, full SSR JSON-LD), prebuilt `ENV_FILE` propagation & secret-decryption guard (P0), and connected-server footer / batch-scan state indicator / `make status` hygiene.
 - **v1.1.0: Infrastructure & Catalog Breadth**: Redis-to-Valkey drop-in migration and serials/journals ISSN ontology design (serial `Work` vs. issue `Manifestation`).
 
 ## Core Messaging Pillars

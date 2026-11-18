@@ -544,6 +544,10 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         or 0
     )
 
+    item_meta_payload = item.meta
+    if not (is_owner or is_admin) and isinstance(item.meta, dict) and "reading_sessions" in item.meta:
+        item_meta_payload = {k: v for k, v in item.meta.items() if k != "reading_sessions"}
+
     item_data = {
         "id": item.id,
         "owner_id": str(item.owner_id) if (is_owner or is_admin or is_borrowed or is_friend) else "Unavailable",
@@ -560,7 +564,7 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         "is_hidden": item.is_hidden,
         "manifestation_id": item.manifestation_id,
         "tags": [link.tag.name for link in getattr(item, "tag_links", [])],
-        "meta": item.meta,
+        "meta": item_meta_payload,
         "map_insert_present": (item.meta or {}).get("map_insert_present"),
         "reading_duration_summary": _compute_reading_duration_summary(item),
     }
@@ -669,8 +673,13 @@ def _compute_reading_duration_summary(item: Item) -> dict[str, Any]:
 @api_bp.route("/items/<int:item_id>/reading-sessions", methods=["POST"])
 @limiter.limit("60 per hour", override_defaults=True)
 @require_auth
+@require_permission(PermissionName.WRITE_ITEM)
 def log_reading_session(item_id: int) -> tuple[Response, int]:
     """Log an active reading session on an owned physical Item."""
+    guard_err = reject_if_federation_head_item_write()
+    if guard_err:
+        return guard_err
+
     if item_id <= 0:
         return jsonify({"error": "Item not found", "code": 404}), 404
 

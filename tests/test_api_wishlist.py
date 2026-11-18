@@ -1003,3 +1003,48 @@ class TestWishlistC121ActionsAndAcquisition:
         resp = client.get(f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}", headers=headers)
         assert resp.status_code == 200
         assert resp.json["data"]["wishlist_item_id"] is None
+
+    def test_rewishlisting_fulfilled_intent_reactivates_and_upgrades_edition(self, client, wishlist_setup, app):
+        """Re-wishlisting a work with a fulfilled UserWorkIntent resets status and binds the target edition (M-03)."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        with app.app_context():
+            fulfilled_intent = UserWorkIntent(
+                user_id=wishlist_setup["user_id"],
+                work_id=wishlist_setup["work2_id"],
+                expression_id=None,
+                manifestation_id=None,
+                status="fulfilled",
+                is_hidden=True,
+            )
+            db.session.add(fulfilled_intent)
+            db.session.commit()
+            intent_id = fulfilled_intent.id
+
+        add_resp = client.post(
+            f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}/add",
+            json={"collection_status": "wish_list"},
+            headers=headers,
+        )
+        assert add_resp.status_code == 200
+        assert add_resp.json["data"]["intent_id"] == intent_id
+
+        with app.app_context():
+            refreshed = db.session.get(UserWorkIntent, intent_id)
+            assert refreshed is not None
+            assert refreshed.status == "want_to_listen"
+            assert refreshed.expression_id == wishlist_setup["expr_audio_id"]
+            assert refreshed.manifestation_id == wishlist_setup["manif_vinyl_id"]
+            assert refreshed.is_hidden is False
+
+        man_resp = client.get(f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}", headers=headers)
+        assert man_resp.status_code == 200
+        assert man_resp.json["data"]["wishlist_item_id"] == intent_id
+
+    def test_wishlist_search_escapes_trailing_backslash(self, client, wishlist_setup, app):
+        """GET /api/wishlist?q=... safely escapes trailing backslashes without SQL ESCAPE errors (L-01)."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        resp = client.get("/api/wishlist?q=Novel%5C", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
