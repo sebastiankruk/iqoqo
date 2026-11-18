@@ -202,6 +202,21 @@
     "seriesSuffix": "{label} (Series)",
     "onWishlist": "On Wishlist"
   },
+  "WorkRollup": {
+    "statusRead": "Read",
+    "statusListened": "Listened",
+    "statusWatched": "Watched",
+    "statusPlayed": "Played",
+    "statusBuilt": "Built",
+    "statusReading": "Currently Reading",
+    "statusListening": "Currently Listening",
+    "statusWatching": "Currently Watching",
+    "statusPlaying": "Currently Playing",
+    "statusBuilding": "Currently Building",
+    "statusWant": "Planned",
+    "statusDnf": "Did Not Finish",
+    "otherEditionLabel": "{label} (another edition)"
+  },
   "Collection": {
     "loading": "Loading collection...",
     "searchResults": "Search results for \"{query}\"",

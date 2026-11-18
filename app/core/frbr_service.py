@@ -34,6 +34,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.sql import func
 
 from app.core import frbr_merge
 from app.core.iri import canonical_frbr_iri, canonical_related_iri
@@ -3796,3 +3797,81 @@ def serialize_collection_to_rdf(
         return g.serialize(format="json-ld", context=context, indent=4)
 
     return g.serialize(format="turtle")
+
+
+COMPLETED_ROLLUP_STATUSES: tuple[str, ...] = ("read", "listened", "watched", "played", "built")
+IN_PROGRESS_ROLLUP_STATUSES: tuple[str, ...] = ("reading", "listening", "watching", "playing", "building")
+INTENT_ROLLUP_STATUSES: tuple[str, ...] = ("want_to_read", "want_to_listen", "want_to_watch", "want_to_play", "want_to_build")
+DNF_ROLLUP_STATUSES: tuple[str, ...] = ("dnf",)
+
+_ROLLUP_STATUS_PRIORITY: dict[str, int] = {
+    **dict.fromkeys(COMPLETED_ROLLUP_STATUSES, 4),
+    **dict.fromkeys(IN_PROGRESS_ROLLUP_STATUSES, 3),
+    **dict.fromkeys(INTENT_ROLLUP_STATUSES, 2),
+    **dict.fromkeys(DNF_ROLLUP_STATUSES, 1),
+}
+
+
+def compute_work_reading_rollup(user_id: Any, work_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """Compute user-scoped consumption rollup per Work in a single batched GROUP BY query.
+
+    Aggregates owned ``Item`` statuses (including private/hidden copies owned by
+    ``user_id``) across all ``Expression`` and ``Manifestation`` records of each
+    requested ``Work``, applying strict precedence:
+    completed > in_progress > intent > dnf.
+
+    Returns ``{work_id: {"work_reading_status": str | None, "completed_manifestation_ids": list[int]}}``.
+    """
+    if user_id is None:
+        return {}
+
+    unique_work_ids = sorted({int(wid) for wid in work_ids if wid is not None and int(wid) > 0})
+    if not unique_work_ids:
+        return {}
+
+    stmt = (
+        select(
+            Expression.work_id,
+            Item.status,
+            Manifestation.id,
+            func.count(Item.id),  # pylint: disable=not-callable
+        )
+        .select_from(Item)
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(
+            Item.owner_id == user_id,
+            Expression.work_id.in_(unique_work_ids),
+            Item.status.isnot(None),
+        )
+        .group_by(Expression.work_id, Item.status, Manifestation.id)
+    )
+    rows = db.session.execute(stmt).all()
+
+    grouped: dict[int, dict[str, Any]] = {}
+    for wid, raw_status, manifestation_id, _count in rows:
+        if wid is None or not raw_status:
+            continue
+        status = str(raw_status).strip().lower()
+        rank = _ROLLUP_STATUS_PRIORITY.get(status, 0)
+        entry = grouped.setdefault(
+            int(wid),
+            {
+                "best_rank": -1,
+                "work_reading_status": None,
+                "completed_manifestation_ids": set(),
+            },
+        )
+        if status in COMPLETED_ROLLUP_STATUSES and manifestation_id is not None:
+            entry["completed_manifestation_ids"].add(int(manifestation_id))
+        if rank > entry["best_rank"]:
+            entry["best_rank"] = rank
+            entry["work_reading_status"] = status
+
+    return {
+        wid: {
+            "work_reading_status": entry["work_reading_status"],
+            "completed_manifestation_ids": sorted(entry["completed_manifestation_ids"]),
+        }
+        for wid, entry in grouped.items()
+    }

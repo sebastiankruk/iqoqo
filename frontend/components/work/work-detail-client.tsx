@@ -38,6 +38,7 @@ import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrap
 import { Footer } from "@/components/dashboard/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
 import { resolveSchemaType } from "@/lib/schema-org";
 import { getCoverUrl } from "@/lib/utils";
 import { queryKeys, useProfile, useWork } from "@/lib/api/hooks";
@@ -229,6 +230,7 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
                       <Sparkles className="h-3 w-3" />
                       Conceptual Work
                     </Badge>
+                    <WorkRollupBadge status={work.work_reading_status} />
                     <span className="text-xs text-muted-foreground">
                       {allManifestations.length} {allManifestations.length === 1 ? "edition" : "editions"}
                     </span>

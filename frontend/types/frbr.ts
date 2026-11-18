@@ -45,6 +45,8 @@ export interface Work {
   meta: WorkMeta;
   container_work_id?: number | null;
   series_memberships?: WorkSeriesMembership[];
+  work_reading_status?: string | null;
+  completed_manifestation_ids?: number[];
 }
 
 /**
@@ -107,6 +109,8 @@ export interface WorkDetail {
   contributions?: Record<string, unknown>;
   expressions: WorkDetailExpression[];
   series_memberships?: WorkSeriesMembership[];
+  work_reading_status?: string | null;
+  completed_manifestation_ids?: number[];
 }
 
 /** Detailed view payload for an Expression entity. */
@@ -188,6 +192,9 @@ export interface Manifestation {
   cover_url?: string | null;
   owner_count?: number;
   meta: ManifestationMeta;
+  work_reading_status?: string | null;
+  completed_manifestation_ids?: number[];
+  completed_via_other_edition?: boolean;
 }
 
 /** * Global Catalog Entry DTO (Returned by /manifestations).
@@ -304,6 +311,8 @@ export interface WorkShelfEntry {
     cover_url?: string | null;
   }>;
   total_items: number;
+  work_reading_status?: string | null;
+  completed_manifestation_ids?: number[];
 }
 
 /** Expression level shelf entry DTO */

@@ -655,6 +655,17 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/works/shelf", "/api/v1/works/shelf") and method == "get":
+                    shelf_vis_param = {
+                        "name": "work_read_status",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string", "enum": ["completed", "in_progress", "unread"]},
+                        "description": "Filter Works by authenticated user's rolled-up consumption status.",
+                    }
+                    op_params = operation.setdefault("parameters", [])
+                    if not any(isinstance(p, dict) and p.get("name") == "work_read_status" for p in op_params):
+                        op_params.append(shelf_vis_param)
                 elif openapi_path in ("/api/items", "/api/v1/items") and method == "get":
                     vis_param = {
                         "name": "visibility",

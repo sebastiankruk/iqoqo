@@ -50,6 +50,7 @@ def get_works_catalog() -> Response:
     statuses_filter = request.args.get("statuses")
     formats_filter = request.args.get("formats")
     ownership_filter = request.args.get("ownership")
+    work_read_status = (request.args.get("work_read_status") or "").strip().lower()
 
     tags_list = [t.strip() for t in tags_filter.split(",") if t.strip()] if tags_filter else None
     collections_list = [c.strip() for c in collections_filter.split(",") if c.strip()] if collections_filter else None
@@ -157,6 +158,38 @@ def get_works_catalog() -> Response:
         if ownership_conditions:
             base_query = base_query.filter(db.or_(*ownership_conditions))
 
+    if work_read_status and user_id and work_read_status in {"completed", "in_progress", "unread"}:
+        from app.core.frbr_service import COMPLETED_ROLLUP_STATUSES, IN_PROGRESS_ROLLUP_STATUSES
+
+        completed_exists = (
+            db.session.query(Item.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .filter(
+                Expression.work_id == Work.id,
+                Item.owner_id == user_id,
+                Item.status.in_(COMPLETED_ROLLUP_STATUSES),
+            )
+            .exists()
+        )
+        in_progress_exists = (
+            db.session.query(Item.id)
+            .join(Manifestation, Item.manifestation_id == Manifestation.id)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .filter(
+                Expression.work_id == Work.id,
+                Item.owner_id == user_id,
+                Item.status.in_(IN_PROGRESS_ROLLUP_STATUSES),
+            )
+            .exists()
+        )
+        if work_read_status == "completed":
+            base_query = base_query.filter(completed_exists)
+        elif work_read_status == "in_progress":
+            base_query = base_query.filter(~completed_exists, in_progress_exists)
+        elif work_read_status == "unread":
+            base_query = base_query.filter(~completed_exists, ~in_progress_exists)
+
     # Get the total count of distinct works matching the filters
     total_count = base_query.with_entities(Work.id).distinct().count()
 
@@ -165,6 +198,10 @@ def get_works_catalog() -> Response:
         row[0]
         for row in base_query.with_entities(Work.id, Work.title).distinct().order_by(Work.title.asc()).offset(offset).limit(limit).all()
     ]
+
+    from app.core.frbr_service import compute_work_reading_rollup
+
+    rollup_map = compute_work_reading_rollup(user_id, work_ids) if (user_id and work_ids) else {}
 
     works = (
         db.session.query(Work)
@@ -233,12 +270,15 @@ def get_works_catalog() -> Response:
                         }
                     )
 
+        work_rollup = rollup_map.get(work.id)
         works_map[work.id] = {
             "work_id": work.id,
             "title": work.title,
             "creators": creators,
             "owned_manifestations": owned_manifestations,
             "total_items": total_items,
+            "work_reading_status": work_rollup["work_reading_status"] if work_rollup else None,
+            "completed_manifestation_ids": work_rollup["completed_manifestation_ids"] if work_rollup else [],
         }
 
     # Sort the resulting list by title to match the ID query order
@@ -751,9 +791,10 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
     if not work:
         return jsonify({"success": False, "data": None, "error": "Work not found"}), 404
 
-    from app.core.frbr_service import is_live_performance, serialize_contributions
+    from app.core.frbr_service import compute_work_reading_rollup, is_live_performance, serialize_contributions
 
     user_id = getattr(g, "user_id", None)
+    rollup_entry = compute_work_reading_rollup(user_id, [work.id]).get(work.id) if user_id else None
     owned_manifestation_ids: set[int] = set()
     if user_id:
         manif_ids = [m.id for expr in getattr(work, "expressions", []) for m in getattr(expr, "manifestations", [])]
@@ -823,6 +864,8 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
         "contributions": contributions,
         "expressions": expressions_data,
         "series_memberships": series_memberships,
+        "work_reading_status": rollup_entry["work_reading_status"] if rollup_entry else None,
+        "completed_manifestation_ids": rollup_entry["completed_manifestation_ids"] if rollup_entry else [],
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
 

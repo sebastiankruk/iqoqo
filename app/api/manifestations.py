@@ -420,12 +420,22 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
 
     # FRBRoo event contributions (creators / performers / publishers) +
     # expression kind so the UI can badge live performances distinctly.
-    from app.core.frbr_service import is_live_performance, serialize_container_aggregation, serialize_contributions
+    from app.core.frbr_service import (
+        compute_work_reading_rollup,
+        is_live_performance,
+        serialize_container_aggregation,
+        serialize_contributions,
+    )
 
     expression = m.expression
     work = expression.work if expression else None
     contributions = serialize_contributions(work=work, expression=expression, manifestation=m)
     expression_kind = expression.kind if expression else None
+
+    work_rollup_entry = compute_work_reading_rollup(user_id, [work.id]).get(work.id) if (user_id and work is not None) else None
+    work_reading_status = work_rollup_entry["work_reading_status"] if work_rollup_entry else None
+    completed_manifestation_ids = work_rollup_entry["completed_manifestation_ids"] if work_rollup_entry else []
+    completed_via_other_edition = bool(user_id and completed_manifestation_ids and m.id not in completed_manifestation_ids)
 
     # F16 Container Work contents (board games): if this manifestation's Work
     # is itself a container, surface its aggregated rulebook Work + physical
@@ -476,6 +486,9 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "is_live_performance": is_live_performance(expression),
         "contributions": contributions,
         "container_aggregation": container_aggregation,
+        "work_reading_status": work_reading_status,
+        "completed_manifestation_ids": completed_manifestation_ids,
+        "completed_via_other_edition": completed_via_other_edition,
         "tags": [
             (
                 t

@@ -41,6 +41,7 @@ import { ExtendedMetadata } from "@/components/item/extended-metadata";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
 import { SemanticLinks } from "@/components/manifestation/semantic-links";
 import { TagCloud } from "@/components/ui/tag-cloud";
+import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
 import { useTranslations } from "next-intl";
 import { PermissionName } from "@/lib/permissions";
 
@@ -275,6 +276,10 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                     {t("onWishlist")}
                   </Badge>
                 )}
+                <WorkRollupBadge
+                  status={manifestation.work_reading_status}
+                  viaOtherEdition={Boolean(manifestation.completed_via_other_edition)}
+                />
               </div>
               <h1
                 className="font-serif text-3xl md:text-4xl font-bold text-foreground"

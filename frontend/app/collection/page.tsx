@@ -37,6 +37,7 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
 import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
+import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
 import { BulkItemVisibilityToolbar } from "@/components/collection/bulk-item-visibility-toolbar";
 import {
   useInfiniteItems,
@@ -1109,9 +1110,12 @@ function CollectionContent() {
                       </div>
                       {/* Content */}
                       <div className="flex flex-1 flex-col p-4">
-                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
-                          {work.title}
-                        </h3>
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                            {work.title}
+                          </h3>
+                          <WorkRollupBadge status={work.work_reading_status} />
+                        </div>
                         {work.creators.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {work.creators.map(c => (

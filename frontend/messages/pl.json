@@ -202,6 +202,21 @@
     "seriesSuffix": "{label} (seria)",
     "onWishlist": "Na liście życzeń"
   },
+  "WorkRollup": {
+    "statusRead": "Przeczytano",
+    "statusListened": "Przesłuchano",
+    "statusWatched": "Obejrzano",
+    "statusPlayed": "Ukończono",
+    "statusBuilt": "Zbudowano",
+    "statusReading": "W trakcie czytania",
+    "statusListening": "W trakcie słuchania",
+    "statusWatching": "W trakcie oglądania",
+    "statusPlaying": "W trakcie gry",
+    "statusBuilding": "W trakcie budowania",
+    "statusWant": "Planowane",
+    "statusDnf": "Porzucono",
+    "otherEditionLabel": "{label} (inne wydanie)"
+  },
   "Collection": {
     "loading": "Ładowanie kolekcji...",
     "searchResults": "Wyniki wyszukiwania dla „{query}”",
