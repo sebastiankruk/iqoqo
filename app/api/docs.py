@@ -728,6 +728,38 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                             "description": "Reading session logged successfully.",
                             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
                         }
+                elif openapi_path in ("/api/sharing", "/api/sharing/") and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string", "minLength": 1, "maxLength": 255},
+                                            "description": {"type": ["string", "null"], "maxLength": 2000},
+                                            "visibility_scope": {
+                                                "type": "string",
+                                                "enum": ["public_only", "friends_and_public", "all"],
+                                                "default": "public_only",
+                                                "description": "Access scope for the generated share link.",
+                                            },
+                                            "filters": {
+                                                "type": "object",
+                                                "description": "Collection filter payload (also accepts filters.visibility_scope).",
+                                            },
+                                            "expires_in_days": {
+                                                "type": ["integer", "null"],
+                                                "minimum": 1,
+                                                "maximum": 365,
+                                            },
+                                        },
+                                        "required": ["name"],
+                                    }
+                                }
+                            },
+                        }
                 elif openapi_path in ("/api/public/share/{token}", "/api/public/rdf/share/{token}") and method == "get":
                     share_query_params = [
                         {
