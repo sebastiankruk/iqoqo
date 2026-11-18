@@ -499,6 +499,23 @@ Standard Linked Data crawlers can follow IRIs:
 3. Follow `frbr:embodimentOf`, `frbr:expressionOf`, etc. to traverse the FRBR hierarchy
 4. Each IRI is dereferenceable and returns RDF
 
+### Ready-to-Use AI Agent & Gem Skill Templates
+
+Collectors can pair public `/share/<token>` links with **Gemini Gems**, **ChatGPT Custom GPTs**, **Claude Projects**, or **CLI/MCP agents** using the ready-to-use Markdown templates in [`docs/gems/`](gems/):
+
+| Template | Domain | Primary Protocol |
+| :--- | :--- | :--- |
+| [HiFi & Physical Music Advisor](gems/hifi-music-advisor-skill.md) | Vinyl, CD, SACD & HiFi setup | `/share/<token>/jsonld/1..N` + `Accept: application/ld+json` |
+| [Reading Curator](gems/reading-curator-skill.md) | Books, Comics & Graphic Novels | `/share/<token>/jsonld/1..N` + `Accept: application/ld+json` |
+| [Board Game & LEGO Sommelier](gems/boardgame-sommelier-skill.md) | Board Games, LEGO & Puzzles | `/share/<token>/jsonld/1..N` + `Accept: application/ld+json` |
+| [Cinema & Video Games Archivist](gems/cinema-archivist-skill.md) | 4K UHD, Blu-ray, DVD & Games | `/share/<token>/jsonld/1..N` + `Accept: application/ld+json` |
+| [iqoqo Librarian Gem](gems/iqoqo-librarian-gem.md) | Full private library + loans/wishlist | PAT OpenAPI Actions + `/share/<token>/jsonld/1..N` |
+
+**Browser Agents vs. Header-Capable Clients:**
+
+- **Headerless Browser Agents (`Gemini App`, `ChatGPT Web`, `Claude Web`):** Instruct the agent to open `/share/<token>`, discover query-free `/share/<token>/jsonld/1` through `/share/<token>/jsonld/<N>` links (`60` items/page) from `<nav aria-label="AI JSON-LD pages">` / `<nav aria-label="JSON-LD Pages">`, and read `<pre id="jsonld-payload">` (`t`, `a`, `f`, `l`, `c`, `y`, `g`) without inventing `?` query parameters.
+- **Header-Capable Clients (CLI, MCP, Custom Actions):** Request `GET /share/<token>` with `Accept: application/ld+json` (or `text/turtle`), `/share/<token>/catalog.jsonld`, or `/api/public/rdf/share/<token>?format=jsonld&limit=2000`.
+
 ---
 
 ## 📚 Further Reading

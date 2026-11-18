@@ -160,7 +160,8 @@ export function ItemCard({
 
   const format = isCatalog
     ? ((catalogObj?.meta?.["format"] as string | undefined) ?? (catalogObj?.meta?.Format as string | undefined))
-    : (((itemObj?.manifestation_meta?.["format"] as string | undefined) ??
+    : (((itemObj as { format?: string } | undefined)?.format ??
+        (itemObj?.manifestation_meta?.["format"] as string | undefined) ??
         (itemObj?.manifestation_meta?.Format as string | undefined) ??
         (itemObj?.meta?.["format"] as string | undefined) ??
         itemObj?.medium_type) as string | undefined);

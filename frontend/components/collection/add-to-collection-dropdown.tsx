@@ -16,10 +16,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { BookOpen, ChevronDown, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
+import { BookOpen, ChevronDown, HeartOff, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
-import { useUserCollections } from "@/lib/api/hooks";
+import { queryKeys, useUserCollections } from "@/lib/api/hooks";
 import { CollectionQuickAdd } from "./collection-quick-add";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -39,11 +40,13 @@ interface AddToCollectionDropdownProps {
  * @returns React node representing the dropdown component
  */
 export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: AddToCollectionDropdownProps) {
+  const tWishlist = useTranslations("Wishlist");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const router = useRouter();
   const { data: collections, isLoading: collectionsLoading } = useUserCollections();
+  const resolvedWishlistId = wishlistItemId ? Math.abs(wishlistItemId) : null;
 
   useEffect(() => {
     /**
@@ -82,19 +85,41 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestationId) });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
       qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
       if (variables.collectionStatus === "wish_list") {
-        toast.success("Added to your wishlist!");
+        toast.success(tWishlist("addedToWishlist"));
       } else {
-        toast.success("Added to your collection!");
+        toast.success(tWishlist("addedToCollection"));
       }
       setIsOpen(false);
     },
     onError: (err: Error) => {
-      toast.error(err.message ?? "Failed to add to collection");
+      toast.error(err.message ?? tWishlist("addToCollectionFailed"));
+    },
+  });
+
+  const removeWishlistMutation = useMutation({
+    mutationFn: async (intentId: number) => {
+      await apiClient.delete(`/wishlist/${intentId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
+      qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestationId) });
+      qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["stats"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
+      toast.success(tWishlist("removedFromWishlist"));
+      setIsOpen(false);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? tWishlist("removeFromWishlistFailed"));
     },
   });
 
@@ -112,15 +137,17 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(prev => !prev)}
-        disabled={addMutation.isPending}
+        disabled={addMutation.isPending || removeWishlistMutation.isPending}
         className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-60"
       >
-        {addMutation.isPending ? (
+        {addMutation.isPending || removeWishlistMutation.isPending ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : resolvedWishlistId ? (
+          <Library className="mr-2 h-4 w-4" />
         ) : (
           <BookOpen className="mr-2 h-4 w-4" />
         )}
-        Add to Collection
+        {resolvedWishlistId ? tWishlist("moveToCollection") : tWishlist("addToCollection")}
         <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
@@ -128,14 +155,29 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
         <div className="absolute left-0 top-full mt-2 min-w-56 rounded-xl border border-border bg-card shadow-xl overflow-hidden z-50">
           {/* Wishlist option */}
           <div className="border-b border-border/50">
-            {wishlistItemId ? (
-              <button
-                onClick={() => router.push(`/item/${wishlistItemId}`)}
-                className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
-              >
-                <Eye className="h-4 w-4 shrink-0 text-primary" />
-                <span>View Wishlist Item</span>
-              </button>
+            {resolvedWishlistId ? (
+              <div className="divide-y divide-border/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push("/wishlist");
+                  }}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
+                >
+                  <Eye className="h-4 w-4 shrink-0 text-primary" />
+                  <span>{tWishlist("viewWishlist")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeWishlistMutation.mutate(resolvedWishlistId)}
+                  disabled={removeWishlistMutation.isPending}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-destructive hover:bg-destructive/5 transition-colors disabled:opacity-50"
+                >
+                  <HeartOff className="h-4 w-4 shrink-0" />
+                  <span>{tWishlist("removeFromWishlist")}</span>
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => addMutation.mutate({ collectionId: null, collectionStatus: "wish_list" })}
@@ -143,7 +185,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
                 className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
               >
                 <BookmarkPlus className="h-4 w-4 shrink-0 text-primary" />
-                <span>Add to Wishlist</span>
+                <span>{tWishlist("addToWishlist")}</span>
               </button>
             )}
           </div>
@@ -156,8 +198,8 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
               className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
             >
               <Library className="h-4 w-4 shrink-0 text-primary" />
-              <span>Add to My Library</span>
-              <span className="ml-auto text-[10px] text-muted-foreground font-normal">No folder</span>
+              <span>{resolvedWishlistId ? tWishlist("moveToMyLibrary") : tWishlist("addToMyLibrary")}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground font-normal">{tWishlist("noFolder")}</span>
             </button>
           </div>
 
@@ -179,9 +221,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
               ))}
             </ul>
           ) : (
-            <div className="px-4 py-3 text-center text-xs text-muted-foreground">
-              No named folders yet. Create one below.
-            </div>
+            <div className="px-4 py-3 text-center text-xs text-muted-foreground">{tWishlist("noNamedFolders")}</div>
           )}
 
           <CollectionQuickAdd onCollectionCreated={handleQuickAdd} />

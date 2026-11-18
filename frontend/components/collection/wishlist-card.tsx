@@ -15,12 +15,17 @@
 //
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Disc, Dices, Film, HeartOff, Puzzle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
+import { BookOpen, Disc, Dices, Film, HeartOff, Library, Loader2, Puzzle } from "lucide-react";
 import type { WishlistItem } from "@/types/frbr";
+import { apiClient } from "@/lib/api/client";
+import { queryKeys } from "@/lib/api/hooks";
 import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { resolveMediaBadge } from "@/lib/media-badge";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -42,8 +47,24 @@ interface WishlistCardProps {
  * @returns Wishlist card element
  */
 export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
+  const router = useRouter();
+  const t = useTranslations("Wishlist");
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteWishlistItem();
+  const { data: appConfig } = useQuery<{ federation_head_mode?: boolean }>({
+    queryKey: ["config"],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<{ federation_head_mode?: boolean }>("/config");
+        return res?.data ?? {};
+      } catch {
+        return {};
+      }
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+  const isFederationHead = appConfig?.federation_head_mode === true;
+  const [isMoving, setIsMoving] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -51,9 +72,45 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
     try {
       await deleteMutation.mutateAsync(item.id);
       queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all });
-      toast.success("Removed from wishlist");
+      queryClient.invalidateQueries({ queryKey: ["manifestations"] });
+      if (item.manifestation_id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(item.manifestation_id) });
+      }
+      toast.success(t("removedFromWishlist"));
     } catch {
-      toast.error("Failed to remove from wishlist");
+      toast.error(t("removeFromWishlistFailed"));
+    }
+  };
+
+  const title = item.title || "Untitled";
+  const handleMoveToLibrary = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!item.manifestation_id) {
+      if (item.work_id) {
+        router.push(`/work/${item.work_id}`);
+      }
+      return;
+    }
+    setIsMoving(true);
+    try {
+      await apiClient.post(`/manifestations/${item.manifestation_id}/add`, {
+        collection_status: "available",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ["items"] }),
+        queryClient.invalidateQueries({ queryKey: ["stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(item.manifestation_id) }),
+        queryClient.invalidateQueries({ queryKey: ["works", "shelf"] }),
+        queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] }),
+      ]);
+      toast.success(t("movedToLibrary", { title }));
+    } catch {
+      toast.error(t("moveToLibraryFailed"));
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -63,9 +120,12 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
     getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ||
     item.cover_url ||
     (item.manifestation_meta?.["cover_url"] as string | undefined);
-  const title = item.title || "Untitled";
   const authors = item.authors || [];
-  const targetHref = item.manifestation_id ? `/manifestation/${item.manifestation_id}` : "/wishlist";
+  const targetHref = item.manifestation_id
+    ? `/manifestation/${item.manifestation_id}`
+    : item.work_id
+      ? `/work/${item.work_id}`
+      : "/wishlist";
 
   const rawContentType = item.content_type ?? item.expression?.content_type;
   const format =
@@ -101,95 +161,114 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
   const mediaLabel = item.content_type ?? item.expression?.content_type ?? item.medium_type;
 
+  const actionButtons = (
+    <div className="flex items-center gap-1.5 opacity-100 sm:opacity-85 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+      {!isFederationHead && (
+        <button
+          type="button"
+          aria-label={t("moveToLibrary")}
+          title={t("moveToLibrary")}
+          disabled={isMoving || deleteMutation.isPending}
+          onClick={handleMoveToLibrary}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-primary shadow-sm ring-1 ring-border hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+        >
+          {isMoving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
+        </button>
+      )}
+      <button
+        type="button"
+        aria-label={t("removeFromWishlist")}
+        title={t("removeFromWishlist")}
+        disabled={isMoving || deleteMutation.isPending}
+        onClick={handleRemove}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-destructive shadow-sm ring-1 ring-border hover:bg-destructive hover:text-destructive-foreground transition-colors disabled:opacity-50"
+      >
+        <HeartOff className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+
   if (variant === "horizontal") {
     return (
-      <Link
-        href={targetHref}
-        data-testid="item-card"
-        className="group flex min-h-40 gap-4 overflow-hidden rounded-xl bg-card p-5 shadow-sm transition-all hover:shadow-md"
-      >
-        <div
-          className={`relative ${aspectClass} w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20`}
-        >
+      <article className="group relative flex min-h-40 overflow-hidden rounded-xl bg-card shadow-sm transition-all hover:shadow-md">
+        <Link href={targetHref} data-testid="item-card" className="flex min-w-0 flex-1 gap-4 p-5 pr-20">
+          <div
+            className={`relative ${aspectClass} w-16 shrink-0 overflow-hidden rounded-md bg-secondary shadow-sm sm:w-20`}
+          >
+            {coverUrl ? (
+              <Image src={coverUrl} alt={title} fill unoptimized className="object-cover" sizes="5rem" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                <MediaIcon className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 self-center">
+            <h3 data-testid="card-title" className="line-clamp-2 font-serif text-base font-bold text-foreground">
+              {title}
+            </h3>
+            {authors.length > 0 && (
+              <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{authors.join(", ")}</p>
+            )}
+            {mediaLabel && (
+              <span className="mt-3 inline-block rounded bg-primary/10 px-2 py-1 text-xs text-muted-foreground">
+                {mediaLabel}
+              </span>
+            )}
+          </div>
+        </Link>
+        <div className="absolute top-3 right-3 z-20">{actionButtons}</div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="group relative overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md">
+      <Link href={targetHref} data-testid="item-card" className="block">
+        {/* Cover image */}
+        <div className={`relative ${aspectClass} overflow-hidden bg-muted`}>
           {coverUrl ? (
-            <Image src={coverUrl} alt={title} fill unoptimized className="object-cover" sizes="5rem" />
+            <Image
+              src={coverUrl}
+              alt={title}
+              fill
+              unoptimized
+              className="object-cover transition-transform group-hover:scale-105"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <MediaIcon className="h-6 w-6 text-muted-foreground/40" />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground">
+              <MediaIcon className="h-8 w-8 text-muted-foreground/40" />
+              <span className="line-clamp-2 text-xs font-medium text-muted-foreground/60">{title}</span>
             </div>
           )}
         </div>
-        <div className="min-w-0 self-center">
-          <h3 data-testid="card-title" className="line-clamp-2 font-serif text-base font-bold text-foreground">
+
+        {/* Content type badge */}
+        {item.content_type && (
+          <span className="absolute top-2 left-2 z-10 rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+            {item.content_type}
+          </span>
+        )}
+
+        {/* Info */}
+        <div className="p-3">
+          <h3 data-testid="card-title" className="line-clamp-2 text-sm font-medium leading-tight">
             {title}
           </h3>
           {authors.length > 0 && (
-            <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{authors.join(", ")}</p>
+            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{authors.join(", ")}</p>
           )}
           {mediaLabel && (
-            <span className="mt-3 inline-block rounded bg-primary/10 px-2 py-1 text-xs text-muted-foreground">
+            <span className="mt-2 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {mediaLabel}
             </span>
           )}
         </div>
       </Link>
-    );
-  }
 
-  return (
-    <Link
-      href={targetHref}
-      data-testid="item-card"
-      className="group relative block overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md"
-    >
-      {/* Cover image */}
-      <div className={`relative ${aspectClass} overflow-hidden bg-muted`}>
-        {coverUrl ? (
-          <Image
-            src={coverUrl}
-            alt={title}
-            fill
-            unoptimized
-            className="object-cover transition-transform group-hover:scale-105"
-            sizes="(max-width: 768px) 100vw, 33vw"
-          />
-        ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-4 text-center text-muted-foreground">
-            <MediaIcon className="h-8 w-8 text-muted-foreground/40" />
-            <span className="line-clamp-2 text-xs font-medium text-muted-foreground/60">{title}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Remove button */}
-      <button
-        type="button"
-        aria-label="Remove from wishlist"
-        onClick={handleRemove}
-        className="absolute top-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shadow-sm ring-1 ring-border hover:bg-destructive hover:text-destructive-foreground"
-      >
-        <HeartOff className="h-3.5 w-3.5" />
-      </button>
-
-      {/* Content type badge */}
-      {item.content_type && (
-        <span className="absolute top-2 left-2 z-10 rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
-          {item.content_type}
-        </span>
-      )}
-
-      {/* Info */}
-      <div className="p-3">
-        <h3 data-testid="card-title" className="line-clamp-2 text-sm font-medium leading-tight">
-          {title}
-        </h3>
-        {authors.length > 0 && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{authors.join(", ")}</p>}
-        {mediaLabel && (
-          <span className="mt-2 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {mediaLabel}
-          </span>
-        )}
-      </div>
-    </Link>
+      {/* Action buttons */}
+      <div className="absolute top-2 right-2 z-20">{actionButtons}</div>
+    </article>
   );
 }

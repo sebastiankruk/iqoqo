@@ -304,4 +304,12 @@ def create_app(config_class=Config, config_override=None):
             except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
                 app.logger.warning(f"Could not run stuck cover task cleanup at startup: {e}")
 
+    with app.app_context():
+        try:
+            from app.db.settings import check_encrypted_settings_drift
+
+            check_encrypted_settings_drift(app.logger)
+        except (SQLAlchemyError, ValueError, AttributeError, KeyError, RuntimeError) as e:
+            app.logger.warning(f"Could not check encrypted settings drift at startup: {e}")
+
     return app

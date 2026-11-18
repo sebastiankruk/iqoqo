@@ -16,7 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/in
 cd /opt/iqoqo
 
 # 3. Start services using official pre-built containers (migrations run automatically)
-docker compose -f docker-compose.prebuilt.yml up -d
+# Uses Makefile so ENV_FILE=.env.prod and --env-file .env.prod are propagated:
+make prebuilt prod start
+# Or equivalently with explicit compose flags:
+# ENV_FILE=.env.prod docker compose -p iqoqo -f docker-compose.prebuilt.yml --env-file .env.prod up -d
 
 # 4. Check status and health
 python3 iqoqo_installer.py --presync-check
@@ -27,7 +30,29 @@ For preview or testing environments:
 ```bash
 # Preview mode on custom port (5001 / 3001)
 curl -fsSL https://raw.githubusercontent.com/sebastiankruk/iqoqo/main/scripts/install.sh | bash -s -- -d /opt/preview.iqoqo --mode preview
-cd /opt/preview.iqoqo && docker compose -f docker-compose.prebuilt.yml up -d
+cd /opt/preview.iqoqo && make prebuilt preview start
+```
+
+#### Upgrade Recovery: Restoring Encrypted InstanceSettings & Google Login
+
+If an upgrade was launched with raw `docker compose -f docker-compose.prebuilt.yml up -d` (without `ENV_FILE=.env.prod` or `--env-file .env.prod`), containers may start with the wrong `SECRET_KEY`, causing Google OAuth or encrypted `InstanceSettings` API keys to fail decryption (`InvalidToken`).
+
+1. **Re-launch with explicit `ENV_FILE` and `--env-file`** (non-destructive; preserves encrypted DB rows):
+
+```bash
+APP_VERSION=1.0.3 ENV_FILE=.env.prod docker compose -p iqoqo -f docker-compose.prebuilt.yml --env-file .env.prod up -d --force-recreate web worker frontend
+```
+
+1. **Verify decryption and stack health**:
+
+```bash
+make status
+```
+
+1. **If `SECRET_KEY` was intentionally rotated** (and `make status` still reports `InvalidToken`), re-encrypt stored values from `.env`:
+
+```bash
+make migrate-secrets
 ```
 
 ### Guided CLI Setup (From Clone)

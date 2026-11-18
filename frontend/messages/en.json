@@ -2,9 +2,6 @@
   "Navbar": {
     "maintenanceMode": "Maintenance Mode Active – Some features may be limited",
     "federationHubBadge": "Federation Hub · Read-Only",
-    "federationHubBanner": "This instance operates as a read-only Federation Hub. Items are federated from community nodes.",
-    "federationHubExploreDirectory": "Explore Directory",
-    "dismissBanner": "Dismiss banner",
     "directory": "Directory",
     "searchPlaceholder": "Search your collection...",
     "collection": "Collection",
@@ -103,7 +100,8 @@
     "libraryOfEverything": "The Library of Everything",
     "githubSponsors": "GitHub Sponsors",
     "buyMeACoffee": "Buy Me a Coffee",
-    "rules": "Your library, your rules."
+    "rules": "Your library, your rules.",
+    "connectedServer": "Server: {host}"
   },
   "Login": {
     "title": "Sign in to iqoqo",
@@ -201,7 +199,8 @@
     "game": "Game",
     "audiobook": "Audiobook",
     "concert": "Concert",
-    "seriesSuffix": "{label} (Series)"
+    "seriesSuffix": "{label} (Series)",
+    "onWishlist": "On Wishlist"
   },
   "Collection": {
     "loading": "Loading collection...",
@@ -347,7 +346,10 @@
     "foundManifestation": "Found edition",
     "notFound": "Item not found in this collection.",
     "profileTitle": "{name}'s Collection",
-    "hiddenItemNote": "Some items may be hidden due to privacy settings."
+    "hiddenItemNote": "Some items may be hidden due to privacy settings.",
+    "jsonLdFeed": "JSON-LD / AI Feed",
+    "jsonLdFeedTitle": "Machine-readable Schema.org JSON-LD graph for AI fetchers",
+    "catalogIndex": "Full Catalog Index ({count})"
   },
   "CoverProvenance": {
     "sourcePrefix": "Source",
@@ -547,6 +549,10 @@
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
+      "stateOn": "ON",
+      "stateOff": "OFF",
+      "statusOn": "Batch scan: ON",
+      "statusOff": "Batch scan: OFF",
       "viewQueue": "View scanned batch queue",
       "recentScans": "Recent scans ({count})",
       "clearQueue": "Clear queue",
@@ -976,6 +982,23 @@
       "statusIncomplete": "Incomplete",
       "statusPartedOut": "Parted Out"
     },
+    "readingDuration": {
+      "title": "Reading Duration",
+      "logButton": "Log Reading Time",
+      "dialogTitle": "Log Reading Session",
+      "dialogDescription": "Record active reading time for this copy.",
+      "quickPresets": "Quick presets",
+      "durationLabel": "Minutes read",
+      "pagesLabel": "Pages read (optional)",
+      "noteLabel": "Note (optional)",
+      "submit": "Save Session",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "summary": "{duration} read across {count} sessions",
+      "summaryOne": "{duration} read across 1 session",
+      "elapsedDays": " ({days} days)",
+      "elapsedDaysOne": " (1 day)"
+    },
     "maps": {
       "title": "Cartography & Map Supplements",
       "addMap": "Add Map",
@@ -1039,5 +1062,49 @@
     "allStatuses": "All statuses",
     "clearFilters": "Clear Filters",
     "reassignOwner": "Reassign Owner"
+  },
+  "Wishlist": {
+    "title": "Wishlist",
+    "itemCount": "{count} items",
+    "itemCountOne": "1 item",
+    "addToWishlist": "Add to Wishlist",
+    "browseCatalog": "Browse Catalog",
+    "searchPlaceholder": "Search wishlist...",
+    "allCategories": "All categories",
+    "filterCategory": "Filter by category",
+    "sortBy": "Sort wishlist",
+    "sortUpdated": "Recently updated",
+    "sortAdded": "Recently added",
+    "sortTitleAsc": "Title (A–Z)",
+    "sortTitleDesc": "Title (Z–A)",
+    "emptyTitle": "Your wishlist is empty",
+    "emptyDescription": "Scan a barcode, search, or browse the catalog to add works you want.",
+    "noMatchingTitle": "No matching wishlist items",
+    "noMatchingDescription": "Try adjusting your search or category filter.",
+    "clearFilters": "Clear filters",
+    "loadError": "Unable to load your wishlist.",
+    "moveToLibrary": "Move to library",
+    "moveToCollection": "Move to Collection",
+    "moveToMyLibrary": "Move to My Library",
+    "movedToLibrary": "Moved \"{title}\" to your library!",
+    "moveToLibraryFailed": "Failed to move item to library",
+    "removeFromWishlist": "Remove from wishlist",
+    "removedFromWishlist": "Removed from wishlist",
+    "removeFromWishlistFailed": "Failed to remove from wishlist",
+    "viewWishlist": "View Wishlist",
+    "onWishlistRemove": "On Wishlist · Remove",
+    "addedToWishlist": "Added to wishlist",
+    "categoryText": "Books & Text",
+    "categoryMusic": "Music",
+    "categoryMovie": "Movies",
+    "categoryBoardGame": "Board Games",
+    "categoryPuzzle": "Puzzles",
+    "categoryLego": "LEGO Sets",
+    "addToCollection": "Add to Collection",
+    "addToMyLibrary": "Add to My Library",
+    "noFolder": "No folder",
+    "noNamedFolders": "No named folders yet. Create one below.",
+    "addedToCollection": "Added to your collection!",
+    "addToCollectionFailed": "Failed to add to collection"
   }
 }

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-11-18
+
+### Added
+
+- **Reading Duration & Session Tracking (C115)**:
+  - Added FRBR `Item`-scoped `POST /api/items/<id>/reading-sessions`, elapsed reading days from `ItemStatusLog`, `<ReadingDurationCard />` on `/item/[id]`, and anonymized `Manifestation` `average_reading_minutes` across public items.
+- **OpenCollections.org Strategy & LOD Bridge (C116)**:
+  - Added SSRF-safe `OpenCollectionsLookupStrategy` (`app/utils/opencollections.py`, `app/strategies/opencollections.py`) with `5.0s` timeout floor, Pydantic validation, `_provenance`, `ProviderMergeDialog` support, and `owl:sameAs` / `schema:sameAs` / `rdfs:seeAlso` RDF triples.
+- **AI-Fetchable Shared Collections & Audio Pressing RDF Graph (C118, C118b)**:
+  - Added `_emit_audio_rdf_triples()` in `app/core/frbr_service.py` for `schema:MusicAlbum` / `schema:MusicRelease`, label, catalog number, `gtin13`, `iqoqo:matrixRunout`, and Discogs/MusicBrainz `owl:sameAs` links.
+  - Added `GET /api/public/rdf/share/<token>` (`?format=jsonld|turtle|rdfxml&limit<=2000`), SQL pagination (`48`/page, 10-page window), compact W3C RDF icon button, query-free `/share/<token>/jsonld/<page>` (`60`/page) AI mini-pages, and runtime `proxy.ts` / Nginx content negotiation + non-`/api/` `/share/<token>/catalog.jsonld` and `/feed.xml` feeds (`Disallow: /api/` preserved in `robots.txt`).
+  - Documented Cloudflare WAF & AI Crawl Control setup in `deploy/cloudflare-semantic-federation-rules.md`, `scripts/verify_cloudflare_rules.sh`, and `docs/{DEPLOYMENT,SECURITY,OPERATIONS}.md`.
+- **Connected Server Footer, Batch-Scan Indicator & Status Hygiene (C120)**:
+  - Displayed connected server host in `Footer` (`en.json` / `pl.json`), added explicit `ON`/`OFF` badge + `aria-live="polite"` to `BatchScanToggle`, added `.env.status-classes`, and brought `scripts/iqopretest.sh` under version control.
+- **User AI Agent Skill Templates (C124)**:
+  - Published hardware-agnostic AI skill templates in `docs/gems/` (`hifi-music-advisor-skill.md`, `reading-curator-skill.md`, `boardgame-sommelier-skill.md`, `cinema-archivist-skill.md`), updated `iqoqo-librarian-gem.md` for zero-auth `/share/<token>/jsonld/1..N` traversal, and cross-linked `docs/SEMANTIC_WEB.md` and `docs/tutorials/linked-data-integration.md`.
+
+### Changed
+
+- **Wishlist Item Actions, Edition Binding & Auto-Fulfill Flow (C121)**:
+  - Exposed positive `wishlist_item_id`, `"View Wishlist"` / `"Remove from Wishlist"` in `AddToCollectionDropdown`, touch-accessible `WishlistCard` `"Move to Library"` & `"Remove"` actions, `/wishlist` search/category/sort + `"+ Add to Wishlist"` CTA, `/work/[id]` wishlist toggle, automatic `UserWorkIntent` fulfillment on acquisition, and SSR `initialData` revalidation on mount.
+- **v1.0.2 Review Deferrals & Polish (C117)**:
+  - Cleaned up `scripts/install.sh` fallback branches, added secret-gated signing & installer SHA-256 checksums in `mobile-build.yml`, percent-encoded `POSTGRES_*` credentials in `DATABASE_URL`, added `iqopresync` `/api/system/status` & WebFinger probes, documented ownership query params in OpenAPI 3.1, fixed offline `collectionFilters`, and migrated `add_items_bulk` to SQLAlchemy 2.0 `select()`.
+
+### Fixed
+
+- **Prebuilt `ENV_FILE` Propagation & Secret Decrypt Drift Guard (C119)**:
+  - Propagated `ENV_FILE=$(COMPOSE_ENV_FILE)` to `docker compose pull` / `up -d` in `Makefile` `prebuilt` targets, declared `APP_VERSION` on `web` and `worker`, added non-destructive startup `check_encrypted_settings_drift()` + `make status` probe, and updated `docs/INSTALL.md`.
+- **Preview Clone Re-Encryption, RUM Provisioning & Manifestation PG Fix (C122)**:
+  - Fixed PostgreSQL dialect resolution in `GET /api/manifestations/<id>` via `db.session.get_bind()`, added `scripts/reconcile_preview_settings.py` to re-encrypt cloned `InstanceSettings` in-memory, wired preview OpenObserve RUM provisioning, standardized `BASE_URL` / `DATABASE_URL` derivation (`app/db/env.py`, `deploy/docker-entrypoint.sh`), and quieted `make status` by default.
+- **Extended Metadata Zero-Card Guards & LEGO Misdetection Fix (C123)**:
+  - Tightened Allegro `Kod producenta` heuristic (`app/utils/allegro.py`), checked truthy `set_number` in `app/api/scanner.py`, suppressed empty extended metadata cards across all format subcomponents, and passed `display` in `ManifestationDetailClient`.
+- **v1.0.3 Release Audit Remediation (C125)**:
+  - Enforced `PermissionName.WRITE_ITEM` and `FEDERATION_HEAD_MODE` guard on `POST /api/items/<id>/reading-sessions` and redacted private `reading_sessions` notes from non-owners on `GET /api/items/<id>`.
+  - Reactivated `"fulfilled"` `UserWorkIntent` rows and upgraded edition bindings on re-wishlist (`app/core/wishlist_service.py`), escaped backslashes via `escape_ilike_term()` in `GET /api/wishlist`, fixed PostgreSQL FTS pagination offset and `"want_to_build"` wishlist slicing on shared collections, completed OpenAPI 3.1 schemas for `v1.0.3` routes, and localized remaining wishlist UI strings.
+
 ## [1.0.2] - 2026-11-11
 
 ### Added

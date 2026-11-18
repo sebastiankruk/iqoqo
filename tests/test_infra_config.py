@@ -32,7 +32,7 @@ class TestRunScripts(unittest.TestCase):
         self.script_path.write_text(self.run_sh.read_text())
         self.script_path.chmod(0o755)
 
-        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.0.2"')
+        (self.work_dir / "pyproject.toml").write_text('[project]\nversion = "1.0.3"')
 
         # Create a mock bin directory to prevent actual execution of Docker/Flask
         self.bin_dir = self.work_dir / "bin"
@@ -329,6 +329,67 @@ exit 0
         self.assertIn("/api/default/_search", status_sh)
         self.assertIn("Exporting failed", status_sh)
         self.assertIn("make monitoring-reset-auth", status_sh)
+
+    def test_prebuilt_makefile_propagates_env_file_and_compose_declares_app_version(self):
+        makefile = (self.repo_root / "Makefile").read_text()
+        prebuilt_block = makefile.split("ifeq ($(filter prebuilt,$(MAKECMDGOALS)),prebuilt)", 1)[1].split("\nelse\n", 1)[0]
+        self.assertIn("ENV_FILE=$(COMPOSE_ENV_FILE)", prebuilt_block)
+        self.assertGreaterEqual(prebuilt_block.count("ENV_FILE=$(COMPOSE_ENV_FILE)"), 2)
+
+        compose = (self.repo_root / "docker-compose.yml").read_text()
+        web_section = compose.split("  web:", 1)[1].split("  frontend:", 1)[0]
+        worker_section = compose.split("  worker:", 1)[1]
+        self.assertIn("APP_VERSION=${APP_VERSION:-prod}", web_section)
+        self.assertIn("APP_VERSION=${APP_VERSION:-prod}", worker_section)
+
+        status_sh = (self.repo_root / "scripts" / "iqoqo-status.sh").read_text()
+        self.assertIn("INVALID_TOKEN:", status_sh)
+        self.assertIn("NO_ENCRYPTED_ROWS", status_sh)
+
+    def test_env_status_classes_covers_env_example_and_iqopretest_waits_for_readiness(self):
+        example_keys = set()
+        for line in (self.repo_root / ".env.example").read_text().splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                example_keys.add(s.split("=", 1)[0].strip())
+
+        classes = {}
+        for line in (self.repo_root / ".env.status-classes").read_text().splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                k, v = s.split("=", 1)
+                classes[k.strip()] = v.strip()
+
+        self.assertEqual(example_keys - set(classes), set())
+        self.assertTrue(all(v in {"required", "default", "optional", "internal"} for v in classes.values()))
+        self.assertNotIn("IQOQO_SECRET_KEY", example_keys)
+        self.assertEqual(classes["BASE_URL"], "required")
+        self.assertEqual(classes["DATABASE_URL"], "default")
+        self.assertEqual(classes["NEXT_PUBLIC_FRONTEND_URL"], "default")
+        self.assertEqual(classes["PUBLIC_APP_URL"], "default")
+        self.assertEqual(classes["NEXTAUTH_URL"], "internal")
+
+        makefile = (self.repo_root / "Makefile").read_text()
+        self.assertIn("presync-check:", makefile)
+        presync_block = makefile.split("presync-check:", 1)[1].split("status:", 1)[0]
+        self.assertIn("$(DIR)/.env", presync_block)
+        self.assertIn("$(DEPLOY_DIR)/.env", presync_block)
+
+        compose = (self.repo_root / "docker-compose.yml").read_text()
+        self.assertIn("${NEXT_PUBLIC_FRONTEND_URL:-${BASE_URL:-https://iqoqo.kruk.cc}}", compose)
+        self.assertIn("${DATABASE_URL:-}", compose)
+
+        entrypoint = (self.repo_root / "deploy" / "docker-entrypoint.sh").read_text()
+        self.assertIn("resolve_database_url", entrypoint)
+
+        iqopretest = (self.repo_root / "scripts" / "iqopretest.sh").read_text()
+        self.assertIn("/healthz", iqopretest)
+        self.assertIn("oo_port", iqopretest)
+        self.assertIn("/v1/traces", iqopretest)
+        self.assertIn("otel_http_port", iqopretest)
+        self.assertIn("exit 1", iqopretest)
+        self.assertIn('DEPLOY_DIR="$DST_LOC" make status preview', iqopretest)
+        self.assertIn("reconcile_preview_settings.py", iqopretest)
 
 
 if __name__ == "__main__":

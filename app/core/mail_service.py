@@ -296,7 +296,7 @@ def public_origin() -> str:
             correct: the alternative is sending a deletion link to a domain the
             recipient does not control.
     """
-    raw = str(_cfg("PUBLIC_APP_URL", "") or "").strip().rstrip("/")
+    raw = str(_cfg("PUBLIC_APP_URL", "") or _cfg("NEXT_PUBLIC_FRONTEND_URL", "") or _cfg("BASE_URL", "") or "").strip().rstrip("/")
     if not raw:
         raise MailConfigurationError("PUBLIC_APP_URL is not set; iQoQo will not generate account email links without a known public origin")
     if not raw.startswith("https://") and not raw.startswith("http://localhost"):

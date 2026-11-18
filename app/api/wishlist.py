@@ -29,6 +29,7 @@ from typing import Any
 
 from flask import Blueprint, Response, g, jsonify, request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.core import invalid_json_payload_response
@@ -36,6 +37,7 @@ from app.api.decorators import optional_auth, require_auth
 from app.api.filters import parse_csv_param
 from app.api.items import _extract_intent_media_info
 from app.core.limiter import limiter
+from app.core.search_service import escape_ilike_term
 from app.db.models import (
     Expression,
     Manifestation,
@@ -268,6 +270,8 @@ def get_wishlist() -> Response | tuple[Response, int]:
     statuses_filter = request.args.get("statuses", request.args.get("status", None))
     work_type_filter = request.args.get("work_type", None)
     medium_type_filter = request.args.get("medium_type", None)
+    category_filter = request.args.get("category", None)
+    sort_by = request.args.get("sort", "updated")
     q = request.args.get("q", request.args.get("search", "")).strip()
 
     try:
@@ -280,8 +284,8 @@ def get_wishlist() -> Response | tuple[Response, int]:
     page = max(page, 1)
     offset = (page - 1) * limit
 
-    query = (
-        db.session.query(UserWorkIntent)
+    stmt = (
+        select(UserWorkIntent)
         .options(
             joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
             .selectinload(Work.expressions)  # type: ignore[arg-type]
@@ -289,41 +293,62 @@ def get_wishlist() -> Response | tuple[Response, int]:
         )
         .options(joinedload(UserWorkIntent.expression))  # type: ignore[arg-type]
         .options(joinedload(UserWorkIntent.manifestation))  # type: ignore[arg-type]
-        .filter(UserWorkIntent.user_id == user_id)
+        .where(UserWorkIntent.user_id == user_id)
     )
 
     if statuses_filter:
         statuses_list = parse_csv_param(statuses_filter) or []
-        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play"}
+        _INTENT_LEVEL_STATUSES = {"want_to_read", "want_to_listen", "want_to_watch", "want_to_play", "want_to_build"}
         intent_statuses = [s for s in statuses_list if s in _INTENT_LEVEL_STATUSES]
         if intent_statuses:
-            query = query.filter(UserWorkIntent.status.in_(intent_statuses))
+            stmt = stmt.where(UserWorkIntent.status.in_(intent_statuses))
         elif "wish_list" in statuses_list:
-            query = query.filter(UserWorkIntent.status != "fulfilled")
+            stmt = stmt.where(UserWorkIntent.status != "fulfilled")
         else:
-            query = query.filter(UserWorkIntent.status != "fulfilled")
+            stmt = stmt.where(UserWorkIntent.status != "fulfilled")
     else:
-        query = query.filter(UserWorkIntent.status != "fulfilled")
+        stmt = stmt.where(UserWorkIntent.status != "fulfilled")
 
+    joined_work = False
     if q:
-        escaped_q = q.strip().lower().replace("%", r"\%").replace("_", r"\_")
+        escaped_q = escape_ilike_term(q.strip().lower())
         pattern = f"%{escaped_q}%"
-        query = query.join(Work, UserWorkIntent.work_id == Work.id).filter(
+        stmt = stmt.join(Work, UserWorkIntent.work_id == Work.id).where(
             db.or_(
                 Work.title.ilike(pattern, escape="\\"),
                 db.cast(Work.meta["authors"], db.String).ilike(pattern, escape="\\"),
             )
         )
+        joined_work = True
 
-    if not (work_type_filter or medium_type_filter):
-        total = query.order_by(None).count()  # pylint: disable=not-callable
-        paginated_intents = (
-            query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).limit(limit).offset(offset).all()
-        )
+    if sort_by in ("title", "title-desc") and not joined_work:
+        stmt = stmt.join(Work, UserWorkIntent.work_id == Work.id)
+
+    if sort_by == "title":
+        order_clauses: tuple[Any, ...] = (func.lower(Work.title).asc(), UserWorkIntent.id.desc())
+    elif sort_by == "title-desc":
+        order_clauses = (func.lower(Work.title).desc(), UserWorkIntent.id.desc())
+    elif sort_by == "added":
+        order_clauses = (UserWorkIntent.created_at.desc(), UserWorkIntent.id.desc())
+    else:
+        order_clauses = (UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc())
+
+    category_list = parse_csv_param(category_filter)
+    normalized_categories: set[str] | None = None
+    if category_list:
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        normalized_categories = {FORMAT_ALIAS_TO_CATEGORY.get(c.strip().lower(), c.strip().lower()) for c in category_list if c.strip()}
+
+    if not (work_type_filter or medium_type_filter or normalized_categories):
+        total = int(db.session.execute(select(func.count()).select_from(stmt.subquery())).scalar_one() or 0)  # pylint: disable=not-callable
+        paginated_intents = db.session.execute(stmt.order_by(*order_clauses).limit(limit).offset(offset)).scalars().unique().all()
         paginated = [_serialize_intent(intent, user_id) for intent in paginated_intents]
     else:
-        # Pre-filter for work_type and medium_type (applied post-serialization)
-        all_intents = query.order_by(UserWorkIntent.updated_at.desc().nullslast(), UserWorkIntent.id.desc()).all()
+        # Pre-filter for work_type, medium_type, and category (applied post-serialization)
+        from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
+
+        all_intents = db.session.execute(stmt.order_by(*order_clauses)).scalars().unique().all()
         data = []
         for intent in all_intents:
             serialized = _serialize_intent(intent, user_id)
@@ -331,6 +356,11 @@ def get_wishlist() -> Response | tuple[Response, int]:
                 continue
             if medium_type_filter and serialized.get("medium_type") != medium_type_filter:
                 continue
+            if normalized_categories:
+                raw_cat = (serialized.get("content_type") or "").strip().lower()
+                resolved_cat = FORMAT_ALIAS_TO_CATEGORY.get(raw_cat, raw_cat)
+                if resolved_cat not in normalized_categories and raw_cat not in normalized_categories:
+                    continue
             data.append(serialized)
         total = len(data)
         paginated = data[offset : offset + limit]
@@ -375,21 +405,21 @@ def create_wishlist_item() -> Response | tuple[Response, int]:  # pylint: disabl
         return jsonify({"success": False, "data": None, "error": hierarchy_err}), 400
 
     # Check for duplicate
-    existing_query = UserWorkIntent.query.filter_by(
-        user_id=user_id,
-        work_id=payload.work_id,
+    existing_stmt = select(UserWorkIntent).where(
+        UserWorkIntent.user_id == user_id,
+        UserWorkIntent.work_id == payload.work_id,
     )
     if payload.expression_id is not None:
-        existing_query = existing_query.filter_by(expression_id=payload.expression_id)
+        existing_stmt = existing_stmt.where(UserWorkIntent.expression_id == payload.expression_id)
     else:
-        existing_query = existing_query.filter(UserWorkIntent.expression_id.is_(None))
+        existing_stmt = existing_stmt.where(UserWorkIntent.expression_id.is_(None))
 
     if payload.manifestation_id is not None:
-        existing_query = existing_query.filter_by(manifestation_id=payload.manifestation_id)
+        existing_stmt = existing_stmt.where(UserWorkIntent.manifestation_id == payload.manifestation_id)
     else:
-        existing_query = existing_query.filter(UserWorkIntent.manifestation_id.is_(None))
+        existing_stmt = existing_stmt.where(UserWorkIntent.manifestation_id.is_(None))
 
-    existing = existing_query.first()
+    existing = db.session.execute(existing_stmt).scalars().first()
     if existing:
         return jsonify({"success": False, "data": None, "error": "Wishlist entry already exists for this target"}), 409
 
@@ -424,15 +454,18 @@ def get_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
     intent = (
-        db.session.query(UserWorkIntent)
-        .options(
-            joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
-            .selectinload(Work.expressions)  # type: ignore[arg-type]
-            .selectinload(Expression.manifestations)  # type: ignore[arg-type]
+        db.session.execute(
+            select(UserWorkIntent)
+            .options(
+                joinedload(UserWorkIntent.work)  # type: ignore[arg-type]
+                .selectinload(Work.expressions)  # type: ignore[arg-type]
+                .selectinload(Expression.manifestations)  # type: ignore[arg-type]
+            )
+            .options(joinedload(UserWorkIntent.expression))  # type: ignore[arg-type]
+            .options(joinedload(UserWorkIntent.manifestation))  # type: ignore[arg-type]
+            .where(UserWorkIntent.id == intent_id)
         )
-        .options(joinedload(UserWorkIntent.expression))  # type: ignore[arg-type]
-        .options(joinedload(UserWorkIntent.manifestation))  # type: ignore[arg-type]
-        .filter(UserWorkIntent.id == intent_id)
+        .scalars()
         .first()
     )
 
@@ -464,7 +497,7 @@ def update_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:  # 
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    intent = UserWorkIntent.query.filter_by(id=intent_id).with_for_update().first()
+    intent = db.session.execute(select(UserWorkIntent).where(UserWorkIntent.id == intent_id).with_for_update()).scalars().first()
     if not intent:
         return jsonify({"success": False, "data": None, "error": "Wishlist entry not found"}), 404
 
@@ -525,7 +558,7 @@ def delete_wishlist_item(intent_id: int) -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    intent = UserWorkIntent.query.filter_by(id=intent_id).first()
+    intent = db.session.execute(select(UserWorkIntent).where(UserWorkIntent.id == intent_id)).scalars().first()
     if not intent:
         return jsonify({"success": False, "data": None, "error": "Wishlist entry not found"}), 404
 

@@ -200,6 +200,14 @@ export function BatchScanToggle({
       >
         <Layers className={`h-4 w-4 mr-1.5 shrink-0 ${enabled ? "animate-pulse" : ""}`} />
         <span className="whitespace-nowrap">{t("batchMode.toggleLabel")}</span>
+        <span
+          data-testid="batch-scan-state-badge"
+          className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+            enabled ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {enabled ? t("batchMode.stateOn") : t("batchMode.stateOff")}
+        </span>
         {queueCount > 0 && (
           <Badge
             variant={enabled ? "secondary" : "default"}
@@ -209,6 +217,9 @@ export function BatchScanToggle({
           </Badge>
         )}
       </Button>
+      <span className="sr-only" role="status" aria-live="polite" data-testid="batch-scan-live-status">
+        {enabled ? t("batchMode.statusOn") : t("batchMode.statusOff")}
+      </span>
 
       {queueCount > 0 && recentItems.length > 0 && (
         <DropdownMenu>

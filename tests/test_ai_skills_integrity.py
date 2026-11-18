@@ -76,7 +76,7 @@ class TestAISkillsIntegrity(unittest.TestCase):
         self.assertFalse(legacy_backup.exists(), "cloud-backup-setup must be removed")
 
     def test_persona_skills_and_gems_harmonized_to_v10x(self) -> None:
-        """Persona skills and gems must reflect v0.9.4 baseline and v1.0.x roadmap."""
+        """Persona skills and gems must reflect v1.0.2 shipped baseline and v1.0.3+ roadmap."""
         persona_skills = [
             "mobile-capacitor-expert",
             "implementation-expert",
@@ -96,9 +96,10 @@ class TestAISkillsIntegrity(unittest.TestCase):
             self.assertTrue(skill_file.is_file(), f"Missing persona skill: {skill_file}")
             text = skill_file.read_text(encoding="utf-8")
             self.assertIn("v1.0.x stream", text, f"{skill_name} missing 'v1.0.x stream' in Current State")
-            self.assertIn("v0.9.4", text, f"{skill_name} missing 'v0.9.4' baseline")
-            self.assertNotIn("v0.9.2, feature-complete", text, f"{skill_name} has stale v0.9.2 reference")
-            self.assertNotIn("## Upcoming (v0.9.3 & Beyond)", text, f"{skill_name} has stale duplicate v0.9.3 Upcoming section")
+            self.assertIn("v1.0.2", text, f"{skill_name} missing 'v1.0.2' shipped baseline")
+            self.assertIn("## Upcoming (v1.0.3 & Beyond)", text, f"{skill_name} missing v1.0.3 Upcoming section")
+            self.assertNotIn("v0.9.4, feature-complete", text, f"{skill_name} has stale v0.9.4 reference")
+            self.assertNotIn("## Upcoming (v1.0.1 & Beyond)", text, f"{skill_name} has stale v1.0.1 Upcoming section")
 
         gem_files = [
             "software-engineer.md",
@@ -117,9 +118,10 @@ class TestAISkillsIntegrity(unittest.TestCase):
             self.assertTrue(gem_file.is_file(), f"Missing gem: {gem_file}")
             text = gem_file.read_text(encoding="utf-8")
             self.assertIn("v1.0.x stream", text, f"{gem_name} missing 'v1.0.x stream'")
-            self.assertIn("v0.9.4", text, f"{gem_name} missing 'v0.9.4' baseline")
-            self.assertNotIn("v0.9.2, feature-complete", text, f"{gem_name} has stale v0.9.2 reference")
-            self.assertNotIn("## Upcoming (v0.9.3 & Beyond)", text, f"{gem_name} has stale duplicate v0.9.3 Upcoming section")
+            self.assertIn("v1.0.2", text, f"{gem_name} missing 'v1.0.2' shipped baseline")
+            self.assertIn("## Upcoming (v1.0.3 & Beyond)", text, f"{gem_name} missing v1.0.3 Upcoming section")
+            self.assertNotIn("v0.9.4, feature-complete", text, f"{gem_name} has stale v0.9.4 reference")
+            self.assertNotIn("## Upcoming (v1.0.1 & Beyond)", text, f"{gem_name} has stale v1.0.1 Upcoming section")
 
 
 if __name__ == "__main__":

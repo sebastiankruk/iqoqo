@@ -37,6 +37,7 @@ import { SidebarLendingInfo } from "./sidebar/sidebar-lending-info";
 import { SidebarIdentifiers } from "./sidebar/sidebar-identifiers";
 import { SidebarActions } from "./sidebar/sidebar-actions";
 import { SidebarFrbrInfo } from "./sidebar/sidebar-frbr-info";
+import { ReadingDurationCard } from "./reading-duration-card";
 import { EditItemDialog } from "./edit-item-dialog";
 
 import { STATUS_LABELS } from "./sidebar/constants";
@@ -192,6 +193,9 @@ export function ItemSidebar({ item, onEdit }: ItemSidebarProps) {
         addToCollection={addToCollection}
         handleAddToCollection={handleAddToCollection}
       />
+
+      {/* Reading Duration Card (owned text items) */}
+      {isBook && <ReadingDurationCard item={item} isOwner={isOwner} />}
 
       {/* FRBR quick info */}
       <SidebarFrbrInfo item={item} />

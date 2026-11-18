@@ -34,6 +34,7 @@ REQUIRED_ELEMENTS=(
   "/.well-known/nodeinfo"
   "/api/federation/"
   "/api/public/rdf/"
+  "/share/"
   "application/activity+json"
   "application/jrd+json"
   "application/ld+json"
@@ -90,6 +91,18 @@ if [[ -n "${TARGET_URL}" ]]; then
   check_endpoint "/.well-known/webfinger?resource=acct:probe@iqoqo.kruk.cc" "application/jrd+json" "WebFinger Discovery"
   check_endpoint "/api/federation/actor" "application/activity+json" "Instance Actor Profile"
   check_endpoint "/api/public/rdf/context" "application/ld+json" "JSON-LD Context"
+
+  echo "  -> Checking ${TARGET_URL}/robots.txt for Cloudflare Managed AI Crawl Control blocks..."
+  robots_body=$(curl -sSL "${TARGET_URL}/robots.txt" || echo "CURL_ERROR")
+  if [[ "${robots_body}" == "CURL_ERROR" ]]; then
+    echo "  [-] WARN: Could not fetch ${TARGET_URL}/robots.txt" >&2
+  elif echo "${robots_body}" | awk '/# BEGIN Cloudflare Managed content/,/# END Cloudflare Managed Content/' | grep -E "User-agent: (Google-Extended|GoogleOther|Google-CloudVertexBot)" >/dev/null; then
+    echo "  [-] ERROR: Cloudflare Managed robots.txt is blocking Google AI fetchers (Google-Extended/GoogleOther/Google-CloudVertexBot)!" >&2
+    echo "      See deploy/cloudflare-semantic-federation-rules.md to disable AI Crawl Control override." >&2
+    exit 3
+  else
+    echo "  [+] OK: /robots.txt does not block Google AI fetchers via Cloudflare Managed content."
+  fi
 fi
 
 echo "[+] Cloudflare Semantic & Fediverse rules verification completed successfully."

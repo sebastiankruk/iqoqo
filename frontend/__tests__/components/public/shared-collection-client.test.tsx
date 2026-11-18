@@ -16,6 +16,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SharedCollectionClient } from "@/components/public/shared-collection-client";
+import { buildPaginationWindow } from "@/lib/pagination";
 import * as routeParams from "@/lib/capacitor/route-params";
 
 vi.mock("next-intl", () => ({
@@ -35,7 +36,9 @@ vi.mock("@/components/ui/share-button", () => ({
 }));
 
 vi.mock("@/components/ui/public-feed-button", () => ({
-  PublicFeedButton: () => <button>RSS</button>,
+  PublicFeedButton: ({ feedPath, label }: { feedPath: string; label?: string }) => (
+    <a href={feedPath}>{label || "RSS"}</a>
+  ),
 }));
 
 vi.mock("@/components/collection/collection-grid", () => ({
@@ -118,5 +121,123 @@ describe("SharedCollectionClient", () => {
     await waitFor(() => {
       expect(screen.getByText("Collection Not Found")).toBeInTheDocument();
     });
+  });
+
+  it("renders subtle RDF icon button linking to query-free /jsonld/1 and sr-only windowed AI page links", () => {
+    const { container } = render(
+      <SharedCollectionClient
+        initialToken="tok-123"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "audiophile",
+          collection_name: "Jazz Vinyl",
+          total: 365,
+          page: 1,
+          per_page: 48,
+          pages: 8,
+          items: [
+            {
+              id: 1,
+              manifestation_id: 10,
+              title: "Kind of Blue",
+              authors: ["Miles Davis"],
+              content_type: "music",
+              format: "vinyl",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(container.querySelector('[data-testid="shared-catalog-index"]')).toBeNull();
+    expect(screen.getByText("365 Items")).toBeInTheDocument();
+
+    const jsonLdLink = screen.getByRole("link", { name: "jsonLdFeed" });
+    expect(jsonLdLink).toHaveAttribute("href", "https://preview.iqoqo.cc/share/tok-123/jsonld/1");
+
+    const aiNav = screen.getByRole("navigation", { name: "AI JSON-LD pages" });
+    const aiLinks = Array.from(aiNav.querySelectorAll("a")).map(a => a.getAttribute("href"));
+    expect(aiLinks).toEqual([
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/1",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/2",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/3",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/4",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/5",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/6",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/7",
+    ]);
+
+    const rssLink = screen.getByRole("link", { name: "RSS" });
+    expect(rssLink).toHaveAttribute("href", "/share/tok-123/feed.xml");
+  });
+
+  it("caps pagination links to at most 10 pages (first, 8 around current, last)", () => {
+    expect(buildPaginationWindow(1, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(buildPaginationWindow(12, 25)).toEqual([1, 9, 10, 11, 12, 13, 14, 15, 16, 25]);
+    expect(buildPaginationWindow(25, 25)).toEqual([1, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+
+    render(
+      <SharedCollectionClient
+        initialToken="tok-25p"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "collector",
+          collection_name: "Huge Collection",
+          total: 1200,
+          page: 12,
+          per_page: 48,
+          pages: 25,
+          items: [{ id: 1, manifestation_id: 10, title: "Album 1", authors: ["Artist"] }],
+        }}
+      />
+    );
+
+    const navs = screen.getAllByRole("navigation", { name: "Collection pagination" });
+    const pageLinks = navs[0].querySelectorAll("a[href^='/share/tok-25p?page=']");
+    // 10 numbered pages + Prev + Next = 12 links
+    expect(pageLinks).toHaveLength(12);
+    expect(navs[0].querySelector('a[aria-current="page"]')).toHaveTextContent("12");
+  });
+
+  it("updates displayed page immediately when initialData changes on client navigation", () => {
+    const { rerender } = render(
+      <SharedCollectionClient
+        initialToken="tok-nav"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "collector",
+          collection_name: "Jazz",
+          total: 96,
+          page: 1,
+          per_page: 48,
+          pages: 2,
+          items: [{ id: 1, manifestation_id: 10, title: "Page 1 Album", authors: ["Artist 1"] }],
+        }}
+      />
+    );
+
+    expect(
+      screen.getAllByRole("navigation", { name: "Collection pagination" })[0].querySelector('a[aria-current="page"]')
+    ).toHaveTextContent("1");
+
+    rerender(
+      <SharedCollectionClient
+        initialToken="tok-nav"
+        publicBaseUrl="https://preview.iqoqo.cc"
+        initialData={{
+          author: "collector",
+          collection_name: "Jazz",
+          total: 96,
+          page: 2,
+          per_page: 48,
+          pages: 2,
+          items: [{ id: 2, manifestation_id: 20, title: "Page 2 Album", authors: ["Artist 2"] }],
+        }}
+      />
+    );
+
+    expect(
+      screen.getAllByRole("navigation", { name: "Collection pagination" })[0].querySelector('a[aria-current="page"]')
+    ).toHaveTextContent("2");
   });
 });

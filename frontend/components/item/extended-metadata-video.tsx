@@ -22,6 +22,16 @@ interface ExtendedMetadataVideoProps {
   meta: Record<string, unknown>;
 }
 
+/** Whether the metadata carries any displayable video fields or cover. */
+export function hasVideoMetadata(meta: Record<string, unknown>): boolean {
+  const cast = (meta.cast || meta.Cast) as string[] | undefined;
+  const directors = (meta.directors || meta.Director) as string[] | undefined;
+  const runtime = (meta.runtime || meta.Runtime) as number | undefined;
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
+  return Boolean(cast?.length || directors?.length || runtime || coverUrl);
+}
+
 /**
  * Extended metadata component for video items.
  *
@@ -36,7 +46,7 @@ export function ExtendedMetadataVideo({ meta }: ExtendedMetadataVideoProps) {
   const timestamp = getCoverTimestamp(meta);
   const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
 
-  if (!cast?.length && !directors?.length && !runtime && meta.Source !== "TMDB" && !coverUrl) return null;
+  if (!hasVideoMetadata(meta)) return null;
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

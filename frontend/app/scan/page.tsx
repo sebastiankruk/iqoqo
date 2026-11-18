@@ -72,10 +72,16 @@ export default function ScanPage() {
   });
   const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">(
     (): "inventory" | "wishlist" | "catalog" => {
-      if (typeof window !== "undefined" && window.localStorage) {
-        const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
-        if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
-          return savedPolicy;
+      if (typeof window !== "undefined") {
+        const urlPolicy = new URLSearchParams(window.location.search).get("policy");
+        if (urlPolicy === "inventory" || urlPolicy === "wishlist" || urlPolicy === "catalog") {
+          return urlPolicy;
+        }
+        if (window.localStorage) {
+          const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
+          if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
+            return savedPolicy;
+          }
         }
       }
       return "inventory";
@@ -209,6 +215,7 @@ export default function ScanPage() {
           });
 
           queryClient.invalidateQueries({ queryKey: queryKeys.items() });
+          queryClient.invalidateQueries({ queryKey: ["wishlist"] });
           queryClient.invalidateQueries({ queryKey: queryKeys.stats() });
           queryClient.invalidateQueries({ queryKey: ["works", "shelf"] });
           queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] });
@@ -321,6 +328,7 @@ export default function ScanPage() {
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
       Publisher: data.publisher || undefined,
+      ...(policy === "wishlist" ? { collection_status: "wish_list" } : {}),
     };
 
     const isCurrentlyOffline = typeof navigator !== "undefined" && !navigator.onLine;
@@ -351,11 +359,15 @@ export default function ScanPage() {
             console.error("Failed to upload cover:", e);
             toast.error(`"${payload.Title}" added, but cover upload failed: ${errMsg}`);
           }
+        } else if (policy === "wishlist") {
+          toast.success(`"${payload.Title}" added to your wishlist!`);
         } else {
           toast.success(`"${payload.Title}" added to your library!`);
         }
 
-        if (response.data?.item_id) {
+        if (policy === "wishlist") {
+          router.push(item?.manifestation_id ? `/manifestation/${item.manifestation_id}` : "/wishlist");
+        } else if (response.data?.item_id) {
           router.push(`/item/${response.data.item_id}`);
         }
       },

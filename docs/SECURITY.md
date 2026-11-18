@@ -24,7 +24,8 @@ If you discover a security vulnerability in this project, please email the maint
 
 #### Cloudflare WAF & Semantic Agent Rules
 
-- **ActivityPub & RDF Crawling Rules**: Express Cloudflare WAF rules permit Semantic Web, SPARQL, and ActivityPub federation agents to query `/.well-known/*`, `/api/federation/*`, and `/api/public/rdf/*` without CAPTCHA challenges or false-positive rate blocks.
+- **ActivityPub & RDF Crawling Rules**: Express Cloudflare WAF rules in `deploy/cloudflare-semantic-federation-rules.md` permit Semantic Web, SPARQL, ActivityPub federation agents, and headerless AI share fetchers to query `/.well-known/*`, `/api/federation/*`, `/api/public/rdf/*`, and `/share/*` (including `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`) without CAPTCHA challenges or false-positive rate blocks.
+- **Crawler Boundary (`/api/` Disallowed)**: `frontend/public/robots.txt` keeps `/api/` disallowed for search and AI crawlers; machine-readable shared collection feeds are served under `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml` (verify edge Cloudflare AI Crawl Control settings with `scripts/verify_cloudflare_rules.sh <url>`).
 
 ### Federation Trust Graph, Settings RBAC & Instance Actor Hardening (Release 0.9.3 - October 2026)
 

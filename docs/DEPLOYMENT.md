@@ -124,3 +124,14 @@ When deploying OpenObserve in `docker-compose.monitoring.yml`:
 
 - **Password Policy**: `ZO_ROOT_USER_PASSWORD` requires minimum 8 characters with at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g. `!@#$%^&*()`). Passwords violating this policy cause OpenObserve to crash-loop on initialisation.
 - **Initialisation-Only**: `ZO_ROOT_USER_PASSWORD` is evaluated only during the initial volume bootstrap. Changing `OPENOBSERVE_ROOT_PASSWORD` in `.env` afterwards will not update an existing database. If resetting credentials, reset via OpenObserve UI or recreate the `openobserve_data` volume.
+
+---
+
+## 6. Deploying Behind Cloudflare (WAF, AI Crawl Control & Shared Links)
+
+When placing an iqoqo instance behind Cloudflare on any domain or subdomain:
+
+1. **Apply Semantic & Fediverse Custom WAF Rules:** In Cloudflare **Security -> Security rules (Custom rules)**, configure the `Skip` rule in `deploy/cloudflare-semantic-federation-rules.md` covering `/share/`, `/manifestation/`, `/work/`, `/expression/`, `/item/`, `/u/`, `/.well-known/`, `/federation/`, `/api/public/`, `/api/federation/`, and `/api/sparql` (matching `(http.host eq "<domain>" or ends_with(http.host, ".<domain>"))`). Skip **All Super Bot Fight Mode Rules**, **Browser Integrity Check**, and **Security Level** while keeping `All managed rules` and `All rate limiting rules` active.
+2. **Unblock Google AI Fetchers in Cloudflare AI Crawl Control:** In Cloudflare **AI Crawl Control -> Settings -> AI Crawler and Agent access policies**, either toggle **Enable Bot Preference Sync** OFF (recommended so `frontend/public/robots.txt` is served unmodified) or set **Search**, **Training**, and **Agents** to `Allow (do not block)` so Cloudflare does not prepend `Google-Extended` / `GoogleOther` / `Google-CloudVertexBot` `Disallow: /` above `/robots.txt`.
+3. **Keep `/api/` Private from Crawlers:** `frontend/public/robots.txt` disallows `/api/`; crawler-facing share feeds live under `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`.
+4. **Verify Live Edge Rules:** Run `bash scripts/verify_cloudflare_rules.sh https://<your-domain>` after DNS/proxy cutover.

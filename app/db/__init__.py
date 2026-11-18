@@ -23,6 +23,10 @@ service, not here."""
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.model import Model
 
+from app.db.env import ensure_database_url_env
+
+ensure_database_url_env()
+
 
 class BaseModel(Model):
     """Custom base model to allow unmapped properties for SQLAlchemy 2.0 compatibility."""

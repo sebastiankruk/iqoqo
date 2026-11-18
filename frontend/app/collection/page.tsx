@@ -685,6 +685,23 @@ function CollectionContent() {
           return pub && publisherFilters.includes(pub);
         });
       }
+
+      // Filter by collection (only when cached item exposes collections / collection_ids)
+      if (collectionFilters.length > 0) {
+        items = items.filter(it => {
+          const itemRecord = it as Item & {
+            collections?: string[];
+            collection_ids?: Array<string | number>;
+          };
+          const rawCollections = Array.isArray(itemRecord.collections)
+            ? itemRecord.collections
+            : Array.isArray(itemRecord.collection_ids)
+              ? itemRecord.collection_ids.map(String)
+              : null;
+          if (!rawCollections) return true;
+          return collectionFilters.some(cf => rawCollections.includes(cf));
+        });
+      }
     }
 
     items.sort((a, b) => {
@@ -725,6 +742,7 @@ function CollectionContent() {
     statusFilters,
     isBorrowedFilterActive,
     tagFilters,
+    collectionFilters,
     genreFilters,
     publisherFilters,
   ]);

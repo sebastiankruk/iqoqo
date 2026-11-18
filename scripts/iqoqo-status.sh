@@ -45,6 +45,8 @@ Check health status of all iQoQo services.
 Options:
   --stack STACK     Stack to check: dev, preview, or prod (default: auto-detect from .env / mode)
   --deploy-dir DIR  Read deployment environment strictly from DIR/.env (no fallback)
+  --all-env         Show defaulted, optional, internal, and empty environment variable lists
+  --verbose         Alias for --all-env
   --help            Show this help
 
 Exit codes:
@@ -57,10 +59,12 @@ EOF
 
 DEPLOY_DIR=""
 STACK=""
+SHOW_ALL_ENV="${IQOQO_STATUS_VERBOSE:-0}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --deploy-dir) DEPLOY_DIR="$2"; shift 2 ;;
         --stack) STACK="$2"; shift 2 ;;
+        --all-env|--verbose|-v) SHOW_ALL_ENV=1; shift ;;
         dev|preview|prod) STACK="$1"; shift ;;
         --help) usage ;;
         *) echo "Unknown option: $1"; usage ;;
@@ -144,8 +148,11 @@ load_env() {
     sed -n "s/^[[:space:]]*${key}=\(.*\)/\1/p" "$ENV_FILE" 2>/dev/null | head -1 | tr -d '"' | tr -d "'" || true
 }
 
+BASE_URL=$(load_env "BASE_URL")
 FRONTEND_URL=$(load_env "NEXT_PUBLIC_FRONTEND_URL")
+FRONTEND_URL="${FRONTEND_URL:-$BASE_URL}"
 API_URL=$(load_env "NEXT_PUBLIC_APP_URL")
+API_URL="${API_URL:-$FRONTEND_URL}"
 DB_PORT=$(load_env "DB_PORT")
 REDIS_PORT=$(load_env "REDIS_PORT")
 NGINX_PORT=$(load_env "NGINX_PORT")
@@ -480,11 +487,48 @@ if [[ -n "$otel_cname" ]]; then
     fi
     check "OTel Collector" pass "ready (:8888) [${otel_status}]"
 
-    recent_export_errors=$(docker logs "$otel_cname" --since 5m 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
-    if [[ "$recent_export_errors" -gt 0 ]]; then
-        check "OTel Collector Export" fail "${recent_export_errors} export failures in last 5m (dropped telemetry — check collector logs)"
+    OTEL_EXPORT_GRACE_SECONDS="${OTEL_EXPORT_GRACE_SECONDS:-60}"
+    otel_started_at=$(docker inspect -f '{{.State.StartedAt}}' "$otel_cname" 2>/dev/null || echo "")
+    otel_uptime=$(python3 -c "
+import sys
+from datetime import datetime, timezone
+raw = sys.argv[1].strip()
+if not raw:
+    print(-1)
+    sys.exit(0)
+try:
+    if raw.endswith('Z'):
+        raw = raw[:-1] + '+00:00'
+    if '.' in raw:
+        head, tail = raw.split('.', 1)
+        tz_idx = next((i for i, ch in enumerate(tail) if ch in '+-'), len(tail))
+        frac = tail[:tz_idx][:6]
+        raw = f'{head}.{frac}{tail[tz_idx:]}'
+    started = datetime.fromisoformat(raw)
+    print(max(0, int((datetime.now(timezone.utc) - started).total_seconds())))
+except Exception:
+    print(-1)
+" "$otel_started_at" 2>/dev/null || echo "-1")
+
+    if [[ "$otel_uptime" -ge 0 && "$otel_uptime" -le "$OTEL_EXPORT_GRACE_SECONDS" ]]; then
+        grace_export_errors=$(docker logs "$otel_cname" --since 5m 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
+        if [[ "$grace_export_errors" -gt 0 ]]; then
+            check "OTel Collector Export" info "${grace_export_errors} transient export failure(s) during startup grace (${otel_uptime}s/${OTEL_EXPORT_GRACE_SECONDS}s)"
+        else
+            check "OTel Collector Export" pass "clean (0 export errors in last 5m)"
+        fi
     else
-        check "OTel Collector Export" pass "clean (0 export errors in last 5m)"
+        since_arg="5m"
+        if [[ "$otel_uptime" -gt "$OTEL_EXPORT_GRACE_SECONDS" ]]; then
+            post_grace=$((otel_uptime - OTEL_EXPORT_GRACE_SECONDS))
+            [[ "$post_grace" -lt 300 ]] && since_arg="${post_grace}s"
+        fi
+        recent_export_errors=$(docker logs "$otel_cname" --since "$since_arg" 2>&1 | grep -c -E "Exporting failed|HTTP Status Code 401" || true)
+        if [[ "$recent_export_errors" -gt 0 ]]; then
+            check "OTel Collector Export" fail "${recent_export_errors} export failures in last ${since_arg} (dropped telemetry — check collector logs)"
+        else
+            check "OTel Collector Export" pass "clean (0 export errors in last ${since_arg})"
+        fi
     fi
 else
     check "OTel Collector" info "not running (optional default stack)"
@@ -509,6 +553,17 @@ if [[ ${#active_exporters[@]} -gt 0 ]]; then
         check "Telemetry Ingestion" pass "active exporters: ${active_exporters[*]}"
     else
         check "Telemetry Ingestion" warn "exporters active (${active_exporters[*]}) but OTel Collector endpoint (:4318) unreachable"
+    fi
+fi
+
+if [[ "$STACK" != "dev" ]]; then
+    frontend_cname=$(find_container "frontend")
+    if [[ -n "$frontend_cname" ]]; then
+        if docker exec "$frontend_cname" sh -c 'test -n "${OPENOBSERVE_RUM_CLIENT_TOKEN:-}"' 2>/dev/null; then
+            check "Browser RUM" pass "OPENOBSERVE_RUM_CLIENT_TOKEN provisioned in frontend"
+        elif [[ -n "$oo_cname" ]]; then
+            check "Browser RUM" info "OPENOBSERVE_RUM_CLIENT_TOKEN not active in frontend (set OPENOBSERVE_RUM_SITE or RUM_LOCAL_ONLY=true)"
+        fi
     fi
 fi
 
@@ -719,6 +774,37 @@ print(count)
         else
             check "Gunicorn" info "${gunicorn_workers} worker process(es)"
         fi
+
+        probe_out=$(docker exec "$web_cname" python3 -c "
+from cryptography.fernet import InvalidToken
+try:
+    from app import create_app
+    from app.db import db
+    from app.db.settings import InstanceSettings, _get_fernet_cipher
+    app = create_app()
+    with app.app_context():
+        rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
+        sample = next((r for r in rows if isinstance(r.value, dict) and r.value.get('_encrypted') is True and isinstance(r.value.get('ciphertext'), str)), None)
+        if sample is None:
+            print('NO_ENCRYPTED_ROWS')
+        else:
+            try:
+                _get_fernet_cipher().decrypt(sample.value['ciphertext'].encode('utf-8'))
+                print('OK:' + sample.key)
+            except InvalidToken:
+                print('INVALID_TOKEN:' + sample.key)
+except Exception as e:
+    print('ERR:' + type(e).__name__)
+" 2>/dev/null || echo "ERR:docker_exec")
+        if [[ "$probe_out" == OK:* ]]; then
+            check "Encrypted settings" pass "decrypted sample key (${probe_out#OK:})"
+        elif [[ "$probe_out" == "NO_ENCRYPTED_ROWS" ]]; then
+            check "Encrypted settings" pass "no encrypted rows present"
+        elif [[ "$probe_out" == INVALID_TOKEN:* ]]; then
+            check "Encrypted settings" fail "InvalidToken decrypting ${probe_out#INVALID_TOKEN:} (ENV_FILE / --env-file SECRET_KEY mismatch or run 'make migrate-secrets')"
+        else
+            check "Encrypted settings" info "probe skipped (${probe_out})"
+        fi
     else
         check "Container" fail "not running"
     fi
@@ -769,9 +855,11 @@ else
 
         recent_5xx=$(docker logs "$nginx_cname" --since 15m 2>&1 | grep -c '" 5[0-9][0-9] ' || true)
         if [[ "$recent_5xx" -gt 10 ]]; then
-            check "Recent 5xx errors" warn "${recent_5xx} in last 15min"
+            check "Recent 5xx errors" warn "${recent_5xx} in last 15min (threshold >10)"
+        elif [[ "$recent_5xx" -gt 0 ]]; then
+            check "Recent 5xx errors" info "${recent_5xx} in last 15min (below warn threshold 10)"
         else
-            check "Recent 5xx errors" pass "${recent_5xx} in last 15min"
+            check "Recent 5xx errors" pass "0 in last 15min"
         fi
     else
         check "Container" fail "not running"
@@ -1198,36 +1286,70 @@ else
     declare -A example_defaults
 fi
 
+CLASSES_FILE="${ENV_STATUS_CLASSES_FILE:-$IQOQO_ROOT/.env.status-classes}"
+declare -A env_classes
+if [[ -f "$CLASSES_FILE" ]]; then
+    while IFS='=' read -r ckey cval; do
+        [[ -z "$ckey" || "$ckey" == \#* ]] && continue
+        ckey=$(echo "$ckey" | tr -d '[:space:]')
+        cval=$(echo "$cval" | sed 's/[[:space:]]*#.*$//' | tr -d '[:space:]')
+        [[ -n "$ckey" && -n "$cval" ]] && env_classes["$ckey"]="$cval"
+    done < "$CLASSES_FILE"
+fi
+
 total_expected=${#expected_keys[@]}
 missing_warn=0
+missing_default=0
 missing_info=0
+missing_internal=0
 empty_count=0
 active_count=0
 db_active_count=0
 missing_warn_vars=()
+missing_default_vars=()
 missing_info_vars=()
+missing_internal_vars=()
 empty_vars=()
 
 get_db_configured_keys
 
 for key in "${expected_keys[@]}"; do
     val=$(load_env "$key")
+    key_class="${env_classes[$key]:-}"
+    if [[ -z "$key_class" ]]; then
+        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
+            key_class="optional"
+        else
+            key_class="required"
+        fi
+    fi
+
     if [[ -n "$val" ]]; then
         active_count=$((active_count + 1))
     elif [[ -n "${db_settings_map[$key]:-}" ]]; then
         active_count=$((active_count + 1))
         db_active_count=$((db_active_count + 1))
+    elif [[ "$key_class" == "internal" ]]; then
+        missing_internal=$((missing_internal + 1))
+        missing_internal_vars+=("$key")
     elif [[ "$val" == "" ]] && grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
         empty_count=$((empty_count + 1))
         empty_vars+=("$key")
     else
-        if [[ "${example_defaults[$key]:-set}" == "empty" ]]; then
-            missing_info=$((missing_info + 1))
-            missing_info_vars+=("$key")
-        else
-            missing_warn=$((missing_warn + 1))
-            missing_warn_vars+=("$key")
-        fi
+        case "$key_class" in
+            required)
+                missing_warn=$((missing_warn + 1))
+                missing_warn_vars+=("$key")
+                ;;
+            default)
+                missing_default=$((missing_default + 1))
+                missing_default_vars+=("$key")
+                ;;
+            *)
+                missing_info=$((missing_info + 1))
+                missing_info_vars+=("$key")
+                ;;
+        esac
     fi
 done
 
@@ -1238,15 +1360,25 @@ else
 fi
 
 if [[ "$missing_warn" -gt 0 ]]; then
-    check "Missing" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
+    check "Missing (required)" warn "${missing_warn} variable(s): ${missing_warn_vars[*]}"
 fi
 
-if [[ "$missing_info" -gt 0 ]]; then
-    check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
-fi
+if [[ "$SHOW_ALL_ENV" == "1" ]]; then
+    if [[ "$missing_default" -gt 0 ]]; then
+        check "Defaulted" info "${missing_default} variable(s) (using code/compose defaults): ${missing_default_vars[*]}"
+    fi
 
-if [[ "$empty_count" -gt 0 ]]; then
-    check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+    if [[ "$missing_info" -gt 0 ]]; then
+        check "Optional" info "${missing_info} variable(s) (not configured): ${missing_info_vars[*]}"
+    fi
+
+    if [[ "$missing_internal" -gt 0 ]]; then
+        check "Internal" info "${missing_internal} variable(s) (dev/test/runtime): ${missing_internal_vars[*]}"
+    fi
+
+    if [[ "$empty_count" -gt 0 ]]; then
+        check "Empty" info "${empty_count} variable(s) (intentional): ${empty_vars[*]}"
+    fi
 fi
 
 # Danger zone: values that silently disable features

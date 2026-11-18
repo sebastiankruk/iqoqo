@@ -86,7 +86,7 @@ else
   # Try primary branch URL first, fall back to release/1.0.2 or main if custom branch doesn't have it
   if ! curl -fsSL "${RAW_BASE_URL}/scripts/iqoqo_installer.py" -o iqoqo_installer.py 2>/dev/null; then
     echo "Notice: Branch ${BRANCH_OR_TAG} not found on remote. Trying fallback branches..."
-    FALLBACK_BRANCHES=("main" "release/1.0.2" "feat/c110-store-submission-lts-audit-v102")
+    FALLBACK_BRANCHES=("main" "release/1.0.2")
     FOUND=0
     for FB in "${FALLBACK_BRANCHES[@]}"; do
       if curl -fsSL "https://raw.githubusercontent.com/sebastiankruk/iqoqo/${FB}/scripts/iqoqo_installer.py" -o iqoqo_installer.py 2>/dev/null; then

@@ -17,66 +17,26 @@
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 
-import { resolveApiUrl } from "@/lib/utils";
 import { buildCollectionJsonLd } from "@/lib/schema-org";
+import {
+  getSharedCollection,
+  renderSharedCollectionError,
+  renderSharedCollectionJsonLdView,
+  resolvePublicOrigin,
+  SHARE_UI_PER_PAGE,
+  type SharedCollectionItem,
+} from "@/lib/share-server";
 import { JsonLdScript } from "@/components/json-ld-script";
 import { SharedCollectionClient } from "@/components/public/shared-collection-client";
-import { Footer } from "@/components/dashboard/footer";
-import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
-
-interface SharedCollectionItem {
-  id: number | string;
-  manifestation_id?: number | string;
-  title: string;
-  authors?: string[];
-  cover_url?: string;
-  status?: string;
-  collection_status?: string;
-}
-
-interface SharedCollectionData {
-  author: string;
-  collection_name: string;
-  collection_description?: string;
-  items: SharedCollectionItem[];
-}
-
-interface SharedCollectionResponse {
-  success: boolean;
-  data: SharedCollectionData;
-}
-
-type SharedCollectionResult =
-  { kind: "success"; response: SharedCollectionResponse } | { kind: "not-found" } | { kind: "error" };
 
 interface SharedCollectionPageProps {
   params: Promise<{ token: string }>;
+  searchParams?: Promise<{ page?: string; format?: string }>;
 }
 
 /** Generates static placeholder params for Capacitor static export builds. */
 export function generateStaticParams() {
   return [{ token: "_placeholder" }];
-}
-
-/**
- * Fetches a shared collection by its secure token.
- * @param token - The unique share token.
- * @returns The shared collection data, a not-found result, or a server error result.
- */
-async function getSharedCollection(token: string): Promise<SharedCollectionResult> {
-  try {
-    const res = await fetch(resolveApiUrl(`/public/share/${token}`, true), {
-      next: { revalidate: 60 },
-    });
-    if (res.status === 404) return { kind: "not-found" };
-    if (!res.ok) return { kind: "error" };
-
-    const response = (await res.json()) as SharedCollectionResponse;
-    if (!response.success || !response.data) return { kind: "error" };
-    return { kind: "success", response };
-  } catch {
-    return { kind: "error" };
-  }
 }
 
 /**
@@ -99,18 +59,16 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
   }
 
   const collection = collectionRes.response.data;
+  const totalCount = collection.total ?? collection.items.length;
   return {
     title: `${collection.collection_name} - Shared by ${collection.author} - iqoqo`,
-    description:
-      collection.collection_description || `A shared collection on iqoqo with ${collection.items.length} items.`,
+    description: collection.collection_description || `A shared collection on iqoqo with ${totalCount} items.`,
     alternates: {
       types: {
-        "application/rss+xml": [
-          { url: `/api/public/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` },
-        ],
+        "application/rss+xml": [{ url: `/share/${token}/feed.xml`, title: `${collection.collection_name} Feed` }],
         "application/ld+json": [
           {
-            url: `/api/public/share/${token}?format=json-ld`,
+            url: `/share/${token}/catalog.jsonld`,
             title: `${collection.collection_name} - Schema.org JSON-LD`,
           },
         ],
@@ -123,52 +81,72 @@ export async function generateMetadata({ params }: SharedCollectionPageProps): P
  * Public page for viewing a shared collection via a secure token.
  * @param props - Component props.
  * @param props.params - The route parameters.
+ * @param props.searchParams - Optional query parameters (`page`, `format`).
  * @returns The rendered page.
  */
-export default async function SharedCollectionPage({ params }: SharedCollectionPageProps) {
+export default async function SharedCollectionPage({ params, searchParams }: SharedCollectionPageProps) {
   const { token } = await params;
   if (token === "_placeholder") {
     return <SharedCollectionClient initialData={null} initialToken="_placeholder" />;
   }
 
-  const collectionRes = await getSharedCollection(token);
+  const resolvedSearch = process.env.CAPACITOR_BUILD === "true" ? undefined : await searchParams;
+  const formatParam = (resolvedSearch?.format || "").trim().toLowerCase();
+  const isJsonLdHtmlView = formatParam === "jsonld" || formatParam === "json-ld";
+  const parsedPage = Number.parseInt(resolvedSearch?.page || "1", 10);
+  const requestedPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+  if (isJsonLdHtmlView) {
+    return renderSharedCollectionJsonLdView(token, requestedPage);
+  }
+
+  const collectionRes = await getSharedCollection(token, requestedPage, SHARE_UI_PER_PAGE);
   if (collectionRes.kind === "not-found") {
     notFound();
   }
   if (collectionRes.kind === "error") {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Navbar />
-        <main className="flex-1 mx-auto w-full max-w-5xl px-6 py-16">
-          <section role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
-            <h1 className="text-2xl font-serif font-bold">Server Error</h1>
-            <p className="mt-3 text-muted-foreground">Please Try Again Later</p>
-          </section>
-        </main>
-        <Footer />
-      </div>
-    );
+    return renderSharedCollectionError();
   }
 
   const collection = collectionRes.response.data;
   const items = collection.items || [];
+  const totalItems = collection.total ?? items.length;
+  const publicBaseUrl = resolvePublicOrigin();
 
   const collectionJsonLd = buildCollectionJsonLd({
     name: collection.collection_name,
     description: collection.collection_description || undefined,
-    totalCount: items.length,
+    totalCount: totalItems,
     authorName: collection.author,
-    items: items.map((item: SharedCollectionItem) => ({
-      id: item.manifestation_id || item.id,
-      title: item.title,
-      url: `/manifestation/${item.manifestation_id || item.id}`,
-    })),
+    items: items.slice(0, 1000).map((item: SharedCollectionItem) => {
+      const sameAs: string[] = [];
+      if (item.lod_links) {
+        for (const key of ["discogs_uri", "musicbrainz_uri", "wikidata_uri", "opencollections_uri"]) {
+          if (item.lod_links[key]) sameAs.push(item.lod_links[key]);
+        }
+      }
+      return {
+        id: item.manifestation_id || item.id,
+        title: item.title,
+        url: `/manifestation/${item.manifestation_id || item.id}`,
+        contentType: item.content_type,
+        format: item.format,
+        authors: item.authors,
+        ean: item.ean,
+        upc: item.upc,
+        publisher: item.publisher,
+        catalogNumber: item.catalog_number,
+        publicationYear: item.publication_year,
+        country: item.country,
+        sameAs: sameAs.length > 0 ? sameAs : undefined,
+      };
+    }),
   });
 
   return (
     <>
+      <SharedCollectionClient initialData={collection} initialToken={token} publicBaseUrl={publicBaseUrl} />
       <JsonLdScript data={collectionJsonLd} />
-      <SharedCollectionClient initialData={collection} initialToken={token} />
     </>
   );
 }

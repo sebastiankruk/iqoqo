@@ -26,6 +26,7 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: {
     get: vi.fn(),
     post: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -101,7 +102,7 @@ describe("AddToCollectionDropdown", () => {
     });
 
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith("Added to your wishlist!");
+      expect(toast.success).toHaveBeenCalledWith("Added to wishlist");
     });
   });
 
@@ -129,20 +130,61 @@ describe("AddToCollectionDropdown", () => {
     });
   });
 
-  it("renders 'View Wishlist Item' when wishlistItemId is present", async () => {
+  it("renders 'Move to Collection', 'Move to My Library', 'View Wishlist', and 'Remove from Wishlist' when wishlistItemId is present", async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: { success: true, collections: [] },
     });
 
     renderComponent({ manifestationId: 123, wishlistItemId: 789 });
 
-    fireEvent.click(screen.getByRole("button", { name: /add to collection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /move to collection/i }));
 
-    const viewWishlistBtn = screen.getByText("View Wishlist Item");
+    expect(screen.getByText("Move to My Library")).toBeInTheDocument();
+    const viewWishlistBtn = screen.getByText("View Wishlist");
     expect(viewWishlistBtn).toBeInTheDocument();
 
     fireEvent.click(viewWishlistBtn);
 
-    expect(mockPush).toHaveBeenCalledWith("/item/789");
+    expect(mockPush).toHaveBeenCalledWith("/wishlist");
+  });
+
+  it("moves wishlisted manifestation to library when 'Move to My Library' is clicked", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { success: true, collections: [] },
+    });
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { success: true, data: { item_id: 456, intent_id: null, manifestation_id: 123 } },
+    });
+
+    renderComponent({ manifestationId: 123, wishlistItemId: 789 });
+
+    fireEvent.click(screen.getByRole("button", { name: /move to collection/i }));
+    fireEvent.click(screen.getByText("Move to My Library"));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith("/manifestations/123/add", {});
+      expect(toast.success).toHaveBeenCalledWith("Added to your collection!");
+    });
+  });
+
+  it("calls DELETE /api/wishlist/<id> when 'Remove from Wishlist' is clicked", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { success: true, collections: [] },
+    });
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({
+      data: { success: true, data: { id: 789 } },
+    });
+
+    renderComponent({ manifestationId: 123, wishlistItemId: 789 });
+
+    fireEvent.click(screen.getByRole("button", { name: /move to collection/i }));
+
+    const removeBtn = screen.getByText("Remove from wishlist");
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(apiClient.delete).toHaveBeenCalledWith("/wishlist/789");
+      expect(toast.success).toHaveBeenCalledWith("Removed from wishlist");
+    });
   });
 });

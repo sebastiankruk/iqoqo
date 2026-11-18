@@ -40,6 +40,11 @@ describe("Video Metadata Display", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("returns null when Source is TMDB but cast, directors, runtime, and cover are absent", () => {
+    const { container } = render(<ExtendedMetadataVideo meta={{ Source: "TMDB" }} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("handles Cast with capital C", () => {
     const meta = { Cast: ["Lead Actor"], Runtime: 90 };
     render(<ExtendedMetadataVideo meta={meta} />);
@@ -71,6 +76,14 @@ describe("BoardGame Metadata Display", () => {
     const meta = {};
     const { container } = render(<ExtendedMetadataBoardGame meta={meta} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("returns null when Source is BGG or IGDB but no game metadata is present", () => {
+    const { container: bgg } = render(<ExtendedMetadataBoardGame meta={{ Source: "BGG" }} />);
+    expect(bgg).toBeEmptyDOMElement();
+
+    const { container: igdb } = render(<ExtendedMetadataBoardGame meta={{ Source: "IGDB" }} />);
+    expect(igdb).toBeEmptyDOMElement();
   });
 
   it("handles MinPlayers with capital M", () => {

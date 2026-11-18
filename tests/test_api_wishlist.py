@@ -29,10 +29,11 @@ Covers wishlist-api-separation Tasks 2.1–2.3:
 #
 
 import pytest
+from sqlalchemy import select
 
 from app.api.auth import generate_internal_jwt
 from app.db.core import MediaCategory, MediaFormat
-from app.db.models import Expression, Manifestation, Permission, Role, User, UserWorkIntent, Work, WorkPart, db
+from app.db.models import Expression, Item, Manifestation, Permission, Role, User, UserWorkIntent, Work, WorkPart, db
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -156,6 +157,7 @@ def wishlist_setup(app):
             "expr_en_id": expr_en.id,
             "expr_fr_id": expr_fr.id,
             "expr_audio_id": expr_audio.id,
+            "expr_game_id": expr_game.id,
             "manif_en_id": manif_en.id,
             "manif_fr_id": manif_fr.id,
             "manif_vinyl_id": manif_vinyl.id,
@@ -763,3 +765,286 @@ class TestComplexAndContainerWorks:
         assert response.status_code in (200, 201)
         data = response.json["data"]
         assert data["manifestation_id"] == complex_work_setup["manifestation_id"]
+
+
+# ---------------------------------------------------------------------------
+# C121: Wishlist Actions, Edition Binding, Filters, and Acquisition Auto-Fulfill
+# ---------------------------------------------------------------------------
+
+
+class TestWishlistC121ActionsAndAcquisition:
+    """Tests for C121 wishlist action fixes, filters, and auto-fulfill on acquisition."""
+
+    def test_manifestation_detail_returns_positive_wishlist_item_id(self, client, wishlist_setup, app):
+        """GET /api/manifestations/<id> returns positive wishlist_item_id for UserWorkIntent."""
+        headers = _headers(app, wishlist_setup["user_id"])
+        resp = client.get(f"/api/manifestations/{wishlist_setup['manif_en_id']}", headers=headers)
+        assert resp.status_code == 200
+        data = resp.json["data"]
+        assert data["wishlist_item_id"] == wishlist_setup["existing_intent_id"]
+        assert data["wishlist_item_id"] > 0
+
+    def test_manifestation_add_and_scan_bind_expression_and_manifestation(self, client, wishlist_setup, app):
+        """Adding via manifestation endpoint or /api/scan binds expression_id and manifestation_id."""
+        headers = _headers(app, wishlist_setup["user_id"])
+        resp = client.post(
+            f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}/add",
+            json={"collection_status": "wish_list"},
+            headers=headers,
+        )
+        assert resp.status_code in (200, 201)
+
+        with app.app_context():
+            intent = db.session.scalar(
+                select(UserWorkIntent).where(
+                    UserWorkIntent.user_id == wishlist_setup["user_id"],
+                    UserWorkIntent.work_id == wishlist_setup["work2_id"],
+                )
+            )
+            assert intent is not None
+            assert intent.expression_id == wishlist_setup["expr_audio_id"]
+            assert intent.manifestation_id == wishlist_setup["manif_vinyl_id"]
+
+        # Re-scan another manifestation (game) to wishlist via /api/scan
+        scan_resp = client.post(
+            "/api/scan",
+            json={
+                "manifestation_id": wishlist_setup["manif_game_id"],
+                "collection_status": "wish_list",
+            },
+            headers=headers,
+        )
+        assert scan_resp.status_code in (200, 201)
+
+        with app.app_context():
+            game_intent = db.session.scalar(
+                select(UserWorkIntent).where(
+                    UserWorkIntent.user_id == wishlist_setup["user_id"],
+                    UserWorkIntent.work_id == wishlist_setup["work3_id"],
+                )
+            )
+            assert game_intent is not None
+            assert game_intent.manifestation_id == wishlist_setup["manif_game_id"]
+
+    def test_bulk_and_manual_wishlist_create_intents_not_items(self, client, wishlist_setup, app):
+        """POST /api/items/bulk and /api/items/manual with collection_status='wish_list' write UserWorkIntent."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        bulk_resp = client.post(
+            "/api/items/bulk",
+            json={
+                "manifestation_ids": [wishlist_setup["manif_vinyl_id"], wishlist_setup["manif_game_id"]],
+                "collection_status": "wish_list",
+            },
+            headers=headers,
+        )
+        assert bulk_resp.status_code == 200
+
+        manual_resp = client.post(
+            "/api/items/manual",
+            json={
+                "Title": "Wishlist Manual Entry",
+                "Authors": ["Manual Author"],
+                "Format": "Book",
+                "collection_status": "wish_list",
+            },
+            headers=headers,
+        )
+        assert manual_resp.status_code in (200, 201)
+        assert manual_resp.json["data"]["intent_id"] is not None
+        assert manual_resp.json["data"]["item_id"] is None
+
+        with app.app_context():
+            owned_wishlist_items = db.session.scalars(
+                select(Item).where(
+                    Item.owner_id == wishlist_setup["user_id"],
+                    Item.collection_status == "wish_list",
+                )
+            ).all()
+            assert owned_wishlist_items == []
+
+            intents = db.session.scalars(select(UserWorkIntent).where(UserWorkIntent.user_id == wishlist_setup["user_id"])).all()
+            work_ids = {intent.work_id for intent in intents}
+            assert wishlist_setup["work2_id"] in work_ids
+            assert wishlist_setup["work3_id"] in work_ids
+            assert len(work_ids) >= 4
+
+    def test_acquiring_item_auto_fulfills_wishlist_intent(self, client, wishlist_setup, app):
+        """Creating a physical Item automatically deletes the matching UserWorkIntent."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        # 1. Acquire work1 via /manifestations/<id>/add (existing_intent_id already set in fixture)
+        add_resp = client.post(
+            f"/api/manifestations/{wishlist_setup['manif_en_id']}/add",
+            json={"collection_status": "available"},
+            headers=headers,
+        )
+        assert add_resp.status_code in (200, 201)
+
+        with app.app_context():
+            remaining = db.session.scalar(
+                select(UserWorkIntent).where(
+                    UserWorkIntent.user_id == wishlist_setup["user_id"],
+                    UserWorkIntent.work_id == wishlist_setup["work1_id"],
+                )
+            )
+            assert remaining is None
+
+        # 2. Wishlist then acquire work2 via /api/scan
+        assert client.post(
+            "/api/scan",
+            json={"manifestation_id": wishlist_setup["manif_vinyl_id"], "collection_status": "wish_list"},
+            headers=headers,
+        ).status_code in (200, 201)
+        assert client.post(
+            "/api/scan",
+            json={"manifestation_id": wishlist_setup["manif_vinyl_id"], "collection_status": "available"},
+            headers=headers,
+        ).status_code in (200, 201)
+        with app.app_context():
+            assert (
+                db.session.scalar(
+                    select(UserWorkIntent).where(
+                        UserWorkIntent.user_id == wishlist_setup["user_id"],
+                        UserWorkIntent.work_id == wishlist_setup["work2_id"],
+                    )
+                )
+                is None
+            )
+
+        # 3. Wishlist then acquire work3 via /api/items/bulk
+        assert client.post(
+            "/api/wishlist",
+            json={
+                "work_id": wishlist_setup["work3_id"],
+                "expression_id": wishlist_setup["expr_game_id"],
+                "manifestation_id": wishlist_setup["manif_game_id"],
+            },
+            headers=headers,
+        ).status_code in (200, 201)
+        assert (
+            client.post(
+                "/api/items/bulk",
+                json={
+                    "manifestation_ids": [wishlist_setup["manif_game_id"]],
+                    "collection_status": "available",
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        with app.app_context():
+            assert (
+                db.session.scalar(
+                    select(UserWorkIntent).where(
+                        UserWorkIntent.user_id == wishlist_setup["user_id"],
+                        UserWorkIntent.work_id == wishlist_setup["work3_id"],
+                    )
+                )
+                is None
+            )
+
+    def test_wishlist_category_filter_and_sort(self, client, wishlist_setup, app):
+        """GET /api/wishlist supports category filter and title sort parameters."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        # Add music and board game entries so all 3 categories exist
+        music_create = client.post(
+            "/api/wishlist",
+            json={
+                "work_id": wishlist_setup["work2_id"],
+                "expression_id": wishlist_setup["expr_audio_id"],
+                "manifestation_id": wishlist_setup["manif_vinyl_id"],
+            },
+            headers=headers,
+        )
+        assert music_create.status_code in (200, 201)
+        game_create = client.post(
+            "/api/wishlist",
+            json={
+                "work_id": wishlist_setup["work3_id"],
+                "expression_id": wishlist_setup["expr_game_id"],
+                "manifestation_id": wishlist_setup["manif_game_id"],
+            },
+            headers=headers,
+        )
+        assert game_create.status_code in (200, 201)
+
+        music_resp = client.get("/api/wishlist?category=music", headers=headers)
+        assert music_resp.status_code == 200
+        music_titles = [entry["title"] for entry in music_resp.json["data"]]
+        assert music_titles == ["Symphony No. 5"]
+
+        asc_resp = client.get("/api/wishlist?sort=title", headers=headers)
+        assert asc_resp.status_code == 200
+        asc_titles = [entry["title"] for entry in asc_resp.json["data"]]
+        assert asc_titles == sorted(asc_titles, key=str.casefold)
+
+        desc_resp = client.get("/api/wishlist?sort=title-desc", headers=headers)
+        assert desc_resp.status_code == 200
+        desc_titles = [entry["title"] for entry in desc_resp.json["data"]]
+        assert desc_titles == sorted(desc_titles, key=str.casefold, reverse=True)
+
+    def test_manifestation_detail_ignores_fulfilled_intent(self, client, wishlist_setup, app):
+        """GET /api/manifestations/<id> ignores fulfilled UserWorkIntent rows when resolving wishlist_item_id."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        with app.app_context():
+            fulfilled_intent = UserWorkIntent(
+                user_id=wishlist_setup["user_id"],
+                work_id=wishlist_setup["work2_id"],
+                expression_id=wishlist_setup["expr_audio_id"],
+                manifestation_id=wishlist_setup["manif_vinyl_id"],
+                status="fulfilled",
+            )
+            db.session.add(fulfilled_intent)
+            db.session.commit()
+
+        resp = client.get(f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json["data"]["wishlist_item_id"] is None
+
+    def test_rewishlisting_fulfilled_intent_reactivates_and_upgrades_edition(self, client, wishlist_setup, app):
+        """Re-wishlisting a work with a fulfilled UserWorkIntent resets status and binds the target edition (M-03)."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        with app.app_context():
+            fulfilled_intent = UserWorkIntent(
+                user_id=wishlist_setup["user_id"],
+                work_id=wishlist_setup["work2_id"],
+                expression_id=None,
+                manifestation_id=None,
+                status="fulfilled",
+                is_hidden=True,
+            )
+            db.session.add(fulfilled_intent)
+            db.session.commit()
+            intent_id = fulfilled_intent.id
+
+        add_resp = client.post(
+            f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}/add",
+            json={"collection_status": "wish_list"},
+            headers=headers,
+        )
+        assert add_resp.status_code == 200
+        assert add_resp.json["data"]["intent_id"] == intent_id
+
+        with app.app_context():
+            refreshed = db.session.get(UserWorkIntent, intent_id)
+            assert refreshed is not None
+            assert refreshed.status == "want_to_listen"
+            assert refreshed.expression_id == wishlist_setup["expr_audio_id"]
+            assert refreshed.manifestation_id == wishlist_setup["manif_vinyl_id"]
+            assert refreshed.is_hidden is False
+
+        man_resp = client.get(f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}", headers=headers)
+        assert man_resp.status_code == 200
+        assert man_resp.json["data"]["wishlist_item_id"] == intent_id
+
+    def test_wishlist_search_escapes_trailing_backslash(self, client, wishlist_setup, app):
+        """GET /api/wishlist?q=... safely escapes trailing backslashes without SQL ESCAPE errors (L-01)."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        resp = client.get("/api/wishlist?q=Novel%5C", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json["success"] is True

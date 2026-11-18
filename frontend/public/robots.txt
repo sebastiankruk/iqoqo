@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
 
-# Public pages, profiles, and shares are indexable
+# Public pages, profiles, and shares (including /share/<token>/catalog.jsonld and feed.xml) are indexable
 Allow: /u/
 Allow: /share/
 Allow: /manifestation/
@@ -9,11 +9,7 @@ Allow: /item/
 Allow: /work/
 Allow: /expression/
 
-# Allow crawlers and AI agents to access public Linked Data & semantic feeds
-Allow: /api/public/
-Allow: /api/sparql
-
-# Admin and private internal API routes are not for crawlers
+# Admin and API routes are not for crawlers
 Disallow: /api/
 Disallow: /admin/
 
@@ -25,8 +21,6 @@ Allow: /work/
 Allow: /expression/
 Allow: /u/
 Allow: /share/
-Allow: /api/public/
-Allow: /api/sparql
 Disallow: /api/
 Disallow: /admin/
 
@@ -38,7 +32,5 @@ Allow: /work/
 Allow: /expression/
 Allow: /u/
 Allow: /share/
-Allow: /api/public/
-Allow: /api/sparql
 Disallow: /api/
 Disallow: /admin/

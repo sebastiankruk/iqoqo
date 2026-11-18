@@ -388,6 +388,9 @@ export function useManifestation(id: number, initialData?: CatalogEntry | null) 
     },
     enabled: id > 0,
     initialData: initialData ?? undefined,
+    // SSR initialData is fetched unauthenticated, so mark it stale immediately
+    // to trigger an authenticated client fetch for user_owns / wishlist_item_id.
+    initialDataUpdatedAt: initialData ? 0 : undefined,
   });
 }
 
@@ -407,6 +410,7 @@ export function useWork(id: number, initialData?: WorkDetail | null) {
     },
     enabled: id > 0,
     initialData: initialData ?? undefined,
+    initialDataUpdatedAt: initialData ? 0 : undefined,
   });
 }
 
@@ -715,6 +719,33 @@ export function useItem(id: number, initialData?: Item | null) {
   });
 }
 
+/** Payload for logging a reading session on an owned physical item. */
+export interface LogReadingSessionPayload {
+  duration_minutes: number;
+  pages_read?: number;
+  note?: string;
+}
+
+/**
+ * Custom hook to log a reading session on an owned physical item.
+ *
+ * @param itemId - Item ID
+ * @returns Mutation for logging a reading session
+ */
+export function useLogReadingSession(itemId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: LogReadingSessionPayload) => {
+      const response = await apiClient.post(`/items/${itemId}/reading-sessions`, payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.item(itemId) });
+      queryClient.invalidateQueries({ queryKey: ["manifestation"] });
+    },
+  });
+}
+
 /* ── Rest of the hooks ─────────────────────────────────────────────────────── */
 
 /**
@@ -768,6 +799,7 @@ export function useAddItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
       qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
@@ -798,6 +830,7 @@ type ManualItemPayload = {
   PublicationDate?: string;
   Publisher?: string;
   Description?: string;
+  collection_status?: string;
   tags?: string[];
   genres?: string[];
 };
@@ -805,21 +838,28 @@ type ManualItemPayload = {
 /**
  * Custom hook to add a new item manually when ISBN is not available.
  *
- * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
+ * @returns {import('@tanstack/react-query').UseMutationResult<ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>, Error, ManualItemPayload>} Mutation result
  */
 export function useAddManualItem() {
   const qc = useQueryClient();
-  return useMutation<ApiResponse<{ item_id: number; manifestation_id: number }>, Error, ManualItemPayload>({
+  return useMutation<
+    ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>,
+    Error,
+    ManualItemPayload
+  >({
     mutationFn: async (metadata: ManualItemPayload) => {
-      const res = await apiClient.post<ApiResponse<{ item_id: number; manifestation_id: number }>>(
-        "/items/manual",
-        metadata
-      );
+      const res = await apiClient.post<
+        ApiResponse<{ item_id: number | null; intent_id?: number; manifestation_id: number }>
+      >("/items/manual", metadata);
       return res.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.stats() });
       qc.invalidateQueries({ queryKey: ["items"] });
+      qc.invalidateQueries({ queryKey: ["wishlist"] });
+      qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: ["works", "shelf"] });
+      qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
     },
   });
 }

@@ -2,9 +2,6 @@
   "Navbar": {
     "maintenanceMode": "Tryb konserwacji aktywny – niektóre funkcje mogą być ograniczone",
     "federationHubBadge": "Węzeł Federacji · Tylko do odczytu",
-    "federationHubBanner": "Ta instancja działa jako węzeł federacji tylko do odczytu. Egzemplarze są federowane z węzłów społeczności.",
-    "federationHubExploreDirectory": "Przeglądaj katalog federacji",
-    "dismissBanner": "Zamknij powiadomienie",
     "directory": "Katalog węzłów",
     "searchPlaceholder": "Szukaj w swojej kolekcji...",
     "collection": "Kolekcja",
@@ -103,7 +100,8 @@
     "libraryOfEverything": "Biblioteka wszystkiego",
     "githubSponsors": "Sponsorzy GitHub",
     "buyMeACoffee": "Kup mi kawę",
-    "rules": "Twoja biblioteka, Twoje zasady."
+    "rules": "Twoja biblioteka, Twoje zasady.",
+    "connectedServer": "Serwer: {host}"
   },
   "Login": {
     "title": "Zaloguj się do iqoqo",
@@ -201,7 +199,8 @@
     "game": "Gra",
     "audiobook": "Audiobook",
     "concert": "Koncert",
-    "seriesSuffix": "{label} (seria)"
+    "seriesSuffix": "{label} (seria)",
+    "onWishlist": "Na liście życzeń"
   },
   "Collection": {
     "loading": "Ładowanie kolekcji...",
@@ -347,7 +346,10 @@
     "foundManifestation": "Znalezione wydanie",
     "notFound": "Brak pozycji w tej kolekcji.",
     "profileTitle": "Kolekcja użytkownika {name}",
-    "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności."
+    "hiddenItemNote": "Niektóre pozycje mogą być ukryte ze względu na ustawienia prywatności.",
+    "jsonLdFeed": "Kanał JSON-LD / AI",
+    "jsonLdFeedTitle": "Maszynowy graf Schema.org JSON-LD dla agentów AI",
+    "catalogIndex": "Pełny indeks katalogu ({count})"
   },
   "CoverProvenance": {
     "sourcePrefix": "Źródło",
@@ -547,6 +549,10 @@
     },
     "batchMode": {
       "toggleLabel": "Tryb seryjny",
+      "stateOn": "WŁ.",
+      "stateOff": "WYŁ.",
+      "statusOn": "Skanowanie seryjne: WŁ.",
+      "statusOff": "Skanowanie seryjne: WYŁ.",
       "viewQueue": "Zobacz kolejkę skanowania seryjnego",
       "recentScans": "Ostatnie skany ({count})",
       "clearQueue": "Wyczyść kolejkę",
@@ -976,6 +982,23 @@
       "statusIncomplete": "Niekompletny",
       "statusPartedOut": "Rozłożony na części"
     },
+    "readingDuration": {
+      "title": "Czas czytania",
+      "logButton": "Zapisz czas czytania",
+      "dialogTitle": "Zapisz sesję czytania",
+      "dialogDescription": "Zarejestruj aktywny czas czytania tego egzemplarza.",
+      "quickPresets": "Szybki wybór",
+      "durationLabel": "Przeczytane minuty",
+      "pagesLabel": "Przeczytane strony (opcjonalnie)",
+      "noteLabel": "Notatka (opcjonalnie)",
+      "submit": "Zapisz sesję",
+      "saving": "Zapisywanie...",
+      "cancel": "Anuluj",
+      "summary": "{duration} czytania w {count} sesjach",
+      "summaryOne": "{duration} czytania w 1 sesji",
+      "elapsedDays": " ({days} dni)",
+      "elapsedDaysOne": " (1 dzień)"
+    },
     "maps": {
       "title": "Kartografia i załączniki mapowe",
       "addMap": "Dodaj mapę",
@@ -1039,5 +1062,49 @@
     "allStatuses": "Wszystkie statusy",
     "clearFilters": "Wyczyść filtry",
     "reassignOwner": "Zmień właściciela"
+  },
+  "Wishlist": {
+    "title": "Lista życzeń",
+    "itemCount": "{count} pozycji",
+    "itemCountOne": "1 pozycja",
+    "addToWishlist": "Dodaj do listy życzeń",
+    "browseCatalog": "Przeglądaj katalog",
+    "searchPlaceholder": "Szukaj na liście życzeń...",
+    "allCategories": "Wszystkie kategorie",
+    "filterCategory": "Filtruj wg kategorii",
+    "sortBy": "Sortuj listę życzeń",
+    "sortUpdated": "Ostatnio zaktualizowane",
+    "sortAdded": "Ostatnio dodane",
+    "sortTitleAsc": "Tytuł (A–Z)",
+    "sortTitleDesc": "Tytuł (Z–A)",
+    "emptyTitle": "Twoja lista życzeń jest pusta",
+    "emptyDescription": "Zeskanuj kod kreskowy, wyszukaj lub przeglądaj katalog, aby dodać wybrane pozycje.",
+    "noMatchingTitle": "Brak pasujących pozycji na liście życzeń",
+    "noMatchingDescription": "Spróbuj zmienić frazę wyszukiwania lub filtr kategorii.",
+    "clearFilters": "Wyczyść filtry",
+    "loadError": "Nie udało się załadować listy życzeń.",
+    "moveToLibrary": "Przenieś do biblioteki",
+    "moveToCollection": "Przenieś do kolekcji",
+    "moveToMyLibrary": "Przenieś do mojej biblioteki",
+    "movedToLibrary": "Przeniesiono „{title}” do biblioteki!",
+    "moveToLibraryFailed": "Nie udało się przenieść pozycji do biblioteki",
+    "removeFromWishlist": "Usuń z listy życzeń",
+    "removedFromWishlist": "Usunięto z listy życzeń",
+    "removeFromWishlistFailed": "Nie udało się usunąć z listy życzeń",
+    "viewWishlist": "Zobacz listę życzeń",
+    "onWishlistRemove": "Na liście życzeń · Usuń",
+    "addedToWishlist": "Dodano do listy życzeń",
+    "categoryText": "Książki i tekst",
+    "categoryMusic": "Muzyka",
+    "categoryMovie": "Filmy",
+    "categoryBoardGame": "Gry planszowe",
+    "categoryPuzzle": "Puzzle",
+    "categoryLego": "Zestawy LEGO",
+    "addToCollection": "Dodaj do kolekcji",
+    "addToMyLibrary": "Dodaj do mojej biblioteki",
+    "noFolder": "Bez folderu",
+    "noNamedFolders": "Brak nazwanych folderów. Utwórz poniżej.",
+    "addedToCollection": "Dodano do kolekcji!",
+    "addToCollectionFailed": "Nie udało się dodać do kolekcji"
   }
 }

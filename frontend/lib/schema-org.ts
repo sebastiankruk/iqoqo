@@ -276,6 +276,15 @@ export interface CollectionItemRef {
   url?: string;
   contentType?: string | null;
   format?: string | null;
+  authors?: string[] | null;
+  gtin13?: string | null;
+  ean?: string | null;
+  upc?: string | null;
+  publisher?: string | null;
+  catalogNumber?: string | null;
+  publicationYear?: string | number | null;
+  country?: string | null;
+  sameAs?: string[] | null;
 }
 
 /** Options for generating a CollectionPage JSON-LD payload. */
@@ -313,15 +322,50 @@ export function buildCollectionJsonLd(options: CollectionJsonLdOptions): Record<
     jsonLd.mainEntity = {
       "@type": "ItemList",
       numberOfItems: options.totalCount,
-      itemListElement: options.items.map((item, index) => ({
-        "@type": "ListItem",
-        position: index + 1,
-        item: {
-          "@type": resolveSchemaType(item.contentType, undefined, item.format),
+      itemListElement: options.items.map((item, index) => {
+        const schemaType = resolveSchemaType(item.contentType, undefined, item.format);
+        const isAudioNode =
+          schemaType === "MusicAlbum" || schemaType === "MusicRelease" || schemaType === "AudioObject";
+        const gtin = item.gtin13 || item.ean || item.upc;
+        const itemNode: Record<string, unknown> = {
+          "@type": schemaType,
           name: item.title,
           ...(item.url ? { url: item.url } : {}),
-        },
-      })),
+        };
+
+        if (item.authors && item.authors.length > 0) {
+          const authorEntities = item.authors.map(name => ({ "@type": "Person", name }));
+          itemNode[isAudioNode ? "byArtist" : "author"] =
+            authorEntities.length === 1 ? authorEntities[0] : authorEntities;
+        }
+        if (isAudioNode && item.format) {
+          itemNode.musicReleaseFormat = item.format;
+        }
+        if (gtin) {
+          itemNode.gtin13 = String(gtin);
+        }
+        if (item.catalogNumber) {
+          itemNode.catalogNumber = item.catalogNumber;
+        }
+        if (item.publisher) {
+          itemNode[isAudioNode ? "recordLabel" : "publisher"] = item.publisher;
+        }
+        if (item.publicationYear !== null && item.publicationYear !== undefined && item.publicationYear !== "") {
+          itemNode.datePublished = String(item.publicationYear);
+        }
+        if (item.country) {
+          itemNode.countryOfOrigin = item.country;
+        }
+        if (item.sameAs && item.sameAs.length > 0) {
+          itemNode.sameAs = item.sameAs;
+        }
+
+        return {
+          "@type": "ListItem",
+          position: index + 1,
+          item: itemNode,
+        };
+      }),
     };
   }
 

@@ -563,8 +563,23 @@ In Next.js 16+, the Edge Runtime is deprecated for middleware and route executio
 
 ---
 
+## Status Check & Environment Classification (`make status`)
+
+`scripts/iqoqo-status.sh` classifies every variable in `.env.example` using `.env.status-classes`. By default, `make status` surfaces only `Configured` counts and `Missing (required)` warnings; pass `--all-env` / `--verbose` (or `make status ARGS=--all-env`) to expand `Defaulted`, `Optional`, `Internal`, and `Empty` lists:
+
+- **`Missing (required)` (warning):** Core database credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`), security/auth keys (`SECRET_KEY`, `JWT_SECRET_KEY`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SPARQL_SERVICE_SECRET`), `REDIS_URL`, and the single canonical instance origin (`BASE_URL`) that must be configured in `.env` or `InstanceSettings`.
+- **`Defaulted` (info, `--all-env` only):** Variables that have safe defaults in application code or `docker-compose.yml` (`DATABASE_URL` derived from `POSTGRES_*`, `NEXT_PUBLIC_FRONTEND_URL` and `PUBLIC_APP_URL` derived from `BASE_URL`, `APP_PORT`, `BACKUP_*`, `S3_*`, `FEDERATION_HEAD_MODE`, etc.).
+- **`Optional` (info, `--all-env` only):** Feature-specific integrations and OAuth providers (including optional AI cover/dedupe keys).
+- **`Internal` (info, `--all-env` only):** Dev/test flags (`TESTING`, `E2E_RESET_SECRET`, `IQOQO_AI_MODE`, `ALLOW_PROD_*`) and runtime-injected tokens (`OPENOBSERVE_RUM_CLIENT_TOKEN`, probed directly from the running `frontend` container under Observability Stack).
+- **OTel Collector Export:** Transient export errors during the first `OTEL_EXPORT_GRACE_SECONDS` (default `60s`) of collector startup are reported as `info`; sustained failures after the grace window fail the check.
+- **Recent 5xx errors:** `0` passes, `1–10` reports `info` (below warn threshold), and `> 10` reports a warning.
+
+---
+
 ## 📚 Further Reading
 
+- **[Cloudflare WAF & AI Crawl Control Rules](../deploy/cloudflare-semantic-federation-rules.md)** — Edge proxy rules for ActivityPub, Semantic Web, and AI-readable `/share/*` feeds
+- **[Deployment Directory Contract](DEPLOYMENT.md)** — Source-free deployment layout, mount guards, and Cloudflare checklist
 - **[Semantic Web Guide](SEMANTIC_WEB.md)** — SPARQL queries and Linked Data endpoints
 - **[Architecture Guide](ARCHITECTURE.md)** — System architecture and data model
 - **[Upgrade Guide](UPGRADE_0.8.0.md)** — Version migration procedures

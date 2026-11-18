@@ -16,10 +16,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Library, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Library, Share2 } from "lucide-react";
 
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
+import { buildPaginationWindow } from "@/lib/pagination";
 import { resolveApiUrl } from "@/lib/utils";
 import type { Item, CatalogEntry } from "@/types/frbr";
 import { CollectionGrid } from "@/components/collection/collection-grid";
@@ -37,18 +39,32 @@ export interface SharedCollectionItem {
   cover_url?: string;
   status?: string;
   collection_status?: string;
+  content_type?: string | null;
+  format?: string | null;
+  ean?: string | null;
+  upc?: string | null;
+  publisher?: string | null;
+  publication_year?: string | number | null;
+  catalog_number?: string | null;
+  country?: string | null;
+  lod_links?: Record<string, string> | null;
 }
 
 export interface SharedCollectionData {
   author: string;
   collection_name: string;
   collection_description?: string;
+  total?: number;
+  page?: number;
+  per_page?: number;
+  pages?: number;
   items: SharedCollectionItem[];
 }
 
 interface SharedCollectionClientProps {
   initialData?: SharedCollectionData | null;
   initialToken?: string;
+  publicBaseUrl?: string;
 }
 
 /**
@@ -57,11 +73,12 @@ interface SharedCollectionClientProps {
  * @param {SharedCollectionClientProps} props - Component props.
  * @returns {JSX.Element} Rendered shared collection page.
  */
-export function SharedCollectionClient({ initialData, initialToken }: SharedCollectionClientProps) {
+export function SharedCollectionClient({ initialData, initialToken, publicBaseUrl }: SharedCollectionClientProps) {
   const resolvedToken = useResolvedRouteParam("token") || initialToken;
   const t = useTranslations("Public");
 
   const [collection, setCollection] = useState<SharedCollectionData | null>(initialData || null);
+  const activeCollection = initialData ?? collection;
   const [isLoading, setIsLoading] = useState<boolean>(!initialData && !!resolvedToken);
   const [isError, setIsError] = useState<boolean>(false);
   const [isNotFound, setIsNotFound] = useState<boolean>(false);
@@ -132,7 +149,7 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
     );
   }
 
-  if (isLoading || !collection) {
+  if (isLoading || !activeCollection) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
@@ -144,7 +161,68 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
     );
   }
 
-  const items = collection.items || [];
+  const items = activeCollection.items || [];
+  const totalItems = activeCollection.total ?? items.length;
+  const currentPage = activeCollection.page ?? 1;
+  const totalPages = activeCollection.pages ?? (totalItems > 0 ? 1 : 0);
+  const paginationWindow = buildPaginationWindow(currentPage, totalPages);
+  const normalizedBaseUrl = (publicBaseUrl || "").replace(/\/+$/, "");
+  const buildJsonLdUrl = (pageNum: number) =>
+    normalizedBaseUrl
+      ? `${normalizedBaseUrl}/share/${resolvedToken}/jsonld/${pageNum}`
+      : `/share/${resolvedToken}/jsonld/${pageNum}`;
+  const jsonLdPageUrl = resolvedToken ? buildJsonLdUrl(1) : "";
+  const jsonLdTotalPages = totalItems > 0 ? Math.ceil(totalItems / 60) : 0;
+  const jsonLdWindow = buildPaginationWindow(1, jsonLdTotalPages);
+
+  const renderPagination = () => {
+    if (totalPages <= 1 || !resolvedToken) return null;
+    return (
+      <nav aria-label="Collection pagination" className="my-6 flex flex-wrap items-center justify-center gap-1.5">
+        {currentPage > 1 && (
+          <Link
+            href={`/share/${resolvedToken}?page=${currentPage - 1}`}
+            aria-label="Previous page"
+            className="inline-flex h-9 items-center gap-1 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Prev</span>
+          </Link>
+        )}
+        {paginationWindow.map((pageNum, idx) => {
+          const prevNum = idx > 0 ? paginationWindow[idx - 1] : null;
+          const showEllipsis = prevNum !== null && pageNum - prevNum > 1;
+          const isCurrent = pageNum === currentPage;
+          return (
+            <span key={pageNum} className="inline-flex items-center gap-1.5">
+              {showEllipsis && <span className="px-1 text-sm text-muted-foreground">…</span>}
+              <Link
+                href={`/share/${resolvedToken}?page=${pageNum}`}
+                aria-current={isCurrent ? "page" : undefined}
+                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2.5 text-sm font-medium transition-colors ${
+                  isCurrent
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {pageNum}
+              </Link>
+            </span>
+          );
+        })}
+        {currentPage < totalPages && (
+          <Link
+            href={`/share/${resolvedToken}?page=${currentPage + 1}`}
+            aria-label="Next page"
+            className="inline-flex h-9 items-center gap-1 rounded-md border bg-background px-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
+      </nav>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -158,25 +236,42 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
             </div>
 
             <h1 className="text-3xl md:text-4xl font-serif font-bold tracking-tight mb-4">
-              {collection.collection_name}
+              {activeCollection.collection_name}
             </h1>
 
             <p className="text-muted-foreground text-sm uppercase tracking-[0.2em] font-bold mb-6">
-              Shared by <span className="text-foreground">@{collection.author}</span>
+              Shared by <span className="text-foreground">@{activeCollection.author}</span>
             </p>
 
-            {collection.collection_description && (
+            {activeCollection.collection_description && (
               <p className="text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-                {collection.collection_description}
+                {activeCollection.collection_description}
               </p>
             )}
 
-            <div className="flex justify-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <ShareButton
-                title={collection.collection_name}
-                text={`Check out this shared collection by ${collection.author} on iqoqo!`}
+                title={activeCollection.collection_name}
+                text={`Check out this shared collection by ${activeCollection.author} on iqoqo!`}
               />
-              {resolvedToken && <PublicFeedButton feedPath={`/api/public/share/${resolvedToken}/feed.xml`} />}
+              {resolvedToken && <PublicFeedButton feedPath={`/share/${resolvedToken}/feed.xml`} />}
+              {resolvedToken && (
+                <PublicFeedButton
+                  feedPath={jsonLdPageUrl}
+                  label={t("jsonLdFeed")}
+                  title={t("jsonLdFeedTitle")}
+                  variant="jsonld"
+                />
+              )}
+              {resolvedToken && jsonLdWindow.length > 1 && (
+                <nav aria-label="AI JSON-LD pages" className="sr-only">
+                  {jsonLdWindow.map(p => (
+                    <a key={p} href={buildJsonLdUrl(p)}>
+                      JSON-LD Page {p}
+                    </a>
+                  ))}
+                </nav>
+              )}
             </div>
           </div>
         </div>
@@ -186,12 +281,16 @@ export function SharedCollectionClient({ initialData, initialToken }: SharedColl
           <div className="flex items-center justify-between border-b pb-4 mb-8">
             <h2 className="text-xl font-serif font-bold">Items in this Collection</h2>
             <span className="text-sm font-medium bg-muted px-2 py-1 rounded">
-              {items.length} {items.length === 1 ? "Item" : "Items"}
+              {totalItems} {totalItems === 1 ? "Item" : "Items"}
             </span>
           </div>
 
           {items.length > 0 ? (
-            <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
+            <>
+              {renderPagination()}
+              <CollectionGrid items={items as unknown as (Item | CatalogEntry)[]} />
+              {renderPagination()}
+            </>
           ) : (
             <EmptyState
               title="Empty Collection"

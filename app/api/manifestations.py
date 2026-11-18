@@ -358,17 +358,38 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         from app.db.models import UserWorkIntent
 
         owned_item = db.session.execute(select(Item).filter_by(manifestation_id=m.id, owner_id=user_id)).scalars().first()
-        if owned_item:
-            if owned_item.collection_status == "wish_list":
-                wishlist_item_id = owned_item.id
-            else:
-                user_owns = True
-                item_id = owned_item.id
+        if owned_item and owned_item.collection_status != "wish_list":
+            user_owns = True
+            item_id = owned_item.id
 
-        if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
-            intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=m.expression.work.id)).scalars().first()
+        if not user_owns:
+            intent = (
+                db.session.execute(
+                    select(UserWorkIntent).filter(
+                        UserWorkIntent.user_id == user_id,
+                        UserWorkIntent.manifestation_id == m.id,
+                        UserWorkIntent.status != "fulfilled",
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if not intent and m.expression and m.expression.work:
+                intent = (
+                    db.session.execute(
+                        select(UserWorkIntent).filter(
+                            UserWorkIntent.user_id == user_id,
+                            UserWorkIntent.work_id == m.expression.work.id,
+                            UserWorkIntent.status != "fulfilled",
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
             if intent:
-                wishlist_item_id = -intent.id
+                wishlist_item_id = intent.id
+            elif owned_item and owned_item.collection_status == "wish_list":
+                wishlist_item_id = owned_item.id
 
     owner_count = (
         db.session.execute(
@@ -376,6 +397,24 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         ).scalar()
         or 0
     )
+
+    bind = db.session.get_bind()
+    dialect_name = bind.dialect.name if bind is not None else "sqlite"
+    if dialect_name == "postgresql":
+        minutes_expr = db.cast(func.nullif(Item.meta["total_reading_minutes"].as_string(), ""), db.Integer)
+    else:
+        minutes_expr = db.cast(func.json_extract(Item.meta, "$.total_reading_minutes"), db.Integer)
+
+    avg_reading_raw = db.session.execute(
+        select(func.avg(minutes_expr)).filter(
+            Item.manifestation_id == m.id,
+            Item.is_hidden.is_(False),
+            Item.visibility == "public",
+            minutes_expr.isnot(None),
+            minutes_expr > 0,
+        )
+    ).scalar()
+    average_reading_minutes = round(float(avg_reading_raw), 1) if avg_reading_raw is not None else None
 
     resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
 
@@ -431,6 +470,7 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "item_id": item_id,
         "wishlist_item_id": wishlist_item_id,
         "owner_count": owner_count,
+        "average_reading_minutes": average_reading_minutes,
         "content_type": m.expression.content_type if m.expression else None,
         "expression_kind": expression_kind,
         "is_live_performance": is_live_performance(expression),

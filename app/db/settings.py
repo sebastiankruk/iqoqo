@@ -333,6 +333,54 @@ class InstanceSettings(db.Model):  # type: ignore[name-defined]
             raise
 
 
+def check_encrypted_settings_drift(logger: Any = None) -> list[str]:
+    """Probe encrypted InstanceSettings rows once at startup for SECRET_KEY drift.
+
+    Never mutates rows and never logs plaintext or ciphertext values. Returns the
+    list of setting keys that failed Fernet decryption with ``InvalidToken``.
+    """
+    from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+
+    from . import db
+
+    failed_keys: list[str] = []
+    try:
+        rows = db.session.execute(db.select(InstanceSettings)).scalars().all()
+        cipher = _get_fernet_cipher()
+        for row in rows:
+            stored = row.value
+            if not isinstance(stored, dict) or stored.get("_encrypted") is not True:
+                continue
+            ciphertext = stored.get("ciphertext")
+            if not ciphertext or not isinstance(ciphertext, str):
+                continue
+            try:
+                cipher.decrypt(ciphertext.encode("utf-8"))
+            except (InvalidToken, ValueError):
+                failed_keys.append(row.key)
+    except (SQLAlchemyError, DBAPIError, RuntimeError, AttributeError):
+        return []
+
+    if failed_keys:
+        target_logger = logger
+        if target_logger is None:
+            try:
+                from flask import current_app
+
+                target_logger = current_app.logger
+            except RuntimeError:
+                target_logger = None
+        if target_logger is not None:
+            target_logger.error(
+                "Encrypted InstanceSettings failed decryption for %d key(s) (%s): "
+                "SECRET_KEY does not match stored ciphertext. Re-launch with matching "
+                "ENV_FILE / --env-file or run `make migrate-secrets` if SECRET_KEY was rotated.",
+                len(failed_keys),
+                ", ".join(sorted(failed_keys)),
+            )
+    return failed_keys
+
+
 @db.event.listens_for(InstanceSettings, "before_insert")
 @db.event.listens_for(InstanceSettings, "before_update")
 def _encrypt_instance_setting_listener(mapper, connection, target):

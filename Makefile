@@ -344,9 +344,9 @@ start: ensure-mount-perms
 	@echo "Prebuilt tag: $(PREBUILT_TAG)"
 	@docker image prune -f --filter "dangling=true"
 	@if [ -n "$(IMAGE_PREFIX)" ]; then \
-		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
+		IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml pull; \
 	fi
-	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
+	@IMAGE_PREFIX="$(IMAGE_PREFIX)" COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT) APP_VERSION=$(PREBUILT_TAG) ENV_FILE=$(COMPOSE_ENV_FILE) docker compose $(if $(wildcard $(COMPOSE_ENV_FILE)),--env-file $(COMPOSE_ENV_FILE),) -f docker-compose.prebuilt.yml up -d
 else
 start: ensure-mount-perms
 	@mkdir -p $(HOME)/.config/rclone && touch $(HOME)/.config/rclone/rclone.conf
@@ -379,8 +379,17 @@ preview-up: ensure-mount-perms ## Start preview stack in DEPLOY_DIR (/opt/pre.iq
 	fi
 	@if [ -f $(DEPLOY_ENV_FILE) ]; then chmod 0600 $(DEPLOY_ENV_FILE) 2>/dev/null || true; fi
 	@set -a; . $(DEPLOY_ENV_FILE); set +a; \
-	 if [ -f docker-compose.monitoring.yml ] && [ "$$OTEL_TRACES_EXPORTER" = "otlp" ]; then \
-		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f docker-compose.monitoring.yml up -d || true; \
+	 export MODE="$${MODE:-preview}"; \
+	 origin_url="$${NEXT_PUBLIC_FRONTEND_URL:-$${BASE_URL:-}}"; \
+	 if [ -z "$${OPENOBSERVE_RUM_SITE:-}" ] && [ -n "$$origin_url" ]; then \
+		case "$$origin_url" in \
+			https://*) export OPENOBSERVE_RUM_SITE="$$origin_url" ;; \
+		esac; \
+	 fi; \
+	 mon_file="$(DEPLOY_DIR)/docker-compose.monitoring.yml"; \
+	 [ -f "$$mon_file" ] || mon_file="docker-compose.monitoring.yml"; \
+	 if [ -f "$$mon_file" ] && [ "$${OTEL_TRACES_EXPORTER:-otlp}" != "none" ]; then \
+		COMPOSE_PROJECT_NAME=iqoqo-preview docker compose --project-directory $(DEPLOY_DIR) --env-file $(DEPLOY_ENV_FILE) -f "$$mon_file" up -d || true; \
 	 fi; \
 	 rum_out="$$(python3 scripts/provision_rum_token.py --env-file $(DEPLOY_ENV_FILE))"; \
 	 rum_token="$$(printf '%s\n' "$$rum_out" | sed -n 's/^RUM_CLIENT_TOKEN=//p')"; \
@@ -506,8 +515,9 @@ deploy-maintain: ## Inspect debris and secret snapshots in deployment directory 
 install-wizard: ## Run interactive guided configuration installer and secret generator
 	@python3 scripts/iqoqo_installer.py $(ARGS)
 
-presync-check: ## Run iqopresync readiness and verification check
-	@python3 scripts/iqoqo_installer.py --presync-check $(ARGS)
+presync-check: ## Run iqopresync readiness and verification check (supports DIR=/path/to/deploy or ENV_FILE=/path/to/.env)
+	@env_target="$(if $(ENV_FILE),$(ENV_FILE),$(if $(DIR),$(DIR)/.env,$(if $(filter-out /opt/pre.iqoqo,$(DEPLOY_DIR)),$(DEPLOY_DIR)/.env,.env)))"; \
+	python3 scripts/iqoqo_installer.py --presync-check --env-file "$$env_target" $(ARGS)
 
 status: ## Show health status of all iQoQo services
 	@set -euo pipefail; \
@@ -519,7 +529,7 @@ status: ## Show health status of all iQoQo services
 		fi; \
 		if [[ -f "$$status_root/scripts/iqoqo-status.sh" ]]; then \
 			status_code=0; \
-			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg || status_code=$$?; \
+			IQOQO_STATUS_ROOT="$$status_root" bash "$$status_root/scripts/iqoqo-status.sh" --stack "$$status_stack" $$deploy_arg $(ARGS) || status_code=$$?; \
 			if [[ $$status_code -ge 2 ]]; then exit $$status_code; fi; \
 			exit 0; \
 		else \

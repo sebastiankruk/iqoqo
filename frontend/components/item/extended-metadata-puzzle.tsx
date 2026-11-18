@@ -24,20 +24,43 @@ interface ExtendedMetadataPuzzleProps {
 }
 
 /**
+ * Extract normalized puzzle fields and cover URL from metadata.
+ *
+ * @param meta - The manifestation metadata record
+ * @returns Normalized puzzle fields and cover URL
+ */
+function extractPuzzleFields(meta: Record<string, unknown>) {
+  const cleanStr = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+  const rawPieceCount = meta["piece_count"];
+  const pieceCount = typeof rawPieceCount === "number" ? rawPieceCount : cleanStr(rawPieceCount);
+  const dimensions = cleanStr(meta["dimensions"]);
+  const manufacturer = cleanStr(meta["manufacturer"]);
+  const artist = cleanStr(meta["artist"]);
+  const puzzleType = cleanStr(meta["puzzle_type"]);
+  const timestamp = getCoverTimestamp(meta);
+  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
+  return { pieceCount, dimensions, manufacturer, artist, puzzleType, coverUrl };
+}
+
+/** Whether the metadata carries any displayable puzzle fields or cover. */
+export function hasPuzzleMetadata(meta: Record<string, unknown>): boolean {
+  const { pieceCount, dimensions, manufacturer, artist, puzzleType, coverUrl } = extractPuzzleFields(meta);
+  return Boolean(pieceCount || dimensions || manufacturer || artist || puzzleType || coverUrl);
+}
+
+/**
  * Extended metadata component for puzzle items.
  *
  * @param props - Component props
  * @param props.meta - The metadata record
- * @returns {JSX.Element} The component
+ * @returns {JSX.Element | null} The component or null if no puzzle metadata
  */
 export function ExtendedMetadataPuzzle({ meta }: ExtendedMetadataPuzzleProps) {
-  const pieceCount = meta["piece_count"] as number | string | undefined;
-  const dimensions = meta["dimensions"] as string | undefined;
-  const manufacturer = meta["manufacturer"] as string | undefined;
-  const artist = meta["artist"] as string | undefined;
-  const puzzleType = meta["puzzle_type"] as string | undefined;
-  const timestamp = getCoverTimestamp(meta);
-  const coverUrl = getCoverUrl(meta["cover_url"] as string | undefined, timestamp);
+  const { pieceCount, dimensions, manufacturer, artist, puzzleType, coverUrl } = extractPuzzleFields(meta);
+
+  if (!hasPuzzleMetadata(meta)) {
+    return null;
+  }
 
   return (
     <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">

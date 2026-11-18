@@ -177,6 +177,7 @@ export function BulkAddToolbar({ selectedItems, onClearSelection, onSuccess }: B
       );
       // Invalidate caches so My Items and stats refresh
       await qc.invalidateQueries({ queryKey: ["items"] });
+      await qc.invalidateQueries({ queryKey: ["wishlist"] });
       await qc.invalidateQueries({ queryKey: ["manifestations"] });
       await qc.invalidateQueries({ queryKey: ["stats"] });
       await qc.invalidateQueries({ queryKey: ["works", "shelf"] });

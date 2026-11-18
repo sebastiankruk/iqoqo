@@ -109,6 +109,8 @@ export function getProviderLabel(provider: string): string {
       return "MusicBrainz";
     case "tmdb":
       return "TMDB";
+    case "opencollections":
+      return "OpenCollections.org";
     case "current":
       return "Current Catalog";
     default:
@@ -161,6 +163,14 @@ function extractProviderField(providerData: unknown, fieldKey: string): string |
     case "page_count": {
       const val = pData.page_count ?? pData.pageCount ?? volumeInfo?.pageCount;
       return val != null ? String(val) : undefined;
+    }
+    case "opencollections_uri": {
+      const lodLinks =
+        pData.lod_links && typeof pData.lod_links === "object"
+          ? (pData.lod_links as Record<string, unknown>)
+          : undefined;
+      const val = pData.opencollections_uri ?? lodLinks?.opencollections_uri;
+      return typeof val === "string" ? val : undefined;
     }
     default: {
       const val = pData[fieldKey];

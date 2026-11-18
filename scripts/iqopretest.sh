@@ -142,11 +142,13 @@ fi
 
 make preview-up DEPLOY_DIR="$DST_LOC" FEDERATION_PAIR="$FEDERATION_PAIR"
 
-# 5. Verify final version
+# 5. Wait for preview backend and observability readiness before running make status
 echo "Waiting for preview backend to become healthy..."
 PREVIEW_READY=0
-for i in $(seq 1 30); do
-    if curl -s -f "http://127.0.0.1:5001/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:8000/api/health" > /dev/null 2>&1 || curl -s -f "http://127.0.0.1:5002/api/health" > /dev/null 2>&1; then
+for i in $(seq 1 45); do
+    if curl -s -f --max-time 2 "http://127.0.0.1:5001/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1 || \
+       curl -s -f --max-time 2 "http://127.0.0.1:5002/api/health" >/dev/null 2>&1; then
         echo "✅ Preview backend healthy after ${i}s"
         PREVIEW_READY=1
         break
@@ -154,12 +156,139 @@ for i in $(seq 1 30); do
     sleep 1
 done
 if [ "$PREVIEW_READY" -ne 1 ]; then
-    echo "⚠️ Preview backend healthcheck timed out after 30s; continuing to status check"
+    echo "💥 ERROR: Preview backend healthcheck timed out after 45s" >&2
+    exit 1
 fi
-make status preview
+
+running_obs=$(docker ps --format '{{.Names}}' 2>/dev/null || true)
+has_oo=0
+has_otel=0
+echo "$running_obs" | grep -q 'openobserve' && has_oo=1
+echo "$running_obs" | grep -q 'otel-collector' && has_otel=1
+
+if [ "$has_oo" -eq 1 ] || [ "$has_otel" -eq 1 ]; then
+    echo "Waiting for OpenObserve & OTel Collector readiness..."
+    oo_port="${OPENOBSERVE_HOST_PORT:-5080}"
+    otel_http_port="${OTEL_HTTP_HOST_PORT:-4318}"
+    if [ -f "$DST_LOC/.env" ]; then
+        env_oo_port=$(grep -E '^OPENOBSERVE_HOST_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        env_otel_port=$(grep -E '^OTEL_HTTP_HOST_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$env_oo_port" ] && oo_port="$env_oo_port"
+        [ -n "$env_otel_port" ] && otel_http_port="$env_otel_port"
+    fi
+    OBS_READY=0
+    for j in $(seq 1 30); do
+        oo_ok=1
+        otel_ok=1
+        if [ "$has_oo" -eq 1 ]; then
+            oo_ok=0
+            curl -s -f --max-time 2 "http://127.0.0.1:${oo_port}/healthz" >/dev/null 2>&1 && oo_ok=1
+        fi
+        if [ "$has_otel" -eq 1 ]; then
+            otel_ok=0
+            otel_code=$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${otel_http_port}/v1/traces" 2>/dev/null || echo "000")
+            case "$otel_code" in
+                200|204|405) otel_ok=1 ;;
+            esac
+        fi
+        if [ "$oo_ok" -eq 1 ] && [ "$otel_ok" -eq 1 ]; then
+            echo "✅ Observability stack ready after ${j}s"
+            OBS_READY=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$OBS_READY" -ne 1 ]; then
+        echo "💥 ERROR: Observability stack readiness timed out after 30s (oo_ok=${oo_ok}, otel_ok=${otel_ok})" >&2
+        exit 1
+    fi
+
+    if [ "$has_oo" -eq 1 ] && [ -f "$DST_LOC/.env" ]; then
+        oo_auth=$(grep -E '^OPENOBSERVE_BASIC_AUTH=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        if [ -n "$oo_auth" ]; then
+            oo_auth_code=$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' \
+                -X POST \
+                -H "Authorization: Basic ${oo_auth}" \
+                -H "Content-Type: application/json" \
+                -d '{"query":{"sql":"SELECT 1","size":1}}' \
+                "http://127.0.0.1:${oo_port}/api/default/_search" 2>/dev/null || echo "000")
+            if [ "$oo_auth_code" = "401" ] || [ "$oo_auth_code" = "403" ]; then
+                echo "🔑 OpenObserve auth mismatch (HTTP ${oo_auth_code}); resetting OpenObserve auth state from $DST_LOC/.env..."
+                MODE=preview DEPLOY_DIR="$DST_LOC" make monitoring-reset-auth
+            fi
+        fi
+    fi
+fi
+
+# Reconcile cloned InstanceSettings rows (in-memory re-encryption) and push authoritative $DST_LOC/.env overrides
+if [ -f "$DST_LOC/.env" ] && [ -f "$DST_LOC/docker-compose.prebuilt.yml" ]; then
+    echo "🔐 Reconciling encrypted InstanceSettings & preview overrides from $DST_LOC/.env..."
+    SRC_SECRET_KEY=""
+    if [ "$SKIP_CLONE" != "1" ]; then
+        src_env_named="${SRC_LOC}/.env.${SRC_NAME}"
+        src_env_default="${SRC_LOC}/.env"
+        if [ -n "$SRC_HOST" ]; then
+            # shellcheck disable=SC2029
+            SRC_SECRET_KEY=$(ssh "$SRC_HOST" "f='${src_env_named}'; [ -f \"\$f\" ] || f='${src_env_default}'; if [ -f \"\$f\" ]; then grep -E '^[[:space:]]*SECRET_KEY=' \"\$f\" | tail -n1 | cut -d= -f2- | tr -d '\r'; fi" 2>/dev/null || true)
+        else
+            src_env_file="$src_env_named"
+            [ -f "$src_env_file" ] || src_env_file="$src_env_default"
+            if [ -f "$src_env_file" ]; then
+                SRC_SECRET_KEY=$(grep -E '^[[:space:]]*SECRET_KEY=' "$src_env_file" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '\r' || true)
+            fi
+        fi
+        SRC_SECRET_KEY="${SRC_SECRET_KEY#\"}"
+        SRC_SECRET_KEY="${SRC_SECRET_KEY%\"}"
+        SRC_SECRET_KEY="${SRC_SECRET_KEY#\'}"
+        SRC_SECRET_KEY="${SRC_SECRET_KEY%\'}"
+    fi
+
+    SRC_SECRET_KEY="$SRC_SECRET_KEY" DST_ENV_PATH="$DST_LOC/.env" python3 -c "
+import json, os
+from pathlib import Path
+
+dst_env = {}
+env_path = Path(os.environ['DST_ENV_PATH'])
+for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith('#'):
+        continue
+    if line.startswith('export '):
+        line = line[len('export '):].lstrip()
+    if '=' not in line:
+        continue
+    k, _, v = line.partition('=')
+    k = k.strip()
+    v = v.strip()
+    if (v.startswith('\"') and v.endswith('\"')) or (v.startswith(\"'\") and v.endswith(\"'\")):
+        v = v[1:-1]
+    elif ' #' in v:
+        v = v.split(' #', 1)[0].strip()
+    if k and v:
+        dst_env[k] = v
+
+print(json.dumps({
+    'src_secret_key': os.environ.get('SRC_SECRET_KEY', ''),
+    'dst_env': dst_env,
+}))
+" | COMPOSE_PROJECT_NAME=iqoqo-preview APP_VERSION=preview docker compose --project-directory "$DST_LOC" --env-file "$DST_LOC/.env" -f "$DST_LOC/docker-compose.prebuilt.yml" exec -T web env PYTHONPATH=/usr/src/app python3 /usr/src/app/scripts/reconcile_preview_settings.py
+    unset SRC_SECRET_KEY
+fi
+
+DEPLOY_DIR="$DST_LOC" make status preview
 
 # 6. Run automated federation verification if federation pair is active
 if [ -n "$FEDERATION_PAIR" ] && [ "$FEDERATION_PAIR" != "0" ]; then
     echo "🔗 Running automated federation preview verification..."
-    bash scripts/verify_federation_preview.sh
+    preview_web_port="${WEB_PORT:-5000}"
+    preview_nginx_port="${NGINX_PORT:-8000}"
+    if [ -f "$DST_LOC/.env" ]; then
+        env_web_port=$(grep -E '^WEB_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        env_nginx_port=$(grep -E '^NGINX_PORT=' "$DST_LOC/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$env_web_port" ] && preview_web_port="$env_web_port"
+        [ -n "$env_nginx_port" ] && preview_nginx_port="$env_nginx_port"
+    fi
+    PRIMARY_API_PORT="${PRIMARY_API_PORT:-$preview_web_port}" \
+    PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-$preview_nginx_port}" \
+        bash scripts/verify_federation_preview.sh
 fi

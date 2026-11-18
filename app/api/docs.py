@@ -269,6 +269,8 @@ def create_spec() -> APISpec:
                         "audiobook",
                         "lego",
                         "puzzle",
+                        "cartographic_map",
+                        "map",
                     ],
                     "description": "Media domain tier.",
                 },
@@ -595,6 +597,141 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                                 }
                             },
                         }
+                elif openapi_path in ("/api/admin/ownership/items", "/api/v1/admin/ownership/items") and method == "get":
+                    ownership_query_params = [
+                        {
+                            "name": "source_user_id",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string", "format": "uuid"},
+                            "description": "UUID of the source user account whose physical items are listed.",
+                        },
+                        {
+                            "name": "page",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1, "minimum": 1},
+                            "description": "Page number (1-indexed).",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
+                            "description": "Maximum number of items per page (1-100).",
+                        },
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Search query matching work title, manifestation title, or barcode.",
+                        },
+                        {
+                            "name": "collection_status",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Filter by item collection_status.",
+                        },
+                        {
+                            "name": "format",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Filter by manifestation format or format_type.",
+                        },
+                        {
+                            "name": "item_id",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer"},
+                            "description": "Filter to a specific physical item ID.",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in ownership_query_params:
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                            op_param_names.add(q_param["name"])
+                elif openapi_path == "/api/items/{item_id}/reading-sessions" and method == "post":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "duration_minutes": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 1440,
+                                                "description": "Reading session duration in minutes (1-1440).",
+                                            },
+                                            "pages_read": {
+                                                "type": ["integer", "null"],
+                                                "minimum": 1,
+                                                "maximum": 50000,
+                                                "description": "Optional number of pages read during the session.",
+                                            },
+                                            "note": {
+                                                "type": ["string", "null"],
+                                                "maxLength": 500,
+                                                "description": "Optional private note for the reading session.",
+                                            },
+                                        },
+                                        "required": ["duration_minutes"],
+                                    }
+                                }
+                            },
+                        }
+                    if "201" not in operation.get("responses", {}):
+                        operation.setdefault("responses", {})["201"] = {
+                            "description": "Reading session logged successfully.",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SuccessEnvelope"}}},
+                        }
+                elif openapi_path in ("/api/public/share/{token}", "/api/public/rdf/share/{token}") and method == "get":
+                    share_query_params = [
+                        {
+                            "name": "format",
+                            "in": "query",
+                            "required": False,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["json", "jsonld", "json-ld", "turtle", "ttl", "rdfxml", "xml", "nt", "n-triples"],
+                            },
+                            "description": "Output serialization format for headerless clients and AI fetchers.",
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1000, "minimum": 1, "maximum": 2000},
+                            "description": "Maximum number of shared collection items to return (clamped to 2000).",
+                        },
+                        {
+                            "name": "page",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1, "minimum": 1},
+                            "description": "1-based page number for SQL pagination.",
+                        },
+                        {
+                            "name": "per_page",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 48, "minimum": 1, "maximum": 200},
+                            "description": "Items per page for SQL pagination (1-200).",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in share_query_params:
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                            op_param_names.add(q_param["name"])
 
                 # Attach security scheme annotations if endpoint requires authentication
                 view_func = current_app.view_functions.get(rule.endpoint)

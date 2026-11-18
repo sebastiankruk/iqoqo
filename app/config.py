@@ -21,7 +21,10 @@ import tomllib
 
 from dotenv import load_dotenv
 
+from app.db.env import ensure_database_url_env, resolve_database_url, resolve_public_app_url
+
 load_dotenv()
+ensure_database_url_env()
 
 
 class Config:
@@ -81,7 +84,7 @@ class Config:
     MAX_CONTENT_LENGTH = _get_int_env("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)  # 16 MB max
 
     REDIS_URL = os.environ.get("REDIS_URL")
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+    SQLALCHEMY_DATABASE_URI = resolve_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Set to True to see all SQL queries emitted to the console
     SQLALCHEMY_ECHO = os.environ.get("SQLALCHEMY_ECHO", "false").lower() in {"true", "1", "yes"}
@@ -123,7 +126,8 @@ class Config:
     # choosing.  Required for the mail features and left unset by default, so
     # an instance that never configures it fails a send loudly instead of
     # mailing `http://localhost/...` to a real person.
-    PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL")
+    BASE_URL = os.environ.get("BASE_URL") or os.environ.get("NEXT_PUBLIC_FRONTEND_URL")
+    PUBLIC_APP_URL = resolve_public_app_url()
 
     # Transactional mail (see app/core/mail_service.py).  Disabled by default
     # because an instance with no relay must still boot and serve its catalogue;

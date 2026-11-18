@@ -136,6 +136,16 @@ const data = await response.json();
 console.log(data['dc:title']); // "The Hobbit"
 ```
 
+### Ready-to-Use AI Agent & Gem Skill Templates
+
+For consumer AI apps (`Gemini App`, `ChatGPT Web`, `Claude Web`) that cannot set custom `Accept` headers or use `?` query strings on discovered links, iqoqo exposes query-free paginated JSON-LD mini-pages at `/share/<token>/jsonld/1` through `/share/<token>/jsonld/<N>` (`60` items/page). Copy one of the hardware-agnostic skill templates below, replace `<YOUR_...>` placeholders, and paste your `/share/<token>` URL:
+
+- **[HiFi & Physical Music Advisor](../gems/hifi-music-advisor-skill.md)** — Vinyl vs. CD/SACD mastering advice & setup placeholders
+- **[Reading Curator](../gems/reading-curator-skill.md)** — Books, Comics & Graphic Novels (`schema:Book` / `ComicStory`)
+- **[Board Game & LEGO Sommelier](../gems/boardgame-sommelier-skill.md)** — Player count, playtime, LEGO sets & expansions
+- **[Cinema & Video Games Archivist](../gems/cinema-archivist-skill.md)** — 4K UHD / Blu-ray / DVD & console release checks
+- **[iqoqo Librarian Gem](../gems/iqoqo-librarian-gem.md)** — Private PAT OpenAPI Actions + zero-auth `/share/<token>/jsonld/1..N` option
+
 ## 📡 Step 5: RSS Feed Discovery
 
 Subscribe to collection feeds for real-time updates.
@@ -152,9 +162,15 @@ curl http://localhost:8000/api/public/feed.xml
 curl http://localhost:8000/api/public/u/alice/feed.xml
 ```
 
-### Shared Collection Feed
+### Shared Collection Feeds (Crawler & AI-Friendly)
 
 ```bash
+# Non-/api/ routes (allowed in robots.txt under /share/)
+curl http://localhost:8000/share/TOKEN/catalog.jsonld
+curl http://localhost:8000/share/TOKEN/feed.xml
+
+# Direct API equivalents (for programmatic clients)
+curl "http://localhost:8000/api/public/share/TOKEN?format=jsonld&limit=1000"
 curl http://localhost:8000/api/public/share/TOKEN/feed.xml
 ```
 
@@ -300,3 +316,4 @@ for s, p, o in g:
 - **[API Reference](../API.md)** — All public endpoint details
 - **[SPARQL Tutorial](sparql-queries.md)** — Query your collection with SPARQL
 - **[Data Export Tutorial](data-export-walkthrough.md)** — Export your library
+- **[AI Agent & Gem Skill Templates](../gems/iqoqo-librarian-gem.md)** — Ready-to-use prompts for Gemini, ChatGPT, and Claude

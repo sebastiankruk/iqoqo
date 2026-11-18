@@ -24,10 +24,10 @@ from scripts.pre_deploy_mounts import DIRECTORY_MOUNTS, prepare_deploy_mounts
 
 
 def test_prepare_deploy_mounts_enforces_key_permissions(tmp_path: Path) -> None:
-    """Verify data/keys is set to 0700 and *.pem files are set to 0600."""
+    """Verify data/keys is set to 1777 (sticky, container-writable) and *.pem files are set to 0600."""
     keys_dir = tmp_path / "data" / "keys"
     keys_dir.mkdir(parents=True, exist_ok=True)
-    os.chmod(keys_dir, 0o777)
+    os.chmod(keys_dir, 0o700)
 
     pem_file = keys_dir / "actor_private_key.pem"
     pem_file.write_text("-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n", encoding="utf-8")
@@ -41,8 +41,8 @@ def test_prepare_deploy_mounts_enforces_key_permissions(tmp_path: Path) -> None:
     ret = prepare_deploy_mounts(tmp_path)
     assert ret == 0
 
-    # Assert directory permissions
-    assert keys_dir.stat().st_mode & 0o777 == 0o700
+    # Assert directory permissions (01777 so unprivileged container UID 10001 can read/write its 0600 .pem files)
+    assert keys_dir.stat().st_mode & 0o1777 == 0o1777
     assert pem_file.stat().st_mode & 0o777 == 0o600
     assert env_file.stat().st_mode & 0o777 == 0o600
 

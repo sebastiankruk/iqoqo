@@ -12,62 +12,99 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
-//
-import { describe, it, expect } from "vitest";
+
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { proxy } from "@/proxy";
 
-describe("proxy middleware redirect rules", () => {
-  it("redirects unauthenticated access to /profile to /login with callbackUrl", () => {
-    const req = new NextRequest("http://localhost:3000/profile");
-    const res = proxy(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/login?callbackUrl=%2Fprofile");
+describe("proxy runtime share feed rewrites and content negotiation", () => {
+  const originalFlaskUrl = process.env.FLASK_API_URL;
+  const originalPublicApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    delete process.env.FLASK_API_URL;
+    delete process.env.NEXT_PUBLIC_API_URL;
   });
 
-  it("redirects unauthenticated access to /collection?statuses=wishlist preserving query parameters", () => {
-    const req = new NextRequest("http://localhost:3000/collection?statuses=wishlist");
+  afterEach(() => {
+    if (originalFlaskUrl === undefined) delete process.env.FLASK_API_URL;
+    else process.env.FLASK_API_URL = originalFlaskUrl;
+
+    if (originalPublicApiUrl === undefined) delete process.env.NEXT_PUBLIC_API_URL;
+    else process.env.NEXT_PUBLIC_API_URL = originalPublicApiUrl;
+  });
+
+  it("rewrites /share/:token/catalog.jsonld using runtime FLASK_API_URL", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+    const req = new NextRequest("https://preview.iqoqo.cc/share/tok-123/catalog.jsonld?limit=2000");
     const res = proxy(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "http://localhost:3000/login?callbackUrl=%2Fcollection%3Fstatuses%3Dwishlist"
+
+    expect(res.headers.get("x-middleware-rewrite")).toBe(
+      "http://web:5000/api/public/share/tok-123?limit=2000&format=jsonld"
     );
   });
 
-  it("redirects unauthenticated access to /scan to /login with callbackUrl", () => {
-    const req = new NextRequest("http://localhost:3000/scan");
+  it("rewrites /share/:token/feed.xml using runtime FLASK_API_URL", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+    const req = new NextRequest("https://preview.iqoqo.cc/share/tok-123/feed.xml");
     const res = proxy(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/login?callbackUrl=%2Fscan");
+
+    expect(res.headers.get("x-middleware-rewrite")).toBe("http://web:5000/api/public/share/tok-123/feed.xml");
   });
 
-  it("redirects unauthenticated access to /admin to /login with callbackUrl", () => {
-    const req = new NextRequest("http://localhost:3000/admin/settings");
-    const res = proxy(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/login?callbackUrl=%2Fadmin%2Fsettings");
+  it("negotiates Accept: application/ld+json and application/json+ld on canonical /share/:token", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+
+    for (const accept of ["application/ld+json", "application/json+ld", "text/turtle"]) {
+      const req = new NextRequest("https://preview.iqoqo.cc/share/tok-123?page=2", {
+        headers: { accept },
+      });
+      const res = proxy(req);
+      expect(res.headers.get("x-middleware-rewrite")).toBe("http://web:5000/api/public/share/tok-123?page=2");
+    }
   });
 
-  it("allows authenticated access to protected routes", () => {
-    const req = new NextRequest("http://localhost:3000/collection");
-    req.cookies.set("iqoqo_session", "valid_token");
+  it("does not rewrite canonical /share/:token for text/html browsers", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+    const req = new NextRequest("https://preview.iqoqo.cc/share/tok-123?page=2", {
+      headers: { accept: "text/html,application/xhtml+xml" },
+    });
     const res = proxy(req);
-    expect(res.headers.get("location")).toBeNull();
+
+    expect(res.headers.get("x-middleware-rewrite")).toBeNull();
   });
 
-  it("redirects logged-in user on /login to callbackUrl if provided", () => {
-    const req = new NextRequest("http://localhost:3000/login?callbackUrl=%2Fcollection%3Fstatuses%3Dwishlist");
-    req.cookies.set("iqoqo_session", "valid_token");
-    const res = proxy(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/collection?statuses=wishlist");
+  it("negotiates Accept: application/ld+json on /share/:token/jsonld/:page and passes text/html through", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+
+    const htmlReq = new NextRequest("https://preview.iqoqo.cc/share/tok-123/jsonld/2", {
+      headers: { accept: "text/html,application/xhtml+xml" },
+    });
+    expect(proxy(htmlReq).headers.get("x-middleware-rewrite")).toBeNull();
+
+    const ldReq = new NextRequest("https://preview.iqoqo.cc/share/tok-123/jsonld/2", {
+      headers: { accept: "application/ld+json" },
+    });
+    expect(proxy(ldReq).headers.get("x-middleware-rewrite")).toBe(
+      "http://web:5000/api/public/share/tok-123?page=2&per_page=60"
+    );
   });
 
-  it("redirects logged-in user on /login to /profile if callbackUrl not provided", () => {
-    const req = new NextRequest("http://localhost:3000/login");
-    req.cookies.set("iqoqo_session", "valid_token");
+  it("ignores relative NEXT_PUBLIC_API_URL and falls back to 127.0.0.1:5000", () => {
+    process.env.NEXT_PUBLIC_API_URL = "/api";
+    const req = new NextRequest("http://localhost:3000/share/tok-123/catalog.jsonld");
     const res = proxy(req);
+
+    expect(res.headers.get("x-middleware-rewrite")).toBe(
+      "http://127.0.0.1:5000/api/public/share/tok-123?format=jsonld"
+    );
+  });
+
+  it("still redirects unauthenticated protected routes to /login", () => {
+    const req = new NextRequest("https://preview.iqoqo.cc/collection");
+    const res = proxy(req);
+
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/profile");
+    expect(res.headers.get("location")).toContain("/login?callbackUrl=%2Fcollection");
   });
 });

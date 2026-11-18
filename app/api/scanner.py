@@ -36,7 +36,8 @@ from app.core.ingest import IngestService
 from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, UserWorkIntent, db
+from app.core.wishlist_service import fulfill_wishlist_intent_for_manifestation, upsert_wishlist_intent_for_manifestation
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.vision import extract_metadata_from_cover
@@ -435,10 +436,17 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
             meta["cover_url"] = cover_val
 
     # 5. Format
-    if meta.get("category") == "lego" or "set_number" in meta or "set_num" in meta:
+    has_lego_set_num = bool(
+        (isinstance(meta.get("set_number"), str) and meta["set_number"].strip())
+        or (isinstance(meta.get("set_num"), str) and meta["set_num"].strip())
+        or (isinstance(meta.get("set_number"), (int, float)) and not isinstance(meta.get("set_number"), bool))
+        or (isinstance(meta.get("set_num"), (int, float)) and not isinstance(meta.get("set_num"), bool))
+    )
+    non_lego_hints = {"video", "movie", "book", "text", "audio", "music", "game", "boardgame", "puzzle", "jigsaw", "audiobook"}
+    if meta.get("category") == "lego" or (has_lego_set_num and format_hint not in non_lego_hints):
         from app.db.core import MediaFormat
 
-        if not meta.get("format") or meta.get("format") in ("BOOK", "book", "audio", "music", "movie"):
+        if not meta.get("format") or (meta.get("category") == "lego" and meta.get("format") in ("BOOK", "book", "audio", "music", "movie")):
             meta["format"] = MediaFormat.STANDARD_SET
     elif "format" not in meta or not meta["format"]:
         if format_hint:
@@ -559,20 +567,11 @@ def _scan_to_wishlist(
     user_id: uuid.UUID | None,
 ) -> tuple[Response, int]:
     """Helper to save intent to wishlist."""
-    work = manifestation.expression.work if (manifestation.expression and manifestation.expression.work) else None
-    if not work:
-        return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
-
-    # Check if intent already exists
-    intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=work.id)).scalars().first()
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+    intent = upsert_wishlist_intent_for_manifestation(user_id, manifestation, status=default_progress)
     if not intent:
-        intent = UserWorkIntent(
-            user_id=user_id,
-            work_id=work.id,
-            status=default_progress,
-        )
-        db.session.add(intent)
-        db.session.flush()
+        return jsonify({"success": False, "data": None, "error": "Work not found for manifestation"}), 500
 
     # For name-based lookups (no barcode), store the hash_id in meta
     if barcode:
@@ -697,6 +696,9 @@ def _scan_to_library(
             updated_meta = dict(manifestation.meta)
             updated_meta["hash_id"] = computed_hash
             manifestation.meta = updated_meta
+
+    if collection_status != "wish_list":
+        fulfill_wishlist_intent_for_manifestation(user_id, manifestation)
 
     db.session.commit()
 

@@ -204,3 +204,46 @@ def test_lego_ingest_deduplication(app) -> None:
             assert m1.barcode == "5702016116977"
             assert m1.expression.content_type == MediaCategory.LEGO
             assert m1.expression.work.meta.get("theme") == "Technic"
+
+
+def test_normalize_allegro_non_lego_omits_null_lego_keys() -> None:
+    """Verify Allegro normalizers omit set_number, piece_count, and theme when not extracted."""
+    from app.utils.allegro import _normalize_allegro_offer, _normalize_allegro_product
+
+    movie_payload = {
+        "name": "Palimpsest [DVD]",
+        "parameters": [
+            {"name": "EAN", "values": ["5902683995046"]},
+            {"name": "Nośnik", "valuesLabels": ["DVD"]},
+            {"name": "Kod producenta", "values": ["12345"]},
+        ],
+        "images": [{"url": "https://a.allegroimg.com/palimpsest.jpg"}],
+    }
+
+    prod = _normalize_allegro_product(movie_payload, "5902683995046")
+    offer = _normalize_allegro_offer(movie_payload, "5902683995046")
+
+    for normalized in (prod, offer):
+        assert "set_number" not in normalized
+        assert "piece_count" not in normalized
+        assert "theme" not in normalized
+
+
+def test_normalize_preview_meta_preserves_movie_with_null_set_number() -> None:
+    """Verify _normalize_preview_meta does not coerce movie/book with null set_number into LEGO."""
+    movie_meta = {
+        "title": "Palimpsest",
+        "format": "movie",
+        "set_number": None,
+        "piece_count": None,
+    }
+    normalized = _normalize_preview_meta(movie_meta, format_hint="movie")
+    assert normalized["format"] == "movie"
+
+    empty_hint_meta = {
+        "title": "Palimpsest",
+        "set_number": None,
+        "piece_count": None,
+    }
+    normalized_fallback = _normalize_preview_meta(empty_hint_meta, format_hint="video")
+    assert normalized_fallback["format"] == MediaFormat.DVD

@@ -19,7 +19,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn, isAudioMedia } from "@/lib/utils";
-import { hasMetaChain, isKnownMetaSpelling, readMeta, readMetaChain } from "@/lib/meta";
+import { hasMeta, hasMetaChain, isKnownMetaSpelling, readMeta, readMetaChain } from "@/lib/meta";
 import { isBoardGameFormat, isLegoFormat, isPuzzleFormat, isVideoFormat } from "@/lib/media-classification";
 import { MEDIA_HIERARCHY } from "@/types/taxonomy";
 import { RichText } from "@/components/ui/rich-text";
@@ -37,11 +37,11 @@ function getFormatLabel(formatId: string): string | undefined {
   }
   return undefined;
 }
-import { ExtendedMetadataVideo } from "./extended-metadata-video";
-import { ExtendedMetadataBoardGame } from "./extended-metadata-boardgame";
-import { ExtendedMetadataPuzzle } from "./extended-metadata-puzzle";
-import { ExtendedMetadataLego } from "./extended-metadata-lego";
-import { ExtendedMetadataMaps } from "./extended-metadata-maps";
+import { ExtendedMetadataVideo, hasVideoMetadata } from "./extended-metadata-video";
+import { ExtendedMetadataBoardGame, hasBoardGameMetadata } from "./extended-metadata-boardgame";
+import { ExtendedMetadataPuzzle, hasPuzzleMetadata } from "./extended-metadata-puzzle";
+import { ExtendedMetadataLego, hasLegoMetadata } from "./extended-metadata-lego";
+import { ExtendedMetadataMaps, hasMapsMetadata } from "./extended-metadata-maps";
 import { DiscogsAttribution } from "@/components/ui/discogs-attribution";
 import { BibliographicAttribution } from "@/components/ui/bibliographic-attribution";
 import { TagCloud } from "@/components/ui/tag-cloud";
@@ -114,11 +114,12 @@ export function ExtendedMetadata({
   const isVideo = isVideoFormat(format);
   const isBoardGame = isBoardGameFormat(format);
   const isPuzzle = isPuzzleFormat(format);
+  const isOtherExplicitMedia = isAudio || isVideo || isBoardGame || isPuzzle;
   const isLego =
     isLegoFormat(format) ||
     meta["category"] === "lego" ||
     meta["content_type"] === "lego" ||
-    (meta["set_number"] !== undefined && meta["piece_count"] !== undefined);
+    (!isOtherExplicitMedia && hasMeta(meta, "set_number") && hasMeta(meta, "piece_count"));
 
   const trackList = meta["track_list"] as
     Array<{ position: string; title: string; duration_seconds: number }> | undefined;
@@ -144,24 +145,21 @@ export function ExtendedMetadata({
   const additionalDetails =
     display && Array.isArray(display.additional_details) ? display.additional_details : fallbackEntries;
 
-  const hasMaps =
-    Boolean(meta["has_map"]) ||
-    Boolean(display?.fields?.has_map) ||
-    Boolean(meta["map_scale"]) ||
-    Boolean(meta["map_projection"]) ||
-    (Array.isArray(meta["map_attachments"]) && meta["map_attachments"].length > 0) ||
-    format === "cartographic_map" ||
-    format === "atlas";
+  const hasVideoSection = isVideo && hasVideoMetadata(meta);
+  const hasBoardGameSection = isBoardGame && hasBoardGameMetadata(meta);
+  const hasPuzzleSection = isPuzzle && hasPuzzleMetadata(meta);
+  const hasLegoSection = isLego && hasLegoMetadata(meta, display);
+  const hasMapsSection = hasMapsMetadata(meta, display, manifestationId, canEdit);
 
   if (
     !description &&
     categories.length === 0 &&
     !isAudio &&
-    !isVideo &&
-    !isBoardGame &&
-    !isPuzzle &&
-    !isLego &&
-    !hasMaps &&
+    !hasVideoSection &&
+    !hasBoardGameSection &&
+    !hasPuzzleSection &&
+    !hasLegoSection &&
+    !hasMapsSection &&
     !trackList &&
     additionalDetails.length === 0 &&
     !owner_name &&
@@ -186,54 +184,61 @@ export function ExtendedMetadata({
       {isLego && <ExtendedMetadataLego meta={meta} display={display} />}
       <ExtendedMetadataMaps meta={meta} display={display} manifestationId={manifestationId} canEdit={canEdit} />
 
-      {isAudio && (
-        <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
-          <h3 className="font-bold text-lg text-foreground font-serif">Release Information</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-            {hasMetaChain(meta, LABEL_PUBLISHER_KEYS) && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
-                  Label / Publisher
-                </span>
-                <DiscoveryPivot
-                  type="publishers"
-                  value={String(readMetaChain(meta, LABEL_PUBLISHER_KEYS))}
-                  variant="link"
-                  className="font-semibold"
-                />
-              </div>
-            )}
-            {hasMetaChain(meta, CATALOG_NUMBER_KEYS) && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Catalog #</span>
-                <span className="font-semibold">{String(readMetaChain(meta, CATALOG_NUMBER_KEYS))}</span>
-              </div>
-            )}
-            {hasMetaChain(meta, MATRIX_NUMBER_KEYS) && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
-                  Matrix / Runout
-                </span>
-                <span className="font-mono text-xs">{String(readMetaChain(meta, MATRIX_NUMBER_KEYS))}</span>
-              </div>
-            )}
-            {Boolean(meta["disc_count"]) && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Discs</span>
-                <span className="font-semibold">{String(meta["disc_count"])}</span>
-              </div>
-            )}
-            {format && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
-                  Media Format
-                </span>
-                <span className="font-semibold uppercase">{formatLabel}</span>
-              </div>
-            )}
+      {isAudio &&
+        (hasMetaChain(meta, LABEL_PUBLISHER_KEYS) ||
+          hasMetaChain(meta, CATALOG_NUMBER_KEYS) ||
+          hasMetaChain(meta, MATRIX_NUMBER_KEYS) ||
+          Boolean(meta["disc_count"]) ||
+          Boolean(formatLabel)) && (
+          <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
+            <h3 className="font-bold text-lg text-foreground font-serif">Release Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+              {hasMetaChain(meta, LABEL_PUBLISHER_KEYS) && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                    Label / Publisher
+                  </span>
+                  <DiscoveryPivot
+                    type="publishers"
+                    value={String(readMetaChain(meta, LABEL_PUBLISHER_KEYS))}
+                    variant="link"
+                    className="font-semibold"
+                  />
+                </div>
+              )}
+              {hasMetaChain(meta, CATALOG_NUMBER_KEYS) && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                    Catalog #
+                  </span>
+                  <span className="font-semibold">{String(readMetaChain(meta, CATALOG_NUMBER_KEYS))}</span>
+                </div>
+              )}
+              {hasMetaChain(meta, MATRIX_NUMBER_KEYS) && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                    Matrix / Runout
+                  </span>
+                  <span className="font-mono text-xs">{String(readMetaChain(meta, MATRIX_NUMBER_KEYS))}</span>
+                </div>
+              )}
+              {Boolean(meta["disc_count"]) && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Discs</span>
+                  <span className="font-semibold">{String(meta["disc_count"])}</span>
+                </div>
+              )}
+              {format && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                    Media Format
+                  </span>
+                  <span className="font-semibold uppercase">{formatLabel}</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {trackList && trackList.length > 0 && (
         <div className="rounded-xl border bg-card/50 p-5 shadow-sm">

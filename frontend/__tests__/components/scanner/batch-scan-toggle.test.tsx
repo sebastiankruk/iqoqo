@@ -22,6 +22,10 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string, params?: { count?: number; title?: string }) => {
     const map: Record<string, string> = {
       "batchMode.toggleLabel": "Batch mode",
+      "batchMode.stateOn": "ON",
+      "batchMode.stateOff": "OFF",
+      "batchMode.statusOn": "Batch scan: ON",
+      "batchMode.statusOff": "Batch scan: OFF",
       "batchMode.viewQueue": "View scanned batch queue",
       "batchMode.recentScans": `Recent scans (${params?.count ?? 0})`,
       "batchMode.clearQueue": "Clear queue",
@@ -118,6 +122,10 @@ describe("BatchScanToggle Component", () => {
     const button = screen.getByRole("button", { name: /batch mode/i });
     expect(button).toBeInTheDocument();
     expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("batch-scan-state-badge")).toHaveTextContent("OFF");
+    const liveStatus = screen.getByTestId("batch-scan-live-status");
+    expect(liveStatus).toHaveAttribute("aria-live", "polite");
+    expect(liveStatus).toHaveTextContent("Batch scan: OFF");
 
     fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledWith(true);
@@ -128,6 +136,8 @@ describe("BatchScanToggle Component", () => {
 
     const button = screen.getByRole("button", { name: /batch mode/i });
     expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("batch-scan-state-badge")).toHaveTextContent("ON");
+    expect(screen.getByTestId("batch-scan-live-status")).toHaveTextContent("Batch scan: ON");
     expect(screen.getByText("5")).toBeInTheDocument();
   });
 

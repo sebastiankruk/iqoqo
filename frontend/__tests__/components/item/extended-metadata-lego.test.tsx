@@ -43,4 +43,33 @@ describe("ExtendedMetadataLego", () => {
     expect(screen.getByText("Missing: 2 pieces")).toBeInTheDocument();
     expect(screen.getByText("View on Rebrickable")).toBeInTheDocument();
   });
+
+  it("returns null when LEGO fields are empty strings or null", () => {
+    const { container } = render(
+      <ExtendedMetadataLego
+        meta={{
+          set_number: "",
+          piece_count: "",
+          minifig_count: null,
+          theme: "  ",
+        }}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("ignores blank piece_count while rendering valid set_number", () => {
+    render(
+      <ExtendedMetadataLego
+        meta={{
+          set_number: "10318-1",
+          piece_count: "",
+          missing_pieces_count: 0,
+        }}
+      />
+    );
+    expect(screen.getByTestId("lego-set-number")).toHaveTextContent("10318-1");
+    expect(screen.queryByTestId("lego-piece-count")).not.toBeInTheDocument();
+    expect(screen.queryByText("Physical Item State")).not.toBeInTheDocument();
+  });
 });

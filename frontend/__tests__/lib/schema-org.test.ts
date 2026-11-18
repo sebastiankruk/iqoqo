@@ -258,6 +258,42 @@ describe("Schema.org Utilities & JSON-LD Builders", () => {
       expect(mainEntity["itemListElement"][0]["item"]["@type"]).toBe("Book");
       expect(mainEntity["itemListElement"][1]["item"]["@type"]).toBe("Game");
     });
+
+    it("emits MusicAlbum pressing metadata for audio items", () => {
+      const jsonLd = buildCollectionJsonLd({
+        name: "HiFi Vinyl",
+        totalCount: 1,
+        authorName: "Audiophile",
+        items: [
+          {
+            id: 42,
+            title: "Kind of Blue",
+            url: "/manifestation/42",
+            contentType: "music",
+            format: "vinyl",
+            authors: ["Miles Davis"],
+            ean: "0074646493519",
+            publisher: "Columbia",
+            catalogNumber: "CL 1355",
+            publicationYear: "1959",
+            country: "US",
+            sameAs: ["https://www.discogs.com/release/12345"],
+          },
+        ],
+      });
+
+      const mainEntity = jsonLd["mainEntity"] as any;
+      const audioItem = mainEntity["itemListElement"][0]["item"];
+      expect(audioItem["@type"]).toBe("MusicAlbum");
+      expect(audioItem["musicReleaseFormat"]).toBe("vinyl");
+      expect(audioItem["gtin13"]).toBe("0074646493519");
+      expect(audioItem["catalogNumber"]).toBe("CL 1355");
+      expect(audioItem["recordLabel"]).toBe("Columbia");
+      expect(audioItem["datePublished"]).toBe("1959");
+      expect(audioItem["countryOfOrigin"]).toBe("US");
+      expect(audioItem["byArtist"]).toEqual({ "@type": "Person", name: "Miles Davis" });
+      expect(audioItem["sameAs"]).toEqual(["https://www.discogs.com/release/12345"]);
+    });
   });
 
   describe("buildWorkJsonLd", () => {
