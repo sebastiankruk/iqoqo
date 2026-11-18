@@ -212,6 +212,32 @@ class ItemUpdateSchema(BaseModel):
         return v
 
 
+class BulkItemVisibilitySchema(BaseModel):
+    """Request body for updating visibility across multiple owned physical items."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_ids: list[int] = Field(min_length=1, max_length=100, description="List of owned physical item IDs (1..100)")
+    visibility: str = Field(..., description="Target visibility tier ('public', 'friends_only', 'private')")
+
+    @field_validator("item_ids")
+    @classmethod
+    def validate_item_ids(cls, v: list[int]) -> list[int]:
+        """Ensure all item identifiers are positive integers."""
+        if any(item_id <= 0 for item_id in v):
+            raise ValueError("All item_ids must be positive integers.")
+        return v
+
+    @field_validator("visibility")
+    @classmethod
+    def validate_visibility(cls, v: str) -> str:
+        """Normalize 'hidden' alias and constrain visibility to controlled tiers."""
+        normalized = "private" if str(v).strip().lower() == "hidden" else str(v).strip().lower()
+        if normalized not in ("public", "friends_only", "private"):
+            raise ValueError("Invalid visibility. Must be one of ('public', 'friends_only', 'private')")
+        return normalized
+
+
 class ItemManualCreateSchema(BaseModel):
     """Request body for creating an item by hand, without a scanned barcode.
 

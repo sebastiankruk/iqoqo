@@ -35,6 +35,7 @@ function getFormatLabel(formatId: string): string | undefined {
 /** Filter type */
 export type FilterType =
   | "status"
+  | "visibility"
   | "category"
   | "format"
   | "tag"
@@ -91,6 +92,15 @@ const statusLabel: Record<string, string> = {
  */
 export function chipLabel(filter: ActiveFilter): string {
   if (filter.type === "status") return `Status: ${statusLabel[filter.value] ?? filter.value}`;
+  if (filter.type === "visibility") {
+    const visLabels: Record<string, string> = {
+      public: "Public",
+      friends_only: "Friends Only",
+      private: "Private / Hidden",
+      hidden: "Private / Hidden",
+    };
+    return `Visibility: ${visLabels[filter.value] ?? filter.value}`;
+  }
   if (filter.type === "category") return `Category: ${filter.value.replace("_", " ")}`;
   if (filter.type === "format") {
     const label = getFormatLabel(filter.value);
@@ -124,6 +134,8 @@ export function chipLabel(filter: ActiveFilter): string {
  */
 function chipColor(filter: ActiveFilter): string {
   if (filter.type === "status") return "bg-accent/10 text-accent border-accent/20";
+  if (filter.type === "visibility")
+    return "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20";
   if (filter.type === "category") return "bg-primary/10 text-primary border-primary/20";
   if (filter.type === "format") return "bg-secondary text-secondary-foreground border-border";
   if (filter.type === "tag")

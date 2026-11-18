@@ -655,6 +655,42 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/items", "/api/v1/items") and method == "get":
+                    vis_param = {
+                        "name": "visibility",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Comma-separated visibility filter (public, friends_only, private, hidden).",
+                    }
+                    op_params = operation.setdefault("parameters", [])
+                    if not any(isinstance(p, dict) and p.get("name") == "visibility" for p in op_params):
+                        op_params.append(vis_param)
+                elif openapi_path in ("/api/items/bulk-visibility", "/api/v1/items/bulk-visibility") and method == "patch":
+                    if not operation.get("requestBody"):
+                        operation["requestBody"] = {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "item_ids": {
+                                                "type": "array",
+                                                "items": {"type": "integer", "minimum": 1},
+                                                "minItems": 1,
+                                                "maxItems": 100,
+                                            },
+                                            "visibility": {
+                                                "type": "string",
+                                                "enum": ["public", "friends_only", "private"],
+                                            },
+                                        },
+                                        "required": ["item_ids", "visibility"],
+                                    }
+                                }
+                            },
+                        }
                 elif openapi_path == "/api/items/{item_id}/reading-sessions" and method == "post":
                     if not operation.get("requestBody"):
                         operation["requestBody"] = {

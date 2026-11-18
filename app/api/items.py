@@ -34,9 +34,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
 from app.api.federation_guard import reject_if_federation_head_item_write
-from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.api.filters import CatalogFilterBuilder, normalize_visibility_filter, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import (
+    BulkItemVisibilitySchema,
     ItemBulkCreateSchema,
     ItemCollectionLinkSchema,
     ItemCreateSchema,
@@ -284,6 +285,7 @@ def get_items():
     publishers_filter = request.args.get("publishers", None)
     lod_authority = (request.args.get("lod_authority") or "").strip().lower()
     lod_status = (request.args.get("lod_status") or "").strip().lower()
+    visibility_list = normalize_visibility_filter(parse_csv_param(request.args.get("visibility")))
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
@@ -329,6 +331,7 @@ def get_items():
             has_map=has_map,
             scope=scope,
             friend_ids=friend_ids_list,
+            visibility=visibility_list,
         )
 
         for row in results:
@@ -338,6 +341,8 @@ def get_items():
                     "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
                     "status": row["status"],
                     "collection_status": row["collection_status"],
+                    "visibility": row.get("visibility"),
+                    "is_hidden": row.get("is_hidden"),
                     "local_barcode": row.get("local_barcode"),
                     "lent_to_user_id": row.get("lent_to_user_id"),
                     "lent_to_name": row.get("lent_to_name"),
@@ -397,6 +402,25 @@ def get_items():
             )
         else:
             stmt = stmt.where(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+
+        if visibility_list:
+            if scope == "friends":
+                friend_vis = [v for v in visibility_list if v in ("public", "friends_only", "shared")]
+                stmt = stmt.where(Item.visibility.in_(friend_vis)) if friend_vis else stmt.where(db.false())
+            elif include_public:
+                stmt = stmt.where(
+                    db.or_(
+                        db.and_(Item.owner_id == user_id, Item.visibility.in_(visibility_list)),
+                        db.and_(
+                            Item.owner_id != user_id,
+                            Item.is_hidden.is_(False),
+                            Item.visibility == "public",
+                            Item.visibility.in_(visibility_list),
+                        ),
+                    )
+                )
+            else:
+                stmt = stmt.where(Item.visibility.in_(visibility_list))
 
         needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
@@ -1914,6 +1938,67 @@ def toggle_item_visibility(item_id: int):
             "message": f"Item visibility updated to {'hidden' if item.is_hidden else 'public'}.",
             "is_hidden": item.is_hidden,
         }
+    )
+
+
+@api_bp.route("/items/bulk-visibility", methods=["PATCH"])
+@limiter.limit("30 per minute", override_defaults=True)
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+def bulk_update_item_visibility() -> Response | tuple[Response, int]:
+    """Update visibility across a bounded batch of owned physical items."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    hub_guard = reject_if_federation_head_item_write()
+    if hub_guard is not None:
+        return hub_guard
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = BulkItemVisibilitySchema(**payload_json)
+    except ValidationError as exc:
+        return jsonify({"success": False, "data": None, "error": "Invalid payload", "details": str(exc)}), 400
+
+    unique_ids = list(dict.fromkeys(payload.item_ids))
+    items = db.session.execute(select(Item).where(Item.id.in_(unique_ids))).scalars().all()
+    if len(items) != len(unique_ids):
+        return jsonify({"success": False, "data": None, "error": "One or more items not found"}), 404
+
+    if any(str(item.owner_id) != str(user_id) for item in items):
+        return jsonify({"success": False, "data": None, "error": "Forbidden: you do not own all selected items"}), 403
+
+    for item in items:
+        item.set_visibility(payload.visibility)
+
+    db.session.commit()
+    invalidate_facets_cache(user_id)
+    for item in items:
+        publish_transition_event(
+            "item_visibility_updated",
+            {
+                "item_id": item.id,
+                "visibility": payload.visibility,
+                "user_id": str(user_id),
+            },
+        )
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "updated_count": len(items),
+                    "visibility": payload.visibility,
+                    "item_ids": unique_ids,
+                },
+            }
+        ),
+        200,
     )
 
 
