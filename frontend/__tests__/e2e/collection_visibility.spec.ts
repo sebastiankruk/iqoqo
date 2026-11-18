@@ -50,20 +50,10 @@ test.describe("Collection Visibility Filtering and Bulk Update (C128)", () => {
     });
 
     let lastPatchBody: Record<string, unknown> | null = null;
-    await page.route("**/api/items/bulk-visibility", async route => {
-      lastPatchBody = JSON.parse(route.request().postData() || "{}");
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: { updated_count: 1, visibility: lastPatchBody?.visibility, item_ids: [101] },
-        }),
-      });
-    });
-
     await page.route("**/api/items**", async route => {
-      if (route.request().url().includes("bulk-visibility")) return;
+      if (route.request().url().includes("bulk-visibility")) {
+        return route.fallback();
+      }
       const url = route.request().url();
       const items = url.includes("visibility=friends_only")
         ? [
@@ -104,6 +94,18 @@ test.describe("Collection Visibility Filtering and Bulk Update (C128)", () => {
           success: true,
           data: items,
           meta: { page: 1, limit: 20, total: items.length, pages: 1 },
+        }),
+      });
+    });
+
+    await page.route("**/api/items/bulk-visibility", async route => {
+      lastPatchBody = JSON.parse(route.request().postData() || "{}");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { updated_count: 1, visibility: lastPatchBody?.visibility, item_ids: [102] },
         }),
       });
     });
