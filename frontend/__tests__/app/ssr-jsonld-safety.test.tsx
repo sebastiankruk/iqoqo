@@ -25,6 +25,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import ManifestationPage from "@/app/manifestation/[id]/page";
 import ItemPage from "@/app/item/[id]/page";
 import SharedCollectionPage from "@/app/share/[token]/page";
+import SharedCollectionJsonLdPage from "@/app/share/[token]/jsonld/[page]/page";
 import PublicProfilePage from "@/app/u/[username]/page";
 import CollectionLayout from "@/app/collection/layout";
 import { WorkStructuredData } from "@/components/work/work-structured-data";
@@ -164,7 +165,7 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
     expect(container.querySelector('[data-testid="shared-catalog-index"]')).toBeNull();
   });
 
-  it("shared collection ?format=jsonld&page=1 renders chromeless minified JSON-LD with absolute pagination URLs", async () => {
+  it("shared collection ?format=jsonld&page=1 and /jsonld/1 render chromeless minified JSON-LD with query-free pagination URLs", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -193,36 +194,43 @@ describe("SSR JSON-LD Safety: parsed values preserved with malicious inputs", ()
       }),
     } as unknown as Response);
 
-    const pageJsx = await SharedCollectionPage({
-      params: Promise.resolve({ token: "tok-ai" }),
-      searchParams: Promise.resolve({ format: "jsonld", page: "1" }),
-    });
-    const { container, queryByTestId } = renderWithClient(pageJsx);
+    for (const pageJsx of [
+      await SharedCollectionPage({
+        params: Promise.resolve({ token: "tok-ai" }),
+        searchParams: Promise.resolve({ format: "jsonld", page: "1" }),
+      }),
+      await SharedCollectionJsonLdPage({
+        params: Promise.resolve({ token: "tok-ai", page: "1" }),
+      }),
+    ]) {
+      const { container, queryByTestId } = renderWithClient(pageJsx);
 
-    expect(queryByTestId("navbar")).toBeNull();
-    expect(queryByTestId("footer")).toBeNull();
+      expect(queryByTestId("navbar")).toBeNull();
+      expect(queryByTestId("footer")).toBeNull();
 
-    const nav = container.querySelector('nav[aria-label="JSON-LD Pages"]');
-    expect(nav).not.toBeNull();
-    const links = Array.from(nav!.querySelectorAll("a")).map(a => a.getAttribute("href"));
-    expect(links.some(href => href?.includes("/share/tok-ai?format=jsonld&page=2"))).toBe(true);
+      const nav = container.querySelector('nav[aria-label="JSON-LD Pages"]');
+      expect(nav).not.toBeNull();
+      const links = Array.from(nav!.querySelectorAll("a")).map(a => a.getAttribute("href"));
+      expect(links.some(href => href?.endsWith("/share/tok-ai/jsonld/2"))).toBe(true);
+      expect(links.every(href => !href?.includes("?"))).toBe(true);
 
-    const pre = container.querySelector("pre#jsonld-payload");
-    expect(pre).not.toBeNull();
-    const payload = JSON.parse(pre!.textContent || "{}");
-    expect(payload.totalItems).toBe(365);
-    expect(payload.perPage).toBe(60);
-    expect(payload.totalPages).toBe(7);
-    expect(payload.pages).toHaveLength(7);
-    expect(payload.nextPage).toMatch(/^https?:\/\/.*\/share\/tok-ai\?format=jsonld&page=2$/);
-    expect(payload.itemListElement[0]).toEqual({
-      t: "Kind of Blue",
-      a: "Miles Davis",
-      f: "vinyl",
-      l: "Columbia",
-      c: "CL 1355",
-      y: "1959",
-    });
+      const pre = container.querySelector("pre#jsonld-payload");
+      expect(pre).not.toBeNull();
+      const payload = JSON.parse(pre!.textContent || "{}");
+      expect(payload.totalItems).toBe(365);
+      expect(payload.perPage).toBe(60);
+      expect(payload.totalPages).toBe(7);
+      expect(payload.pages).toHaveLength(7);
+      expect(payload.nextPage).toMatch(/^https?:\/\/.*\/share\/tok-ai\/jsonld\/2$/);
+      expect(payload.itemListElement[0]).toEqual({
+        t: "Kind of Blue",
+        a: "Miles Davis",
+        f: "vinyl",
+        l: "Columbia",
+        c: "CL 1355",
+        y: "1959",
+      });
+    }
   });
 
   it("public profile page preserves bio with Unicode separators and multiline text", async () => {

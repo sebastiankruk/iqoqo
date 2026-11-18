@@ -123,7 +123,7 @@ describe("SharedCollectionClient", () => {
     });
   });
 
-  it("renders subtle RDF icon button linking to full absolute ?format=jsonld&page=1 and omits raw text dump", () => {
+  it("renders subtle RDF icon button linking to query-free /jsonld/1 and sr-only windowed AI page links", () => {
     const { container } = render(
       <SharedCollectionClient
         initialToken="tok-123"
@@ -153,7 +153,19 @@ describe("SharedCollectionClient", () => {
     expect(screen.getByText("365 Items")).toBeInTheDocument();
 
     const jsonLdLink = screen.getByRole("link", { name: "jsonLdFeed" });
-    expect(jsonLdLink).toHaveAttribute("href", "https://preview.iqoqo.cc/share/tok-123?format=jsonld&page=1");
+    expect(jsonLdLink).toHaveAttribute("href", "https://preview.iqoqo.cc/share/tok-123/jsonld/1");
+
+    const aiNav = screen.getByRole("navigation", { name: "AI JSON-LD pages" });
+    const aiLinks = Array.from(aiNav.querySelectorAll("a")).map(a => a.getAttribute("href"));
+    expect(aiLinks).toEqual([
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/1",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/2",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/3",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/4",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/5",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/6",
+      "https://preview.iqoqo.cc/share/tok-123/jsonld/7",
+    ]);
 
     const rssLink = screen.getByRole("link", { name: "RSS" });
     expect(rssLink).toHaveAttribute("href", "/share/tok-123/feed.xml");

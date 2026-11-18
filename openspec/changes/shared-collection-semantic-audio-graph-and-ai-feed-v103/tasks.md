@@ -9,13 +9,13 @@
 
 - [x] 2.1 Fix badge resolution in `shared-collection-client.tsx` / item card (top-level `format`, then `manifestation_meta.format`, then `content_type`).
 - [x] 2.2 Remove the `<details open>` catalog index text block from `frontend/components/public/shared-collection-client.tsx` so `/share/[token]` renders a clean human-first layout.
-- [x] 2.3 Harmonize hero button heights (`h-9`) in `frontend/components/ui/share-button.tsx` and `frontend/components/ui/public-feed-button.tsx`; style `variant="jsonld"` as a subtle, compact icon-only RDF button (`w-9 h-9`) linking to the full absolute URL `https://<host>/share/<token>?format=jsonld&page=1`.
+- [x] 2.3 Harmonize hero button heights (`h-9`) in `frontend/components/ui/share-button.tsx` and `frontend/components/ui/public-feed-button.tsx`; style `variant="jsonld"` as a subtle, compact icon-only W3C RDF Flyer button (`w-9 h-9`) linking to the full query-free URL `https://<host>/share/<token>/jsonld/1` alongside an `sr-only` windowed `<nav aria-label="AI JSON-LD pages">`.
 - [x] 2.4 Implement `buildPaginationWindow(currentPage, totalPages)` (at most 10 pages: `1`, up to `8` around current page, `totalPages`) and render windowed pagination controls on `/share/[token]?page=N` (`per_page = 48`).
-- [x] 2.5 Implement the chromeless `?format=jsonld&page=N` mini-page in `frontend/app/share/[token]/page.tsx` (`per_page = 60`, no `<Navbar />`/`<Footer />`, `<nav aria-label="JSON-LD Pages">` with full absolute links for the 10-page window, and `<pre id="jsonld-payload">` with minified Schema.org JSON-LD).
+- [x] 2.5 Implement the chromeless query-free `/share/[token]/jsonld/[page]` route (`frontend/app/share/[token]/jsonld/[page]/page.tsx` + `frontend/lib/share-server.tsx`, with `?format=jsonld&page=N` alias on `frontend/app/share/[token]/page.tsx`) rendering `per_page = 60`, no `<Navbar />`/`<Footer />`, `<nav aria-label="JSON-LD Pages">` with full query-free links for the 10-page window, and `<pre id="jsonld-payload">` with minified Schema.org JSON-LD.
 
 ## 3. Batch 3 — Canonical HTTP Content Negotiation, Crawler Boundary & Cloudflare SRE Docs
 
-- [x] 3.1 Support HTTP Content Negotiation (`Accept: application/ld+json`, `application/json+ld`, `text/turtle`, `application/n-triples`, `application/rdf+xml`) on `/share/<token>` (including `?page=N`) as well as `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml` via `frontend/proxy.ts` (`FLASK_API_URL`) and `deploy/nginx.conf` / `deploy/nginx.conf.example`, keeping `Disallow: /api/` and `Allow: /share/` in `frontend/public/robots.txt`.
+- [x] 3.1 Support HTTP Content Negotiation (`Accept: application/ld+json`, `application/json+ld`, `text/turtle`, `application/n-triples`, `application/rdf+xml`) on `/share/<token>` (including `?page=N`) and `/share/<token>/jsonld/<page>` as well as `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml` via `frontend/proxy.ts` (`FLASK_API_URL`) and `deploy/nginx.conf` / `deploy/nginx.conf.example`, keeping `Disallow: /api/` and `Allow: /share/` in `frontend/public/robots.txt`.
 - [x] 3.2 Update `deploy/cloudflare-semantic-federation-rules.md`, `scripts/verify_cloudflare_rules.sh`, `docs/DEPLOYMENT.md`, `docs/SECURITY.md`, and `docs/OPERATIONS.md` with Cloudflare WAF + AI Crawl Control SRE deployment guidance.
 
 ## 4. Batch 4 — Tests

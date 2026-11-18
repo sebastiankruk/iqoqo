@@ -50,12 +50,12 @@ The system SHALL emit audio pressing properties for audio `Manifestation` record
 
 ### Requirement: Human Share Page UX, 10-Page Windowed Pagination, and Subtle RDF Icon Button
 
-`/share/[token]` SHALL render a human-first collection view without raw `<details>`/`<pre>` catalog text blocks above the cover grid, SHALL align all hero action buttons (`Share`, `RSS Feed`, and the RDF/JSON-LD button) to uniform `h-9` height with the JSON-LD trigger styled as a compact icon-only RDF button linking to the full absolute URL `https://<host>/share/<token>?format=jsonld&page=1`, SHALL paginate the cover grid with at most 10 visible page numbers (`first`, up to `8` around current page, `last`), and SHALL NOT label audio items "Book".
+`/share/[token]` SHALL render a human-first collection view without raw `<details>`/`<pre>` catalog text blocks above the cover grid, SHALL align all hero action buttons (`Share`, `RSS Feed`, and the RDF/JSON-LD button) to uniform `h-9` height with the JSON-LD trigger styled as a compact icon-only RDF button linking to the full, query-free absolute URL `https://<host>/share/<token>/jsonld/1` alongside an `sr-only` 10-page windowed `<nav aria-label="AI JSON-LD pages">`, SHALL paginate the cover grid with at most 10 visible page numbers (`first`, up to `8` around current page, `last`), and SHALL NOT label audio items "Book".
 
 #### Scenario: No raw text dump on human share page and uniform hero buttons
 
 - **WHEN** `/share/[token]` is rendered without `?format=jsonld`
-- **THEN** no `shared-catalog-index` `<details>`/`<pre>` block MUST appear above `CollectionGrid`, `<ShareButton>` and `<PublicFeedButton>` MUST share `h-9` sizing, and the RDF icon button MUST link to the full absolute URL `https://<host>/share/<token>?format=jsonld&page=1`.
+- **THEN** no `shared-catalog-index` `<details>`/`<pre>` block MUST appear above `CollectionGrid`, `<ShareButton>` and `<PublicFeedButton>` MUST share `h-9` sizing, the RDF icon button MUST link to the full absolute URL `https://<host>/share/<token>/jsonld/1`, and multi-page collections MUST include `<nav aria-label="AI JSON-LD pages">` with query-free links.
 
 #### Scenario: 10-page pagination window bounds
 
@@ -69,12 +69,12 @@ The system SHALL emit audio pressing properties for audio `Manifestation` record
 - **WHEN** its card renders
 - **THEN** the badge MUST read the real format (for example "Vinyl"), never "Book".
 
-### Requirement: Chromeless Paginated HTML-Wrapped JSON-LD Mini-Page for AI Agents
+### Requirement: Chromeless Query-Free Paginated HTML-Wrapped JSON-LD Mini-Page for AI Agents
 
-When `/share/[token]` is requested with `?format=jsonld` (and optional `&page=<n>`), Next.js SHALL render a minimal `text/html` document without `<Navbar />` or `<Footer />` containing a `<nav aria-label="JSON-LD Pages">` with full absolute links for the 10-page window (`first`, up to `8` around current page, `last`) and a `<pre id="jsonld-payload">` with minified Schema.org JSON-LD (`per_page = 60` items) including `totalItems`, `page`, `perPage`, `totalPages`, `nextPage`, `pages`, and `itemListElement`.
+When `/share/[token]/jsonld/[page]` (or `/share/[token]?format=jsonld&page=<n>`) is requested with `Accept: text/html`, Next.js SHALL render a minimal `text/html` document without `<Navbar />` or `<Footer />` containing a `<nav aria-label="JSON-LD Pages">` with full, query-free absolute links for the 10-page window (`first`, up to `8` around current page, `last`) and a `<pre id="jsonld-payload">` with minified Schema.org JSON-LD (`per_page = 60` items) including `totalItems`, `page`, `perPage`, `totalPages`, `nextPage`, `pages`, and `itemListElement`.
 
 #### Scenario: Chromeless JSON-LD mini-page rendering
 
 - **GIVEN** a shared collection with 365 audio items
-- **WHEN** `/share/<token>?format=jsonld&page=1` is rendered on the server
-- **THEN** the response MUST omit `<Navbar />` and `<Footer />`, MUST render `<pre id="jsonld-payload">` with minified Schema.org JSON-LD for page 1 (`totalItems: 365`, `perPage: 60`, `totalPages: 7`, full absolute URLs in `pages`), and MUST render `<nav aria-label="JSON-LD Pages">` with full absolute `<a href="https://.../share/<token>?format=jsonld&page=...">` links.
+- **WHEN** `/share/<token>/jsonld/1` (or `/share/<token>?format=jsonld&page=1`) is rendered on the server
+- **THEN** the response MUST omit `<Navbar />` and `<Footer />`, MUST render `<pre id="jsonld-payload">` with minified Schema.org JSON-LD for page 1 (`totalItems: 365`, `perPage: 60`, `totalPages: 7`, full query-free `https://.../share/<token>/jsonld/<n>` URLs in `pages`), and MUST render `<nav aria-label="JSON-LD Pages">` with full query-free `<a href="https://.../share/<token>/jsonld/<n>">` links.

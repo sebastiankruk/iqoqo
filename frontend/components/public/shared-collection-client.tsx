@@ -167,11 +167,13 @@ export function SharedCollectionClient({ initialData, initialToken, publicBaseUr
   const totalPages = activeCollection.pages ?? (totalItems > 0 ? 1 : 0);
   const paginationWindow = buildPaginationWindow(currentPage, totalPages);
   const normalizedBaseUrl = (publicBaseUrl || "").replace(/\/+$/, "");
-  const jsonLdPageUrl = resolvedToken
-    ? normalizedBaseUrl
-      ? `${normalizedBaseUrl}/share/${resolvedToken}?format=jsonld&page=1`
-      : `/share/${resolvedToken}?format=jsonld&page=1`
-    : "";
+  const buildJsonLdUrl = (pageNum: number) =>
+    normalizedBaseUrl
+      ? `${normalizedBaseUrl}/share/${resolvedToken}/jsonld/${pageNum}`
+      : `/share/${resolvedToken}/jsonld/${pageNum}`;
+  const jsonLdPageUrl = resolvedToken ? buildJsonLdUrl(1) : "";
+  const jsonLdTotalPages = totalItems > 0 ? Math.ceil(totalItems / 60) : 0;
+  const jsonLdWindow = buildPaginationWindow(1, jsonLdTotalPages);
 
   const renderPagination = () => {
     if (totalPages <= 1 || !resolvedToken) return null;
@@ -260,6 +262,15 @@ export function SharedCollectionClient({ initialData, initialToken, publicBaseUr
                   title={t("jsonLdFeedTitle")}
                   variant="jsonld"
                 />
+              )}
+              {resolvedToken && jsonLdWindow.length > 1 && (
+                <nav aria-label="AI JSON-LD pages" className="sr-only">
+                  {jsonLdWindow.map(p => (
+                    <a key={p} href={buildJsonLdUrl(p)}>
+                      JSON-LD Page {p}
+                    </a>
+                  ))}
+                </nav>
               )}
             </div>
           </div>

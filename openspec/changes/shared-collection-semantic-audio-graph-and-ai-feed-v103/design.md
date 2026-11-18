@@ -36,14 +36,14 @@ Meanwhile, the UX audit of `/share/[token]` (`My music Collection - Shared by sk
      - If `totalPages <= 10`, returns `[1..totalPages]`.
      - Otherwise, always includes page `1` (first), page `totalPages` (last), and a contiguous window of **8 pages** centered around `currentPage` (clamped to `[2, totalPages - 1]`).
    - Used identically in the human `/share/[token]?page=N` pagination bar and in the `?format=jsonld&page=N` mini-page `<nav>` + JSON-LD `pages` array.
-3. **Chromeless `?format=jsonld&page=N` Mini-Page in Next.js (`frontend/app/share/[token]/page.tsx`):**
-   - Handled by the Next.js Server Component when `searchParams.format === "jsonld"` (or `"json-ld"`).
-   - Serves `Content-Type: text/html; charset=utf-8` (keeping Flask 100% API-only while satisfying Gemini App's HTML-only scraper).
+3. **Chromeless Query-Free `/share/[token]/jsonld/[page]` Mini-Page in Next.js (`frontend/app/share/[token]/jsonld/[page]/page.tsx` + `frontend/lib/share-server.tsx`):**
+   - Also retained as `?format=jsonld&page=N` on `frontend/app/share/[token]/page.tsx` for backward compatibility.
+   - Serves `Content-Type: text/html; charset=utf-8` (keeping Flask 100% API-only while satisfying Gemini App's HTML-only scraper and avoiding `?` query-string blocks on discovered links).
    - Omits `<Navbar />` and `<Footer />` so 100% of Gemini's budget goes to the JSON-LD payload (`60` items/page).
-   - Renders `<nav aria-label="JSON-LD Pages">` with full absolute `<a href="https://<host>/share/<token>?format=jsonld&page=K">` links for the 10-page window (plus `nextPage`), followed by `<pre id="jsonld-payload">` containing minified Schema.org JSON-LD (`@context` with short aliases `t`/`a`/`f`/`l`/`c`/`y`/`g` + `totalItems`, `page`, `perPage`, `totalPages`, `nextPage`, `pages`, and `itemListElement`).
-4. **Hero Button Harmonization & Subtle RDF Icon Button:**
+   - Renders `<nav aria-label="JSON-LD Pages">` with full, query-free absolute `<a href="https://<host>/share/<token>/jsonld/<K>">` links for the 10-page window (plus `nextPage`), followed by `<pre id="jsonld-payload">` containing minified Schema.org JSON-LD (`@context` with short aliases `t`/`a`/`f`/`l`/`c`/`y`/`g` + `totalItems`, `page`, `perPage`, `totalPages`, `nextPage`, `pages`, and `itemListElement`).
+4. **Hero Button Harmonization, Subtle RDF Icon Button & `sr-only` AI Page Links:**
    - `<ShareButton>` and `<PublicFeedButton>` both use height `h-9` (`36px`) and consistent border/background tokens.
-   - `variant="jsonld"` in `<PublicFeedButton>` renders a compact icon-only (`w-9 h-9 px-0`) button with an RDF graph icon (`<Share2 />` / semantic triple SVG), `aria-label`, and `title` tooltip, with `href` set to the **full absolute URL** `${publicBaseUrl}/share/${token}?format=jsonld&page=1` so Gemini App extracts the complete URL directly from the main share page DOM.
+   - `variant="jsonld"` in `<PublicFeedButton>` renders a compact icon-only (`w-9 h-9`) button with the W3C RDF Flyer SVG (`rdf_flyer.svg`), `sr-only` text, `aria-label`, and `title` tooltip, with `href` set to the **full query-free absolute URL** `${publicBaseUrl}/share/${token}/jsonld/1`. When `totalItems > 60`, `/share/[token]` also emits an `sr-only` `<nav aria-label="AI JSON-LD pages">` with the windowed `/share/${token}/jsonld/1..N` URLs so Gemini App extracts all pages on its initial fetch.
 5. **Canonical HTTP Content Negotiation (`Accept: application/ld+json` / `application/json+ld`) + Crawler Isolation:**
    - Every `/share/<token>` URL (including `/share/<token>?page=N`) responds to HTTP Content Negotiation: when `Accept` contains `application/ld+json`, `application/json+ld`, `text/turtle`, `application/n-triples`, or `application/rdf+xml`, `frontend/proxy.ts` (and Nginx via `Accept` routing) proxies the request directly to Flask `/api/public/share/<token>` (forwarding `page`/`per_page`/`limit`), returning raw `application/ld+json` (or requested RDF MIME type).
    - Each HTML version of `/share/[token]` (`?page=N`) also continues to embed `<JsonLdScript>` (`<script type="application/ld+json">`) for search engines and Schema.org validators.

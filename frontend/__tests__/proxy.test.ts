@@ -74,6 +74,22 @@ describe("proxy runtime share feed rewrites and content negotiation", () => {
     expect(res.headers.get("x-middleware-rewrite")).toBeNull();
   });
 
+  it("negotiates Accept: application/ld+json on /share/:token/jsonld/:page and passes text/html through", () => {
+    process.env.FLASK_API_URL = "http://web:5000/api";
+
+    const htmlReq = new NextRequest("https://preview.iqoqo.cc/share/tok-123/jsonld/2", {
+      headers: { accept: "text/html,application/xhtml+xml" },
+    });
+    expect(proxy(htmlReq).headers.get("x-middleware-rewrite")).toBeNull();
+
+    const ldReq = new NextRequest("https://preview.iqoqo.cc/share/tok-123/jsonld/2", {
+      headers: { accept: "application/ld+json" },
+    });
+    expect(proxy(ldReq).headers.get("x-middleware-rewrite")).toBe(
+      "http://web:5000/api/public/share/tok-123?page=2&per_page=60"
+    );
+  });
+
   it("ignores relative NEXT_PUBLIC_API_URL and falls back to 127.0.0.1:5000", () => {
     process.env.NEXT_PUBLIC_API_URL = "/api";
     const req = new NextRequest("http://localhost:3000/share/tok-123/catalog.jsonld");

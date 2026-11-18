@@ -68,9 +68,26 @@ export function proxy(req: NextRequest) {
     return NextResponse.rewrite(target);
   }
 
-  // HTTP Content Negotiation on canonical /share/<token> (and ?page=N):
+  // HTTP Content Negotiation on canonical /share/<token> (and ?page=N) or /share/<token>/jsonld/<page>:
   // clients requesting application/ld+json, application/json+ld, or RDF formats
   // are routed directly to Flask's RDF/JSON-LD serializer.
+  const jsonLdPageMatch = pathname.match(/^\/share\/([^/]+)\/jsonld\/(\d+)\/?$/);
+  if (jsonLdPageMatch) {
+    const acceptHeader = (req.headers.get("accept") || "").toLowerCase();
+    if (RDF_ACCEPT_MIME_TYPES.some(mime => acceptHeader.includes(mime))) {
+      const [, token, page] = jsonLdPageMatch;
+      const target = new URL(`${resolveRuntimeBackendBase()}/api/public/share/${encodeURIComponent(token)}`);
+      req.nextUrl.searchParams.forEach((value, key) => {
+        target.searchParams.set(key, value);
+      });
+      target.searchParams.set("page", page);
+      if (!target.searchParams.has("per_page")) {
+        target.searchParams.set("per_page", "60");
+      }
+      return NextResponse.rewrite(target);
+    }
+  }
+
   const canonicalShareMatch = pathname.match(/^\/share\/([^/]+)\/?$/);
   if (canonicalShareMatch) {
     const acceptHeader = (req.headers.get("accept") || "").toLowerCase();
