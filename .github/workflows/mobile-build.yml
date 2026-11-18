@@ -181,11 +181,12 @@ jobs:
           mkdir -p "${{ runner.temp }}/installer"
           cp scripts/iqoqo_installer.py "${{ runner.temp }}/installer/iqoqo_installer.py"
           (cd "${{ runner.temp }}/installer" && sha256sum iqoqo_installer.py > iqoqo_installer.py.sha256)
+          echo "SAFE_REF_NAME=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
 
       - name: Upload installer & checksum artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iqoqo-installer-${{ github.ref_name }}
+          name: iqoqo-installer-${{ env.SAFE_REF_NAME }}
           path: |
             ${{ runner.temp }}/installer/iqoqo_installer.py
             ${{ runner.temp }}/installer/iqoqo_installer.py.sha256
