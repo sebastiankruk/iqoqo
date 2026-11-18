@@ -1,0 +1,10 @@
+## 1. Backend Share Scope Validation & Resolution
+
+- [ ] 1.1 Update `POST /api/sharing/` (`app/api/sharing.py`) and `app/api/schemas.py` to accept and validate `visibility_scope` (`"public_only"` default, `"friends_and_public"`, `"all"`), persisting it in `SharedCollection.filters["visibility_scope"]` and returning HTTP `400` on invalid values; document in `app/api/docs.py` and verify via `IQOQO_AI_MODE=1 .venv/bin/pytest tests/test_openapi_spec.py`
+- [ ] 1.2 Extract `_resolve_shared_visibilities(collection, viewer_id)` in `app/api/public_items.py` implementing the Token Scope + Friend Bonus rules (`"public_only"` with optional authenticated friend/owner check, `"friends_and_public"`, `"all"`), apply it identically in `fetch_shared_collection_by_token`, `public_shared_collection`, `SearchService.search_items()` (`app/core/search_service.py`), and `app/api/public_rdf.py`, and enforce `Cache-Control: private, no-store` + `Vary: Authorization, Cookie` on non-public or authenticated responses
+- [ ] 1.3 Add comprehensive Pytest coverage in `tests/test_shared_collection_ai_feed.py` and `tests/test_public_feeds.py` verifying all 3 scopes + friend bonus across JSON, JSON-LD, Turtle, RSS, and PostgreSQL/SQLite search filters; verify via `IQOQO_AI_MODE=1 .venv/bin/pytest tests/test_shared_collection_ai_feed.py tests/test_public_feeds.py`
+
+## 2. Frontend Share Modal & SSR Cookie Forwarding
+
+- [ ] 2.1 Update `ShareCollectionDialog` (`frontend/components/collection/share-collection-dialog.tsx`) with a localized 3-option `visibility_scope` selector (`public_only` default, `friends_and_public`, `all`) and privacy warning notice when `friends_and_public` or `all` is selected, adding EN/PL strings to `frontend/messages/en.json` and `frontend/messages/pl.json`
+- [ ] 2.2 Forward caller `cookie` headers in `frontend/app/share/[token]/page.tsx` when fetching `/api/public/share/<token>` so authenticated friends receive their Friend Bonus items on SSR load without weakening anonymous `"public_only"` caching, and add Vitest tests for `ShareCollectionDialog` (`cd frontend && npx vitest run __tests__/components/collection/`)

@@ -7,7 +7,7 @@ Complete 100% OpenAPI 3.1 specification, contract testing CI gate, AI skills, an
 
 ### Requirement: Complete OpenAPI 3.1 Contract Coverage
 
-The system SHALL emit a valid OpenAPI 3.1 document covering all registered API routes and schemas without duplicate path declarations, and its documented schemas for `/api/auth/tokens` and `/api/auth/2fa/*` SHALL match the actual runtime JSON request/response payloads and HTTP status codes (`raw_token`, `expires_in_days`, and `200 OK` on revocation).
+The system SHALL emit a valid OpenAPI 3.1 document covering all registered API routes and schemas without duplicate path declarations, and its documented schemas for `/api/auth/tokens`, `/api/auth/2fa/*`, `/api/items/{item_id}/reading-sessions`, `/api/public/share/{token}`, and `Expression.content_type` SHALL match the actual runtime JSON request/response payloads, query parameters (`page`, `per_page`, `format`, `limit`), and HTTP status codes (`raw_token`, `expires_in_days`, `201 Created` on reading sessions, and `200 OK` on revocation).
 
 #### Scenario: CI validates zero contract drift
 
@@ -27,7 +27,12 @@ The system SHALL emit a valid OpenAPI 3.1 document covering all registered API r
 #### Scenario: Developer API documentation matches runtime 2FA, SSE, and OpenAPI routes
 
 - **WHEN** a developer or AI agent consults `docs/API.md` and `docs/gems/iqoqo-librarian-gem.md`
-- **THEN** `docs/API.md` documents `POST /api/auth/2fa/disable`, the two-step `POST /api/auth/login` MFA payload, accurate `/2fa/*` responses, unnamed `data: {...}` SSE frames, and `GET /api/docs/openapi.json`, while `iqoqo-librarian-gem.md` references `/api/scanner/preview/{barcode}` with matching PAT scopes
+- **THEN** `docs/API.md` documents `POST /api/auth/2fa/disable`, the two-step `POST /api/auth/login` MFA payload, accurate `/2fa/*` responses, unnamed `data: {...}` SSE frames, and `GET /api/docs/openapi.json`, while `iqoqo-librarian-gem.md` references `/api/scanner/preview/{barcode}` with matching PAT scopes.
+
+#### Scenario: OpenAPI schema documents v1.0.3 reading sessions, shared collection pagination, and cartographic map content type
+
+- **WHEN** The OpenAPI 3.1 spec is generated at `/api/docs/openapi.json`
+- **THEN** `POST /api/items/{item_id}/reading-sessions` documents `duration_minutes`, `pages_read`, and `note` in its request body and a `201` response, `GET /api/public/share/{token}` documents `page`, `per_page`, `format`, and `limit` query parameters, and `components.schemas.Expression.properties.content_type.enum` includes `"cartographic_map"`.
 
 ### Requirement: ActivityPub HTTP Signature Verification CLI
 
