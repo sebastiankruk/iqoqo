@@ -314,7 +314,7 @@ export function ItemCard({
   );
 
   // Checkbox overlay shown whenever multi-select mode is active (manifestations or owned items).
-  const selectionOverlay = Boolean(onToggleSelect) && (
+  const selectionOverlay = onToggleSelect && (
     <button
       type="button"
       aria-label={isSelected ? "Deselect" : "Select"}
