@@ -25,6 +25,7 @@ import { useTranslations } from "next-intl";
 import { BookOpen, Disc, Dices, Film, HeartOff, Library, Loader2, Puzzle } from "lucide-react";
 import type { WishlistItem } from "@/types/frbr";
 import { apiClient } from "@/lib/api/client";
+import { queryKeys } from "@/lib/api/hooks";
 import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { resolveMediaBadge } from "@/lib/media-badge";
 import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
@@ -72,6 +73,9 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
       await deleteMutation.mutateAsync(item.id);
       queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all });
       queryClient.invalidateQueries({ queryKey: ["manifestations"] });
+      if (item.manifestation_id) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(item.manifestation_id) });
+      }
       toast.success(t("removedFromWishlist"));
     } catch {
       toast.error(t("removeFromWishlistFailed"));
@@ -98,6 +102,7 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
         queryClient.invalidateQueries({ queryKey: ["items"] }),
         queryClient.invalidateQueries({ queryKey: ["stats"] }),
         queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(item.manifestation_id) }),
         queryClient.invalidateQueries({ queryKey: ["works", "shelf"] }),
         queryClient.invalidateQueries({ queryKey: ["expressions", "shelf"] }),
       ]);

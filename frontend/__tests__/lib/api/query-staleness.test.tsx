@@ -14,13 +14,23 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createAppQueryClient } from "@/components/providers";
 import { useEscalationQueue, useMyEscalations } from "@/lib/api/escalations";
+import { useManifestation, useWork } from "@/lib/api/hooks/catalog";
 import { useWorkIntent } from "@/lib/api/hooks/intents";
 import { useProfile } from "@/lib/api/hooks/user";
+import { apiClient } from "@/lib/api/client";
+import type { CatalogEntry, WorkDetail } from "@/types/frbr";
+
+vi.mock("@/lib/api/client", () => ({
+  apiClient: {
+    get: vi.fn(),
+  },
+  apiFetch: vi.fn(),
+}));
 
 /**
  * Creates a wrapper that provides the given query client to a tested hook.
@@ -56,9 +66,61 @@ function getQueryStaleTime(client: QueryClient, queryKey: readonly unknown[]): n
 }
 
 describe("query staleness configuration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("uses a 60-second default stale time", () => {
     const client = createAppQueryClient();
     expect(client.getDefaultOptions().queries).toMatchObject({ staleTime: 60_000, retry: 1 });
+  });
+
+  it("revalidates SSR initialData on mount for useManifestation and useWork so authenticated wishlist/owned state is fetched", async () => {
+    const client = createAppQueryClient();
+    const wrapper = makeWrapper(client);
+
+    const ssrManifestation = {
+      id: 42,
+      title: "Dune",
+      authors: ["Frank Herbert"],
+      user_owns: false,
+      wishlist_item_id: null,
+    } as unknown as CatalogEntry;
+
+    const ssrWork = {
+      id: 99,
+      title: "Dune",
+      authors: ["Frank Herbert"],
+      expressions: [],
+    } as unknown as WorkDetail;
+
+    vi.mocked(apiClient.get).mockImplementation(async url => {
+      if (url === "/manifestations/42") {
+        return {
+          data: {
+            success: true,
+            data: { ...ssrManifestation, wishlist_item_id: 777 },
+            error: null,
+          },
+        };
+      }
+      return {
+        data: {
+          success: true,
+          data: ssrWork,
+          error: null,
+        },
+      };
+    });
+
+    const { result: manifestationResult } = renderHook(() => useManifestation(42, ssrManifestation), { wrapper });
+    renderHook(() => useWork(99, ssrWork), { wrapper });
+
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith("/manifestations/42");
+      expect(apiClient.get).toHaveBeenCalledWith("/works/99");
+      expect(manifestationResult.current.data?.wishlist_item_id).toBe(777);
+    });
   });
 
   it("keeps work-intent query immediately stale and profile query cached for 30 seconds", () => {

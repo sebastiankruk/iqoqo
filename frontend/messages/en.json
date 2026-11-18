@@ -199,7 +199,8 @@
     "game": "Game",
     "audiobook": "Audiobook",
     "concert": "Concert",
-    "seriesSuffix": "{label} (Series)"
+    "seriesSuffix": "{label} (Series)",
+    "onWishlist": "On Wishlist"
   },
   "Collection": {
     "loading": "Loading collection...",
@@ -1083,6 +1084,8 @@
     "clearFilters": "Clear filters",
     "loadError": "Unable to load your wishlist.",
     "moveToLibrary": "Move to library",
+    "moveToCollection": "Move to Collection",
+    "moveToMyLibrary": "Move to My Library",
     "movedToLibrary": "Moved \"{title}\" to your library!",
     "moveToLibraryFailed": "Failed to move item to library",
     "removeFromWishlist": "Remove from wishlist",

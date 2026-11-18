@@ -40,7 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveSchemaType } from "@/lib/schema-org";
 import { getCoverUrl } from "@/lib/utils";
-import { useProfile, useWork } from "@/lib/api/hooks";
+import { queryKeys, useProfile, useWork } from "@/lib/api/hooks";
 import { useCreateWishlistItem, useDeleteWishlistItem, useWishlist, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import type { WorkDetail, WorkDetailManifestation } from "@/types/frbr";
@@ -120,6 +120,8 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
           queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+          queryClient.invalidateQueries({ queryKey: ["manifestation"] }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.work(work.id) }),
         ]);
         toast.success(tWishlist("removedFromWishlist"));
       } else {
@@ -127,6 +129,8 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
           queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+          queryClient.invalidateQueries({ queryKey: ["manifestation"] }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.work(work.id) }),
         ]);
         toast.success(tWishlist("addedToWishlist"));
       }

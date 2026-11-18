@@ -984,3 +984,22 @@ class TestWishlistC121ActionsAndAcquisition:
         assert desc_resp.status_code == 200
         desc_titles = [entry["title"] for entry in desc_resp.json["data"]]
         assert desc_titles == sorted(desc_titles, key=str.casefold, reverse=True)
+
+    def test_manifestation_detail_ignores_fulfilled_intent(self, client, wishlist_setup, app):
+        """GET /api/manifestations/<id> ignores fulfilled UserWorkIntent rows when resolving wishlist_item_id."""
+        headers = _headers(app, wishlist_setup["user_id"])
+
+        with app.app_context():
+            fulfilled_intent = UserWorkIntent(
+                user_id=wishlist_setup["user_id"],
+                work_id=wishlist_setup["work2_id"],
+                expression_id=wishlist_setup["expr_audio_id"],
+                manifestation_id=wishlist_setup["manif_vinyl_id"],
+                status="fulfilled",
+            )
+            db.session.add(fulfilled_intent)
+            db.session.commit()
+
+        resp = client.get(f"/api/manifestations/{wishlist_setup['manif_vinyl_id']}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json["data"]["wishlist_item_id"] is None

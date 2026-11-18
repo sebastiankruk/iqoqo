@@ -18,8 +18,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { BookOpen, ChevronDown, HeartOff, Library, Loader2, BookmarkPlus, Eye } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
-import { useUserCollections } from "@/lib/api/hooks";
+import { queryKeys, useUserCollections } from "@/lib/api/hooks";
 import { CollectionQuickAdd } from "./collection-quick-add";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -39,6 +40,7 @@ interface AddToCollectionDropdownProps {
  * @returns React node representing the dropdown component
  */
 export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: AddToCollectionDropdownProps) {
+  const tWishlist = useTranslations("Wishlist");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -86,6 +88,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
       qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestationId) });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
       qc.invalidateQueries({ queryKey: ["expressions", "shelf"] });
       if (variables.collectionStatus === "wish_list") {
@@ -107,6 +110,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wishlist"] });
       qc.invalidateQueries({ queryKey: ["manifestations"] });
+      qc.invalidateQueries({ queryKey: queryKeys.manifestation(manifestationId) });
       qc.invalidateQueries({ queryKey: ["items"] });
       qc.invalidateQueries({ queryKey: ["stats"] });
       qc.invalidateQueries({ queryKey: ["works", "shelf"] });
@@ -133,15 +137,17 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(prev => !prev)}
-        disabled={addMutation.isPending}
+        disabled={addMutation.isPending || removeWishlistMutation.isPending}
         className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-60"
       >
-        {addMutation.isPending ? (
+        {addMutation.isPending || removeWishlistMutation.isPending ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : resolvedWishlistId ? (
+          <Library className="mr-2 h-4 w-4" />
         ) : (
           <BookOpen className="mr-2 h-4 w-4" />
         )}
-        Add to Collection
+        {resolvedWishlistId ? tWishlist("moveToCollection") : "Add to Collection"}
         <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
@@ -192,7 +198,7 @@ export function AddToCollectionDropdown({ manifestationId, wishlistItemId }: Add
               className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary transition-colors"
             >
               <Library className="h-4 w-4 shrink-0 text-primary" />
-              <span>Add to My Library</span>
+              <span>{resolvedWishlistId ? tWishlist("moveToMyLibrary") : "Add to My Library"}</span>
               <span className="ml-auto text-[10px] text-muted-foreground font-normal">No folder</span>
             </button>
           </div>

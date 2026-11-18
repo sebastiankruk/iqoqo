@@ -358,17 +358,38 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         from app.db.models import UserWorkIntent
 
         owned_item = db.session.execute(select(Item).filter_by(manifestation_id=m.id, owner_id=user_id)).scalars().first()
-        if owned_item:
-            if owned_item.collection_status == "wish_list":
-                wishlist_item_id = owned_item.id
-            else:
-                user_owns = True
-                item_id = owned_item.id
+        if owned_item and owned_item.collection_status != "wish_list":
+            user_owns = True
+            item_id = owned_item.id
 
-        if not user_owns and not wishlist_item_id and m.expression and m.expression.work:
-            intent = db.session.execute(select(UserWorkIntent).filter_by(user_id=user_id, work_id=m.expression.work.id)).scalars().first()
+        if not user_owns:
+            intent = (
+                db.session.execute(
+                    select(UserWorkIntent).filter(
+                        UserWorkIntent.user_id == user_id,
+                        UserWorkIntent.manifestation_id == m.id,
+                        UserWorkIntent.status != "fulfilled",
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if not intent and m.expression and m.expression.work:
+                intent = (
+                    db.session.execute(
+                        select(UserWorkIntent).filter(
+                            UserWorkIntent.user_id == user_id,
+                            UserWorkIntent.work_id == m.expression.work.id,
+                            UserWorkIntent.status != "fulfilled",
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
             if intent:
                 wishlist_item_id = intent.id
+            elif owned_item and owned_item.collection_status == "wish_list":
+                wishlist_item_id = owned_item.id
 
     owner_count = (
         db.session.execute(

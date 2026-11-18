@@ -388,6 +388,9 @@ export function useManifestation(id: number, initialData?: CatalogEntry | null) 
     },
     enabled: id > 0,
     initialData: initialData ?? undefined,
+    // SSR initialData is fetched unauthenticated, so mark it stale immediately
+    // to trigger an authenticated client fetch for user_owns / wishlist_item_id.
+    initialDataUpdatedAt: initialData ? 0 : undefined,
   });
 }
 
@@ -407,6 +410,7 @@ export function useWork(id: number, initialData?: WorkDetail | null) {
     },
     enabled: id > 0,
     initialData: initialData ?? undefined,
+    initialDataUpdatedAt: initialData ? 0 : undefined,
   });
 }
 

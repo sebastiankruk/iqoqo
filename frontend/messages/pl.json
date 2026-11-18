@@ -199,7 +199,8 @@
     "game": "Gra",
     "audiobook": "Audiobook",
     "concert": "Koncert",
-    "seriesSuffix": "{label} (seria)"
+    "seriesSuffix": "{label} (seria)",
+    "onWishlist": "Na liście życzeń"
   },
   "Collection": {
     "loading": "Ładowanie kolekcji...",
@@ -1083,6 +1084,8 @@
     "clearFilters": "Wyczyść filtry",
     "loadError": "Nie udało się załadować listy życzeń.",
     "moveToLibrary": "Przenieś do biblioteki",
+    "moveToCollection": "Przenieś do kolekcji",
+    "moveToMyLibrary": "Przenieś do mojej biblioteki",
     "movedToLibrary": "Przeniesiono „{title}” do biblioteki!",
     "moveToLibraryFailed": "Nie udało się przenieść pozycji do biblioteki",
     "removeFromWishlist": "Usuń z listy życzeń",

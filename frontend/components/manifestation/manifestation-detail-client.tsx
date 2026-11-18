@@ -17,10 +17,12 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { BookOpen, Loader2, Disc, ImagePlus } from "lucide-react";
+import { BookmarkCheck, BookOpen, Disc, HeartOff, ImagePlus, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
-import { useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
+import { queryKeys, useManifestation, useProfile, useWorkParts } from "@/lib/api/hooks";
+import { useDeleteWishlistItem, wishlistQueryKeys } from "@/lib/api/wishlist";
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import { getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
@@ -71,7 +73,10 @@ function normalizeAuthors(authors: unknown): string[] {
  */
 export function ManifestationDetailClient({ manifestationId, initialManifestation }: ManifestationDetailClientProps) {
   const t = useTranslations("Manifestation");
+  const tWishlist = useTranslations("Wishlist");
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const deleteWishlistMutation = useDeleteWishlistItem();
 
   const routeId = useResolvedRouteParam("id");
   const effectiveId =
@@ -124,6 +129,25 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
     format
   );
   const isAudio = badge.isAudio;
+  const isOnWishlist = Boolean(!manifestation.user_owns && manifestation.wishlist_item_id);
+
+  const handleRemoveFromWishlist = async () => {
+    if (!manifestation.wishlist_item_id) return;
+    const intentId = Math.abs(manifestation.wishlist_item_id);
+    try {
+      await deleteWishlistMutation.mutateAsync(intentId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: wishlistQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.manifestation(manifestation.id) }),
+        queryClient.invalidateQueries({ queryKey: ["manifestations"] }),
+        queryClient.invalidateQueries({ queryKey: ["items"] }),
+        queryClient.invalidateQueries({ queryKey: ["stats"] }),
+      ]);
+      toast.success(tWishlist("removedFromWishlist"));
+    } catch {
+      toast.error(tWishlist("removeFromWishlistFailed"));
+    }
+  };
 
   // Compose "Type[ / Kind][ / Format]" (e.g. "Movie / Concert / Blu-ray")
   const composedLabel = composeMediaBadgeLabel(badge, key => t(key));
@@ -233,7 +257,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
           {/* Metadata */}
           <div className="flex-1 space-y-6">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 <Badge
                   variant={isSeries ? "default" : isAudio ? "secondary" : "outline"}
                   className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider"
@@ -241,6 +265,16 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   {isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
                   {badgeLabel}
                 </Badge>
+                {isOnWishlist && (
+                  <Badge
+                    variant="secondary"
+                    data-testid="on-wishlist-badge"
+                    className="flex items-center gap-1.5 border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary"
+                  >
+                    <BookmarkCheck className="h-3 w-3" />
+                    {t("onWishlist")}
+                  </Badge>
+                )}
               </div>
               <h1
                 className="font-serif text-3xl md:text-4xl font-bold text-foreground"
@@ -495,10 +529,29 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                         </Button>
                       </div>
                     ) : (
-                      <AddToCollectionDropdown
-                        manifestationId={manifestation.id}
-                        wishlistItemId={manifestation.wishlist_item_id}
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AddToCollectionDropdown
+                          manifestationId={manifestation.id}
+                          wishlistItemId={manifestation.wishlist_item_id}
+                        />
+                        {isOnWishlist && manifestation.wishlist_item_id && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="default"
+                            disabled={deleteWishlistMutation.isPending}
+                            onClick={handleRemoveFromWishlist}
+                            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            {deleteWishlistMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <HeartOff className="h-4 w-4" />
+                            )}
+                            <span>{tWishlist("removeFromWishlist")}</span>
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                   {manifestation.owner_count !== undefined && manifestation.owner_count > 0 && (
