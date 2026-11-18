@@ -79,13 +79,13 @@ def sync_tags(item_id: int, user_id, tags: list[str] | None):
     list. Unknown tags are created on demand."""
     if tags is None:
         return
-    existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
+    existing_links = db.session.execute(select(ItemTag).where(ItemTag.item_id == item_id)).scalars().all()
     existing_tag_ids = {link.tag_id: link for link in existing_links}
     desired_tag_names = {t.strip() for t in tags if t.strip()}
 
     db_tags = []
     for name in desired_tag_names:
-        tag = db.session.query(Tag).filter(Tag.name == name).first()
+        tag = db.session.execute(select(Tag).where(Tag.name == name)).scalars().first()
         if not tag:
             tag = Tag(name=name)
             db.session.add(tag)
@@ -364,27 +364,27 @@ def get_items():
                 }
             )
     else:
-        query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
 
         if scope == "friends":
             from app.core.friend_service import get_friend_user_ids
 
             friend_ids = list(get_friend_user_ids(user_id))
             if friend_ids:
-                query = query.filter(
+                stmt = stmt.where(
                     Item.owner_id.in_(friend_ids),
                     db.or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
                 )
             else:
-                query = query.filter(db.false())
+                stmt = stmt.where(db.false())
         elif borrowed_only:
-            query = query.filter(Item.lent_to_user_id == user_id)
+            stmt = stmt.where(Item.lent_to_user_id == user_id)
         elif owner_only:
-            query = query.filter(Item.owner_id == user_id)
+            stmt = stmt.where(Item.owner_id == user_id)
         elif include_public:
             # Social lending catalogue: include own items, borrowed items, AND public
             # available items from other users so borrowers can discover lendable items.
-            query = query.filter(
+            stmt = stmt.where(
                 db.or_(
                     Item.owner_id == user_id,
                     Item.lent_to_user_id == user_id,
@@ -396,14 +396,14 @@ def get_items():
                 )
             )
         else:
-            query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+            stmt = stmt.where(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
 
         needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
         builder = CatalogFilterBuilder(
-            query,
+            stmt,
             root=CatalogFilterBuilder.ROOT_ITEM,
             user_id=user_id,
             borrowed_only=borrowed_only,
@@ -413,9 +413,9 @@ def get_items():
         if needs_mfn_join or needs_work_join:
             # Sorting by work title requires the FRBR chain even when no
             # filter does, so the join is requested explicitly.
-            query = builder.ensure_frbr_joins()
+            stmt = builder.ensure_frbr_joins()
 
-        query = builder.apply(
+        stmt = builder.apply(
             category=category_list,
             fmt=format_list,
             tags=tags_list,
@@ -430,20 +430,22 @@ def get_items():
             has_map=has_map,
         )
 
-        total_physical = query.order_by(None).count()
+        total_physical = db.session.execute(
+            select(func.count()).select_from(stmt.order_by(None).subquery())  # pylint: disable=not-callable
+        ).scalar_one()
 
         if sort_by == "title":
-            query = query.order_by(func.lower(Work.title).asc())
+            stmt = stmt.order_by(func.lower(Work.title).asc())
         elif sort_by == "title-desc":
-            query = query.order_by(func.lower(Work.title).desc())
+            stmt = stmt.order_by(func.lower(Work.title).desc())
         elif sort_by == "author":
-            query = query.order_by(func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc())
+            stmt = stmt.order_by(func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc())
         elif sort_by == "added":
-            query = query.order_by(Item.added_at.desc())
+            stmt = stmt.order_by(Item.added_at.desc())
         else:
-            query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+            stmt = stmt.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
 
-        physical_items = query.limit(limit).offset(offset).all()
+        physical_items = db.session.execute(stmt.limit(limit).offset(offset)).scalars().unique().all()
 
         for item in physical_items:
             manifestation = item.manifestation
@@ -540,7 +542,11 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     manifestation = item.manifestation
     owner_count = (
-        db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)).scalar()
+        db.session.execute(
+            select(func.count(Item.id)).where(  # pylint: disable=not-callable
+                Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)
+            )
+        ).scalar()
         or 0
     )
 
@@ -991,9 +997,12 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     links = (
-        db.session.query(UserCollection)
-        .join(UserCollectionItem, UserCollectionItem.collection_id == UserCollection.id)
-        .filter(UserCollectionItem.item_id == item_id)
+        db.session.execute(
+            select(UserCollection)
+            .join(UserCollectionItem, UserCollectionItem.collection_id == UserCollection.id)
+            .where(UserCollectionItem.item_id == item_id)
+        )
+        .scalars()
         .all()
     )
     collections_data = [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in links]
@@ -1022,22 +1031,26 @@ def _guard_add_item_to_collection(item_id: int) -> tuple[dict | None, tuple[Resp
         return None, (jsonify({"success": False, "error": "Forbidden"}), 403)
 
     collection = (
-        db.session.query(UserCollection)
-        .filter(
-            UserCollection.id == payload.collection_id,
-            UserCollection.owner_id == item.owner_id,
+        db.session.execute(
+            select(UserCollection).where(
+                UserCollection.id == payload.collection_id,
+                UserCollection.owner_id == item.owner_id,
+            )
         )
+        .scalars()
         .first()
     )
     if not collection:
         return None, (jsonify({"success": False, "error": "Collection not found"}), 404)
 
     existing = (
-        db.session.query(UserCollectionItem)
-        .filter(
-            UserCollectionItem.collection_id == payload.collection_id,
-            UserCollectionItem.item_id == item_id,
+        db.session.execute(
+            select(UserCollectionItem).where(
+                UserCollectionItem.collection_id == payload.collection_id,
+                UserCollectionItem.item_id == item_id,
+            )
         )
+        .scalars()
         .first()
     )
     if existing:
@@ -1097,11 +1110,13 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     link = (
-        db.session.query(UserCollectionItem)
-        .filter(
-            UserCollectionItem.collection_id == collection_id,
-            UserCollectionItem.item_id == item_id,
+        db.session.execute(
+            select(UserCollectionItem).where(
+                UserCollectionItem.collection_id == collection_id,
+                UserCollectionItem.item_id == item_id,
+            )
         )
+        .scalars()
         .first()
     )
     if not link:
@@ -1122,11 +1137,11 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     """List every physical item of the manifestation with this ISBN.
 
     The endpoint a scanner uses to decide whether a code is already shelved."""
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == isbn)).scalars().first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    items = Item.query.filter_by(manifestation_id=manifestation.id).filter(Item.is_hidden.is_(False)).all()
+    items = db.session.execute(select(Item).where(Item.manifestation_id == manifestation.id, Item.is_hidden.is_(False))).scalars().all()
     if not items:
         return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
@@ -1202,7 +1217,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == isbn)).scalars().first()
 
     if not manifestation:
         # Explicit ingestion. `GET /api/isbn/<isbn>` is read-only by design, so
@@ -1618,7 +1633,9 @@ def add_item_manual() -> Response | tuple[Response, int]:
         normalised_isbn: str | None = None
         if isbn:
             normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
-            existing_manifestation = Manifestation.query.filter_by(isbn13=normalised_isbn).first()
+            existing_manifestation = (
+                db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
+            )
 
         if existing_manifestation:
             # Manifestation already exists — just create a new Item linked to it
@@ -1820,9 +1837,10 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     from app.core.taxonomy import PROGRESS_STATUSES
 
     logs = (
-        db.session.query(ItemStatusLog)
-        .filter(ItemStatusLog.item_id == item_id)
-        .order_by(ItemStatusLog.changed_at.desc(), ItemStatusLog.id.desc())
+        db.session.execute(
+            select(ItemStatusLog).where(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc(), ItemStatusLog.id.desc())
+        )
+        .scalars()
         .all()
     )
 

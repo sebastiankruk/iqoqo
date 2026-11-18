@@ -963,6 +963,11 @@
     "version": "Wersja: {version}"
   },
   "ItemDetail": {
+    "federation": {
+      "borrowedBadge": "Egzemplarz wypożyczony",
+      "lentToBadge": "Wypożyczono: {borrower}",
+      "provenanceBadge": "Pochodzenie sfederowane"
+    },
     "lego": {
       "title": "Szczegóły zestawu LEGO",
       "viewOnRebrickable": "Zobacz w serwisie Rebrickable",

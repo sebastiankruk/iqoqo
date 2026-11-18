@@ -963,6 +963,11 @@
     "version": "Version: {version}"
   },
   "ItemDetail": {
+    "federation": {
+      "borrowedBadge": "Federated / Lent Copy",
+      "lentToBadge": "Lent to {borrower}",
+      "provenanceBadge": "Federated Provenance"
+    },
     "lego": {
       "title": "LEGO Set Details",
       "viewOnRebrickable": "View on Rebrickable",
