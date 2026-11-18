@@ -313,8 +313,8 @@ export function ItemCard({
     </button>
   );
 
-  // Checkbox overlay shown in Global Library (manifestation) view when selection mode is active.
-  const selectionOverlay = isCatalog && onToggleSelect && (
+  // Checkbox overlay shown whenever multi-select mode is active (manifestations or owned items).
+  const selectionOverlay = Boolean(onToggleSelect) && (
     <button
       type="button"
       aria-label={isSelected ? "Deselect" : "Select"}

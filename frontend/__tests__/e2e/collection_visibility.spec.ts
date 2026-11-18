@@ -109,16 +109,17 @@ test.describe("Collection Visibility Filtering and Bulk Update (C128)", () => {
     });
 
     await page.goto("/collection");
-    await expect(page.getByText("Public Copy")).toBeVisible();
+    await expect(page.locator('[data-testid="card-title"]', { hasText: "Public Copy" })).toBeVisible();
 
     const friendsCheckbox = page.locator('input[name="visibility_filter"]').nth(1);
     await friendsCheckbox.check();
     await expect(page).toHaveURL(/visibility=friends_only/);
-    await expect(page.getByText("Friends Only Copy")).toBeVisible();
+    await expect(page.locator('[data-testid="card-title"]', { hasText: "Friends Only Copy" })).toBeVisible();
 
-    const selectCheckbox = page.locator('[aria-label="Select Friends Only Copy"], input[type="checkbox"]').last();
-    if (await selectCheckbox.isVisible()) {
-      await selectCheckbox.click();
-    }
+    await page.getByRole("button", { name: "Select" }).first().click();
+    await expect(page.getByTestId("bulk-item-visibility-toolbar")).toBeVisible();
+    await page.getByTestId("bulk-visibility-trigger").click();
+    await page.getByTestId("bulk-visibility-menu").getByRole("menuitem").first().click();
+    await expect.poll(() => lastPatchBody).toEqual({ item_ids: [102], visibility: "public" });
   });
 });
