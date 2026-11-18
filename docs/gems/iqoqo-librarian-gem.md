@@ -4,6 +4,13 @@ This guide provides the system instructions, configuration, and OpenAPI 3.1 Acti
 
 The Gem connects directly to your private iqoqo library instance using a scoped **Personal Access Token (PAT)**, allowing you to converse with your collection, query physical media on your shelves, check loan statuses, and add items to your wishlist.
 
+> **Zero-Auth Shared Collection Option:** If you only want an AI agent to read a public `/share/<token>` link without creating a PAT or configuring OpenAPI actions, use the query-free `/share/<token>/jsonld/1..N` paginated JSON-LD index (`60` items/page) or `Accept: application/ld+json` content negotiation. Ready-to-use domain skill templates are available for:
+>
+> - [HiFi & Physical Music Collection Advisor](hifi-music-advisor-skill.md)
+> - [Books, Comics & Graphic Novels Reading Curator](reading-curator-skill.md)
+> - [Board Games, Tabletop, LEGO & Puzzles Sommelier](boardgame-sommelier-skill.md)
+> - [Physical Cinema & Video Games Archivist](cinema-archivist-skill.md)
+
 ---
 
 ## 1. Gem Details & System Instructions
