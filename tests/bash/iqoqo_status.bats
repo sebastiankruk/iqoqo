@@ -281,3 +281,31 @@ EOF
   [[ "$output" =~ "export failures in last" ]]
 }
 
+@test "iqoqo-status.sh probes Valkey container via valkey-cli" {
+  mock_bin_valkey="${TEST_TEMP_DIR}/mock_bin_valkey"
+  mkdir -p "${mock_bin_valkey}"
+  cat > "${mock_bin_valkey}/docker" <<'EOF'
+#!/bin/bash
+if [[ "$*" == *"ps --format"* ]]; then
+  echo "iqoqo-redis-1"
+  exit 0
+elif [[ "$*" == *"exec"* && "$*" == *"valkey-cli ping"* ]]; then
+  echo "PONG"
+  exit 0
+elif [[ "$*" == *"exec"* && "$*" == *"valkey-cli LLEN celery"* ]]; then
+  echo "0"
+  exit 0
+elif [[ "$*" == *"exec"* && "$*" == *"valkey-cli INFO memory"* ]]; then
+  echo "used_memory_human:1.25M"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${mock_bin_valkey}/docker"
+
+  run env -u IQOQO_AI_MODE PATH="${mock_bin_valkey}:$PATH" bash scripts/iqoqo-status.sh prod
+  [[ "$output" =~ "Valkey (Redis)" ]]
+  [[ "$output" =~ "PONG" ]]
+  [[ ! "$output" =~ "cannot execute redis-cli" ]]
+}
+

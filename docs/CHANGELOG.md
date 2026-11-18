@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Redis → Valkey 8 Drop-In Migration (C126)**:
+  - Replaced `redis:8-alpine` with `valkey/valkey:8-alpine` (`BSD-3-Clause`) in `docker-compose.yml` using `valkey-server --maxmemory 256mb --maxmemory-policy allkeys-lru` and `valkey-cli ping` healthchecks, while preserving the `redis` Docker service name, `redis:6379` network alias, and `redis://` URI scheme.
+  - Updated `scripts/iqoqo-status.sh` and `tests/bash/iqoqo_status.bats` to probe via `valkey-cli`.
+  - **Upgrade note:** Cache and Celery broker state in Valkey is ephemeral; if you use a custom persistent `redis_data` volume overlay, recreate or flush it (`docker compose exec redis valkey-cli FLUSHALL`) when upgrading from Redis 8.
+
 ### Fixed
 
 ## [1.0.3] - 2026-11-18

@@ -567,14 +567,14 @@ if [[ "$STACK" != "dev" ]]; then
     fi
 fi
 
-# ─── Redis ──────────────────────────────────────────────────────
-header "Redis"
+# ─── Valkey (Redis-compatible broker & cache) ──────────────────
+header "Valkey (Redis)"
 redis_cname=$(find_container "redis")
 if [[ -n "$redis_cname" ]]; then
-    if ping_result=$(docker exec "$redis_cname" redis-cli ping 2>/dev/null); then
+    if ping_result=$(docker exec "$redis_cname" valkey-cli ping 2>/dev/null); then
         if [[ "$ping_result" == "PONG" ]]; then
             check "Connectivity" pass "PONG"
-            queue_len=$(docker exec "$redis_cname" redis-cli LLEN celery 2>/dev/null || echo "0")
+            queue_len=$(docker exec "$redis_cname" valkey-cli LLEN celery 2>/dev/null || echo "0")
             if [[ "$queue_len" -gt 50 ]]; then
                 check "Celery queue" warn "${queue_len} tasks queued (high)"
             elif [[ "$queue_len" -gt 0 ]]; then
@@ -582,13 +582,13 @@ if [[ -n "$redis_cname" ]]; then
             else
                 check "Celery queue" pass "empty"
             fi
-            mem=$(docker exec "$redis_cname" redis-cli INFO memory 2>/dev/null | grep "used_memory_human" | cut -d: -f2)
+            mem=$(docker exec "$redis_cname" valkey-cli INFO memory 2>/dev/null | grep "used_memory_human" | cut -d: -f2)
             check "Memory" pass "used${mem:- N/A}"
         else
             check "Connectivity" fail "unexpected response: $ping_result"
         fi
     else
-        check "Connectivity" fail "cannot execute redis-cli"
+        check "Connectivity" fail "cannot execute valkey-cli"
     fi
 else
     check "Container" fail "not running"
