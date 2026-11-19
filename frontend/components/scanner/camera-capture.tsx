@@ -188,7 +188,7 @@ export function CameraCapture({
   }, []);
 
   const startPolling = async (taskId: string) => {
-    const maxRetries = 15; // 15 retries * 1s = 15s max timeout
+    const maxRetries = 45; // 45 retries * 1s = 45s max timeout for local/cloud vision inference
     const { apiClient: pollClient } = await import("@/lib/api/client");
 
     for (let i = 0; i < maxRetries; i++) {

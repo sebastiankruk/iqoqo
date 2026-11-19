@@ -1692,7 +1692,10 @@ def add_item_manual() -> Response | tuple[Response, int]:
                 year_part = str(pub_date_str).split("-")[0]
                 if year_part.isdigit():
                     serial_meta["publication_year"] = int(year_part)
-            manifestation = IngestService.ingest_serial_from_meta(serial_meta)
+            try:
+                manifestation = IngestService.ingest_serial_from_meta(serial_meta)
+            except ValueError as exc:
+                return jsonify({"error": str(exc), "code": 400}), 400
         else:
             if isbn:
                 normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()

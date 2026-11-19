@@ -1350,8 +1350,10 @@ fi
 
 if [[ "${llm_vision_ready:-0}" == "1" ]]; then
     check "Vision Cover Extraction" pass "active (LLM vision ready)"
+elif [[ "${llm_gem_cfg:-0}" == "1" || "${llm_oll_vinst:-0}" == "1" ]]; then
+    check "Vision Cover Extraction" warn "blocked by ALLOW_LLM Gate (providers ready — set ALLOW_LLM=true in ${ENV_FILE} or Admin Settings)"
 else
-    check "Vision Cover Extraction" warn "degraded to Tesseract-only OCR (enable ALLOW_LLM + Gemini or pull Ollama '${llm_oll_vmodel:-llava}')"
+    check "Vision Cover Extraction" warn "degraded to Tesseract-only OCR (configure GEMINI_API_KEY or run 'ollama pull ${llm_oll_vmodel:-llava}')"
 fi
 
 if [[ "${llm_tes_inst:-0}" == "1" ]]; then

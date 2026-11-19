@@ -233,6 +233,8 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         raw = response.text.strip() if response.text else ""
         result = _parse_json_response(raw)
 
+        if result:
+            result = _enrich_llm_serial_result(result, image_bytes)
         if result and user_id:
             duration = time.time() - start_time
             record_telemetry("gemini", user_id, duration, operation_type="metadata_extraction")
@@ -282,7 +284,10 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
 
         data = response.json()
         raw = data.get("response", "").strip()
-        return _parse_json_response(raw)
+        result = _parse_json_response(raw)
+        if result:
+            result = _enrich_llm_serial_result(result, image_bytes)
+        return result
 
     except requests.exceptions.RequestException as e:
         msg = str(e)
@@ -315,8 +320,21 @@ def _pick_serial_headline(lines: list[str]) -> str | None:
     return candidates[0][1]
 
 
+def _upscale_crop_for_ocr(crop: Any, min_width: int = 1200) -> Any:
+    """Upscale small regional crops so thin masthead and barcode glyphs stay legible."""
+    from PIL import Image
+
+    cw, ch = crop.size
+    if cw <= 0 or ch <= 0:
+        return crop
+    if cw < min_width:
+        scale = min(3.0, float(min_width) / float(cw))
+        return crop.resize((max(1, int(cw * scale)), max(1, int(ch * scale))), Image.Resampling.BICUBIC)
+    return crop
+
+
 def _run_multizone_serial_ocr(img: Any, pytesseract_mod: Any, lang: str | None) -> str:
-    """Run targeted OCR on top masthead (normal + inverted) and bottom barcode zones."""
+    """Run targeted OCR on inner top masthead (normal + inverted) and bottom barcode corners."""
     from PIL import ImageOps
 
     w, h = img.size
@@ -324,20 +342,91 @@ def _run_multizone_serial_ocr(img: Any, pytesseract_mod: Any, lang: str | None) 
     ocr_kwargs = {"lang": lang, "config": "--psm 6"} if lang else {"config": "--psm 6"}
     zone_texts: list[str] = []
 
-    top_strip = gray.crop((0, 0, w, max(1, int(h * 0.14))))
-    for variant in (ImageOps.autocontrast(top_strip), ImageOps.autocontrast(ImageOps.invert(top_strip))):
-        t = pytesseract_mod.image_to_string(variant, **ocr_kwargs).strip()
-        if t:
-            zone_texts.append(t)
+    top_bands = (
+        gray.crop((int(w * 0.28), int(h * 0.03), int(w * 0.92), max(int(h * 0.105), 1))),
+        gray.crop((0, 0, w, max(1, int(h * 0.14)))),
+    )
+    for top_strip in top_bands:
+        scaled = _upscale_crop_for_ocr(top_strip, min_width=1400)
+        for variant in (ImageOps.autocontrast(scaled), ImageOps.autocontrast(ImageOps.invert(scaled))):
+            t = pytesseract_mod.image_to_string(variant, **ocr_kwargs).strip()
+            if t:
+                zone_texts.append(t)
 
-    bot_right = ImageOps.autocontrast(gray.crop((int(w * 0.55), int(h * 0.72), w, int(h * 0.96))))
-    bot_left = ImageOps.autocontrast(gray.crop((0, int(h * 0.72), int(w * 0.45), int(h * 0.96))))
-    for crop in (bot_right, bot_left, bot_right.rotate(90, expand=True), bot_left.rotate(270, expand=True)):
+    bot_right = _upscale_crop_for_ocr(gray.crop((int(w * 0.58), int(h * 0.74), int(w * 0.96), int(h * 0.94))), min_width=1200)
+    bot_left = _upscale_crop_for_ocr(gray.crop((int(w * 0.06), int(h * 0.74), int(w * 0.44), int(h * 0.94))), min_width=1200)
+    for raw_crop in (bot_right, bot_left, bot_right.rotate(90, expand=True), bot_left.rotate(270, expand=True)):
+        crop = ImageOps.autocontrast(raw_crop)
         t = pytesseract_mod.image_to_string(crop, **ocr_kwargs).strip()
         if t:
             zone_texts.append(t)
 
     return "\n".join(zone_texts)
+
+
+def _enrich_llm_serial_result(result: dict[str, Any], image_bytes: bytes) -> dict[str, Any]:
+    """Overlay deterministic barcode/masthead OCR and Biblioteka Narodowa lookup onto LLM output."""
+    try:
+        import pytesseract
+        from PIL import Image, ImageOps
+
+        prev_max = Image.MAX_IMAGE_PIXELS
+        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
+            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max
+
+        if not (hasattr(img, "size") and isinstance(getattr(img, "size", None), tuple) and len(img.size) == 2):
+            return result
+
+        img = ImageOps.exif_transpose(img)
+        lang: str | None = None
+        try:
+            if "pol" in pytesseract.get_languages():
+                lang = "pol+eng"
+        except (OSError, RuntimeError, TypeError):
+            lang = None
+
+        zone_text = _run_multizone_serial_ocr(img, pytesseract, lang)
+        from app.utils.issn import parse_cover_issue_label
+
+        ocr_hints = parse_cover_issue_label(zone_text)
+        enriched = dict(result)
+        for key in (
+            "issn",
+            "ean",
+            "ean_addon",
+            "indeks",
+            "issue_number",
+            "cumulative_issue_number",
+            "publication_month",
+            "publication_year",
+        ):
+            if key in ocr_hints and ocr_hints[key] not in (None, ""):
+                enriched[key] = ocr_hints[key]
+
+        issn_val = enriched.get("issn")
+        if issn_val:
+            try:
+                from app.strategies.serials import SerialLookupStrategy
+
+                serial_meta, _ = SerialLookupStrategy().lookup(str(issn_val))
+                if isinstance(serial_meta, dict):
+                    if serial_meta.get("Title") or serial_meta.get("title"):
+                        enriched["Title"] = str(serial_meta.get("Title") or serial_meta.get("title"))
+                    if serial_meta.get("publisher"):
+                        enriched["Publisher"] = str(serial_meta["publisher"])
+            except (OSError, ValueError, RuntimeError):
+                pass
+            if str(enriched.get("ISBN") or "").strip() in ("000000", "0"):
+                enriched["ISBN"] = ""
+            enriched["Authors"] = []
+
+        return enriched
+    except (ImportError, OSError, ValueError, RuntimeError):
+        return result
 
 
 def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
@@ -368,7 +457,7 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
             if max(work_img.size) > _OCR_MAX_DIMENSION:
                 work_img.thumbnail((_OCR_MAX_DIMENSION, _OCR_MAX_DIMENSION), Image.Resampling.LANCZOS)
             text = pytesseract.image_to_string(work_img, **({"lang": lang} if lang else {})).strip()
-            zone_text = _run_multizone_serial_ocr(work_img, pytesseract, lang)
+            zone_text = _run_multizone_serial_ocr(img, pytesseract, lang)
             combined_text = "\n".join(part for part in (text, zone_text) if part)
         else:
             text = pytesseract.image_to_string(img).strip()

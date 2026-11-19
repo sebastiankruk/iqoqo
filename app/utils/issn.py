@@ -55,7 +55,7 @@ _MONTH_NAMES: dict[str, int] = {
     "lip": 7,
     "sierpien": 8,
     "sierpnia": 8,
-    "sie": 8,
+    "sierp": 8,
     "wrzesien": 9,
     "wrzesnia": 9,
     "wrz": 9,
@@ -250,10 +250,16 @@ def parse_cover_issue_label(text: str | None) -> dict[str, Any]:
 
     folded_lower = _strip_accents(text).lower()
     tokens = re.findall(r"[a-z]+", folded_lower)
+    full_month_keys = {k for k in _MONTH_NAMES if len(k) >= 4 or k in ("maj", "may")}
     for token in tokens:
-        if token in _MONTH_NAMES:
+        if token in full_month_keys:
             result["publication_month"] = _MONTH_NAMES[token]
             break
+    if "publication_month" not in result:
+        for token in tokens:
+            if token in _MONTH_NAMES:
+                result["publication_month"] = _MONTH_NAMES[token]
+                break
 
     if "publication_year" not in result:
         year_match = _YEAR_RE.search(text)

@@ -208,6 +208,7 @@ def test_bn_lookup_uses_isbn_issn_param_verifies_marc_022_and_extracts_marc_245(
     [
         ("Cena 14,95 zt ne 11(50) LISTOPAD 2003 9 771507 596037 11>", "1507-5966", "11", 50, 11, 2003, "11"),
         ("Cena 9,90 7% vat) RMo12(63) GRUDZIEN 2004 9 771507 596044 12>", "1507-5966", "12", 63, 12, 2004, "12"),
+        ("Jak zmieni sie klimat? RMo12(63) GRUDZIEN 2004 ISSN 1507-5966", "1507-5966", "12", 63, 12, 2004, None),
         ("ISSN 1507-5966 INDEKS 323357 07>", "1507-5966", "7", None, None, None, "07"),
     ],
 )

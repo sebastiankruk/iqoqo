@@ -139,3 +139,53 @@ def test_ingest_all_five_ng_polska_issues_under_one_serial_work(app):
 
         with pytest.raises(ValueError, match="Ambiguous bare 977"):
             IngestService.ingest_serial_issue("9771507596044")
+
+
+def test_manual_serial_save_with_month_or_headline_succeeds_and_ambiguous_returns_400(client, app, normal_user_headers):
+    """POST /items/manual saves bare-977 issues with month/headline and returns 400 (never 500) if totally ambiguous."""
+    IngestService.ingest_serial_from_meta(
+        {
+            "title": "National Geographic Polska",
+            "issn": "1507-5966",
+            "ean": "9771507596044",
+            "ean_addon": "07",
+            "full_barcode": "977150759604407",
+            "issue_number": "7",
+            "publication_year": 2004,
+            "format": "magazine",
+        }
+    )
+
+    # 1. Partial manual fields (month + cover_headline, no issue_number/year) must succeed (200), never 500
+    ok_res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596044",
+            "Publisher": "Burda Media Polska Sp.",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+            "publication_month": 12,
+            "cover_headline": "Poszukiwanie nowej Ziemi",
+        },
+        headers=normal_user_headers,
+    )
+    assert ok_res.status_code == 200
+
+    # 2. Completely ambiguous bare-977 manual payload returns 400 Bad Request, never unhandled 500
+    bad_res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596044",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+        },
+        headers=normal_user_headers,
+    )
+    assert bad_res.status_code == 400
+    assert "Ambiguous bare 977" in (bad_res.json.get("error") or "")

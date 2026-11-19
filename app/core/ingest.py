@@ -896,11 +896,23 @@ class IngestService:
             if existing_issue is not None:
                 return existing_issue
 
-        # Guard against bare 977 collision when no issue specifier was provided at all
-        if is_977_periodical_barcode(str(ean or "")) and not full_barcode and not issue_number:
+        # Guard against bare 977 collision when no distinguishing issue attribute was provided at all
+        cover_headline = str(meta.get("cover_headline") or "").strip()
+        has_issue_specifier = any(
+            [
+                full_barcode,
+                ean_addon,
+                issue_number,
+                cum_issue is not None,
+                pub_year is not None,
+                pub_month is not None,
+                bool(cover_headline),
+            ]
+        )
+        if is_977_periodical_barcode(str(ean or "")) and not has_issue_specifier:
             existing_for_ean = db.session.execute(select(Manifestation.id).where(Manifestation.ean == str(ean))).scalars().first()
             if existing_for_ean is not None:
-                raise ValueError("Ambiguous bare 977 periodical barcode requires an EAN-2 add-on or issue number.")
+                raise ValueError("Ambiguous bare 977 periodical barcode requires an EAN-2 add-on, issue number, date, or headline.")
 
         # 5. Create new issue Manifestation
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")

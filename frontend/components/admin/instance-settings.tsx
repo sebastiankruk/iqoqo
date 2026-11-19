@@ -178,9 +178,18 @@ const API_SERVICE_GROUPS: SettingGroup[] = [
   {
     id: "ai_image",
     title: "AI & Cover Generation",
-    description: "Configure LLM providers and local image generation services.",
+    description: "Configure LLM providers, Ollama local vision, and local image generation services.",
     items: [
+      {
+        key: "ALLOW_LLM",
+        label: "Enable AI Vision & LLM Features",
+        type: "boolean",
+        placeholder: "",
+        description: "Required master gate for Gemini Vision, OpenAI, and Ollama Vision cover extraction.",
+      },
       { key: "OPENAI_API_KEY", label: "OpenAI API Key", type: "api", placeholder: "Enter OpenAI API key" },
+      { key: "OLLAMA_URL", label: "Ollama Base URL", type: "text", placeholder: "http://localhost:11434" },
+      { key: "OLLAMA_VISION_MODEL", label: "Ollama Vision Model", type: "text", placeholder: "llava" },
       { key: "LOCAL_SD_URL", label: "Local Stable Diffusion URL", type: "text", placeholder: "http://localhost:7860" },
     ],
   },
