@@ -49,8 +49,9 @@ test.describe("Jigsaw Puzzle Workflow", () => {
     // 1. Go to Scanner (already authenticated via mocks)
     await page.goto("/scan");
 
-    // 2. Select Puzzle Mode using accessible button
-    await page.getByRole("button", { name: "Puzzle", exact: true }).click();
+    // 2. Select Puzzle Mode using compact Format selector
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-puzzle").click();
 
     // 3. Mock Barcode API Response (Simulating a successful scan)
     await page.route("**/api/lookup/4005556199999*", async route => {
