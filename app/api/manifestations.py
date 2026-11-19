@@ -466,6 +466,16 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "isbn13": m.isbn13,
         "upc": m.upc,
         "ean": m.ean,
+        "ean_addon": m.ean_addon,
+        "full_barcode": m.full_barcode,
+        "issue_number": m.issue_number,
+        "cumulative_issue_number": m.cumulative_issue_number,
+        "volume": m.volume,
+        "publication_year": m.publication_year,
+        "publication_month": m.publication_month,
+        "issn": work.issn if work else None,
+        "eissn": work.eissn if work else None,
+        "work_kind": work.work_kind if work else None,
         "publisher": m.publisher,
         "format_type": m.format_type,
         "format": m.format_type or m.format,
@@ -739,6 +749,17 @@ def update_manifestation(isbn: str) -> tuple[Response, int]:
             isbn_val = metadata.pop("isbn13")
             if isbn_val:
                 manifestation.isbn13 = isbn_val.replace("-", "").replace(" ", "").strip()
+        for serial_col in (
+            "issue_number",
+            "cumulative_issue_number",
+            "volume",
+            "publication_year",
+            "publication_month",
+            "ean_addon",
+            "full_barcode",
+        ):
+            if serial_col in metadata:
+                setattr(manifestation, serial_col, metadata[serial_col])
 
         manifestation.update_meta(**metadata)
         if manifestation.expression and manifestation.expression.work:

@@ -311,6 +311,14 @@ class ManifestationUpdateSchema(BaseModel):
     format_type: str | None = Field(default=None, max_length=50)
     format: str | None = Field(default=None, max_length=50)
     isbn13: str | None = Field(default=None, max_length=20)
+    issue_number: str | None = Field(default=None, max_length=32)
+    cumulative_issue_number: int | None = Field(default=None, ge=1)
+    volume: str | None = Field(default=None, max_length=32)
+    publication_year: int | None = Field(default=None, ge=1400, le=2100)
+    publication_month: int | None = Field(default=None, ge=1, le=12)
+    ean_addon: str | None = Field(default=None, max_length=8)
+    full_barcode: str | None = Field(default=None, max_length=20)
+    cover_headline: str | None = Field(default=None, max_length=500)
 
 
 class ScanBarcodeSchema(BaseModel):

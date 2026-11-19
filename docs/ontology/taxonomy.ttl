@@ -253,6 +253,18 @@
 :FormatAliasAtlas a :FormatAlias ;
     rdfs:label "atlas" ;
     :resolvesToCategory :MediaCategoryText .
+:FormatAliasMagazine a :FormatAlias ;
+    rdfs:label "magazine" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasJournal a :FormatAlias ;
+    rdfs:label "journal" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasPeriodical a :FormatAlias ;
+    rdfs:label "periodical" ;
+    :resolvesToCategory :MediaCategoryText .
+:FormatAliasSerial a :FormatAlias ;
+    rdfs:label "serial" ;
+    :resolvesToCategory :MediaCategoryText .
 :FormatAliasAudio a :FormatAlias ;
     rdfs:label "audio" ;
     :resolvesToCategory :MediaCategoryMusic .

@@ -610,6 +610,14 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
+        item_data["ean"] = manifestation.ean
+        item_data["ean_addon"] = manifestation.ean_addon
+        item_data["full_barcode"] = manifestation.full_barcode
+        item_data["issue_number"] = manifestation.issue_number
+        item_data["cumulative_issue_number"] = manifestation.cumulative_issue_number
+        item_data["volume"] = manifestation.volume
+        item_data["publication_year"] = manifestation.publication_year
+        item_data["publication_month"] = manifestation.publication_month
         item_data["manifestation_meta"] = manifestation.meta
         item_data["display"] = build_display_projection(manifestation.meta, item.meta)
         item_data["publisher"] = manifestation.publisher
@@ -631,6 +639,9 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                 item_data["work"] = {
                     "id": work.id,
                     "title": work.title,
+                    "issn": work.issn,
+                    "eissn": work.eissn,
+                    "work_kind": work.work_kind,
                     "authors": work.meta.get("authors", []) if work.meta else [],
                     "meta": work.meta,
                     "container_work_id": container_work_id,

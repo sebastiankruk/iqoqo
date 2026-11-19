@@ -90,6 +90,7 @@ export const MEDIA_HIERARCHY = {
       {
         id: "magazine",
         label: "Magazine",
+        ui_aspect_ratio: 0.72,
       },
       {
         id: "ebook",
@@ -396,6 +397,9 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   lego: "lego",
   standard: "text",
   map: "text",
+  journal: "text",
+  periodical: "text",
+  serial: "text",
   audio: "music",
   sound: "music",
   lp: "music",

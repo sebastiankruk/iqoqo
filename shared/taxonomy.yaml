@@ -41,6 +41,7 @@ media_categories:
         label: "Comic Book (Single Issue)"
       - id: magazine
         label: "Magazine"
+        ui_aspect_ratio: 0.72
       - id: ebook
         label: "eBook"
       - id: cartographic_map
@@ -189,6 +190,10 @@ format_aliases:
   map: text
   cartographic_map: text
   atlas: text
+  magazine: text
+  journal: text
+  periodical: text
+  serial: text
   # music aliases
   audio: music
   sound: music

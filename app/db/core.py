@@ -200,6 +200,9 @@ class Work(db.Model):  # type: ignore[name-defined]
     #: ("The", "A", "An", and Polish "Ten"/"Ta"/"To").  Populated by the
     #: service layer; used for alphabetical ordering in catalog views.
     sort_title = db.Column(db.String(1000), nullable=True, index=True)
+    issn = db.Column(db.String(9), nullable=True, index=True)
+    eissn = db.Column(db.String(9), nullable=True, index=True)
+    work_kind = db.Column(db.String(32), nullable=True, index=True)
     meta = db.Column(db.JSON, default=dict)
     #: Verbatim external-provider payload (BGG/Discogs/TMDB/MusicBrainz/Allegro)
     #: captured at ingestion time.  Read-only audit trail for provenance and
@@ -429,6 +432,13 @@ class Manifestation(db.Model):  # type: ignore[name-defined]
     label = db.Column(db.String(500), nullable=True)
     barcode = db.Column(db.String(100), nullable=True, index=True)
     catalog_number = db.Column(db.String(100), nullable=True)
+    issue_number = db.Column(db.String(32), nullable=True)
+    cumulative_issue_number = db.Column(db.Integer, nullable=True)
+    volume = db.Column(db.String(32), nullable=True)
+    publication_year = db.Column(db.Integer, nullable=True, index=True)
+    publication_month = db.Column(db.Integer, nullable=True)
+    ean_addon = db.Column(db.String(8), nullable=True)
+    full_barcode = db.Column(db.String(20), nullable=True, index=True)
     meta = db.Column(db.JSON, default=dict)
     #: Verbatim external-provider payload captured at ingestion time.
     raw_payload = db.Column(db.JSON, nullable=True)
