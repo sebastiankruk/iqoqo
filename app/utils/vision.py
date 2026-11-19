@@ -161,15 +161,15 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
         if result:
             return result
     except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as e:
-        logger.debug("Waterfall: Gemini failed, trying Ollama... (%s)", e)
+        logger.warning("Waterfall: Gemini failed, trying Ollama... (%s)", e)
 
     # 2. Try Ollama Fallback
     try:
         result = _extract_via_ollama(image_bytes)
         if result:
             return result
-    except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError) as e:
-        logger.debug("Waterfall: Ollama failed, trying Tesseract... (%s)", e)
+    except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError, requests.exceptions.RequestException) as e:
+        logger.warning("Waterfall: Ollama failed, trying Tesseract... (%s)", e)
 
     # 3. Try Tesseract OCR Fallback
     try:
@@ -191,13 +191,15 @@ def _call_gemini_api(client, model, contents):
     return client.models.generate_content(model=model, contents=contents)
 
 
-def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None = None) -> dict | None:
+def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | uuid.UUID | None = None) -> dict | None:
     can_use_cloud_llm = False
+    user_id_str = str(user_id) if user_id else None
     if user_id:
         user = None
         try:
-            user = db.session.get(User, uuid.UUID(user_id))
-        except ValueError:
+            user_uuid = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(str(user_id))
+            user = db.session.get(User, user_uuid)
+        except (ValueError, TypeError, AttributeError):
             logger.debug("vision._extract_via_gemini: invalid user_id format %r, skipping permission check.", user_id)
 
         if user:
@@ -214,9 +216,14 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
     from app.utils.llm_covers import record_telemetry
 
+    api_error_cls: type[BaseException] = RuntimeError
     try:
         from google import genai  # type: ignore[import-untyped]
         from google.genai import types  # type: ignore[import-untyped]
+
+        maybe_api_err = getattr(getattr(genai, "errors", None), "APIError", None)
+        if isinstance(maybe_api_err, type) and issubclass(maybe_api_err, BaseException):
+            api_error_cls = maybe_api_err
 
         normalized_bytes, normalized_mime = _normalize_cover_image_bytes(image_bytes)
         effective_mime = normalized_mime if normalized_bytes is not image_bytes else mime_type
@@ -235,14 +242,16 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
         if result:
             result = _enrich_llm_serial_result(result, image_bytes)
-        if result and user_id:
+        if result and user_id_str:
             duration = time.time() - start_time
-            record_telemetry("gemini", user_id, duration, operation_type="metadata_extraction")
+            record_telemetry("gemini", user_id_str, duration, operation_type="metadata_extraction")
 
         return result
 
     except (ImportError, AttributeError) as e:
         logger.error("google-genai package is not installed or API surface changed: %s", e)
+    except api_error_cls as e:
+        logger.warning("Gemini API rejected cover extraction request (%s); falling back.", e)
     except (ValueError, KeyError, TypeError, OSError, RuntimeError, ConnectionError) as e:
         logger.error("Gemini vision extraction failed: %s", e)
 
@@ -250,19 +259,19 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(requests.exceptions.RequestException),
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=1, max=3),
+    retry=retry_if_exception_type(requests.exceptions.ConnectionError),
     reraise=True,
 )
-def _call_ollama_api(url, payload):
+def _call_ollama_api(url, payload, timeout: int | None = None):
     # Vision inference on a local model is slower than its text counterpart: the
     # same model needed 45.7s cold and 9.1s warm on a real pairing run, so a 30s
     # ceiling cuts off a cold start that would otherwise succeed. Overridable
     # because the right value depends on the host, and an OCI Free Tier ARM box
     # is slower still -- a hardcoded number here is wrong for somebody.
-    timeout = int(os.environ.get("OLLAMA_VISION_TIMEOUT", "90"))
-    response = requests.post(f"{url}/api/generate", json=payload, timeout=timeout)
+    effective_timeout = timeout if timeout is not None else int(os.environ.get("OLLAMA_VISION_TIMEOUT", "90"))
+    response = requests.post(f"{url}/api/generate", json=payload, timeout=effective_timeout)
     response.raise_for_status()
     return response
 
@@ -274,13 +283,25 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
 
     url = _resolve_ollama_base_url()
     model = str(ConfigService.get("OLLAMA_VISION_MODEL") or "llava").strip()
+    raw_timeout = ConfigService.get("OLLAMA_VISION_TIMEOUT") or os.environ.get("OLLAMA_VISION_TIMEOUT")
+    try:
+        fast_timeout = int(raw_timeout) if raw_timeout not in (None, "") else 25
+    except (ValueError, TypeError):
+        fast_timeout = 25
 
     try:
-        normalized_bytes, _ = _normalize_cover_image_bytes(image_bytes)
+        normalized_bytes, _ = _normalize_cover_image_bytes(image_bytes, max_dim=768)
         b64_image = base64.b64encode(normalized_bytes).decode("utf-8")
-        payload = {"model": model, "prompt": PROMPT, "images": [b64_image], "stream": False, "format": "json"}
+        payload = {
+            "model": model,
+            "prompt": PROMPT,
+            "images": [b64_image],
+            "stream": False,
+            "format": "json",
+            "options": {"num_predict": 220, "temperature": 0.1},
+        }
 
-        response = _call_ollama_api(url, payload)
+        response = _call_ollama_api(url, payload, timeout=fast_timeout)
 
         data = response.json()
         raw = data.get("response", "").strip()

@@ -1083,7 +1083,13 @@ def extract_from_cover():
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=getattr(g, "user_id", None))
+    raw_user_id = getattr(g, "user_id", None)
+    task_id = submit_task(
+        extract_metadata_from_cover,
+        image_bytes,
+        mime_type=mime_type,
+        user_id=str(raw_user_id) if raw_user_id else None,
+    )
 
     if task_id is None:
         return jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}), 503

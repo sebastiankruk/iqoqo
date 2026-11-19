@@ -483,3 +483,43 @@ def test_get_llm_vision_status_reports_providers_and_ollama_models(app, monkeypa
     assert status["ollama"]["vision_model_installed"] is True
     assert status["ollama"]["dedupe_model_installed"] is True
     assert status["vision_ready"] is True
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
+@patch("google.genai.Client", create=True)
+def test_extract_gemini_accepts_uuid_object_user_id(mock_client_class, mock_record, mock_session):
+    """Gemini extraction must accept uuid.UUID user_id objects from g.user_id without crashing."""
+    import uuid
+
+    uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.text = '{"Title": "Dune", "Authors": ["Frank Herbert"]}'
+    mock_client.models.generate_content.return_value = mock_response
+
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id=uid)
+    assert result is not None
+    assert result["Title"] == "Dune"
+    mock_session.get.assert_called_once()
+    mock_record.assert_called_once()
+    assert isinstance(mock_record.call_args.args[1], str)
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision._extract_via_gemini", return_value=None)
+@patch("app.utils.vision._extract_via_tesseract", return_value={"Title": "Fallback", "Authors": []})
+@patch("requests.post", side_effect=requests.exceptions.ReadTimeout("slow llava"))
+def test_ollama_read_timeout_does_not_retry_and_falls_back_immediately(mock_post, mock_tess, _mock_gem):
+    """ReadTimeout on Ollama must not retry 3x and must fall straight back to Tesseract."""
+    result = extract_metadata_from_cover(b"test image")
+    assert result == {"Title": "Fallback", "Authors": []}
+    assert mock_post.call_count == 1
+    mock_tess.assert_called_once()
