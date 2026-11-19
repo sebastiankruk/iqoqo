@@ -174,4 +174,39 @@ describe("FreshArrivals", () => {
     render(<FreshArrivals />);
     expect(screen.getByRole("region", { name: /recently added items/i })).toBeInTheDocument();
   });
+
+  it("renders edition info instead of Unknown for serial entries and omits Unknown when empty", () => {
+    mockUseRecentManifestations.mockReturnValue({
+      data: [
+        {
+          id: 10,
+          expression_id: 10,
+          title: "National Geographic Polska",
+          authors: ["Unknown"],
+          issue_number: "11",
+          cumulative_issue_number: 50,
+          publication_year: 2003,
+          publication_month: 11,
+          meta: {},
+          user_owns: false,
+        },
+        {
+          id: 11,
+          expression_id: 11,
+          title: "Mystery Booklet",
+          authors: [],
+          meta: {},
+          user_owns: false,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useRecentManifestations>);
+
+    render(<FreshArrivals />);
+
+    expect(screen.getByText("#11 (50) · 11/2003")).toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+    expect(screen.queryByText("unknown")).not.toBeInTheDocument();
+  });
 });

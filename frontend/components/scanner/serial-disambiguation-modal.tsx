@@ -15,10 +15,11 @@
 //
 "use client";
 
-import { BookOpen, Plus, X } from "lucide-react";
+import { BookOpen, Camera, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CameraCapture, type ExtractedMetadata } from "@/components/scanner/camera-capture";
 import type { IsbnMeta } from "@/types/frbr";
 
 type ExistingSerialIssue = NonNullable<IsbnMeta["existing_issues"]>[number];
@@ -27,6 +28,7 @@ interface SerialDisambiguationModalProps {
   disambiguation: IsbnMeta;
   onSelectIssue: (issue: ExistingSerialIssue) => void;
   onAddNewIssue: () => void;
+  onSnapCoverAutoFill?: (extracted: ExtractedMetadata, file: File) => void;
   onDismiss: () => void;
 }
 
@@ -39,6 +41,7 @@ export function SerialDisambiguationModal({
   disambiguation,
   onSelectIssue,
   onAddNewIssue,
+  onSnapCoverAutoFill,
   onDismiss,
 }: SerialDisambiguationModalProps) {
   const t = useTranslations("scanner");
@@ -124,7 +127,20 @@ export function SerialDisambiguationModal({
           )}
         </div>
 
-        <div className="flex justify-end pt-2 border-t border-border">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-border">
+          {onSnapCoverAutoFill && (
+            <div data-testid="snap-cover-serial-autofill">
+              <CameraCapture
+                mode="vision"
+                format="magazine"
+                inline
+                variant="outline"
+                icon={<Camera className="mr-2 h-4 w-4" />}
+                label={t("serialDisambiguation.snapCoverAutoFill")}
+                onExtractComplete={(data, file) => onSnapCoverAutoFill(data, file)}
+              />
+            </div>
+          )}
           <Button type="button" onClick={onAddNewIssue} data-testid="add-new-serial-issue-button" className="gap-1.5">
             <Plus className="h-4 w-4" />
             <span>{t("serialDisambiguation.addNewIssue")}</span>

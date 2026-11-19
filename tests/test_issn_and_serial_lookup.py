@@ -147,3 +147,77 @@ def test_serial_lookup_strategy_waterfall_and_factory(monkeypatch):
     failed_meta, failed_provider = strategy.lookup("977150759604407")
     assert failed_meta is None
     assert failed_provider is None
+
+
+def test_bn_lookup_uses_isbn_issn_param_verifies_marc_022_and_extracts_marc_245(monkeypatch):
+    """BN lookup queries isbnIssn + kind=czasopismo, rejects 022$y spin-offs/books, and cleans MARC 245."""
+    captured_params = {}
+    bn_resp = MagicMock()
+    bn_resp.status_code = 200
+    bn_resp.json.return_value = {
+        "bibs": [
+            {
+                "title": "Matka Teresa : miłość w czynach /",
+                "isbnIssn": "8871351460",
+                "kind": "książka",
+                "publisher": "Wydawnictwo Velar",
+            },
+            {
+                "title": "National Geographic Traveler /",
+                "isbnIssn": "2545-3521",
+                "kind": "czasopismo",
+                "marc": {
+                    "fields": [
+                        {"022": {"subfields": [{"a": "2545-3521"}, {"y": "1507-5966"}]}},
+                        {"245": {"subfields": [{"a": "National Geographic Traveler"}]}},
+                    ]
+                },
+            },
+            {
+                "title": "Natl. Geogr. (Wyd. pol.) National Geographic. Polska /",
+                "isbnIssn": "1507-5966",
+                "kind": "czasopismo",
+                "language": "pol",
+                "marc": {
+                    "fields": [
+                        {"022": {"subfields": [{"a": "1507-5966"}]}},
+                        {"245": {"subfields": [{"a": "National Geographic."}, {"p": "Polska /"}]}},
+                        {"260": {"subfields": [{"b": "Wydawnictwo G+J RBA,"}]}},
+                    ]
+                },
+            },
+        ]
+    }
+
+    def fake_safe_get(_url, params=None, **_kwargs):
+        captured_params.update(params or {})
+        return bn_resp
+
+    monkeypatch.setattr("app.strategies.serials.safe_get", fake_safe_get)
+    meta, provider = SerialLookupStrategy().lookup("9771507596044")
+    assert provider == "biblioteka_narodowa"
+    assert captured_params.get("isbnIssn") == "1507-5966"
+    assert captured_params.get("kind") == "czasopismo"
+    assert meta is not None
+    assert meta["title"] == "National Geographic Polska"
+    assert meta["publisher"] == "Wydawnictwo G+J RBA"
+
+
+@pytest.mark.parametrize(
+    "ocr_text,exp_issn,exp_issue,exp_cum,exp_month,exp_year,exp_addon",
+    [
+        ("Cena 14,95 zt ne 11(50) LISTOPAD 2003 9 771507 596037 11>", "1507-5966", "11", 50, 11, 2003, "11"),
+        ("Cena 9,90 7% vat) RMo12(63) GRUDZIEN 2004 9 771507 596044 12>", "1507-5966", "12", 63, 12, 2004, "12"),
+        ("Jak zmieni sie klimat? RMo12(63) GRUDZIEN 2004 ISSN 1507-5966", "1507-5966", "12", 63, 12, 2004, None),
+        ("ISSN 1507-5966 INDEKS 323357 07>", "1507-5966", "7", None, None, None, "07"),
+    ],
+)
+def test_parse_cover_issue_label_handles_garbled_ocr_and_977_addon(ocr_text, exp_issn, exp_issue, exp_cum, exp_month, exp_year, exp_addon):
+    """OCR-garbled NR prefixes, spaced 977 EANs, and 07>/11>/12> add-ons are recovered."""
+    parsed = parse_cover_issue_label(ocr_text)
+    assert parsed.get("issn") == exp_issn
+    assert parsed.get("issue_number") == exp_issue
+    assert parsed.get("cumulative_issue_number") == exp_cum
+    assert parsed.get("publication_month") == exp_month
+    assert parsed.get("publication_year") == exp_year
+    assert parsed.get("ean_addon") == exp_addon

@@ -115,9 +115,9 @@ describe("ItemCard", () => {
     expect(screen.getAllByText("Untitled").length).toBeGreaterThan(0);
   });
 
-  it("falls back to 'Unknown author' when authors is missing", () => {
+  it("omits 'Unknown author' when authors is missing", () => {
     renderWithQuery(<ItemCard item={makeItem({ authors: undefined })} />);
-    expect(screen.getAllByText("Unknown author").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Unknown author")).not.toBeInTheDocument();
   });
 
   it("links to the item detail page", () => {

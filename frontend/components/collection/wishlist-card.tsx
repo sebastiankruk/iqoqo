@@ -120,7 +120,9 @@ export function WishlistCard({ item, variant = "grid" }: WishlistCardProps) {
     getCoverUrl(item.manifestation_meta?.["cover_url"] as string | undefined, timestamp) ||
     item.cover_url ||
     (item.manifestation_meta?.["cover_url"] as string | undefined);
-  const authors = item.authors || [];
+  const authors = (item.authors || []).filter(
+    a => typeof a === "string" && !["unknown", "n/a", "none", ""].includes(a.trim().toLowerCase())
+  );
   const targetHref = item.manifestation_id
     ? `/manifestation/${item.manifestation_id}`
     : item.work_id

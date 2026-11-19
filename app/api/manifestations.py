@@ -40,7 +40,7 @@ from app.core.tasks import enqueue_fts_reindex
 from app.db.models import EntityAuditLog, Expression, ImageScan, Item, Manifestation, User, Work, db
 from app.utils.covers import RAW_DIR, process_fast_cover, start_cover_processing
 from app.utils.http_client import is_safe_url
-from app.utils.images import save_upload_image, validate_upload_file
+from app.utils.images import optimize_and_save_image, save_upload_image, validate_upload_file
 from app.utils.pagination import (
     CURSOR_START,
     InvalidCursorError,
@@ -55,18 +55,28 @@ MAX_CURSOR_PAGE_SIZE = 100
 logger = logging.getLogger(__name__)
 
 
+def _filter_real_authors(raw: Any) -> list[str]:
+    """Normalize author candidates and drop empty or placeholder values like 'Unknown'."""
+    return [a for a in normalize_authors_list(raw) if a.strip().lower() not in {"unknown", "n/a", "none", ""}]
+
+
 def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
     """Resolve author list for a manifestation with graceful fallbacks across FRBR hierarchy."""
     if m.expression and m.expression.work:
         work = m.expression.work
         if work.meta:
-            authors = normalize_authors_list(work.meta.get("authors"))
+            authors = _filter_real_authors(work.meta.get("authors"))
             if authors:
                 return authors
 
         # Fallback to relational contributions if work.meta['authors'] is empty
         relational_authors = [
-            c.contributor.name for c in getattr(work, "contributions", []) if c.contributor and c.role == "author" and c.contributor.name
+            c.contributor.name
+            for c in getattr(work, "contributions", [])
+            if c.contributor
+            and c.role == "author"
+            and c.contributor.name
+            and c.contributor.name.strip().lower() not in {"unknown", "n/a", "none"}
         ]
         if relational_authors:
             return relational_authors
@@ -75,18 +85,21 @@ def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
         creative_contributors = [
             c.contributor.name
             for c in getattr(work, "contributions", [])
-            if c.contributor and c.role in ("director", "designer", "artist", "composer", "creator") and c.contributor.name
+            if c.contributor
+            and c.role in ("director", "designer", "artist", "composer", "creator")
+            and c.contributor.name
+            and c.contributor.name.strip().lower() not in {"unknown", "n/a", "none"}
         ]
         if creative_contributors:
             return creative_contributors
 
     if m.meta:
-        m_authors = normalize_authors_list(m.meta.get("authors") or m.meta.get("author") or m.meta.get("Artist"))
+        m_authors = _filter_real_authors(m.meta.get("authors") or m.meta.get("author") or m.meta.get("Artist"))
         if m_authors:
             return m_authors
 
     author_prop = getattr(m, "author", None)
-    if author_prop:
+    if author_prop and str(author_prop).strip().lower() not in {"unknown", "n/a", "none", ""}:
         return [author_prop]
 
     if m.raw_payload and isinstance(m.raw_payload, dict) and "parameters" in m.raw_payload:
@@ -94,7 +107,7 @@ def _resolve_manifestation_display_author(m: Manifestation) -> list[str]:
 
         ext = _extract_allegro_parameters(m.raw_payload.get("parameters", []))
         if ext.get("authors"):
-            return normalize_authors_list(ext["authors"])
+            return _filter_real_authors(ext["authors"])
 
     return []
 
@@ -275,7 +288,11 @@ def get_manifestations() -> tuple[Response, int]:
             user_owns = m.id in owned_manifestation_map
             item_id = owned_manifestation_map.get(m.id)
 
-        resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
+        resolved_year = (
+            m.publication_year
+            or (m.publication_date.year if getattr(m, "publication_date", None) else None)
+            or ((m.meta.get("Year") or m.meta.get("year")) if m.meta else None)
+        )
 
         data.append(
             {
@@ -288,7 +305,19 @@ def get_manifestations() -> tuple[Response, int]:
                     else None
                 ),
                 "isbn13": m.isbn13,
-                "publisher": m.publisher,
+                "ean": m.ean,
+                "ean_addon": m.ean_addon,
+                "full_barcode": m.full_barcode,
+                "issue_number": m.issue_number,
+                "cumulative_issue_number": m.cumulative_issue_number,
+                "volume": m.volume,
+                "publication_year": m.publication_year,
+                "publication_month": m.publication_month,
+                "issn": m.expression.work.issn if (m.expression and m.expression.work) else None,
+                "work_kind": m.expression.work.work_kind if (m.expression and m.expression.work) else None,
+                "publisher": m.publisher
+                or ((m.meta.get("publisher") or m.meta.get("Publisher")) if m.meta else None)
+                or (m.expression.work.meta.get("publisher") if (m.expression and m.expression.work and m.expression.work.meta) else None),
                 "format_type": m.format_type,
                 "format": m.format_type or m.format,
                 "year": resolved_year,
@@ -416,7 +445,11 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
     ).scalar()
     average_reading_minutes = round(float(avg_reading_raw), 1) if avg_reading_raw is not None else None
 
-    resolved_year = m.publication_date.year if getattr(m, "publication_date", None) else (m.meta.get("Year") if m.meta else None)
+    resolved_year = (
+        m.publication_year
+        or (m.publication_date.year if getattr(m, "publication_date", None) else None)
+        or ((m.meta.get("Year") or m.meta.get("year")) if m.meta else None)
+    )
 
     # FRBRoo event contributions (creators / performers / publishers) +
     # expression kind so the UI can badge live performances distinctly.
@@ -476,7 +509,10 @@ def get_manifestation_detail(manifestation_id: int) -> tuple[Response, int]:
         "issn": work.issn if work else None,
         "eissn": work.eissn if work else None,
         "work_kind": work.work_kind if work else None,
-        "publisher": m.publisher,
+        "publisher": m.publisher
+        or ((m.meta.get("publisher") or m.meta.get("Publisher")) if m.meta else None)
+        or (work.meta.get("publisher") if (work and work.meta) else None),
+        "publication_date": m.publication_date.isoformat() if getattr(m, "publication_date", None) else None,
         "format_type": m.format_type,
         "format": m.format_type or m.format,
         "year": resolved_year,
@@ -535,9 +571,18 @@ def get_recent_manifestations() -> tuple[Response, int]:
         for m in recent:
             work = m.expression.work if (m.expression and m.expression.work) else None
             title = work.title if work else (m.meta.get("Title") if m.meta else None)
-            raw_authors = work.meta.get("authors") if (work and work.meta) else (m.meta.get("Authors") if m.meta else None)
-            authors: list[str] = normalize_authors_list(raw_authors)
+            authors = _resolve_manifestation_display_author(m)
             author = authors[0] if authors else None
+            resolved_year = (
+                m.publication_year
+                or (m.publication_date.year if getattr(m, "publication_date", None) else None)
+                or ((m.meta.get("Year") or m.meta.get("year")) if m.meta else None)
+            )
+            publisher = (
+                m.publisher
+                or ((m.meta.get("publisher") or m.meta.get("Publisher")) if m.meta else None)
+                or (work.meta.get("publisher") if (work and work.meta) else None)
+            )
 
             result.append(
                 {
@@ -548,6 +593,16 @@ def get_recent_manifestations() -> tuple[Response, int]:
                     "meta": m.meta,
                     "author": author,
                     "authors": authors,
+                    "publisher": publisher,
+                    "format": m.format_type or m.format,
+                    "year": resolved_year,
+                    "issn": work.issn if work else None,
+                    "work_kind": work.work_kind if work else None,
+                    "issue_number": m.issue_number,
+                    "cumulative_issue_number": m.cumulative_issue_number,
+                    "volume": m.volume,
+                    "publication_year": m.publication_year,
+                    "publication_month": m.publication_month,
                 }
             )
 
@@ -869,8 +924,13 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     identifier = manifestation.isbn13 or manifestation.ean or manifestation.upc or f"item_{manifestation_id}"
 
     filename = secure_filename(f"{identifier}_raw.jpg")
+    os.makedirs(RAW_DIR, exist_ok=True)
     filepath = os.path.join(RAW_DIR, filename)
-    file.save(filepath)
+    file.seek(0)
+    try:
+        optimize_and_save_image(file.read(), filepath)
+    except (OSError, ValueError):
+        return jsonify({"error": "Invalid or corrupted image file"}), 400
 
     manifestation.update_meta(cover_status="processing")
     db.session.commit()

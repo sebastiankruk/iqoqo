@@ -23,10 +23,13 @@ from typing import Any
 
 _ISSN_RE = re.compile(r"\b(?:ISSN\s*:?\s*)?(\d{4})[-\s]?(\d{3}[\dXx])\b", re.IGNORECASE)
 _INDEKS_RE = re.compile(r"\bINDEKS\s*(?:NR\.?\s*)?:?\s*(\d{5,8})\b", re.IGNORECASE)
-_ISSUE_WITH_CUM_RE = re.compile(r"\b(?:NR|NO\.?|ISSUE|ISS\.?|#)\s*(\d+(?:[-/]\d+)?)\s*\(\s*(\d+)\s*\)", re.IGNORECASE)
+_ISSUE_WITH_CUM_RE = re.compile(r"\b(?:NR|NO\.?|ISSUE|ISS\.?|#)\s*\.?\s*(\d+(?:[-/]\d+)?)\s*\(\s*(\d+)\s*\)", re.IGNORECASE)
+_LOOSE_ISSUE_WITH_CUM_RE = re.compile(r"(?<!\d)(\d{1,3}(?:[-/]\d{1,3})?)\s*\(\s*(\d{1,4})\s*\)")
 _ISSUE_PLAIN_RE = re.compile(r"\b(?:NR|NO\.?|ISSUE|ISS\.?)\s*\.?\s*(\d+(?:[-/]\d+)?)\b", re.IGNORECASE)
 _SLASH_YEAR_RE = re.compile(r"\b(\d{1,3})\s*/\s*((?:19|20)\d{2})\b")
 _YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
+_EAN977_OCR_RE = re.compile(r"9[^\d\n]{0,3}77(?:[^\d\n]{0,3}\d){10}")
+_EAN_ADDON_MARKER_RE = re.compile(r"(?<!\d)(0[1-9]|[1-9]\d)\s*>")
 
 _MONTH_NAMES: dict[str, int] = {
     # Polish (nominative + genitive + common abbreviations, ASCII-folded)
@@ -52,7 +55,7 @@ _MONTH_NAMES: dict[str, int] = {
     "lip": 7,
     "sierpien": 8,
     "sierpnia": 8,
-    "sie": 8,
+    "sierp": 8,
     "wrzesien": 9,
     "wrzesnia": 9,
     "wrz": 9,
@@ -212,11 +215,24 @@ def parse_cover_issue_label(text: str | None) -> dict[str, Any]:
             result["issn"] = cand
             break
 
+    for ean_match in _EAN977_OCR_RE.finditer(text):
+        digits = re.sub(r"\D", "", ean_match.group(0))
+        if len(digits) == 13:
+            parsed_ean = parse_issn_or_977(digits)
+            if parsed_ean:
+                result.setdefault("issn", parsed_ean["issn"])
+                result.setdefault("ean", parsed_ean["ean"])
+                break
+
+    addon_match = _EAN_ADDON_MARKER_RE.search(text)
+    if addon_match:
+        result["ean_addon"] = addon_match.group(1)
+
     indeks_match = _INDEKS_RE.search(text)
     if indeks_match:
         result["indeks"] = indeks_match.group(1)
 
-    cum_match = _ISSUE_WITH_CUM_RE.search(text)
+    cum_match = _ISSUE_WITH_CUM_RE.search(text) or _LOOSE_ISSUE_WITH_CUM_RE.search(text)
     if cum_match:
         result["issue_number"] = cum_match.group(1)
         result["cumulative_issue_number"] = int(cum_match.group(2))
@@ -229,13 +245,21 @@ def parse_cover_issue_label(text: str | None) -> dict[str, Any]:
             if slash_match:
                 result["issue_number"] = slash_match.group(1)
                 result["publication_year"] = int(slash_match.group(2))
+            elif "ean_addon" in result and 1 <= int(result["ean_addon"]) <= 12:
+                result["issue_number"] = str(int(result["ean_addon"]))
 
     folded_lower = _strip_accents(text).lower()
     tokens = re.findall(r"[a-z]+", folded_lower)
+    full_month_keys = {k for k in _MONTH_NAMES if len(k) >= 4 or k in ("maj", "may")}
     for token in tokens:
-        if token in _MONTH_NAMES:
+        if token in full_month_keys:
             result["publication_month"] = _MONTH_NAMES[token]
             break
+    if "publication_month" not in result:
+        for token in tokens:
+            if token in _MONTH_NAMES:
+                result["publication_month"] = _MONTH_NAMES[token]
+                break
 
     if "publication_year" not in result:
         year_match = _YEAR_RE.search(text)

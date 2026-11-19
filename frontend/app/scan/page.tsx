@@ -31,6 +31,7 @@ import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
 import { useAddManualItem, queryKeys, useAppConfig } from "@/lib/api/hooks";
+import { COVER_JPEG_QUALITY, COVER_MAX_DIMENSION, resizeImageFile } from "@/lib/image-resize";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Search, Loader2, Radio, Library, BookmarkCheck } from "lucide-react";
@@ -345,6 +346,8 @@ export default function ScanPage() {
         Authors?: string[];
         Publisher?: string;
         issn?: string;
+        indeks?: string;
+        ean_addon?: string;
         issue_number?: string;
         cumulative_issue_number?: number;
         publication_month?: number;
@@ -355,14 +358,17 @@ export default function ScanPage() {
     ) => {
       setTitle(data.Title || "");
       setAuthor(data.Authors?.join(", ") || "");
-      if (
+      const hasSerialFields = Boolean(
         data.issn ||
+        data.indeks ||
+        data.ean_addon ||
         data.issue_number ||
         data.cumulative_issue_number != null ||
         data.cover_headline ||
         activeFormat === "magazine"
-      ) {
-        if (data.issn) {
+      );
+      if (hasSerialFields) {
+        if (data.issn || data.indeks || data.ean_addon || data.issue_number || data.cumulative_issue_number != null) {
           setActiveFormat("magazine");
         }
         setSerialDefaults(prev => ({
@@ -374,6 +380,7 @@ export default function ScanPage() {
             data.cumulative_issue_number != null ? String(data.cumulative_issue_number) : prev.cumulativeIssueNumber,
           publicationMonth: data.publication_month != null ? String(data.publication_month) : prev.publicationMonth,
           year: data.publication_year != null ? String(data.publication_year) : prev.year,
+          eanAddon: data.ean_addon || prev.eanAddon,
           coverHeadline: data.cover_headline || prev.coverHeadline,
         }));
       }
@@ -403,19 +410,22 @@ export default function ScanPage() {
       ? data.authors
           .split(",")
           .map(a => a.trim())
-          .filter(Boolean)
-      : ["Unknown"];
+          .filter(a => Boolean(a) && !["unknown", "n/a", "none"].includes(a.toLowerCase()))
+      : [];
 
     let explicitDate = data.year || undefined;
     if (explicitDate && /^\d{4}$/.test(explicitDate)) {
-      explicitDate = `${explicitDate}-01-01`;
+      const monthNum = Number(data.publicationMonth);
+      const paddedMonth =
+        Number.isInteger(monthNum) && monthNum >= 1 && monthNum <= 12 ? String(monthNum).padStart(2, "0") : "01";
+      explicitDate = `${explicitDate}-${paddedMonth}-01`;
     }
 
     const apiFormat = mapFormatToApi(data.format);
 
     const payload = {
       Title: data.title || "Unknown",
-      Authors: authors.length > 0 ? authors : ["Unknown"],
+      Authors: authors,
       Format: apiFormat,
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
@@ -449,8 +459,12 @@ export default function ScanPage() {
         const coverToUpload = data.coverFile || snappedCover;
 
         if (item && coverToUpload && item.manifestation_id) {
+          const resizedCover = await resizeImageFile(coverToUpload, {
+            maxDimension: COVER_MAX_DIMENSION,
+            quality: COVER_JPEG_QUALITY,
+          });
           const coverFormData = new FormData();
-          coverFormData.append("cover", coverToUpload);
+          coverFormData.append("cover", resizedCover);
           const isSnapped = coverToUpload === snappedCover;
           coverFormData.append("source", isSnapped ? "scanner_camera" : "user_upload");
           try {
@@ -697,6 +711,28 @@ export default function ScanPage() {
               });
               setSerialDisambiguation(null);
               setShowManual(true);
+            }}
+            onSnapCoverAutoFill={(extracted, file) => {
+              const prefill = serialDisambiguation.prefill;
+              setActiveFormat("magazine");
+              setTitle(prefill?.title || serialDisambiguation.title || extracted.Title || "");
+              setAuthor("");
+              setInitialIdentifier(prefill?.ean || serialDisambiguation.ean || serialDisambiguation.issn || "");
+              setSerialDefaults({
+                publisher: prefill?.publisher || serialDisambiguation.publisher || extracted.Publisher || "",
+                issn: prefill?.issn || serialDisambiguation.issn || extracted.issn || "",
+                issueNumber: extracted.issue_number || "",
+                cumulativeIssueNumber:
+                  extracted.cumulative_issue_number != null ? String(extracted.cumulative_issue_number) : "",
+                publicationMonth: extracted.publication_month != null ? String(extracted.publication_month) : "",
+                year: extracted.publication_year != null ? String(extracted.publication_year) : "",
+                eanAddon: extracted.ean_addon || "",
+                coverHeadline: extracted.cover_headline || "",
+              });
+              setSnappedCover(file);
+              setSerialDisambiguation(null);
+              setShowManual(true);
+              toast.success("Issue details extracted from cover! Please review.");
             }}
             onDismiss={() => setSerialDisambiguation(null)}
           />
