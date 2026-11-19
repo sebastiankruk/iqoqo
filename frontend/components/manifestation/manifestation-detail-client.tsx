@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { BookmarkCheck, BookOpen, Disc, HeartOff, ImagePlus, Loader2 } from "lucide-react";
+import { BookmarkCheck, BookOpen, Disc, GitBranch, HeartOff, ImagePlus, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
@@ -280,6 +280,18 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                   status={manifestation.work_reading_status}
                   viaOtherEdition={Boolean(manifestation.completed_via_other_edition)}
                 />
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  data-testid="explore-graph-link"
+                  className="gap-1.5 ml-auto"
+                >
+                  <Link href={`/graph?type=manifestation&id=${manifestation.id}`}>
+                    <GitBranch className="h-4 w-4" />
+                    <span>Explore Graph</span>
+                  </Link>
+                </Button>
               </div>
               <h1
                 className="font-serif text-3xl md:text-4xl font-bold text-foreground"

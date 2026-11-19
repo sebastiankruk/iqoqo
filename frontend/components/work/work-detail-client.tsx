@@ -26,6 +26,7 @@ import {
   Disc,
   Film,
   Gamepad2,
+  GitBranch,
   Layers,
   Loader2,
   Music,
@@ -258,6 +259,12 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
                         </Link>
                       </Button>
                     )}
+                    <Button asChild size="sm" variant="outline" data-testid="explore-graph-link" className="gap-1.5">
+                      <Link href={`/graph?type=work&id=${work.id}`}>
+                        <GitBranch className="h-4 w-4" />
+                        <span>Explore Graph</span>
+                      </Link>
+                    </Button>
                     {profile && (
                       <Button
                         type="button"

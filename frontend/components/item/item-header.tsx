@@ -23,7 +23,7 @@ import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, ChevronRight } from "lucide-react";
+import { Disc, BookOpen, Calendar, ChevronRight, GitBranch } from "lucide-react";
 import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
@@ -188,6 +188,16 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {badge.isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
             {badgeLabel}
           </Badge>
+          {item.id && (
+            <Link
+              href={`/graph?type=item&id=${item.id}`}
+              data-testid="explore-graph-link"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <GitBranch className="h-3.5 w-3.5 text-primary" />
+              <span>Explore Graph</span>
+            </Link>
+          )}
         </div>
 
         {/* Tags */}

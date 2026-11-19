@@ -1188,5 +1188,45 @@
     "noNamedFolders": "No named folders yet. Create one below.",
     "addedToCollection": "Added to your collection!",
     "addToCollectionFailed": "Failed to add to collection"
+  },
+  "graph": {
+    "exploreGraph": "Explore Graph",
+    "title": "FRBR Relation Graph",
+    "subtitle": "Interactive neighborhood across Works, Expressions, Manifestations, Items, Series, Maps, and LOD",
+    "depthLabel": "Depth",
+    "hop1": "1 hop",
+    "hop2": "2 hops",
+    "searchPlaceholder": "Highlight nodes...",
+    "resetView": "Reset View",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "truncatedBanner": "Graph truncated to {max} nodes — select a node and click Recenter to explore further.",
+    "recenter": "Recenter Graph on This Node",
+    "openEntity": "Open Entity Page",
+    "openExternal": "Open External Authority",
+    "connections": "Connections",
+    "anchorBadge": "Anchor",
+    "selectPrompt": "Click any node to inspect details, recenter, or open its page.",
+    "missingParamsTitle": "Select an Entity to Explore",
+    "missingParamsDescription": "Open this view via Explore Graph on any Work, Expression, Manifestation, or Item page.",
+    "backToCollection": "Back to Collection",
+    "loadError": "Could not load relation graph for this entity.",
+    "categories": {
+      "frbr": "FRBR Hierarchy",
+      "series": "Series",
+      "parts_expansions": "Parts & Expansions",
+      "contributors": "Contributors",
+      "maps": "Maps",
+      "lod": "LOD"
+    },
+    "nodeTypes": {
+      "work": "Work",
+      "expression": "Expression",
+      "manifestation": "Manifestation",
+      "item": "Item",
+      "contributor": "Contributor",
+      "map": "Map",
+      "lod": "LOD Authority"
+    }
   }
 }

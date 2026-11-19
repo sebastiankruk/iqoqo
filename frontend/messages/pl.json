@@ -1188,5 +1188,45 @@
     "noNamedFolders": "Brak nazwanych folderów. Utwórz poniżej.",
     "addedToCollection": "Dodano do kolekcji!",
     "addToCollectionFailed": "Nie udało się dodać do kolekcji"
+  },
+  "graph": {
+    "exploreGraph": "Eksploruj graf",
+    "title": "Graf relacji FRBR",
+    "subtitle": "Interaktywne otoczenie obejmujące dzieła, ekspresje, manifestacje, egzemplarze, serie, mapy i LOD",
+    "depthLabel": "Głębokość",
+    "hop1": "1 skok",
+    "hop2": "2 skoki",
+    "searchPlaceholder": "Wyróżnij węzły...",
+    "resetView": "Resetuj widok",
+    "zoomIn": "Powiększ",
+    "zoomOut": "Pomniejsz",
+    "truncatedBanner": "Graf ograniczony do {max} węzłów — wybierz węzeł i kliknij Wyśrodkuj, aby kontynuować.",
+    "recenter": "Wyśrodkuj graf na tym węźle",
+    "openEntity": "Otwórz stronę encji",
+    "openExternal": "Otwórz zewnętrzne źródło",
+    "connections": "Powiązania",
+    "anchorBadge": "Źródło",
+    "selectPrompt": "Kliknij dowolny węzeł, aby zobaczyć szczegóły, wyśrodkować lub otworzyć stronę.",
+    "missingParamsTitle": "Wybierz encję do eksploracji",
+    "missingParamsDescription": "Otwórz ten widok przyciskiem Eksploruj graf ze strony Dzieła, Ekspresji, Manifestacji lub Egzemplarza.",
+    "backToCollection": "Wróć do kolekcji",
+    "loadError": "Nie udało się wczytać grafu relacji dla tej encji.",
+    "categories": {
+      "frbr": "Hierarchia FRBR",
+      "series": "Serie",
+      "parts_expansions": "Części i rozszerzenia",
+      "contributors": "Twórcy",
+      "maps": "Mapy",
+      "lod": "LOD"
+    },
+    "nodeTypes": {
+      "work": "Dzieło",
+      "expression": "Ekspresja",
+      "manifestation": "Manifestacja",
+      "item": "Egzemplarz",
+      "contributor": "Twórca",
+      "map": "Mapa",
+      "lod": "Źródło LOD"
+    }
   }
 }

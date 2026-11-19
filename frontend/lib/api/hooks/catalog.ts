@@ -29,6 +29,8 @@ import type {
   SemanticLinksData,
   WorkDetail,
   ExpressionDetail,
+  CatalogGraphData,
+  GraphAnchorEntityType,
 } from "@/types/frbr";
 
 import { queryKeys } from "./query-keys";
@@ -1034,6 +1036,32 @@ export function useDeleteSemanticLink(manifestationId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.semanticLinks(manifestationId) });
     },
+  });
+}
+
+/**
+ * Custom hook to fetch bounded, visibility-safe FRBR neighborhood graph data.
+ */
+export function useCatalogGraph(
+  entityType: GraphAnchorEntityType | string,
+  entityId: number,
+  depth = 1,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.catalogGraph(entityType, entityId, depth),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<CatalogGraphData>>("/catalog/graph", {
+        params: {
+          entity_type: entityType,
+          entity_id: entityId,
+          depth,
+        },
+      });
+      return res.data.data;
+    },
+    enabled: Boolean(enabled && entityType && entityId > 0),
+    staleTime: 30_000,
   });
 }
 

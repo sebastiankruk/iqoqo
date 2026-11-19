@@ -198,4 +198,6 @@ export const queryKeys = {
   federationActivities: (page: number = 1, filters?: Record<string, string | undefined>) =>
     ["admin", "federation", "activities", page, filters] as const,
   federationKeyFingerprint: ["admin", "federation", "key-fingerprint"] as const,
+  catalogGraph: (entityType: string, entityId: number, depth = 1) =>
+    ["catalog-graph", entityType, entityId, depth] as const,
 };
