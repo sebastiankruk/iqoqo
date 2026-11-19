@@ -217,6 +217,15 @@
     "statusDnf": "Porzucono",
     "otherEditionLabel": "{label} (inne wydanie)"
   },
+  "SerialIssues": {
+    "issuesInSerial": "Numery w tym czasopiśmie",
+    "addIssueCta": "Dodaj numer",
+    "noIssuesRecorded": "Brak skatalogowanych numerów tego czasopisma.",
+    "issueBadge": "Nr {issue}",
+    "cumulativeIssueBadge": "{issue} ({cumulative})",
+    "yearUnknown": "Rok nieznany",
+    "issnLabel": "ISSN {issn}"
+  },
   "Collection": {
     "loading": "Ładowanie kolekcji...",
     "searchResults": "Wyniki wyszukiwania dla „{query}”",
@@ -523,6 +532,7 @@
     },
     "formats": {
       "book": "Książka",
+      "magazine": "Czasopismo",
       "audiobook": "Audiobook",
       "music": "Muzyka",
       "movie": "Film",
@@ -598,7 +608,21 @@
       "uploadCover": "Dodaj okładkę",
       "chooseCoverSource": "Wybierz, czy chcesz zrobić zdjęcie aparatem, czy wybrać istniejący plik obrazu z urządzenia.",
       "cantFindFormat": "Nie możesz znaleźć formatu?",
-      "requestNewType": "Zgłoś nowy typ mediów"
+      "requestNewType": "Zgłoś nowy typ mediów",
+      "issnLabel": "ISSN",
+      "issueNumberLabel": "Numer wydania",
+      "cumulativeIssueLabel": "Numer ciągły",
+      "publicationMonthLabel": "Miesiąc (1–12)",
+      "eanAddonLabel": "2-cyfrowy dodatek EAN-2",
+      "coverHeadlineLabel": "Nagłówek z okładki"
+    },
+    "serialDisambiguation": {
+      "title": "Wybierz lub dodaj numer czasopisma",
+      "description": "Ten kod EAN 977 jest współdzielony przez wiele numerów. Wybierz istniejący numer lub utwórz nowy.",
+      "existingIssuesLabel": "Skatalogowane numery",
+      "addNewIssue": "Dodaj nowy numer",
+      "selectIssue": "Wybierz ten numer",
+      "noIssuesYet": "W katalogu nie ma jeszcze żadnych numerów tego tytułu."
     },
     "batchMode": {
       "toggleLabel": "Tryb seryjny",

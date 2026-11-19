@@ -409,6 +409,11 @@
     :strategyClass "BookLookupStrategy" ;
     :waterfallOrder 3 ;
     :forCategory :MediaCategoryBook .
+:LookupStrategyMagazine a :LookupStrategy ;
+    rdfs:label "magazine" ;
+    :strategyClass "SerialLookupStrategy" ;
+    :waterfallOrder 7 ;
+    :forCategory :MediaCategoryMagazine .
 :LookupStrategyBoardGame a :LookupStrategy ;
     rdfs:label "board_game" ;
     :strategyClass "BoardGameLookupStrategy" ;

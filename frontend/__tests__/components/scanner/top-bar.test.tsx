@@ -45,6 +45,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/lib/media", () => ({
   MEDIA_REGISTRY: {
     book: { icon: () => null, label: "Book" },
+    magazine: { icon: () => null, label: "Magazine" },
     audiobook: { icon: () => null, label: "Audiobook" },
     music: { icon: () => null, label: "Music" },
     movie: { icon: () => null, label: "Movie" },
@@ -69,7 +70,7 @@ describe("TopBar", () => {
     expect(screen.getByText("Scan New Item")).toBeInTheDocument();
 
     // Check format buttons exist (via aria-label)
-    ["Book", "Audiobook", "Music", "Movie", "Board Game", "Puzzle"].forEach(label => {
+    ["Book", "Magazine", "Audiobook", "Music", "Movie", "Board Game", "Puzzle"].forEach(label => {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     });
   });

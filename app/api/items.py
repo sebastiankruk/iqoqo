@@ -1663,40 +1663,68 @@ def add_item_manual() -> Response | tuple[Response, int]:
         default_status = statuses[0]
 
     try:
+        from app.utils.issn import is_977_periodical_barcode, is_valid_issn
+
+        extra_dump = payload.model_dump()
+        is_serial_manual = (
+            _fmt_lower in ("magazine", "journal", "periodical", "serial")
+            or extra_dump.get("work_kind") == "serial"
+            or bool(extra_dump.get("issn"))
+            or is_977_periodical_barcode(isbn)
+            or is_valid_issn(isbn)
+        )
+
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
         existing_manifestation: Manifestation | None = None
         normalised_isbn: str | None = None
-        if isbn:
-            normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
-            existing_manifestation = (
-                db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
-            )
+        if is_serial_manual:
+            from app.core.ingest import IngestService
 
-        if existing_manifestation:
-            # Manifestation already exists — just create a new Item linked to it
-            manifestation = existing_manifestation
+            serial_meta = dict(extra_dump)
+            serial_meta.setdefault("title", title)
+            serial_meta.setdefault("authors", authors)
+            if isbn:
+                if is_valid_issn(isbn) and not serial_meta.get("issn"):
+                    serial_meta["issn"] = isbn
+                else:
+                    serial_meta.setdefault("barcode", isbn)
+            if pub_date_str and not serial_meta.get("publication_year"):
+                year_part = str(pub_date_str).split("-")[0]
+                if year_part.isdigit():
+                    serial_meta["publication_year"] = int(year_part)
+            manifestation = IngestService.ingest_serial_from_meta(serial_meta)
         else:
-            work = Work(title=title, meta={"authors": authors, "description": payload.Description})
-            db.session.add(work)
-            db.session.flush()
+            if isbn:
+                normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
+                existing_manifestation = (
+                    db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
+                )
 
-            expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
-            db.session.add(expression)
-            db.session.flush()
+            if existing_manifestation:
+                # Manifestation already exists — just create a new Item linked to it
+                manifestation = existing_manifestation
+            else:
+                work = Work(title=title, meta={"authors": authors, "description": payload.Description})
+                db.session.add(work)
+                db.session.flush()
 
-            # Store all extra fields in meta
-            manifestation = Manifestation(expression_id=expression.id, meta=payload.model_dump())
-            if normalised_isbn:
-                manifestation.isbn13 = normalised_isbn
-            if pub_date_str:
-                from datetime import date
+                expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+                db.session.add(expression)
+                db.session.flush()
 
-                try:
-                    manifestation.publication_date = date.fromisoformat(pub_date_str)
-                except (ValueError, TypeError):
-                    pass
-            db.session.add(manifestation)
-            db.session.flush()
+                # Store all extra fields in meta
+                manifestation = Manifestation(expression_id=expression.id, meta=extra_dump)
+                if normalised_isbn:
+                    manifestation.isbn13 = normalised_isbn
+                if pub_date_str:
+                    from datetime import date
+
+                    try:
+                        manifestation.publication_date = date.fromisoformat(pub_date_str)
+                    except (ValueError, TypeError):
+                        pass
+                db.session.add(manifestation)
+                db.session.flush()
 
         if payload.collection_status == "wish_list":
             return _add_wishlist_by_manifestation(user_id, manifestation, payload)

@@ -84,6 +84,13 @@ export interface WorkDetailManifestation {
   format?: string | null;
   format_type?: string | null;
   year?: number | string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  ean_addon?: string | null;
+  full_barcode?: string | null;
   cover_url?: string | null;
   user_owns?: boolean;
   meta?: Record<string, unknown>;
@@ -105,6 +112,9 @@ export interface WorkDetail {
   id: number;
   title: string;
   authors: string[];
+  issn?: string | null;
+  eissn?: string | null;
+  work_kind?: string | null;
   meta?: Record<string, unknown>;
   contributions?: Record<string, unknown>;
   expressions: WorkDetailExpression[];
@@ -419,6 +429,52 @@ export interface IsbnMeta {
   discogs_id?: string;
   already_in_db?: boolean;
   candidates?: IsbnMeta[];
+  issn?: string | null;
+  eissn?: string | null;
+  work_kind?: string | null;
+  ean?: string | null;
+  ean_addon?: string | null;
+  full_barcode?: string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  cover_headline?: string | null;
+  publisher?: string | null;
+  status?: string;
+  serial_disambiguation?: boolean;
+  work?: {
+    id: number;
+    title: string;
+    issn?: string | null;
+    eissn?: string | null;
+    work_kind?: string | null;
+    publisher?: string | null;
+  } | null;
+  existing_issues?: Array<{
+    manifestation_id: number;
+    title?: string;
+    issue_number?: string | null;
+    cumulative_issue_number?: number | null;
+    volume?: string | null;
+    publication_year?: number | null;
+    publication_month?: number | null;
+    ean?: string | null;
+    ean_addon?: string | null;
+    full_barcode?: string | null;
+    cover_headline?: string | null;
+    cover_url?: string | null;
+  }>;
+  prefill?: {
+    title?: string;
+    issn?: string | null;
+    ean?: string | null;
+    publisher?: string | null;
+    work_kind?: string;
+    format?: string;
+    format_type?: string;
+  };
 }
 
 /** User profile */

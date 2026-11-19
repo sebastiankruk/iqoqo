@@ -29,6 +29,8 @@ import {
   Layers,
   Loader2,
   Music,
+  Newspaper,
+  Plus,
   Sparkles,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -102,6 +104,7 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
   const router = useRouter();
   const queryClient = useQueryClient();
   const tWishlist = useTranslations("Wishlist");
+  const tSerial = useTranslations("SerialIssues");
   const routeId = useResolvedRouteParam("id");
   const effectiveId = workId && !isNaN(workId) && workId > 0 ? workId : routeId ? parseInt(routeId, 10) : 0;
   const { data: clientWork, isLoading } = useWork(effectiveId, initialWork);
@@ -227,33 +230,56 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
                       variant="secondary"
                       className="gap-1.5 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider"
                     >
-                      <Sparkles className="h-3 w-3" />
-                      Conceptual Work
+                      {work.work_kind === "serial" ? (
+                        <Newspaper className="h-3 w-3" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                      {work.work_kind === "serial" ? "F18 Serial Work" : "Conceptual Work"}
                     </Badge>
+                    {work.issn && (
+                      <Badge variant="outline" data-testid="work-issn-badge" className="font-mono text-xs">
+                        {tSerial("issnLabel", { issn: work.issn })}
+                      </Badge>
+                    )}
                     <WorkRollupBadge status={work.work_reading_status} />
                     <span className="text-xs text-muted-foreground">
                       {allManifestations.length} {allManifestations.length === 1 ? "edition" : "editions"}
                     </span>
                   </div>
-                  {profile && (
-                    <Button
-                      type="button"
-                      variant={existingWishlistEntry ? "secondary" : "outline"}
-                      size="sm"
-                      disabled={isWishlistMutating}
-                      onClick={handleToggleWishlist}
-                      className="gap-1.5"
-                    >
-                      {isWishlistMutating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : existingWishlistEntry ? (
-                        <BookmarkCheck className="h-4 w-4 text-primary" />
-                      ) : (
-                        <BookmarkPlus className="h-4 w-4" />
-                      )}
-                      <span>{existingWishlistEntry ? tWishlist("onWishlistRemove") : tWishlist("addToWishlist")}</span>
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {work.work_kind === "serial" && (
+                      <Button asChild size="sm" variant="default" data-testid="work-add-issue-cta" className="gap-1.5">
+                        <Link
+                          href={`/scan?format=magazine&manual=1&issn=${encodeURIComponent(work.issn || "")}&title=${encodeURIComponent(work.title)}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>{tSerial("addIssueCta")}</span>
+                        </Link>
+                      </Button>
+                    )}
+                    {profile && (
+                      <Button
+                        type="button"
+                        variant={existingWishlistEntry ? "secondary" : "outline"}
+                        size="sm"
+                        disabled={isWishlistMutating}
+                        onClick={handleToggleWishlist}
+                        className="gap-1.5"
+                      >
+                        {isWishlistMutating ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : existingWishlistEntry ? (
+                          <BookmarkCheck className="h-4 w-4 text-primary" />
+                        ) : (
+                          <BookmarkPlus className="h-4 w-4" />
+                        )}
+                        <span>
+                          {existingWishlistEntry ? tWishlist("onWishlistRemove") : tWishlist("addToWishlist")}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <h1
@@ -317,6 +343,93 @@ export function WorkDetailClient({ workId, initialWork }: WorkDetailClientProps)
             </div>
           </div>
         </div>
+
+        {/* Serial Issues Chronological Browser (F18_Serial_Work) */}
+        {work.work_kind === "serial" && (
+          <section data-testid="serial-issues-section" className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-5">
+              <h2 className="font-serif text-xl font-bold text-foreground">{tSerial("issuesInSerial")}</h2>
+            </div>
+            {allManifestations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{tSerial("noIssuesRecorded")}</p>
+            ) : (
+              (() => {
+                const sorted = [...allManifestations].sort((a, b) => {
+                  const yDiff = (a.publication_year ?? 9999) - (b.publication_year ?? 9999);
+                  if (yDiff !== 0) return yDiff;
+                  const mDiff = (a.publication_month ?? 99) - (b.publication_month ?? 99);
+                  if (mDiff !== 0) return mDiff;
+                  return String(a.issue_number ?? "").localeCompare(String(b.issue_number ?? ""), undefined, {
+                    numeric: true,
+                  });
+                });
+                const groups = new Map<string, WorkDetailManifestation[]>();
+                for (const m of sorted) {
+                  const yrKey = m.publication_year ? String(m.publication_year) : tSerial("yearUnknown");
+                  const list = groups.get(yrKey) ?? [];
+                  list.push(m);
+                  groups.set(yrKey, list);
+                }
+                return (
+                  <div className="space-y-6">
+                    {Array.from(groups.entries()).map(([yr, issues]) => (
+                      <div key={yr} className="space-y-2.5">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{yr}</h3>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {issues.map(issue => {
+                            const issueLabel =
+                              issue.cumulative_issue_number != null
+                                ? tSerial("cumulativeIssueBadge", {
+                                    issue: issue.issue_number || "?",
+                                    cumulative: String(issue.cumulative_issue_number),
+                                  })
+                                : issue.issue_number
+                                  ? tSerial("issueBadge", { issue: issue.issue_number })
+                                  : issue.full_barcode || `#${issue.id}`;
+                            const coverHeadline =
+                              typeof issue.meta?.cover_headline === "string" ? issue.meta.cover_headline : null;
+                            return (
+                              <Link
+                                key={issue.id}
+                                href={`/manifestation/${issue.id}`}
+                                data-testid={`serial-issue-card-${issue.id}`}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card px-4 py-3 text-sm transition-colors hover:border-primary/40 hover:bg-muted/40"
+                              >
+                                <div className="min-w-0 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="font-mono text-xs">
+                                      {issueLabel}
+                                    </Badge>
+                                    {issue.publication_month && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {String(issue.publication_month).padStart(2, "0")}/{yr}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {coverHeadline && (
+                                    <p className="truncate text-xs text-foreground font-medium">{coverHeadline}</p>
+                                  )}
+                                  {issue.full_barcode && (
+                                    <p className="font-mono text-[11px] text-muted-foreground">{issue.full_barcode}</p>
+                                  )}
+                                </div>
+                                {issue.user_owns && (
+                                  <Badge variant="default" className="shrink-0 text-[10px]">
+                                    Owned
+                                  </Badge>
+                                )}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
+            )}
+          </section>
+        )}
 
         {/* Expressions & Manifestations Section */}
         <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6">

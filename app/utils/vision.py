@@ -35,11 +35,15 @@ from app.db.models import User, db
 logger = logging.getLogger(__name__)
 
 PROMPT = (
-    "You are a book cataloguing assistant. "
-    "Look at the book cover image and extract the book metadata. "
+    "You are a book and periodical cataloguing assistant. "
+    "Look at the book or magazine cover image and extract its bibliographic metadata. "
     "Respond ONLY with a JSON object in this exact format, with no markdown fences or extra text:\n"
     '{"Title": "<title>", "Subtitle": "<subtitle>", "Authors": ["<author1>", "<author2>"], '
     '"Publisher": "<publisher>", "Year": "<year>", "ISBN": "<isbn>", '
+    '"ISSN": "<issn>", "Indeks": "<indeks>", "IssueNumber": "<issue_number>", '
+    '"CumulativeIssueNumber": "<cumulative_issue_number>", "Volume": "<volume>", '
+    '"PublicationMonth": "<month_1_to_12>", "PublicationYear": "<4_digit_year>", '
+    '"CoverHeadline": "<cover_headline>", '
     '"Edition": "<edition>", "Language": "<language>", "Genre": "<genre>"}\n'
     "If you cannot determine a field, use an empty string or empty list as appropriate."
 )
@@ -248,7 +252,14 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
         title = lines[0]
         authors = lines[1:] if len(lines) > 1 else []
 
-        return {"Title": title, "Authors": authors}
+        payload: dict[str, object] = {"Title": title, "Authors": authors}
+
+        from app.utils.issn import parse_cover_issue_label
+
+        serial_hints = parse_cover_issue_label(text)
+        if serial_hints:
+            payload.update(serial_hints)
+        return payload
 
     except ImportError:
         logger.error("pytesseract or Pillow is not installed.")
@@ -316,7 +327,7 @@ def _parse_json_response(raw: str) -> dict | None:
         if not isinstance(authors, list):
             authors = [a.strip() for a in str(authors).split(",") if a.strip()] if authors else []
 
-        return {
+        parsed_payload: dict[str, object] = {
             "Title": title.strip(),
             "Subtitle": str(subtitle).strip(),
             "Authors": [a.strip() for a in authors if a],
@@ -327,6 +338,42 @@ def _parse_json_response(raw: str) -> dict | None:
             "Language": str(language).strip(),
             "Genre": str(genre).strip(),
         }
+
+        from app.utils.issn import normalize_issn, parse_cover_issue_label
+
+        raw_issn = normalize_issn(str(data.get("ISSN") or data.get("issn") or ""))
+        if raw_issn:
+            parsed_payload["issn"] = raw_issn
+        for src_key, dst_key in (
+            ("Indeks", "indeks"),
+            ("IssueNumber", "issue_number"),
+            ("Volume", "volume"),
+            ("CoverHeadline", "cover_headline"),
+        ):
+            val = data.get(src_key) or data.get(dst_key)
+            if val is not None and str(val).strip():
+                parsed_payload[dst_key] = str(val).strip()
+
+        for int_src, int_dst in (
+            ("CumulativeIssueNumber", "cumulative_issue_number"),
+            ("PublicationMonth", "publication_month"),
+            ("PublicationYear", "publication_year"),
+        ):
+            raw_int = data.get(int_src) if data.get(int_src) not in (None, "") else data.get(int_dst)
+            if raw_int not in (None, ""):
+                try:
+                    parsed_payload[int_dst] = int(str(raw_int).strip())
+                except ValueError:
+                    pass
+
+        headline_or_title = " ".join(
+            str(part) for part in (title, subtitle, data.get("CoverHeadline") or "", data.get("ISSN") or "") if part
+        )
+        inferred_hints = parse_cover_issue_label(headline_or_title)
+        for k, v in inferred_hints.items():
+            parsed_payload.setdefault(k, v)
+
+        return parsed_payload
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         logger.error("Failed to parse JSON response: %s", e)
         return None

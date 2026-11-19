@@ -26,6 +26,7 @@ import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
 import { SuccessCard } from "@/components/scanner/success-card";
 import { DisambiguationSheet } from "@/components/scanner/disambiguation-sheet";
+import { SerialDisambiguationModal } from "@/components/scanner/serial-disambiguation-modal";
 import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
@@ -57,16 +58,55 @@ import {
 export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
   const [candidates, setCandidates] = useState<{ isbn: string; items: IsbnMeta[] } | null>(null);
-  const [showManual, setShowManual] = useState(false);
-  const [initialIdentifier, setInitialIdentifier] = useState("");
-  const [title, setTitle] = useState("");
+  const [serialDisambiguation, setSerialDisambiguation] = useState<IsbnMeta | null>(null);
+  const [showManual, setShowManual] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("manual") === "1";
+    }
+    return false;
+  });
+  const [initialIdentifier, setInitialIdentifier] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("issn") || "";
+    }
+    return "";
+  });
+  const [title, setTitle] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("title") || "";
+    }
+    return "";
+  });
   const [author, setAuthor] = useState("");
+  const [serialDefaults, setSerialDefaults] = useState<{
+    publisher?: string;
+    year?: string;
+    issn?: string;
+    issueNumber?: string;
+    cumulativeIssueNumber?: string;
+    publicationMonth?: string;
+    eanAddon?: string;
+    coverHeadline?: string;
+  }>(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      return {
+        publisher: sp.get("publisher") || "",
+        issn: sp.get("issn") || "",
+      };
+    }
+    return {};
+  });
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
   const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
-      if (savedFormat) return savedFormat as ScanFormat;
+    if (typeof window !== "undefined") {
+      const urlFormat = new URLSearchParams(window.location.search).get("format");
+      if (urlFormat) return urlFormat as ScanFormat;
+      if (window.localStorage) {
+        const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
+        if (savedFormat) return savedFormat as ScanFormat;
+      }
     }
     return "book";
   });
@@ -158,6 +198,7 @@ export default function ScanPage() {
     if (fmt === "puzzle") return "puzzle";
     if (fmt === "music" || fmt === "audio") return "music";
     if (fmt === "lego") return "lego";
+    if (fmt === "magazine") return "magazine";
     if (fmt === "book") return "book";
     return "";
   };
@@ -166,6 +207,13 @@ export default function ScanPage() {
     async (isbn: string, meta: IsbnMeta) => {
       // Prefer the backend-normalized identifier/barcode if available
       const canonicalId = meta.identifier || meta.barcode || meta.isbn || isbn;
+
+      if (meta.serial_disambiguation || meta.status === "serial_disambiguation") {
+        inFlightBarcodesRef.current.delete(canonicalId);
+        await triggerScanHaptic();
+        setSerialDisambiguation(meta);
+        return;
+      }
 
       // Continuous batch mode handling: auto-adds item, toasts, and keeps scanner active
       if (isBatchMode) {
@@ -284,14 +332,52 @@ export default function ScanPage() {
     setAutoStart(false);
   }, []);
 
-  const handleExtractComplete = useCallback((data: { Title?: string; Authors?: string[] }, file?: File) => {
-    setTitle(data.Title || "");
-    setAuthor(data.Authors?.join(", ") || "");
-    if (file) setSnappedCover(file);
-    setInitialIdentifier("");
-    setShowManual(true);
-    toast.success("Cover metadata extracted! Please review.");
-  }, []);
+  const handleExtractComplete = useCallback(
+    (
+      data: {
+        Title?: string;
+        Authors?: string[];
+        Publisher?: string;
+        issn?: string;
+        issue_number?: string;
+        cumulative_issue_number?: number;
+        publication_month?: number;
+        publication_year?: number;
+        cover_headline?: string;
+      },
+      file?: File
+    ) => {
+      setTitle(data.Title || "");
+      setAuthor(data.Authors?.join(", ") || "");
+      if (
+        data.issn ||
+        data.issue_number ||
+        data.cumulative_issue_number != null ||
+        data.cover_headline ||
+        activeFormat === "magazine"
+      ) {
+        if (data.issn) {
+          setActiveFormat("magazine");
+        }
+        setSerialDefaults(prev => ({
+          ...prev,
+          publisher: data.Publisher || prev.publisher,
+          issn: data.issn || prev.issn,
+          issueNumber: data.issue_number || prev.issueNumber,
+          cumulativeIssueNumber:
+            data.cumulative_issue_number != null ? String(data.cumulative_issue_number) : prev.cumulativeIssueNumber,
+          publicationMonth: data.publication_month != null ? String(data.publication_month) : prev.publicationMonth,
+          year: data.publication_year != null ? String(data.publication_year) : prev.year,
+          coverHeadline: data.cover_headline || prev.coverHeadline,
+        }));
+      }
+      if (file) setSnappedCover(file);
+      setInitialIdentifier("");
+      setShowManual(true);
+      toast.success("Cover metadata extracted! Please review.");
+    },
+    [activeFormat]
+  );
 
   const handleShowManualForm = useCallback((isbn?: string) => {
     setInitialIdentifier(isbn || "");
@@ -328,6 +414,18 @@ export default function ScanPage() {
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
       Publisher: data.publisher || undefined,
+      ...(data.format === "magazine" || data.issn
+        ? {
+            work_kind: "serial",
+            ...(data.issn ? { issn: data.issn } : {}),
+            ...(data.issueNumber ? { issue_number: data.issueNumber } : {}),
+            ...(data.cumulativeIssueNumber ? { cumulative_issue_number: Number(data.cumulativeIssueNumber) } : {}),
+            ...(data.publicationMonth ? { publication_month: Number(data.publicationMonth) } : {}),
+            ...(data.year && /^\d{4}$/.test(data.year) ? { publication_year: Number(data.year) } : {}),
+            ...(data.eanAddon ? { ean_addon: data.eanAddon } : {}),
+            ...(data.coverHeadline ? { cover_headline: data.coverHeadline } : {}),
+          }
+        : {}),
       ...(policy === "wishlist" ? { collection_status: "wish_list" } : {}),
     };
 
@@ -558,6 +656,49 @@ export default function ScanPage() {
           />
         )}
 
+        {serialDisambiguation && (
+          <SerialDisambiguationModal
+            disambiguation={serialDisambiguation}
+            onSelectIssue={issue => {
+              setSerialDisambiguation(null);
+              const issueBarcode = issue.full_barcode || issue.ean || serialDisambiguation.ean || "";
+              setResult({
+                isbn: issueBarcode,
+                meta: {
+                  Title: issue.title || serialDisambiguation.title || serialDisambiguation.Title || "",
+                  Authors: [],
+                  title: issue.title || serialDisambiguation.title || serialDisambiguation.Title || "",
+                  format: "magazine",
+                  manifestation_id: issue.manifestation_id,
+                  issn: serialDisambiguation.issn,
+                  issue_number: issue.issue_number,
+                  cumulative_issue_number: issue.cumulative_issue_number,
+                  publication_year: issue.publication_year,
+                  publication_month: issue.publication_month,
+                  ean: issue.ean || serialDisambiguation.ean,
+                  ean_addon: issue.ean_addon,
+                  full_barcode: issue.full_barcode,
+                  cover_url: issue.cover_url || undefined,
+                  already_in_db: true,
+                },
+              });
+            }}
+            onAddNewIssue={() => {
+              const prefill = serialDisambiguation.prefill;
+              setActiveFormat("magazine");
+              setTitle(prefill?.title || serialDisambiguation.title || "");
+              setInitialIdentifier(prefill?.ean || serialDisambiguation.ean || serialDisambiguation.issn || "");
+              setSerialDefaults({
+                publisher: prefill?.publisher || serialDisambiguation.publisher || "",
+                issn: prefill?.issn || serialDisambiguation.issn || "",
+              });
+              setSerialDisambiguation(null);
+              setShowManual(true);
+            }}
+            onDismiss={() => setSerialDisambiguation(null)}
+          />
+        )}
+
         {showManual && (
           <div className="absolute inset-x-0 bottom-0 z-40 bg-card rounded-t-3xl shadow-2xl pb-12 animate-[slide-up_0.3s_ease-out_forwards]">
             <ManualEntryForm
@@ -565,6 +706,14 @@ export default function ScanPage() {
               onCancel={() => setShowManual(false)}
               initialTitle={title}
               initialAuthors={author}
+              initialPublisher={serialDefaults.publisher}
+              initialYear={serialDefaults.year}
+              initialIssn={serialDefaults.issn}
+              initialIssueNumber={serialDefaults.issueNumber}
+              initialCumulativeIssueNumber={serialDefaults.cumulativeIssueNumber}
+              initialPublicationMonth={serialDefaults.publicationMonth}
+              initialEanAddon={serialDefaults.eanAddon}
+              initialCoverHeadline={serialDefaults.coverHeadline}
               initialFormat={activeFormat}
               initialIdentifier={initialIdentifier}
               initialCoverFile={snappedCover}

@@ -217,6 +217,15 @@
     "statusDnf": "Did Not Finish",
     "otherEditionLabel": "{label} (another edition)"
   },
+  "SerialIssues": {
+    "issuesInSerial": "Issues in this Serial",
+    "addIssueCta": "Add Issue",
+    "noIssuesRecorded": "No issues cataloged in this serial yet.",
+    "issueBadge": "No. {issue}",
+    "cumulativeIssueBadge": "{issue} ({cumulative})",
+    "yearUnknown": "Year Unknown",
+    "issnLabel": "ISSN {issn}"
+  },
   "Collection": {
     "loading": "Loading collection...",
     "searchResults": "Search results for \"{query}\"",
@@ -523,6 +532,7 @@
     },
     "formats": {
       "book": "Book",
+      "magazine": "Magazine",
       "audiobook": "Audiobook",
       "music": "Music",
       "movie": "Movie",
@@ -598,7 +608,21 @@
       "uploadCover": "Upload Cover",
       "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device.",
       "cantFindFormat": "Can't find your format?",
-      "requestNewType": "Request new media type"
+      "requestNewType": "Request new media type",
+      "issnLabel": "ISSN",
+      "issueNumberLabel": "Issue #",
+      "cumulativeIssueLabel": "Cumulative #",
+      "publicationMonthLabel": "Month (1–12)",
+      "eanAddonLabel": "2-digit EAN-2 Add-on",
+      "coverHeadlineLabel": "Cover Headline"
+    },
+    "serialDisambiguation": {
+      "title": "Select or Add Magazine Issue",
+      "description": "This 977 periodical barcode is shared across multiple issues. Pick an existing issue or create a new one.",
+      "existingIssuesLabel": "Existing Cataloged Issues",
+      "addNewIssue": "Add New Issue",
+      "selectIssue": "Use This Issue",
+      "noIssuesYet": "No issues of this serial are in the catalog yet."
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
