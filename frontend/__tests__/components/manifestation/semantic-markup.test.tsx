@@ -213,4 +213,79 @@ describe("Semantic Web Validation for Manifestation View", () => {
     expect(jsonLd["inLanguage"]).toBe("de");
     expect(jsonLd["offers"][0]["availability"]).toBe("https://schema.org/PreOrder");
   });
+
+  it("renders serial edition fields cleanly without Unknown author or stray zero", () => {
+    const serialManifestation = {
+      id: 777,
+      title: "National Geographic Polska",
+      authors: ["Unknown"],
+      ean: "9771507596037",
+      ean_addon: "11",
+      full_barcode: "977150759603711",
+      issn: "1507-5966",
+      issue_number: "11",
+      cumulative_issue_number: 50,
+      volume: "5",
+      publication_year: 2003,
+      publication_month: 11,
+      publisher: "G+J RBA",
+      work_kind: "serial",
+      work_id: 888,
+      expression_id: 889,
+      owner_count: 0,
+      content_type: "text",
+      format: "magazine",
+      user_owns: false,
+      meta: {
+        format: "magazine",
+        cover_headline: "100 lat lotnictwa",
+        indeks: "323357",
+        Publisher: "G+J RBA",
+      },
+      display: {
+        sections: {
+          issn: "1507-5966",
+          issue_number: "11",
+          cumulative_issue_number: 50,
+          volume: "5",
+          publication_year: 2003,
+          publication_month: 11,
+          ean_addon: "11",
+          full_barcode: "977150759603711",
+          cover_headline: "100 lat lotnictwa",
+          indeks: "323357",
+        },
+        fields: {},
+        additional_details: [],
+      },
+    };
+
+    vi.spyOn(hooks, "useProfile").mockReturnValue({ data: { id: 1 } } as unknown as ReturnType<
+      typeof hooks.useProfile
+    >);
+    vi.spyOn(hooks, "useManifestation").mockReturnValue({
+      data: serialManifestation,
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useManifestation>);
+    vi.spyOn(hooks, "useWorkParts").mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<
+      typeof hooks.useWorkParts
+    >);
+
+    const { container, getByText, queryByText } = renderWithQueryClient(
+      <ManifestationDetailClient manifestationId={777} initialManifestation={serialManifestation as never} />
+    );
+
+    expect(queryByText("Unknown")).toBeNull();
+    expect(queryByText("unknownAuthor")).toBeNull();
+    expect(getByText("1507-5966")).toBeTruthy();
+    expect(getByText("11 (50)")).toBeTruthy();
+    expect(getByText("G+J RBA")).toBeTruthy();
+    expect(getByText("977150759603711")).toBeTruthy();
+    expect(getByText("323357")).toBeTruthy();
+    expect(getByText("100 lat lotnictwa")).toBeTruthy();
+
+    // Ensure owner_count === 0 never renders a stray "0" inside Additional Details
+    const dlTexts = Array.from(container.querySelectorAll("dt, dd")).map(el => el.textContent?.trim());
+    expect(dlTexts).not.toContain("0");
+  });
 });

@@ -118,11 +118,8 @@ test.describe("Phase 1 Ingestion Hardening - Allegro Strategy Cascade", () => {
     // Navigate to the scanner page
     await page.goto("/scan");
 
-    // Switch to the Manual Search tab
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // Enter target ISBN
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    // Enter target ISBN in the unified lookup bar
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(targetIsbn);
     await barcodeInput.press("Enter");
 

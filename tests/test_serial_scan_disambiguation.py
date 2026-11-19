@@ -139,3 +139,131 @@ def test_ingest_all_five_ng_polska_issues_under_one_serial_work(app):
 
         with pytest.raises(ValueError, match="Ambiguous bare 977"):
             IngestService.ingest_serial_issue("9771507596044")
+
+
+def test_manual_serial_save_with_month_or_headline_succeeds_and_ambiguous_returns_400(client, app, normal_user_headers):
+    """POST /items/manual saves bare-977 issues with month/headline and returns 400 (never 500) if totally ambiguous."""
+    IngestService.ingest_serial_from_meta(
+        {
+            "title": "National Geographic Polska",
+            "issn": "1507-5966",
+            "ean": "9771507596044",
+            "ean_addon": "07",
+            "full_barcode": "977150759604407",
+            "issue_number": "7",
+            "publication_year": 2004,
+            "format": "magazine",
+        }
+    )
+
+    # 1. Partial manual fields (month + cover_headline, no issue_number/year) must succeed (200), never 500
+    ok_res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596044",
+            "Publisher": "Burda Media Polska Sp.",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+            "publication_month": 12,
+            "cover_headline": "Poszukiwanie nowej Ziemi",
+        },
+        headers=normal_user_headers,
+    )
+    assert ok_res.status_code == 200
+
+    # 2. Completely ambiguous bare-977 manual payload returns 400 Bad Request, never unhandled 500
+    bad_res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596044",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+        },
+        headers=normal_user_headers,
+    )
+    assert bad_res.status_code == 400
+    assert "Ambiguous bare 977" in (bad_res.json.get("error") or "")
+
+
+def test_manual_serial_save_preserves_edition_fields_and_strips_unknown_and_item_noise(client, normal_user_headers):
+    """Manual periodical saves persist publisher/issue fields cleanly, strip 'Unknown', and hide item-only noise."""
+    res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596037",
+            "Publisher": "G+J RBA",
+            "PublicationDate": "2003-11-01",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+            "issue_number": "11",
+            "cumulative_issue_number": 50,
+            "volume": "5",
+            "publication_year": 2003,
+            "publication_month": 11,
+            "ean_addon": "11",
+            "cover_headline": "100 lat lotnictwa",
+            "collection_status": "available",
+        },
+        headers=normal_user_headers,
+    )
+    assert res.status_code == 200
+    manif_id = res.json["data"]["manifestation_id"]
+
+    m_res = client.get(f"/api/manifestations/{manif_id}", headers=normal_user_headers)
+    assert m_res.status_code == 200
+    m_data = m_res.json["data"]
+
+    assert m_data["authors"] == []
+    assert m_data["publisher"] == "G+J RBA"
+    assert m_data["issn"] == "1507-5966"
+    assert m_data["issue_number"] == "11"
+    assert m_data["cumulative_issue_number"] == 50
+    assert m_data["volume"] == "5"
+    assert m_data["publication_year"] == 2003
+    assert m_data["publication_month"] == 11
+    assert m_data["year"] == 2003
+    assert m_data["ean_addon"] == "11"
+    assert m_data["full_barcode"] == "977150759603711"
+    assert m_data["publication_date"] == "2003-11-01"
+
+    extra_keys = {entry["key"].lower() for entry in m_data["display"]["additional_details"]}
+    assert "collection_status" not in extra_keys
+    assert "publicationdate" not in extra_keys
+
+    # Recent / global list / collection list endpoints also strip Unknown and expose edition fields
+    recent_res = client.get("/api/manifestations/recent", headers=normal_user_headers)
+    assert recent_res.status_code == 200
+    recent_match = next(row for row in recent_res.json["data"] if row["id"] == manif_id)
+    assert recent_match["authors"] == []
+    assert recent_match["issue_number"] == "11"
+    assert recent_match["cumulative_issue_number"] == 50
+    assert recent_match["publication_year"] == 2003
+    assert recent_match["publication_month"] == 11
+    assert recent_match["publisher"] == "G+J RBA"
+
+    catalog_res = client.get("/api/manifestations?limit=10", headers=normal_user_headers)
+    assert catalog_res.status_code == 200
+    catalog_match = next(row for row in catalog_res.json["data"] if row["id"] == manif_id)
+    assert catalog_match["authors"] == []
+    assert catalog_match["issue_number"] == "11"
+    assert catalog_match["publisher"] == "G+J RBA"
+
+    items_res = client.get("/api/items?limit=10", headers=normal_user_headers)
+    assert items_res.status_code == 200
+    item_match = next(row for row in items_res.json["data"] if row["manifestation_id"] == manif_id)
+    assert item_match["authors"] == []
+    assert item_match["format"] == "magazine"
+    assert item_match["issue_number"] == "11"
+    assert item_match["cumulative_issue_number"] == 50
+    assert item_match["publication_year"] == 2003
+    assert item_match["publication_month"] == 11
+    assert item_match["publisher"] == "G+J RBA"

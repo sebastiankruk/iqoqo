@@ -138,6 +138,32 @@ describe("C132 Serial Scanner & Issues Browser UI", () => {
     expect(onAddNewIssue).toHaveBeenCalledTimes(1);
   });
 
+  it("renders Snap Cover to Auto-Fill Issue button inside SerialDisambiguationModal when handler is supplied", () => {
+    const onSnapCoverAutoFill = vi.fn();
+    const disambig: IsbnMeta = {
+      Title: "National Geographic Polska",
+      title: "National Geographic Polska",
+      Authors: [],
+      issn: "1507-5966",
+      ean: "9771507596044",
+      serial_disambiguation: true,
+      existing_issues: [],
+    };
+
+    render(
+      <SerialDisambiguationModal
+        disambiguation={disambig}
+        onSelectIssue={vi.fn()}
+        onAddNewIssue={vi.fn()}
+        onSnapCoverAutoFill={onSnapCoverAutoFill}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("snap-cover-serial-autofill")).toBeInTheDocument();
+    expect(screen.getByText("Snap Cover to Auto-Fill Issue")).toBeInTheDocument();
+  });
+
   it("renders serial issue inputs in ManualEntryForm when format is magazine", () => {
     renderWithQuery(
       <ManualEntryForm

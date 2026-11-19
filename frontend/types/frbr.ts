@@ -195,6 +195,17 @@ export interface Manifestation {
   isbn13?: string;
   upc?: string;
   ean?: string;
+  ean_addon?: string | null;
+  full_barcode?: string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  publication_date?: string | null;
+  issn?: string | null;
+  eissn?: string | null;
+  work_kind?: string | null;
   publisher?: string;
   format_type?: string;
   format?: string;
@@ -285,6 +296,14 @@ export interface Item {
   box_condition?: string | null;
   work_type?: string | null;
   medium_type?: string | null;
+  work_kind?: string | null;
+  issn?: string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  format?: string | null;
   work_id?: number | null;
   work_title?: string | null;
   expression_id?: number | null;
@@ -676,5 +695,58 @@ export interface SemanticLinksData {
     geonames?: SemanticLink[];
     wordnet?: SemanticLink[];
     [authority: string]: SemanticLink[] | undefined;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Catalog Visual Relation Graph Types (C133)
+// ---------------------------------------------------------------------------
+
+export type GraphAnchorEntityType = "work" | "expression" | "manifestation" | "item";
+
+export type GraphNodeEntityType = GraphAnchorEntityType | "contributor" | "map" | "lod";
+
+export type GraphEdgeCategory = "frbr" | "series" | "parts_expansions" | "contributors" | "maps" | "lod";
+
+export interface GraphNode {
+  id: string;
+  entity_type: GraphNodeEntityType;
+  entity_id: number | string;
+  label: string;
+  subtitle?: string | null;
+  work_kind?: string | null;
+  issn?: string | null;
+  visibility?: string | null;
+  authority?: string | null;
+  external_uri?: string | null;
+  url?: string | null;
+  hop: number;
+  is_anchor: boolean;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation: string;
+  category: GraphEdgeCategory;
+  label: string;
+}
+
+export interface CatalogGraphData {
+  anchor: {
+    entity_type: GraphAnchorEntityType;
+    entity_id: number;
+    node_id: string;
+  };
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  meta: {
+    depth: number;
+    requested_depth: number;
+    max_nodes: number;
+    node_count: number;
+    edge_count: number;
+    truncated: boolean;
   };
 }
