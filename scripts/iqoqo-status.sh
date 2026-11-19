@@ -1335,10 +1335,12 @@ else
 fi
 
 if [[ "${llm_oll_reach:-0}" == "1" ]]; then
+    dedupe_note="missing"
+    [[ "${llm_oll_dinst:-0}" == "1" ]] && dedupe_note="ready"
     if [[ "${llm_oll_vinst:-0}" == "1" ]]; then
-        check "Ollama Local LLM" pass "reachable at ${llm_oll_url} (vision: ${llm_oll_vmodel}, dedupe: ${llm_oll_dmodel})"
+        check "Ollama Local LLM" pass "reachable at ${llm_oll_url} (vision: ${llm_oll_vmodel}, dedupe: ${llm_oll_dmodel} [${dedupe_note}])"
     else
-        check "Ollama Local LLM" warn "reachable at ${llm_oll_url}, but vision model '${llm_oll_vmodel}' not pulled (run: ollama pull ${llm_oll_vmodel})"
+        check "Ollama Local LLM" warn "reachable at ${llm_oll_url} (dedupe: ${llm_oll_dmodel} [${dedupe_note}]), vision model '${llm_oll_vmodel}' not pulled (run: ollama pull ${llm_oll_vmodel})"
     fi
 elif [[ -n "$ollama_url_env" ]]; then
     check "Ollama Local LLM" warn "configured (${llm_oll_url}) but unreachable"
