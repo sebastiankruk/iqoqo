@@ -309,3 +309,35 @@ EOF
   [[ ! "$output" =~ "cannot execute redis-cli" ]]
 }
 
+@test "iqoqo-status.sh flags OTLP protocol mismatch and app container OTel export errors" {
+  mock_bin_otel="${TEST_TEMP_DIR}/mock_bin_otel"
+  mkdir -p "${mock_bin_otel}"
+  cat > "${mock_bin_otel}/docker" <<'EOF'
+#!/bin/bash
+if [[ "$*" == *"ps --format"* ]]; then
+  echo "iqoqo-web-1"
+  exit 0
+elif [[ "$*" == *"exec"* && "$*" == *"OTEL_EXPORTER_OTLP_ENDPOINT"* ]]; then
+  echo "http://otel-collector:4318"
+  exit 0
+elif [[ "$*" == *"exec"* && "$*" == *"OTEL_EXPORTER_OTLP_PROTOCOL"* ]]; then
+  echo ""
+  exit 0
+elif [[ "$*" == *"logs iqoqo-web-1"* ]]; then
+  echo "Failed parsing HTTP/2 (Expected SETTINGS frame as the first frame, got frame type 80)"
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${mock_bin_otel}/docker"
+
+  tmp_env="${TEST_TEMP_DIR}/.env.otel"
+  printf 'OTEL_TRACES_EXPORTER=otlp\nOTEL_LOGS_EXPORTER=otlp\n' > "${tmp_env}"
+
+  run env -u IQOQO_AI_MODE ENV_FILE="${tmp_env}" PATH="${mock_bin_otel}:$PATH" bash scripts/iqoqo-status.sh prod
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "OTel Protocol" ]]
+  [[ "$output" =~ "http/protobuf" ]]
+  [[ "$output" =~ "App OTel Export" ]]
+}
+

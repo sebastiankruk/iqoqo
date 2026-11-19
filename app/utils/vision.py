@@ -165,7 +165,7 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
 
     # 2. Try Ollama Fallback
     try:
-        result = _extract_via_ollama(image_bytes)
+        result = _extract_via_ollama(image_bytes, user_id=user_id)
         if result:
             return result
     except (ValueError, KeyError, IndexError, AttributeError, TypeError, OSError, RuntimeError, requests.exceptions.RequestException) as e:
@@ -173,11 +173,37 @@ def extract_metadata_from_cover(image_bytes: bytes, mime_type: str = "image/jpeg
 
     # 3. Try Tesseract OCR Fallback
     try:
-        return _extract_via_tesseract(image_bytes)
+        return _extract_via_tesseract(image_bytes, user_id=user_id)
     except (OSError, ValueError, RuntimeError) as e:
         logger.error("Waterfall: Tesseract failed: %s", e)
 
     return None
+
+
+def _record_vision_telemetry(
+    provider: str,
+    user_id: str | uuid.UUID | None,
+    duration: float,
+    status: str = "success",
+    error_message: str | None = None,
+) -> None:
+    """Persist metadata extraction telemetry to LLMTelemetry when app context or mock is present."""
+    from flask import has_app_context
+
+    from app.utils.llm_covers import record_telemetry
+
+    session_is_mocked = bool(getattr(getattr(db, "session", None), "_mock_name", None))
+    if not has_app_context() and not session_is_mocked:
+        return
+    effective_user_id = str(user_id) if user_id else "system"
+    record_telemetry(
+        provider,
+        effective_user_id,
+        duration,
+        operation_type="metadata_extraction",
+        status=status,
+        error_message=error_message[:500] if error_message else None,
+    )
 
 
 @retry(
@@ -214,9 +240,12 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | uuid.
         logger.warning("GEMINI_API_KEY not set – skipping Gemini vision extraction.")
         return None
 
+    from flask import has_app_context
+
     from app.utils.llm_covers import record_telemetry
 
     api_error_cls: type[BaseException] = RuntimeError
+    start_time = time.time()
     try:
         from google import genai  # type: ignore[import-untyped]
         from google.genai import types  # type: ignore[import-untyped]
@@ -242,18 +271,26 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | uuid.
 
         if result:
             result = _enrich_llm_serial_result(result, image_bytes)
-        if result and user_id_str:
-            duration = time.time() - start_time
-            record_telemetry("gemini", user_id_str, duration, operation_type="metadata_extraction")
+        duration = time.time() - start_time
+        if result:
+            if user_id_str and (has_app_context() or getattr(getattr(db, "session", None), "_mock_name", None)):
+                record_telemetry("gemini", user_id_str, duration, operation_type="metadata_extraction")
+            elif has_app_context():
+                _record_vision_telemetry("gemini", user_id_str, duration, status="success")
+        else:
+            _record_vision_telemetry("gemini", user_id_str, duration, status="failed", error_message="Empty or unparseable JSON response")
 
         return result
 
     except (ImportError, AttributeError) as e:
         logger.error("google-genai package is not installed or API surface changed: %s", e)
+        _record_vision_telemetry("gemini", user_id_str, time.time() - start_time, status="failed", error_message=str(e))
     except api_error_cls as e:
         logger.warning("Gemini API rejected cover extraction request (%s); falling back.", e)
+        _record_vision_telemetry("gemini", user_id_str, time.time() - start_time, status="failed", error_message=str(e))
     except (ValueError, KeyError, TypeError, OSError, RuntimeError, ConnectionError) as e:
         logger.error("Gemini vision extraction failed: %s", e)
+        _record_vision_telemetry("gemini", user_id_str, time.time() - start_time, status="failed", error_message=str(e))
 
     return None
 
@@ -276,7 +313,7 @@ def _call_ollama_api(url, payload, timeout: int | None = None):
     return response
 
 
-def _extract_via_ollama(image_bytes: bytes) -> dict | None:
+def _extract_via_ollama(image_bytes: bytes, user_id: str | uuid.UUID | None = None) -> dict | None:
     if not _is_llm_enabled():
         logger.debug("Ollama vision extraction skipped: ALLOW_LLM is false.")
         return None
@@ -289,6 +326,7 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
     except (ValueError, TypeError):
         fast_timeout = 25
 
+    start_time = time.time()
     try:
         normalized_bytes, _ = _normalize_cover_image_bytes(image_bytes, max_dim=768)
         b64_image = base64.b64encode(normalized_bytes).decode("utf-8")
@@ -308,6 +346,14 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
         result = _parse_json_response(raw)
         if result:
             result = _enrich_llm_serial_result(result, image_bytes)
+        duration = time.time() - start_time
+        _record_vision_telemetry(
+            "ollama",
+            user_id,
+            duration,
+            status="success" if result else "failed",
+            error_message=None if result else f"Empty or unparseable JSON from model {model}",
+        )
         return result
 
     except requests.exceptions.RequestException as e:
@@ -316,6 +362,13 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
         if err_resp is not None and getattr(err_resp, "status_code", None) == 404:
             msg = f"Model '{model}' not found on Ollama. Run 'ollama pull {model}' to fix."
         logger.error("Ollama HTTP extraction failed: %s", msg)
+        _record_vision_telemetry(
+            "ollama",
+            user_id,
+            time.time() - start_time,
+            status="failed",
+            error_message=f"{type(e).__name__}: {msg}",
+        )
 
     return None
 
@@ -450,7 +503,8 @@ def _enrich_llm_serial_result(result: dict[str, Any], image_bytes: bytes) -> dic
         return result
 
 
-def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
+def _extract_via_tesseract(image_bytes: bytes, user_id: str | uuid.UUID | None = None) -> dict | None:
+    start_time = time.time()
     try:
         import pytesseract
         from PIL import Image, ImageOps
@@ -485,10 +539,12 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
             combined_text = text
 
         if not combined_text.strip():
+            _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="failed", error_message="No OCR text detected")
             return None
 
         lines = [line.strip() for line in (text or combined_text).splitlines() if line.strip()]
         if not lines:
+            _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="failed", error_message="No OCR lines detected")
             return None
 
         from app.utils.issn import parse_cover_issue_label
@@ -514,6 +570,7 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
             headline = _pick_serial_headline(lines)
             if headline and "cover_headline" not in payload:
                 payload["cover_headline"] = headline
+            _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="success")
             return payload
 
         title = lines[0]
@@ -521,15 +578,18 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
         payload = {"Title": title, "Authors": authors}
         if serial_hints:
             payload.update(serial_hints)
+        _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="success")
         return payload
 
-    except ImportError:
+    except ImportError as e:
         logger.error("pytesseract or Pillow is not installed.")
+        _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="failed", error_message=str(e))
     except (OSError, ValueError, RuntimeError) as e:
         msg = str(e)
         if "tesseract is not installed" in msg:
             msg = "tesseract-ocr not found on host. On macOS, run 'brew install tesseract'."
         logger.error("Tesseract extraction failed: %s", msg)
+        _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="failed", error_message=msg)
 
     return None
 

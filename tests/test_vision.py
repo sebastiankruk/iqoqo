@@ -523,3 +523,58 @@ def test_ollama_read_timeout_does_not_retry_and_falls_back_immediately(mock_post
     assert result == {"Title": "Fallback", "Authors": []}
     assert mock_post.call_count == 1
     mock_tess.assert_called_once()
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch.dict(os.environ, {"GEMINI_API_KEY": "bad_key"})
+@patch("google.genai.Client", create=True)
+def test_extract_via_gemini_records_failed_telemetry(mock_client_class, mock_record, mock_session):
+    """Gemini API failure records a 'failed' telemetry row rather than staying invisible."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    mock_client.models.generate_content.side_effect = RuntimeError("400 API key not valid")
+
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is None
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "gemini"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "failed"
+    assert "400 API key not valid" in (mock_record.call_args.kwargs["error_message"] or "")
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch("requests.post", side_effect=requests.exceptions.ReadTimeout("timed out"))
+def test_extract_via_ollama_records_failed_telemetry(mock_post, mock_record, _mock_session):
+    """Ollama timeout records a 'failed' telemetry row with error details."""
+    result = _extract_via_ollama(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is None
+    mock_post.assert_called_once()
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "ollama"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "failed"
+
+
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch("pytesseract.image_to_string", return_value="Tesseract Book\nSome Author")
+@patch("PIL.Image.open")
+def test_extract_via_tesseract_records_success_telemetry(mock_open, _mock_ocr, mock_record, _mock_session):
+    """Tesseract OCR fallback records a 'success' telemetry row when producing metadata."""
+    mock_open.return_value = MagicMock()
+    result = _extract_via_tesseract(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is not None
+    assert result["Title"] == "Tesseract Book"
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "tesseract"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "success"
