@@ -56,10 +56,20 @@ interface ApiEnvelope<T> {
   error?: string | null;
 }
 
-/** Extracted book metadata returned by the `/vision/extract` endpoint. */
-interface ExtractedMetadata {
+/** Extracted book or serial metadata returned by the `/vision/extract` endpoint. */
+export interface ExtractedMetadata {
   Title?: string;
   Authors?: string[];
+  Publisher?: string;
+  issn?: string;
+  indeks?: string;
+  ean_addon?: string;
+  issue_number?: string;
+  cumulative_issue_number?: number;
+  publication_month?: number;
+  publication_year?: number;
+  cover_headline?: string;
+  volume?: string;
 }
 
 interface CameraCaptureProps {

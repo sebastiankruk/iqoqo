@@ -157,6 +157,7 @@ def get_system_status():
     from app.utils.allegro import get_allegro_token_status
     from app.utils.discogs import get_discogs_status
     from app.utils.igdb import get_igdb_token_status
+    from app.utils.vision import get_llm_vision_status
 
     probe_remote = request.args.get("probe", "false").lower() in ("1", "true", "yes")
     if probe_remote:
@@ -236,6 +237,8 @@ def get_system_status():
         "status": "CONFIGURED_VALID" if reb_configured else "DISABLED",
     }
 
+    llm_vision_status = get_llm_vision_status(probe_ollama=probe_remote)
+
     payload = {
         "status": "ok",
         "version": Config.VERSION,
@@ -249,6 +252,7 @@ def get_system_status():
         "google_books": google_books_status,
         "upc": upc_status,
         "rebrickable": rebrickable_status,
+        "llm_vision": llm_vision_status,
     }
     return jsonify({"success": True, "data": payload, "error": None}), 200
 

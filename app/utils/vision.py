@@ -22,17 +22,71 @@ import json
 import logging
 import os
 import re
+import shutil
 import time
 import uuid
+from typing import Any
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import Config
+from app.core.config_service import ConfigService
 from app.core.permissions import PermissionName
 from app.db.models import User, db
 
 logger = logging.getLogger(__name__)
+
+_MAX_COVER_PIXELS = 100_000_000
+_OCR_MAX_DIMENSION = 2200
+_LLM_MAX_DIMENSION = 2000
+
+
+def _is_llm_enabled() -> bool:
+    """Resolve ALLOW_LLM via Config.ALLOW_LLM or ConfigService (DB / env)."""
+    if Config.ALLOW_LLM:
+        return True
+    return ConfigService.get_bool("ALLOW_LLM", False)
+
+
+def _resolve_ollama_base_url() -> str:
+    """Return configured Ollama URL, falling back to host.docker.internal inside containers."""
+    configured = ConfigService.get("OLLAMA_URL")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip().rstrip("/")
+    default_url = "http://localhost:11434"
+    if os.path.exists("/.dockerenv"):
+        try:
+            requests.get(f"{default_url}/api/tags", timeout=1)
+            return default_url
+        except requests.exceptions.RequestException:
+            return "http://host.docker.internal:11434"
+    return default_url
+
+
+def _normalize_cover_image_bytes(image_bytes: bytes, max_dim: int = _LLM_MAX_DIMENSION) -> tuple[bytes, str]:
+    """EXIF-transpose and downscale large camera images; return original bytes if unparseable."""
+    try:
+        from PIL import Image, ImageOps
+
+        prev_max = Image.MAX_IMAGE_PIXELS
+        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
+            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as opened:
+                img = ImageOps.exif_transpose(opened)
+                if max(img.size) <= max_dim and img.mode in ("RGB", "L"):
+                    return image_bytes, "image/jpeg"
+                rgb = img.convert("RGB")
+                rgb.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                rgb.save(buf, format="JPEG", quality=88)
+                return buf.getvalue(), "image/jpeg"
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max
+    except (ImportError, OSError, ValueError):
+        return image_bytes, "image/jpeg"
+
 
 PROMPT = (
     "You are a book and periodical cataloguing assistant. "
@@ -149,11 +203,9 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         if user:
             can_use_cloud_llm = user.has_permission(PermissionName.LLM_GENERATE_CLOUD.value)
 
-    if not Config.ALLOW_LLM or not can_use_cloud_llm:
-        logger.debug("Gemini execution skipped: ALLOW_LLM=%s, cloud status=%s", Config.ALLOW_LLM, can_use_cloud_llm)
+    if not _is_llm_enabled() or not can_use_cloud_llm:
+        logger.debug("Gemini execution skipped: ALLOW_LLM=%s, cloud status=%s", _is_llm_enabled(), can_use_cloud_llm)
         return None
-
-    from app.core.config_service import ConfigService
 
     api_key = ConfigService.get("GEMINI_API_KEY")
     if not api_key:
@@ -166,10 +218,17 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | None 
         from google import genai  # type: ignore[import-untyped]
         from google.genai import types  # type: ignore[import-untyped]
 
+        normalized_bytes, normalized_mime = _normalize_cover_image_bytes(image_bytes)
+        effective_mime = normalized_mime if normalized_bytes is not image_bytes else mime_type
+
         client = genai.Client(api_key=api_key)
         start_time = time.time()
 
-        response = _call_gemini_api(client, "gemini-flash-latest", [types.Part.from_bytes(data=image_bytes, mime_type=mime_type), PROMPT])
+        response = _call_gemini_api(
+            client,
+            "gemini-flash-latest",
+            [types.Part.from_bytes(data=normalized_bytes, mime_type=effective_mime), PROMPT],
+        )
 
         raw = response.text.strip() if response.text else ""
         result = _parse_json_response(raw)
@@ -207,15 +266,16 @@ def _call_ollama_api(url, payload):
 
 
 def _extract_via_ollama(image_bytes: bytes) -> dict | None:
-    if not Config.ALLOW_LLM:
+    if not _is_llm_enabled():
         logger.debug("Ollama vision extraction skipped: ALLOW_LLM is false.")
         return None
 
-    url = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-    model = os.environ.get("OLLAMA_VISION_MODEL", "llava")
+    url = _resolve_ollama_base_url()
+    model = str(ConfigService.get("OLLAMA_VISION_MODEL") or "llava").strip()
 
     try:
-        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        normalized_bytes, _ = _normalize_cover_image_bytes(image_bytes)
+        b64_image = base64.b64encode(normalized_bytes).decode("utf-8")
         payload = {"model": model, "prompt": PROMPT, "images": [b64_image], "stream": False, "format": "json"}
 
         response = _call_ollama_api(url, payload)
@@ -234,29 +294,121 @@ def _extract_via_ollama(image_bytes: bytes) -> dict | None:
     return None
 
 
+def _pick_serial_headline(lines: list[str]) -> str | None:
+    """Pick the cleanest prominent headline from magazine cover OCR lines."""
+    noise_re = re.compile(r"^(?:cena|www\.|http|issn|indeks|nr\b|no\.?\b|9\s*77|\d+[\d\s.,/>-]*$)", re.IGNORECASE)
+    garbage_re = re.compile(r"[-_=~|]{2,}")
+    candidates: list[tuple[int, str]] = []
+    for line in lines:
+        cleaned = line.strip()
+        if len(cleaned) < 5 or noise_re.search(cleaned) or garbage_re.search(cleaned):
+            continue
+        if "national geographic" in cleaned.lower():
+            continue
+        words = [w for w in re.findall(r"[A-Za-zÀ-ÿ]+", cleaned) if len(w) >= 3]
+        alpha_chars = sum(1 for ch in cleaned if ch.isalpha())
+        if words and alpha_chars >= 5:
+            candidates.append((alpha_chars, cleaned))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _run_multizone_serial_ocr(img: Any, pytesseract_mod: Any, lang: str | None) -> str:
+    """Run targeted OCR on top masthead (normal + inverted) and bottom barcode zones."""
+    from PIL import ImageOps
+
+    w, h = img.size
+    gray = img.convert("L")
+    ocr_kwargs = {"lang": lang, "config": "--psm 6"} if lang else {"config": "--psm 6"}
+    zone_texts: list[str] = []
+
+    top_strip = gray.crop((0, 0, w, max(1, int(h * 0.14))))
+    for variant in (ImageOps.autocontrast(top_strip), ImageOps.autocontrast(ImageOps.invert(top_strip))):
+        t = pytesseract_mod.image_to_string(variant, **ocr_kwargs).strip()
+        if t:
+            zone_texts.append(t)
+
+    bot_right = ImageOps.autocontrast(gray.crop((int(w * 0.55), int(h * 0.72), w, int(h * 0.96))))
+    bot_left = ImageOps.autocontrast(gray.crop((0, int(h * 0.72), int(w * 0.45), int(h * 0.96))))
+    for crop in (bot_right, bot_left, bot_right.rotate(90, expand=True), bot_left.rotate(270, expand=True)):
+        t = pytesseract_mod.image_to_string(crop, **ocr_kwargs).strip()
+        if t:
+            zone_texts.append(t)
+
+    return "\n".join(zone_texts)
+
+
 def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
     try:
         import pytesseract
-        from PIL import Image
+        from PIL import Image, ImageOps
 
-        img = Image.open(io.BytesIO(image_bytes))
-        text = pytesseract.image_to_string(img).strip()
+        prev_max = Image.MAX_IMAGE_PIXELS
+        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
+            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max
 
-        if not text:
+        is_real_pil_image = hasattr(img, "size") and isinstance(getattr(img, "size", None), tuple) and len(img.size) == 2
+        lang: str | None = None
+        if is_real_pil_image:
+            img = ImageOps.exif_transpose(img)
+            try:
+                avail_langs = pytesseract.get_languages()
+                if "pol" in avail_langs:
+                    lang = "pol+eng"
+            except (OSError, RuntimeError, TypeError):
+                lang = None
+
+            work_img = img.copy()
+            if max(work_img.size) > _OCR_MAX_DIMENSION:
+                work_img.thumbnail((_OCR_MAX_DIMENSION, _OCR_MAX_DIMENSION), Image.Resampling.LANCZOS)
+            text = pytesseract.image_to_string(work_img, **({"lang": lang} if lang else {})).strip()
+            zone_text = _run_multizone_serial_ocr(work_img, pytesseract, lang)
+            combined_text = "\n".join(part for part in (text, zone_text) if part)
+        else:
+            text = pytesseract.image_to_string(img).strip()
+            combined_text = text
+
+        if not combined_text.strip():
             return None
 
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        lines = [line.strip() for line in (text or combined_text).splitlines() if line.strip()]
         if not lines:
             return None
 
-        title = lines[0]
-        authors = lines[1:] if len(lines) > 1 else []
-
-        payload: dict[str, object] = {"Title": title, "Authors": authors}
-
         from app.utils.issn import parse_cover_issue_label
 
-        serial_hints = parse_cover_issue_label(text)
+        serial_hints = parse_cover_issue_label(combined_text)
+        if serial_hints.get("issn"):
+            title = lines[0]
+            publisher = ""
+            try:
+                from app.strategies.serials import SerialLookupStrategy
+
+                serial_meta, _ = SerialLookupStrategy().lookup(serial_hints["issn"])
+                if isinstance(serial_meta, dict):
+                    title = str(serial_meta.get("Title") or serial_meta.get("title") or title)
+                    publisher = str(serial_meta.get("publisher") or "")
+            except (OSError, ValueError, RuntimeError):
+                pass
+
+            payload: dict[str, object] = {"Title": title, "Authors": []}
+            if publisher:
+                payload["Publisher"] = publisher
+            payload.update(serial_hints)
+            headline = _pick_serial_headline(lines)
+            if headline and "cover_headline" not in payload:
+                payload["cover_headline"] = headline
+            return payload
+
+        title = lines[0]
+        authors = lines[1:] if len(lines) > 1 else []
+        payload = {"Title": title, "Authors": authors}
         if serial_hints:
             payload.update(serial_hints)
         return payload
@@ -270,6 +422,76 @@ def _extract_via_tesseract(image_bytes: bytes) -> dict | None:
         logger.error("Tesseract extraction failed: %s", msg)
 
     return None
+
+
+def get_llm_vision_status(probe_ollama: bool = False) -> dict[str, Any]:
+    """Return health & readiness summary for Gemini, OpenAI, Ollama Vision/Dedupe, and Tesseract."""
+    from app.db.models import InstanceSettings
+
+    configured_keys = set(InstanceSettings.get_configured_keys())
+    allow_llm = _is_llm_enabled()
+
+    gemini_db = "GEMINI_API_KEY" in configured_keys
+    gemini_env = bool(os.getenv("GEMINI_API_KEY"))
+    gemini_configured = gemini_db or gemini_env
+    gemini_source = "db" if gemini_db else ("env" if gemini_env else "missing")
+
+    openai_db = "OPENAI_API_KEY" in configured_keys
+    openai_env = bool(os.getenv("OPENAI_API_KEY"))
+    openai_configured = openai_db or openai_env
+    openai_source = "db" if openai_db else ("env" if openai_env else "missing")
+
+    ollama_url = _resolve_ollama_base_url()
+    ollama_vision_model = str(ConfigService.get("OLLAMA_VISION_MODEL") or "llava").strip()
+    ollama_dedupe_model = str(ConfigService.get("OLLAMA_DEDUPE_MODEL") or "llama3:latest").strip()
+
+    ollama_reachable = False
+    installed_models: list[str] = []
+    if probe_ollama:
+        try:
+            resp = requests.get(f"{ollama_url}/api/tags", timeout=2)
+            resp.raise_for_status()
+            payload = resp.json()
+            installed_models = [
+                str(entry.get("name", "")) for entry in (payload.get("models") or []) if isinstance(entry, dict) and entry.get("name")
+            ]
+            ollama_reachable = True
+        except (requests.exceptions.RequestException, ValueError):
+            ollama_reachable = False
+
+    def _has_model(target: str) -> bool:
+        return any(m == target or m.startswith(f"{target}:") for m in installed_models)
+
+    vision_model_installed = _has_model(ollama_vision_model) if ollama_reachable else False
+    dedupe_model_installed = _has_model(ollama_dedupe_model) if ollama_reachable else False
+
+    tesseract_bin = bool(shutil.which("tesseract"))
+    tesseract_langs: list[str] = []
+    if tesseract_bin:
+        try:
+            import pytesseract
+
+            tesseract_langs = list(pytesseract.get_languages())
+        except (ImportError, OSError, RuntimeError):
+            tesseract_langs = []
+
+    vision_ready = allow_llm and (gemini_configured or (ollama_reachable and vision_model_installed))
+    return {
+        "allow_llm": allow_llm,
+        "gemini": {"configured": gemini_configured, "source": gemini_source},
+        "openai": {"configured": openai_configured, "source": openai_source},
+        "ollama": {
+            "url": ollama_url,
+            "vision_model": ollama_vision_model,
+            "dedupe_model": ollama_dedupe_model,
+            "reachable": ollama_reachable,
+            "vision_model_installed": vision_model_installed,
+            "dedupe_model_installed": dedupe_model_installed,
+            "installed_models": installed_models,
+        },
+        "vision_ready": vision_ready,
+        "tesseract": {"installed": tesseract_bin, "languages": tesseract_langs},
+    }
 
 
 def _extract_json_object(raw: str) -> dict | None:

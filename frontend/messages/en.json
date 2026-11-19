@@ -624,6 +624,7 @@
       "description": "This 977 periodical barcode is shared across multiple issues. Pick an existing issue or create a new one.",
       "existingIssuesLabel": "Existing Cataloged Issues",
       "addNewIssue": "Add New Issue",
+      "snapCoverAutoFill": "Snap Cover to Auto-Fill Issue",
       "selectIssue": "Use This Issue",
       "noIssuesYet": "No issues of this serial are in the catalog yet."
     },

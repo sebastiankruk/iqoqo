@@ -345,6 +345,8 @@ export default function ScanPage() {
         Authors?: string[];
         Publisher?: string;
         issn?: string;
+        indeks?: string;
+        ean_addon?: string;
         issue_number?: string;
         cumulative_issue_number?: number;
         publication_month?: number;
@@ -355,14 +357,17 @@ export default function ScanPage() {
     ) => {
       setTitle(data.Title || "");
       setAuthor(data.Authors?.join(", ") || "");
-      if (
+      const hasSerialFields = Boolean(
         data.issn ||
+        data.indeks ||
+        data.ean_addon ||
         data.issue_number ||
         data.cumulative_issue_number != null ||
         data.cover_headline ||
         activeFormat === "magazine"
-      ) {
-        if (data.issn) {
+      );
+      if (hasSerialFields) {
+        if (data.issn || data.indeks || data.ean_addon || data.issue_number || data.cumulative_issue_number != null) {
           setActiveFormat("magazine");
         }
         setSerialDefaults(prev => ({
@@ -374,6 +379,7 @@ export default function ScanPage() {
             data.cumulative_issue_number != null ? String(data.cumulative_issue_number) : prev.cumulativeIssueNumber,
           publicationMonth: data.publication_month != null ? String(data.publication_month) : prev.publicationMonth,
           year: data.publication_year != null ? String(data.publication_year) : prev.year,
+          eanAddon: data.ean_addon || prev.eanAddon,
           coverHeadline: data.cover_headline || prev.coverHeadline,
         }));
       }
@@ -697,6 +703,28 @@ export default function ScanPage() {
               });
               setSerialDisambiguation(null);
               setShowManual(true);
+            }}
+            onSnapCoverAutoFill={(extracted, file) => {
+              const prefill = serialDisambiguation.prefill;
+              setActiveFormat("magazine");
+              setTitle(prefill?.title || serialDisambiguation.title || extracted.Title || "");
+              setAuthor("");
+              setInitialIdentifier(prefill?.ean || serialDisambiguation.ean || serialDisambiguation.issn || "");
+              setSerialDefaults({
+                publisher: prefill?.publisher || serialDisambiguation.publisher || extracted.Publisher || "",
+                issn: prefill?.issn || serialDisambiguation.issn || extracted.issn || "",
+                issueNumber: extracted.issue_number || "",
+                cumulativeIssueNumber:
+                  extracted.cumulative_issue_number != null ? String(extracted.cumulative_issue_number) : "",
+                publicationMonth: extracted.publication_month != null ? String(extracted.publication_month) : "",
+                year: extracted.publication_year != null ? String(extracted.publication_year) : "",
+                eanAddon: extracted.ean_addon || "",
+                coverHeadline: extracted.cover_headline || "",
+              });
+              setSnappedCover(file);
+              setSerialDisambiguation(null);
+              setShowManual(true);
+              toast.success("Issue details extracted from cover! Please review.");
             }}
             onDismiss={() => setSerialDisambiguation(null)}
           />

@@ -149,6 +149,7 @@ def test_system_status(client, normal_user_headers):
     assert "igdb" in data["data"]
     assert "twitch_igdb_status" in data["data"]
     assert "bgg" in data["data"]
+    assert "llm_vision" in data["data"]
     assert "version" in data["data"]
     assert data["error"] is None
 

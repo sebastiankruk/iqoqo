@@ -624,6 +624,7 @@
       "description": "Ten kod EAN 977 jest współdzielony przez wiele numerów. Wybierz istniejący numer lub utwórz nowy.",
       "existingIssuesLabel": "Skatalogowane numery",
       "addNewIssue": "Dodaj nowy numer",
+      "snapCoverAutoFill": "Zrób zdjęcie okładki, aby uzupełnić",
       "selectIssue": "Wybierz ten numer",
       "noIssuesYet": "W katalogu nie ma jeszcze żadnych numerów tego tytułu."
     },

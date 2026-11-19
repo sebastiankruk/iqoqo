@@ -43,8 +43,9 @@ from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
 from app.utils.issn import is_977_periodical_barcode, is_valid_issn, parse_issn_or_977
 from app.utils.vision import extract_metadata_from_cover
 
-# Maximum allowed upload size for cover images (10 MB)
+# Maximum allowed upload size for cover images (10 MB) and safe pixel bound (100 MP)
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
+_MAX_COVER_PIXELS = 100_000_000  # 100 MP (supports 50MP+ phone camera photos)
 _ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 
@@ -1071,8 +1072,13 @@ def extract_from_cover():
         return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     try:
-        Image.open(io.BytesIO(image_bytes)).verify()
-    except (OSError, SyntaxError):
+        prev_max_pixels = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = max(prev_max_pixels or 0, _MAX_COVER_PIXELS)
+        try:
+            Image.open(io.BytesIO(image_bytes)).verify()
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max_pixels
+    except (OSError, SyntaxError, Image.DecompressionBombError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}

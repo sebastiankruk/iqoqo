@@ -406,3 +406,80 @@ def test_ollama_vision_timeout_is_overridable(monkeypatch):
     monkeypatch.setenv("OLLAMA_VISION_TIMEOUT", "180")
     vision._call_ollama_api("http://ollama.local", {})
     assert captured["timeout"] == 180, "a slower host must be able to raise the ceiling"
+
+
+def test_normalize_cover_image_bytes_downscales_oversized_image():
+    """Large camera images are downscaled cleanly without raising DecompressionBombError."""
+    import io
+
+    from PIL import Image
+
+    from app.utils.vision import _normalize_cover_image_bytes
+
+    buf = io.BytesIO()
+    Image.new("RGB", (3000, 4000), color="yellow").save(buf, format="JPEG")
+    out_bytes, mime = _normalize_cover_image_bytes(buf.getvalue(), max_dim=1200)
+    assert mime == "image/jpeg"
+    with Image.open(io.BytesIO(out_bytes)) as resized:
+        assert max(resized.size) <= 1200
+
+
+def test_extract_via_tesseract_enriches_serial_by_issn(monkeypatch):
+    """When Tesseract detects an ISSN on a magazine cover, Title/Publisher come from SerialLookupStrategy."""
+    import io
+
+    import pytesseract
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (600, 800), color="white").save(buf, format="JPEG")
+
+    monkeypatch.setattr(pytesseract, "get_languages", lambda: ["eng"])
+    monkeypatch.setattr(
+        pytesseract,
+        "image_to_string",
+        lambda *_a, **_kw: "wr --- is\nNR 7(58) LIPIEC 2004\nKOKAINA\nISSN 1507-5966 INDEKS 323357\n07>",
+    )
+    monkeypatch.setattr(
+        "app.strategies.serials.SerialLookupStrategy.lookup",
+        lambda _self, _q: ({"Title": "National Geographic Polska", "publisher": "G+J RBA"}, "biblioteka_narodowa"),
+    )
+
+    result = _extract_via_tesseract(buf.getvalue())
+    assert result is not None
+    assert result["Title"] == "National Geographic Polska"
+    assert result["Publisher"] == "G+J RBA"
+    assert result["Authors"] == []
+    assert result["issn"] == "1507-5966"
+    assert result["issue_number"] == "7"
+    assert result["cumulative_issue_number"] == 58
+    assert result["publication_month"] == 7
+    assert result["publication_year"] == 2004
+    assert result["ean_addon"] == "07"
+    assert result["cover_headline"] == "KOKAINA"
+
+
+def test_get_llm_vision_status_reports_providers_and_ollama_models(app, monkeypatch):
+    """get_llm_vision_status reports ALLOW_LLM, Gemini, OpenAI, Ollama vision model readiness, and Tesseract."""
+    from app.utils.vision import get_llm_vision_status
+
+    class _FakeResp:
+        def raise_for_status(self):
+            return None
+
+        @staticmethod
+        def json():
+            return {"models": [{"name": "llama3:latest"}, {"name": "llava:latest"}]}
+
+    monkeypatch.setattr(requests, "get", lambda *_a, **_kw: _FakeResp())
+    monkeypatch.setattr("app.utils.vision.Config.ALLOW_LLM", True)
+    monkeypatch.setenv("OLLAMA_VISION_MODEL", "llava")
+
+    with app.app_context():
+        status = get_llm_vision_status(probe_ollama=True)
+
+    assert status["allow_llm"] is True
+    assert status["ollama"]["reachable"] is True
+    assert status["ollama"]["vision_model_installed"] is True
+    assert status["ollama"]["dedupe_model_installed"] is True
+    assert status["vision_ready"] is True
