@@ -554,36 +554,38 @@ if [[ ${#active_exporters[@]} -gt 0 ]]; then
     else
         check "Telemetry Ingestion" warn "exporters active (${active_exporters[*]}) but OTel Collector endpoint (:4318) unreachable"
     fi
+fi
 
-    web_otel_cname=$(find_container "web")
-    worker_otel_cname=$(find_container "worker")
-    live_otel_ep=""
-    live_otel_proto=""
-    if [[ -n "$web_otel_cname" ]]; then
-        live_otel_ep=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"' 2>/dev/null || echo "")
-        live_otel_proto=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_PROTOCOL:-}"' 2>/dev/null || echo "")
-    fi
-    [[ -z "$live_otel_ep" ]] && live_otel_ep=$(load_env "OTEL_EXPORTER_OTLP_ENDPOINT")
-    [[ -z "$live_otel_proto" ]] && live_otel_proto=$(load_env "OTEL_EXPORTER_OTLP_PROTOCOL")
+web_otel_cname=$(find_container "web")
+worker_otel_cname=$(find_container "worker")
+live_otel_ep=""
+live_otel_proto=""
+if [[ -n "$web_otel_cname" ]]; then
+    live_otel_ep=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"' 2>/dev/null || echo "")
+    live_otel_proto=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_PROTOCOL:-}"' 2>/dev/null || echo "")
+fi
+[[ -z "$live_otel_ep" ]] && live_otel_ep=$(load_env "OTEL_EXPORTER_OTLP_ENDPOINT")
+[[ -z "$live_otel_proto" ]] && live_otel_proto=$(load_env "OTEL_EXPORTER_OTLP_PROTOCOL")
 
+if [[ ${#active_exporters[@]} -gt 0 || -n "$live_otel_ep" ]]; then
     if [[ "$live_otel_ep" == *":4318"* && ( -z "$live_otel_proto" || "$live_otel_proto" == "grpc" ) ]]; then
         check "OTel Protocol" fail "OTLP endpoint targets HTTP :4318 without OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf (defaults to gRPC HTTP/2 and drops telemetry)"
     elif [[ -n "$live_otel_proto" ]]; then
         check "OTel Protocol" pass "${live_otel_proto} (${live_otel_ep:-default})"
     fi
+fi
 
-    app_otel_errors=0
-    for app_c in "$web_otel_cname" "$worker_otel_cname"; do
-        if [[ -n "$app_c" ]]; then
-            c_errs=$(docker logs "$app_c" --since 5m 2>&1 | grep -c -E "Failed to export (traces|metrics|logs) to otel-collector|Failed parsing HTTP/2|Trying to connect an http1\.x server" || true)
-            app_otel_errors=$((app_otel_errors + ${c_errs:-0}))
-        fi
-    done
-    if [[ "$app_otel_errors" -gt 0 ]]; then
-        check "App OTel Export" fail "${app_otel_errors} OTLP export error(s) in web/worker logs in last 5m (telemetry dropped)"
-    elif [[ -n "$web_otel_cname" || -n "$worker_otel_cname" ]]; then
-        check "App OTel Export" pass "clean (0 OTLP export errors in web/worker logs)"
+app_otel_errors=0
+for app_c in "$web_otel_cname" "$worker_otel_cname"; do
+    if [[ -n "$app_c" ]]; then
+        c_errs=$(docker logs "$app_c" --since 5m 2>&1 | grep -c -E "Failed to export (traces|metrics|logs) to otel-collector|Failed parsing HTTP/2|Trying to connect an http1\.x server" || true)
+        app_otel_errors=$((app_otel_errors + ${c_errs:-0}))
     fi
+done
+if [[ "$app_otel_errors" -gt 0 ]]; then
+    check "App OTel Export" fail "${app_otel_errors} OTLP export error(s) in web/worker logs in last 5m (telemetry dropped)"
+elif [[ ${#active_exporters[@]} -gt 0 && ( -n "$web_otel_cname" || -n "$worker_otel_cname" ) ]]; then
+    check "App OTel Export" pass "clean (0 OTLP export errors in web/worker logs)"
 fi
 
 if [[ "$STACK" != "dev" ]]; then

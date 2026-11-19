@@ -331,10 +331,11 @@ exit 0
 EOF
   chmod +x "${mock_bin_otel}/docker"
 
-  tmp_env="${TEST_TEMP_DIR}/.env.otel"
-  printf 'OTEL_TRACES_EXPORTER=otlp\nOTEL_LOGS_EXPORTER=otlp\n' > "${tmp_env}"
+  otel_deploy_dir="${TEST_TEMP_DIR}/deploy_otel"
+  mkdir -p "${otel_deploy_dir}"
+  printf 'OTEL_TRACES_EXPORTER=otlp\nOTEL_LOGS_EXPORTER=otlp\n' > "${otel_deploy_dir}/.env"
 
-  run env -u IQOQO_AI_MODE ENV_FILE="${tmp_env}" PATH="${mock_bin_otel}:$PATH" bash scripts/iqoqo-status.sh prod
+  run env -u IQOQO_AI_MODE PATH="${mock_bin_otel}:$PATH" bash scripts/iqoqo-status.sh --stack prod --deploy-dir "${otel_deploy_dir}"
   [ "$status" -ne 0 ]
   [[ "$output" =~ "OTel Protocol" ]]
   [[ "$output" =~ "http/protobuf" ]]
