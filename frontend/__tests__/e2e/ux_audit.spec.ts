@@ -223,15 +223,11 @@ test.describe("UX/UI Audit Workflow", () => {
 
       let clickCount = 0;
 
-      // Click 1: Switch to Manual Search tab
-      await page.getByRole("button", { name: "Manual Search" }).click();
-      clickCount++;
+      // Input 1: Fill the full-width unified lookup field
+      await page.getByTestId("unified-lookup-input").fill("9780134685991");
 
-      // Input 1: Fill the lookup field
-      await page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…").fill("9780134685991");
-
-      // Click 2: Click search icon button
-      await page.locator("button:has(svg.lucide-search)").click();
+      // Click 1: Click Lookup submit button
+      await page.getByTestId("unified-lookup-submit").click();
       clickCount++;
 
       // Wait for success card to be visible
@@ -337,15 +333,38 @@ test.describe("UX/UI Audit Workflow", () => {
         const startCameraButton = page.getByTestId("start-camera-button");
         await expect(startCameraButton).toBeVisible();
 
-        // Audit tab buttons in bottom sheet on mobile viewport
+        // Audit compact single-line top bar and 2-tab bottom sheet on mobile viewport
+        const formatTrigger = page.getByTestId("format-selector-trigger");
+        const policyTrigger = page.getByTestId("policy-selector-trigger");
+        const batchToggle = page.getByTestId("batch-scan-toggle");
+        const lookupForm = page.getByTestId("unified-lookup-form");
+
+        await expect(formatTrigger).toBeVisible();
+        await expect(policyTrigger).toBeVisible();
+        await expect(batchToggle).toBeVisible();
+        await expect(lookupForm).toBeVisible();
+
+        const [formatBox, policyBox, batchBox] = await Promise.all([
+          formatTrigger.boundingBox(),
+          policyTrigger.boundingBox(),
+          batchToggle.boundingBox(),
+        ]);
+        expect(formatBox && policyBox && batchBox).toBeTruthy();
+        if (formatBox && policyBox && batchBox) {
+          expect(formatBox.x).toBeGreaterThanOrEqual(0);
+          expect(batchBox.x + batchBox.width).toBeLessThanOrEqual(375);
+          expect(Math.abs(formatBox.y - policyBox.y)).toBeLessThan(6);
+          expect(Math.abs(formatBox.y - batchBox.y)).toBeLessThan(6);
+        }
+
         const tabBarcode = page.getByTestId("scanner-tab-barcode");
         const tabCover = page.getByTestId("scanner-tab-cover");
-        const tabManual = page.getByTestId("scanner-tab-manual");
         await expect(tabBarcode).toBeVisible();
         await expect(tabCover).toBeVisible();
-        await expect(tabManual).toBeVisible();
+        await expect(page.getByTestId("scanner-tab-manual")).not.toBeVisible();
+        await expect(page.getByTestId("enter-manually-link")).toBeVisible();
 
-        console.log("[AUDIT] Mobile Scanner - Bottom sheet tabs are fully visible and accessible.");
+        console.log("[AUDIT] Mobile Scanner - Single-line TopBar & 2-tab BottomSheet verified.");
       });
     });
   });

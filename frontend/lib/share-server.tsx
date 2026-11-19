@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 
 import { buildPaginationWindow } from "@/lib/pagination";
 import { resolveApiUrl } from "@/lib/utils";
@@ -73,7 +74,30 @@ export function resolvePublicOrigin(): string {
 }
 
 /**
+ * Safely retrieve request cookies when running inside a dynamic SSR request.
+ * Returns empty headers during Capacitor static builds or unit tests.
+ */
+async function getCookieHeader(): Promise<Record<string, string>> {
+  if (process.env.CAPACITOR_BUILD === "true") {
+    return {};
+  }
+  try {
+    const cookieStore = await cookies();
+    const cookieHeader = cookieStore?.toString();
+    if (cookieHeader) {
+      return { Cookie: cookieHeader };
+    }
+  } catch {
+    // RequestAsyncStorage is unavailable outside active requests
+  }
+  return {};
+}
+
+/**
  * Fetches a paginated shared collection by its secure token.
+ *
+ * Forwards caller cookies so authenticated friends receive Friend Bonus items
+ * on SSR while anonymous requests keep 60-second ISR caching.
  *
  * @param token - The unique share token.
  * @param page - 1-based page number.
@@ -86,9 +110,12 @@ export async function getSharedCollection(
   perPage = SHARE_UI_PER_PAGE
 ): Promise<SharedCollectionResult> {
   try {
-    const res = await fetch(resolveApiUrl(`/public/share/${token}?page=${page}&per_page=${perPage}`, true), {
-      next: { revalidate: 60 },
-    });
+    const cookieHeaders = await getCookieHeader();
+    const hasCookies = Boolean(cookieHeaders.Cookie);
+    const res = await fetch(
+      resolveApiUrl(`/public/share/${token}?page=${page}&per_page=${perPage}`, true),
+      hasCookies ? { headers: cookieHeaders, cache: "no-store" } : { next: { revalidate: 60 } }
+    );
     if (res.status === 404) return { kind: "not-found" };
     if (!res.ok) return { kind: "error" };
 

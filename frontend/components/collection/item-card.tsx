@@ -206,20 +206,55 @@ export function ItemCard({
           : "Board Game"
         : isPuzzle
           ? "Puzzle"
-          : "Book";
+          : badge.formatLabel || "Book";
   const aspectClass = isAudio || isBoardGame || isPuzzle ? "aspect-square" : "aspect-[2/3]";
 
   const title = item.title ?? "Untitled";
-  // Normalize authors to always be an array (handles string or array)
-  const rawAuthors = item.authors;
+  // Normalize authors and drop placeholder strings such as "Unknown"
+  const rawAuthors: unknown = item.authors;
+  const isRealAuthor = (value: string) => {
+    const cleaned = value.trim().toLowerCase();
+    return Boolean(cleaned) && cleaned !== "unknown" && cleaned !== "n/a" && cleaned !== "none";
+  };
   const authorsList: string[] = Array.isArray(rawAuthors)
-    ? rawAuthors.filter(a => typeof a === "string")
-    : typeof rawAuthors === "string"
-      ? [rawAuthors]
+    ? rawAuthors.filter((a): a is string => typeof a === "string" && isRealAuthor(a))
+    : typeof rawAuthors === "string" && isRealAuthor(rawAuthors)
+      ? [rawAuthors.trim()]
       : [];
 
+  const issueNumber =
+    (item as { issue_number?: string | null }).issue_number || (tMeta?.issue_number as string | undefined) || undefined;
+  const cumulativeIssueNumber =
+    (item as { cumulative_issue_number?: number | null }).cumulative_issue_number ??
+    (tMeta?.cumulative_issue_number as number | undefined);
+  const pubMonth =
+    (item as { publication_month?: number | null }).publication_month ??
+    (tMeta?.publication_month as number | undefined);
+  const pubYear =
+    (item as { publication_year?: number | null }).publication_year ??
+    (tMeta?.publication_year as number | undefined) ??
+    (item as { year?: number | null }).year;
+  const issuePart = issueNumber
+    ? `#${issueNumber}${cumulativeIssueNumber != null ? ` (${cumulativeIssueNumber})` : ""}`
+    : cumulativeIssueNumber != null
+      ? `#${cumulativeIssueNumber}`
+      : null;
+  const datePart =
+    pubMonth != null && pubYear != null
+      ? `${String(pubMonth).padStart(2, "0")}/${pubYear}`
+      : pubYear != null
+        ? String(pubYear)
+        : null;
+  const cleanPublisher =
+    item.publisher && !["unknown", "n/a", "none", ""].includes(String(item.publisher).trim().toLowerCase())
+      ? String(item.publisher).trim()
+      : null;
+  const editionFallback = [issuePart, datePart].filter(Boolean).join(" · ") || cleanPublisher || null;
+
   const renderAuthors = () => {
-    if (authorsList.length === 0) return <span>Unknown author</span>;
+    if (authorsList.length === 0) {
+      return editionFallback ? <span>{editionFallback}</span> : null;
+    }
     return (
       <span className="relative z-20 inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
         {authorsList.map((author, idx) => (
@@ -313,8 +348,8 @@ export function ItemCard({
     </button>
   );
 
-  // Checkbox overlay shown in Global Library (manifestation) view when selection mode is active.
-  const selectionOverlay = isCatalog && onToggleSelect && (
+  // Checkbox overlay shown whenever multi-select mode is active (manifestations or owned items).
+  const selectionOverlay = onToggleSelect && (
     <button
       type="button"
       aria-label={isSelected ? "Deselect" : "Select"}

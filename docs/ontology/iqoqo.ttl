@@ -891,3 +891,82 @@ iqoqo:FeedbackComment a owl:Class ;
     rdfs:comment "Rationale or LLM justification for duplicate candidate judgment." ;
     rdfs:domain :DuplicateCandidate ;
     rdfs:range xsd:string .
+
+# ---------------------------------------------------------------------------
+# Serials, Journals & Periodical Issues (v1.1.0 - C131)
+# ---------------------------------------------------------------------------
+
+:SerialWork a owl:Class ;
+    rdfs:subClassOf :Work, frbroo:F18_Serial_Work ;
+    owl:equivalentClass schema:Periodical ;
+    rdfs:label "SerialWork" ;
+    rdfs:comment "FRBRoo F18 Serial Work representing a continuing periodical or journal (catalog.works with work_kind='serial')." .
+
+:PublicationIssue a owl:Class ;
+    rdfs:subClassOf :Manifestation ;
+    owl:equivalentClass schema:PublicationIssue ;
+    rdfs:label "PublicationIssue" ;
+    rdfs:comment "A published numbered or dated issue Manifestation belonging to a SerialWork." .
+
+iqoqo:issn a owl:DatatypeProperty ;
+    rdfs:label "ISSN" ;
+    rdfs:subPropertyOf schema:issn ;
+    rdfs:comment "Normalized print International Standard Serial Number (XXXX-XXXX)." ;
+    rdfs:domain iqoqo:Work ;
+    rdfs:range xsd:string .
+
+iqoqo:eissn a owl:DatatypeProperty ;
+    rdfs:label "eISSN" ;
+    rdfs:comment "Normalized electronic International Standard Serial Number (XXXX-XXXX)." ;
+    rdfs:domain iqoqo:Work ;
+    rdfs:range xsd:string .
+
+iqoqo:workKind a owl:DatatypeProperty ;
+    rdfs:label "work kind" ;
+    rdfs:comment "Work classification discriminator (e.g. 'serial' for F18 Serial Work)." ;
+    rdfs:domain iqoqo:Work ;
+    rdfs:range xsd:string .
+
+iqoqo:issueNumber a owl:DatatypeProperty ;
+    rdfs:label "issue number" ;
+    rdfs:subPropertyOf schema:issueNumber ;
+    rdfs:comment "Within-year or primary periodical issue number string (e.g. '7' or '1-2')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:cumulativeIssueNumber a owl:DatatypeProperty ;
+    rdfs:label "cumulative issue number" ;
+    rdfs:comment "Cumulative sequential issue number across the lifetime of a serial (e.g. 58 in '7(58)')." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:volume a owl:DatatypeProperty ;
+    rdfs:label "volume" ;
+    rdfs:subPropertyOf schema:volumeNumber ;
+    rdfs:comment "Volume or rocznik designator for a periodical issue." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:publicationYear a owl:DatatypeProperty ;
+    rdfs:label "publication year" ;
+    rdfs:comment "Four-digit publication year for an issue Manifestation." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:publicationMonth a owl:DatatypeProperty ;
+    rdfs:label "publication month" ;
+    rdfs:comment "Numeric publication month (1-12) for a periodical issue." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:integer .
+
+iqoqo:eanAddon a owl:DatatypeProperty ;
+    rdfs:label "EAN add-on" ;
+    rdfs:comment "Supplemental 2-digit or 5-digit EAN add-on barcode suffix (e.g. '07' for issue month)." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .
+
+iqoqo:fullBarcode a owl:DatatypeProperty ;
+    rdfs:label "full barcode" ;
+    rdfs:comment "Canonical concatenated 15-digit or 18-digit barcode combining 977 EAN-13 and EAN add-on." ;
+    rdfs:domain iqoqo:Manifestation ;
+    rdfs:range xsd:string .

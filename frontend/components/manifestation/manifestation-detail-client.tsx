@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { BookmarkCheck, BookOpen, Disc, HeartOff, ImagePlus, Loader2 } from "lucide-react";
+import { BookmarkCheck, BookOpen, Disc, GitBranch, HeartOff, ImagePlus, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { NavbarWithSuspense as Navbar } from "@/components/dashboard/navbar-wrapper";
 import { Footer } from "@/components/dashboard/footer";
@@ -41,6 +41,7 @@ import { ExtendedMetadata } from "@/components/item/extended-metadata";
 import { CoverProvenance } from "@/components/cover/cover-provenance";
 import { SemanticLinks } from "@/components/manifestation/semantic-links";
 import { TagCloud } from "@/components/ui/tag-cloud";
+import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
 import { useTranslations } from "next-intl";
 import { PermissionName } from "@/lib/permissions";
 
@@ -58,9 +59,13 @@ export interface ManifestationDetailClientProps {
  * @returns An array of author strings
  */
 function normalizeAuthors(authors: unknown): string[] {
+  const isReal = (value: string) => {
+    const cleaned = value.trim().toLowerCase();
+    return Boolean(cleaned) && cleaned !== "unknown" && cleaned !== "n/a" && cleaned !== "none";
+  };
   if (!authors) return [];
-  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
-  if (typeof authors === "string") return [authors];
+  if (Array.isArray(authors)) return authors.filter((a): a is string => typeof a === "string" && isReal(a));
+  if (typeof authors === "string" && isReal(authors)) return [authors.trim()];
   return [];
 }
 
@@ -162,6 +167,47 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
     (manifestation.meta?.ean as string | undefined) ||
     (manifestation.meta?.barcode as string | undefined);
   const resolvedUpc = (manifestation.upc || "").trim() || (manifestation.meta?.upc as string | undefined);
+  const resolvedIssn = (manifestation.issn || "").trim() || (manifestation.meta?.issn as string | undefined);
+  const resolvedEissn = (manifestation.eissn || "").trim() || (manifestation.meta?.eissn as string | undefined);
+  const resolvedIssueNumber =
+    (manifestation.issue_number || "").trim() || (manifestation.meta?.issue_number as string | undefined);
+  const resolvedCumulativeIssue =
+    manifestation.cumulative_issue_number ?? (manifestation.meta?.cumulative_issue_number as number | undefined);
+  const resolvedVolume = (manifestation.volume || "").trim() || (manifestation.meta?.volume as string | undefined);
+  const resolvedPubYear =
+    manifestation.publication_year ?? (manifestation.meta?.publication_year as number | undefined) ?? resolved_year;
+  const resolvedPubMonth =
+    manifestation.publication_month ?? (manifestation.meta?.publication_month as number | undefined);
+  const resolvedEanAddon =
+    (manifestation.ean_addon || "").trim() || (manifestation.meta?.ean_addon as string | undefined);
+  const resolvedFullBarcode =
+    (manifestation.full_barcode || "").trim() || (manifestation.meta?.full_barcode as string | undefined);
+  const resolvedCoverHeadline = (manifestation.meta?.cover_headline as string | undefined)?.trim();
+  const resolvedIndeks = (manifestation.meta?.indeks as string | undefined)?.trim();
+
+  const rawPublisher =
+    manifestation.publisher ||
+    (manifestation.meta?.Publisher as string | undefined) ||
+    (manifestation.meta?.publisher as string | undefined) ||
+    (manifestation.meta?.label as string | undefined);
+  const resolvedPublisher =
+    rawPublisher && !["unknown", "n/a", "none", ""].includes(String(rawPublisher).trim().toLowerCase())
+      ? String(rawPublisher).trim()
+      : undefined;
+
+  const displayAuthors = normalizeAuthors(manifestation.authors);
+  const formattedIssueLabel = resolvedIssueNumber
+    ? `${resolvedIssueNumber}${resolvedCumulativeIssue != null ? ` (${resolvedCumulativeIssue})` : ""}`
+    : resolvedCumulativeIssue != null
+      ? `#${resolvedCumulativeIssue}`
+      : undefined;
+  const editionSubtitleParts = [
+    formattedIssueLabel ? `${t("issueNumber")} ${formattedIssueLabel}` : null,
+    resolvedVolume ? `${t("volume")} ${resolvedVolume}` : null,
+    resolvedPubMonth != null && resolvedPubYear
+      ? `${String(resolvedPubMonth).padStart(2, "0")}/${String(resolvedPubYear)}`
+      : null,
+  ].filter(Boolean);
   const tags = ((manifestation as unknown as { tags?: (string | { name: string; source?: string })[] }).tags ||
     manifestation.meta?.tags ||
     manifestation.meta?.genres ||
@@ -275,6 +321,22 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                     {t("onWishlist")}
                   </Badge>
                 )}
+                <WorkRollupBadge
+                  status={manifestation.work_reading_status}
+                  viaOtherEdition={Boolean(manifestation.completed_via_other_edition)}
+                />
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  data-testid="explore-graph-link"
+                  className="gap-1.5 ml-auto"
+                >
+                  <Link href={`/graph?type=manifestation&id=${manifestation.id}`}>
+                    <GitBranch className="h-4 w-4" />
+                    <span>Explore Graph</span>
+                  </Link>
+                </Button>
               </div>
               <h1
                 className="font-serif text-3xl md:text-4xl font-bold text-foreground"
@@ -283,16 +345,16 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
               >
                 {manifestation.title || "Untitled Work"}
               </h1>
-              <div
-                className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
-                property="schema:author"
-                typeof="Person"
-                itemProp={schemaType === "MusicAlbum" ? "byArtist" : "author"}
-                itemScope
-                itemType="https://schema.org/Person"
-              >
-                {normalizeAuthors(manifestation.authors).length > 0 ? (
-                  normalizeAuthors(manifestation.authors).map((author, idx, arr) => (
+              {displayAuthors.length > 0 && (
+                <div
+                  className="mt-2 flex flex-wrap items-center gap-1 text-xl text-muted-foreground font-medium"
+                  property="schema:author"
+                  typeof="Person"
+                  itemProp={schemaType === "MusicAlbum" ? "byArtist" : "author"}
+                  itemScope
+                  itemType="https://schema.org/Person"
+                >
+                  {displayAuthors.map((author, idx, arr) => (
                     <span key={author} property="schema:name" itemProp="name">
                       <span
                         role="button"
@@ -306,11 +368,19 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                       </span>
                       {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
                     </span>
-                  ))
-                ) : (
-                  <span>{t("unknownAuthor")}</span>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
+              {(editionSubtitleParts.length > 0 || resolvedCoverHeadline) && (
+                <div className="mt-2 space-y-1">
+                  {editionSubtitleParts.length > 0 && (
+                    <p className="text-lg text-muted-foreground font-medium">{editionSubtitleParts.join(" · ")}</p>
+                  )}
+                  {resolvedCoverHeadline && (
+                    <p className="text-sm text-muted-foreground italic">&ldquo;{resolvedCoverHeadline}&rdquo;</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 pt-6 border-t border-border">
@@ -324,12 +394,38 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                     </dd>
                   </div>
                 )}
+                {resolvedIssn && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("issn")}</dt>
+                    <dd className="font-medium text-foreground" property="schema:issn" itemProp="issn">
+                      {String(resolvedIssn)}
+                    </dd>
+                  </div>
+                )}
+                {resolvedEissn && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("eissn")}</dt>
+                    <dd className="font-medium text-foreground">{String(resolvedEissn)}</dd>
+                  </div>
+                )}
                 {resolvedEan && (
                   <div>
                     <dt className="text-muted-foreground">{t("ean")}</dt>
                     <dd className="font-medium text-foreground" property="schema:gtin13" itemProp="gtin13">
                       {String(resolvedEan)}
                     </dd>
+                  </div>
+                )}
+                {resolvedEanAddon && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("eanAddon")}</dt>
+                    <dd className="font-medium text-foreground font-mono">{String(resolvedEanAddon)}</dd>
+                  </div>
+                )}
+                {resolvedFullBarcode && resolvedFullBarcode !== resolvedEan && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("fullBarcode")}</dt>
+                    <dd className="font-medium text-foreground font-mono">{String(resolvedFullBarcode)}</dd>
                   </div>
                 )}
                 {resolvedUpc && (
@@ -360,19 +456,38 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 {manifestation.expression_id && (
                   <a rel="expressionOf" href={`/expression/${manifestation.expression_id}`} className="hidden" />
                 )}
-                {!!(
-                  manifestation.meta?.Publisher &&
-                  manifestation.meta.Publisher !== "Unknown" &&
-                  manifestation.meta.Publisher !== "N/A"
-                ) && (
+                {resolvedPublisher && (
                   <div>
                     <dt className="text-muted-foreground">{t("publisher")}</dt>
                     <dd className="font-medium text-foreground" property="schema:publisher" itemProp="publisher">
-                      {String(manifestation.meta.Publisher)}
+                      {resolvedPublisher}
                     </dd>
                   </div>
                 )}
-                {!!(resolved_year && resolved_year !== "Unknown" && resolved_year !== "N/A") && (
+                {resolvedIssueNumber && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("issueNumber")}</dt>
+                    <dd className="font-medium text-foreground" property="schema:issueNumber" itemProp="issueNumber">
+                      {resolvedIssueNumber}
+                      {resolvedCumulativeIssue != null ? ` (${resolvedCumulativeIssue})` : ""}
+                    </dd>
+                  </div>
+                )}
+                {resolvedCumulativeIssue != null && !resolvedIssueNumber && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("cumulativeIssue")}</dt>
+                    <dd className="font-medium text-foreground">{String(resolvedCumulativeIssue)}</dd>
+                  </div>
+                )}
+                {resolvedVolume && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("volume")}</dt>
+                    <dd className="font-medium text-foreground" property="schema:volumeNumber" itemProp="volumeNumber">
+                      {resolvedVolume}
+                    </dd>
+                  </div>
+                )}
+                {!!(resolvedPubYear && resolvedPubYear !== "Unknown" && resolvedPubYear !== "N/A") && (
                   <div>
                     <dt className="text-muted-foreground">{t("year")}</dt>
                     <dd
@@ -380,8 +495,26 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                       property="schema:datePublished"
                       itemProp="datePublished"
                     >
-                      {String(resolved_year)}
+                      {String(resolvedPubYear)}
                     </dd>
+                  </div>
+                )}
+                {resolvedPubMonth != null && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("publicationMonth")}</dt>
+                    <dd className="font-medium text-foreground">{String(resolvedPubMonth).padStart(2, "0")}</dd>
+                  </div>
+                )}
+                {resolvedIndeks && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("indeks")}</dt>
+                    <dd className="font-medium text-foreground font-mono">{resolvedIndeks}</dd>
+                  </div>
+                )}
+                {resolvedCoverHeadline && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">{t("coverHeadline")}</dt>
+                    <dd className="font-medium text-foreground">{resolvedCoverHeadline}</dd>
                   </div>
                 )}
                 {!!(
@@ -406,6 +539,7 @@ export function ManifestationDetailClient({ manifestationId, initialManifestatio
                 display={manifestation.display}
                 owner_count={manifestation.owner_count}
                 manifestationId={manifestation.id}
+                hideSerialSection
                 canEdit={Boolean(
                   userProfile &&
                   (userProfile.roles?.includes("admin") ||

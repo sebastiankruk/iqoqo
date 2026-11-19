@@ -49,6 +49,18 @@ export const FIELD_CHAINS = {
   map_scale: ["map_scale", "scale", "MapScale"],
   map_projection: ["map_projection", "projection", "MapProjection"],
   has_map: ["has_map", "has_map_attachment", "has_maps"],
+  issn: ["issn", "ISSN"],
+  eissn: ["eissn", "eISSN"],
+  work_kind: ["work_kind", "workKind"],
+  issue_number: ["issue_number", "issueNumber", "issue"],
+  cumulative_issue_number: ["cumulative_issue_number", "cumulativeIssueNumber"],
+  volume: ["volume", "Volume"],
+  publication_year: ["publication_year", "publicationYear"],
+  publication_month: ["publication_month", "publicationMonth"],
+  ean_addon: ["ean_addon", "eanAddon"],
+  full_barcode: ["full_barcode", "fullBarcode"],
+  cover_headline: ["cover_headline", "coverHeadline"],
+  indeks: ["indeks", "Indeks"],
 } as const satisfies Record<string, KeyChain>;
 
 /**
