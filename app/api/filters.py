@@ -50,6 +50,26 @@ def parse_csv_param(value: str | None) -> list[str] | None:
     return tokens if tokens else None
 
 
+def normalize_visibility_filter(raw_values: list[str] | None) -> list[str] | None:
+    """Normalize visibility filter tokens, mapping 'hidden' to 'private'.
+
+    Returns ``None`` if no valid tokens were supplied (so callers can treat an
+    explicit non-empty list of unknown values safely if needed).
+    """
+    if not raw_values:
+        return None
+    from app.db.core import ITEM_VISIBILITIES
+
+    normalized: list[str] = []
+    for raw in raw_values:
+        token = raw.strip().lower()
+        if token == "hidden":
+            token = "private"
+        if token in ITEM_VISIBILITIES and token not in normalized:
+            normalized.append(token)
+    return normalized or ["__invalid__"]
+
+
 def escape_ilike_term(term: str) -> str:
     """Canonicalize apostrophe variants (’ ‘ ʼ -> ') and escape ILIKE metacharacters (% _ \\)."""
     if not term:

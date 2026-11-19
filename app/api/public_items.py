@@ -22,7 +22,7 @@ import datetime
 from typing import Any
 
 import sqlalchemy as sa
-from flask import Response, current_app, g, jsonify, request, stream_with_context
+from flask import Response, current_app, g, has_request_context, jsonify, request, stream_with_context
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -267,7 +267,63 @@ def fetch_user_public_collection(username: str, limit: int = 50, stream: bool = 
     return list(db.session.execute(stmt).scalars().unique().all())
 
 
-def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool = False, offset: int = 0) -> list[Any] | Any:
+def _resolve_shared_visibilities(collection: SharedCollection, viewer_id: Any = None) -> tuple[tuple[str, ...], bool, bool]:
+    """Resolve permitted Item visibilities and cache privacy for a shared collection.
+
+    Implements Token Scope + Friend Bonus:
+    - ``all`` -> ``("public", "friends_only", "shared", "private")``, ``include_hidden=True``, private cache
+    - ``friends_and_public`` -> ``("public", "friends_only", "shared")``, ``include_hidden=False``, private cache
+    - ``public_only`` (default) -> owner or accepted friend receives Friend Bonus
+      (``("public", "friends_only", "shared")``, private cache); others receive ``("public",)``, public cache.
+    """
+    from app.core.friend_service import is_friend_of
+
+    filters = collection.filters if isinstance(collection.filters, dict) else {}
+    scope = filters.get("visibility_scope", "public_only")
+    if scope == "all":
+        return (("public", "friends_only", "shared", "private"), True, True)
+    if scope == "friends_and_public":
+        return (("public", "friends_only", "shared"), False, True)
+    if viewer_id is not None and is_friend_of(viewer_id, collection.user_id):
+        return (("public", "friends_only", "shared"), False, True)
+    return (("public",), False, False)
+
+
+def _build_shared_visibility_predicate(allowed_vis: tuple[str, ...], include_hidden: bool) -> Any:
+    """Build SQLAlchemy WHERE predicate enforcing resolved visibility and hidden state."""
+    if include_hidden:
+        return or_(Item.visibility.in_(allowed_vis), Item.visibility.is_(None))
+    return sa.and_(Item.is_hidden.is_(False), Item.visibility.in_(allowed_vis))
+
+
+def _apply_share_cache_headers(headers: dict[str, str], is_private_cache: bool) -> dict[str, str]:
+    """Set Cache-Control and Vary headers protecting private or friend-bonus share responses."""
+    updated = dict(headers)
+    if is_private_cache:
+        updated["Cache-Control"] = "private, no-store"
+        updated["Vary"] = "Authorization, Cookie"
+    else:
+        updated["Cache-Control"] = "public, max-age=300"
+    return updated
+
+
+def is_shared_collection_private_cache(token: str, viewer_id: Any = None) -> bool:
+    """Return True when responses for ``token`` and ``viewer_id`` must bypass shared public caches."""
+    resolved_viewer = viewer_id if viewer_id is not None else (getattr(g, "user_id", None) if has_request_context() else None)
+    collection = db.session.execute(select(SharedCollection).where(SharedCollection.share_token == token)).scalar_one_or_none()
+    if not collection or collection.is_expired:
+        return False
+    _, _, is_private_cache = _resolve_shared_visibilities(collection, viewer_id=resolved_viewer)
+    return is_private_cache
+
+
+def fetch_shared_collection_by_token(
+    token: str,
+    limit: int = 50,
+    stream: bool = False,
+    offset: int = 0,
+    viewer_id: Any = None,
+) -> list[Any] | Any:
     """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
 
     Args:
@@ -275,10 +331,12 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
         limit: Maximum number of items to return.
         stream: If True, returns an iterator instead of a list for memory-efficient streaming.
         offset: SQL offset for paginated queries.
+        viewer_id: Optional authenticated caller ID used for Friend Bonus resolution.
 
     Returns:
         List of items or iterator if stream=True.
     """
+    resolved_viewer = viewer_id if viewer_id is not None else (getattr(g, "user_id", None) if has_request_context() else None)
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
     if not collection:
@@ -289,7 +347,8 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
     if not user:
         return [] if not stream else iter([])
 
-    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False), Item.visibility == "public")
+    allowed_vis, include_hidden, _ = _resolve_shared_visibilities(collection, viewer_id=resolved_viewer)
+    query = select(Item).where(Item.owner_id == user.id, _build_shared_visibility_predicate(allowed_vis, include_hidden))
     filters = collection.filters
 
     if "status" in filters:
@@ -323,7 +382,8 @@ def fetch_shared_collection_by_token(token: str, limit: int = 50, stream: bool =
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
-                    include_hidden=False,
+                    include_hidden=include_hidden,
+                    visibility=list(allowed_vis),
                 )
                 item_ids = [r["item_id"] for r in results]
                 if not item_ids:
@@ -401,10 +461,13 @@ def user_collection_feed(username: str):
 
 
 @public_bp.route("/share/<string:token>/feed.xml", methods=["GET"])
+@optional_auth
 @limiter.limit("60 per minute")
 def shared_collection_feed(token: str):
     """Exposes public shared collection feed streams via safe access token lookup."""
-    items = fetch_shared_collection_by_token(token=token, limit=50)
+    viewer_id = getattr(g, "user_id", None)
+    items = fetch_shared_collection_by_token(token=token, limit=50, viewer_id=viewer_id)
+    is_private_cache = is_shared_collection_private_cache(token, viewer_id=viewer_id)
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rss_data = generate_rss_xml(
         title="Shared Collection Catalog Feed",
@@ -416,7 +479,7 @@ def shared_collection_feed(token: str):
     return Response(
         rss_data,
         mimetype="application/rss+xml",
-        headers={"Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300"},
+        headers=_apply_share_cache_headers({"Content-Type": "application/rss+xml; charset=utf-8"}, is_private_cache),
     )
 
 
@@ -577,9 +640,11 @@ def _serialize_shared_collection_item(item: Item) -> dict[str, Any]:
 
 
 @public_bp.route("/share/<string:token>", methods=["GET"])
+@optional_auth
 @limiter.limit("60 per minute")
 def get_shared_collection(token: str):
     """Retrieve items based on a specific SharedCollection token filters."""
+    viewer_id = getattr(g, "user_id", None)
     accept_header = request.headers.get("Accept", "")
     accept_lower = accept_header.lower()
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
@@ -615,16 +680,24 @@ def get_shared_collection(token: str):
 
     if rdf_format:
         if page_num is not None and per_page_num is not None:
-            items = fetch_shared_collection_by_token(token=token, limit=per_page_num, offset=offset_val, stream=is_stream)
+            items = fetch_shared_collection_by_token(
+                token=token,
+                limit=per_page_num,
+                offset=offset_val,
+                stream=is_stream,
+                viewer_id=viewer_id,
+            )
         else:
             limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
-            items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
+            items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream, viewer_id=viewer_id)
+        is_private_cache = is_shared_collection_private_cache(token, viewer_id=viewer_id)
         collection_uri = f"{base_url}/share/{token}"
+        rdf_headers = _apply_share_cache_headers({"Content-Type": f"{rdf_mimetype}; charset=utf-8"}, is_private_cache)
         if is_stream:
             return Response(
                 stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
                 mimetype=rdf_mimetype,
-                headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8", "Cache-Control": "public, max-age=300"},
+                headers=rdf_headers,
             )
         # For non-streaming, convert iterator to list if needed
         if not isinstance(items, list):
@@ -633,7 +706,7 @@ def get_shared_collection(token: str):
         return Response(
             rdf_payload,
             mimetype=rdf_mimetype,
-            headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8", "Cache-Control": "public, max-age=300"},
+            headers=rdf_headers,
         )
 
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
@@ -647,7 +720,8 @@ def get_shared_collection(token: str):
     if not user:
         return jsonify({"error": "Author not found"}), 404
 
-    query = select(Item).where(Item.owner_id == user.id, Item.is_hidden.is_(False), Item.visibility == "public")
+    allowed_vis, include_hidden, is_private_cache = _resolve_shared_visibilities(collection, viewer_id=viewer_id)
+    query = select(Item).where(Item.owner_id == user.id, _build_shared_visibility_predicate(allowed_vis, include_hidden))
 
     filters = collection.filters
 
@@ -692,6 +766,8 @@ def get_shared_collection(token: str):
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
+                    include_hidden=include_hidden,
+                    visibility=list(allowed_vis),
                 )
                 item_ids = [r["item_id"] for r in results]
                 if not item_ids:
@@ -741,14 +817,14 @@ def get_shared_collection(token: str):
 
     if is_wish_list:
         # Query UserWorkIntent directly for shared collection visibility.
-        # Only non-hidden intents are exposed through shared collections.
+        # Hidden intents are excluded unless the collection visibility scope allows them ('all').
+        intent_conditions = [UserWorkIntent.user_id == user.id]
+        if not include_hidden:
+            intent_conditions.append(UserWorkIntent.is_hidden.is_(False))
         intent_stmt = (
             select(UserWorkIntent)
             .options(joinedload(UserWorkIntent.work).selectinload(Work.expressions).selectinload(Expression.manifestations))
-            .where(
-                UserWorkIntent.user_id == user.id,
-                UserWorkIntent.is_hidden.is_(False),
-            )
+            .where(*intent_conditions)
         )
         matched_intents = [s for s in status_list if s in _INTENT_LEVEL_STATUSES]
         if matched_intents:
@@ -854,12 +930,14 @@ def get_shared_collection(token: str):
     total_items = total_count + (intent_total if is_wish_list else 0)
     total_pages = (total_items + effective_per_page - 1) // effective_per_page if total_items else 0
 
-    return jsonify(
+    visibility_scope = filters.get("visibility_scope", "public_only") if isinstance(filters, dict) else "public_only"
+    response = jsonify(
         {
             "success": True,
             "data": {
                 "collection_name": collection.name,
                 "collection_description": collection.description,
+                "visibility_scope": visibility_scope,
                 "author": user.public_username or user.display_name or "A user",
                 "total": total_items,
                 "page": page_num if page_num is not None else 1,
@@ -869,6 +947,12 @@ def get_shared_collection(token: str):
             },
         }
     )
+    if is_private_cache:
+        response.headers["Cache-Control"] = "private, no-store"
+        response.headers["Vary"] = "Authorization, Cookie"
+    else:
+        response.headers["Cache-Control"] = "public, max-age=300"
+    return response
 
 
 def generate_sitemap_xml(base_url: str) -> str:

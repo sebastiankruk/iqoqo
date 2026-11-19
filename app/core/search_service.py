@@ -203,6 +203,7 @@ class ItemSearchFilters:
     include_hidden: bool = True
     scope: str = "personal"
     friend_ids: list[Any] | None = None
+    visibility: list[str] | None = None
 
 
 class SearchService:
@@ -557,6 +558,18 @@ class SearchService:
         if not filters.include_hidden:
             extra_filters_sql += " AND i.is_hidden = FALSE"
 
+        if filters.visibility:
+            allowed_vis = (
+                [v for v in filters.visibility if v in ("public", "friends_only", "shared")]
+                if filters.scope == "friends"
+                else list(filters.visibility)
+            )
+            if allowed_vis:
+                params["visibility_filter"] = tuple(allowed_vis)
+                extra_filters_sql += " AND i.visibility IN :visibility_filter"
+            else:
+                extra_filters_sql += " AND 1=0"
+
         count_sql = f"""
         SELECT count(i.id) FROM {catalog_prefix}manifestations m
         JOIN {catalog_prefix}expressions e ON e.id = m.expression_id
@@ -567,6 +580,7 @@ class SearchService:
         """
         rows_sql = f"""
         SELECT i.id as item_id, i.owner_id, i.status, i.collection_status,
+               i.visibility, i.is_hidden,
                i.lent_to_user_id, i.lent_to_name, m.id as manifestation_id,
                m.isbn13, w.title, m.cover_url, m.meta as manifestation_meta,
                m.publisher,
@@ -595,6 +609,9 @@ class SearchService:
         if format_filter:
             count_stmt = count_stmt.bindparams(bindparam("format_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("format_filter", expanding=True))
+        if filters.visibility and "visibility_filter" in params:
+            count_stmt = count_stmt.bindparams(bindparam("visibility_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("visibility_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -628,6 +645,7 @@ class SearchService:
             include_hidden,
             scope,
             friend_ids,
+            visibility,
         ) = dataclasses.astuple(filters)
 
         # Subquery to get matching item IDs. Contributor matching lives inside the
@@ -694,6 +712,13 @@ class SearchService:
         if not filters.include_hidden:
             query = query.filter(Item.is_hidden.is_(False))
 
+        if visibility:
+            allowed_vis = [v for v in visibility if v in ("public", "friends_only", "shared")] if scope == "friends" else list(visibility)
+            if allowed_vis:
+                query = query.filter(Item.visibility.in_(allowed_vis))
+            else:
+                query = query.filter(db.false())
+
         if statuses:
             query = query.filter(db.or_(Item.status.in_(statuses), Item.collection_status.in_(statuses)))
 
@@ -729,6 +754,8 @@ class SearchService:
                     "owner_id": item.owner_id,
                     "status": item.status,
                     "collection_status": item.collection_status,
+                    "visibility": item.visibility,
+                    "is_hidden": item.is_hidden,
                     "lent_to_user_id": item.lent_to_user_id,
                     "lent_to_name": item.lent_to_name,
                     "manifestation_id": manifestation.id,

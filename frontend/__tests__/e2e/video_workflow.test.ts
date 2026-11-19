@@ -113,14 +113,12 @@ test.describe("Video Media Ingestion Workflow", () => {
     // 5. Verify scanner page loads
     await expect(page.getByText("Tap to start camera")).toBeVisible();
 
-    // 6. Select the Video format from the top pill menu
-    await page.getByRole("button", { name: "Movie" }).click();
+    // 6. Select the Video format from compact format selector
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-movie").click();
 
-    // 7. Switch to the Manual Search tab
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 8. Enter barcode for a DVD
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    // 7. Enter barcode for a DVD in unified lookup bar
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 

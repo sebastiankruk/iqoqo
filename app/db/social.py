@@ -74,12 +74,14 @@ class SharedCollection(db.Model):  # type: ignore[name-defined]
 
     def to_dict(self) -> dict:
         """Serialize the shared collection."""
+        filters_dict = self.filters if isinstance(self.filters, dict) else {}
         return {
             "id": self.id,
             "share_token": self.share_token,
             "name": self.name,
             "description": self.description,
             "filters": self.filters,
+            "visibility_scope": filters_dict.get("visibility_scope", "public_only"),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
         }

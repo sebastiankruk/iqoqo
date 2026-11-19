@@ -49,8 +49,9 @@ test.describe("Jigsaw Puzzle Workflow", () => {
     // 1. Go to Scanner (already authenticated via mocks)
     await page.goto("/scan");
 
-    // 2. Select Puzzle Mode using accessible button
-    await page.getByRole("button", { name: "Puzzle", exact: true }).click();
+    // 2. Select Puzzle Mode using compact Format selector
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-puzzle").click();
 
     // 3. Mock Barcode API Response (Simulating a successful scan)
     await page.route("**/api/lookup/4005556199999*", async route => {
@@ -90,11 +91,8 @@ test.describe("Jigsaw Puzzle Workflow", () => {
       });
     });
 
-    // 4. Switch to Manual Search tab to access the input
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 5. Fill in the barcode
-    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', "4005556199999");
+    // 4. Fill in the barcode in unified lookup bar
+    await page.getByTestId("unified-lookup-input").fill("4005556199999");
     await page.keyboard.press("Enter");
 
     // 6. Verify Item Card is created (title is visible in success card)

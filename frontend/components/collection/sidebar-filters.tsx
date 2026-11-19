@@ -556,6 +556,40 @@ export function SidebarFilters({
         </div>
       </AccordionSection>
 
+      {isLoggedIn && viewMode === "items" && (
+        <AccordionSection title={t("secVisibility")}>
+          <div className="flex flex-col gap-1">
+            {[
+              { value: "public", label: t("visibilityPublic") },
+              { value: "friends_only", label: t("visibilityFriendsOnly") },
+              { value: "private", label: t("visibilityPrivate") },
+            ].map(opt => {
+              const active = isActive(activeFilters, "visibility", opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    active
+                      ? "bg-muted text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="visibility_filter"
+                    checked={active}
+                    onChange={() => onToggleFilter({ type: "visibility", value: opt.value })}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="flex-1 truncate">{opt.label}</span>
+                  {active && <Check className="h-3 w-3 text-primary" />}
+                </label>
+              );
+            })}
+          </div>
+        </AccordionSection>
+      )}
+
       {isLoggedIn && (
         <AccordionSection title={t("secCollectionStatus")}>
           {(function renderStatusCheckboxes() {

@@ -322,6 +322,19 @@ API_KEYS = {
     "GOOGLE_CLIENT_SECRET",
     "GEONAMES_USERNAME",
     "REBRICKABLE_API_KEY",
+    "ALLOW_LLM",
+    "OLLAMA_URL",
+    "OLLAMA_VISION_MODEL",
+    "OLLAMA_DEDUPE_MODEL",
+}
+
+_UNMASKED_API_KEYS = {
+    "LOCAL_SD_URL",
+    "GEONAMES_USERNAME",
+    "ALLOW_LLM",
+    "OLLAMA_URL",
+    "OLLAMA_VISION_MODEL",
+    "OLLAMA_DEDUPE_MODEL",
 }
 
 FEDERATION_KEYS = {
@@ -373,13 +386,14 @@ def _get_settings(user: User, category: str) -> tuple[Response, int] | dict:
     if can_external:
         for key in API_KEYS:
             source = "db" if key in db_settings else "env" if key in flask_config or os.environ.get(key) else "missing"
-            value = db_settings.get(key) or flask_config.get(key) or os.environ.get(key)
+            value = db_settings.get(key) if key in db_settings else (flask_config.get(key) or os.environ.get(key))
             # Mask API keys but keep other external settings unmasked
-            display_value = (
-                (_mask_api_key(str(value)) if value and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME") else str(value or ""))
-                if key in API_KEYS and key not in ("LOCAL_SD_URL", "GEONAMES_USERNAME")
-                else str(value or "")
-            )
+            if key == "ALLOW_LLM":
+                display_value = normalize_val(value if value is not None else "false")
+            elif key in _UNMASKED_API_KEYS:
+                display_value = str(value or "")
+            else:
+                display_value = _mask_api_key(str(value)) if value else ""
             result[key] = {"value": display_value, "source": source}
 
     if can_federation:
@@ -447,7 +461,7 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
                 return jsonify({"success": False, "error": "FEDERATION_DEFAULT_TRUST must be 'untrusted'", "code": 400}), 400
             value = norm_trust
 
-        if key == "FEDERATION_AUTO_ACCEPT_FOLLOWS":
+        if key == "FEDERATION_AUTO_ACCEPT_FOLLOWS" or key == "ALLOW_LLM":
             if isinstance(value, bool):
                 value = "true" if value else "false"
             elif str(value).lower() in {"true", "1", "yes"}:
@@ -455,7 +469,7 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
             elif str(value).lower() in {"false", "0", "no"}:
                 value = "false"
             else:
-                return jsonify({"success": False, "error": "FEDERATION_AUTO_ACCEPT_FOLLOWS must be a boolean", "code": 400}), 400
+                return jsonify({"success": False, "error": f"{key} must be a boolean", "code": 400}), 400
 
         to_save[key] = value
 

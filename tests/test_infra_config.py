@@ -329,6 +329,19 @@ exit 0
         self.assertIn("/api/default/_search", status_sh)
         self.assertIn("Exporting failed", status_sh)
         self.assertIn("make monitoring-reset-auth", status_sh)
+        self.assertIn("OTel Protocol", status_sh)
+        self.assertIn("App OTel Export", status_sh)
+
+    def test_compose_otlp_4318_declares_http_protobuf_protocol(self):
+        import re
+
+        compose = (self.repo_root / "docker-compose.yml").read_text()
+        service_blocks = re.split(r"(?m)^  (?=[a-z0-9-]+:\s*$)", compose)
+        by_name = {b.split(":", 1)[0].strip(): b for b in service_blocks if ":" in b}
+        for svc in ("web", "sparql-runner", "frontend", "worker"):
+            block = by_name[svc]
+            self.assertIn("OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318", block)
+            self.assertIn("OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}", block)
 
     def test_prebuilt_makefile_propagates_env_file_and_compose_declares_app_version(self):
         makefile = (self.repo_root / "Makefile").read_text()

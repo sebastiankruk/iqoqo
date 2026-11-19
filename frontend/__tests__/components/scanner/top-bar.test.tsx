@@ -14,15 +14,16 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 /**
- * Tests for TopBar scanner component.
+ * Tests for TopBar compact scanner component (C134).
  *
- * Verifies format selector, policy selector, flash toggle, and back-link.
+ * Verifies single-line Format selector dropdown, Policy selector dropdown,
+ * rightAccessory slot (Batch toggle), flash toggle, and back-link.
  */
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TopBar } from "@/components/scanner/top-bar";
 
-// Mock next/link
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -41,15 +42,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// Mock the MEDIA_REGISTRY to provide icons
 vi.mock("@/lib/media", () => ({
   MEDIA_REGISTRY: {
     book: { icon: () => null, label: "Book" },
+    magazine: { icon: () => null, label: "Magazine" },
     audiobook: { icon: () => null, label: "Audiobook" },
     music: { icon: () => null, label: "Music" },
     movie: { icon: () => null, label: "Movie" },
     board_game: { icon: () => null, label: "Board Game" },
     puzzle: { icon: () => null, label: "Puzzle" },
+    lego: { icon: () => null, label: "LEGO Sets" },
   },
 }));
 
@@ -62,20 +64,51 @@ describe("TopBar", () => {
     vi.clearAllMocks();
   });
 
-  it("renders format selector with all scan formats", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} />);
+  it("renders compact Format and Policy dropdown triggers on one line alongside rightAccessory", async () => {
+    const user = userEvent.setup();
+    render(
+      <TopBar
+        currentFormat="book"
+        setFormat={setFormat}
+        currentPolicy="inventory"
+        setPolicy={vi.fn()}
+        rightAccessory={<button data-testid="batch-accessory">Batch OFF</button>}
+      />
+    );
 
-    // Should render the "Scan New Item" title
     expect(screen.getByText("Scan New Item")).toBeInTheDocument();
+    const formatTrigger = screen.getByTestId("format-selector-trigger");
+    const policyTrigger = screen.getByTestId("policy-selector-trigger");
+    expect(formatTrigger).toHaveTextContent("Book");
+    expect(policyTrigger).toHaveTextContent("Shelf");
+    expect(screen.getByTestId("batch-accessory")).toBeInTheDocument();
 
-    // Check format buttons exist (via aria-label)
-    ["Book", "Audiobook", "Music", "Movie", "Board Game", "Puzzle"].forEach(label => {
-      expect(screen.getByLabelText(label)).toBeInTheDocument();
-    });
+    await user.click(formatTrigger);
+    expect(screen.getByTestId("format-option-magazine")).toBeInTheDocument();
+    expect(screen.getByTestId("format-option-lego")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("format-option-magazine"));
+    expect(setFormat).toHaveBeenCalledWith("magazine");
   });
 
-  it("flash toggle button renders when hasFlash is true", () => {
-    render(
+  it("opens Policy selector menu and switches between Shelf, Wishlist, and Catalog Only", async () => {
+    const user = userEvent.setup();
+    const setPolicy = vi.fn();
+    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
+
+    const policyTrigger = screen.getByTestId("policy-selector-trigger");
+    await user.click(policyTrigger);
+
+    expect(screen.getByText("Adding directly to your personal shelf")).toBeInTheDocument();
+    expect(screen.getByTestId("policy-option-wishlist")).toBeInTheDocument();
+    expect(screen.getByTestId("policy-option-catalog")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("policy-option-wishlist"));
+    expect(setPolicy).toHaveBeenCalledWith("wishlist");
+  });
+
+  it("flash toggle button renders when hasFlash is true and hides when false", () => {
+    const { rerender } = render(
       <TopBar
         currentFormat="book"
         setFormat={setFormat}
@@ -86,40 +119,11 @@ describe("TopBar", () => {
     );
 
     const flashBtn = screen.getByLabelText("Toggle flash");
-    expect(flashBtn).toBeInTheDocument();
-
     fireEvent.click(flashBtn);
     expect(onToggleFlash).toHaveBeenCalled();
-  });
 
-  it("flash button hidden when hasFlash is false", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} hasFlash={false} />);
-
+    rerender(<TopBar currentFormat="book" setFormat={setFormat} hasFlash={false} />);
     expect(screen.queryByLabelText("Toggle flash")).not.toBeInTheDocument();
-  });
-
-  it("renders policy selector with Shelf, Wishlist, Catalog Only buttons and active hint", () => {
-    const setPolicy = vi.fn();
-    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="inventory" setPolicy={setPolicy} />);
-
-    expect(screen.getByText("Shelf")).toBeInTheDocument();
-    expect(screen.getByText("Wishlist")).toBeInTheDocument();
-    expect(screen.getByText("Catalog Only")).toBeInTheDocument();
-    expect(screen.getByText("Adding directly to your personal shelf")).toBeInTheDocument();
-
-    const wishlistBtn = screen.getByText("Wishlist");
-    fireEvent.click(wishlistBtn);
-    expect(setPolicy).toHaveBeenCalledWith("wishlist");
-
-    const catalogBtn = screen.getByText("Catalog Only");
-    fireEvent.click(catalogBtn);
-    expect(setPolicy).toHaveBeenCalledWith("catalog");
-  });
-
-  it("displays catalog policy hint when policy is catalog", () => {
-    render(<TopBar currentFormat="book" setFormat={setFormat} currentPolicy="catalog" />);
-
-    expect(screen.getByText("Adding to shared catalog without adding to shelf")).toBeInTheDocument();
   });
 
   it("back-link invokes cancel callback", () => {

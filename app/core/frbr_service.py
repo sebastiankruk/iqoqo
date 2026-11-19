@@ -34,6 +34,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.sql import func
 
 from app.core import frbr_merge
 from app.core.iri import canonical_frbr_iri, canonical_related_iri
@@ -423,6 +424,10 @@ def create_work(
     meta: dict[str, Any] | None = None,
     sort_title: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    *,
+    issn: str | None = None,
+    eissn: str | None = None,
+    work_kind: str | None = None,
 ) -> Work:
     """
     Creates a new Work.
@@ -432,6 +437,9 @@ def create_work(
         meta: Additional metadata for the work
         sort_title: Alphabetical sort key (auto-derived from title if None)
         raw_payload: Verbatim provider payload JSON
+        issn: Optional print ISSN (e.g. '1507-5966')
+        eissn: Optional electronic ISSN
+        work_kind: Optional classification discriminator (e.g. 'serial')
 
     Returns:
         The created Work object
@@ -441,7 +449,18 @@ def create_work(
     sanitize_metadata_description(meta)
     if sort_title is None and title:
         sort_title = derive_sort_title(title)
-    work = Work(title=title, sort_title=sort_title, meta=meta, raw_payload=raw_payload)
+    resolved_issn = issn or (meta.get("issn") if isinstance(meta, dict) else None)
+    resolved_eissn = eissn or (meta.get("eissn") if isinstance(meta, dict) else None)
+    resolved_kind = work_kind or (meta.get("work_kind") if isinstance(meta, dict) else None)
+    work = Work(
+        title=title,
+        sort_title=sort_title,
+        issn=resolved_issn,
+        eissn=resolved_eissn,
+        work_kind=resolved_kind,
+        meta=meta,
+        raw_payload=raw_payload,
+    )
     db.session.add(work)
     db.session.commit()
     return work
@@ -506,6 +525,14 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
     catalog_number: str | None = None,
     raw_payload: dict[str, Any] | None = None,
     format_type: str | None = None,
+    *,
+    issue_number: str | None = None,
+    cumulative_issue_number: int | None = None,
+    volume: str | None = None,
+    publication_year: int | None = None,
+    publication_month: int | None = None,
+    ean_addon: str | None = None,
+    full_barcode: str | None = None,
 ) -> Manifestation:
     """
     Creates a new Manifestation for an Expression.
@@ -598,6 +625,14 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         for k in keys_to_remove:
             del meta[k]
 
+    resolved_issue = issue_number or meta.get("issue_number")
+    resolved_cum = cumulative_issue_number if cumulative_issue_number is not None else meta.get("cumulative_issue_number")
+    resolved_vol = volume or meta.get("volume")
+    resolved_pub_year = publication_year if publication_year is not None else meta.get("publication_year")
+    resolved_pub_month = publication_month if publication_month is not None else meta.get("publication_month")
+    resolved_addon = ean_addon or meta.get("ean_addon")
+    resolved_full_barcode = full_barcode or meta.get("full_barcode") or (f"{ean}{resolved_addon}" if ean and resolved_addon else None)
+
     manifestation = Manifestation(
         expression_id=expression_id,
         isbn13=isbn13,
@@ -610,6 +645,13 @@ def create_manifestation(  # pylint: disable=too-many-arguments,too-many-positio
         label=label,
         barcode=barcode,
         catalog_number=catalog_number,
+        issue_number=resolved_issue,
+        cumulative_issue_number=resolved_cum,
+        volume=resolved_vol,
+        publication_year=resolved_pub_year,
+        publication_month=resolved_pub_month,
+        ean_addon=resolved_addon,
+        full_barcode=resolved_full_barcode,
         meta=meta,
         raw_payload=raw_payload,
     )
@@ -2375,6 +2417,7 @@ def update_frbr_entity_type(
 # relationships use the IFLA FRBRer namespace (as in the JSON-LD context).
 FRBR = Namespace("http://purl.org/vocab/frbr/core#")
 FRBRER = Namespace("http://iflastandards.info/ns/frbr/frbrer/")
+FRBROO = Namespace("http://iflastandards.info/ns/fr/frbr/frbroo/")
 SIOC = Namespace("http://rdfs.org/sioc/ns#")
 SCHEMA = Namespace("https://schema.org/")
 PROV = Namespace("http://www.w3.org/ns/prov#")
@@ -3031,6 +3074,93 @@ def _emit_cartographic_rdf_triples(g: Graph, m_uri: URIRef, meta: dict[str, Any]
                     g.add((att_node, IQOQO.mapImageUrl, Literal(str(img_val), datatype=XSD.string)))
 
 
+def _emit_serial_rdf_triples(
+    g: Graph,
+    w_uri: URIRef,
+    m_uri: URIRef | None,
+    work_obj: Any = None,
+    manif_obj: Any = None,
+    meta_dict: dict[str, Any] | None = None,
+) -> None:
+    """Emit FRBRoo F18_Serial_Work and Schema.org Periodical/PublicationIssue triples."""
+    m_meta = meta_dict if isinstance(meta_dict, dict) else {}
+    w_meta = getattr(work_obj, "meta", None) if work_obj is not None else None
+    w_meta = w_meta if isinstance(w_meta, dict) else {}
+
+    issn = getattr(work_obj, "issn", None) or w_meta.get("issn") or m_meta.get("issn")
+    eissn = getattr(work_obj, "eissn", None) or w_meta.get("eissn") or m_meta.get("eissn")
+    work_kind = getattr(work_obj, "work_kind", None) or w_meta.get("work_kind") or m_meta.get("work_kind")
+
+    is_serial = work_kind == "serial" or bool(issn) or bool(eissn)
+    if is_serial:
+        g.add((w_uri, RDF.type, FRBROO.F18_Serial_Work))
+        g.add((w_uri, RDF.type, SCHEMA.Periodical))
+        if work_kind:
+            g.add((w_uri, IQOQO.workKind, Literal(str(work_kind))))
+        if issn:
+            g.add((w_uri, SCHEMA.issn, Literal(str(issn))))
+            g.add((w_uri, IQOQO.issn, Literal(str(issn))))
+        if eissn:
+            g.add((w_uri, IQOQO.eissn, Literal(str(eissn))))
+
+    if m_uri is None:
+        return
+
+    issue_number = getattr(manif_obj, "issue_number", None) if manif_obj is not None else None
+    issue_number = issue_number or m_meta.get("issue_number")
+    cum_issue = getattr(manif_obj, "cumulative_issue_number", None) if manif_obj is not None else None
+    if cum_issue is None:
+        cum_issue = m_meta.get("cumulative_issue_number")
+    volume = getattr(manif_obj, "volume", None) if manif_obj is not None else None
+    volume = volume or m_meta.get("volume")
+    pub_year = getattr(manif_obj, "publication_year", None) if manif_obj is not None else None
+    if pub_year is None:
+        pub_year = m_meta.get("publication_year")
+    pub_month = getattr(manif_obj, "publication_month", None) if manif_obj is not None else None
+    if pub_month is None:
+        pub_month = m_meta.get("publication_month")
+    ean_addon = getattr(manif_obj, "ean_addon", None) if manif_obj is not None else None
+    ean_addon = ean_addon or m_meta.get("ean_addon")
+    full_barcode = getattr(manif_obj, "full_barcode", None) if manif_obj is not None else None
+    full_barcode = full_barcode or m_meta.get("full_barcode")
+    ean = getattr(manif_obj, "ean", None) if manif_obj is not None else None
+    ean = ean or m_meta.get("ean")
+    m_format = getattr(manif_obj, "format", None) if manif_obj is not None else None
+    m_format = m_format or m_meta.get("format")
+
+    if ean:
+        g.add((m_uri, SCHEMA.gtin13, Literal(str(ean))))
+
+    is_issue = (
+        is_serial
+        or any(val is not None and val != "" for val in (issue_number, cum_issue, volume, ean_addon, full_barcode))
+        or m_format == "magazine"
+    )
+    if not is_issue:
+        return
+
+    g.add((m_uri, RDF.type, SCHEMA.PublicationIssue))
+    if issue_number:
+        g.add((m_uri, SCHEMA.issueNumber, Literal(str(issue_number))))
+        g.add((m_uri, IQOQO.issueNumber, Literal(str(issue_number))))
+    if cum_issue is not None:
+        g.add((m_uri, IQOQO.cumulativeIssueNumber, Literal(int(cum_issue), datatype=XSD.integer)))
+    if volume:
+        g.add((m_uri, SCHEMA.volumeNumber, Literal(str(volume))))
+        g.add((m_uri, IQOQO.volume, Literal(str(volume))))
+    if pub_year is not None:
+        g.add((m_uri, IQOQO.publicationYear, Literal(int(pub_year), datatype=XSD.integer)))
+        if (m_uri, SCHEMA.datePublished, None) not in g:
+            date_str = f"{int(pub_year):04d}-{int(pub_month):02d}" if pub_month is not None else f"{int(pub_year):04d}"
+            g.add((m_uri, SCHEMA.datePublished, Literal(date_str)))
+    if pub_month is not None:
+        g.add((m_uri, IQOQO.publicationMonth, Literal(int(pub_month), datatype=XSD.integer)))
+    if ean_addon:
+        g.add((m_uri, IQOQO.eanAddon, Literal(str(ean_addon))))
+    if full_barcode:
+        g.add((m_uri, IQOQO.fullBarcode, Literal(str(full_barcode))))
+
+
 def build_collection_rdf_graph(
     items: list[Any],
     base_url: str,
@@ -3051,6 +3181,7 @@ def build_collection_rdf_graph(
     g = Graph()
     g.bind("frbr", FRBR)
     g.bind("frbrer", FRBRER)
+    g.bind("frbroo", FRBROO)
     g.bind("sioc", SIOC)
     g.bind("schema", SCHEMA)
     g.bind("prov", PROV)
@@ -3174,6 +3305,9 @@ def build_collection_rdf_graph(
                         g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                     if m_elem.isbn13:
                         g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
+                    _emit_serial_rdf_triples(
+                        g, w_uri, m_uri, work_obj=getattr(item, "work", None), manif_obj=m_elem, meta_dict=getattr(m_elem, "meta", None)
+                    )
                     _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
                     _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
                     _emit_audio_rdf_triples(g, m_uri, m_elem, getattr(m_elem, "meta", None), content_type=content_type)
@@ -3199,6 +3333,7 @@ def build_collection_rdf_graph(
                 g.add((w_uri, RDF.type, FRBR.Work))
                 g.add((w_uri, RDF.type, SCHEMA.CreativeWork))
                 g.add((w_uri, SCHEMA.name, Literal(title)))
+                _emit_serial_rdf_triples(g, w_uri, None, work_obj=item)
                 for author in authors:
                     author_node = BNode()
                     g.add((author_node, RDF.type, SCHEMA.Person))
@@ -3219,6 +3354,7 @@ def build_collection_rdf_graph(
                             g.add((m_uri, SCHEMA.name, Literal(m_elem.title)))
                         if m_elem.isbn13:
                             g.add((m_uri, SCHEMA.isbn, Literal(m_elem.isbn13)))
+                        _emit_serial_rdf_triples(g, w_uri, m_uri, work_obj=item, manif_obj=m_elem, meta_dict=getattr(m_elem, "meta", None))
                         _emit_lego_rdf_triples(g, m_uri, getattr(m_elem, "meta", None))
                         _emit_cartographic_rdf_triples(g, m_uri, getattr(m_elem, "meta", None), base_url)
                         _emit_audio_rdf_triples(
@@ -3380,6 +3516,36 @@ def build_collection_rdf_graph(
             m_inst_for_audio = m_inst
             m_meta_dict = (m_inst.meta or {}) if m_inst and hasattr(m_inst, "meta") and m_inst.meta else {}
 
+        work_inst_for_serial = None
+        if not isinstance(item, dict):
+            m_ref = item if hasattr(item, "expression_id") else getattr(item, "manifestation", None)
+            expr_ref = getattr(m_ref, "expression", None) if m_ref is not None else None
+            work_inst_for_serial = getattr(expr_ref, "work", None) if expr_ref is not None else None
+        else:
+            m_meta_dict_for_serial = dict(m_meta_dict)
+            for serial_k in (
+                "issn",
+                "eissn",
+                "work_kind",
+                "issue_number",
+                "cumulative_issue_number",
+                "volume",
+                "publication_month",
+                "ean_addon",
+                "full_barcode",
+            ):
+                if serial_k in item and serial_k not in m_meta_dict_for_serial:
+                    m_meta_dict_for_serial[serial_k] = item[serial_k]
+            m_meta_dict = m_meta_dict_for_serial
+
+        _emit_serial_rdf_triples(
+            g,
+            w_uri,
+            m_uri,
+            work_obj=work_inst_for_serial,
+            manif_obj=m_inst_for_audio,
+            meta_dict=m_meta_dict,
+        )
         _emit_lego_rdf_triples(g, m_uri, m_meta_dict)
         _emit_cartographic_rdf_triples(g, m_uri, m_meta_dict, base_url)
         _emit_audio_rdf_triples(g, m_uri, m_inst_for_audio, m_meta_dict, content_type=content_type)
@@ -3717,6 +3883,8 @@ def stream_collection_to_rdf(
         elif output_format == "json-ld":
             context = {
                 "frbr": str(FRBR),
+                "frbroo": str(FRBROO),
+                "iqoqo": str(IQOQO),
                 "sioc": str(SIOC),
                 "schema": str(SCHEMA),
                 "prov": str(PROV),
@@ -3786,6 +3954,8 @@ def serialize_collection_to_rdf(
     if output_format == "json-ld":
         context = {
             "frbr": str(FRBR),
+            "frbroo": str(FRBROO),
+            "iqoqo": str(IQOQO),
             "sioc": str(SIOC),
             "schema": str(SCHEMA),
             "prov": str(PROV),
@@ -3796,3 +3966,81 @@ def serialize_collection_to_rdf(
         return g.serialize(format="json-ld", context=context, indent=4)
 
     return g.serialize(format="turtle")
+
+
+COMPLETED_ROLLUP_STATUSES: tuple[str, ...] = ("read", "listened", "watched", "played", "built")
+IN_PROGRESS_ROLLUP_STATUSES: tuple[str, ...] = ("reading", "listening", "watching", "playing", "building")
+INTENT_ROLLUP_STATUSES: tuple[str, ...] = ("want_to_read", "want_to_listen", "want_to_watch", "want_to_play", "want_to_build")
+DNF_ROLLUP_STATUSES: tuple[str, ...] = ("dnf",)
+
+_ROLLUP_STATUS_PRIORITY: dict[str, int] = {
+    **dict.fromkeys(COMPLETED_ROLLUP_STATUSES, 4),
+    **dict.fromkeys(IN_PROGRESS_ROLLUP_STATUSES, 3),
+    **dict.fromkeys(INTENT_ROLLUP_STATUSES, 2),
+    **dict.fromkeys(DNF_ROLLUP_STATUSES, 1),
+}
+
+
+def compute_work_reading_rollup(user_id: Any, work_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """Compute user-scoped consumption rollup per Work in a single batched GROUP BY query.
+
+    Aggregates owned ``Item`` statuses (including private/hidden copies owned by
+    ``user_id``) across all ``Expression`` and ``Manifestation`` records of each
+    requested ``Work``, applying strict precedence:
+    completed > in_progress > intent > dnf.
+
+    Returns ``{work_id: {"work_reading_status": str | None, "completed_manifestation_ids": list[int]}}``.
+    """
+    if user_id is None:
+        return {}
+
+    unique_work_ids = sorted({int(wid) for wid in work_ids if wid is not None and int(wid) > 0})
+    if not unique_work_ids:
+        return {}
+
+    stmt = (
+        select(
+            Expression.work_id,
+            Item.status,
+            Manifestation.id,
+            func.count(Item.id),  # pylint: disable=not-callable
+        )
+        .select_from(Item)
+        .join(Manifestation, Item.manifestation_id == Manifestation.id)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(
+            Item.owner_id == user_id,
+            Expression.work_id.in_(unique_work_ids),
+            Item.status.isnot(None),
+        )
+        .group_by(Expression.work_id, Item.status, Manifestation.id)
+    )
+    rows = db.session.execute(stmt).all()
+
+    grouped: dict[int, dict[str, Any]] = {}
+    for wid, raw_status, manifestation_id, _count in rows:
+        if wid is None or not raw_status:
+            continue
+        status = str(raw_status).strip().lower()
+        rank = _ROLLUP_STATUS_PRIORITY.get(status, 0)
+        entry = grouped.setdefault(
+            int(wid),
+            {
+                "best_rank": -1,
+                "work_reading_status": None,
+                "completed_manifestation_ids": set(),
+            },
+        )
+        if status in COMPLETED_ROLLUP_STATUSES and manifestation_id is not None:
+            entry["completed_manifestation_ids"].add(int(manifestation_id))
+        if rank > entry["best_rank"]:
+            entry["best_rank"] = rank
+            entry["work_reading_status"] = status
+
+    return {
+        wid: {
+            "work_reading_status": entry["work_reading_status"],
+            "completed_manifestation_ids": sorted(entry["completed_manifestation_ids"]),
+        }
+        for wid, entry in grouped.items()
+    }

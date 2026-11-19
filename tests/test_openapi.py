@@ -52,3 +52,7 @@ def test_openapi_spec_generation(client):
     # Assert operational bindings
     assert "paths" in data
     assert "/api/docs/openapi.json" in data["paths"], "Self-documenting route failed to inject into path schema."
+    assert "/api/items/bulk-visibility" in data["paths"]
+    assert "patch" in data["paths"]["/api/items/bulk-visibility"]
+    items_get_params = [p["name"] for p in data["paths"]["/api/items"]["get"].get("parameters", [])]
+    assert "visibility" in items_get_params
