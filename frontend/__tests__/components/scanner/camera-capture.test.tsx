@@ -302,4 +302,35 @@ describe("CameraCapture", () => {
       expect(onExtractionFailure).toHaveBeenCalled();
     });
   });
+
+  it("renders uploading progress card in document flow without absolute clipping on mobile camera mode", async () => {
+    setupCamera(true);
+    let resolvePost!: (val: unknown) => void;
+    vi.mocked(apiClient.post).mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolvePost = resolve;
+        })
+    );
+    const onUploadingChange = vi.fn();
+
+    render(<CameraCapture mode="vision" label="Snap Cover" onUploadingChange={onUploadingChange} />);
+    await waitFor(() => {
+      expect(screen.getByText("Snap Cover")).toBeInTheDocument();
+    });
+
+    const file = new File(["dummy"], "cover.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const overlay = await screen.findByTestId("scanner-uploading-overlay");
+    expect(overlay).toHaveClass("min-h-[156px]");
+    expect(overlay).not.toHaveClass("absolute");
+    expect(onUploadingChange).toHaveBeenCalledWith(true);
+
+    resolvePost({ data: { success: false, error: "done" } });
+    await waitFor(() => {
+      expect(onUploadingChange).toHaveBeenCalledWith(false);
+    });
+  });
 });

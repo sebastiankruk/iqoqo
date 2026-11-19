@@ -23,7 +23,7 @@ import { isAudioMedia, getCoverUrl, getCoverTimestamp } from "@/lib/utils";
 import { hasMeta, readMeta, readMetaChain } from "@/lib/meta";
 import { resolveMediaBadge, composeMediaBadgeLabel } from "@/lib/media-badge";
 import { useWorkParts } from "@/lib/api/hooks";
-import { Disc, BookOpen, Calendar, ChevronRight } from "lucide-react";
+import { Disc, BookOpen, Calendar, ChevronRight, GitBranch } from "lucide-react";
 import { TagCloud } from "@/components/ui/tag-cloud";
 
 import { DiscoveryPivot } from "./discovery-pivot";
@@ -61,9 +61,13 @@ interface ItemHeaderProps {
  * @returns An array of author strings
  */
 function normalizeAuthors(authors: unknown): string[] {
+  const isReal = (value: string) => {
+    const cleaned = value.trim().toLowerCase();
+    return Boolean(cleaned) && cleaned !== "unknown" && cleaned !== "n/a" && cleaned !== "none";
+  };
   if (!authors) return [];
-  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
-  if (typeof authors === "string") return [authors];
+  if (Array.isArray(authors)) return authors.filter((a): a is string => typeof a === "string" && isReal(a));
+  if (typeof authors === "string" && isReal(authors)) return [authors.trim()];
   return [];
 }
 
@@ -188,6 +192,16 @@ export function ItemHeader({ item }: ItemHeaderProps) {
             {badge.isAudio ? <Disc className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
             {badgeLabel}
           </Badge>
+          {item.id && (
+            <Link
+              href={`/graph?type=item&id=${item.id}`}
+              data-testid="explore-graph-link"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <GitBranch className="h-3.5 w-3.5 text-primary" />
+              <span>Explore Graph</span>
+            </Link>
+          )}
         </div>
 
         {/* Tags */}
@@ -206,16 +220,16 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           >
             {title}
           </h1>
-          <div
-            className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium"
-            property="schema:author"
-            typeof="Person"
-            itemProp="author"
-            itemScope
-            itemType="https://schema.org/Person"
-          >
-            {normalizeAuthors(work?.authors ?? item.authors).length > 0 ? (
-              normalizeAuthors(work?.authors ?? item.authors).map((author, idx, arr) => (
+          {normalizeAuthors(work?.authors ?? item.authors).length > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium"
+              property="schema:author"
+              typeof="Person"
+              itemProp="author"
+              itemScope
+              itemType="https://schema.org/Person"
+            >
+              {normalizeAuthors(work?.authors ?? item.authors).map((author, idx, arr) => (
                 <span key={author} property="schema:name" itemProp="name">
                   <DiscoveryPivot
                     type="q"
@@ -225,11 +239,9 @@ export function ItemHeader({ item }: ItemHeaderProps) {
                   />
                   {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
                 </span>
-              ))
-            ) : (
-              <span>Unknown Artist/Author</span>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Meta block */}

@@ -68,7 +68,12 @@ vi.mock("@/components/scanner/top-bar", () => ({
   TopBar: (props: any) => {
     mockSetMediaType = props.setFormat;
     mockSetPolicy = props.setPolicy;
-    return <div data-testid="top-bar">{props.children}</div>;
+    return (
+      <div data-testid="top-bar">
+        {props.rightAccessory}
+        {props.children}
+      </div>
+    );
   },
 }));
 
@@ -206,8 +211,9 @@ describe("ScanPage", () => {
     render(<ScanPage />);
 
     expect(screen.getByTestId("unified-lookup-input")).toBeInTheDocument();
+    expect(screen.getByTestId("unified-lookup-form")).toHaveClass("w-full");
     expect(screen.getByTestId("unified-lookup-submit")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /batch mode/i })).toBeInTheDocument();
+    expect(screen.getByTestId("batch-scan-toggle")).toBeInTheDocument();
   });
 
   it("toggles batch mode button state on click", () => {
@@ -218,7 +224,7 @@ describe("ScanPage", () => {
 
     render(<ScanPage />);
 
-    const batchButton = screen.getByRole("button", { name: /batch mode/i });
+    const batchButton = screen.getByTestId("batch-scan-toggle");
     expect(batchButton).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(batchButton);

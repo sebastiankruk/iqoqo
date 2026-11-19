@@ -37,11 +37,10 @@ from app.core.s3_service import (
 )
 from app.utils.phash import parse_hash, perceptual_hash
 
-# Safety threshold for decompression bombs.
-# Set to 200MP to accommodate even the largest modern smartphone cameras
-# (e.g. 200MP Samsung S23 Ultra). PIL default is 50MP.
+# Safety threshold for decompression bombs (100MP matches app/__init__.py and scanner.py;
+# Pillow warns above 100MP and raises DecompressionBombError above 200MP).
 # Note: optimize_and_save_image always thumbnails down to 1024x1024 after this check.
-Image.MAX_IMAGE_PIXELS = 200_000_000
+Image.MAX_IMAGE_PIXELS = 100_000_000
 
 logger = logging.getLogger(__name__)
 

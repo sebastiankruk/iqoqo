@@ -37,13 +37,15 @@ from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.core.tasks import get_task_result, submit_task
 from app.core.wishlist_service import fulfill_wishlist_intent_for_manifestation, upsert_wishlist_intent_for_manifestation
-from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, db
+from app.db.models import Expression, Item, Manifestation, ScanTelemetry, User, Work, db
 from app.strategies import LookupStrategyFactory
 from app.utils.discogs import fetch_discogs_by_id, fetch_discogs_candidates
+from app.utils.issn import is_977_periodical_barcode, is_valid_issn, parse_issn_or_977
 from app.utils.vision import extract_metadata_from_cover
 
-# Maximum allowed upload size for cover images (10 MB)
+# Maximum allowed upload size for cover images (10 MB) and safe pixel bound (100 MP)
 _MAX_COVER_SIZE = 10 * 1024 * 1024  # 10 MB
+_MAX_COVER_PIXELS = 100_000_000  # 100 MP (supports 50MP+ phone camera photos)
 _ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 
@@ -99,6 +101,7 @@ def _record_scan_telemetry(
 def _get_manifestation_filters(code: str):
     """Unified filters to find manifestation by ANY identifier."""
     return [
+        Manifestation.full_barcode == code,
         Manifestation.isbn13 == code,
         Manifestation.upc == code,
         Manifestation.ean == code,
@@ -109,10 +112,149 @@ def _get_manifestation_filters(code: str):
     ]
 
 
+def _serialize_serial_issue_summary(m: Manifestation) -> dict[str, Any]:
+    """Serialize one existing issue Manifestation for serial scan disambiguation."""
+    meta = m.meta if isinstance(m.meta, dict) else {}
+    return {
+        "manifestation_id": m.id,
+        "title": m.title,
+        "issue_number": m.issue_number,
+        "cumulative_issue_number": m.cumulative_issue_number,
+        "volume": m.volume,
+        "publication_year": m.publication_year,
+        "publication_month": m.publication_month,
+        "ean": m.ean,
+        "ean_addon": m.ean_addon,
+        "full_barcode": m.full_barcode,
+        "cover_headline": meta.get("cover_headline"),
+        "cover_url": m.cover_url or meta.get("cover_url"),
+    }
+
+
+def _build_serial_disambiguation_payload(parsed_serial: dict[str, Any], raw_query: str) -> dict[str, Any]:
+    """Resolve parent F18 Serial Work and existing issues without auto-picking an arbitrary issue."""
+    issn = parsed_serial.get("issn")
+    ean = parsed_serial.get("ean")
+
+    parent_work: Work | None = None
+    if issn:
+        parent_work = db.session.execute(select(Work).where(Work.issn == issn)).scalars().first()
+    if parent_work is None and ean:
+        parent_work = (
+            db.session.execute(
+                select(Work)
+                .join(Expression, Expression.work_id == Work.id)
+                .join(Manifestation, Manifestation.expression_id == Expression.id)
+                .where(Manifestation.ean == ean, Work.work_kind == "serial")
+            )
+            .scalars()
+            .first()
+        )
+
+    existing_manifestations: list[Manifestation] = []
+    if parent_work is not None:
+        existing_manifestations = list(
+            db.session.execute(
+                select(Manifestation)
+                .join(Expression, Manifestation.expression_id == Expression.id)
+                .where(Expression.work_id == parent_work.id)
+                .order_by(
+                    Manifestation.publication_year.asc().nullslast(),
+                    Manifestation.publication_month.asc().nullslast(),
+                    Manifestation.issue_number.asc().nullslast(),
+                    Manifestation.id.asc(),
+                )
+            )
+            .scalars()
+            .all()
+        )
+    elif ean:
+        existing_manifestations = list(
+            db.session.execute(
+                select(Manifestation)
+                .where(Manifestation.ean == ean)
+                .order_by(
+                    Manifestation.publication_year.asc().nullslast(),
+                    Manifestation.publication_month.asc().nullslast(),
+                    Manifestation.id.asc(),
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    resolved_title = parent_work.title if parent_work else ""
+    resolved_publisher: str | None = (parent_work.meta or {}).get("publisher") if parent_work and parent_work.meta else None
+    data_source = "database" if parent_work else "serial_parser"
+
+    if parent_work is None:
+        from app.strategies.serials import SerialLookupStrategy
+
+        ext_meta, ext_provider = SerialLookupStrategy().lookup(raw_query)
+        if isinstance(ext_meta, dict):
+            resolved_title = str(ext_meta.get("title") or ext_meta.get("Title") or "").strip()
+            resolved_publisher = ext_meta.get("publisher") or resolved_publisher
+            data_source = ext_provider or data_source
+
+    work_payload = (
+        {
+            "id": parent_work.id,
+            "title": parent_work.title,
+            "issn": parent_work.issn or issn,
+            "eissn": parent_work.eissn,
+            "work_kind": parent_work.work_kind or "serial",
+            "publisher": resolved_publisher,
+        }
+        if parent_work
+        else None
+    )
+
+    prefill = {
+        "title": resolved_title,
+        "issn": issn,
+        "ean": ean,
+        "publisher": resolved_publisher,
+        "work_kind": "serial",
+        "format": "magazine",
+        "format_type": "magazine",
+    }
+
+    return {
+        "status": "serial_disambiguation",
+        "serial_disambiguation": True,
+        "already_in_db": bool(existing_manifestations),
+        "already_in_collection": False,
+        "identifier": raw_query,
+        "issn": issn,
+        "ean": ean,
+        "work_kind": "serial",
+        "format": "magazine",
+        "title": resolved_title or (f"ISSN {issn}" if issn else raw_query),
+        "publisher": resolved_publisher,
+        "data_source": data_source,
+        "work": work_payload,
+        "existing_issues": [_serialize_serial_issue_summary(m) for m in existing_manifestations],
+        "prefill": prefill,
+    }
+
+
 def _find_locally(code: str) -> Manifestation | None:
     """Unified helper to find manifestation by identifier or item local barcode."""
     # pylint: disable=singleton-comparison
     clean_code = code.strip()
+    parsed_serial = parse_issn_or_977(clean_code)
+    if parsed_serial is not None:
+        if parsed_serial.get("full_barcode"):
+            exact_full = (
+                db.session.execute(select(Manifestation).where(Manifestation.full_barcode == parsed_serial["full_barcode"]))
+                .scalars()
+                .first()
+            )
+            if isinstance(exact_full, Manifestation):
+                return exact_full
+        # Bare 13-digit 977 EANs and plain ISSNs must never auto-match an arbitrary existing issue.
+        return None
+
     result = db.session.execute(select(Manifestation).filter(or_(*_get_manifestation_filters(clean_code)))).scalars().first()
     if isinstance(result, Manifestation):
         return result
@@ -132,6 +274,8 @@ def _ingest_by_hint(barcode: str, category_hint: str | None, format_hint: str | 
 
     if len(barcode) == 13 and barcode.startswith("570201"):
         category_hint = "lego"
+    elif is_977_periodical_barcode(barcode) or is_valid_issn(barcode) or format_hint in ("magazine", "journal", "periodical", "serial"):
+        return IngestService.ingest_serial_issue(barcode)
 
     ingest_map = {cat: getattr(IngestService, method) for cat, method in CATEGORY_INGEST_METHOD.items()}
 
@@ -199,21 +343,35 @@ def lookup_barcode_preview(query: str) -> Response | tuple[Response, int]:
         canonical_id = hashlib.sha256(normalized_name.encode()).hexdigest()[:16]
         current_app.logger.debug(f"Hashed search '{query}' to {canonical_id}")
 
+    # Special-case GS1 977 periodical barcodes and ISSNs before generic EAN lookups
+    # so bare 13-digit 977 codes never auto-match an arbitrary existing issue.
+    cleaned_query = query.strip()
+    parsed_serial = parse_issn_or_977(cleaned_query) if is_barcode else None
+    if parsed_serial is not None and not parsed_serial.get("full_barcode"):
+        disambig_payload = _build_serial_disambiguation_payload(parsed_serial, cleaned_query)
+        _record_scan_telemetry(cleaned_query, format_hint or "magazine", "serial_disambiguation", "success")
+        return jsonify({"success": True, "data": disambig_payload, "error": None}), 200
+
     # Check DB first
-    stmt_manifestations = select(Manifestation).join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
+    if parsed_serial is not None and parsed_serial.get("full_barcode"):
+        stmt_manifestations = select(Manifestation).join(Expression).filter(Manifestation.full_barcode == parsed_serial["full_barcode"])
+    else:
+        stmt_manifestations = select(Manifestation).join(Expression).filter(or_(*_get_manifestation_filters(canonical_id)))
 
     from app.core.taxonomy import FORMAT_ALIAS_TO_CATEGORY
 
-    cleaned_query = query.strip()
     is_lego_gs1 = len(cleaned_query) == 13 and cleaned_query.startswith("570201")
     if is_lego_gs1:
         category_hint = "lego"
+    elif parsed_serial is not None or format_hint == "magazine":
+        category_hint = "magazine"
     else:
         category_hint = FORMAT_ALIAS_TO_CATEGORY.get(format_hint) if format_hint else None
 
     # Filter by format if hint is provided to avoid cross-media collisions
-    if category_hint:
-        stmt_manifestations = stmt_manifestations.filter(Expression.content_type == category_hint)
+    if category_hint and parsed_serial is None:
+        effective_ct = "text" if category_hint == "magazine" else category_hint
+        stmt_manifestations = stmt_manifestations.filter(Expression.content_type == effective_ct)
 
     all_manifestations = db.session.execute(stmt_manifestations).scalars().all()
     matched_item: Item | None = None
@@ -463,6 +621,9 @@ def _normalize_preview_meta(meta: dict[str, Any], format_hint: str | None = None
                 "game": MediaFormat.BOARD_GAME,
                 "boardgame": MediaFormat.BOARD_GAME,
                 "book": MediaFormat.BOOK,
+                "magazine": MediaFormat.MAGAZINE,
+                "journal": MediaFormat.MAGAZINE,
+                "periodical": MediaFormat.MAGAZINE,
                 "text": MediaFormat.BOOK,
                 "puzzle": MediaFormat.JIGSAW_PUZZLE,
                 "jigsaw": MediaFormat.JIGSAW_PUZZLE,
@@ -760,6 +921,24 @@ def scan_barcode() -> Response | tuple[Response, int]:  # pylint: disable=too-ma
         manifestation = db.session.get(Manifestation, manifestation_id)
 
     if not manifestation and (barcode or payload.meta):
+        parsed_serial = parse_issn_or_977(barcode) if barcode else None
+        meta_has_issue = bool(
+            payload.meta and (payload.meta.get("issue_number") or payload.meta.get("ean_addon") or payload.meta.get("full_barcode"))
+        )
+        if parsed_serial and not parsed_serial.get("full_barcode") and not meta_has_issue:
+            disambig_payload = _build_serial_disambiguation_payload(parsed_serial, barcode or "")
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "status": "serial_disambiguation",
+                        "data": disambig_payload,
+                        "error": "Serial issue disambiguation required for bare 977 barcode",
+                    }
+                ),
+                409,
+            )
+
         manifestation = _find_locally(barcode) if barcode else None
         if not manifestation:
             try:
@@ -893,13 +1072,24 @@ def extract_from_cover():
         return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     try:
-        Image.open(io.BytesIO(image_bytes)).verify()
-    except (OSError, SyntaxError):
+        prev_max_pixels = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = max(prev_max_pixels or 0, _MAX_COVER_PIXELS)
+        try:
+            Image.open(io.BytesIO(image_bytes)).verify()
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max_pixels
+    except (OSError, SyntaxError, Image.DecompressionBombError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     mime_type = mime_map.get(ext, "image/jpeg")
-    task_id = submit_task(extract_metadata_from_cover, image_bytes, mime_type=mime_type, user_id=getattr(g, "user_id", None))
+    raw_user_id = getattr(g, "user_id", None)
+    task_id = submit_task(
+        extract_metadata_from_cover,
+        image_bytes,
+        mime_type=mime_type,
+        user_id=str(raw_user_id) if raw_user_id else None,
+    )
 
     if task_id is None:
         return jsonify({"success": False, "data": None, "error": "Background queue unavailable. Please try again later."}), 503
