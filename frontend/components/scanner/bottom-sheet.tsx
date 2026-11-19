@@ -16,20 +16,20 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search, ImagePlus } from "lucide-react";
+import { Camera, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { ScanFormat } from "@/types/taxonomy";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useTranslations } from "next-intl";
 
-type TabId = "barcode" | "cover" | "manual";
+type TabId = "barcode" | "cover";
 
 /** Props for BottomSheet component */
 interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
   onScannerStateChange?: (isActive: boolean) => void;
-  onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
+  onTabChange?: (tabId: "barcode" | "cover") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onExtractionFailure?: (ean: string) => void;
   onShowManualForm?: (isbn?: string) => void;
@@ -73,7 +73,6 @@ export function BottomSheet({
   const tabs = [
     { id: "barcode", label: t("bottomSheet.barcodeTab") },
     { id: "cover", label: t("bottomSheet.snapCoverTab") },
-    { id: "manual", label: t("bottomSheet.manualSearchTab") },
   ] as const;
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
@@ -82,6 +81,7 @@ export function BottomSheet({
     if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
     if (fmt === "music" || fmt === "audio") return "music";
+    if (fmt === "magazine") return "magazine";
     if (fmt === "book") return "book";
     return "";
   };
@@ -93,7 +93,6 @@ export function BottomSheet({
     },
     [onTabChange]
   );
-  const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +295,7 @@ export function BottomSheet({
   }, [autoStart, activeTab, scannerActive, isSearching, startScanner]);
 
   useEffect(() => {
-    if (activeTab === "manual") {
+    if (activeTab !== "barcode") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       stopScanner();
     }
@@ -308,11 +307,6 @@ export function BottomSheet({
       stopScanner();
     };
   }, [stopScanner]);
-
-  const handleManualSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    lookupBarcode(manualIsbn.trim(), true);
-  };
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 flex h-[40%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
@@ -427,39 +421,15 @@ export function BottomSheet({
           </div>
         )}
 
-        {activeTab === "manual" && (
-          <div className="flex w-full flex-col">
-            <form onSubmit={handleManualSearch} className="w-full">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={manualIsbn}
-                  onChange={e => setManualIsbn(e.target.value)}
-                  placeholder={t("bottomSheet.manualSearchPlaceholder")}
-                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
-                />
-                <button
-                  type="submit"
-                  disabled={isSearching || !manualIsbn}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              </div>
-            </form>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              {isSearching ? t("bottomSheet.lookingUp") : t("bottomSheet.manualSearchHint")}
-            </p>
-            <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
-              <button
-                type="button"
-                onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
-                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
-              >
-                {t("bottomSheet.manualEntryForm")}
-              </button>
-            </div>
-          </div>
+        {onShowManualForm && (
+          <button
+            type="button"
+            data-testid="enter-manually-link"
+            onClick={() => onShowManualForm(lastSearchedBarcode)}
+            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
+          >
+            {t("bottomSheet.enterManuallyLink")}
+          </button>
         )}
       </div>
     </div>

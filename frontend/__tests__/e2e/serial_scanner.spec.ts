@@ -121,8 +121,7 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    await page.getByTestId("scanner-tab-manual").click();
-    const lookupInput = page.getByPlaceholder(/ISBN|UPC|Discogs|ISSN/i);
+    const lookupInput = page.getByTestId("unified-lookup-input");
     await lookupInput.fill("9771507596044");
     await page.keyboard.press("Enter");
 

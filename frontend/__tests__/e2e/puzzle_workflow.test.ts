@@ -90,11 +90,8 @@ test.describe("Jigsaw Puzzle Workflow", () => {
       });
     });
 
-    // 4. Switch to Manual Search tab to access the input
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 5. Fill in the barcode
-    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', "4005556199999");
+    // 4. Fill in the barcode in unified lookup bar
+    await page.getByTestId("unified-lookup-input").fill("4005556199999");
     await page.keyboard.press("Enter");
 
     // 6. Verify Item Card is created (title is visible in success card)

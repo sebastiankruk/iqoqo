@@ -105,7 +105,7 @@ test.describe("Mobile Scanner & Batch Mode (C98)", () => {
   test("toggles continuous batch scan mode on /scan", async ({ page }) => {
     await page.goto("/scan");
 
-    const batchButton = page.getByRole("button", { name: /batch mode/i });
+    const batchButton = page.getByTestId("batch-scan-toggle");
     await expect(batchButton).toBeVisible();
     await expect(batchButton).toHaveAttribute("aria-pressed", "false");
 
@@ -162,7 +162,7 @@ test.describe("Mobile Scanner & Batch Mode (C98)", () => {
     await page.goto("/scan");
 
     // Activate Batch Mode
-    const batchButton = page.getByRole("button", { name: /batch mode/i });
+    const batchButton = page.getByTestId("batch-scan-toggle");
     await batchButton.click();
     await expect(batchButton).toHaveAttribute("aria-pressed", "true");
 

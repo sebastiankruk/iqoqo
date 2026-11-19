@@ -98,7 +98,7 @@ export default function ScanPage() {
     return {};
   });
   const [scannerActive, setScannerActive] = useState(false);
-  const [scannerTab, setScannerTab] = useState<"barcode" | "cover" | "manual">("barcode");
+  const [scannerTab, setScannerTab] = useState<"barcode" | "cover">("barcode");
   const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
     if (typeof window !== "undefined") {
       const urlFormat = new URLSearchParams(window.location.search).get("format");
@@ -303,7 +303,13 @@ export default function ScanPage() {
       const url = formatParam
         ? `/lookup/${encodeURIComponent(query)}?format=${formatParam}`
         : `/lookup/${encodeURIComponent(query)}`;
-      const data = await apiFetch<IsbnMeta>(url);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(t("bottomSheet.lookupTimedOut"))), 10000);
+      });
+      const data = await Promise.race([apiFetch<IsbnMeta>(url), timeoutPromise]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
       setQuickQuery("");
       await handleFound(query, data);
     } catch {
@@ -557,47 +563,44 @@ export default function ScanPage() {
           hasFlash={hasTorch}
           isFlashOn={torchOn}
           onToggleFlash={handleToggleTorch}
-        >
-          {!result && !showManual && (
-            <div className="flex items-center gap-2">
-              <form
-                onSubmit={handleQuickLookup}
-                className="flex flex-1 min-w-0 h-9 items-center rounded-xl bg-background/80 backdrop-blur-md border border-border/40 shadow-sm px-3 focus-within:border-primary/60"
-              >
-                <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-                <input
-                  data-testid="unified-lookup-input"
-                  type="text"
-                  value={quickQuery}
-                  onChange={e => setQuickQuery(e.target.value)}
-                  placeholder={t("unifiedLookup.placeholder")}
-                  className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
-                />
-                <Button
-                  data-testid="unified-lookup-submit"
-                  type="button"
-                  onClick={handleQuickLookup}
-                  size="sm"
-                  disabled={!quickQuery.trim() || isQuickSearching}
-                  className="h-7 px-2.5 text-xs ml-1 shrink-0 rounded-lg"
-                >
-                  {isQuickSearching ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    t("unifiedLookup.searchButton")
-                  )}
-                </Button>
-              </form>
-
+          rightAccessory={
+            !result && !showManual ? (
               <BatchScanToggle
+                compact
                 enabled={isBatchMode}
                 onToggle={setBatchMode}
                 queueCount={scannedQueue.length}
                 recentItems={scannedQueue}
                 onClearQueue={clearQueue}
-                className="shrink-0"
               />
-            </div>
+            ) : undefined
+          }
+        >
+          {!result && !showManual && (
+            <form
+              onSubmit={handleQuickLookup}
+              data-testid="unified-lookup-form"
+              className="flex w-full min-w-0 h-9 items-center rounded-xl bg-background/85 backdrop-blur-md border border-border/40 shadow-sm px-3 focus-within:border-primary/60"
+            >
+              <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+              <input
+                data-testid="unified-lookup-input"
+                type="text"
+                value={quickQuery}
+                onChange={e => setQuickQuery(e.target.value)}
+                placeholder={t("unifiedLookup.placeholder")}
+                className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+              />
+              <Button
+                data-testid="unified-lookup-submit"
+                type="submit"
+                size="sm"
+                disabled={!quickQuery.trim() || isQuickSearching}
+                className="h-7 px-2.5 text-xs ml-1 shrink-0 rounded-lg"
+              >
+                {isQuickSearching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("unifiedLookup.searchButton")}
+              </Button>
+            </form>
           )}
         </TopBar>
 
