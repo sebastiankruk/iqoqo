@@ -150,11 +150,8 @@ test.describe("Lending Workflow", () => {
     // 2. Navigate to Scanner page
     await page.goto("/scan");
 
-    // 3. Switch to Manual Search tab
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 4. Enter barcode
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    // 3. Enter barcode in unified lookup bar
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 

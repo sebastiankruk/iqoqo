@@ -35,7 +35,91 @@ _HTTP_TIMEOUT = 5.0
 
 def _clean_marc_title(raw_title: str) -> str:
     """Strip trailing punctuation commonly present in MARC 245$a fields."""
-    return raw_title.strip().rstrip(" /:;.")
+    return raw_title.strip().rstrip(" /:;.,")
+
+
+def _extract_marc_subfields(bib: dict[str, Any], tag: str) -> list[dict[str, str]]:
+    """Collect flattened subfield maps for every MARC field matching *tag*."""
+    marc = bib.get("marc")
+    if not isinstance(marc, dict):
+        return []
+    fields = marc.get("fields")
+    if not isinstance(fields, list):
+        return []
+    results: list[dict[str, str]] = []
+    for entry in fields:
+        if not isinstance(entry, dict) or tag not in entry:
+            continue
+        tag_val = entry[tag]
+        if not isinstance(tag_val, dict):
+            continue
+        subfields = tag_val.get("subfields")
+        if not isinstance(subfields, list):
+            continue
+        merged: dict[str, str] = {}
+        for sub in subfields:
+            if isinstance(sub, dict):
+                for code, val in sub.items():
+                    if isinstance(val, str) and val.strip() and code not in merged:
+                        merged[code] = val.strip()
+        if merged:
+            results.append(merged)
+    return results
+
+
+def _bn_record_matches_primary_issn(bib: dict[str, Any], issn: str) -> bool:
+    """Verify a Biblioteka Narodowa bib record owns *issn* as primary ISSN (022$a)."""
+    kind = str(bib.get("kind") or "").strip().lower()
+    if kind and kind not in ("czasopismo", "serial", "periodical", "wydawnictwo ciągłe"):
+        return False
+
+    marc_022 = _extract_marc_subfields(bib, "022")
+    if marc_022:
+        return any(normalize_issn(sf.get("a")) == issn for sf in marc_022 if sf.get("a"))
+
+    raw_isbn_issn = bib.get("isbnIssn")
+    if isinstance(raw_isbn_issn, str) and raw_isbn_issn.strip():
+        return normalize_issn(raw_isbn_issn) == issn
+
+    return True
+
+
+def _extract_bn_title_and_publisher(bib: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Extract clean serial title (MARC 245/222) and publisher (MARC 260/264) from a BN bib."""
+    clean_title: str | None = None
+    marc_245 = _extract_marc_subfields(bib, "245")
+    if marc_245:
+        sf = marc_245[0]
+        parts = [_clean_marc_title(sf[k]) for k in ("a", "p") if sf.get(k)]
+        joined = " ".join(p for p in parts if p).strip()
+        if joined:
+            clean_title = joined
+
+    if not clean_title:
+        marc_222 = _extract_marc_subfields(bib, "222")
+        if marc_222:
+            sf = marc_222[0]
+            if sf.get("a"):
+                clean_title = _clean_marc_title(sf["a"])
+
+    if not clean_title:
+        raw_title = bib.get("title")
+        if isinstance(raw_title, str) and raw_title.strip():
+            clean_title = _clean_marc_title(raw_title)
+
+    clean_publisher: str | None = None
+    for tag in ("264", "260"):
+        marc_pub = _extract_marc_subfields(bib, tag)
+        if marc_pub and marc_pub[0].get("b"):
+            clean_publisher = marc_pub[0]["b"].strip().rstrip(" ,:;.")
+            break
+
+    if not clean_publisher:
+        raw_pub = bib.get("publisher") or bib.get("placeOfPublication")
+        if isinstance(raw_pub, str) and raw_pub.strip():
+            clean_publisher = raw_pub.strip().rstrip(" ,:;.")
+
+    return clean_title, clean_publisher
 
 
 def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
@@ -43,7 +127,7 @@ def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
     try:
         resp = safe_get(
             "https://data.bn.org.pl/api/institutions/bibs.json",
-            params={"issn": issn, "limit": "5"},
+            params={"isbnIssn": issn, "kind": "czasopismo", "limit": "10"},
             timeout=_HTTP_TIMEOUT,
         )
         if resp.status_code != 200:
@@ -53,12 +137,10 @@ def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
         if not isinstance(bibs, list) or not bibs:
             return None
         for bib in bibs:
-            if not isinstance(bib, dict):
+            if not isinstance(bib, dict) or not _bn_record_matches_primary_issn(bib, issn):
                 continue
-            title = bib.get("title")
-            if isinstance(title, str) and title.strip():
-                publisher = bib.get("publisher") or bib.get("placeOfPublication")
-                clean_title = _clean_marc_title(title)
+            clean_title, clean_publisher = _extract_bn_title_and_publisher(bib)
+            if clean_title:
                 meta: dict[str, Any] = {
                     "title": clean_title,
                     "Title": clean_title,
@@ -69,8 +151,8 @@ def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
                     "category": MediaCategory.TEXT,
                     "data_source": "biblioteka_narodowa",
                 }
-                if isinstance(publisher, str) and publisher.strip():
-                    meta["publisher"] = publisher.strip().rstrip(" ,:;.")
+                if clean_publisher:
+                    meta["publisher"] = clean_publisher
                 if isinstance(bib.get("language"), str) and bib["language"].strip():
                     meta["language"] = bib["language"].strip().lower()[:10]
                 return meta

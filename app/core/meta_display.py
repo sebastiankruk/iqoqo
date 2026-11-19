@@ -24,7 +24,7 @@ drift.
 from dataclasses import dataclass
 from typing import Any
 
-# Structural column keys excluded from display (matched case-insensitively)
+# Structural column & physical-item keys excluded from Manifestation display (matched case-insensitively)
 EXCLUDED_STRUCTURAL_KEYS = {
     "id",
     "manifestation_id",
@@ -32,6 +32,13 @@ EXCLUDED_STRUCTURAL_KEYS = {
     "image",
     "cover_status",
     "cover",
+    "collection_status",
+    "status",
+    "local_barcode",
+    "lent_to_user_id",
+    "lent_to_name",
+    "visibility",
+    "is_hidden",
 }
 
 # Values considered empty / placeholder in UI display
@@ -315,6 +322,10 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
     "additional_images",
     "imageLinks",
     "data_source",
+    "work_kind",
+    "PublicationDate",
+    "publicationDate",
+    "publication_date",
 }
 
 # All keys that are rendered in a dedicated surface and should be omitted from Additional Details

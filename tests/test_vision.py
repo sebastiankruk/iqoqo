@@ -406,3 +406,175 @@ def test_ollama_vision_timeout_is_overridable(monkeypatch):
     monkeypatch.setenv("OLLAMA_VISION_TIMEOUT", "180")
     vision._call_ollama_api("http://ollama.local", {})
     assert captured["timeout"] == 180, "a slower host must be able to raise the ceiling"
+
+
+def test_normalize_cover_image_bytes_downscales_oversized_image():
+    """Large camera images are downscaled cleanly without raising DecompressionBombError."""
+    import io
+
+    from PIL import Image
+
+    from app.utils.vision import _normalize_cover_image_bytes
+
+    buf = io.BytesIO()
+    Image.new("RGB", (3000, 4000), color="yellow").save(buf, format="JPEG")
+    out_bytes, mime = _normalize_cover_image_bytes(buf.getvalue(), max_dim=1200)
+    assert mime == "image/jpeg"
+    with Image.open(io.BytesIO(out_bytes)) as resized:
+        assert max(resized.size) <= 1200
+
+
+def test_extract_via_tesseract_enriches_serial_by_issn(monkeypatch):
+    """When Tesseract detects an ISSN on a magazine cover, Title/Publisher come from SerialLookupStrategy."""
+    import io
+
+    import pytesseract
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (600, 800), color="white").save(buf, format="JPEG")
+
+    monkeypatch.setattr(pytesseract, "get_languages", lambda: ["eng"])
+    monkeypatch.setattr(
+        pytesseract,
+        "image_to_string",
+        lambda *_a, **_kw: "wr --- is\nNR 7(58) LIPIEC 2004\nKOKAINA\nISSN 1507-5966 INDEKS 323357\n07>",
+    )
+    monkeypatch.setattr(
+        "app.strategies.serials.SerialLookupStrategy.lookup",
+        lambda _self, _q: ({"Title": "National Geographic Polska", "publisher": "G+J RBA"}, "biblioteka_narodowa"),
+    )
+
+    result = _extract_via_tesseract(buf.getvalue())
+    assert result is not None
+    assert result["Title"] == "National Geographic Polska"
+    assert result["Publisher"] == "G+J RBA"
+    assert result["Authors"] == []
+    assert result["issn"] == "1507-5966"
+    assert result["issue_number"] == "7"
+    assert result["cumulative_issue_number"] == 58
+    assert result["publication_month"] == 7
+    assert result["publication_year"] == 2004
+    assert result["ean_addon"] == "07"
+    assert result["cover_headline"] == "KOKAINA"
+
+
+def test_get_llm_vision_status_reports_providers_and_ollama_models(app, monkeypatch):
+    """get_llm_vision_status reports ALLOW_LLM, Gemini, OpenAI, Ollama vision model readiness, and Tesseract."""
+    from app.utils.vision import get_llm_vision_status
+
+    class _FakeResp:
+        def raise_for_status(self):
+            return None
+
+        @staticmethod
+        def json():
+            return {"models": [{"name": "llama3:latest"}, {"name": "llava:latest"}]}
+
+    monkeypatch.setattr(requests, "get", lambda *_a, **_kw: _FakeResp())
+    monkeypatch.setattr("app.utils.vision.Config.ALLOW_LLM", True)
+    monkeypatch.setenv("OLLAMA_VISION_MODEL", "llava")
+
+    with app.app_context():
+        status = get_llm_vision_status(probe_ollama=True)
+
+    assert status["allow_llm"] is True
+    assert status["ollama"]["reachable"] is True
+    assert status["ollama"]["vision_model_installed"] is True
+    assert status["ollama"]["dedupe_model_installed"] is True
+    assert status["vision_ready"] is True
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch.dict(os.environ, {"GEMINI_API_KEY": "dummy_key"})
+@patch("google.genai.Client", create=True)
+def test_extract_gemini_accepts_uuid_object_user_id(mock_client_class, mock_record, mock_session):
+    """Gemini extraction must accept uuid.UUID user_id objects from g.user_id without crashing."""
+    import uuid
+
+    uid = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.text = '{"Title": "Dune", "Authors": ["Frank Herbert"]}'
+    mock_client.models.generate_content.return_value = mock_response
+
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id=uid)
+    assert result is not None
+    assert result["Title"] == "Dune"
+    mock_session.get.assert_called_once()
+    mock_record.assert_called_once()
+    assert isinstance(mock_record.call_args.args[1], str)
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision._extract_via_gemini", return_value=None)
+@patch("app.utils.vision._extract_via_tesseract", return_value={"Title": "Fallback", "Authors": []})
+@patch("requests.post", side_effect=requests.exceptions.ReadTimeout("slow llava"))
+def test_ollama_read_timeout_does_not_retry_and_falls_back_immediately(mock_post, mock_tess, _mock_gem):
+    """ReadTimeout on Ollama must not retry 3x and must fall straight back to Tesseract."""
+    result = extract_metadata_from_cover(b"test image")
+    assert result == {"Title": "Fallback", "Authors": []}
+    assert mock_post.call_count == 1
+    mock_tess.assert_called_once()
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch.dict(os.environ, {"GEMINI_API_KEY": "bad_key"})
+@patch("google.genai.Client", create=True)
+def test_extract_via_gemini_records_failed_telemetry(mock_client_class, mock_record, mock_session):
+    """Gemini API failure records a 'failed' telemetry row rather than staying invisible."""
+    mock_user = MagicMock()
+    mock_user.has_permission.return_value = True
+    mock_session.get.return_value = mock_user
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    mock_client.models.generate_content.side_effect = RuntimeError("400 API key not valid")
+
+    result = _extract_via_gemini(b"test image", "image/jpeg", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is None
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "gemini"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "failed"
+    assert "400 API key not valid" in (mock_record.call_args.kwargs["error_message"] or "")
+
+
+@patch("app.utils.vision.Config.ALLOW_LLM", True)
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch("requests.post", side_effect=requests.exceptions.ReadTimeout("timed out"))
+def test_extract_via_ollama_records_failed_telemetry(mock_post, mock_record, _mock_session):
+    """Ollama timeout records a 'failed' telemetry row with error details."""
+    result = _extract_via_ollama(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is None
+    mock_post.assert_called_once()
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "ollama"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "failed"
+
+
+@patch("app.utils.vision.db.session")
+@patch("app.utils.llm_covers.record_telemetry")
+@patch("pytesseract.image_to_string", return_value="Tesseract Book\nSome Author")
+@patch("PIL.Image.open")
+def test_extract_via_tesseract_records_success_telemetry(mock_open, _mock_ocr, mock_record, _mock_session):
+    """Tesseract OCR fallback records a 'success' telemetry row when producing metadata."""
+    mock_open.return_value = MagicMock()
+    result = _extract_via_tesseract(b"test image", user_id="00000000-0000-0000-0000-000000000000")
+    assert result is not None
+    assert result["Title"] == "Tesseract Book"
+    mock_record.assert_called_once()
+    assert mock_record.call_args.args[0] == "tesseract"
+    assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
+    assert mock_record.call_args.kwargs["status"] == "success"

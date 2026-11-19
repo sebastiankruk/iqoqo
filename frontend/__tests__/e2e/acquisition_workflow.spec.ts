@@ -147,14 +147,11 @@ test.describe("Item Acquisition and Collection Workflow", () => {
       );
 
       // Execute Workflow
-      // 1. Switch to Manual Search tab
-      await page.getByRole("button", { name: "Manual Search" }).click();
+      // 1. Fill the full-width unified lookup field
+      await page.getByTestId("unified-lookup-input").fill("9780134685991");
 
-      // 2. Fill the lookup field
-      await page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…").fill("9780134685991");
-
-      // 3. Click search icon button
-      await page.locator("button:has(svg.lucide-search)").click();
+      // 2. Click Lookup submit button
+      await page.getByTestId("unified-lookup-submit").click();
 
       // Verify Result (SuccessCard should appear)
       await expect(page.getByText("Test Book")).toBeVisible();

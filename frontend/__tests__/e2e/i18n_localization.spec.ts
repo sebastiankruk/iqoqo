@@ -107,9 +107,12 @@ test.describe("Internationalization (i18n) & Localization", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Barcode");
     await expect(page.getByTestId("scanner-tab-cover")).toContainText("Snap Cover");
-    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Manual Search");
-    await page.getByTestId("scanner-tab-manual").click();
-    await expect(page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…")).toBeVisible();
+    await expect(page.getByTestId("scanner-tab-manual")).not.toBeVisible();
+    await expect(page.getByTestId("enter-manually-link")).toContainText("Can't scan? Enter details manually");
+    await expect(page.getByTestId("unified-lookup-input")).toHaveAttribute(
+      "placeholder",
+      "Quick search title, code or barcode..."
+    );
 
     // Switch to Polish from the home page
     await page.goto("/");
@@ -123,9 +126,7 @@ test.describe("Internationalization (i18n) & Localization", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Kod kreskowy");
     await expect(page.getByTestId("scanner-tab-cover")).toContainText("Zrób zdjęcie okładki");
-    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Wyszukiwanie ręczne");
-    await page.getByTestId("scanner-tab-manual").click();
-    await expect(page.getByPlaceholder("ISBN, UPC, identyfikator Discogs lub wykonawca – tytuł…")).toBeVisible();
+    await expect(page.getByTestId("enter-manually-link")).toContainText("Nie możesz zeskanować? Wpisz dane ręcznie");
 
     // Switch back to English and verify the scanner UI updates
     await page.goto("/");
@@ -138,6 +139,6 @@ test.describe("Internationalization (i18n) & Localization", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByTestId("scanner-tab-barcode")).toContainText("Barcode");
     await expect(page.getByTestId("scanner-tab-cover")).toContainText("Snap Cover");
-    await expect(page.getByTestId("scanner-tab-manual")).toContainText("Manual Search");
+    await expect(page.getByTestId("enter-manually-link")).toContainText("Can't scan? Enter details manually");
   });
 });

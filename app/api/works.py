@@ -851,7 +851,8 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
             }
         )
 
-    authors = work.meta.get("authors", []) if work.meta else []
+    raw_authors = work.meta.get("authors", []) if work.meta else []
+    authors = [a for a in raw_authors if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}]
     contributions = serialize_contributions(work=work)
     series_memberships = [
         {
@@ -899,7 +900,8 @@ def get_expression_detail(expression_id: int) -> tuple[Response, int]:
     from app.core.frbr_service import is_live_performance, serialize_contributions
 
     work = getattr(expr, "work", None)
-    authors = work.meta.get("authors", []) if (work and work.meta) else []
+    raw_authors = work.meta.get("authors", []) if (work and work.meta) else []
+    authors = [a for a in raw_authors if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}]
 
     manifestations_data = []
     for m in getattr(expr, "manifestations", []):
