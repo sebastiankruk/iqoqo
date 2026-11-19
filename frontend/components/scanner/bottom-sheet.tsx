@@ -309,11 +309,11 @@ export function BottomSheet({
   }, [stopScanner]);
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-20 flex h-[40%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+    <div className="absolute inset-x-0 bottom-0 z-20 flex min-h-[40%] max-h-[56%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
       <div className="flex justify-center pt-3 pb-2">
         <div className="h-1 w-10 rounded-full bg-border" />
       </div>
-      <div className="flex justify-center px-6">
+      <div className="flex justify-center px-6 pb-2">
         <div className="inline-flex rounded-xl bg-secondary p-1">
           {tabs.map(tab => (
             <button
@@ -332,7 +332,7 @@ export function BottomSheet({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 relative">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pt-3 pb-5 overflow-y-auto relative">
         {isSearching && (
           <div
             data-testid="scanner-searching-overlay"

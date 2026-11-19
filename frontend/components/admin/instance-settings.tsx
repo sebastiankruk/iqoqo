@@ -533,39 +533,57 @@ export function InstanceSettings({ category = "external_apis", showApiKeys = fal
     const isMasked = s.type === "api" && value.startsWith("***");
     const isRevealed = revealedKeys.has(s.key);
     const badge = getSourceBadge(source);
+    const inputId = `setting-input-${s.key}`;
 
     return (
       <div key={s.key} className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">{s.label}</label>
+        <label htmlFor={inputId} className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
+          {s.label}
+        </label>
         <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              autoComplete="off"
-              className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
-              value={isRevealed ? revealedValues[s.key] || value : value}
-              onChange={e => {
-                const newVal = e.target.value;
-                if (isRevealed) {
-                  setRevealedValues({ ...revealedValues, [s.key]: newVal });
-                }
-                setSettings({ ...settings, [s.key]: newVal });
-              }}
-              placeholder={s.placeholder}
-            />
-            {(isMasked || (s.type === "api" && source !== "missing")) && (
-              <button
-                type="button"
-                onClick={() => toggleReveal(s.key)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                title={isRevealed ? "Hide value" : "Reveal stored value"}
-              >
-                {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            )}
-          </div>
+          {s.type === "boolean" ? (
+            <select
+              id={inputId}
+              aria-label={s.label}
+              className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={String(value).toLowerCase() === "true" ? "true" : "false"}
+              onChange={e => setSettings({ ...settings, [s.key]: e.target.value })}
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          ) : (
+            <div className="relative flex-1">
+              <input
+                id={inputId}
+                type="text"
+                autoComplete="off"
+                className="flex h-9 w-full max-w-md rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring pr-10"
+                value={isRevealed ? revealedValues[s.key] || value : value}
+                onChange={e => {
+                  const newVal = e.target.value;
+                  if (isRevealed) {
+                    setRevealedValues({ ...revealedValues, [s.key]: newVal });
+                  }
+                  setSettings({ ...settings, [s.key]: newVal });
+                }}
+                placeholder={s.placeholder}
+              />
+              {(isMasked || (s.type === "api" && source !== "missing")) && (
+                <button
+                  type="button"
+                  onClick={() => toggleReveal(s.key)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                  title={isRevealed ? "Hide value" : "Reveal stored value"}
+                >
+                  {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
+          )}
           <span className={`text-xs px-2 py-1 rounded font-mono ${badge.className}`}>{badge.label}</span>
         </div>
+        {s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}
       </div>
     );
   };

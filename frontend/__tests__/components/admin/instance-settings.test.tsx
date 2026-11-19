@@ -111,4 +111,32 @@ describe("InstanceSettings - Google OAuth Admin Settings UI", () => {
       );
     });
   });
+
+  it("renders boolean settings like ALLOW_LLM as a dropdown select instead of a text input", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(adminApi.getInstanceSettings).mockResolvedValue({
+      ALLOW_LLM: { value: "false", source: "env" },
+    });
+    vi.mocked(adminApi.updateInstanceSettings).mockResolvedValue({ success: true, data: { ALLOW_LLM: "true" } });
+
+    render(<InstanceSettings category="external_apis" showApiKeys={true} />);
+
+    const allowLlmSelect = (await screen.findByLabelText("Enable AI Vision & LLM Features")) as HTMLSelectElement;
+    expect(allowLlmSelect.tagName).toBe("SELECT");
+    expect(allowLlmSelect.value).toBe("false");
+
+    await user.selectOptions(allowLlmSelect, "true");
+    expect(allowLlmSelect.value).toBe("true");
+
+    const saveButtons = screen.getAllByRole("button", { name: /save/i });
+    await user.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(adminApi.updateInstanceSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ ALLOW_LLM: "true" }),
+        "external_apis"
+      );
+    });
+  });
 });
