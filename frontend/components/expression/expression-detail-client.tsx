@@ -24,7 +24,7 @@ import { Footer } from "@/components/dashboard/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveSchemaType } from "@/lib/schema-org";
-import { getCoverUrl } from "@/lib/utils";
+import { getCoverTimestamp, getCoverUrl } from "@/lib/utils";
 import { useExpression } from "@/lib/api/hooks";
 import { useResolvedRouteParam } from "@/lib/capacitor/route-params";
 import type { ExpressionDetail } from "@/types/frbr";
@@ -104,10 +104,9 @@ export function ExpressionDetailClient({ expressionId, initialExpression }: Expr
     );
   }
 
-  const primaryCoverManifestation = (expr.manifestations || []).find(m => m.cover_url);
-  const primaryCoverUrl = primaryCoverManifestation
-    ? getCoverUrl(primaryCoverManifestation.cover_url || undefined)
-    : undefined;
+  const resolveManifestationCover = (m: ExpressionDetail["manifestations"][number]) =>
+    getCoverUrl(m.cover_url || (m.meta?.cover_url as string | undefined) || undefined, getCoverTimestamp(m.meta));
+  const primaryCoverUrl = (expr.manifestations || []).map(resolveManifestationCover).find(Boolean);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -161,6 +160,7 @@ export function ExpressionDetailClient({ expressionId, initialExpression }: Expr
                     alt={expr.work_title}
                     fill
                     sizes="(max-width: 768px) 192px, 240px"
+                    unoptimized
                     className="object-cover"
                     priority
                   />
@@ -258,7 +258,7 @@ export function ExpressionDetailClient({ expressionId, initialExpression }: Expr
             {expr.manifestations && expr.manifestations.length > 0 ? (
               expr.manifestations.map(m => {
                 const mSchemaType = resolveSchemaType(expr.content_type, expr.kind, m.format);
-                const cover = getCoverUrl(m.cover_url || undefined);
+                const cover = resolveManifestationCover(m);
                 return (
                   <Link
                     key={m.id}
@@ -278,6 +278,7 @@ export function ExpressionDetailClient({ expressionId, initialExpression }: Expr
                           alt={m.title || expr.work_title}
                           fill
                           sizes="72px"
+                          unoptimized
                           className="object-cover transition-transform group-hover:scale-105"
                         />
                       ) : (
