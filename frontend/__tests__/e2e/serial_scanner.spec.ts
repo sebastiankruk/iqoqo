@@ -16,7 +16,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
-  test.beforeEach(async ({ page }) => {
+  test("bare 977 lookup opens serial disambiguation modal and pre-fills new issue entry", async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
@@ -59,9 +59,7 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
         body: JSON.stringify({ success: true, data: [] }),
       });
     });
-  });
 
-  test("bare 977 lookup opens serial disambiguation modal and pre-fills new issue entry", async ({ page }) => {
     await page.route("**/api/lookup/9771507596044**", async route => {
       await route.fulfill({
         status: 200,
@@ -113,8 +111,8 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
         body: JSON.stringify({
           success: true,
           data: {
-            item: { id: 702 },
-            manifestation: { id: 502, title: "National Geographic Polska" },
+            item_id: 702,
+            manifestation_id: 502,
           },
         }),
       });
@@ -149,7 +147,8 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     await expect.poll(() => capturedRequests.length).toBeGreaterThan(0);
     const capturedManualBody = capturedRequests[0];
     expect(capturedManualBody?.issn).toBe("1507-5966");
-    expect(capturedManualBody?.format).toBe("magazine");
+    expect(capturedManualBody?.Format).toBe("Magazine");
+    expect(capturedManualBody?.work_kind).toBe("serial");
     expect(capturedManualBody?.issue_number).toBe("12");
     expect(capturedManualBody?.cumulative_issue_number).toBe(63);
   });
@@ -157,76 +156,63 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
   test("serial work detail displays chronological Issues in this Serial section and Add Issue CTA", async ({
     page,
   }) => {
-    await page.route("**/api/wishlist**", async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ success: true, data: [] }),
-      });
+    await page.addInitScript(() => {
+      window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
-    await page.route("**/api/works/50**", async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          success: true,
-          data: {
-            id: 50,
-            title: "National Geographic Polska",
-            authors: ["Towarzystwo National Geographic"],
-            work_kind: "serial",
-            issn: "1507-5966",
-            frequency: "monthly",
-            country_code: "PL",
-            reading_rollup: {
-              total_items: 2,
-              owned_count: 2,
-              wishlist_count: 0,
-              statuses: { read: 1, unread: 1 },
-            },
-            expressions: [
-              {
-                id: 500,
-                language: "pl",
-                translator: null,
-                is_abridged: false,
-                manifestations: [
-                  {
-                    id: 501,
-                    title: "National Geographic Polska 7(58)/2004",
-                    format: "magazine",
-                    year: 2004,
-                    publication_year: 2004,
-                    publication_month: 7,
-                    issue_number: "7",
-                    cumulative_issue_number: 58,
-                    full_barcode: "977150759604407",
-                    cover_headline: "Skarby pod lodem",
-                    meta: {},
-                  },
-                  {
-                    id: 502,
-                    title: "National Geographic Polska 1(64)/2005",
-                    format: "magazine",
-                    year: 2005,
-                    publication_year: 2005,
-                    publication_month: 1,
-                    issue_number: "1",
-                    cumulative_issue_number: 64,
-                    full_barcode: "977150759650101",
-                    cover_headline: "Rok pod znakiem wielkich zmian",
-                    meta: {},
-                  },
-                ],
-              },
-            ],
-          },
-        }),
-      });
-    });
+    await page.goto("/login");
+    const emailInput = page.getByLabel(/email/i);
+    if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await emailInput.fill("e2e-admin@iqoqo.local");
+      await page.getByLabel(/password/i).fill("E2ETestPassword123!");
+      await page.getByRole("button", { name: /sign in/i }).click();
+      await page.waitForURL("**/dashboard*");
+    }
 
-    await page.goto("/work/50");
+    const createIssue1 = await page.request.post("/api/items/manual", {
+      data: {
+        Title: "National Geographic Polska",
+        Authors: ["Towarzystwo National Geographic"],
+        Format: "Magazine",
+        work_kind: "serial",
+        issn: "1507-5966",
+        ean: "9771507596044",
+        ean_addon: "07",
+        issue_number: "7",
+        cumulative_issue_number: 58,
+        publication_year: 2004,
+        publication_month: 7,
+        cover_headline: "Skarby pod lodem",
+      },
+    });
+    expect(createIssue1.ok()).toBeTruthy();
+    const issue1Body = (await createIssue1.json()) as { data: { item_id: number } };
+
+    const createIssue2 = await page.request.post("/api/items/manual", {
+      data: {
+        Title: "National Geographic Polska",
+        Authors: ["Towarzystwo National Geographic"],
+        Format: "Magazine",
+        work_kind: "serial",
+        issn: "1507-5966",
+        ean: "9771507596501",
+        ean_addon: "01",
+        issue_number: "1",
+        cumulative_issue_number: 64,
+        publication_year: 2005,
+        publication_month: 1,
+        cover_headline: "Rok pod znakiem wielkich zmian",
+      },
+    });
+    expect(createIssue2.ok()).toBeTruthy();
+
+    const itemResp = await page.request.get(`/api/items/${issue1Body.data.item_id}`);
+    expect(itemResp.ok()).toBeTruthy();
+    const itemJson = (await itemResp.json()) as { data: { work?: { id: number } } };
+    const workId = itemJson.data.work?.id;
+    expect(workId).toBeTruthy();
+
+    await page.goto(`/work/${workId}`);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByTestId("work-add-issue-cta")).toBeVisible();
