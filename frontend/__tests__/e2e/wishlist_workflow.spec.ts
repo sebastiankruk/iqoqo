@@ -87,10 +87,9 @@ test.describe("Wishlist and Progress Workflow", () => {
       });
     });
 
-    // 3. Navigate and perform action
+    // 3. Navigate and lookup via full-width unified lookup bar
     await page.goto("/scan");
-    await page.getByRole("button", { name: "Manual Search" }).click();
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 

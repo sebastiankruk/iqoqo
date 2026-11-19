@@ -172,6 +172,16 @@
     "isbn13": "ISBN-13",
     "ean": "EAN",
     "upc": "UPC",
+    "issn": "ISSN",
+    "eissn": "e-ISSN",
+    "issueNumber": "Issue",
+    "cumulativeIssue": "Cumulative Issue",
+    "volume": "Volume",
+    "publicationMonth": "Publication Month",
+    "eanAddon": "EAN Add-on",
+    "fullBarcode": "Full Barcode",
+    "coverHeadline": "Cover Headline",
+    "indeks": "Indeks",
     "publisher": "Publisher",
     "year": "Year",
     "language": "Language",
@@ -216,6 +226,15 @@
     "statusWant": "Planned",
     "statusDnf": "Did Not Finish",
     "otherEditionLabel": "{label} (another edition)"
+  },
+  "SerialIssues": {
+    "issuesInSerial": "Issues in this Serial",
+    "addIssueCta": "Add Issue",
+    "noIssuesRecorded": "No issues cataloged in this serial yet.",
+    "issueBadge": "No. {issue}",
+    "cumulativeIssueBadge": "{issue} ({cumulative})",
+    "yearUnknown": "Year Unknown",
+    "issnLabel": "ISSN {issn}"
   },
   "Collection": {
     "loading": "Loading collection...",
@@ -514,6 +533,8 @@
       "subtitle": "Position barcode or cover within the frame",
       "backAria": "Go back to library",
       "flashToggleAria": "Toggle flash",
+      "formatLabel": "Format",
+      "policyLabel": "Save to",
       "policyShelf": "Shelf",
       "policyWishlist": "Wishlist",
       "policyCatalog": "Catalog Only",
@@ -523,6 +544,7 @@
     },
     "formats": {
       "book": "Book",
+      "magazine": "Magazine",
       "audiobook": "Audiobook",
       "music": "Music",
       "movie": "Movie",
@@ -574,6 +596,7 @@
       "lookingUpBarcode": "Looking up barcode {barcode}",
       "skipAndEnterManually": "Skip and enter manually",
       "enterManually": "Enter Manually",
+      "enterManuallyLink": "Can't scan? Enter details manually",
       "startCamera": "Start camera",
       "scanning": "Scanning – point at barcode",
       "tapToStartCamera": "Tap to start camera",
@@ -598,10 +621,26 @@
       "uploadCover": "Upload Cover",
       "chooseCoverSource": "Choose whether to take a photo with your camera or select an existing image file from your device.",
       "cantFindFormat": "Can't find your format?",
-      "requestNewType": "Request new media type"
+      "requestNewType": "Request new media type",
+      "issnLabel": "ISSN",
+      "issueNumberLabel": "Issue #",
+      "cumulativeIssueLabel": "Cumulative #",
+      "publicationMonthLabel": "Month (1–12)",
+      "eanAddonLabel": "2-digit EAN-2 Add-on",
+      "coverHeadlineLabel": "Cover Headline"
+    },
+    "serialDisambiguation": {
+      "title": "Select or Add Magazine Issue",
+      "description": "This 977 periodical barcode is shared across multiple issues. Pick an existing issue or create a new one.",
+      "existingIssuesLabel": "Existing Cataloged Issues",
+      "addNewIssue": "Add New Issue",
+      "snapCoverAutoFill": "Snap Cover to Auto-Fill Issue",
+      "selectIssue": "Use This Issue",
+      "noIssuesYet": "No issues of this serial are in the catalog yet."
     },
     "batchMode": {
       "toggleLabel": "Batch mode",
+      "compactLabel": "Batch",
       "stateOn": "ON",
       "stateOff": "OFF",
       "statusOn": "Batch scan: ON",
@@ -1164,5 +1203,45 @@
     "noNamedFolders": "No named folders yet. Create one below.",
     "addedToCollection": "Added to your collection!",
     "addToCollectionFailed": "Failed to add to collection"
+  },
+  "graph": {
+    "exploreGraph": "Explore Graph",
+    "title": "FRBR Relation Graph",
+    "subtitle": "Interactive neighborhood across Works, Expressions, Manifestations, Items, Series, Maps, and LOD",
+    "depthLabel": "Depth",
+    "hop1": "1 hop",
+    "hop2": "2 hops",
+    "searchPlaceholder": "Highlight nodes...",
+    "resetView": "Reset View",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "truncatedBanner": "Graph truncated to {max} nodes — select a node and click Recenter to explore further.",
+    "recenter": "Recenter Graph on This Node",
+    "openEntity": "Open Entity Page",
+    "openExternal": "Open External Authority",
+    "connections": "Connections",
+    "anchorBadge": "Anchor",
+    "selectPrompt": "Click any node to inspect details, recenter, or open its page.",
+    "missingParamsTitle": "Select an Entity to Explore",
+    "missingParamsDescription": "Open this view via Explore Graph on any Work, Expression, Manifestation, or Item page.",
+    "backToCollection": "Back to Collection",
+    "loadError": "Could not load relation graph for this entity.",
+    "categories": {
+      "frbr": "FRBR Hierarchy",
+      "series": "Series",
+      "parts_expansions": "Parts & Expansions",
+      "contributors": "Contributors",
+      "maps": "Maps",
+      "lod": "LOD"
+    },
+    "nodeTypes": {
+      "work": "Work",
+      "expression": "Expression",
+      "manifestation": "Manifestation",
+      "item": "Item",
+      "contributor": "Contributor",
+      "map": "Map",
+      "lod": "LOD Authority"
+    }
   }
 }

@@ -481,9 +481,20 @@ def get_items():
                 work = manifestation.expression.work
                 phys_expr = manifestation.expression
                 work_title = work.title or ""
-                authors = work.meta.get("authors", []) if work.meta else []
+                authors = [
+                    a
+                    for a in (work.meta.get("authors", []) if work.meta else [])
+                    if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                ]
 
             phys_work_type, phys_medium_type = _extract_intent_media_info(work, phys_expr, manifestation)
+            resolved_publisher = (
+                manifestation.publisher
+                or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+                or (work.meta.get("publisher") if (work and work.meta) else None)
+                if manifestation
+                else None
+            )
 
             is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
             is_borrowed = bool(item.lent_to_user_id and str(item.lent_to_user_id) == str(g.user_id)) if hasattr(g, "user_id") else False
@@ -501,10 +512,19 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "work_id": work.id if work else None,
                     "work_title": work_title or (work.title if work else None),
+                    "work_kind": work.work_kind if work else None,
+                    "issn": work.issn if work else None,
                     "expression_id": phys_expr.id if phys_expr else None,
                     "isbn": manifestation.isbn13 if manifestation else None,
+                    "ean": manifestation.ean if manifestation else None,
+                    "issue_number": manifestation.issue_number if manifestation else None,
+                    "cumulative_issue_number": manifestation.cumulative_issue_number if manifestation else None,
+                    "volume": manifestation.volume if manifestation else None,
+                    "publication_year": manifestation.publication_year if manifestation else None,
+                    "publication_month": manifestation.publication_month if manifestation else None,
+                    "format": (manifestation.format_type or manifestation.format) if manifestation else None,
                     "title": work_title,
-                    "publisher": manifestation.publisher if manifestation else None,
+                    "publisher": resolved_publisher,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
@@ -620,7 +640,18 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         item_data["publication_month"] = manifestation.publication_month
         item_data["manifestation_meta"] = manifestation.meta
         item_data["display"] = build_display_projection(manifestation.meta, item.meta)
-        item_data["publisher"] = manifestation.publisher
+        item_data["publisher"] = (
+            manifestation.publisher
+            or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+            or (
+                manifestation.expression.work.meta.get("publisher")
+                if (manifestation.expression.work and manifestation.expression.work.meta)
+                else None
+            )
+            if manifestation.expression
+            else manifestation.publisher
+        )
+        item_data["publication_date"] = manifestation.publication_date.isoformat() if manifestation.publication_date else None
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
@@ -642,7 +673,11 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                     "issn": work.issn,
                     "eissn": work.eissn,
                     "work_kind": work.work_kind,
-                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "authors": [
+                        a
+                        for a in (work.meta.get("authors", []) if work.meta else [])
+                        if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                    ],
                     "meta": work.meta,
                     "container_work_id": container_work_id,
                     "series_memberships": [
@@ -1638,9 +1673,14 @@ def add_item_manual() -> Response | tuple[Response, int]:
             return guard_err
 
     title = payload.Title
-    authors = payload.Authors
-    if isinstance(authors, str):
-        authors = [authors]
+    raw_authors = payload.Authors
+    if isinstance(raw_authors, str):
+        raw_authors = [raw_authors]
+    authors = [
+        str(a).strip()
+        for a in (raw_authors or [])
+        if isinstance(a, str) and a.strip() and a.strip().lower() not in {"unknown", "n/a", "none"}
+    ]
     content_type = payload.Format
     isbn = payload.ISBN
     pub_date_str = payload.PublicationDate
@@ -1663,40 +1703,84 @@ def add_item_manual() -> Response | tuple[Response, int]:
         default_status = statuses[0]
 
     try:
+        from app.utils.issn import is_977_periodical_barcode, is_valid_issn
+
+        item_only_keys = {
+            "collection_status",
+            "status",
+            "local_barcode",
+            "lent_to_user_id",
+            "lent_to_name",
+            "visibility",
+            "is_hidden",
+            "tags",
+        }
+        extra_dump = {k: v for k, v in payload.model_dump().items() if k not in item_only_keys and v is not None}
+        if "Publisher" in extra_dump and not extra_dump.get("publisher"):
+            extra_dump["publisher"] = extra_dump["Publisher"]
+        extra_dump["Authors"] = authors
+        is_serial_manual = (
+            _fmt_lower in ("magazine", "journal", "periodical", "serial")
+            or extra_dump.get("work_kind") == "serial"
+            or bool(extra_dump.get("issn"))
+            or is_977_periodical_barcode(isbn)
+            or is_valid_issn(isbn)
+        )
+
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
         existing_manifestation: Manifestation | None = None
         normalised_isbn: str | None = None
-        if isbn:
-            normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
-            existing_manifestation = (
-                db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
-            )
+        if is_serial_manual:
+            from app.core.ingest import IngestService
 
-        if existing_manifestation:
-            # Manifestation already exists — just create a new Item linked to it
-            manifestation = existing_manifestation
+            serial_meta = dict(extra_dump)
+            serial_meta.setdefault("title", title)
+            serial_meta["authors"] = authors
+            if isbn:
+                if is_valid_issn(isbn) and not serial_meta.get("issn"):
+                    serial_meta["issn"] = isbn
+                else:
+                    serial_meta.setdefault("barcode", isbn)
+            if pub_date_str and not serial_meta.get("publication_year"):
+                year_part = str(pub_date_str).split("-")[0]
+                if year_part.isdigit():
+                    serial_meta["publication_year"] = int(year_part)
+            try:
+                manifestation = IngestService.ingest_serial_from_meta(serial_meta)
+            except ValueError as exc:
+                return jsonify({"error": str(exc), "code": 400}), 400
         else:
-            work = Work(title=title, meta={"authors": authors, "description": payload.Description})
-            db.session.add(work)
-            db.session.flush()
+            if isbn:
+                normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
+                existing_manifestation = (
+                    db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
+                )
 
-            expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
-            db.session.add(expression)
-            db.session.flush()
+            if existing_manifestation:
+                # Manifestation already exists — just create a new Item linked to it
+                manifestation = existing_manifestation
+            else:
+                work = Work(title=title, meta={"authors": authors, "description": payload.Description})
+                db.session.add(work)
+                db.session.flush()
 
-            # Store all extra fields in meta
-            manifestation = Manifestation(expression_id=expression.id, meta=payload.model_dump())
-            if normalised_isbn:
-                manifestation.isbn13 = normalised_isbn
-            if pub_date_str:
-                from datetime import date
+                expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+                db.session.add(expression)
+                db.session.flush()
 
-                try:
-                    manifestation.publication_date = date.fromisoformat(pub_date_str)
-                except (ValueError, TypeError):
-                    pass
-            db.session.add(manifestation)
-            db.session.flush()
+                # Store all extra fields in meta
+                manifestation = Manifestation(expression_id=expression.id, meta=extra_dump)
+                if normalised_isbn:
+                    manifestation.isbn13 = normalised_isbn
+                if pub_date_str:
+                    from datetime import date
+
+                    try:
+                        manifestation.publication_date = date.fromisoformat(pub_date_str)
+                    except (ValueError, TypeError):
+                        pass
+                db.session.add(manifestation)
+                db.session.flush()
 
         if payload.collection_status == "wish_list":
             return _add_wishlist_by_manifestation(user_id, manifestation, payload)

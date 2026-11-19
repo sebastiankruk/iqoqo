@@ -163,11 +163,23 @@ ORDER BY avg_ms DESC LIMIT 20
 
 ### Trace Investigation
 
-To fetch recent traces for a specific service:
+To fetch recent traces for a specific service (always use `POST /api/default/_search?type=traces`; `/api/default/traces` is OTLP ingestion only):
 
 ```bash
-curl -s "http://127.0.0.1:5080/api/default/traces?service=iqoqo-api&limit=10" \
-  -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" | jq '.'
+curl -s -X POST "http://127.0.0.1:5080/api/default/_search?type=traces" \
+  -H "Authorization: Basic ${OPENOBSERVE_BASIC_AUTH}" \
+  -H "Content-Type: application/json" \
+  -d '{"query":{"sql":"SELECT service_name, operation_name, start_time FROM \"default\" WHERE service_name = '\''iqoqo-api'\'' ORDER BY start_time DESC LIMIT 10","start_time":0,"end_time":9999999999999999,"size":10}}' | jq '.hits'
+```
+
+### LLM / Vision Backend Usage Diagnostics
+
+Always query the actual `llm_telemetry` execution audit table rather than inspecting config settings (which only show what is configured, not what handled or failed requests):
+
+```bash
+# Against a running docker stack (dev | preview | prod):
+python3 scripts/llm_usage_report.py --docker preview --hours 24
+python3 scripts/llm_usage_report.py --docker prod --operation metadata_extraction --hours 24
 ```
 
 ## Multi-Tier Cloud Backup & Disaster Recovery (S3 & Rclone)

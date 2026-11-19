@@ -851,7 +851,8 @@ def get_work_detail(work_id: int) -> tuple[Response, int]:
             }
         )
 
-    authors = work.meta.get("authors", []) if work.meta else []
+    raw_authors = work.meta.get("authors", []) if work.meta else []
+    authors = [a for a in raw_authors if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}]
     contributions = serialize_contributions(work=work)
     series_memberships = [
         {
@@ -899,7 +900,8 @@ def get_expression_detail(expression_id: int) -> tuple[Response, int]:
     from app.core.frbr_service import is_live_performance, serialize_contributions
 
     work = getattr(expr, "work", None)
-    authors = work.meta.get("authors", []) if (work and work.meta) else []
+    raw_authors = work.meta.get("authors", []) if (work and work.meta) else []
+    authors = [a for a in raw_authors if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}]
 
     manifestations_data = []
     for m in getattr(expr, "manifestations", []):
@@ -938,3 +940,70 @@ def get_expression_detail(expression_id: int) -> tuple[Response, int]:
         "manifestations": manifestations_data,
     }
     return jsonify({"success": True, "data": data, "error": None}), 200
+
+
+@api_bp.route("/catalog/graph", methods=["GET"])
+@optional_auth
+def get_catalog_graph() -> tuple[Response, int]:
+    """Return a bounded, visibility-safe neighborhood graph around a FRBR entity."""
+    from app.core.graph_service import (
+        MAX_GRAPH_NODES,
+        VALID_EDGE_CATEGORIES,
+        VALID_GRAPH_ENTITY_TYPES,
+        GraphService,
+    )
+
+    entity_type = (request.args.get("entity_type") or "").strip().lower()
+    if entity_type not in VALID_GRAPH_ENTITY_TYPES:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "data": None,
+                    "error": f"Invalid or missing entity_type. Expected one of: {', '.join(VALID_GRAPH_ENTITY_TYPES)}",
+                }
+            ),
+            400,
+        )
+
+    entity_id = request.args.get("entity_id", type=int)
+    if entity_id is None or entity_id <= 0:
+        return (
+            jsonify({"success": False, "data": None, "error": "Invalid or missing entity_id parameter"}),
+            400,
+        )
+
+    depth_arg = request.args.get("depth", default=1, type=int)
+    max_nodes_arg = request.args.get("max_nodes", default=MAX_GRAPH_NODES, type=int)
+
+    raw_edge_types = request.args.get("edge_types")
+    edge_categories: set[str] | None = None
+    if raw_edge_types is not None:
+        parsed_cats = {part.strip().lower() for part in raw_edge_types.split(",") if part.strip()}
+        invalid = parsed_cats - set(VALID_EDGE_CATEGORIES)
+        if invalid:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"Invalid edge_types: {', '.join(sorted(invalid))}",
+                    }
+                ),
+                400,
+            )
+        edge_categories = parsed_cats
+
+    viewer_user_id = getattr(g, "user_id", None)
+    graph = GraphService.build_neighborhood(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        viewer_user_id=viewer_user_id,
+        depth=depth_arg if depth_arg is not None else 1,
+        max_nodes=max_nodes_arg if max_nodes_arg is not None else MAX_GRAPH_NODES,
+        edge_categories=edge_categories,
+    )
+    if graph is None:
+        return jsonify({"success": False, "data": None, "error": "Entity not found"}), 404
+
+    return jsonify({"success": True, "data": graph, "error": None}), 200
