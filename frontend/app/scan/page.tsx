@@ -31,6 +31,7 @@ import { ManualEntryForm } from "@/components/scanner/manual-entry-form";
 import type { ManualEntryData } from "@/components/scanner/manual-entry-form";
 import { ScannerErrorBoundary } from "@/components/scanner/error-boundary";
 import { useAddManualItem, queryKeys, useAppConfig } from "@/lib/api/hooks";
+import { COVER_JPEG_QUALITY, COVER_MAX_DIMENSION, resizeImageFile } from "@/lib/image-resize";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Search, Loader2, Radio, Library, BookmarkCheck } from "lucide-react";
@@ -409,19 +410,22 @@ export default function ScanPage() {
       ? data.authors
           .split(",")
           .map(a => a.trim())
-          .filter(Boolean)
-      : ["Unknown"];
+          .filter(a => Boolean(a) && !["unknown", "n/a", "none"].includes(a.toLowerCase()))
+      : [];
 
     let explicitDate = data.year || undefined;
     if (explicitDate && /^\d{4}$/.test(explicitDate)) {
-      explicitDate = `${explicitDate}-01-01`;
+      const monthNum = Number(data.publicationMonth);
+      const paddedMonth =
+        Number.isInteger(monthNum) && monthNum >= 1 && monthNum <= 12 ? String(monthNum).padStart(2, "0") : "01";
+      explicitDate = `${explicitDate}-${paddedMonth}-01`;
     }
 
     const apiFormat = mapFormatToApi(data.format);
 
     const payload = {
       Title: data.title || "Unknown",
-      Authors: authors.length > 0 ? authors : ["Unknown"],
+      Authors: authors,
       Format: apiFormat,
       ISBN: data.identifier || undefined,
       PublicationDate: explicitDate,
@@ -455,8 +459,12 @@ export default function ScanPage() {
         const coverToUpload = data.coverFile || snappedCover;
 
         if (item && coverToUpload && item.manifestation_id) {
+          const resizedCover = await resizeImageFile(coverToUpload, {
+            maxDimension: COVER_MAX_DIMENSION,
+            quality: COVER_JPEG_QUALITY,
+          });
           const coverFormData = new FormData();
-          coverFormData.append("cover", coverToUpload);
+          coverFormData.append("cover", resizedCover);
           const isSnapped = coverToUpload === snappedCover;
           coverFormData.append("source", isSnapped ? "scanner_camera" : "user_upload");
           try {

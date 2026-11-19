@@ -806,6 +806,22 @@ class IngestService:
         pub_month = int(pub_month_raw) if pub_month_raw not in (None, "") and str(pub_month_raw).strip().isdigit() else None
         volume = str(meta["volume"]).strip() if meta.get("volume") not in (None, "") else None
 
+        raw_pub = meta.get("publisher") or meta.get("Publisher") or meta.get("label") or meta.get("Label")
+        publisher_val = (
+            str(raw_pub).strip()
+            if isinstance(raw_pub, str) and raw_pub.strip() and raw_pub.strip().lower() not in {"unknown", "n/a", "none"}
+            else None
+        )
+        raw_pub_date = meta.get("publication_date") or meta.get("PublicationDate")
+        pub_date_obj = None
+        if isinstance(raw_pub_date, str) and raw_pub_date.strip():
+            from datetime import date
+
+            try:
+                pub_date_obj = date.fromisoformat(raw_pub_date.strip()[:10])
+            except (ValueError, TypeError):
+                pub_date_obj = None
+
         # 1. Exact full_barcode lookup first (unambiguous 15/18-digit barcode)
         if full_barcode:
             existing_full = db.session.execute(select(Manifestation).where(Manifestation.full_barcode == full_barcode)).scalars().first()
@@ -834,8 +850,8 @@ class IngestService:
             work_meta = dict(meta.get("work_meta") or {})
             if meta.get("indeks"):
                 work_meta["indeks"] = meta["indeks"]
-            if meta.get("publisher"):
-                work_meta["publisher"] = meta["publisher"]
+            if publisher_val:
+                work_meta["publisher"] = publisher_val
             work = Work(
                 title=title,
                 sort_title=derive_sort_title(title),
@@ -854,6 +870,8 @@ class IngestService:
                 work.eissn = eissn
             if not work.work_kind:
                 work.work_kind = "serial"
+            if publisher_val and isinstance(work.meta, dict) and not work.meta.get("publisher"):
+                work.meta = {**work.meta, "publisher": publisher_val}
 
         # 3. Resolve or create Expression for language under serial Work
         lang = str(meta.get("language") or "en").strip().lower()[:10] or "en"
@@ -916,7 +934,17 @@ class IngestService:
 
         # 5. Create new issue Manifestation
         cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
-        man_meta = dict(meta)
+        _item_only_keys = {
+            "collection_status",
+            "status",
+            "local_barcode",
+            "lent_to_user_id",
+            "lent_to_name",
+            "visibility",
+            "is_hidden",
+            "tags",
+        }
+        man_meta = {k: v for k, v in meta.items() if k not in _item_only_keys and v is not None}
         man_meta.update(
             {
                 "title": title,
@@ -924,6 +952,17 @@ class IngestService:
                 "work_kind": "serial",
             }
         )
+        if publisher_val:
+            man_meta["publisher"] = publisher_val
+            man_meta.pop("Publisher", None)
+        if "authors" in man_meta and isinstance(man_meta["authors"], list):
+            man_meta["authors"] = [
+                a for a in man_meta["authors"] if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+            ]
+        if "Authors" in man_meta and isinstance(man_meta["Authors"], list):
+            man_meta["Authors"] = [
+                a for a in man_meta["Authors"] if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+            ]
         if issn:
             man_meta["issn"] = issn
         if issue_number:
@@ -943,8 +982,9 @@ class IngestService:
             expression=expression,
             format=MediaFormat.MAGAZINE,
             format_type=MediaFormat.MAGAZINE,
-            publisher=meta.get("publisher") or meta.get("label"),
-            label=meta.get("publisher") or meta.get("label"),
+            publisher=publisher_val,
+            label=publisher_val,
+            publication_date=pub_date_obj,
             barcode=full_barcode or ean or meta.get("barcode"),
             ean=ean,
             cover_url=cover_url,

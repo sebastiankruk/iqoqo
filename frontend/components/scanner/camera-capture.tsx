@@ -33,6 +33,13 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
+import {
+  COVER_JPEG_QUALITY,
+  COVER_MAX_DIMENSION,
+  resizeImageFile,
+  VISION_JPEG_QUALITY,
+  VISION_MAX_DIMENSION,
+} from "@/lib/image-resize";
 import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
 import { Button, ButtonVariant } from "@/components/ui/button";
@@ -242,7 +249,11 @@ export function CameraCapture({
     try {
       if (mode === "gallery" && manifestation_id) {
         // Mode 3: Upload an additional scan to the gallery
-        formData.append("image", file);
+        const resizedImage = await resizeImageFile(file, {
+          maxDimension: COVER_MAX_DIMENSION,
+          quality: COVER_JPEG_QUALITY,
+        });
+        formData.append("image", resizedImage);
         formData.append("label", galleryLabel || "other");
         formData.append("source", effectiveSource);
 
@@ -252,7 +263,11 @@ export function CameraCapture({
         if (onGalleryUploadComplete) onGalleryUploadComplete();
       } else if (manifestation_id) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
-        formData.append("cover", file);
+        const resizedCover = await resizeImageFile(file, {
+          maxDimension: COVER_MAX_DIMENSION,
+          quality: COVER_JPEG_QUALITY,
+        });
+        formData.append("cover", resizedCover);
         formData.append("format", format);
         formData.append("source", effectiveSource);
 
@@ -262,7 +277,11 @@ export function CameraCapture({
         if (onUploadComplete) onUploadComplete();
       } else {
         // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
-        formData.append("cover", file);
+        const visionFile = await resizeImageFile(file, {
+          maxDimension: VISION_MAX_DIMENSION,
+          quality: VISION_JPEG_QUALITY,
+        });
+        formData.append("cover", visionFile);
         formData.append("format", format);
         formData.append("source", effectiveSource);
 
@@ -277,7 +296,11 @@ export function CameraCapture({
           // Transition to polling
           const result = await startPolling(envelope.data.task_id);
           await triggerSuccessHaptic();
-          if (onExtractComplete) onExtractComplete(result, file, format);
+          const coverFile = await resizeImageFile(visionFile, {
+            maxDimension: COVER_MAX_DIMENSION,
+            quality: COVER_JPEG_QUALITY,
+          });
+          if (onExtractComplete) onExtractComplete(result, coverFile, format);
         } else {
           await triggerErrorHaptic();
           toast.error(envelope.error ?? t("cameraCapture.visionSubmissionFailed"));

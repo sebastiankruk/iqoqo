@@ -155,3 +155,19 @@ def test_overlay_path_variant_leaves_a_missing_file_absent(tmp_path):
     corrupt.write_bytes(b"not an image either")
     add_text_overlay(str(corrupt), "Title", "Author")
     assert corrupt.read_bytes() == b"not an image either", "the file must be left untouched"
+
+
+def test_validate_upload_file_allows_50mp_smartphone_photo():
+    """50MP phone photos must pass global MAX_IMAGE_PIXELS without failing below 25MP."""
+    import app as app_pkg  # noqa: F401  # Ensure global app-level Pillow threshold is loaded
+
+    assert (PILImage.MAX_IMAGE_PIXELS or 0) >= 100_000_000
+
+    # A solid-color 6144x8160 PNG compresses to ~100 KB while representing 50.1 MP.
+    img = PILImage.new("RGB", (6144, 8160), color="white")
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.filename = "pixel_50mp.png"
+    bio.seek(0)
+
+    assert validate_upload_file(bio) == "png"

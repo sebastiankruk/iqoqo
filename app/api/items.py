@@ -620,7 +620,18 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
         item_data["publication_month"] = manifestation.publication_month
         item_data["manifestation_meta"] = manifestation.meta
         item_data["display"] = build_display_projection(manifestation.meta, item.meta)
-        item_data["publisher"] = manifestation.publisher
+        item_data["publisher"] = (
+            manifestation.publisher
+            or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+            or (
+                manifestation.expression.work.meta.get("publisher")
+                if (manifestation.expression.work and manifestation.expression.work.meta)
+                else None
+            )
+            if manifestation.expression
+            else manifestation.publisher
+        )
+        item_data["publication_date"] = manifestation.publication_date.isoformat() if manifestation.publication_date else None
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
@@ -642,7 +653,11 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                     "issn": work.issn,
                     "eissn": work.eissn,
                     "work_kind": work.work_kind,
-                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "authors": [
+                        a
+                        for a in (work.meta.get("authors", []) if work.meta else [])
+                        if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                    ],
                     "meta": work.meta,
                     "container_work_id": container_work_id,
                     "series_memberships": [
@@ -1638,9 +1653,14 @@ def add_item_manual() -> Response | tuple[Response, int]:
             return guard_err
 
     title = payload.Title
-    authors = payload.Authors
-    if isinstance(authors, str):
-        authors = [authors]
+    raw_authors = payload.Authors
+    if isinstance(raw_authors, str):
+        raw_authors = [raw_authors]
+    authors = [
+        str(a).strip()
+        for a in (raw_authors or [])
+        if isinstance(a, str) and a.strip() and a.strip().lower() not in {"unknown", "n/a", "none"}
+    ]
     content_type = payload.Format
     isbn = payload.ISBN
     pub_date_str = payload.PublicationDate
@@ -1665,7 +1685,20 @@ def add_item_manual() -> Response | tuple[Response, int]:
     try:
         from app.utils.issn import is_977_periodical_barcode, is_valid_issn
 
-        extra_dump = payload.model_dump()
+        item_only_keys = {
+            "collection_status",
+            "status",
+            "local_barcode",
+            "lent_to_user_id",
+            "lent_to_name",
+            "visibility",
+            "is_hidden",
+            "tags",
+        }
+        extra_dump = {k: v for k, v in payload.model_dump().items() if k not in item_only_keys and v is not None}
+        if "Publisher" in extra_dump and not extra_dump.get("publisher"):
+            extra_dump["publisher"] = extra_dump["Publisher"]
+        extra_dump["Authors"] = authors
         is_serial_manual = (
             _fmt_lower in ("magazine", "journal", "periodical", "serial")
             or extra_dump.get("work_kind") == "serial"
@@ -1682,7 +1715,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
 
             serial_meta = dict(extra_dump)
             serial_meta.setdefault("title", title)
-            serial_meta.setdefault("authors", authors)
+            serial_meta["authors"] = authors
             if isbn:
                 if is_valid_issn(isbn) and not serial_meta.get("issn"):
                     serial_meta["issn"] = isbn

@@ -189,3 +189,52 @@ def test_manual_serial_save_with_month_or_headline_succeeds_and_ambiguous_return
     )
     assert bad_res.status_code == 400
     assert "Ambiguous bare 977" in (bad_res.json.get("error") or "")
+
+
+def test_manual_serial_save_preserves_edition_fields_and_strips_unknown_and_item_noise(client, normal_user_headers):
+    """Manual periodical saves persist publisher/issue fields cleanly, strip 'Unknown', and hide item-only noise."""
+    res = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "National Geographic Polska",
+            "Authors": ["Unknown"],
+            "Format": "magazine",
+            "ISBN": "9771507596037",
+            "Publisher": "G+J RBA",
+            "PublicationDate": "2003-11-01",
+            "work_kind": "serial",
+            "issn": "1507-5966",
+            "issue_number": "11",
+            "cumulative_issue_number": 50,
+            "volume": "5",
+            "publication_year": 2003,
+            "publication_month": 11,
+            "ean_addon": "11",
+            "cover_headline": "100 lat lotnictwa",
+            "collection_status": "available",
+        },
+        headers=normal_user_headers,
+    )
+    assert res.status_code == 200
+    manif_id = res.json["data"]["manifestation_id"]
+
+    m_res = client.get(f"/api/manifestations/{manif_id}", headers=normal_user_headers)
+    assert m_res.status_code == 200
+    m_data = m_res.json["data"]
+
+    assert m_data["authors"] == []
+    assert m_data["publisher"] == "G+J RBA"
+    assert m_data["issn"] == "1507-5966"
+    assert m_data["issue_number"] == "11"
+    assert m_data["cumulative_issue_number"] == 50
+    assert m_data["volume"] == "5"
+    assert m_data["publication_year"] == 2003
+    assert m_data["publication_month"] == 11
+    assert m_data["year"] == 2003
+    assert m_data["ean_addon"] == "11"
+    assert m_data["full_barcode"] == "977150759603711"
+    assert m_data["publication_date"] == "2003-11-01"
+
+    extra_keys = {entry["key"].lower() for entry in m_data["display"]["additional_details"]}
+    assert "collection_status" not in extra_keys
+    assert "publicationdate" not in extra_keys

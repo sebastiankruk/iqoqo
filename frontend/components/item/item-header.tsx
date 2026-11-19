@@ -61,9 +61,13 @@ interface ItemHeaderProps {
  * @returns An array of author strings
  */
 function normalizeAuthors(authors: unknown): string[] {
+  const isReal = (value: string) => {
+    const cleaned = value.trim().toLowerCase();
+    return Boolean(cleaned) && cleaned !== "unknown" && cleaned !== "n/a" && cleaned !== "none";
+  };
   if (!authors) return [];
-  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
-  if (typeof authors === "string") return [authors];
+  if (Array.isArray(authors)) return authors.filter((a): a is string => typeof a === "string" && isReal(a));
+  if (typeof authors === "string" && isReal(authors)) return [authors.trim()];
   return [];
 }
 
@@ -216,16 +220,16 @@ export function ItemHeader({ item }: ItemHeaderProps) {
           >
             {title}
           </h1>
-          <div
-            className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium"
-            property="schema:author"
-            typeof="Person"
-            itemProp="author"
-            itemScope
-            itemType="https://schema.org/Person"
-          >
-            {normalizeAuthors(work?.authors ?? item.authors).length > 0 ? (
-              normalizeAuthors(work?.authors ?? item.authors).map((author, idx, arr) => (
+          {normalizeAuthors(work?.authors ?? item.authors).length > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-1 text-xl md:text-2xl text-muted-foreground font-medium"
+              property="schema:author"
+              typeof="Person"
+              itemProp="author"
+              itemScope
+              itemType="https://schema.org/Person"
+            >
+              {normalizeAuthors(work?.authors ?? item.authors).map((author, idx, arr) => (
                 <span key={author} property="schema:name" itemProp="name">
                   <DiscoveryPivot
                     type="q"
@@ -235,11 +239,9 @@ export function ItemHeader({ item }: ItemHeaderProps) {
                   />
                   {idx < arr.length - 1 && <span className="text-muted-foreground/60">,&nbsp;</span>}
                 </span>
-              ))
-            ) : (
-              <span>Unknown Artist/Author</span>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Meta block */}

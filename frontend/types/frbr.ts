@@ -195,6 +195,17 @@ export interface Manifestation {
   isbn13?: string;
   upc?: string;
   ean?: string;
+  ean_addon?: string | null;
+  full_barcode?: string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  publication_date?: string | null;
+  issn?: string | null;
+  eissn?: string | null;
+  work_kind?: string | null;
   publisher?: string;
   format_type?: string;
   format?: string;
