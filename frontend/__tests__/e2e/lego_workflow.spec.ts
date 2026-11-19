@@ -90,22 +90,15 @@ test.describe("LEGO Sets Workflow", () => {
     // 3. Go to Scan page
     await page.goto("/scan");
 
-    // 4. Select LEGO Sets media filter in TopBar if present
-    const legoBtn = page.getByRole("button", { name: /LEGO Sets|LEGO/i });
-    if (await legoBtn.isVisible()) {
-      await legoBtn.click();
+    // 4. Select LEGO Sets media filter in compact TopBar selector if present
+    const formatTrigger = page.getByTestId("format-selector-trigger");
+    if (await formatTrigger.isVisible()) {
+      await formatTrigger.click();
+      await page.getByTestId("format-option-lego").click();
     }
 
-    // 5. Switch to Manual Search tab
-    const manualSearchBtn = page.getByRole("button", { name: "Manual Search" });
-    if (await manualSearchBtn.isVisible()) {
-      await manualSearchBtn.click();
-    }
-
-    // 6. Fill in LEGO set number
-    const searchInput = page
-      .locator('input[placeholder*="ISBN, UPC"], input[type="search"], input[type="text"]')
-      .first();
+    // 5. Fill in LEGO set number in full-width unified lookup bar
+    const searchInput = page.getByTestId("unified-lookup-input");
     await searchInput.fill("10318");
     await page.keyboard.press("Enter");
 

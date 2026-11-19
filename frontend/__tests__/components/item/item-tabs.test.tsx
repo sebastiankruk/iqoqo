@@ -74,4 +74,25 @@ describe("ItemTabs Component", () => {
     render(<ItemTabs item={itemWithoutManif} />);
     expect(screen.queryByTestId("mock-semantic-links")).not.toBeInTheDocument();
   });
+
+  it("never renders a Federation tab or 'Federation Coming Soon' placeholder", () => {
+    render(<ItemTabs item={baseItem} />);
+    expect(screen.queryByRole("button", { name: "Federation" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Federation Coming Soon")).not.toBeInTheDocument();
+  });
+
+  it("renders federated loan and remote provenance badges inside DetailsTab", () => {
+    const federatedItem: Item = {
+      ...baseItem,
+      is_borrowed: true,
+      lent_to_name: "@alice@peer.example",
+      manifestation_meta: { _provenance: { source: "peer.example" } },
+    };
+
+    render(<ItemTabs item={federatedItem} />);
+    const badges = screen.getByTestId("federation-details-badges");
+    expect(badges).toHaveTextContent("borrowedBadge");
+    expect(badges).toHaveTextContent("lentToBadge");
+    expect(badges).toHaveTextContent("provenanceBadge");
+  });
 });

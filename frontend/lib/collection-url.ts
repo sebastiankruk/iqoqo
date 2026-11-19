@@ -46,6 +46,7 @@ import type { ActiveFilter, FilterType } from "@/components/collection/filter-ba
  */
 const MULTI_VALUE_PARAMS: ReadonlyArray<readonly [FilterType, string]> = [
   ["status", "statuses"],
+  ["visibility", "visibility"],
   ["tag", "tags"],
   ["collection", "collections"],
   ["genre", "genres"],

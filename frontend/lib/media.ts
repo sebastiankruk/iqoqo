@@ -6,7 +6,7 @@
 // (at your option) any later version.
 //
 
-import { Book, Disc, Film, Dices, Puzzle, Headphones, Boxes, LucideIcon } from "lucide-react";
+import { Book, Disc, Film, Dices, Puzzle, Headphones, Boxes, Newspaper, LucideIcon } from "lucide-react";
 import { MEDIA_HIERARCHY, MediaFormat, ScanFormat, MediaCategory, SCAN_FORMATS } from "@/types/taxonomy";
 
 /**
@@ -78,13 +78,17 @@ function buildMediaRegistry(): Record<MediaFormat | ScanFormat, MediaMetadata> {
     (info.formats as readonly TaxonomyFormat[]).forEach(fmt => {
       const fmtAspectRatio =
         "ui_aspect_ratio" in fmt && fmt.ui_aspect_ratio !== null ? Number(fmt.ui_aspect_ratio) : catAspectRatio;
-      const fmtParent =
-        "ui_parent" in fmt && fmt.ui_parent !== null ? String(fmt.ui_parent) : catParent || scanFormatId;
+      const isTopLevelScan = (SCAN_FORMATS as readonly string[]).includes(fmt.id);
+      const fmtParent = isTopLevelScan
+        ? undefined
+        : "ui_parent" in fmt && fmt.ui_parent !== null
+          ? String(fmt.ui_parent)
+          : catParent || scanFormatId;
 
       registry[fmt.id] = {
         label: fmt.label,
         apiCategory: category,
-        icon,
+        icon: fmt.id === "magazine" ? Newspaper : icon,
         aspectRatio: fmtAspectRatio,
         parent: fmtParent !== fmt.id ? (fmtParent as ScanFormat) : undefined,
       };

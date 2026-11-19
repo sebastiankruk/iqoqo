@@ -16,20 +16,20 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Camera, Search, ImagePlus } from "lucide-react";
+import { Camera, ImagePlus } from "lucide-react";
 import type { IsbnMeta } from "@/types/frbr";
 import { ScanFormat } from "@/types/taxonomy";
 import { CameraCapture } from "@/components/scanner/camera-capture";
 import { useTranslations } from "next-intl";
 
-type TabId = "barcode" | "cover" | "manual";
+type TabId = "barcode" | "cover";
 
 /** Props for BottomSheet component */
 interface BottomSheetProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFound: (isbn: string, meta: IsbnMeta) => void;
   onScannerStateChange?: (isActive: boolean) => void;
-  onTabChange?: (tabId: "barcode" | "cover" | "manual") => void;
+  onTabChange?: (tabId: "barcode" | "cover") => void;
   onExtractComplete?: (data: { Title?: string; Authors?: string[] }, file?: File) => void;
   onExtractionFailure?: (ean: string) => void;
   onShowManualForm?: (isbn?: string) => void;
@@ -73,7 +73,6 @@ export function BottomSheet({
   const tabs = [
     { id: "barcode", label: t("bottomSheet.barcodeTab") },
     { id: "cover", label: t("bottomSheet.snapCoverTab") },
-    { id: "manual", label: t("bottomSheet.manualSearchTab") },
   ] as const;
   const [activeTab, setActiveTab] = useState<TabId>("barcode");
 
@@ -82,6 +81,7 @@ export function BottomSheet({
     if (fmt === "board_game" || fmt === "boardgame") return "board_game";
     if (fmt === "puzzle") return "puzzle";
     if (fmt === "music" || fmt === "audio") return "music";
+    if (fmt === "magazine") return "magazine";
     if (fmt === "book") return "book";
     return "";
   };
@@ -93,8 +93,9 @@ export function BottomSheet({
     },
     [onTabChange]
   );
-  const [manualIsbn, setManualIsbn] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isExtractingPrimary, setIsExtractingPrimary] = useState(false);
+  const [isExtractingGallery, setIsExtractingGallery] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSearchedBarcode, setLastSearchedBarcode] = useState<string>("");
@@ -296,7 +297,7 @@ export function BottomSheet({
   }, [autoStart, activeTab, scannerActive, isSearching, startScanner]);
 
   useEffect(() => {
-    if (activeTab === "manual") {
+    if (activeTab !== "barcode") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       stopScanner();
     }
@@ -309,17 +310,12 @@ export function BottomSheet({
     };
   }, [stopScanner]);
 
-  const handleManualSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    lookupBarcode(manualIsbn.trim(), true);
-  };
-
   return (
-    <div className="absolute inset-x-0 bottom-0 z-20 flex h-[40%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+    <div className="absolute inset-x-0 bottom-0 z-20 flex min-h-[40%] max-h-[56%] flex-col rounded-t-3xl bg-card shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
       <div className="flex justify-center pt-3 pb-2">
         <div className="h-1 w-10 rounded-full bg-border" />
       </div>
-      <div className="flex justify-center px-6">
+      <div className="flex justify-center px-6 pb-2">
         <div className="inline-flex rounded-xl bg-secondary p-1">
           {tabs.map(tab => (
             <button
@@ -338,7 +334,7 @@ export function BottomSheet({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 relative">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pt-3 pb-5 overflow-y-auto relative">
         {isSearching && (
           <div
             data-testid="scanner-searching-overlay"
@@ -408,8 +404,9 @@ export function BottomSheet({
               icon={<Camera className="mr-2 h-5 w-5" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
+              onUploadingChange={setIsExtractingPrimary}
               format={format}
-              className="flex w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80"
+              className={`${isExtractingGallery ? "hidden" : "flex"} w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80`}
             />
 
             {/* Secondary: gallery-only upload */}
@@ -419,47 +416,24 @@ export function BottomSheet({
               icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
+              onUploadingChange={setIsExtractingGallery}
               format={format}
-              className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
+              className={`${isExtractingPrimary ? "hidden" : "flex"} w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent`}
             />
 
             {/* Error is already handled at the top */}
           </div>
         )}
 
-        {activeTab === "manual" && (
-          <div className="flex w-full flex-col">
-            <form onSubmit={handleManualSearch} className="w-full">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={manualIsbn}
-                  onChange={e => setManualIsbn(e.target.value)}
-                  placeholder={t("bottomSheet.manualSearchPlaceholder")}
-                  className="h-11 w-full rounded-xl border border-border bg-secondary px-4 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2"
-                />
-                <button
-                  type="submit"
-                  disabled={isSearching || !manualIsbn}
-                  className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-foreground"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              </div>
-            </form>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              {isSearching ? t("bottomSheet.lookingUp") : t("bottomSheet.manualSearchHint")}
-            </p>
-            <div className="mt-5 flex flex-col items-center border-t border-border pt-4">
-              <button
-                type="button"
-                onClick={() => onShowManualForm?.(manualIsbn || lastSearchedBarcode)}
-                className="w-full rounded-xl bg-secondary px-4 py-3 text-sm font-semibold shadow-sm hover:bg-secondary/80"
-              >
-                {t("bottomSheet.manualEntryForm")}
-              </button>
-            </div>
-          </div>
+        {onShowManualForm && (
+          <button
+            type="button"
+            data-testid="enter-manually-link"
+            onClick={() => onShowManualForm(lastSearchedBarcode)}
+            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors cursor-pointer"
+          >
+            {t("bottomSheet.enterManuallyLink")}
+          </button>
         )}
       </div>
     </div>

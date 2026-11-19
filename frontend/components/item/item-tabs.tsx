@@ -16,9 +16,10 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Globe, History, Images, BookOpen, MessageSquare, Layers } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { FileText, History, Images, BookOpen, MessageSquare, Layers, Globe } from "lucide-react";
 import type { Item } from "@/types/frbr";
-import { useAppConfig, useWorkParts, useProfile } from "@/lib/api/hooks";
+import { useWorkParts, useProfile } from "@/lib/api/hooks";
 import { PermissionName } from "@/lib/permissions";
 import Link from "next/link";
 import Image from "next/image";
@@ -34,7 +35,6 @@ const TABS = [
   { id: "reviews", label: "Reviews", icon: MessageSquare },
   { id: "gallery", label: "Gallery", icon: Images },
   { id: "history", label: "History", icon: History },
-  { id: "federation", label: "Federation", icon: Globe },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -49,7 +49,10 @@ type TabId = (typeof TABS)[number]["id"];
  * @returns {JSX.Element}
  */
 function DetailsTab({ item }: { item: Item }) {
+  const tFed = useTranslations("ItemDetail.federation");
   const meta = (item.manifestation_meta as Record<string, unknown>) ?? {};
+  const itemMeta = (item.meta as Record<string, unknown>) ?? {};
+  const hasRemoteProvenance = Boolean(meta._provenance || itemMeta._provenance);
   const { data: partsResponse } = useWorkParts(item.work?.container_work_id ?? item.work?.id ?? 0);
   const parts = partsResponse?.data ?? [];
   const { data: profile } = useProfile();
@@ -57,6 +60,32 @@ function DetailsTab({ item }: { item: Item }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {(item.is_borrowed || item.lent_to_name || hasRemoteProvenance) && (
+        <div className="flex flex-wrap gap-2" data-testid="federation-details-badges">
+          {item.is_borrowed && (
+            <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/5 text-primary">
+              <Globe className="h-3 w-3" />
+              <span>{tFed("borrowedBadge")}</span>
+            </Badge>
+          )}
+          {item.lent_to_name && (
+            <Badge
+              variant="outline"
+              className="gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            >
+              <Globe className="h-3 w-3" />
+              <span>{tFed("lentToBadge", { borrower: item.lent_to_name })}</span>
+            </Badge>
+          )}
+          {hasRemoteProvenance && (
+            <Badge variant="outline" className="gap-1.5">
+              <Globe className="h-3 w-3" />
+              <span>{tFed("provenanceBadge")}</span>
+            </Badge>
+          )}
+        </div>
+      )}
+
       {/* Rich metadata including audio tracklists */}
       <ExtendedMetadata
         meta={meta}
@@ -180,27 +209,6 @@ function DetailsTab({ item }: { item: Item }) {
   );
 }
 
-/* ── Federation tab ──────────────────────────────────────────────────────── */
-
-/**
- * Federation tab component.
- *
- * @returns {JSX.Element} The component
- */
-function FederationTab() {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <Globe className="h-7 w-7 text-muted-foreground" />
-      </div>
-      <h3 className="mt-4 font-serif text-lg font-bold text-foreground">Federation Coming Soon</h3>
-      <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-        Connect with other iqoqo libraries to discover who else has this title in their collection.
-      </p>
-    </div>
-  );
-}
-
 /**
  * Renders the reviews tab content for an item, showing all levels of reviews (Work, Expression, Manifestation, Item).
  *
@@ -281,7 +289,6 @@ function ReviewsTab({ item }: { item: Item }) {
  */
 export function ItemTabs({ item }: { item: Item }) {
   const [active, setActive] = useState<TabId>("details");
-  const { data: config } = useAppConfig();
   const { data: profile } = useProfile();
 
   const permissions = profile?.permissions ?? [];
@@ -293,7 +300,6 @@ export function ItemTabs({ item }: { item: Item }) {
   const canViewHistory = isOwner || isBorrower || isAdmin || hasUpdatePermission;
 
   const visibleTabs = TABS.filter(tab => {
-    if (tab.id === "federation") return !!config?.federation_enabled;
     if (tab.id === "history") return canViewHistory && item.id > 0;
     return true;
   });
@@ -322,7 +328,6 @@ export function ItemTabs({ item }: { item: Item }) {
         {active === "reviews" && <ReviewsTab item={item} />}
         {active === "gallery" && <MultiScanGallery manifestationId={item.manifestation_id} />}
         {active === "history" && <ItemProvenanceTimeline itemId={item.id} />}
-        {active === "federation" && <FederationTab />}
       </div>
     </div>
   );

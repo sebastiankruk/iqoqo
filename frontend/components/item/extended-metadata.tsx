@@ -73,6 +73,8 @@ interface ExtendedMetadataProps {
   display?: DisplayProjection | null;
   manifestationId?: number;
   canEdit?: boolean;
+  /** Suppress serial card when parent view (e.g. ManifestationDetailClient) renders serial fields inline. */
+  hideSerialSection?: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ export function ExtendedMetadata({
   display,
   manifestationId,
   canEdit = false,
+  hideSerialSection = false,
 }: ExtendedMetadataProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -151,10 +154,42 @@ export function ExtendedMetadata({
   const hasLegoSection = isLego && hasLegoMetadata(meta, display);
   const hasMapsSection = hasMapsMetadata(meta, display, manifestationId, canEdit);
 
+  const serialIssn = (display?.sections?.issn as string | undefined) || (meta["issn"] as string | undefined);
+  const serialIssue =
+    (display?.sections?.issue_number as string | undefined) || (meta["issue_number"] as string | undefined);
+  const serialCumIssue =
+    (display?.sections?.cumulative_issue_number as number | undefined) ??
+    (meta["cumulative_issue_number"] as number | undefined);
+  const serialVolume = (display?.sections?.volume as string | undefined) || (meta["volume"] as string | undefined);
+  const serialYear =
+    (display?.sections?.publication_year as number | undefined) ?? (meta["publication_year"] as number | undefined);
+  const serialMonth =
+    (display?.sections?.publication_month as number | undefined) ?? (meta["publication_month"] as number | undefined);
+  const serialAddon = (display?.sections?.ean_addon as string | undefined) || (meta["ean_addon"] as string | undefined);
+  const serialFullBarcode =
+    (display?.sections?.full_barcode as string | undefined) || (meta["full_barcode"] as string | undefined);
+  const serialHeadline =
+    (display?.sections?.cover_headline as string | undefined) || (meta["cover_headline"] as string | undefined);
+  const serialIndeks = (display?.sections?.indeks as string | undefined) || (meta["indeks"] as string | undefined);
+
+  const hasSerialSection =
+    !hideSerialSection &&
+    Boolean(
+      serialIssn ||
+      serialIssue ||
+      serialCumIssue != null ||
+      serialVolume ||
+      serialMonth != null ||
+      serialAddon ||
+      serialHeadline ||
+      serialIndeks
+    );
+
   if (
     !description &&
     categories.length === 0 &&
     !isAudio &&
+    !hasSerialSection &&
     !hasVideoSection &&
     !hasBoardGameSection &&
     !hasPuzzleSection &&
@@ -163,7 +198,7 @@ export function ExtendedMetadata({
     !trackList &&
     additionalDetails.length === 0 &&
     !owner_name &&
-    !owner_count &&
+    !(owner_count && owner_count > 0) &&
     !meta["data_source"]
   )
     return null;
@@ -175,6 +210,87 @@ export function ExtendedMetadata({
       {description && (
         <div className="bg-muted/20 p-4 rounded-xl border border-border/40 text-muted-foreground">
           <RichText content={description} />
+        </div>
+      )}
+
+      {hasSerialSection && (
+        <div className="rounded-xl border bg-card/50 p-5 shadow-sm space-y-4">
+          <h3 className="font-bold text-lg text-foreground font-serif">Edition &amp; Issue Details</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+            {serialIssue && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Issue</span>
+                <span className="font-semibold">
+                  {serialIssue}
+                  {serialCumIssue != null ? ` (#${serialCumIssue})` : ""}
+                </span>
+              </div>
+            )}
+            {serialCumIssue != null && !serialIssue && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Cumulative Issue
+                </span>
+                <span className="font-semibold">#{serialCumIssue}</span>
+              </div>
+            )}
+            {(serialYear != null || serialMonth != null) && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Publication Date
+                </span>
+                <span className="font-semibold">
+                  {serialMonth != null && serialYear != null
+                    ? `${String(serialMonth).padStart(2, "0")}/${serialYear}`
+                    : serialYear != null
+                      ? String(serialYear)
+                      : `Month ${serialMonth}`}
+                </span>
+              </div>
+            )}
+            {serialVolume && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Volume</span>
+                <span className="font-semibold">{serialVolume}</span>
+              </div>
+            )}
+            {serialIssn && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">ISSN</span>
+                <span className="font-mono text-xs">{serialIssn}</span>
+              </div>
+            )}
+            {serialAddon && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  EAN Add-on
+                </span>
+                <span className="font-mono text-xs">{serialAddon}</span>
+              </div>
+            )}
+            {serialFullBarcode && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Full Barcode
+                </span>
+                <span className="font-mono text-xs">{serialFullBarcode}</span>
+              </div>
+            )}
+            {serialIndeks && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">Indeks</span>
+                <span className="font-mono text-xs">{serialIndeks}</span>
+              </div>
+            )}
+            {serialHeadline && (
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest">
+                  Cover Headline
+                </span>
+                <span className="font-medium">{serialHeadline}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -267,7 +383,7 @@ export function ExtendedMetadata({
         </div>
       )}
 
-      {(additionalDetails.length > 0 || owner_name) && (
+      {(additionalDetails.length > 0 || Boolean(owner_name) || Boolean(owner_count && owner_count > 0)) && (
         <div className="border rounded-xl p-2 bg-muted/10">
           <Button
             variant="ghost"
@@ -283,12 +399,12 @@ export function ExtendedMetadata({
 
           {isExpanded && (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 text-sm bg-background/50 rounded-lg mt-2 border border-border/40">
-              {(owner_name || owner_count) && (
+              {Boolean(owner_name || (owner_count && owner_count > 0)) && (
                 <div className="flex flex-col gap-1 pb-2 border-b border-border/20">
                   <dt className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Owner</dt>
                   <dd className="font-medium text-foreground">
                     {owner_name}
-                    {owner_count && owner_count > 1 && (
+                    {owner_count != null && owner_count > 1 && (
                       <span className={cn("text-muted-foreground", owner_name && "ml-1")}>
                         (<strong>{owner_count}</strong> owners)
                       </span>

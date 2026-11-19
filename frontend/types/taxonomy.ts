@@ -90,6 +90,7 @@ export const MEDIA_HIERARCHY = {
       {
         id: "magazine",
         label: "Magazine",
+        ui_aspect_ratio: 0.72,
       },
       {
         id: "ebook",
@@ -321,7 +322,16 @@ export const CATEGORY_STATUS_MAP = {
   lego: ["want_to_build", "building", "built"],
 } as const;
 
-export const SCAN_FORMATS = ["book", "audiobook", "music", "movie", "board_game", "puzzle", "lego"] as const;
+export const SCAN_FORMATS = [
+  "book",
+  "magazine",
+  "audiobook",
+  "music",
+  "movie",
+  "board_game",
+  "puzzle",
+  "lego",
+] as const;
 export type ScanFormat = (typeof SCAN_FORMATS)[number];
 
 export const GLOBAL_IMAGE_TYPES = ["front", "back", "spine", "other"] as const;
@@ -396,6 +406,9 @@ export const FORMAT_ALIAS_TO_CATEGORY: Record<string, MediaCategory> = {
   lego: "lego",
   standard: "text",
   map: "text",
+  journal: "text",
+  periodical: "text",
+  serial: "text",
   audio: "music",
   sound: "music",
   lp: "music",
