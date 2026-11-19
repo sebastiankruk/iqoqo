@@ -147,7 +147,7 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     await expect.poll(() => capturedRequests.length).toBeGreaterThan(0);
     const capturedManualBody = capturedRequests[0];
     expect(capturedManualBody?.issn).toBe("1507-5966");
-    expect(capturedManualBody?.Format).toBe("Magazine");
+    expect(capturedManualBody?.Format).toBe("text");
     expect(capturedManualBody?.work_kind).toBe("serial");
     expect(capturedManualBody?.issue_number).toBe("12");
     expect(capturedManualBody?.cumulative_issue_number).toBe(63);
@@ -160,20 +160,21 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
       window.localStorage.setItem("iqoqo-cookie-consent", "true");
     });
 
-    await page.goto("/login");
-    const emailInput = page.getByLabel(/email/i);
-    if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await emailInput.fill("e2e-admin@iqoqo.local");
-      await page.getByLabel(/password/i).fill("E2ETestPassword123!");
-      await page.getByRole("button", { name: /sign in/i }).click();
-      await page.waitForURL("**/dashboard*");
-    }
+    const flaskApiUrl = process.env.FLASK_API_URL || "http://127.0.0.1:5000/api";
+    const loginRes = await page.request.post(`${flaskApiUrl}/auth/login`, {
+      data: { email: "e2e-admin@iqoqo.local", password: "E2ETestPassword123!" },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    const { token } = (await loginRes.json()) as { token: string };
 
-    const createIssue1 = await page.request.post("/api/items/manual", {
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    const createIssue1 = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: authHeaders,
       data: {
         Title: "National Geographic Polska",
         Authors: ["Towarzystwo National Geographic"],
-        Format: "Magazine",
+        Format: "text",
         work_kind: "serial",
         issn: "1507-5966",
         ean: "9771507596044",
@@ -188,11 +189,12 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     expect(createIssue1.ok()).toBeTruthy();
     const issue1Body = (await createIssue1.json()) as { data: { item_id: number } };
 
-    const createIssue2 = await page.request.post("/api/items/manual", {
+    const createIssue2 = await page.request.post(`${flaskApiUrl}/items/manual`, {
+      headers: authHeaders,
       data: {
         Title: "National Geographic Polska",
         Authors: ["Towarzystwo National Geographic"],
-        Format: "Magazine",
+        Format: "text",
         work_kind: "serial",
         issn: "1507-5966",
         ean: "9771507596501",
@@ -206,11 +208,16 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     });
     expect(createIssue2.ok()).toBeTruthy();
 
-    const itemResp = await page.request.get(`/api/items/${issue1Body.data.item_id}`);
+    const itemResp = await page.request.get(`${flaskApiUrl}/items/${issue1Body.data.item_id}`, {
+      headers: authHeaders,
+    });
     expect(itemResp.ok()).toBeTruthy();
     const itemJson = (await itemResp.json()) as { data: { work?: { id: number } } };
     const workId = itemJson.data.work?.id;
     expect(workId).toBeTruthy();
+
+    const exchangeRes = await page.request.post("/api/auth-exchange", { data: { token } });
+    expect(exchangeRes.ok()).toBeTruthy();
 
     await page.goto(`/work/${workId}`);
     await page.waitForLoadState("networkidle");
@@ -219,8 +226,8 @@ test.describe("Serial & Magazine Scanner + Issues Browser (C132)", () => {
     const section = page.getByTestId("serial-issues-section");
     await expect(section).toBeVisible();
     await expect(section).toContainText("Issues in this Serial");
-    await expect(section).toContainText("7(58)");
-    await expect(section).toContainText("1(64)");
+    await expect(section).toContainText("7 (58)");
+    await expect(section).toContainText("1 (64)");
     await expect(section).toContainText("Skarby pod lodem");
   });
 });
