@@ -48,6 +48,12 @@ export interface ManualEntryData {
   year: string;
   format: ScanFormat;
   coverFile?: File | null;
+  issn?: string;
+  issueNumber?: string;
+  cumulativeIssueNumber?: string;
+  publicationMonth?: string;
+  eanAddon?: string;
+  coverHeadline?: string;
 }
 
 export interface ManualEntryFormProps {
@@ -57,6 +63,14 @@ export interface ManualEntryFormProps {
   initialFormat?: ScanFormat;
   initialTitle?: string;
   initialAuthors?: string;
+  initialPublisher?: string;
+  initialYear?: string;
+  initialIssn?: string;
+  initialIssueNumber?: string;
+  initialCumulativeIssueNumber?: string;
+  initialPublicationMonth?: string;
+  initialEanAddon?: string;
+  initialCoverHeadline?: string;
   initialCoverFile?: File | null;
 }
 
@@ -66,7 +80,7 @@ export interface ManualEntryFormProps {
  * @param props - Component props
  * @param props.onSubmit - Callback for form submission
  * @param props.onCancel - Callback for cancellation
- * @param props.initialIdentifier - Initial identifier (ISBN/UPC)
+ * @param props.initialIdentifier - Initial identifier (ISBN/UPC/EAN)
  * @param props.initialFormat - Initial media format
  * @param props.initialTitle - Initial title if already partially known
  * @param props.initialAuthors - Initial authors if already partially known
@@ -79,6 +93,14 @@ export function ManualEntryForm({
   initialFormat = "book",
   initialTitle = "",
   initialAuthors = "",
+  initialPublisher = "",
+  initialYear = "",
+  initialIssn = "",
+  initialIssueNumber = "",
+  initialCumulativeIssueNumber = "",
+  initialPublicationMonth = "",
+  initialEanAddon = "",
+  initialCoverHeadline = "",
   initialCoverFile = null,
 }: ManualEntryFormProps) {
   const t = useTranslations("scanner");
@@ -86,10 +108,16 @@ export function ManualEntryForm({
     title: initialTitle,
     authors: initialAuthors,
     identifier: initialIdentifier,
-    publisher: "",
-    year: "",
+    publisher: initialPublisher,
+    year: initialYear,
     format: initialFormat,
     coverFile: initialCoverFile,
+    issn: initialIssn,
+    issueNumber: initialIssueNumber,
+    cumulativeIssueNumber: initialCumulativeIssueNumber,
+    publicationMonth: initialPublicationMonth,
+    eanAddon: initialEanAddon,
+    coverHeadline: initialCoverHeadline,
   });
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const galleryInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -122,10 +150,32 @@ export function ManualEntryForm({
       title: initialTitle,
       authors: initialAuthors,
       identifier: initialIdentifier,
+      publisher: initialPublisher || prev.publisher,
+      year: initialYear || prev.year,
       format: initialFormat,
+      issn: initialIssn || prev.issn,
+      issueNumber: initialIssueNumber || prev.issueNumber,
+      cumulativeIssueNumber: initialCumulativeIssueNumber || prev.cumulativeIssueNumber,
+      publicationMonth: initialPublicationMonth || prev.publicationMonth,
+      eanAddon: initialEanAddon || prev.eanAddon,
+      coverHeadline: initialCoverHeadline || prev.coverHeadline,
       ...(initialCoverFile !== undefined ? { coverFile: initialCoverFile } : {}),
     }));
-  }, [initialTitle, initialAuthors, initialIdentifier, initialFormat, initialCoverFile]);
+  }, [
+    initialTitle,
+    initialAuthors,
+    initialIdentifier,
+    initialPublisher,
+    initialYear,
+    initialFormat,
+    initialIssn,
+    initialIssueNumber,
+    initialCumulativeIssueNumber,
+    initialPublicationMonth,
+    initialEanAddon,
+    initialCoverHeadline,
+    initialCoverFile,
+  ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -149,17 +199,31 @@ export function ManualEntryForm({
     try {
       const res = await apiFetch<{
         title?: string;
-        authors?: string;
+        authors?: string | string[];
         publisher?: string;
         year?: string;
+        issn?: string;
+        issue_number?: string;
+        ean_addon?: string;
+        publication_year?: number;
+        publication_month?: number;
+        cover_headline?: string;
+        format?: string;
       }>(`/lookup/${encodeURIComponent(formData.identifier)}`);
       if (res && res.title) {
+        const authorsStr = Array.isArray(res.authors) ? res.authors.join(", ") : res.authors;
         setFormData(prev => ({
           ...prev,
           title: res.title || prev.title,
-          authors: res.authors || prev.authors,
+          authors: authorsStr || prev.authors,
           publisher: res.publisher || prev.publisher,
-          year: res.year || prev.year,
+          year: res.year || (res.publication_year ? String(res.publication_year) : prev.year),
+          issn: res.issn || prev.issn,
+          issueNumber: res.issue_number || prev.issueNumber,
+          eanAddon: res.ean_addon || prev.eanAddon,
+          publicationMonth: res.publication_month ? String(res.publication_month) : prev.publicationMonth,
+          coverHeadline: res.cover_headline || prev.coverHeadline,
+          format: res.format === "magazine" ? ("magazine" as ScanFormat) : prev.format,
         }));
         toast.success("Metadata found and populated.");
       } else {
@@ -189,7 +253,22 @@ export function ManualEntryForm({
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await onSubmit(formData);
+      const submission: ManualEntryData = {
+        title: formData.title,
+        authors: formData.authors,
+        identifier: formData.identifier,
+        publisher: formData.publisher,
+        year: formData.year,
+        format: formData.format,
+        coverFile: formData.coverFile,
+        ...(formData.issn ? { issn: formData.issn } : {}),
+        ...(formData.issueNumber ? { issueNumber: formData.issueNumber } : {}),
+        ...(formData.cumulativeIssueNumber ? { cumulativeIssueNumber: formData.cumulativeIssueNumber } : {}),
+        ...(formData.publicationMonth ? { publicationMonth: formData.publicationMonth } : {}),
+        ...(formData.eanAddon ? { eanAddon: formData.eanAddon } : {}),
+        ...(formData.coverHeadline ? { coverHeadline: formData.coverHeadline } : {}),
+      };
+      await onSubmit(submission);
     } finally {
       setIsSubmitting(false);
     }
@@ -339,6 +418,100 @@ export function ManualEntryForm({
             />
           </div>
         </div>
+
+        {(formData.format === "magazine" || formData.issn) && (
+          <div
+            data-testid="serial-manual-fields"
+            className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-muted/20 p-3"
+          >
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-issn" className="text-xs font-medium text-foreground">
+                {t("manualEntry.issnLabel")}
+              </label>
+              <input
+                id="manual-issn"
+                type="text"
+                name="issn"
+                value={formData.issn || ""}
+                onChange={handleChange}
+                placeholder="1507-5966"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-ean-addon" className="text-xs font-medium text-foreground">
+                {t("manualEntry.eanAddonLabel")}
+              </label>
+              <input
+                id="manual-ean-addon"
+                type="text"
+                name="eanAddon"
+                value={formData.eanAddon || ""}
+                onChange={handleChange}
+                placeholder="07"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-issue-number" className="text-xs font-medium text-foreground">
+                {t("manualEntry.issueNumberLabel")}
+              </label>
+              <input
+                id="manual-issue-number"
+                type="text"
+                name="issueNumber"
+                value={formData.issueNumber || ""}
+                onChange={handleChange}
+                placeholder="7"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-cumulative-issue" className="text-xs font-medium text-foreground">
+                {t("manualEntry.cumulativeIssueLabel")}
+              </label>
+              <input
+                id="manual-cumulative-issue"
+                type="number"
+                name="cumulativeIssueNumber"
+                value={formData.cumulativeIssueNumber || ""}
+                onChange={handleChange}
+                placeholder="58"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-publication-month" className="text-xs font-medium text-foreground">
+                {t("manualEntry.publicationMonthLabel")}
+              </label>
+              <input
+                id="manual-publication-month"
+                type="number"
+                min={1}
+                max={12}
+                name="publicationMonth"
+                value={formData.publicationMonth || ""}
+                onChange={handleChange}
+                placeholder="7"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="manual-cover-headline" className="text-xs font-medium text-foreground">
+                {t("manualEntry.coverHeadlineLabel")}
+              </label>
+              <input
+                id="manual-cover-headline"
+                type="text"
+                name="coverHeadline"
+                value={formData.coverHeadline || ""}
+                onChange={handleChange}
+                placeholder="Skarby pod lodem"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <label htmlFor="manual-cover-gallery" className="text-sm font-medium text-foreground">

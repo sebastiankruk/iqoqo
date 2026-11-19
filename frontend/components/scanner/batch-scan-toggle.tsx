@@ -159,6 +159,8 @@ export interface BatchScanToggleProps {
   recentItems?: BatchScannedItem[];
   /** Callback to clear the session batch queue. */
   onClearQueue?: () => void;
+  /** Compact pill sizing for single-line mobile TopBar layout. */
+  compact?: boolean;
   /** Optional custom CSS classes. */
   className?: string;
 }
@@ -175,6 +177,7 @@ export function BatchScanToggle({
   queueCount = 0,
   recentItems = [],
   onClearQueue,
+  compact = false,
   className = "",
 }: BatchScanToggleProps) {
   const t = useTranslations("scanner");
@@ -188,22 +191,31 @@ export function BatchScanToggle({
     <div className={`flex items-center space-x-1.5 shrink-0 ${className}`}>
       <Button
         type="button"
+        data-testid="batch-scan-toggle"
         variant={enabled ? "default" : "outline"}
         size="sm"
         onClick={handleToggleClick}
         aria-pressed={enabled}
-        className={`h-9 px-3 text-xs font-medium rounded-xl border border-border/40 shadow-sm transition-all whitespace-nowrap ${
+        className={`${compact ? "h-8 px-2.5" : "h-9 px-3"} text-xs font-medium rounded-full border border-white/15 shadow-sm transition-all whitespace-nowrap ${
           enabled
-            ? "bg-primary text-primary-foreground shadow-sm"
-            : "bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground"
+            ? "bg-primary text-primary-foreground shadow-sm border-primary"
+            : compact
+              ? "bg-white/10 text-white/90 hover:bg-white/20 hover:text-white"
+              : "bg-background/80 backdrop-blur-sm text-muted-foreground hover:text-foreground rounded-xl border-border/40"
         }`}
       >
-        <Layers className={`h-4 w-4 mr-1.5 shrink-0 ${enabled ? "animate-pulse" : ""}`} />
-        <span className="whitespace-nowrap">{t("batchMode.toggleLabel")}</span>
+        <Layers
+          className={`${compact ? "h-3.5 w-3.5 mr-1" : "h-4 w-4 mr-1.5"} shrink-0 ${enabled ? "animate-pulse" : ""}`}
+        />
+        <span className="whitespace-nowrap">{compact ? t("batchMode.compactLabel") : t("batchMode.toggleLabel")}</span>
         <span
           data-testid="batch-scan-state-badge"
-          className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            enabled ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+          className={`ml-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+            enabled
+              ? "bg-primary-foreground/20 text-primary-foreground"
+              : compact
+                ? "bg-white/15 text-white"
+                : "bg-muted text-muted-foreground"
           }`}
         >
           {enabled ? t("batchMode.stateOn") : t("batchMode.stateOff")}
@@ -211,7 +223,7 @@ export function BatchScanToggle({
         {queueCount > 0 && (
           <Badge
             variant={enabled ? "secondary" : "default"}
-            className="ml-1.5 px-1.5 py-0 h-4 text-[10px] font-semibold shrink-0"
+            className="ml-1 px-1.5 py-0 h-4 text-[10px] font-semibold shrink-0"
           >
             {queueCount}
           </Badge>
@@ -228,7 +240,7 @@ export function BatchScanToggle({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-xl border border-border/40 text-muted-foreground hover:text-foreground bg-background/60 backdrop-blur-sm"
+              className={`${compact ? "h-8 w-8 rounded-full" : "h-9 w-9 rounded-xl"} border border-border/40 text-muted-foreground hover:text-foreground bg-background/60 backdrop-blur-sm`}
               aria-label={t("batchMode.viewQueue")}
             >
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />

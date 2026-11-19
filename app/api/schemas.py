@@ -23,6 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.core.taxonomy import COLLECTION_STATUSES, PROGRESS_STATUSES
 from app.db.core import ITEM_VISIBILITIES
 
+SHARED_VISIBILITY_SCOPES = ("public_only", "friends_and_public", "all")
+
 
 def _validate_uuid_str(v: str | None) -> str | None:
     if v is not None and v.strip() != "":
@@ -309,6 +311,14 @@ class ManifestationUpdateSchema(BaseModel):
     format_type: str | None = Field(default=None, max_length=50)
     format: str | None = Field(default=None, max_length=50)
     isbn13: str | None = Field(default=None, max_length=20)
+    issue_number: str | None = Field(default=None, max_length=32)
+    cumulative_issue_number: int | None = Field(default=None, ge=1)
+    volume: str | None = Field(default=None, max_length=32)
+    publication_year: int | None = Field(default=None, ge=1400, le=2100)
+    publication_month: int | None = Field(default=None, ge=1, le=12)
+    ean_addon: str | None = Field(default=None, max_length=8)
+    full_barcode: str | None = Field(default=None, max_length=20)
+    cover_headline: str | None = Field(default=None, max_length=500)
 
 
 class ScanBarcodeSchema(BaseModel):
@@ -599,3 +609,67 @@ class ReadingSessionCreateSchema(BaseModel):
             return None
         stripped = v.strip()
         return stripped if stripped else None
+
+
+class SharedCollectionCreateSchema(BaseModel):
+    """Request body for creating a shared collection link with configurable visibility scope."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+    filters: dict[str, Any] = Field(default_factory=dict)
+    visibility_scope: str | None = Field(
+        default=None,
+        description="Visibility scope for the generated token ('public_only', 'friends_and_public', 'all')",
+    )
+    expires_in_days: int | None = Field(default=None, description="Optional expiry duration in days (1-365)")
+
+    @field_validator("visibility_scope")
+    @classmethod
+    def validate_visibility_scope(cls, v: str | None) -> str | None:
+        """Validate top-level visibility_scope against supported shared collection scopes."""
+        if v is None:
+            return None
+        if not isinstance(v, str) or v.strip() not in SHARED_VISIBILITY_SCOPES:
+            raise ValueError(f"Invalid visibility_scope '{v}'. Must be one of {SHARED_VISIBILITY_SCOPES}")
+        return v.strip()
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def normalize_filters(cls, v: Any) -> dict[str, Any]:
+        """Ensure filters is a dict and validate filters.visibility_scope if supplied."""
+        if v is None:
+            return {}
+        if not isinstance(v, dict):
+            raise ValueError("'filters' must be a JSON object")
+        copied = dict(v)
+        nested_scope = copied.get("visibility_scope")
+        if nested_scope is not None:
+            if not isinstance(nested_scope, str) or nested_scope.strip() not in SHARED_VISIBILITY_SCOPES:
+                raise ValueError(f"Invalid filters.visibility_scope '{nested_scope}'. Must be one of {SHARED_VISIBILITY_SCOPES}")
+            copied["visibility_scope"] = nested_scope.strip()
+        return copied
+
+    @field_validator("expires_in_days", mode="before")
+    @classmethod
+    def validate_expires_in_days(cls, v: Any) -> int | None:
+        """Validate expires_in_days is an integer between 1 and 365."""
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            raise ValueError("'expires_in_days' must be an integer")
+        try:
+            days = int(v)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("'expires_in_days' must be an integer") from exc
+        if not 1 <= days <= 365:
+            raise ValueError("'expires_in_days' must be between 1 and 365")
+        return days
+
+    def resolved_filters(self) -> dict[str, Any]:
+        """Return filters dict with canonical 'visibility_scope' guaranteed populated."""
+        merged = dict(self.filters or {})
+        effective_scope = self.visibility_scope or merged.get("visibility_scope") or "public_only"
+        merged["visibility_scope"] = effective_scope
+        return merged

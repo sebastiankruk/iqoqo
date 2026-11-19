@@ -41,6 +41,7 @@ media_categories:
         label: "Comic Book (Single Issue)"
       - id: magazine
         label: "Magazine"
+        ui_aspect_ratio: 0.72
       - id: ebook
         label: "eBook"
       - id: cartographic_map
@@ -189,6 +190,10 @@ format_aliases:
   map: text
   cartographic_map: text
   atlas: text
+  magazine: text
+  journal: text
+  periodical: text
+  serial: text
   # music aliases
   audio: music
   sound: music
@@ -233,7 +238,7 @@ progress_statuses:
   lego: ["want_to_build", "building", "built"]
 
 # Scanner top-bar formats (categories shown in scanner UI)
-scan_formats: ["book", "audiobook", "music", "movie", "board_game", "puzzle", "lego"]
+scan_formats: ["book", "magazine", "audiobook", "music", "movie", "board_game", "puzzle", "lego"]
 
 # Mapping of media categories to their respective lookup strategy classes
 lookup_strategies:
@@ -246,6 +251,9 @@ lookup_strategies:
   book:
     class: BookLookupStrategy
     waterfall_order: 3
+  magazine:
+    class: SerialLookupStrategy
+    waterfall_order: 7
   board_game:
     class: BoardGameLookupStrategy
     waterfall_order: 4
@@ -261,6 +269,7 @@ lookup_strategies:
 
 # Mapping of media categories to IngestService methods for hint-based ingestion
 ingest_methods:
+  magazine: ingest_serial_issue
   music: ingest_audio_from_barcode
   movie: ingest_video_from_barcode
   board_game: ingest_game_from_barcode

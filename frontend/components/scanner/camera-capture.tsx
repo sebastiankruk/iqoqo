@@ -33,6 +33,13 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Camera, Loader2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
+import {
+  COVER_JPEG_QUALITY,
+  COVER_MAX_DIMENSION,
+  resizeImageFile,
+  VISION_JPEG_QUALITY,
+  VISION_MAX_DIMENSION,
+} from "@/lib/image-resize";
 import { useTranslations } from "next-intl";
 import { apiClient } from "@/lib/api/client";
 import { Button, ButtonVariant } from "@/components/ui/button";
@@ -56,10 +63,20 @@ interface ApiEnvelope<T> {
   error?: string | null;
 }
 
-/** Extracted book metadata returned by the `/vision/extract` endpoint. */
-interface ExtractedMetadata {
+/** Extracted book or serial metadata returned by the `/vision/extract` endpoint. */
+export interface ExtractedMetadata {
   Title?: string;
   Authors?: string[];
+  Publisher?: string;
+  issn?: string;
+  indeks?: string;
+  ean_addon?: string;
+  issue_number?: string;
+  cumulative_issue_number?: number;
+  publication_month?: number;
+  publication_year?: number;
+  cover_headline?: string;
+  volume?: string;
 }
 
 interface CameraCaptureProps {
@@ -77,6 +94,8 @@ interface CameraCaptureProps {
   onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
   /** Called when vision extraction or polling fails. */
   onExtractionFailure?: () => void;
+  /** Called whenever the upload/extraction loading state changes. */
+  onUploadingChange?: (uploading: boolean) => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -133,6 +152,7 @@ export function CameraCapture({
   onGalleryUploadComplete,
   onExtractComplete,
   onExtractionFailure,
+  onUploadingChange,
   className,
   capture = "environment",
   label,
@@ -178,7 +198,7 @@ export function CameraCapture({
   }, []);
 
   const startPolling = async (taskId: string) => {
-    const maxRetries = 15; // 15 retries * 1s = 15s max timeout
+    const maxRetries = 45; // 45 retries * 1s = 45s max timeout for local/cloud vision inference
     const { apiClient: pollClient } = await import("@/lib/api/client");
 
     for (let i = 0; i < maxRetries; i++) {
@@ -223,6 +243,7 @@ export function CameraCapture({
 
   const processFile = async (file: File) => {
     setUploading(true);
+    onUploadingChange?.(true);
     await triggerScanHaptic();
     const formData = new FormData();
 
@@ -232,7 +253,11 @@ export function CameraCapture({
     try {
       if (mode === "gallery" && manifestation_id) {
         // Mode 3: Upload an additional scan to the gallery
-        formData.append("image", file);
+        const resizedImage = await resizeImageFile(file, {
+          maxDimension: COVER_MAX_DIMENSION,
+          quality: COVER_JPEG_QUALITY,
+        });
+        formData.append("image", resizedImage);
         formData.append("label", galleryLabel || "other");
         formData.append("source", effectiveSource);
 
@@ -242,7 +267,11 @@ export function CameraCapture({
         if (onGalleryUploadComplete) onGalleryUploadComplete();
       } else if (manifestation_id) {
         // Mode 1: Upload a user-contributed cover for a known manifestation
-        formData.append("cover", file);
+        const resizedCover = await resizeImageFile(file, {
+          maxDimension: COVER_MAX_DIMENSION,
+          quality: COVER_JPEG_QUALITY,
+        });
+        formData.append("cover", resizedCover);
         formData.append("format", format);
         formData.append("source", effectiveSource);
 
@@ -252,7 +281,11 @@ export function CameraCapture({
         if (onUploadComplete) onUploadComplete();
       } else {
         // Mode 2: OCR / Vision Metadata Extraction (Asynchronous)
-        formData.append("cover", file);
+        const visionFile = await resizeImageFile(file, {
+          maxDimension: VISION_MAX_DIMENSION,
+          quality: VISION_JPEG_QUALITY,
+        });
+        formData.append("cover", visionFile);
         formData.append("format", format);
         formData.append("source", effectiveSource);
 
@@ -267,7 +300,11 @@ export function CameraCapture({
           // Transition to polling
           const result = await startPolling(envelope.data.task_id);
           await triggerSuccessHaptic();
-          if (onExtractComplete) onExtractComplete(result, file, format);
+          const coverFile = await resizeImageFile(visionFile, {
+            maxDimension: COVER_MAX_DIMENSION,
+            quality: COVER_JPEG_QUALITY,
+          });
+          if (onExtractComplete) onExtractComplete(result, coverFile, format);
         } else {
           await triggerErrorHaptic();
           toast.error(envelope.error ?? t("cameraCapture.visionSubmissionFailed"));
@@ -282,6 +319,7 @@ export function CameraCapture({
       if (onExtractionFailure) onExtractionFailure();
     } finally {
       setUploading(false);
+      onUploadingChange?.(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -369,7 +407,7 @@ export function CameraCapture({
   return (
     <div
       className={`w-full relative ${className ?? ""} ${
-        isDesktopMode
+        !uploading && isDesktopMode
           ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " +
             (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
           : isDragging
@@ -383,10 +421,12 @@ export function CameraCapture({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {uploading && (
+      {inputNode}
+
+      {uploading ? (
         <div
           data-testid="scanner-uploading-overlay"
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-background/90 backdrop-blur-sm p-4 text-center"
+          className="flex min-h-[156px] w-full flex-col items-center justify-center rounded-xl border border-border bg-card/95 p-6 text-center shadow-sm"
         >
           <div className="relative flex items-center justify-center mb-4">
             <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
@@ -395,11 +435,7 @@ export function CameraCapture({
           <p className="animate-pulse text-sm font-semibold text-foreground">{t("cameraCapture.processingImage")}</p>
           <p className="text-xs text-muted-foreground mt-1">{t("cameraCapture.extractingDetails")}</p>
         </div>
-      )}
-
-      {inputNode}
-
-      {isDesktopMode ? (
+      ) : isDesktopMode ? (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
           <UploadCloud
             className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`}
@@ -409,13 +445,7 @@ export function CameraCapture({
             <p className="text-xs text-muted-foreground">{t("cameraCapture.orBrowse")}</p>
           </div>
           <Button onClick={handleClick} disabled={uploading} className="mt-2">
-            {uploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" /> {t("cameraCapture.processing")}
-              </>
-            ) : (
-              t("cameraCapture.browseFiles")
-            )}
+            {t("cameraCapture.browseFiles")}
           </Button>
         </div>
       ) : (
@@ -426,17 +456,8 @@ export function CameraCapture({
             variant={variant || "outline"}
             className={buttonClassName || "w-full"}
           >
-            {uploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" />
-                {t("cameraCapture.processing")}
-              </>
-            ) : (
-              <>
-                {icon || <Camera className="mr-2 h-4 w-4" />}
-                {label ?? t("cameraCapture.snapCover")}
-              </>
-            )}
+            {icon || <Camera className="mr-2 h-4 w-4" />}
+            {label ?? t("cameraCapture.snapCover")}
           </Button>
         </div>
       )}

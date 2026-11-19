@@ -24,7 +24,7 @@ drift.
 from dataclasses import dataclass
 from typing import Any
 
-# Structural column keys excluded from display (matched case-insensitively)
+# Structural column & physical-item keys excluded from Manifestation display (matched case-insensitively)
 EXCLUDED_STRUCTURAL_KEYS = {
     "id",
     "manifestation_id",
@@ -32,6 +32,13 @@ EXCLUDED_STRUCTURAL_KEYS = {
     "image",
     "cover_status",
     "cover",
+    "collection_status",
+    "status",
+    "local_barcode",
+    "lent_to_user_id",
+    "lent_to_name",
+    "visibility",
+    "is_hidden",
 }
 
 # Values considered empty / placeholder in UI display
@@ -158,6 +165,78 @@ DISPLAY_FIELD_DEFINITIONS: dict[str, DisplayFieldDef] = {
         section="cartographic",
         label="Includes Map",
     ),
+    "issn": DisplayFieldDef(
+        field="issn",
+        spellings=("issn", "ISSN"),
+        section="serial",
+        label="ISSN",
+    ),
+    "eissn": DisplayFieldDef(
+        field="eissn",
+        spellings=("eissn", "eISSN"),
+        section="serial",
+        label="eISSN",
+    ),
+    "work_kind": DisplayFieldDef(
+        field="work_kind",
+        spellings=("work_kind", "workKind"),
+        section="serial",
+        label="Work Kind",
+    ),
+    "issue_number": DisplayFieldDef(
+        field="issue_number",
+        spellings=("issue_number", "issueNumber", "issue"),
+        section="serial",
+        label="Issue Number",
+    ),
+    "cumulative_issue_number": DisplayFieldDef(
+        field="cumulative_issue_number",
+        spellings=("cumulative_issue_number", "cumulativeIssueNumber"),
+        section="serial",
+        label="Cumulative Issue",
+    ),
+    "volume": DisplayFieldDef(
+        field="volume",
+        spellings=("volume", "Volume"),
+        section="serial",
+        label="Volume",
+    ),
+    "publication_year": DisplayFieldDef(
+        field="publication_year",
+        spellings=("publication_year", "publicationYear"),
+        section="serial",
+        label="Publication Year",
+    ),
+    "publication_month": DisplayFieldDef(
+        field="publication_month",
+        spellings=("publication_month", "publicationMonth"),
+        section="serial",
+        label="Publication Month",
+    ),
+    "ean_addon": DisplayFieldDef(
+        field="ean_addon",
+        spellings=("ean_addon", "eanAddon"),
+        section="serial",
+        label="EAN Add-on",
+    ),
+    "full_barcode": DisplayFieldDef(
+        field="full_barcode",
+        spellings=("full_barcode", "fullBarcode"),
+        section="serial",
+        label="Full Barcode",
+    ),
+    "cover_headline": DisplayFieldDef(
+        field="cover_headline",
+        spellings=("cover_headline", "coverHeadline"),
+        section="serial",
+        label="Cover Headline",
+    ),
+    "indeks": DisplayFieldDef(
+        field="indeks",
+        spellings=("indeks", "Indeks"),
+        section="serial",
+        label="Indeks",
+    ),
 }
 
 # Explicit precedence orders for sections (design decision 4)
@@ -243,6 +322,10 @@ ADDITIONAL_SECTION_KEYS: set[str] = {
     "additional_images",
     "imageLinks",
     "data_source",
+    "work_kind",
+    "PublicationDate",
+    "publicationDate",
+    "publication_date",
 }
 
 # All keys that are rendered in a dedicated surface and should be omitted from Additional Details
@@ -371,6 +454,26 @@ def build_display_projection(
         fields["map_attachments"] = map_attachments
         sections["has_map"] = True
         fields["has_map"] = True
+
+    # 7b. Serial & Periodical Issue Fields
+    for serial_field in (
+        "issn",
+        "eissn",
+        "work_kind",
+        "issue_number",
+        "cumulative_issue_number",
+        "volume",
+        "publication_year",
+        "publication_month",
+        "ean_addon",
+        "full_barcode",
+        "cover_headline",
+        "indeks",
+    ):
+        serial_val = read_first_present_value(meta, DISPLAY_FIELD_DEFINITIONS[serial_field].spellings)
+        if serial_val is not None:
+            sections[serial_field] = serial_val
+            fields[serial_field] = serial_val
 
     # 8. Additional Details (catch-all for primitive values not rendered in dedicated sections)
     additional_details: list[dict[str, Any]] = []

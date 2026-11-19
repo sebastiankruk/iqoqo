@@ -18,17 +18,15 @@
 from datetime import UTC, datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.api.decorators import require_auth
+from app.api.schemas import SharedCollectionCreateSchema
 from app.core.limiter import limiter
 from app.db.models import SharedCollection, db
 
 sharing_bp = Blueprint("sharing", __name__, url_prefix="/sharing")
-
-# Sanity bound for client-supplied expiry: at least a day, at most a year.
-_MIN_EXPIRY_DAYS = 1
-_MAX_EXPIRY_DAYS = 365
 
 
 @sharing_bp.route("", methods=["GET"], strict_slashes=False)
@@ -54,24 +52,20 @@ def create_shared_collection():
     if "name" not in data:
         return jsonify({"error": "Missing name", "code": 400}), 400
 
+    try:
+        payload = SharedCollectionCreateSchema.model_validate(data)
+    except ValidationError as exc:
+        return jsonify({"error": str(exc), "code": 400}), 400
+
     expires_at = None
-    if "expires_in_days" in data and data["expires_in_days"] is not None:
-        try:
-            expires_in_days = int(data["expires_in_days"])
-        except (TypeError, ValueError):
-            return jsonify({"error": "'expires_in_days' must be an integer", "code": 400}), 400
-        if not _MIN_EXPIRY_DAYS <= expires_in_days <= _MAX_EXPIRY_DAYS:
-            return (
-                jsonify({"error": f"'expires_in_days' must be between {_MIN_EXPIRY_DAYS} and {_MAX_EXPIRY_DAYS}", "code": 400}),
-                400,
-            )
-        expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
+    if payload.expires_in_days is not None:
+        expires_at = datetime.now(UTC) + timedelta(days=payload.expires_in_days)
 
     collection = SharedCollection(
         user_id=user_id,
-        name=data["name"],
-        description=data.get("description"),
-        filters=data.get("filters", {}),
+        name=payload.name,
+        description=payload.description,
+        filters=payload.resolved_filters(),
         expires_at=expires_at,
     )
     db.session.add(collection)

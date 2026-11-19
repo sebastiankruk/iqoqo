@@ -357,3 +357,64 @@ class TestPublicSemanticEndpoints:
         resp_hid = client.get(f"/api/public/items/{hidden_item_id}")
         assert resp_hid.status_code == 404
         assert resp_hid.get_json()["error"] == "Item not found"
+
+    def test_shared_collection_rdf_obeys_visibility_scope(self, client, app):
+        """JSON-LD and Turtle share endpoints enforce visibility_scope, friend bonus, and cache headers."""
+        from app.api.auth import generate_internal_jwt
+        from app.db.auth import UserFriendship
+        from app.db.models import SharedCollection
+
+        with app.app_context():
+            owner = User(email="rdf_scope_owner@iqoqo.local", public_username="rdfowner", visibility="public")
+            friend = User(email="rdf_scope_friend@iqoqo.local", public_username="rdffriend", visibility="public")
+            db.session.add_all([owner, friend])
+            db.session.flush()
+            db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+            for title, vis, hidden in (
+                ("RDF Public Title", "public", False),
+                ("RDF Friend Title", "friends_only", False),
+                ("RDF Secret Title", "private", True),
+            ):
+                work = Work(title=title)
+                db.session.add(work)
+                db.session.flush()
+                expr = Expression(work_id=work.id, content_type="text")
+                db.session.add(expr)
+                db.session.flush()
+                mani = Manifestation(expression_id=expr.id, meta={"title": title})
+                db.session.add(mani)
+                db.session.flush()
+                db.session.add(Item(owner_id=owner.id, manifestation_id=mani.id, status="read", visibility=vis, is_hidden=hidden))
+
+            share_pub = SharedCollection(user_id=owner.id, name="RDF Public", filters={"visibility_scope": "public_only"})
+            share_all = SharedCollection(user_id=owner.id, name="RDF All", filters={"visibility_scope": "all"})
+            db.session.add_all([share_pub, share_all])
+            db.session.commit()
+            pub_token = share_pub.share_token
+            all_token = share_all.share_token
+            friend_headers = {"Authorization": f"Bearer {generate_internal_jwt(friend)}"}
+
+        # Anonymous caller on public_only JSON-LD endpoint
+        anon_jsonld = client.get(f"/api/public/rdf/share/{pub_token}?format=jsonld")
+        assert anon_jsonld.status_code == 200
+        assert b"RDF Public Title" in anon_jsonld.data
+        assert b"RDF Friend Title" not in anon_jsonld.data
+        assert b"RDF Secret Title" not in anon_jsonld.data
+        assert "public" in anon_jsonld.headers.get("Cache-Control", "")
+
+        # Friend caller on public_only Turtle endpoint gets Friend Bonus + private no-store
+        friend_ttl = client.get(f"/api/public/rdf/share/{pub_token}?format=turtle", headers=friend_headers)
+        assert friend_ttl.status_code == 200
+        assert b"RDF Public Title" in friend_ttl.data
+        assert b"RDF Friend Title" in friend_ttl.data
+        assert b"RDF Secret Title" not in friend_ttl.data
+        assert friend_ttl.headers.get("Cache-Control") == "private, no-store"
+
+        # Token holder on 'all' scope receives private items via content-negotiated /api/public/share/<token>
+        all_ttl = client.get(f"/api/public/share/{all_token}", headers={"Accept": "text/turtle"})
+        assert all_ttl.status_code == 200
+        assert b"RDF Public Title" in all_ttl.data
+        assert b"RDF Friend Title" in all_ttl.data
+        assert b"RDF Secret Title" in all_ttl.data
+        assert all_ttl.headers.get("Cache-Control") == "private, no-store"

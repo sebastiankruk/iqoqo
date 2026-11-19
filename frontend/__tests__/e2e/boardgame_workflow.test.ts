@@ -116,14 +116,12 @@ test.describe("Board Game Ingestion Workflow", () => {
     // 5. Verify scanner page loads
     await expect(page.getByText("Tap to start camera")).toBeVisible();
 
-    // 6. Select the Game format from the top pill menu
-    await page.getByRole("button", { name: /Board Game|Game/i }).click();
+    // 6. Select the Game format from compact format selector
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-board_game").click();
 
-    // 7. Switch to the Manual Search tab
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 8. Enter barcode for a board game
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    // 7. Enter barcode for a board game in unified lookup bar
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 
@@ -215,13 +213,11 @@ test.describe("Board Game Ingestion Workflow", () => {
     await page.goto("/scan");
 
     // 4. Select Game format
-    await page.getByRole("button", { name: /Board Game|Game/i }).click();
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-board_game").click();
 
-    // 5. Switch to Manual Search
-    await page.getByRole("button", { name: "Manual Search" }).click();
-
-    // 6. Enter board game barcode
-    const searchInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    // 5. Enter board game barcode in unified lookup bar
+    const searchInput = page.getByTestId("unified-lookup-input");
     await searchInput.fill(testBarcode);
     await searchInput.press("Enter");
 

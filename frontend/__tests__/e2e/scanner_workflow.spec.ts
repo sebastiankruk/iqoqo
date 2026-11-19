@@ -131,29 +131,20 @@ test.describe("Scanner Workflow", () => {
     const pageContent = await page.textContent("body");
     expect(pageContent).toContain("Scan New Item");
 
-    // Switch to manual tab
-    const manualTab = page.getByTestId("scanner-tab-manual");
-    if (await manualTab.isVisible()) {
-      await manualTab.click();
-      await page.waitForTimeout(300);
+    // Enter barcode in full-width unified lookup bar
+    const input = page.getByTestId("unified-lookup-input");
+    await input.fill(testBarcode);
+    await page.keyboard.press("Enter");
 
-      // Enter barcode
-      const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
-      await input.fill(testBarcode);
+    // Verify disambiguation sheet appears with multiple candidates
+    await expect(page.getByText("Which one did you mean?")).toBeVisible();
+    const candidateChoice = page.getByRole("button", { name: /The Divine Comedy - Edition 1/i });
+    await expect(candidateChoice).toBeVisible();
+    await candidateChoice.click();
 
-      // Submit search
-      await page.keyboard.press("Enter");
-
-      // Verify disambiguation sheet appears with multiple candidates
-      await expect(page.getByText("Which one did you mean?")).toBeVisible();
-      const candidateChoice = page.getByRole("button", { name: /The Divine Comedy - Edition 1/i });
-      await expect(candidateChoice).toBeVisible();
-      await candidateChoice.click();
-
-      // Verify success card appears with selected metadata
-      await expect(page.getByText("Successfully Found!")).toBeVisible();
-      await expect(page.getByText("The Divine Comedy - Edition 1")).toBeVisible();
-    }
+    // Verify success card appears with selected metadata
+    await expect(page.getByText("Successfully Found!")).toBeVisible();
+    await expect(page.getByText("The Divine Comedy - Edition 1")).toBeVisible();
   });
 
   test("switches format and verifies format selection UI", async ({ page }) => {
@@ -161,18 +152,11 @@ test.describe("Scanner Workflow", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    // Verify format selector is visible
-    const bookBtn = page.getByRole("button", { name: "Book", exact: true });
-    if (await bookBtn.isVisible()) {
-      await bookBtn.click();
-      await page.waitForTimeout(200);
-    }
-
-    const movieBtn = page.getByRole("button", { name: "Movie", exact: true });
-    if (await movieBtn.isVisible()) {
-      await movieBtn.click();
-      await page.waitForTimeout(200);
-    }
+    const formatTrigger = page.getByTestId("format-selector-trigger");
+    await expect(formatTrigger).toBeVisible();
+    await formatTrigger.click();
+    await page.getByTestId("format-option-movie").click();
+    await expect(formatTrigger).toContainText("Movie");
   });
 
   test("simulates API timeout/failure and verifies graceful fallback to manual entry", async ({ page }) => {
@@ -188,13 +172,8 @@ test.describe("Scanner Workflow", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    // Switch to manual search tab
-    const manualTab = page.getByTestId("scanner-tab-manual");
-    await expect(manualTab).toBeVisible();
-    await manualTab.click();
-
-    // Fill barcode and trigger search
-    const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
+    // Fill barcode in unified lookup input and trigger search
+    const input = page.getByTestId("unified-lookup-input");
     await input.fill(timeoutBarcode);
     await page.keyboard.press("Enter");
 
@@ -210,25 +189,24 @@ test.describe("Scanner Workflow", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    // Policy buttons
-    const shelfBtn = page.getByRole("button", { name: "Shelf", exact: true });
-    const wishlistBtn = page.getByRole("button", { name: "Wishlist", exact: true });
-    const catalogBtn = page.getByRole("button", { name: "Catalog Only", exact: true });
-
-    await expect(shelfBtn).toBeVisible();
-    await expect(wishlistBtn).toBeVisible();
-    await expect(catalogBtn).toBeVisible();
-
-    // Default policy is Shelf -> shows shelf hint
-    await expect(page.getByText("Adding directly to your personal shelf")).toBeVisible();
+    const policyTrigger = page.getByTestId("policy-selector-trigger");
+    await expect(policyTrigger).toBeVisible();
+    await expect(policyTrigger).toContainText("Shelf");
+    await expect(policyTrigger).toHaveAttribute("title", "Adding directly to your personal shelf");
 
     // Switch to Catalog Only
-    await catalogBtn.click();
+    await policyTrigger.click();
     await expect(page.getByText("Adding to shared catalog without adding to shelf")).toBeVisible();
+    await page.getByTestId("policy-option-catalog").click();
+    await expect(page.getByTestId("policy-option-catalog")).not.toBeVisible();
+    await expect(policyTrigger).toContainText("Catalog Only");
 
     // Switch to Wishlist
-    await wishlistBtn.click();
+    await policyTrigger.click();
+    await expect(page.getByTestId("policy-option-wishlist")).toBeVisible();
     await expect(page.getByText("Adding to your wishlist")).toBeVisible();
+    await page.getByTestId("policy-option-wishlist").click();
+    await expect(policyTrigger).toContainText("Wishlist");
   });
 
   test("continuous batch scanning: clicking scan another on success card dismisses card and re-engages scanner", async ({
@@ -262,30 +240,23 @@ test.describe("Scanner Workflow", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    // Switch to manual search tab
-    const manualTab = page.getByTestId("scanner-tab-manual");
-    if (await manualTab.isVisible()) {
-      await manualTab.click();
-      await page.waitForTimeout(300);
+    // Search barcode via unified lookup bar
+    const input = page.getByTestId("unified-lookup-input");
+    await input.fill(testBarcode);
+    await page.keyboard.press("Enter");
 
-      // Search barcode
-      const input = page.getByPlaceholder(/ISBN|UPC|Discogs/);
-      await input.fill(testBarcode);
-      await page.keyboard.press("Enter");
+    // Verify success card is displayed directly for single candidate
+    const successHeading = page.getByText("Successfully Found!");
+    await expect(successHeading).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Batch Scan Test Book")).toBeVisible();
 
-      // Verify success card is displayed directly for single candidate
-      const successHeading = page.getByText("Successfully Found!");
-      await expect(successHeading).toBeVisible({ timeout: 10000 });
-      await expect(page.getByText("Batch Scan Test Book")).toBeVisible();
+    // Click "Scan another" action button
+    const scanAnotherBtn = page.getByRole("button", { name: /Scan another/i });
+    await expect(scanAnotherBtn).toBeVisible();
+    await scanAnotherBtn.click();
 
-      // Click "Scan another" action button
-      const scanAnotherBtn = page.getByRole("button", { name: /Scan another/i });
-      await expect(scanAnotherBtn).toBeVisible();
-      await scanAnotherBtn.click();
-
-      // Verify success card is dismissed and scanner view is restored
-      await expect(successHeading).not.toBeVisible();
-      await expect(manualTab).toBeVisible();
-    }
+    // Verify success card is dismissed and scanner view is restored
+    await expect(successHeading).not.toBeVisible();
+    await expect(page.getByTestId("unified-lookup-input")).toBeVisible();
   });
 });
