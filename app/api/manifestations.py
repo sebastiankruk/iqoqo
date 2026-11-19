@@ -305,7 +305,19 @@ def get_manifestations() -> tuple[Response, int]:
                     else None
                 ),
                 "isbn13": m.isbn13,
-                "publisher": m.publisher,
+                "ean": m.ean,
+                "ean_addon": m.ean_addon,
+                "full_barcode": m.full_barcode,
+                "issue_number": m.issue_number,
+                "cumulative_issue_number": m.cumulative_issue_number,
+                "volume": m.volume,
+                "publication_year": m.publication_year,
+                "publication_month": m.publication_month,
+                "issn": m.expression.work.issn if (m.expression and m.expression.work) else None,
+                "work_kind": m.expression.work.work_kind if (m.expression and m.expression.work) else None,
+                "publisher": m.publisher
+                or ((m.meta.get("publisher") or m.meta.get("Publisher")) if m.meta else None)
+                or (m.expression.work.meta.get("publisher") if (m.expression and m.expression.work and m.expression.work.meta) else None),
                 "format_type": m.format_type,
                 "format": m.format_type or m.format,
                 "year": resolved_year,
@@ -559,9 +571,18 @@ def get_recent_manifestations() -> tuple[Response, int]:
         for m in recent:
             work = m.expression.work if (m.expression and m.expression.work) else None
             title = work.title if work else (m.meta.get("Title") if m.meta else None)
-            raw_authors = work.meta.get("authors") if (work and work.meta) else (m.meta.get("Authors") if m.meta else None)
-            authors: list[str] = normalize_authors_list(raw_authors)
+            authors = _resolve_manifestation_display_author(m)
             author = authors[0] if authors else None
+            resolved_year = (
+                m.publication_year
+                or (m.publication_date.year if getattr(m, "publication_date", None) else None)
+                or ((m.meta.get("Year") or m.meta.get("year")) if m.meta else None)
+            )
+            publisher = (
+                m.publisher
+                or ((m.meta.get("publisher") or m.meta.get("Publisher")) if m.meta else None)
+                or (work.meta.get("publisher") if (work and work.meta) else None)
+            )
 
             result.append(
                 {
@@ -572,6 +593,16 @@ def get_recent_manifestations() -> tuple[Response, int]:
                     "meta": m.meta,
                     "author": author,
                     "authors": authors,
+                    "publisher": publisher,
+                    "format": m.format_type or m.format,
+                    "year": resolved_year,
+                    "issn": work.issn if work else None,
+                    "work_kind": work.work_kind if work else None,
+                    "issue_number": m.issue_number,
+                    "cumulative_issue_number": m.cumulative_issue_number,
+                    "volume": m.volume,
+                    "publication_year": m.publication_year,
+                    "publication_month": m.publication_month,
                 }
             )
 

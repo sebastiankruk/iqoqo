@@ -238,3 +238,32 @@ def test_manual_serial_save_preserves_edition_fields_and_strips_unknown_and_item
     extra_keys = {entry["key"].lower() for entry in m_data["display"]["additional_details"]}
     assert "collection_status" not in extra_keys
     assert "publicationdate" not in extra_keys
+
+    # Recent / global list / collection list endpoints also strip Unknown and expose edition fields
+    recent_res = client.get("/api/manifestations/recent", headers=normal_user_headers)
+    assert recent_res.status_code == 200
+    recent_match = next(row for row in recent_res.json["data"] if row["id"] == manif_id)
+    assert recent_match["authors"] == []
+    assert recent_match["issue_number"] == "11"
+    assert recent_match["cumulative_issue_number"] == 50
+    assert recent_match["publication_year"] == 2003
+    assert recent_match["publication_month"] == 11
+    assert recent_match["publisher"] == "G+J RBA"
+
+    catalog_res = client.get("/api/manifestations?limit=10", headers=normal_user_headers)
+    assert catalog_res.status_code == 200
+    catalog_match = next(row for row in catalog_res.json["data"] if row["id"] == manif_id)
+    assert catalog_match["authors"] == []
+    assert catalog_match["issue_number"] == "11"
+    assert catalog_match["publisher"] == "G+J RBA"
+
+    items_res = client.get("/api/items?limit=10", headers=normal_user_headers)
+    assert items_res.status_code == 200
+    item_match = next(row for row in items_res.json["data"] if row["manifestation_id"] == manif_id)
+    assert item_match["authors"] == []
+    assert item_match["format"] == "magazine"
+    assert item_match["issue_number"] == "11"
+    assert item_match["cumulative_issue_number"] == 50
+    assert item_match["publication_year"] == 2003
+    assert item_match["publication_month"] == 11
+    assert item_match["publisher"] == "G+J RBA"

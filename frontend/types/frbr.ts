@@ -296,6 +296,14 @@ export interface Item {
   box_condition?: string | null;
   work_type?: string | null;
   medium_type?: string | null;
+  work_kind?: string | null;
+  issn?: string | null;
+  issue_number?: string | null;
+  cumulative_issue_number?: number | null;
+  volume?: string | null;
+  publication_year?: number | null;
+  publication_month?: number | null;
+  format?: string | null;
   work_id?: number | null;
   work_title?: string | null;
   expression_id?: number | null;

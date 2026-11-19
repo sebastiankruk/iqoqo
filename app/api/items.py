@@ -481,9 +481,20 @@ def get_items():
                 work = manifestation.expression.work
                 phys_expr = manifestation.expression
                 work_title = work.title or ""
-                authors = work.meta.get("authors", []) if work.meta else []
+                authors = [
+                    a
+                    for a in (work.meta.get("authors", []) if work.meta else [])
+                    if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                ]
 
             phys_work_type, phys_medium_type = _extract_intent_media_info(work, phys_expr, manifestation)
+            resolved_publisher = (
+                manifestation.publisher
+                or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+                or (work.meta.get("publisher") if (work and work.meta) else None)
+                if manifestation
+                else None
+            )
 
             is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
             is_borrowed = bool(item.lent_to_user_id and str(item.lent_to_user_id) == str(g.user_id)) if hasattr(g, "user_id") else False
@@ -501,10 +512,19 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "work_id": work.id if work else None,
                     "work_title": work_title or (work.title if work else None),
+                    "work_kind": work.work_kind if work else None,
+                    "issn": work.issn if work else None,
                     "expression_id": phys_expr.id if phys_expr else None,
                     "isbn": manifestation.isbn13 if manifestation else None,
+                    "ean": manifestation.ean if manifestation else None,
+                    "issue_number": manifestation.issue_number if manifestation else None,
+                    "cumulative_issue_number": manifestation.cumulative_issue_number if manifestation else None,
+                    "volume": manifestation.volume if manifestation else None,
+                    "publication_year": manifestation.publication_year if manifestation else None,
+                    "publication_month": manifestation.publication_month if manifestation else None,
+                    "format": (manifestation.format_type or manifestation.format) if manifestation else None,
                     "title": work_title,
-                    "publisher": manifestation.publisher if manifestation else None,
+                    "publisher": resolved_publisher,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,

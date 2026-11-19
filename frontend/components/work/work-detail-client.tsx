@@ -62,9 +62,13 @@ export interface WorkDetailClientProps {
  * @returns An array of author strings
  */
 function normalizeAuthors(authors: unknown): string[] {
+  const isReal = (value: string) => {
+    const cleaned = value.trim().toLowerCase();
+    return Boolean(cleaned) && cleaned !== "unknown" && cleaned !== "n/a" && cleaned !== "none";
+  };
   if (!authors) return [];
-  if (Array.isArray(authors)) return authors.filter(a => typeof a === "string");
-  if (typeof authors === "string") return [authors];
+  if (Array.isArray(authors)) return authors.filter((a): a is string => typeof a === "string" && isReal(a));
+  if (typeof authors === "string" && isReal(authors)) return [authors.trim()];
   return [];
 }
 
