@@ -94,6 +94,8 @@ interface CameraCaptureProps {
   onExtractComplete?: (data: ExtractedMetadata, file: File, format: MediaFormat | string) => void;
   /** Called when vision extraction or polling fails. */
   onExtractionFailure?: () => void;
+  /** Called whenever the upload/extraction loading state changes. */
+  onUploadingChange?: (uploading: boolean) => void;
   className?: string;
   /** Label for the button */
   label?: string;
@@ -150,6 +152,7 @@ export function CameraCapture({
   onGalleryUploadComplete,
   onExtractComplete,
   onExtractionFailure,
+  onUploadingChange,
   className,
   capture = "environment",
   label,
@@ -240,6 +243,7 @@ export function CameraCapture({
 
   const processFile = async (file: File) => {
     setUploading(true);
+    onUploadingChange?.(true);
     await triggerScanHaptic();
     const formData = new FormData();
 
@@ -315,6 +319,7 @@ export function CameraCapture({
       if (onExtractionFailure) onExtractionFailure();
     } finally {
       setUploading(false);
+      onUploadingChange?.(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -402,7 +407,7 @@ export function CameraCapture({
   return (
     <div
       className={`w-full relative ${className ?? ""} ${
-        isDesktopMode
+        !uploading && isDesktopMode
           ? "border-2 border-dashed border-border rounded-xl p-6 transition-colors " +
             (isDragging ? "bg-accent/50 border-primary" : "hover:bg-secondary/50")
           : isDragging
@@ -416,10 +421,12 @@ export function CameraCapture({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {uploading && (
+      {inputNode}
+
+      {uploading ? (
         <div
           data-testid="scanner-uploading-overlay"
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-background/90 backdrop-blur-sm p-4 text-center"
+          className="flex min-h-[156px] w-full flex-col items-center justify-center rounded-xl border border-border bg-card/95 p-6 text-center shadow-sm"
         >
           <div className="relative flex items-center justify-center mb-4">
             <div className="absolute h-14 w-14 rounded-full border-4 border-primary/30 border-t-transparent animate-[spin_1.5s_linear_infinite]" />
@@ -428,11 +435,7 @@ export function CameraCapture({
           <p className="animate-pulse text-sm font-semibold text-foreground">{t("cameraCapture.processingImage")}</p>
           <p className="text-xs text-muted-foreground mt-1">{t("cameraCapture.extractingDetails")}</p>
         </div>
-      )}
-
-      {inputNode}
-
-      {isDesktopMode ? (
+      ) : isDesktopMode ? (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
           <UploadCloud
             className={`h-10 w-10 ${isDragging ? "text-primary animate-bounce" : "text-muted-foreground"}`}
@@ -442,13 +445,7 @@ export function CameraCapture({
             <p className="text-xs text-muted-foreground">{t("cameraCapture.orBrowse")}</p>
           </div>
           <Button onClick={handleClick} disabled={uploading} className="mt-2">
-            {uploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" /> {t("cameraCapture.processing")}
-              </>
-            ) : (
-              t("cameraCapture.browseFiles")
-            )}
+            {t("cameraCapture.browseFiles")}
           </Button>
         </div>
       ) : (
@@ -459,17 +456,8 @@ export function CameraCapture({
             variant={variant || "outline"}
             className={buttonClassName || "w-full"}
           >
-            {uploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 aspect-square shrink-0 animate-spin" />
-                {t("cameraCapture.processing")}
-              </>
-            ) : (
-              <>
-                {icon || <Camera className="mr-2 h-4 w-4" />}
-                {label ?? t("cameraCapture.snapCover")}
-              </>
-            )}
+            {icon || <Camera className="mr-2 h-4 w-4" />}
+            {label ?? t("cameraCapture.snapCover")}
           </Button>
         </div>
       )}

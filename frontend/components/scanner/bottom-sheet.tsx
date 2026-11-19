@@ -94,6 +94,8 @@ export function BottomSheet({
     [onTabChange]
   );
   const [isSearching, setIsSearching] = useState(false);
+  const [isExtractingPrimary, setIsExtractingPrimary] = useState(false);
+  const [isExtractingGallery, setIsExtractingGallery] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSearchedBarcode, setLastSearchedBarcode] = useState<string>("");
@@ -402,8 +404,9 @@ export function BottomSheet({
               icon={<Camera className="mr-2 h-5 w-5" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
+              onUploadingChange={setIsExtractingPrimary}
               format={format}
-              className="flex w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80"
+              className={`${isExtractingGallery ? "hidden" : "flex"} w-full justify-center [&>div]:w-full [&>button]:h-14 [&>button]:w-full [&>button]:rounded-xl [&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button]:shadow-md [&>button]:ring-2 [&>button]:ring-primary/20 [&>button]:ring-offset-2 [&>button]:transition-all [&>button]:disabled:opacity-80`}
             />
 
             {/* Secondary: gallery-only upload */}
@@ -413,8 +416,9 @@ export function BottomSheet({
               icon={<ImagePlus className="mr-2 h-4 w-4" />}
               onExtractComplete={(data, file) => onExtractComplete?.(data, file)}
               onExtractionFailure={() => onExtractionFailure?.(lastSearchedBarcode)}
+              onUploadingChange={setIsExtractingGallery}
               format={format}
-              className="flex w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent"
+              className={`${isExtractingPrimary ? "hidden" : "flex"} w-full justify-center [&>button]:h-10 [&>button]:w-full [&>button]:rounded-xl [&>button]:border [&>button]:border-border [&>button]:bg-card [&>button]:text-sm [&>button]:font-semibold [&>button]:text-foreground [&>button]:hover:bg-accent`}
             />
 
             {/* Error is already handled at the top */}
