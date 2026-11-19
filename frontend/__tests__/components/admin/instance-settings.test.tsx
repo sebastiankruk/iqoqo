@@ -134,7 +134,7 @@ describe("InstanceSettings - Google OAuth Admin Settings UI", () => {
 
     await waitFor(() => {
       expect(adminApi.updateInstanceSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ ALLOW_LLM: "true" }),
+        expect.objectContaining({ ALLOW_LLM: true }),
         "external_apis"
       );
     });
