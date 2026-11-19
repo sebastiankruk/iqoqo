@@ -556,6 +556,38 @@ if [[ ${#active_exporters[@]} -gt 0 ]]; then
     fi
 fi
 
+web_otel_cname=$(find_container "web")
+worker_otel_cname=$(find_container "worker")
+live_otel_ep=""
+live_otel_proto=""
+if [[ -n "$web_otel_cname" ]]; then
+    live_otel_ep=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"' 2>/dev/null || echo "")
+    live_otel_proto=$(docker exec "$web_otel_cname" sh -c 'printf "%s" "${OTEL_EXPORTER_OTLP_PROTOCOL:-}"' 2>/dev/null || echo "")
+fi
+[[ -z "$live_otel_ep" ]] && live_otel_ep=$(load_env "OTEL_EXPORTER_OTLP_ENDPOINT")
+[[ -z "$live_otel_proto" ]] && live_otel_proto=$(load_env "OTEL_EXPORTER_OTLP_PROTOCOL")
+
+if [[ ${#active_exporters[@]} -gt 0 || -n "$live_otel_ep" ]]; then
+    if [[ "$live_otel_ep" == *":4318"* && ( -z "$live_otel_proto" || "$live_otel_proto" == "grpc" ) ]]; then
+        check "OTel Protocol" fail "OTLP endpoint targets HTTP :4318 without OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf (defaults to gRPC HTTP/2 and drops telemetry)"
+    elif [[ -n "$live_otel_proto" ]]; then
+        check "OTel Protocol" pass "${live_otel_proto} (${live_otel_ep:-default})"
+    fi
+fi
+
+app_otel_errors=0
+for app_c in "$web_otel_cname" "$worker_otel_cname"; do
+    if [[ -n "$app_c" ]]; then
+        c_errs=$(docker logs "$app_c" --since 5m 2>&1 | grep -c -E "Failed to export (traces|metrics|logs) to otel-collector|Failed parsing HTTP/2|Trying to connect an http1\.x server" || true)
+        app_otel_errors=$((app_otel_errors + ${c_errs:-0}))
+    fi
+done
+if [[ "$app_otel_errors" -gt 0 ]]; then
+    check "App OTel Export" fail "${app_otel_errors} OTLP export error(s) in web/worker logs in last 5m (telemetry dropped)"
+elif [[ ${#active_exporters[@]} -gt 0 && ( -n "$web_otel_cname" || -n "$worker_otel_cname" ) ]]; then
+    check "App OTel Export" pass "clean (0 OTLP export errors in web/worker logs)"
+fi
+
 if [[ "$STACK" != "dev" ]]; then
     frontend_cname=$(find_container "frontend")
     if [[ -n "$frontend_cname" ]]; then
@@ -1206,6 +1238,164 @@ elif [[ -n "$reb_key" ]]; then
     check "Rebrickable API" pass "configured (.env)"
 else
     check "Rebrickable API" info "optional (not configured)"
+fi
+
+# ─── AI / Vision & OCR Providers ────────────────────────────────
+header "AI / Vision & OCR Providers"
+get_db_configured_keys
+
+allow_llm_env=$(load_env "ALLOW_LLM")
+ollama_url_env=$(load_env "OLLAMA_URL")
+ollama_vision_env=$(load_env "OLLAMA_VISION_MODEL")
+ollama_dedupe_env=$(load_env "OLLAMA_DEDUPE_MODEL")
+
+llm_status_json=""
+if [[ "$STACK" == "dev" ]]; then
+    py_bin="python3"
+    if [[ -x "$IQOQO_ROOT/.venv/bin/python3" ]]; then
+        py_bin="$IQOQO_ROOT/.venv/bin/python3"
+    elif [[ -x "$IQOQO_ROOT/.venv/bin/python" ]]; then
+        py_bin="$IQOQO_ROOT/.venv/bin/python"
+    fi
+    llm_status_json=$(IQOQO_ROOT="$IQOQO_ROOT" "$py_bin" -c "
+import json, os, sys
+try:
+    sys.path.insert(0, os.environ.get('IQOQO_ROOT', '.'))
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.vision import get_llm_vision_status
+        print(json.dumps(get_llm_vision_status(probe_ollama=True)))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+else
+    web_cname=$(find_container "web")
+    if [[ -n "$web_cname" ]]; then
+        llm_status_json=$(docker exec "$web_cname" python3 -c "
+import json, sys
+try:
+    sys.path.insert(0, '/app')
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.utils.vision import get_llm_vision_status
+        print(json.dumps(get_llm_vision_status(probe_ollama=True)))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+    fi
+fi
+
+if [[ -n "$llm_status_json" ]]; then
+    eval "$(echo "$llm_status_json" | python3 -c "
+import json, shlex, sys
+d = json.load(sys.stdin)
+gem = d.get('gemini', {})
+oai = d.get('openai', {})
+oll = d.get('ollama', {})
+tes = d.get('tesseract', {})
+print('llm_allow=' + ('1' if d.get('allow_llm') else '0'))
+print('llm_vision_ready=' + ('1' if d.get('vision_ready') else '0'))
+print('llm_gem_cfg=' + ('1' if gem.get('configured') else '0'))
+print('llm_gem_src=' + shlex.quote(str(gem.get('source', 'missing'))))
+print('llm_oai_cfg=' + ('1' if oai.get('configured') else '0'))
+print('llm_oai_src=' + shlex.quote(str(oai.get('source', 'missing'))))
+print('llm_oll_reach=' + ('1' if oll.get('reachable') else '0'))
+print('llm_oll_url=' + shlex.quote(str(oll.get('url', 'http://localhost:11434'))))
+print('llm_oll_vmodel=' + shlex.quote(str(oll.get('vision_model', 'llava'))))
+print('llm_oll_vinst=' + ('1' if oll.get('vision_model_installed') else '0'))
+print('llm_oll_dmodel=' + shlex.quote(str(oll.get('dedupe_model', 'llama3:latest'))))
+print('llm_oll_dinst=' + ('1' if oll.get('dedupe_model_installed') else '0'))
+print('llm_tes_inst=' + ('1' if tes.get('installed') else '0'))
+print('llm_tes_langs=' + shlex.quote(','.join(tes.get('languages', []))))
+" 2>/dev/null || echo "")"
+else
+    llm_allow=0
+    [[ "${allow_llm_env,,}" == "true" || "$allow_llm_env" == "1" || "${allow_llm_env,,}" == "yes" ]] && llm_allow=1
+    llm_gem_cfg=0; llm_gem_src="missing"
+    if [[ -n "${db_settings_map['GEMINI_API_KEY']:-}" ]]; then llm_gem_cfg=1; llm_gem_src="db"; elif [[ -n "$(load_env 'GEMINI_API_KEY')" ]]; then llm_gem_cfg=1; llm_gem_src="env"; fi
+    llm_oai_cfg=0; llm_oai_src="missing"
+    if [[ -n "${db_settings_map['OPENAI_API_KEY']:-}" ]]; then llm_oai_cfg=1; llm_oai_src="db"; elif [[ -n "$(load_env 'OPENAI_API_KEY')" ]]; then llm_oai_cfg=1; llm_oai_src="env"; fi
+    llm_oll_url="${ollama_url_env:-http://localhost:11434}"
+    llm_oll_vmodel="${ollama_vision_env:-llava}"
+    llm_oll_dmodel="${ollama_dedupe_env:-llama3:latest}"
+    llm_oll_reach=0; llm_oll_vinst=0; llm_oll_dinst=0
+    oll_tags=$(curl -s -m 2 "${llm_oll_url%/}/api/tags" 2>/dev/null || echo "")
+    if [[ -n "$oll_tags" ]] && echo "$oll_tags" | grep -q '"models"'; then
+        llm_oll_reach=1
+        echo "$oll_tags" | grep -q "\"${llm_oll_vmodel}" && llm_oll_vinst=1
+        echo "$oll_tags" | grep -q "\"${llm_oll_dmodel}" && llm_oll_dinst=1
+    fi
+    llm_vision_ready=0
+    if [[ "$llm_allow" == "1" && ( "$llm_gem_cfg" == "1" || "$llm_oll_vinst" == "1" ) ]]; then
+        llm_vision_ready=1
+    fi
+    llm_tes_inst=0; llm_tes_langs=""
+    if command -v tesseract >/dev/null 2>&1; then
+        llm_tes_inst=1
+        llm_tes_langs=$(tesseract --list-langs 2>/dev/null | tail -n +2 | paste -sd, - || echo "")
+    fi
+fi
+
+if [[ "${llm_allow:-0}" == "1" ]]; then
+    check "ALLOW_LLM Gate" pass "enabled"
+elif [[ "${llm_gem_cfg:-0}" == "1" || "${llm_oai_cfg:-0}" == "1" || "${llm_oll_reach:-0}" == "1" ]]; then
+    check "ALLOW_LLM Gate" warn "disabled (LLM credentials/Ollama present but ALLOW_LLM is false)"
+else
+    check "ALLOW_LLM Gate" info "disabled"
+fi
+
+if [[ "${llm_gem_cfg:-0}" == "1" ]]; then
+    if [[ "${llm_gem_src:-}" == "db" ]]; then
+        check "Gemini API" pass "configured (DB: InstanceSettings)"
+    else
+        check "Gemini API" pass "configured (.env)"
+    fi
+else
+    check "Gemini API" info "optional (not configured)"
+fi
+
+if [[ "${llm_oai_cfg:-0}" == "1" ]]; then
+    if [[ "${llm_oai_src:-}" == "db" ]]; then
+        check "OpenAI API" pass "configured (DB: InstanceSettings)"
+    else
+        check "OpenAI API" pass "configured (.env)"
+    fi
+else
+    check "OpenAI API" info "optional (not configured)"
+fi
+
+if [[ "${llm_oll_reach:-0}" == "1" ]]; then
+    dedupe_note="missing"
+    [[ "${llm_oll_dinst:-0}" == "1" ]] && dedupe_note="ready"
+    if [[ "${llm_oll_vinst:-0}" == "1" ]]; then
+        check "Ollama Local LLM" pass "reachable at ${llm_oll_url} (vision: ${llm_oll_vmodel}, dedupe: ${llm_oll_dmodel} [${dedupe_note}])"
+    else
+        check "Ollama Local LLM" warn "reachable at ${llm_oll_url} (dedupe: ${llm_oll_dmodel} [${dedupe_note}]), vision model '${llm_oll_vmodel}' not pulled (run: ollama pull ${llm_oll_vmodel})"
+    fi
+elif [[ -n "$ollama_url_env" ]]; then
+    check "Ollama Local LLM" warn "configured (${llm_oll_url}) but unreachable"
+else
+    check "Ollama Local LLM" info "optional (not reachable at ${llm_oll_url:-http://localhost:11434})"
+fi
+
+if [[ "${llm_vision_ready:-0}" == "1" ]]; then
+    check "Vision Cover Extraction" pass "active (LLM vision ready)"
+elif [[ "${llm_gem_cfg:-0}" == "1" || "${llm_oll_vinst:-0}" == "1" ]]; then
+    check "Vision Cover Extraction" warn "blocked by ALLOW_LLM Gate (providers ready — set ALLOW_LLM=true in ${ENV_FILE} or Admin Settings)"
+else
+    check "Vision Cover Extraction" warn "degraded to Tesseract-only OCR (configure GEMINI_API_KEY or run 'ollama pull ${llm_oll_vmodel:-llava}')"
+fi
+
+if [[ "${llm_tes_inst:-0}" == "1" ]]; then
+    if echo ",${llm_tes_langs:-}," | grep -q ",pol,"; then
+        check "Tesseract OCR" pass "installed (langs: ${llm_tes_langs})"
+    else
+        check "Tesseract OCR" warn "installed (langs: ${llm_tes_langs:-none}), missing Polish pack 'pol' (install tesseract-ocr-pol)"
+    fi
+else
+    check "Tesseract OCR" warn "tesseract binary not found"
 fi
 
 # ─── Linked Open Data & Gazetteer ────────────────────────────────

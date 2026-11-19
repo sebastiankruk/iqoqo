@@ -67,6 +67,12 @@ format_normalizations:
   folding_map: cartographic_map
   road_map: cartographic_map
   world_atlas: atlas
+  # Periodical & Serial normalizations
+  journal: magazine
+  periodical: magazine
+  serial: magazine
+  czasopismo: magazine
+  magazyn: magazine
   # LEGO & Construction Sets normalizations
   lego_set: standard_set
   lego: standard_set

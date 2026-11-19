@@ -49,7 +49,7 @@ def _get_route_tag(path: str) -> str:
         return "Profile"
     if path.startswith("/api/items") or path.startswith("/items"):
         return "Items"
-    if any(path.startswith(f"/api/{prefix}") for prefix in ("work", "expression", "manifestation", "collections")):
+    if any(path.startswith(f"/api/{prefix}") for prefix in ("work", "expression", "manifestation", "collections", "catalog")):
         return "Catalog"
     if path.startswith("/api/scanner") or path.startswith("/api/isbn"):
         return "Scanner"
@@ -240,6 +240,9 @@ def create_spec() -> APISpec:
                 "id": {"type": "integer", "description": "Work identifier."},
                 "title": {"type": "string", "description": "Canonical intellectual work title."},
                 "description": {"type": ["string", "null"], "description": "Detailed synopsis or intellectual description."},
+                "issn": {"type": ["string", "null"], "description": "Normalized print ISSN (XXXX-XXXX) for F18 Serial Works."},
+                "eissn": {"type": ["string", "null"], "description": "Normalized electronic ISSN (XXXX-XXXX)."},
+                "work_kind": {"type": ["string", "null"], "description": "Optional work classification ('serial' for periodicals)."},
                 "meta": {"type": "object", "description": "Extended metadata (genres, original year, authors)."},
             },
             "required": ["id", "title"],
@@ -293,7 +296,18 @@ def create_spec() -> APISpec:
                 "publisher": {"type": ["string", "null"], "description": "Publishing house, label, or manufacturer."},
                 "publication_date": {"type": ["string", "null"], "description": "Publication year or full date string."},
                 "cover_url": {"type": ["string", "null"], "description": "Cover thumbnail image URL."},
-                "format": {"type": ["string", "null"], "description": "Specific physical format (Hardcover, Vinyl, Blu-ray, etc.)."},
+                "format": {
+                    "type": ["string", "null"],
+                    "description": "Specific physical format (Hardcover, Vinyl, Blu-ray, Magazine, etc.).",
+                },
+                "ean": {"type": ["string", "null"], "description": "EAN-13 barcode (may repeat across annual periodical issues)."},
+                "ean_addon": {"type": ["string", "null"], "description": "Supplemental EAN-2 or EAN-5 issue add-on suffix."},
+                "full_barcode": {"type": ["string", "null"], "description": "Canonical combined EAN-13 + add-on barcode."},
+                "issue_number": {"type": ["string", "null"], "description": "Periodical issue number within year/volume."},
+                "cumulative_issue_number": {"type": ["integer", "null"], "description": "Cumulative periodical issue number."},
+                "volume": {"type": ["string", "null"], "description": "Periodical volume number."},
+                "publication_year": {"type": ["integer", "null"], "description": "Four-digit issue publication year."},
+                "publication_month": {"type": ["integer", "null"], "description": "Numeric issue publication month (1-12)."},
                 "meta": {"type": "object", "description": "Manifestation metadata attributes."},
             },
             "required": ["id", "expression_id"],
@@ -808,6 +822,50 @@ def assemble_complete_openapi_spec() -> dict[str, Any]:
                     op_params = operation.setdefault("parameters", [])
                     op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
                     for q_param in share_query_params:
+                        if q_param["name"] not in op_param_names:
+                            op_params.append(q_param)
+                            op_param_names.add(q_param["name"])
+                elif openapi_path in ("/api/catalog/graph", "/api/v1/catalog/graph") and method == "get":
+                    graph_query_params = [
+                        {
+                            "name": "entity_type",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string", "enum": ["work", "expression", "manifestation", "item"]},
+                            "description": "Root FRBR entity type for neighborhood traversal.",
+                        },
+                        {
+                            "name": "entity_id",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "integer", "minimum": 1},
+                            "description": "Root FRBR entity primary key ID.",
+                        },
+                        {
+                            "name": "depth",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 1, "minimum": 1, "maximum": 2},
+                            "description": "BFS hop depth from anchor node (clamped to 1..2).",
+                        },
+                        {
+                            "name": "max_nodes",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "integer", "default": 150, "minimum": 1, "maximum": 150},
+                            "description": "Maximum number of nodes returned (clamped to 1..150).",
+                        },
+                        {
+                            "name": "edge_types",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Comma-separated edge categories (frbr,series,parts_expansions,contributors,maps,lod).",
+                        },
+                    ]
+                    op_params = operation.setdefault("parameters", [])
+                    op_param_names = {p.get("name") for p in op_params if isinstance(p, dict)}
+                    for q_param in graph_query_params:
                         if q_param["name"] not in op_param_names:
                             op_params.append(q_param)
                             op_param_names.add(q_param["name"])

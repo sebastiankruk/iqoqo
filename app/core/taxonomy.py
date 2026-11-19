@@ -252,6 +252,9 @@ FORMAT_ALIAS_TO_CATEGORY: dict[str, str] = {
     "lego": "lego",
     "standard": "text",
     "map": "text",
+    "journal": "text",
+    "periodical": "text",
+    "serial": "text",
     "audio": "music",
     "sound": "music",
     "lp": "music",
@@ -290,21 +293,23 @@ CATEGORY_DEFAULT_IMAGE_TYPE: dict[str, str] = {
     "lego": "box",
 }
 
-SCAN_FORMATS: tuple[str, ...] = ("book", "audiobook", "music", "movie", "board_game", "puzzle", "lego")
+SCAN_FORMATS: tuple[str, ...] = ("book", "magazine", "audiobook", "music", "movie", "board_game", "puzzle", "lego")
 
 LOOKUP_STRATEGY_MAP: dict[str, str] = {
     "movie": "VideoLookupStrategy",
     "music": "AudioLookupStrategy",
     "book": "BookLookupStrategy",
+    "magazine": "SerialLookupStrategy",
     "board_game": "BoardGameLookupStrategy",
     "puzzle": "PuzzleLookupStrategy",
     "lego": "LegoLookupStrategy",
     "text": "BookLookupStrategy",
 }
 
-LOOKUP_WATERFALL_ORDER: list[str] = ["movie", "music", "book", "board_game", "puzzle", "lego"]
+LOOKUP_WATERFALL_ORDER: list[str] = ["movie", "music", "book", "board_game", "puzzle", "lego", "magazine"]
 
 CATEGORY_INGEST_METHOD: dict[str, str] = {
+    "magazine": "ingest_serial_issue",
     "music": "ingest_audio_from_barcode",
     "movie": "ingest_video_from_barcode",
     "board_game": "ingest_game_from_barcode",

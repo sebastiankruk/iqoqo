@@ -85,10 +85,10 @@ test.describe("Policy Scanning", () => {
       await page.goto("/scan");
       await page.waitForLoadState("networkidle");
 
-      const wishlistBtn = page.getByText("Wishlist", { exact: true });
-      await expect(wishlistBtn).toBeVisible();
+      const policyPill = page.getByTestId("policy-selector-trigger");
+      await expect(policyPill).toBeVisible();
 
-      const pillBox = await wishlistBtn.boundingBox();
+      const pillBox = await policyPill.boundingBox();
       expect(pillBox).not.toBeNull();
       if (pillBox) {
         // Must be in upper dark camera overlay region (y < 200px)
@@ -110,19 +110,16 @@ test.describe("Policy Scanning", () => {
     await page.goto("/scan");
     await page.waitForLoadState("networkidle");
 
-    // Verify policy selector is visible
-    const wishlistBtn = page.getByText("Wishlist", { exact: true });
-    if (await wishlistBtn.isVisible()) {
-      await wishlistBtn.click();
-      await page.waitForTimeout(200);
-    }
+    const policyTrigger = page.getByTestId("policy-selector-trigger");
+    await expect(policyTrigger).toBeVisible();
+    await policyTrigger.click();
+    await page.getByTestId("policy-option-wishlist").click();
+    await expect(page.getByTestId("policy-option-wishlist")).not.toBeVisible();
+    await expect(policyTrigger).toContainText("Wishlist");
 
-    // Switch back to Inventory
-    const inventoryBtn = page.getByText("Inventory", { exact: true });
-    if (await inventoryBtn.isVisible()) {
-      await inventoryBtn.click();
-      await page.waitForTimeout(200);
-    }
+    await policyTrigger.click();
+    await page.getByTestId("policy-option-inventory").click();
+    await expect(policyTrigger).toContainText("Shelf");
   });
 
   test("switches policy to Catalog and verifies UI", async ({ page }) => {

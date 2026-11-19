@@ -229,15 +229,13 @@ test.describe("Audio Media Workflow", () => {
     // 3. Navigate to the scanner page
     await page.goto("/scan");
 
-    // 4. Select the Audio format first
-    await page.getByRole("button", { name: "Music" }).click();
+    // 4. Select the Audio format via compact format selector
+    await page.getByTestId("format-selector-trigger").click();
+    await page.getByTestId("format-option-music").click();
 
-    // 5. Use the Manual Search tab
-    await page.getByText("Manual Search").click();
-
-    // 5. Submit 12-digit UPC (validates updated frontend regex rules)
-    await page.fill('input[placeholder="ISBN, UPC, Discogs ID, or Artist – Title…"]', testBarcode);
-    await page.locator('button[type="submit"]').click();
+    // 5. Submit 12-digit UPC in unified lookup bar (validates updated frontend regex rules)
+    await page.getByTestId("unified-lookup-input").fill(testBarcode);
+    await page.getByTestId("unified-lookup-submit").click();
 
     // 6. Verify the Success Card renders parsed audio metadata
     await expect(page.getByText("Successfully Found!")).toBeVisible();
@@ -246,8 +244,7 @@ test.describe("Audio Media Workflow", () => {
     await expect(page.getByText("AUDIO", { exact: true })).toBeVisible(); // JS transformation check
 
     // 7. Verify the Audio format is active (selected) in the scanner header
-    // The Music button should be highlighted as the active format
-    await expect(page.getByRole("button", { name: "Music" })).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("format-selector-trigger")).toContainText("Music");
 
     // 8. Submit the generic "Add to Collection" action
     await page.getByRole("button", { name: /Add to (Shelf|Library)/i }).click();

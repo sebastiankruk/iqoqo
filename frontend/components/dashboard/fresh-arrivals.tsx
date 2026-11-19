@@ -101,6 +101,30 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
 
             const isProcessing = item.cover_status === "processing";
             const isGenerated = item.cover_status === "ready" && !item.meta?.["cover_url"];
+            const realAuthors = (item.authors ?? []).filter(
+              a => typeof a === "string" && !["unknown", "n/a", "none", ""].includes(a.trim().toLowerCase())
+            );
+            const issueNum = item.issue_number || (item.meta?.issue_number as string | undefined);
+            const cumNum = item.cumulative_issue_number ?? (item.meta?.cumulative_issue_number as number | undefined);
+            const pubMonth = item.publication_month ?? (item.meta?.publication_month as number | undefined);
+            const pubYear = item.publication_year ?? (item.meta?.publication_year as number | undefined) ?? item.year;
+            const issuePart = issueNum
+              ? `#${issueNum}${cumNum != null ? ` (${cumNum})` : ""}`
+              : cumNum != null
+                ? `#${cumNum}`
+                : null;
+            const datePart =
+              pubMonth != null && pubYear != null
+                ? `${String(pubMonth).padStart(2, "0")}/${pubYear}`
+                : pubYear != null
+                  ? String(pubYear)
+                  : null;
+            const cleanPublisher =
+              item.publisher && !["unknown", "n/a", "none", ""].includes(String(item.publisher).trim().toLowerCase())
+                ? String(item.publisher).trim()
+                : null;
+            const subtitle =
+              realAuthors[0] || [issuePart, datePart].filter(Boolean).join(" · ") || cleanPublisher || null;
 
             return (
               <Link href={`/manifestation/${item.id}`} key={item.id} className="group w-36 shrink-0 sm:w-40">
@@ -132,10 +156,12 @@ export function FreshArrivals({ publicMode = false }: { publicMode?: boolean } =
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
                 <h3 className="truncate text-sm font-semibold text-card-foreground">{item.title ?? t("untitled")}</h3>
-                <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                  <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
-                  {item.authors?.[0] ?? t("unknown")}
-                </p>
+                {subtitle && (
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                    <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent/60" />
+                    {subtitle}
+                  </p>
+                )}
               </Link>
             );
           })}

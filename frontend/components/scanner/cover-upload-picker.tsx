@@ -20,6 +20,7 @@ import { Camera, ImagePlus, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
+import { COVER_JPEG_QUALITY, COVER_MAX_DIMENSION, resizeImageFile } from "@/lib/image-resize";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -98,8 +99,12 @@ export function CoverUploadPicker({
     if (!manifestation_id) return;
     setUploading(true);
 
+    const resizedCover = await resizeImageFile(file, {
+      maxDimension: COVER_MAX_DIMENSION,
+      quality: COVER_JPEG_QUALITY,
+    });
     const formData = new FormData();
-    formData.append("cover", file);
+    formData.append("cover", resizedCover);
     formData.append("format", String(format));
     formData.append("source", source || uploadSource);
 
