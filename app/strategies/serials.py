@@ -23,6 +23,7 @@ from typing import Any
 import requests
 
 from app.core.taxonomy import MediaCategory, MediaFormat
+from app.core.telemetry import record_outbound_telemetry
 from app.strategies.base import LookupStrategy
 from app.utils.allegro import fetch_allegro_metadata
 from app.utils.http_client import SSRFError, safe_get
@@ -124,9 +125,11 @@ def _extract_bn_title_and_publisher(bib: dict[str, Any]) -> tuple[str | None, st
 
 def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
     """Query Poland's Biblioteka Narodowa Linked Data JSON API by ISSN."""
+    bn_url = "https://data.bn.org.pl/api/institutions/bibs.json"
     try:
+        record_outbound_telemetry("biblioteka_narodowa", {}, url=bn_url)
         resp = safe_get(
-            "https://data.bn.org.pl/api/institutions/bibs.json",
+            bn_url,
             params={"isbnIssn": issn, "kind": "czasopismo", "limit": "10"},
             timeout=_HTTP_TIMEOUT,
         )
@@ -163,8 +166,10 @@ def _fetch_biblioteka_narodowa_by_issn(issn: str) -> dict[str, Any] | None:
 
 def _fetch_crossref_journal_by_issn(issn: str) -> dict[str, Any] | None:
     """Query Crossref /journals/{issn} REST endpoint for serial metadata."""
+    crossref_url = f"https://api.crossref.org/journals/{issn}"
     try:
-        resp = safe_get(f"https://api.crossref.org/journals/{issn}", timeout=_HTTP_TIMEOUT)
+        record_outbound_telemetry("crossref", {}, url=crossref_url)
+        resp = safe_get(crossref_url, timeout=_HTTP_TIMEOUT)
         if resp.status_code != 200:
             return None
         payload = resp.json()
@@ -199,9 +204,11 @@ def _fetch_crossref_journal_by_issn(issn: str) -> dict[str, Any] | None:
 
 def _fetch_openlibrary_by_issn(issn: str) -> dict[str, Any] | None:
     """Query OpenLibrary search API by ISSN."""
+    ol_url = "https://openlibrary.org/search.json"
     try:
+        record_outbound_telemetry("openlibrary", {}, url=ol_url)
         resp = safe_get(
-            "https://openlibrary.org/search.json",
+            ol_url,
             params={"q": f"issn:{issn}", "limit": "5"},
             timeout=_HTTP_TIMEOUT,
         )

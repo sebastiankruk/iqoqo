@@ -245,7 +245,7 @@ def parse_cover_issue_label(text: str | None) -> dict[str, Any]:
             if slash_match:
                 result["issue_number"] = slash_match.group(1)
                 result["publication_year"] = int(slash_match.group(2))
-            elif "ean_addon" in result and 1 <= int(result["ean_addon"]) <= 12:
+            elif "ean_addon" in result and 1 <= int(result["ean_addon"]) <= 53:
                 result["issue_number"] = str(int(result["ean_addon"]))
 
     folded_lower = _strip_accents(text).lower()

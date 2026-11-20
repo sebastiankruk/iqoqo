@@ -137,7 +137,7 @@ describe("C129 ShareCollectionDialog & SSR cookie forwarding", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/public/share/tok-anon"),
       expect.objectContaining({
-        next: { revalidate: 60 },
+        cache: "no-store",
       })
     );
 

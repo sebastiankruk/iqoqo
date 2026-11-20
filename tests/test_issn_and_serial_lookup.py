@@ -210,6 +210,7 @@ def test_bn_lookup_uses_isbn_issn_param_verifies_marc_022_and_extracts_marc_245(
         ("Cena 9,90 7% vat) RMo12(63) GRUDZIEN 2004 9 771507 596044 12>", "1507-5966", "12", 63, 12, 2004, "12"),
         ("Jak zmieni sie klimat? RMo12(63) GRUDZIEN 2004 ISSN 1507-5966", "1507-5966", "12", 63, 12, 2004, None),
         ("ISSN 1507-5966 INDEKS 323357 07>", "1507-5966", "7", None, None, None, "07"),
+        ("ISSN 0032-3500 42>", "0032-3500", "42", None, None, None, "42"),
     ],
 )
 def test_parse_cover_issue_label_handles_garbled_ocr_and_977_addon(ocr_text, exp_issn, exp_issue, exp_cum, exp_month, exp_year, exp_addon):
@@ -221,3 +222,27 @@ def test_parse_cover_issue_label_handles_garbled_ocr_and_977_addon(ocr_text, exp
     assert parsed.get("publication_month") == exp_month
     assert parsed.get("publication_year") == exp_year
     assert parsed.get("ean_addon") == exp_addon
+
+
+def test_serial_lookup_records_outbound_telemetry(monkeypatch):
+    """Serial lookup fetchers emit record_outbound_telemetry before HTTP calls."""
+    recorded: list[tuple[str, str | None]] = []
+
+    class _FakeResp:
+        status_code = 404
+
+        @staticmethod
+        def json():
+            return {}
+
+    monkeypatch.setattr(
+        "app.strategies.serials.record_outbound_telemetry",
+        lambda service, _headers, url=None: recorded.append((service, url)),
+    )
+    monkeypatch.setattr("app.strategies.serials.safe_get", lambda *_a, **_kw: _FakeResp())
+    monkeypatch.setattr("app.strategies.serials.fetch_allegro_metadata", lambda _q: None)
+
+    SerialLookupStrategy().lookup("1507-5966")
+    assert any(service == "biblioteka_narodowa" for service, _ in recorded)
+    assert any(service == "crossref" for service, _ in recorded)
+    assert any(service == "openlibrary" for service, _ in recorded)

@@ -454,8 +454,9 @@ def get_items():
             has_map=has_map,
         )
 
+        filtered_subq = stmt.order_by(None).subquery()
         total_physical = db.session.execute(
-            select(func.count()).select_from(stmt.order_by(None).subquery())  # pylint: disable=not-callable
+            select(func.count(func.distinct(filtered_subq.c.id)))  # pylint: disable=not-callable
         ).scalar_one()
 
         if sort_by == "title":

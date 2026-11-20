@@ -172,3 +172,45 @@ def test_work_manifestation_and_shelf_rollup_endpoints(client, app):
     assert shelf_unread.status_code == 200
     assert [w["work_id"] for w in shelf_unread.json["data"]] == [w_unread_id]
     assert shelf_unread.json["data"][0]["work_reading_status"] is None
+
+
+def test_compute_work_reading_rollup_deterministic_tiebreak_and_ignores_unmapped(app):
+    """Equal-rank completed statuses tie-break deterministically and unmapped rank-0 values do not leak."""
+    from app.core.frbr_service import compute_work_reading_rollup
+
+    with app.app_context():
+        db.create_all()
+        user = User(email="rollup_tie@example.com")
+        user.set_password("StrongPass123!")
+        db.session.add(user)
+        db.session.flush()
+
+        w_tie = Work(title="Tie Work")
+        w_unmapped = Work(title="Unmapped Work")
+        db.session.add_all([w_tie, w_unmapped])
+        db.session.flush()
+
+        e_tie = Expression(work_id=w_tie.id, content_type="text")
+        e_unmapped = Expression(work_id=w_unmapped.id, content_type="text")
+        db.session.add_all([e_tie, e_unmapped])
+        db.session.flush()
+
+        m_listened = Manifestation(expression_id=e_tie.id, format_type="audiobook")
+        m_read = Manifestation(expression_id=e_tie.id, format_type="book")
+        m_unmapped = Manifestation(expression_id=e_unmapped.id, format_type="book")
+        db.session.add_all([m_listened, m_read, m_unmapped])
+        db.session.flush()
+
+        db.session.add_all(
+            [
+                Item(manifestation_id=m_listened.id, owner_id=user.id, status="listened"),
+                Item(manifestation_id=m_read.id, owner_id=user.id, status="read"),
+                Item(manifestation_id=m_unmapped.id, owner_id=user.id, status="unread"),
+            ]
+        )
+        db.session.commit()
+
+        rollup = compute_work_reading_rollup(user.id, [w_tie.id, w_unmapped.id])
+        assert rollup[w_tie.id]["work_reading_status"] == "read"
+        assert rollup[w_tie.id]["completed_manifestation_ids"] == sorted([m_listened.id, m_read.id])
+        assert rollup.get(w_unmapped.id) is None

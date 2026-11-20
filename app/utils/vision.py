@@ -373,16 +373,18 @@ def _extract_via_ollama(image_bytes: bytes, user_id: str | uuid.UUID | None = No
     return None
 
 
-def _pick_serial_headline(lines: list[str]) -> str | None:
+def _pick_serial_headline(lines: list[str], serial_title: str = "") -> str | None:
     """Pick the cleanest prominent headline from magazine cover OCR lines."""
     noise_re = re.compile(r"^(?:cena|www\.|http|issn|indeks|nr\b|no\.?\b|9\s*77|\d+[\d\s.,/>-]*$)", re.IGNORECASE)
     garbage_re = re.compile(r"[-_=~|]{2,}")
+    normalized_title = " ".join(serial_title.lower().split()) if serial_title else ""
     candidates: list[tuple[int, str]] = []
     for line in lines:
         cleaned = line.strip()
         if len(cleaned) < 5 or noise_re.search(cleaned) or garbage_re.search(cleaned):
             continue
-        if "national geographic" in cleaned.lower():
+        cleaned_lower = " ".join(cleaned.lower().split())
+        if normalized_title and (normalized_title in cleaned_lower or cleaned_lower in normalized_title):
             continue
         words = [w for w in re.findall(r"[A-Za-zÀ-ÿ]+", cleaned) if len(w) >= 3]
         alpha_chars = sum(1 for ch in cleaned if ch.isalpha())
@@ -567,7 +569,7 @@ def _extract_via_tesseract(image_bytes: bytes, user_id: str | uuid.UUID | None =
             if publisher:
                 payload["Publisher"] = publisher
             payload.update(serial_hints)
-            headline = _pick_serial_headline(lines)
+            headline = _pick_serial_headline(lines, serial_title=title)
             if headline and "cover_headline" not in payload:
                 payload["cover_headline"] = headline
             _record_vision_telemetry("tesseract", user_id, time.time() - start_time, status="success")
@@ -645,7 +647,11 @@ def get_llm_vision_status(probe_ollama: bool = False) -> dict[str, Any]:
         except (ImportError, OSError, RuntimeError):
             tesseract_langs = []
 
-    vision_ready = allow_llm and (gemini_configured or (ollama_reachable and vision_model_installed))
+    ollama_explicitly_configured = bool(ConfigService.get("OLLAMA_URL") or os.environ.get("OLLAMA_URL"))
+    ollama_ready = (
+        (ollama_reachable and vision_model_installed) if probe_ollama else (ollama_explicitly_configured and bool(ollama_vision_model))
+    )
+    vision_ready = allow_llm and (gemini_configured or ollama_ready)
     return {
         "allow_llm": allow_llm,
         "gemini": {"configured": gemini_configured, "source": gemini_source},

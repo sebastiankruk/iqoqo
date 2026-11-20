@@ -317,37 +317,24 @@ def is_shared_collection_private_cache(token: str, viewer_id: Any = None) -> boo
     return is_private_cache
 
 
-def fetch_shared_collection_by_token(
+def fetch_shared_collection_with_cache_policy(
     token: str,
     limit: int = 50,
     stream: bool = False,
     offset: int = 0,
     viewer_id: Any = None,
-) -> list[Any] | Any:
-    """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
-
-    Args:
-        token: The share token to look up.
-        limit: Maximum number of items to return.
-        stream: If True, returns an iterator instead of a list for memory-efficient streaming.
-        offset: SQL offset for paginated queries.
-        viewer_id: Optional authenticated caller ID used for Friend Bonus resolution.
-
-    Returns:
-        List of items or iterator if stream=True.
-    """
+) -> tuple[list[Any] | Any, bool]:
+    """Fetch shared collection items and whether the response must use private caching in one pass."""
     resolved_viewer = viewer_id if viewer_id is not None else (getattr(g, "user_id", None) if has_request_context() else None)
     stmt = select(SharedCollection).where(SharedCollection.share_token == token)
     collection = db.session.execute(stmt).scalar_one_or_none()
-    if not collection:
-        return [] if not stream else iter([])
-    if collection.is_expired:
-        return [] if not stream else iter([])
+    if not collection or collection.is_expired:
+        return ([] if not stream else iter([])), False
     user = db.session.get(User, collection.user_id)
     if not user:
-        return [] if not stream else iter([])
+        return ([] if not stream else iter([])), False
 
-    allowed_vis, include_hidden, _ = _resolve_shared_visibilities(collection, viewer_id=resolved_viewer)
+    allowed_vis, include_hidden, is_private_cache = _resolve_shared_visibilities(collection, viewer_id=resolved_viewer)
     query = select(Item).where(Item.owner_id == user.id, _build_shared_visibility_predicate(allowed_vis, include_hidden))
     filters = collection.filters
 
@@ -387,7 +374,7 @@ def fetch_shared_collection_by_token(
                 )
                 item_ids = [r["item_id"] for r in results]
                 if not item_ids:
-                    return [] if not stream else iter([])
+                    return ([] if not stream else iter([])), is_private_cache
                 query = query.where(Item.id.in_(item_ids))
                 pg_search_paginated = True
             else:
@@ -409,14 +396,52 @@ def fetch_shared_collection_by_token(
             )
             .scalars()
             .yield_per(50)
-        )
+        ), is_private_cache
 
-    return list(
-        db.session.execute(query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work)))
-        .scalars()
-        .unique()
-        .all()
+    return (
+        list(
+            db.session.execute(
+                query.options(joinedload(Item.manifestation).joinedload(Manifestation.expression).joinedload(Expression.work))
+            )
+            .scalars()
+            .unique()
+            .all()
+        ),
+        is_private_cache,
     )
+
+
+def fetch_shared_collection_by_token(
+    token: str,
+    limit: int = 50,
+    stream: bool = False,
+    offset: int = 0,
+    viewer_id: Any = None,
+    _cache_policy_out: dict[str, bool] | None = None,
+) -> list[Any] | Any:
+    """Fetch items from a shared collection by token with eager loading across all FRBR tiers.
+
+    Args:
+        token: The share token to look up.
+        limit: Maximum number of items to return.
+        stream: If True, returns an iterator instead of a list for memory-efficient streaming.
+        offset: SQL offset for paginated queries.
+        viewer_id: Optional authenticated caller ID used for Friend Bonus resolution.
+        _cache_policy_out: Optional dict populated with ``{"is_private_cache": bool}`` to avoid a second DB lookup.
+
+    Returns:
+        List of items or iterator if stream=True.
+    """
+    items, is_private_cache = fetch_shared_collection_with_cache_policy(
+        token=token,
+        limit=limit,
+        stream=stream,
+        offset=offset,
+        viewer_id=viewer_id,
+    )
+    if _cache_policy_out is not None:
+        _cache_policy_out["is_private_cache"] = is_private_cache
+    return items
 
 
 @public_bp.route("/feed.xml", methods=["GET"])
@@ -466,8 +491,18 @@ def user_collection_feed(username: str):
 def shared_collection_feed(token: str):
     """Exposes public shared collection feed streams via safe access token lookup."""
     viewer_id = getattr(g, "user_id", None)
-    items = fetch_shared_collection_by_token(token=token, limit=50, viewer_id=viewer_id)
-    is_private_cache = is_shared_collection_private_cache(token, viewer_id=viewer_id)
+    cache_policy_box: dict[str, bool] = {}
+    items = fetch_shared_collection_by_token(
+        token=token,
+        limit=50,
+        viewer_id=viewer_id,
+        _cache_policy_out=cache_policy_box,
+    )
+    is_private_cache = (
+        cache_policy_box["is_private_cache"]
+        if "is_private_cache" in cache_policy_box
+        else is_shared_collection_private_cache(token, viewer_id=viewer_id)
+    )
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     rss_data = generate_rss_xml(
         title="Shared Collection Catalog Feed",
@@ -679,6 +714,7 @@ def get_shared_collection(token: str):
         rdf_mimetype = "application/rdf+xml"
 
     if rdf_format:
+        cache_policy_box: dict[str, bool] = {}
         if page_num is not None and per_page_num is not None:
             items = fetch_shared_collection_by_token(
                 token=token,
@@ -686,11 +722,22 @@ def get_shared_collection(token: str):
                 offset=offset_val,
                 stream=is_stream,
                 viewer_id=viewer_id,
+                _cache_policy_out=cache_policy_box,
             )
         else:
             limit_val = _parse_safe_rdf_limit(default=1000, max_limit=MAX_SHARED_COLLECTION_LIMIT)
-            items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream, viewer_id=viewer_id)
-        is_private_cache = is_shared_collection_private_cache(token, viewer_id=viewer_id)
+            items = fetch_shared_collection_by_token(
+                token=token,
+                limit=limit_val,
+                stream=is_stream,
+                viewer_id=viewer_id,
+                _cache_policy_out=cache_policy_box,
+            )
+        is_private_cache = (
+            cache_policy_box["is_private_cache"]
+            if "is_private_cache" in cache_policy_box
+            else is_shared_collection_private_cache(token, viewer_id=viewer_id)
+        )
         collection_uri = f"{base_url}/share/{token}"
         rdf_headers = _apply_share_cache_headers({"Content-Type": f"{rdf_mimetype}; charset=utf-8"}, is_private_cache)
         if is_stream:
