@@ -927,9 +927,11 @@ def upload_cover(manifestation_id: int) -> tuple[Response, int]:
     os.makedirs(RAW_DIR, exist_ok=True)
     filepath = os.path.join(RAW_DIR, filename)
     file.seek(0)
+    from PIL import Image
+
     try:
         optimize_and_save_image(file.read(), filepath)
-    except (OSError, ValueError):
+    except (OSError, ValueError, Image.DecompressionBombError):
         return jsonify({"error": "Invalid or corrupted image file"}), 400
 
     manifestation.update_meta(cover_status="processing")

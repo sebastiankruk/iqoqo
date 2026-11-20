@@ -439,3 +439,14 @@ def test_admin_settings_atomic_rollback_on_partial_failure(app, client, admin_he
     with app.app_context():
         # FEDERATION_ENABLED must NOT have been changed to true
         assert InstanceSettings.get_value("FEDERATION_ENABLED") == "false"
+
+
+def test_admin_settings_rejects_ssrf_ollama_url(client, admin_headers):
+    """PUT /api/v1/admin/settings rejects link-local/metadata OLLAMA_URL and unsafe schemes."""
+    for bad_url in (
+        "http://169.254.169.254/latest/meta-data",
+        "ftp://ollama.local:11434",
+        "http://user:pass@localhost:11434",
+    ):
+        res = client.put("/api/v1/admin/settings", json={"OLLAMA_URL": bad_url}, headers=admin_headers)
+        assert res.status_code == 400

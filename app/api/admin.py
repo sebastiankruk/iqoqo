@@ -471,6 +471,14 @@ def _put_settings(user: User, data: dict) -> tuple[Response, int] | dict:
             else:
                 return jsonify({"success": False, "error": f"{key} must be a boolean", "code": 400}), 400
 
+        if key == "OLLAMA_URL" and str(value or "").strip():
+            from app.utils.vision import validate_ollama_url
+
+            try:
+                value = validate_ollama_url(str(value))
+            except ValueError as exc:
+                return jsonify({"success": False, "error": str(exc), "code": 400}), 400
+
         to_save[key] = value
 
     saved = {}

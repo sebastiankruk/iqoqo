@@ -769,3 +769,61 @@ def test_shared_collection_token_scope_and_friend_bonus(client, app):
     assert rss_all.status_code == 200
     assert b"Scope Book Private" in rss_all.data
     assert rss_all.headers.get("Cache-Control") == "private, no-store"
+    assert "Authorization" in rss_pub.headers.get("Vary", "")
+    assert "Cookie" in rss_pub.headers.get("Vary", "")
+
+
+def test_shared_collection_includes_friends_only_is_hidden_true_and_sets_vary(client, app):
+    """C136: friends_only items (is_hidden=True) appear on friends_and_public/Friend Bonus, and public cache sets Vary."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.auth import UserFriendship
+
+    with app.app_context():
+        owner = User(email="c136owner@example.com")
+        owner.set_password("StrongPass123!")
+        friend = User(email="c136friend@example.com")
+        friend.set_password("StrongPass123!")
+        db.session.add_all([owner, friend])
+        db.session.flush()
+        db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+        w = Work(title="C136 Hidden Friend Book")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id)
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id)
+        db.session.add(m)
+        db.session.flush()
+
+        it_pub = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_pub.set_visibility("public")
+        it_fr = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_fr.set_visibility("friends_only")
+        assert it_fr.is_hidden is True
+        db.session.add_all([it_pub, it_fr])
+
+        sc_pub = SharedCollection(user_id=owner.id, name="Pub Share", filters={"visibility_scope": "public_only"})
+        sc_fr = SharedCollection(user_id=owner.id, name="Friends Share", filters={"visibility_scope": "friends_and_public"})
+        db.session.add_all([sc_pub, sc_fr])
+        db.session.commit()
+
+        pub_tok = sc_pub.share_token
+        fr_tok = sc_fr.share_token
+        friend_headers = {"Authorization": f"Bearer {generate_internal_jwt(friend)}"}
+
+    anon_pub = client.get(f"/api/public/share/{pub_tok}")
+    assert anon_pub.status_code == 200
+    assert anon_pub.headers.get("Cache-Control") == "public, max-age=300"
+    assert "Authorization" in anon_pub.headers.get("Vary", "")
+    assert "Cookie" in anon_pub.headers.get("Vary", "")
+    assert len(anon_pub.json["data"]["items"]) == 1
+
+    friend_bonus = client.get(f"/api/public/share/{pub_tok}", headers=friend_headers)
+    assert friend_bonus.status_code == 200
+    assert len(friend_bonus.json["data"]["items"]) == 2
+
+    anon_fr = client.get(f"/api/public/share/{fr_tok}")
+    assert anon_fr.status_code == 200
+    assert len(anon_fr.json["data"]["items"]) == 2

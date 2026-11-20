@@ -293,15 +293,25 @@ def _build_shared_visibility_predicate(allowed_vis: tuple[str, ...], include_hid
     """Build SQLAlchemy WHERE predicate enforcing resolved visibility and hidden state."""
     if include_hidden:
         return or_(Item.visibility.in_(allowed_vis), Item.visibility.is_(None))
-    return sa.and_(Item.is_hidden.is_(False), Item.visibility.in_(allowed_vis))
+    non_public_vis = tuple(v for v in allowed_vis if v != "public")
+    if "public" in allowed_vis and non_public_vis:
+        return or_(
+            sa.and_(Item.visibility == "public", Item.is_hidden.is_(False)),
+            Item.visibility.in_(non_public_vis),
+        )
+    if "public" in allowed_vis:
+        return sa.and_(Item.visibility == "public", Item.is_hidden.is_(False))
+    if non_public_vis:
+        return Item.visibility.in_(non_public_vis)
+    return sa.false()
 
 
 def _apply_share_cache_headers(headers: dict[str, str], is_private_cache: bool) -> dict[str, str]:
     """Set Cache-Control and Vary headers protecting private or friend-bonus share responses."""
     updated = dict(headers)
+    updated["Vary"] = "Authorization, Cookie"
     if is_private_cache:
         updated["Cache-Control"] = "private, no-store"
-        updated["Vary"] = "Authorization, Cookie"
     else:
         updated["Cache-Control"] = "public, max-age=300"
     return updated
@@ -382,7 +392,7 @@ def fetch_shared_collection_by_token(
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
-                    include_hidden=include_hidden,
+                    include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
                     visibility=list(allowed_vis),
                 )
                 item_ids = [r["item_id"] for r in results]
@@ -947,9 +957,9 @@ def get_shared_collection(token: str):
             },
         }
     )
+    response.headers["Vary"] = "Authorization, Cookie"
     if is_private_cache:
         response.headers["Cache-Control"] = "private, no-store"
-        response.headers["Vary"] = "Authorization, Cookie"
     else:
         response.headers["Cache-Control"] = "public, max-age=300"
     return response

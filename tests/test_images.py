@@ -171,3 +171,46 @@ def test_validate_upload_file_allows_50mp_smartphone_photo():
     bio.seek(0)
 
     assert validate_upload_file(bio) == "png"
+
+
+def test_upload_cover_catches_decompression_bomb_error(client, app, monkeypatch):
+    """POST /api/manifestations/<id>/cover returns HTTP 400 on DecompressionBombError instead of 500."""
+    from PIL import Image as PILImg
+
+    from app.api.auth import generate_internal_jwt
+    from app.core.permissions import PermissionName
+    from app.db.models import Expression, Manifestation, Permission, Role, User, Work, db
+
+    with app.app_context():
+        db.create_all()
+        user = User(email="bomb_tester@iqoqo.local")
+        perm = Permission(name=PermissionName.UPLOAD_COVER)
+        role = Role(name="bomb_writer")
+        role.permissions.append(perm)
+        user.roles.append(role)
+        db.session.add_all([perm, role, user])
+        db.session.flush()
+        w = Work(title="Bomb Work")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id)
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id)
+        db.session.add(m)
+        db.session.commit()
+        mid = m.id
+        headers = {"Authorization": f"Bearer {generate_internal_jwt(user)}"}
+
+    monkeypatch.setattr("app.api.manifestations.validate_upload_file", lambda _f: "jpg")
+    monkeypatch.setattr(
+        "app.api.manifestations.optimize_and_save_image",
+        lambda *_a, **_kw: (_ for _ in ()).throw(PILImg.DecompressionBombError("Image size exceeds limit")),
+    )
+    res = client.post(
+        f"/api/manifestations/{mid}/cover",
+        data={"cover": (io.BytesIO(b"fake"), "huge.jpg")},
+        content_type="multipart/form-data",
+        headers=headers,
+    )
+    assert res.status_code == 400

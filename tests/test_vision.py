@@ -578,3 +578,28 @@ def test_extract_via_tesseract_records_success_telemetry(mock_open, _mock_ocr, m
     assert mock_record.call_args.args[0] == "tesseract"
     assert mock_record.call_args.kwargs["operation_type"] == "metadata_extraction"
     assert mock_record.call_args.kwargs["status"] == "success"
+
+
+def test_book_scan_skips_serial_ocr_and_heuristics(monkeypatch):
+    """Plain books like '1984' do not trigger 8-pass serial OCR or magazine year extraction."""
+    from app.utils.vision import _parse_json_response, _should_enrich_serial
+
+    monkeypatch.delenv("OLLAMA_URL", raising=False)
+    parsed = _parse_json_response('{"Title": "1984", "Authors": ["George Orwell"], "Year": "1949"}')
+    assert parsed is not None
+    assert "publication_year" not in parsed
+    assert _should_enrich_serial(parsed) is False
+
+
+def test_resolve_ollama_base_url_skips_network_when_probe_disabled(monkeypatch):
+    """_resolve_ollama_base_url(allow_probe=False) must not issue outbound HTTP calls inside Docker."""
+    from app.utils.vision import _resolve_ollama_base_url
+
+    monkeypatch.delenv("OLLAMA_URL", raising=False)
+    monkeypatch.setattr("app.utils.vision.os.path.exists", lambda p: p == "/.dockerenv")
+    called = []
+    monkeypatch.setattr("app.utils.vision.requests.get", lambda *a, **kw: called.append(a))
+
+    url = _resolve_ollama_base_url(allow_probe=False)
+    assert url == "http://host.docker.internal:11434"
+    assert called == []

@@ -50,6 +50,9 @@ class ItemCreateSchema(BaseModel):
     collection_status: str | None = Field(default="available", description="The physical status of the item")
     visibility: str | None = Field(default=None, description="The visibility tier of the item ('public', 'friends_only', 'private')")
     is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
+    cumulative_issue_number: int | None = Field(default=None, ge=1)
+    publication_year: int | None = Field(default=None, ge=1400, le=2100)
+    publication_month: int | None = Field(default=None, ge=1, le=12)
     tags: list[str] | None = Field(default=None, description="List of tags to apply to the item")
     meta: dict[str, Any] | None = Field(default_factory=dict)
     collection_id: int | None = Field(default=None, description="Optional collection folder to add the item into")
@@ -263,6 +266,9 @@ class ItemManualCreateSchema(BaseModel):
     lent_to_name: str | None = Field(default=None, description="The name of the borrower")
     visibility: str | None = Field(default=None, description="The visibility tier of the item ('public', 'friends_only', 'private')")
     is_hidden: bool | None = Field(default=None, description="Whether the item is hidden from public profiles")
+    cumulative_issue_number: int | None = Field(default=None, ge=1)
+    publication_year: int | None = Field(default=None, ge=1400, le=2100)
+    publication_month: int | None = Field(default=None, ge=1, le=12)
 
     @field_validator("lent_to_user_id")
     @classmethod
