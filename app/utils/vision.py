@@ -18,6 +18,7 @@
 
 import base64
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -26,6 +27,7 @@ import shutil
 import time
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -42,6 +44,41 @@ _OCR_MAX_DIMENSION = 2200
 _LLM_MAX_DIMENSION = 2000
 
 
+_SERIAL_CUE_RE = re.compile(r"\b(?:issn|indeks|nr\.?|no\.?|issue|vol\.?|czasopismo|magazine)\b|977\d{4}", re.IGNORECASE)
+
+
+def validate_ollama_url(raw_url: str) -> str:
+    """Validate Admin-supplied OLLAMA_URL against SSRF cloud-metadata endpoints and unsafe schemes."""
+    cleaned = raw_url.strip().rstrip("/")
+    parsed = urlparse(cleaned)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("OLLAMA_URL must use http or https with a valid hostname")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("OLLAMA_URL must not contain embedded credentials")
+
+    host = parsed.hostname.lower()
+    if host in {"metadata.google.internal", "169.254.169.254"}:
+        raise ValueError("OLLAMA_URL must not point to cloud metadata endpoints")
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        if ip_obj.is_link_local or ip_obj.is_unspecified:
+            raise ValueError("OLLAMA_URL must not target link-local or unspecified addresses")
+    except ValueError as exc:
+        if "must not" in str(exc):
+            raise
+    return cleaned
+
+
+def _should_enrich_serial(result: dict[str, Any]) -> bool:
+    """Return True only when extracted LLM metadata shows explicit serial/periodical cues."""
+    if any(result.get(k) for k in ("issn", "indeks", "issue_number", "cumulative_issue_number", "ean_addon")):
+        return True
+    if str(result.get("format") or "").strip().lower() == "magazine":
+        return True
+    probe_text = " ".join(str(result.get(k) or "") for k in ("Title", "Subtitle", "cover_headline", "Genre") if result.get(k))
+    return bool(_SERIAL_CUE_RE.search(probe_text))
+
+
 def _is_llm_enabled() -> bool:
     """Resolve ALLOW_LLM via Config.ALLOW_LLM or ConfigService (DB / env)."""
     if Config.ALLOW_LLM:
@@ -49,13 +86,18 @@ def _is_llm_enabled() -> bool:
     return ConfigService.get_bool("ALLOW_LLM", False)
 
 
-def _resolve_ollama_base_url() -> str:
-    """Return configured Ollama URL, falling back to host.docker.internal inside containers."""
+def _resolve_ollama_base_url(allow_probe: bool = True) -> str:
+    """Return validated Ollama URL, falling back to host.docker.internal inside containers."""
     configured = ConfigService.get("OLLAMA_URL")
     if isinstance(configured, str) and configured.strip():
-        return configured.strip().rstrip("/")
+        try:
+            return validate_ollama_url(configured)
+        except ValueError:
+            logger.warning("Ignoring invalid OLLAMA_URL configuration.")
     default_url = "http://localhost:11434"
     if os.path.exists("/.dockerenv"):
+        if not allow_probe:
+            return "http://host.docker.internal:11434"
         try:
             requests.get(f"{default_url}/api/tags", timeout=1)
             return default_url
@@ -69,21 +111,15 @@ def _normalize_cover_image_bytes(image_bytes: bytes, max_dim: int = _LLM_MAX_DIM
     try:
         from PIL import Image, ImageOps
 
-        prev_max = Image.MAX_IMAGE_PIXELS
-        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
-            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
-        try:
-            with Image.open(io.BytesIO(image_bytes)) as opened:
-                img = ImageOps.exif_transpose(opened)
-                if max(img.size) <= max_dim and img.mode in ("RGB", "L"):
-                    return image_bytes, "image/jpeg"
-                rgb = img.convert("RGB")
-                rgb.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
-                buf = io.BytesIO()
-                rgb.save(buf, format="JPEG", quality=88)
-                return buf.getvalue(), "image/jpeg"
-        finally:
-            Image.MAX_IMAGE_PIXELS = prev_max
+        with Image.open(io.BytesIO(image_bytes)) as opened:
+            img = ImageOps.exif_transpose(opened)
+            if max(img.size) <= max_dim and img.mode in ("RGB", "L"):
+                return image_bytes, "image/jpeg"
+            rgb = img.convert("RGB")
+            rgb.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            rgb.save(buf, format="JPEG", quality=88)
+            return buf.getvalue(), "image/jpeg"
     except (ImportError, OSError, ValueError):
         return image_bytes, "image/jpeg"
 
@@ -269,7 +305,7 @@ def _extract_via_gemini(image_bytes: bytes, mime_type: str, user_id: str | uuid.
         raw = response.text.strip() if response.text else ""
         result = _parse_json_response(raw)
 
-        if result:
+        if result and _should_enrich_serial(result):
             result = _enrich_llm_serial_result(result, image_bytes)
         duration = time.time() - start_time
         if result:
@@ -322,9 +358,9 @@ def _extract_via_ollama(image_bytes: bytes, user_id: str | uuid.UUID | None = No
     model = str(ConfigService.get("OLLAMA_VISION_MODEL") or "llava").strip()
     raw_timeout = ConfigService.get("OLLAMA_VISION_TIMEOUT") or os.environ.get("OLLAMA_VISION_TIMEOUT")
     try:
-        fast_timeout = int(raw_timeout) if raw_timeout not in (None, "") else 25
+        fast_timeout = int(raw_timeout) if raw_timeout not in (None, "") else 60
     except (ValueError, TypeError):
-        fast_timeout = 25
+        fast_timeout = 60
 
     start_time = time.time()
     try:
@@ -344,7 +380,7 @@ def _extract_via_ollama(image_bytes: bytes, user_id: str | uuid.UUID | None = No
         data = response.json()
         raw = data.get("response", "").strip()
         result = _parse_json_response(raw)
-        if result:
+        if result and _should_enrich_serial(result):
             result = _enrich_llm_serial_result(result, image_bytes)
         duration = time.time() - start_time
         _record_vision_telemetry(
@@ -444,13 +480,7 @@ def _enrich_llm_serial_result(result: dict[str, Any], image_bytes: bytes) -> dic
         import pytesseract
         from PIL import Image, ImageOps
 
-        prev_max = Image.MAX_IMAGE_PIXELS
-        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
-            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
-        try:
-            img = Image.open(io.BytesIO(image_bytes))
-        finally:
-            Image.MAX_IMAGE_PIXELS = prev_max
+        img = Image.open(io.BytesIO(image_bytes))
 
         if not (hasattr(img, "size") and isinstance(getattr(img, "size", None), tuple) and len(img.size) == 2):
             return result
@@ -509,13 +539,7 @@ def _extract_via_tesseract(image_bytes: bytes, user_id: str | uuid.UUID | None =
         import pytesseract
         from PIL import Image, ImageOps
 
-        prev_max = Image.MAX_IMAGE_PIXELS
-        if isinstance(prev_max, int) and prev_max < _MAX_COVER_PIXELS:
-            Image.MAX_IMAGE_PIXELS = _MAX_COVER_PIXELS
-        try:
-            img = Image.open(io.BytesIO(image_bytes))
-        finally:
-            Image.MAX_IMAGE_PIXELS = prev_max
+        img = Image.open(io.BytesIO(image_bytes))
 
         is_real_pil_image = hasattr(img, "size") and isinstance(getattr(img, "size", None), tuple) and len(img.size) == 2
         lang: str | None = None
@@ -611,7 +635,7 @@ def get_llm_vision_status(probe_ollama: bool = False) -> dict[str, Any]:
     openai_configured = openai_db or openai_env
     openai_source = "db" if openai_db else ("env" if openai_env else "missing")
 
-    ollama_url = _resolve_ollama_base_url()
+    ollama_url = _resolve_ollama_base_url(allow_probe=probe_ollama)
     ollama_vision_model = str(ConfigService.get("OLLAMA_VISION_MODEL") or "llava").strip()
     ollama_dedupe_model = str(ConfigService.get("OLLAMA_DEDUPE_MODEL") or "llama3:latest").strip()
 
@@ -761,9 +785,10 @@ def _parse_json_response(raw: str) -> dict | None:
         headline_or_title = " ".join(
             str(part) for part in (title, subtitle, data.get("CoverHeadline") or "", data.get("ISSN") or "") if part
         )
-        inferred_hints = parse_cover_issue_label(headline_or_title)
-        for k, v in inferred_hints.items():
-            parsed_payload.setdefault(k, v)
+        if _SERIAL_CUE_RE.search(headline_or_title):
+            inferred_hints = parse_cover_issue_label(headline_or_title)
+            for k, v in inferred_hints.items():
+                parsed_payload.setdefault(k, v)
 
         return parsed_payload
     except (ValueError, KeyError, json.JSONDecodeError) as e:

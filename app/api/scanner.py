@@ -1072,12 +1072,7 @@ def extract_from_cover():
         return jsonify({"success": False, "data": None, "error": "File too large"}), 413
 
     try:
-        prev_max_pixels = Image.MAX_IMAGE_PIXELS
-        Image.MAX_IMAGE_PIXELS = max(prev_max_pixels or 0, _MAX_COVER_PIXELS)
-        try:
-            Image.open(io.BytesIO(image_bytes)).verify()
-        finally:
-            Image.MAX_IMAGE_PIXELS = prev_max_pixels
+        Image.open(io.BytesIO(image_bytes)).verify()
     except (OSError, SyntaxError, Image.DecompressionBombError):
         return jsonify({"success": False, "data": None, "error": "Invalid or corrupted image file"}), 400
 

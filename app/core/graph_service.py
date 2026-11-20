@@ -20,8 +20,9 @@ from __future__ import annotations
 import uuid
 from collections import deque
 from typing import Any
+from urllib.parse import quote_plus
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.friend_service import get_friend_user_ids
@@ -161,7 +162,7 @@ def _contributor_node_dict(contributor: Contributor, *, hop: int) -> dict[str, A
         "subtitle": contributor.type or "person",
         "hop": hop,
         "is_anchor": False,
-        "url": f"/collection?q={contributor.name}" if contributor.name else None,
+        "url": f"/collection?q={quote_plus(contributor.name)}" if contributor.name else None,
     }
 
 
@@ -474,27 +475,39 @@ class GraphService:
                 .scalars()
                 .all()
             )
-            for wp in parts:
-                part_work = db.session.get(Work, wp.part_work_id)
-                if part_work:
-                    p_key = enqueue_neighbor("work", part_work, next_hop)
-                    if p_key:
-                        add_edge(work_key, p_key, "has_part", "parts_expansions", f"has part (#{wp.sequence or 0})")
+            if parts:
+                part_ids = [wp.part_work_id for wp in parts]
+                part_works = {w.id: w for w in db.session.execute(select(Work).where(Work.id.in_(part_ids))).scalars().all()}
+                for wp in parts:
+                    part_work = part_works.get(wp.part_work_id)
+                    if part_work:
+                        p_key = enqueue_neighbor("work", part_work, next_hop)
+                        if p_key:
+                            add_edge(work_key, p_key, "has_part", "parts_expansions", f"has part (#{wp.sequence or 0})")
 
             containers = (
                 db.session.execute(select(WorkPart).where(WorkPart.part_work_id == work.id).order_by(WorkPart.container_work_id.asc()))
                 .scalars()
                 .all()
             )
-            for wp in containers:
-                container_work = db.session.get(Work, wp.container_work_id)
-                if container_work:
-                    c_key = enqueue_neighbor("work", container_work, next_hop)
-                    if c_key:
-                        add_edge(c_key, work_key, "has_part", "parts_expansions", f"has part (#{wp.sequence or 0})")
+            if containers:
+                container_ids = [wp.container_work_id for wp in containers]
+                container_works = {w.id: w for w in db.session.execute(select(Work).where(Work.id.in_(container_ids))).scalars().all()}
+                for wp in containers:
+                    container_work = container_works.get(wp.container_work_id)
+                    if container_work:
+                        c_key = enqueue_neighbor("work", container_work, next_hop)
+                        if c_key:
+                            add_edge(c_key, work_key, "has_part", "parts_expansions", f"has part (#{wp.sequence or 0})")
 
             base_link = (
-                db.session.execute(select(WorkExpansionLink).where(WorkExpansionLink.expansion_work_id == work.id)).scalars().first()
+                db.session.execute(
+                    select(WorkExpansionLink)
+                    .options(selectinload(WorkExpansionLink.base_work))
+                    .where(WorkExpansionLink.expansion_work_id == work.id)
+                )
+                .scalars()
+                .first()
             )
             if base_link and base_link.base_work:
                 b_key = enqueue_neighbor("work", base_link.base_work, next_hop)
@@ -503,7 +516,10 @@ class GraphService:
 
             expansion_links = (
                 db.session.execute(
-                    select(WorkExpansionLink).where(WorkExpansionLink.base_work_id == work.id).order_by(WorkExpansionLink.id.asc())
+                    select(WorkExpansionLink)
+                    .options(selectinload(WorkExpansionLink.expansion_work))
+                    .where(WorkExpansionLink.base_work_id == work.id)
+                    .order_by(WorkExpansionLink.id.asc())
                 )
                 .scalars()
                 .all()
@@ -517,6 +533,7 @@ class GraphService:
             aggregates = (
                 db.session.execute(
                     select(ContainerAggregation)
+                    .options(selectinload(ContainerAggregation.aggregated_work), selectinload(ContainerAggregation.aggregated_item))
                     .where(ContainerAggregation.container_work_id == work.id)
                     .order_by(ContainerAggregation.id.asc())
                 )
@@ -545,12 +562,15 @@ class GraphService:
                 .scalars()
                 .all()
             )
-            for wc in contributions:
-                contrib = db.session.get(Contributor, wc.contributor_id)
-                if contrib:
-                    contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                    if try_add_node(contrib_payload["id"], contrib_payload):
-                        add_edge(work_key, contrib_payload["id"], "contributed_by", "contributors", wc.role)
+            if contributions:
+                contrib_ids = [wc.contributor_id for wc in contributions]
+                contribs = {c.id: c for c in db.session.execute(select(Contributor).where(Contributor.id.in_(contrib_ids))).scalars().all()}
+                for wc in contributions:
+                    contrib = contribs.get(wc.contributor_id)
+                    if contrib:
+                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
+                        if try_add_node(contrib_payload["id"], contrib_payload):
+                            add_edge(work_key, contrib_payload["id"], "contributed_by", "contributors", wc.role)
 
         # 5. Accepted LOD links
         if "lod" in allowed_categories:
@@ -601,12 +621,15 @@ class GraphService:
                 .scalars()
                 .all()
             )
-            for ec in contributions:
-                contrib = db.session.get(Contributor, ec.contributor_id)
-                if contrib:
-                    contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                    if try_add_node(contrib_payload["id"], contrib_payload):
-                        add_edge(expr_key, contrib_payload["id"], "contributed_by", "contributors", ec.role)
+            if contributions:
+                contrib_ids = [ec.contributor_id for ec in contributions]
+                contribs = {c.id: c for c in db.session.execute(select(Contributor).where(Contributor.id.in_(contrib_ids))).scalars().all()}
+                for ec in contributions:
+                    contrib = contribs.get(ec.contributor_id)
+                    if contrib:
+                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
+                        if try_add_node(contrib_payload["id"], contrib_payload):
+                            add_edge(expr_key, contrib_payload["id"], "contributed_by", "contributors", ec.role)
 
         if "lod" in allowed_categories:
             GraphService._add_semantic_links("expression", expr.id, expr_key, next_hop, try_add_node, add_edge)
@@ -630,8 +653,27 @@ class GraphService:
                 if e_key:
                     add_edge(man_key, e_key, "embodies", "frbr", "embodies")
 
+            vis_clauses = [and_(Item.visibility == "public", Item.is_hidden.is_(False))]
+            viewer_uuid: uuid.UUID | None = None
+            if viewer_user_id:
+                try:
+                    viewer_uuid = uuid.UUID(str(viewer_user_id)) if not isinstance(viewer_user_id, uuid.UUID) else viewer_user_id
+                except (ValueError, TypeError):
+                    viewer_uuid = None
+            if viewer_uuid is not None:
+                vis_clauses.append(Item.owner_id == viewer_uuid)
+                if viewer_friend_ids:
+                    vis_clauses.append(and_(Item.owner_id.in_(viewer_friend_ids), Item.visibility.in_(("friends_only", "shared"))))
+
             items = (
-                db.session.execute(select(Item).where(Item.manifestation_id == manifestation.id).order_by(Item.id.asc())).scalars().all()
+                db.session.execute(
+                    select(Item)
+                    .where(Item.manifestation_id == manifestation.id, or_(*vis_clauses))
+                    .order_by(Item.id.asc())
+                    .limit(MAX_GRAPH_NODES)
+                )
+                .scalars()
+                .all()
             )
             for item in items:
                 if is_item_visible_to_viewer(item, viewer_user_id, viewer_friend_ids):
@@ -659,12 +701,15 @@ class GraphService:
                 .scalars()
                 .all()
             )
-            for mc in contributions:
-                contrib = db.session.get(Contributor, mc.contributor_id)
-                if contrib:
-                    contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
-                    if try_add_node(contrib_payload["id"], contrib_payload):
-                        add_edge(man_key, contrib_payload["id"], "contributed_by", "contributors", mc.role)
+            if contributions:
+                contrib_ids = [mc.contributor_id for mc in contributions]
+                contribs = {c.id: c for c in db.session.execute(select(Contributor).where(Contributor.id.in_(contrib_ids))).scalars().all()}
+                for mc in contributions:
+                    contrib = contribs.get(mc.contributor_id)
+                    if contrib:
+                        contrib_payload = _contributor_node_dict(contrib, hop=next_hop)
+                        if try_add_node(contrib_payload["id"], contrib_payload):
+                            add_edge(man_key, contrib_payload["id"], "contributed_by", "contributors", mc.role)
 
         if "lod" in allowed_categories:
             GraphService._add_semantic_links("manifestation", manifestation.id, man_key, next_hop, try_add_node, add_edge)

@@ -20,7 +20,9 @@
  */
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
+
+const _subscribeNoop = () => () => {};
 import { TopBar } from "@/components/scanner/top-bar";
 import { Viewfinder } from "@/components/scanner/viewfinder";
 import { BottomSheet } from "@/components/scanner/bottom-sheet";
@@ -60,26 +62,39 @@ export default function ScanPage() {
   const [result, setResult] = useState<{ isbn: string; meta: IsbnMeta } | null>(null);
   const [candidates, setCandidates] = useState<{ isbn: string; items: IsbnMeta[] } | null>(null);
   const [serialDisambiguation, setSerialDisambiguation] = useState<IsbnMeta | null>(null);
-  const [showManual, setShowManual] = useState(() => {
-    if (typeof window !== "undefined") {
-      return new URLSearchParams(window.location.search).get("manual") === "1";
-    }
-    return false;
-  });
-  const [initialIdentifier, setInitialIdentifier] = useState(() => {
-    if (typeof window !== "undefined") {
-      return new URLSearchParams(window.location.search).get("issn") || "";
-    }
-    return "";
-  });
-  const [title, setTitle] = useState(() => {
-    if (typeof window !== "undefined") {
-      return new URLSearchParams(window.location.search).get("title") || "";
-    }
-    return "";
-  });
+  const clientSearch = useSyncExternalStore(
+    _subscribeNoop,
+    () => (typeof window !== "undefined" ? window.location.search : ""),
+    () => ""
+  );
+  const clientSavedFormat = useSyncExternalStore(
+    _subscribeNoop,
+    () =>
+      typeof window !== "undefined" && window.localStorage
+        ? window.localStorage.getItem("iqoqo_scanner_media_type")
+        : null,
+    () => null
+  );
+  const clientSavedPolicy = useSyncExternalStore(
+    _subscribeNoop,
+    () =>
+      typeof window !== "undefined" && window.localStorage ? window.localStorage.getItem("iqoqo_scanner_policy") : null,
+    () => null
+  );
+
+  const searchParamsSnapshot = new URLSearchParams(clientSearch);
+  const urlManual = searchParamsSnapshot.get("manual") === "1";
+  const urlIssn = searchParamsSnapshot.get("issn") || "";
+  const urlTitle = searchParamsSnapshot.get("title") || "";
+  const urlPublisher = searchParamsSnapshot.get("publisher") || "";
+  const urlFormat = searchParamsSnapshot.get("format");
+  const urlPolicy = searchParamsSnapshot.get("policy");
+
+  const [showManualOverride, setShowManual] = useState<boolean | null>(null);
+  const [initialIdentifierOverride, setInitialIdentifier] = useState<string | null>(null);
+  const [titleOverride, setTitle] = useState<string | null>(null);
   const [author, setAuthor] = useState("");
-  const [serialDefaults, setSerialDefaults] = useState<{
+  const [serialDefaultsOverride, setSerialDefaults] = useState<{
     publisher?: string;
     year?: string;
     issn?: string;
@@ -88,73 +103,55 @@ export default function ScanPage() {
     publicationMonth?: string;
     eanAddon?: string;
     coverHeadline?: string;
-  }>(() => {
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search);
-      return {
-        publisher: sp.get("publisher") || "",
-        issn: sp.get("issn") || "",
-      };
-    }
-    return {};
-  });
+  } | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [scannerTab, setScannerTab] = useState<"barcode" | "cover">("barcode");
-  const [activeFormat, setActiveFormat] = useState<ScanFormat>(() => {
-    if (typeof window !== "undefined") {
-      const urlFormat = new URLSearchParams(window.location.search).get("format");
-      if (urlFormat) return urlFormat as ScanFormat;
-      if (window.localStorage) {
-        const savedFormat = window.localStorage.getItem("iqoqo_scanner_media_type");
-        if (savedFormat) return savedFormat as ScanFormat;
-      }
-    }
-    return "book";
-  });
-  const [policy, setPolicy] = useState<"inventory" | "wishlist" | "catalog">(
-    (): "inventory" | "wishlist" | "catalog" => {
-      if (typeof window !== "undefined") {
-        const urlPolicy = new URLSearchParams(window.location.search).get("policy");
-        if (urlPolicy === "inventory" || urlPolicy === "wishlist" || urlPolicy === "catalog") {
-          return urlPolicy;
-        }
-        if (window.localStorage) {
-          const savedPolicy = window.localStorage.getItem("iqoqo_scanner_policy");
-          if (savedPolicy === "inventory" || savedPolicy === "wishlist" || savedPolicy === "catalog") {
-            return savedPolicy;
-          }
-        }
-      }
-      return "inventory";
-    }
-  );
+  const [activeFormatOverride, setActiveFormat] = useState<ScanFormat | null>(null);
+  const [policyOverride, setPolicy] = useState<"inventory" | "wishlist" | "catalog" | null>(null);
   const [snappedCover, setSnappedCover] = useState<File | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [autoStart, setAutoStart] = useState(() => {
+  const [autoStart, setAutoStart] = useState(false);
+
+  const showManual = showManualOverride ?? urlManual;
+  const initialIdentifier = initialIdentifierOverride ?? urlIssn;
+  const title = titleOverride ?? urlTitle;
+  const serialDefaults =
+    serialDefaultsOverride ?? (urlPublisher || urlIssn ? { publisher: urlPublisher, issn: urlIssn } : {});
+  const activeFormat: ScanFormat = activeFormatOverride ?? ((urlFormat || clientSavedFormat || "book") as ScanFormat);
+  const policy: "inventory" | "wishlist" | "catalog" =
+    policyOverride ??
+    (urlPolicy === "inventory" || urlPolicy === "wishlist" || urlPolicy === "catalog"
+      ? urlPolicy
+      : clientSavedPolicy === "inventory" || clientSavedPolicy === "wishlist" || clientSavedPolicy === "catalog"
+        ? clientSavedPolicy
+        : "inventory");
+
+  useEffect(() => {
     if (typeof window !== "undefined" && window.sessionStorage) {
       if (window.sessionStorage.getItem("iqoqo_auto_start_camera") === "true") {
         window.sessionStorage.removeItem("iqoqo_auto_start_camera");
-        return true;
+        queueMicrotask(() => setAutoStart(true));
       }
     }
-    return false;
-  });
+  }, []);
 
   const inFlightBarcodesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (activeFormatOverride === null) return;
     if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.setItem("iqoqo_scanner_media_type", activeFormat);
+      window.localStorage.setItem("iqoqo_scanner_media_type", activeFormatOverride);
     }
-  }, [activeFormat]);
+  }, [activeFormatOverride]);
 
   useEffect(() => {
+    if (policyOverride === null) return;
     if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.setItem("iqoqo_scanner_policy", policy);
+      window.localStorage.setItem("iqoqo_scanner_policy", policyOverride);
     }
-  }, [policy]);
+  }, [policyOverride]);
 
   const addManualMutation = useAddManualItem();
   const router = useRouter();
@@ -371,18 +368,21 @@ export default function ScanPage() {
         if (data.issn || data.indeks || data.ean_addon || data.issue_number || data.cumulative_issue_number != null) {
           setActiveFormat("magazine");
         }
-        setSerialDefaults(prev => ({
-          ...prev,
-          publisher: data.Publisher || prev.publisher,
-          issn: data.issn || prev.issn,
-          issueNumber: data.issue_number || prev.issueNumber,
-          cumulativeIssueNumber:
-            data.cumulative_issue_number != null ? String(data.cumulative_issue_number) : prev.cumulativeIssueNumber,
-          publicationMonth: data.publication_month != null ? String(data.publication_month) : prev.publicationMonth,
-          year: data.publication_year != null ? String(data.publication_year) : prev.year,
-          eanAddon: data.ean_addon || prev.eanAddon,
-          coverHeadline: data.cover_headline || prev.coverHeadline,
-        }));
+        setSerialDefaults(prev => {
+          const base = prev ?? {};
+          return {
+            ...base,
+            publisher: data.Publisher || base.publisher,
+            issn: data.issn || base.issn,
+            issueNumber: data.issue_number || base.issueNumber,
+            cumulativeIssueNumber:
+              data.cumulative_issue_number != null ? String(data.cumulative_issue_number) : base.cumulativeIssueNumber,
+            publicationMonth: data.publication_month != null ? String(data.publication_month) : base.publicationMonth,
+            year: data.publication_year != null ? String(data.publication_year) : base.year,
+            eanAddon: data.ean_addon || base.eanAddon,
+            coverHeadline: data.cover_headline || base.coverHeadline,
+          };
+        });
       }
       if (file) setSnappedCover(file);
       setInitialIdentifier("");

@@ -556,7 +556,11 @@ class SearchService:
             )
 
         if not filters.include_hidden:
-            extra_filters_sql += " AND i.is_hidden = FALSE"
+            extra_filters_sql += (
+                " AND (i.is_hidden = FALSE OR (i.owner_id = :user_id AND i.visibility IN ('friends_only', 'shared', 'private')))"
+            )
+        elif filters.scope != "friends":
+            extra_filters_sql += " AND (i.owner_id = :user_id OR i.visibility != 'private')"
 
         if filters.visibility:
             allowed_vis = (
@@ -710,7 +714,14 @@ class SearchService:
         query = query.filter(Item.id.in_(matching_items_sub))
 
         if not filters.include_hidden:
-            query = query.filter(Item.is_hidden.is_(False))
+            query = query.filter(
+                db.or_(
+                    Item.is_hidden.is_(False),
+                    db.and_(Item.owner_id == user_id, Item.visibility.in_(["friends_only", "shared", "private"])),
+                )
+            )
+        elif scope != "friends":
+            query = query.filter(db.or_(Item.owner_id == user_id, Item.visibility != "private"))
 
         if visibility:
             allowed_vis = [v for v in visibility if v in ("public", "friends_only", "shared")] if scope == "friends" else list(visibility)
