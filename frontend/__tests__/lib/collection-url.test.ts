@@ -94,6 +94,8 @@ describe("buildCollectionUrl", () => {
       ["ownership", "ownership"],
       ["category", "category"],
       ["format", "format"],
+      ["visibility", "visibility"],
+      ["has_map", "has_map"],
       ["lod_authority", "lod_authority"],
       ["lod_status", "lod_status"],
     ];

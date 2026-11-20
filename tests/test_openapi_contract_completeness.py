@@ -312,3 +312,15 @@ def test_v103_reading_sessions_and_share_pagination_documented(app):
 
     expr_enum = spec["components"]["schemas"]["Expression"]["properties"]["content_type"]["enum"]
     assert "cartographic_map" in expr_enum
+
+
+def test_v110_endpoints_present_in_openapi_spec(app):
+    """Verify v1.1.0 endpoints (bulk-visibility, catalog/graph, works/shelf, sharing) appear in OpenAPI 3.1."""
+    with app.app_context():
+        spec = assemble_complete_openapi_spec()
+
+    paths = spec.get("paths", {})
+    assert "patch" in paths.get("/api/items/bulk-visibility", {})
+    assert "get" in paths.get("/api/catalog/graph", {})
+    assert "get" in paths.get("/api/works/shelf", {})
+    assert "post" in paths.get("/api/sharing", {}) or "post" in paths.get("/api/sharing/", {})
