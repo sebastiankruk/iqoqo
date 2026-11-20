@@ -121,10 +121,15 @@ python scripts/llm_usage_report.py --docker preview --hours 24
   "success": true,
   "data": {
     "Title": "National Geographic Polska",
-    "ISSN": "1507-5966",
-    "IssueNumber": "12",
-    "PublicationYear": "2025",
-    "PublicationMonth": "12"
+    "Authors": [],
+    "Publisher": "Burda Media Polska",
+    "issn": "1507-5966",
+    "indeks": "323357",
+    "issue_number": "12",
+    "volume": "26",
+    "publication_year": 2025,
+    "publication_month": 12,
+    "cover_headline": "Sekrety oceanów"
   },
   "error": null
 }

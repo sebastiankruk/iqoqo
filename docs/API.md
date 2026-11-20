@@ -637,10 +637,10 @@ Create a tokenized filtered collection view with configurable `visibility_scope`
 
 ## Scanner Periodicals & Cover Vision OCR Endpoints
 
-### `GET /api/scanner/preview/<barcode>` & `POST /api/vision/extract`
+### `GET /api/scanner/preview/<barcode>`, `GET /api/lookup/<barcode>` & `POST /api/vision/extract`
 
-- **`GET /api/scanner/preview/<barcode>`:** Resolves books, audio, video, games, puzzles, LEGO sets (`570201...` / set IDs), and **Serials/Periodicals** (`977` GS1 13/15/18-digit barcodes with EAN-2/EAN-5 issue add-ons or Modulo-11 `XXXX-XXXX` ISSN) via Biblioteka Narodowa, Crossref, OpenLibrary, and Allegro. Returns existing issues for disambiguation when a bare 13-digit `977` prefix matches a cataloged periodical.
-- **`POST /api/vision/extract` (`202 Accepted`) & `GET /api/vision/extract/<task_id>`:** Enqueues cover photo extraction through the 3-tier waterfall (**Gemini 2.0 Flash** -> **Ollama Vision** -> **Offline Multi-Zone Tesseract `eng+pol` Magazine OCR**) protected by a `100_000_000`-pixel Pillow decompression bomb guard, returning extracted book and serial issue fields (`ISSN`, `Indeks`, `IssueNumber`, `Volume`, `PublicationYear`, `PublicationMonth`, `CoverHeadline`).
+- **`GET /api/scanner/preview/<barcode>` & `GET /api/lookup/<barcode>`:** Resolve books, audio, video, games, puzzles, LEGO sets (`570201...` / set IDs), and **Serials/Periodicals** (`977` GS1 13/15/18-digit barcodes with EAN-2/EAN-5 issue add-ons or Modulo-11 `XXXX-XXXX` ISSN) via Biblioteka Narodowa, Crossref, OpenLibrary, and Allegro. Returns existing issues for disambiguation when a bare 13-digit `977` prefix matches a cataloged periodical.
+- **`POST /api/vision/extract` (`202 Accepted`) & `GET /api/vision/extract/<task_id>`:** Enqueues cover photo extraction through the 3-tier waterfall (**Gemini 2.0 Flash** -> **Ollama Vision** -> **Offline Multi-Zone Tesseract `eng+pol` Magazine OCR**) protected by a `100_000_000`-pixel Pillow decompression bomb guard, returning extracted book fields (`Title`, `Authors`, `Publisher`, `Year`, `ISBN`) and snake_case serial issue fields (`issn`, `indeks`, `issue_number`, `cumulative_issue_number`, `volume`, `publication_year`, `publication_month`, `cover_headline`).
 
 ---
 

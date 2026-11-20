@@ -556,11 +556,9 @@ class SearchService:
             )
 
         if not filters.include_hidden:
-            extra_filters_sql += (
-                " AND (i.is_hidden = FALSE OR (i.owner_id = :user_id AND i.visibility IN ('friends_only', 'shared', 'private')))"
-            )
+            extra_filters_sql += " AND i.is_hidden = FALSE"
         elif filters.scope != "friends":
-            extra_filters_sql += " AND (i.owner_id = :user_id OR i.visibility != 'private')"
+            extra_filters_sql += " AND (i.owner_id = :user_id OR i.lent_to_user_id = :user_id OR i.visibility != 'private')"
 
         if filters.visibility:
             allowed_vis = (
@@ -569,8 +567,17 @@ class SearchService:
                 else list(filters.visibility)
             )
             if allowed_vis:
-                params["visibility_filter"] = tuple(allowed_vis)
-                extra_filters_sql += " AND i.visibility IN :visibility_filter"
+                non_public_vis = [v for v in allowed_vis if v != "public"]
+                if filters.include_hidden and "public" in allowed_vis and non_public_vis:
+                    params["non_public_visibility_filter"] = tuple(non_public_vis)
+                    extra_filters_sql += (
+                        " AND ((i.visibility = 'public' AND i.is_hidden = FALSE)" " OR i.visibility IN :non_public_visibility_filter)"
+                    )
+                elif filters.include_hidden and allowed_vis == ["public"]:
+                    extra_filters_sql += " AND i.visibility = 'public' AND i.is_hidden = FALSE"
+                else:
+                    params["visibility_filter"] = tuple(allowed_vis)
+                    extra_filters_sql += " AND i.visibility IN :visibility_filter"
             else:
                 extra_filters_sql += " AND 1=0"
 
@@ -616,6 +623,9 @@ class SearchService:
         if filters.visibility and "visibility_filter" in params:
             count_stmt = count_stmt.bindparams(bindparam("visibility_filter", expanding=True))
             rows_stmt = rows_stmt.bindparams(bindparam("visibility_filter", expanding=True))
+        if filters.visibility and "non_public_visibility_filter" in params:
+            count_stmt = count_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
+            rows_stmt = rows_stmt.bindparams(bindparam("non_public_visibility_filter", expanding=True))
 
         total = int(db.session.execute(count_stmt, params).scalar() or 0)
         results = db.session.execute(rows_stmt, params).mappings().all()
@@ -714,19 +724,25 @@ class SearchService:
         query = query.filter(Item.id.in_(matching_items_sub))
 
         if not filters.include_hidden:
-            query = query.filter(
-                db.or_(
-                    Item.is_hidden.is_(False),
-                    db.and_(Item.owner_id == user_id, Item.visibility.in_(["friends_only", "shared", "private"])),
-                )
-            )
+            query = query.filter(Item.is_hidden.is_(False))
         elif scope != "friends":
-            query = query.filter(db.or_(Item.owner_id == user_id, Item.visibility != "private"))
+            query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id, Item.visibility != "private"))
 
         if visibility:
             allowed_vis = [v for v in visibility if v in ("public", "friends_only", "shared")] if scope == "friends" else list(visibility)
             if allowed_vis:
-                query = query.filter(Item.visibility.in_(allowed_vis))
+                non_public_vis = [v for v in allowed_vis if v != "public"]
+                if filters.include_hidden and "public" in allowed_vis and non_public_vis:
+                    query = query.filter(
+                        db.or_(
+                            db.and_(Item.visibility == "public", Item.is_hidden.is_(False)),
+                            Item.visibility.in_(non_public_vis),
+                        )
+                    )
+                elif filters.include_hidden and allowed_vis == ["public"]:
+                    query = query.filter(Item.visibility == "public", Item.is_hidden.is_(False))
+                else:
+                    query = query.filter(Item.visibility.in_(allowed_vis))
             else:
                 query = query.filter(db.false())
 

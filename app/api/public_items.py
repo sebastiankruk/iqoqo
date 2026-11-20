@@ -823,7 +823,7 @@ def get_shared_collection(token: str):
                     statuses=statuses_list,
                     category=tags_list,
                     owner_only=True,
-                    include_hidden=include_hidden,
+                    include_hidden=include_hidden or any(v != "public" for v in allowed_vis),
                     visibility=list(allowed_vis),
                 )
                 item_ids = [r["item_id"] for r in results]

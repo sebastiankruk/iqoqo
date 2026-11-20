@@ -602,6 +602,7 @@ class GraphService:
                         Manifestation.publication_month.asc().nullslast(),
                         Manifestation.id.asc(),
                     )
+                    .limit(MAX_GRAPH_NODES)
                 )
                 .scalars()
                 .all()
@@ -743,9 +744,12 @@ class GraphService:
                 .scalars()
                 .all()
             )
-            for agg in reverse_aggs:
-                container = db.session.get(Work, agg.container_work_id)
-                if container:
-                    c_key = enqueue_neighbor("work", container, next_hop)
-                    if c_key:
-                        add_edge(c_key, item_key, "has_part", "parts_expansions", agg.component_name)
+            if reverse_aggs:
+                container_ids = [agg.container_work_id for agg in reverse_aggs]
+                containers = {w.id: w for w in db.session.execute(select(Work).where(Work.id.in_(container_ids))).scalars().all()}
+                for agg in reverse_aggs:
+                    container = containers.get(agg.container_work_id)
+                    if container:
+                        c_key = enqueue_neighbor("work", container, next_hop)
+                        if c_key:
+                            add_edge(c_key, item_key, "has_part", "parts_expansions", agg.component_name)
