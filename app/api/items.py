@@ -1747,8 +1747,9 @@ def add_item_manual() -> Response | tuple[Response, int]:
                 if year_part.isdigit():
                     serial_meta["publication_year"] = int(year_part)
             try:
-                manifestation = IngestService.ingest_serial_from_meta(serial_meta)
+                manifestation = IngestService.ingest_serial_from_meta(serial_meta, commit=False)
             except ValueError as exc:
+                db.session.rollback()
                 return jsonify({"error": str(exc), "code": 400}), 400
         else:
             if isbn:
@@ -1789,6 +1790,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         if payload.collection_status == "lent":
             lent_to_name = payload.lent_to_name
             if not payload.lent_to_user_id and not (lent_to_name and lent_to_name.strip()):
+                db.session.rollback()
                 return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
         visibility, is_hidden = _resolve_item_visibility_and_hidden(
@@ -2061,19 +2063,29 @@ def bulk_update_item_visibility() -> Response | tuple[Response, int]:
         return jsonify({"success": False, "data": None, "error": "Invalid payload", "details": str(exc)}), 400
 
     unique_ids = list(dict.fromkeys(payload.item_ids))
-    items = db.session.execute(select(Item).where(Item.id.in_(unique_ids))).scalars().all()
+    items = db.session.execute(select(Item).where(Item.id.in_(unique_ids), Item.owner_id == user_id)).scalars().all()
     if len(items) != len(unique_ids):
         return jsonify({"success": False, "data": None, "error": "One or more items not found"}), 404
 
-    if any(str(item.owner_id) != str(user_id) for item in items):
-        return jsonify({"success": False, "data": None, "error": "Forbidden: you do not own all selected items"}), 403
-
+    previous_states = {item.id: (item.visibility, item.is_hidden) for item in items}
     for item in items:
         item.set_visibility(payload.visibility)
 
     db.session.commit()
     invalidate_facets_cache(user_id)
+
+    user_obj = db.session.get(User, user_id)
     for item in items:
+        old_vis, old_hidden = previous_states[item.id]
+        if old_vis != payload.visibility or old_hidden != item.is_hidden:
+            enqueue_fts_reindex("item", item.id)
+            if user_obj:
+                try:
+                    from app.core.federation_dispatch import dispatch_collection_update
+
+                    dispatch_collection_update(user_obj, item, action="Update" if not item.is_hidden else "Delete")
+                except (RuntimeError, ValueError, OSError) as fed_exc:
+                    current_app.logger.warning("Federation collection visibility dispatch failed: %s", fed_exc)
         publish_transition_event(
             "item_visibility_updated",
             {

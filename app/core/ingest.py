@@ -771,7 +771,7 @@ class IngestService:
         return manifestation
 
     @staticmethod
-    def ingest_serial_from_meta(meta: dict) -> Manifestation:
+    def ingest_serial_from_meta(meta: dict, *, commit: bool = True) -> Manifestation:
         """Persist or match an individual periodical issue Manifestation under an F18 Serial Work.
 
         Unlike books/albums, GS1 977 EAN-13 barcodes repeat across issues within a year/price variant,
@@ -997,7 +997,10 @@ class IngestService:
             raw_payload=meta.get("raw_payload") or meta,
         )
         db.session.add(manifestation)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return manifestation
 
     @staticmethod

@@ -228,3 +228,23 @@ def test_catalog_graph_clamping_filtering_and_validation(app, client):
     assert client.get(f"/api/catalog/graph?entity_type=work&entity_id={work_id}&edge_types=bogus").status_code == 400
     assert client.get("/api/catalog/graph?entity_type=work&entity_id=0").status_code == 400
     assert client.get("/api/catalog/graph?entity_type=work&entity_id=999999").status_code == 404
+
+
+def test_catalog_graph_encodes_contributor_urls(client, app):
+    """Contributor node URLs encode '&' and '+' so /collection?q=... stays intact."""
+    with app.app_context():
+        w = Work(title="Encoded Contributor Work")
+        db.session.add(w)
+        db.session.flush()
+        c = Contributor(name="Simon & Schuster + Co", type="organization")
+        db.session.add(c)
+        db.session.flush()
+        db.session.add(WorkContribution(work_id=w.id, contributor_id=c.id, role="publisher", sequence=0))
+        db.session.commit()
+        wid = w.id
+
+    res = client.get(f"/api/catalog/graph?entity_type=work&entity_id={wid}&depth=1&edge_types=contributors")
+    assert res.status_code == 200
+    contrib_nodes = [n for n in res.get_json()["data"]["nodes"] if n["entity_type"] == "contributor"]
+    assert len(contrib_nodes) == 1
+    assert contrib_nodes[0]["url"] == "/collection?q=Simon+%26+Schuster+%2B+Co"

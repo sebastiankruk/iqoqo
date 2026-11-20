@@ -251,13 +251,13 @@ def test_bulk_update_item_visibility_and_ownership_guards(client, app, test_user
         assert db.session.get(Item, owned_ids[0]).visibility == "friends_only"
         assert db.session.get(Item, owned_ids[1]).is_hidden is True
 
-    # Rejects mixed batch with unowned item atomically (403)
+    # Rejects mixed batch with unowned item atomically with uniform 404 (prevents existence oracle)
     res_forbid = client.patch(
         "/api/items/bulk-visibility",
         json={"item_ids": [owned_ids[0], other_id], "visibility": "private"},
         headers=auth_headers,
     )
-    assert res_forbid.status_code == 403
+    assert res_forbid.status_code == 404
     with app.app_context():
         assert db.session.get(Item, owned_ids[0]).visibility == "friends_only"
         assert db.session.get(Item, other_id).visibility == "public"
@@ -279,3 +279,59 @@ def test_bulk_update_item_visibility_and_ownership_guards(client, app, test_user
         ).status_code
         == 400
     )
+
+
+def test_bulk_visibility_dispatches_fts_and_include_public_pins_non_owned(client, app, test_user, auth_headers, monkeypatch):
+    """Bulk visibility triggers FTS reindex on visibility flip and include_public never leaks foreign private items."""
+    from sqlalchemy import select
+
+    from app.core.permissions import PermissionName
+    from app.db.models import Permission, Role
+
+    fts_calls: list[tuple[str, int]] = []
+    monkeypatch.setattr("app.api.items.enqueue_fts_reindex", lambda etype, eid: fts_calls.append((etype, eid)))
+
+    with app.app_context():
+        user = db.session.get(User, test_user)
+        write_perm = db.session.execute(select(Permission).where(Permission.name == PermissionName.WRITE_ITEM)).scalars().first()
+        if not write_perm:
+            write_perm = Permission(name=PermissionName.WRITE_ITEM)
+            db.session.add(write_perm)
+        role = Role(name="bulk_fts_writer")
+        role.permissions.append(write_perm)
+        db.session.add(role)
+        user.roles.append(role)
+
+        other = User(email="otherpin@iqoqo.local")
+        db.session.add(other)
+        db.session.flush()
+        work = Work(title="Pin Test Book")
+        db.session.add(work)
+        db.session.flush()
+        expr = Expression(work_id=work.id)
+        db.session.add(expr)
+        db.session.flush()
+        mani = Manifestation(expression_id=expr.id, isbn13="9780000000099")
+        db.session.add(mani)
+        db.session.flush()
+        own = Item(owner_id=test_user, manifestation_id=mani.id)
+        own.set_visibility("public")
+        foreign_priv = Item(owner_id=other.id, manifestation_id=mani.id)
+        foreign_priv.set_visibility("private")
+        db.session.add_all([own, foreign_priv])
+        db.session.commit()
+        own_id = own.id
+        foreign_id = foreign_priv.id
+
+    res_flip = client.patch(
+        "/api/items/bulk-visibility",
+        json={"item_ids": [own_id], "visibility": "private"},
+        headers=auth_headers,
+    )
+    assert res_flip.status_code == 200
+    assert ("item", own_id) in fts_calls
+
+    res_list = client.get("/api/items?include_public=true&visibility=friends_only,private", headers=auth_headers)
+    assert res_list.status_code == 200
+    returned_ids = {row["id"] for row in res_list.get_json()["data"]}
+    assert foreign_id not in returned_ids

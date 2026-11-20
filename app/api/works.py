@@ -24,6 +24,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission
 from app.api.filters import apply_genre_filter, apply_statuses_filter, parse_csv_param
+from app.core.limiter import limiter
 from app.core.permissions import PermissionName
 from app.db.models import Expression, Item, Manifestation, UserWorkIntent, Work, WorkPart, WorkSeriesMembership, db
 
@@ -945,6 +946,7 @@ def get_expression_detail(expression_id: int) -> tuple[Response, int]:
 
 
 @api_bp.route("/catalog/graph", methods=["GET"])
+@limiter.limit("60 per minute")
 @optional_auth
 def get_catalog_graph() -> tuple[Response, int]:
     """Return a bounded, visibility-safe neighborhood graph around a FRBR entity."""

@@ -267,3 +267,36 @@ def test_manual_serial_save_preserves_edition_fields_and_strips_unknown_and_item
     assert item_match["publication_year"] == 2003
     assert item_match["publication_month"] == 11
     assert item_match["publisher"] == "G+J RBA"
+
+
+def test_manual_serial_rejects_invalid_month_and_rolls_back_on_item_failure(client, app, normal_user_headers):
+    """Manual serial creation rejects out-of-range publication_month (400) and rolls back Work/Manifestation if Item fails."""
+    res_bad = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "Bad Month Magazine",
+            "Format": "magazine",
+            "issn": "1507-5966",
+            "publication_month": 99,
+        },
+        headers=normal_user_headers,
+    )
+    assert res_bad.status_code == 400
+
+    # collection_status="lent" without borrower fails after ingest_serial_from_meta(..., commit=False)
+    res_fail = client.post(
+        "/api/items/manual",
+        json={
+            "Title": "Rollback Serial Work",
+            "Format": "magazine",
+            "issn": "0032-3500",
+            "issue_number": "42",
+            "publication_year": 2025,
+            "collection_status": "lent",
+        },
+        headers=normal_user_headers,
+    )
+    assert res_fail.status_code == 400
+
+    with app.app_context():
+        assert db.session.query(Work).filter_by(title="Rollback Serial Work").first() is None
