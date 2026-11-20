@@ -567,6 +567,15 @@ function CollectionContent() {
     setSelectedItemIds(new Set());
   }, []);
 
+  const selectionContextKey = `${currentScope}|${viewMode}|${appliedQuery}|${JSON.stringify(activeFilters)}`;
+  const [lastSelectionContextKey, setLastSelectionContextKey] = useState(selectionContextKey);
+  if (selectionContextKey !== lastSelectionContextKey) {
+    setLastSelectionContextKey(selectionContextKey);
+    if (selectedItemIds.size > 0) {
+      setSelectedItemIds(new Set());
+    }
+  }
+
   /** Toggles selection of a single owned physical item in My Items view. */
   const toggleItemSelection = useCallback(
     (id: number) => {

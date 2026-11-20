@@ -3144,21 +3144,35 @@ def _emit_serial_rdf_triples(
         g.add((m_uri, SCHEMA.issueNumber, Literal(str(issue_number))))
         g.add((m_uri, IQOQO.issueNumber, Literal(str(issue_number))))
     if cum_issue is not None:
-        g.add((m_uri, IQOQO.cumulativeIssueNumber, Literal(int(cum_issue), datatype=XSD.integer)))
+        cum_issue_int = _safe_optional_int(cum_issue)
+        if cum_issue_int is not None:
+            g.add((m_uri, IQOQO.cumulativeIssueNumber, Literal(cum_issue_int, datatype=XSD.integer)))
     if volume:
         g.add((m_uri, SCHEMA.volumeNumber, Literal(str(volume))))
         g.add((m_uri, IQOQO.volume, Literal(str(volume))))
-    if pub_year is not None:
-        g.add((m_uri, IQOQO.publicationYear, Literal(int(pub_year), datatype=XSD.integer)))
+    pub_year_int = _safe_optional_int(pub_year)
+    pub_month_int = _safe_optional_int(pub_month)
+    if pub_year_int is not None:
+        g.add((m_uri, IQOQO.publicationYear, Literal(pub_year_int, datatype=XSD.integer)))
         if (m_uri, SCHEMA.datePublished, None) not in g:
-            date_str = f"{int(pub_year):04d}-{int(pub_month):02d}" if pub_month is not None else f"{int(pub_year):04d}"
+            date_str = f"{pub_year_int:04d}-{pub_month_int:02d}" if pub_month_int is not None else f"{pub_year_int:04d}"
             g.add((m_uri, SCHEMA.datePublished, Literal(date_str)))
-    if pub_month is not None:
-        g.add((m_uri, IQOQO.publicationMonth, Literal(int(pub_month), datatype=XSD.integer)))
+    if pub_month_int is not None:
+        g.add((m_uri, IQOQO.publicationMonth, Literal(pub_month_int, datatype=XSD.integer)))
     if ean_addon:
         g.add((m_uri, IQOQO.eanAddon, Literal(str(ean_addon))))
     if full_barcode:
         g.add((m_uri, IQOQO.fullBarcode, Literal(str(full_barcode))))
+
+
+def _safe_optional_int(value: Any) -> int | None:
+    """Parse an integer metadata field safely, returning None on malformed legacy strings."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def build_collection_rdf_graph(
@@ -3530,6 +3544,7 @@ def build_collection_rdf_graph(
                 "issue_number",
                 "cumulative_issue_number",
                 "volume",
+                "publication_year",
                 "publication_month",
                 "ean_addon",
                 "full_barcode",
@@ -3980,6 +3995,11 @@ _ROLLUP_STATUS_PRIORITY: dict[str, int] = {
     **dict.fromkeys(DNF_ROLLUP_STATUSES, 1),
 }
 
+_ROLLUP_TIE_BREAK_ORDER: dict[str, int] = {
+    status: idx
+    for idx, status in enumerate((*COMPLETED_ROLLUP_STATUSES, *IN_PROGRESS_ROLLUP_STATUSES, *INTENT_ROLLUP_STATUSES, *DNF_ROLLUP_STATUSES))
+}
+
 
 def compute_work_reading_rollup(user_id: Any, work_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """Compute user-scoped consumption rollup per Work in a single batched GROUP BY query.
@@ -4014,6 +4034,7 @@ def compute_work_reading_rollup(user_id: Any, work_ids: Iterable[int]) -> dict[i
             Item.status.isnot(None),
         )
         .group_by(Expression.work_id, Item.status, Manifestation.id)
+        .order_by(Expression.work_id.asc(), Item.status.asc(), Manifestation.id.asc())
     )
     rows = db.session.execute(stmt).all()
 
@@ -4023,18 +4044,21 @@ def compute_work_reading_rollup(user_id: Any, work_ids: Iterable[int]) -> dict[i
             continue
         status = str(raw_status).strip().lower()
         rank = _ROLLUP_STATUS_PRIORITY.get(status, 0)
+        if rank == 0:
+            continue
+        score = (rank, -_ROLLUP_TIE_BREAK_ORDER.get(status, 999))
         entry = grouped.setdefault(
             int(wid),
             {
-                "best_rank": -1,
+                "best_score": (0, -1000),
                 "work_reading_status": None,
                 "completed_manifestation_ids": set(),
             },
         )
         if status in COMPLETED_ROLLUP_STATUSES and manifestation_id is not None:
             entry["completed_manifestation_ids"].add(int(manifestation_id))
-        if rank > entry["best_rank"]:
-            entry["best_rank"] = rank
+        if score > entry["best_score"]:
+            entry["best_score"] = score
             entry["work_reading_status"] = status
 
     return {

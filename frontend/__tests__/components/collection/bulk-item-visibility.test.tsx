@@ -105,4 +105,20 @@ describe("C128 Collection Visibility Filter & Bulk Visibility Toolbar", () => {
     });
     expect(onSuccess).toHaveBeenCalled();
   });
+
+  it("closes visibility dropdown on Escape key and outside mousedown", () => {
+    renderWithQueryClient(<BulkItemVisibilityToolbar selectedItemIds={[11]} onClearSelection={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId("bulk-visibility-trigger"));
+    expect(screen.getByTestId("bulk-visibility-menu")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("bulk-visibility-menu")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("bulk-visibility-trigger"));
+    expect(screen.getByTestId("bulk-visibility-menu")).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId("bulk-visibility-menu")).not.toBeInTheDocument();
+  });
 });

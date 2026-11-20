@@ -896,14 +896,12 @@ class IngestService:
             db.session.add(expression)
             db.session.flush()
 
-        # 4. Issue-scoped deduplication under this parent Serial Work (never by bare EAN alone)
+        # 4. Issue-scoped deduplication under this parent Expression (never by bare EAN alone)
         if issue_number and pub_year is not None:
             existing_issue = (
                 db.session.execute(
-                    select(Manifestation)
-                    .join(Expression, Manifestation.expression_id == Expression.id)
-                    .where(
-                        Expression.work_id == work.id,
+                    select(Manifestation).where(
+                        Manifestation.expression_id == expression.id,
                         Manifestation.issue_number == issue_number,
                         Manifestation.publication_year == pub_year,
                     )

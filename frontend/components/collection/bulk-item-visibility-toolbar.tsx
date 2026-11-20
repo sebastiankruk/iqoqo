@@ -15,7 +15,7 @@
 //
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Users, X, Loader2, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -48,6 +48,30 @@ export function BulkItemVisibilityToolbar({
   const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    const handleOutsideMouseDown = (event: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideMouseDown);
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideMouseDown);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [dropdownOpen]);
 
   if (selectedItemIds.length === 0) return null;
 
@@ -91,7 +115,7 @@ export function BulkItemVisibilityToolbar({
 
       <div className="h-5 w-px bg-border" />
 
-      <div className="relative">
+      <div className="relative" ref={menuContainerRef}>
         <button
           type="button"
           disabled={isUpdating}

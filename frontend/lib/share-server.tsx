@@ -97,7 +97,8 @@ async function getCookieHeader(): Promise<Record<string, string>> {
  * Fetches a paginated shared collection by its secure token.
  *
  * Forwards caller cookies so authenticated friends receive Friend Bonus items
- * on SSR while anonymous requests keep 60-second ISR caching.
+ * on SSR and disables Next.js Data Cache so private-scope share tokens are
+ * never retained after revocation.
  *
  * @param token - The unique share token.
  * @param page - 1-based page number.
@@ -114,7 +115,7 @@ export async function getSharedCollection(
     const hasCookies = Boolean(cookieHeaders.Cookie);
     const res = await fetch(
       resolveApiUrl(`/public/share/${token}?page=${page}&per_page=${perPage}`, true),
-      hasCookies ? { headers: cookieHeaders, cache: "no-store" } : { next: { revalidate: 60 } }
+      hasCookies ? { headers: cookieHeaders, cache: "no-store" } : { cache: "no-store" }
     );
     if (res.status === 404) return { kind: "not-found" };
     if (!res.ok) return { kind: "error" };

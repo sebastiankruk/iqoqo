@@ -580,6 +580,29 @@ def test_extract_via_tesseract_records_success_telemetry(mock_open, _mock_ocr, m
     assert mock_record.call_args.kwargs["status"] == "success"
 
 
+def test_pick_serial_headline_filters_dynamic_serial_title():
+    """_pick_serial_headline filters out the resolved serial title rather than a hardcoded name."""
+    from app.utils.vision import _pick_serial_headline
+
+    lines = ["Polityka", "ISSN 0032-3500", "Wielka zmiana gospodarcza", "Nr 42"]
+    assert _pick_serial_headline(lines, serial_title="Polityka") == "Wielka zmiana gospodarcza"
+
+
+def test_get_llm_vision_status_ollama_only_without_probe(app, monkeypatch):
+    """vision_ready reflects explicitly configured Ollama-only deployments even when probe_ollama=False."""
+    from app.utils.vision import get_llm_vision_status
+
+    monkeypatch.setattr("app.utils.vision.Config.ALLOW_LLM", True)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama.local:11434")
+    monkeypatch.setenv("OLLAMA_VISION_MODEL", "llava")
+
+    with app.app_context():
+        status = get_llm_vision_status(probe_ollama=False)
+
+    assert status["vision_ready"] is True
+
+
 def test_book_scan_skips_serial_ocr_and_heuristics(monkeypatch):
     """Plain books like '1984' do not trigger 8-pass serial OCR or magazine year extraction."""
     from app.utils.vision import _parse_json_response, _should_enrich_serial

@@ -851,8 +851,19 @@ def get_shared_collection_rdf(token: str) -> Response | tuple[Response, int]:
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     collection_uri = f"{base_url}/share/{token}"
-    items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream, viewer_id=viewer_id)
-    is_private_cache = is_shared_collection_private_cache(token, viewer_id=viewer_id)
+    cache_policy_box: dict[str, bool] = {}
+    items = fetch_shared_collection_by_token(
+        token=token,
+        limit=limit_val,
+        stream=is_stream,
+        viewer_id=viewer_id,
+        _cache_policy_out=cache_policy_box,
+    )
+    is_private_cache = (
+        cache_policy_box["is_private_cache"]
+        if "is_private_cache" in cache_policy_box
+        else is_shared_collection_private_cache(token, viewer_id=viewer_id)
+    )
     rdf_headers = _apply_share_cache_headers({"Content-Type": f"{rdf_mimetype}; charset=utf-8"}, is_private_cache)
 
     if is_stream:

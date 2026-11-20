@@ -163,10 +163,11 @@ def get_works_catalog() -> Response:
         from app.core.frbr_service import COMPLETED_ROLLUP_STATUSES, IN_PROGRESS_ROLLUP_STATUSES
 
         completed_exists = (
-            db.session.query(Item.id)
+            select(Item.id)
+            .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
-            .filter(
+            .where(
                 Expression.work_id == Work.id,
                 Item.owner_id == user_id,
                 Item.status.in_(COMPLETED_ROLLUP_STATUSES),
@@ -174,10 +175,11 @@ def get_works_catalog() -> Response:
             .exists()
         )
         in_progress_exists = (
-            db.session.query(Item.id)
+            select(Item.id)
+            .select_from(Item)
             .join(Manifestation, Item.manifestation_id == Manifestation.id)
             .join(Expression, Manifestation.expression_id == Expression.id)
-            .filter(
+            .where(
                 Expression.work_id == Work.id,
                 Item.owner_id == user_id,
                 Item.status.in_(IN_PROGRESS_ROLLUP_STATUSES),

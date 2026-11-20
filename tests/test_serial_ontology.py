@@ -168,3 +168,31 @@ def test_two_national_geographic_issues_share_serial_work_and_emit_rdf(client, a
         assert (None, SCHEMA.volumeNumber, Literal("2004")) in g
         assert (None, SCHEMA.gtin13, Literal("9771507596044")) in g
         assert (None, IQOQO.eissn, None) not in g  # absent optional field omitted
+
+
+def test_serial_rdf_dict_forwards_publication_year_and_guards_non_numeric():
+    """Dict-based RDF export forwards publication_year and skips malformed non-numeric issue fields."""
+    from rdflib import XSD
+
+    from app.core.frbr_service import build_collection_rdf_graph
+
+    g = build_collection_rdf_graph(
+        [
+            {
+                "id": 101,
+                "work_id": 201,
+                "manifestation_id": 301,
+                "title": "Polityka",
+                "issn": "0032-3500",
+                "work_kind": "serial",
+                "issue_number": "42",
+                "cumulative_issue_number": "bad-int",
+                "publication_year": 2025,
+                "publication_month": "bad-month",
+            }
+        ],
+        base_url="https://iqoqo.test",
+    )
+    assert (None, IQOQO.publicationYear, Literal(2025, datatype=XSD.integer)) in g
+    assert (None, IQOQO.cumulativeIssueNumber, None) not in g
+    assert (None, IQOQO.publicationMonth, None) not in g
