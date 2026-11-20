@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as published
+ by the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+
+ You should have received a copy of the GNU Affero General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>
+-->
+<svg id="svg-bp7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp7-title bp7-desc">
+            <title id="bp7-title">Blueprint 7 — Semantic Web, Isolated SPARQL Runner &amp; AI-Fetchable Share Feeds</title>
+            <desc id="bp7-desc">Three-column security boundary and protocol flow diagram showing 5 semantic web consumers, Cloudflare/negotiation/RDF/AI-share pipelines, and the hardened HMAC-signed isolated sparql-runner container.</desc>
+            <style>
+              .canvas-bg { fill: #FDFBF7; }
+              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .subtitle-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #475569; }
+              .header-pill-bg { fill: #EFE9DD; stroke: #D6CFC2; stroke-width: 1.2; }
+              .header-pill-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
+
+              .zone-parchment { fill: #F4EFE6; stroke: #C9BFA9; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-indigo { fill: #EEF2F6; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-perimeter { fill: #FEF2F2; stroke: #B91C1C; stroke-width: 2; stroke-dasharray: 7 4; }
+
+              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 12.5px; font-weight: 700; fill: #2B3D4F; }
+              .zone-title-red { font-family: 'Merriweather', Georgia, serif; font-size: 12px; font-weight: 700; fill: #991B1B; }
+              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #64748B; }
+
+              .badge-indigo { fill: #2B3D4F; }
+              .badge-clay { fill: #D15400; }
+              .badge-teal { fill: #0F766E; }
+              .badge-red { fill: #B91C1C; }
+              .badge-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
+
+              .card { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
+              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.8; }
+              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
+              .card-red { fill: #FFFFFF; stroke: #B91C1C; stroke-width: 1.8; }
+              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1.1; }
+
+              .node-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.8px; font-weight: 700; fill: #1E293B; }
+              .node-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.6px; font-weight: 400; fill: #475569; }
+              .node-mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.6px; font-weight: 500; fill: #2B3D4F; }
+              .node-clay { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #B84700; }
+              .node-teal { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #0F766E; }
+              .node-red { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.6px; font-weight: 600; fill: #991B1B; }
+
+              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #B84700; }
+              .pill-teal { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1; }
+              .pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #0F766E; }
+              .pill-red { fill: #FEE2E2; stroke: #FCA5A5; stroke-width: 1; }
+              .pill-red-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 700; fill: #991B1B; }
+
+              .edge-primary { fill: none; stroke: #2B3D4F; stroke-width: 1.9; stroke-linejoin: round; }
+              .edge-teal { fill: none; stroke: #0F766E; stroke-width: 1.85; stroke-linejoin: round; }
+              .edge-sec { fill: none; stroke: #D15400; stroke-width: 2.1; stroke-linejoin: round; }
+              .edge-red { fill: none; stroke: #B91C1C; stroke-width: 2.1; stroke-linejoin: round; }
+              .mk-primary { fill: #2B3D4F; }
+              .mk-teal { fill: #0F766E; }
+              .mk-sec { fill: #D15400; }
+              .mk-red { fill: #B91C1C; }
+
+              .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
+              .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .edge-pill-sec { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
+              .edge-pill-sec-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #B84700; }
+              .edge-pill-red { fill: #FEE2E2; stroke: #FCA5A5; stroke-width: 1; }
+              .edge-pill-red-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 700; fill: #991B1B; }
+
+              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
+              .legend-heading { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #334155; }
+            </style>
+            <defs>
+              <pattern id="b7-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+              </pattern>
+              <filter id="b7-shadow" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              </filter>
+              <marker id="b7-mk-primary" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-primary"/>
+              </marker>
+              <marker id="b7-mk-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-teal"/>
+              </marker>
+              <marker id="b7-mk-sec" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-sec"/>
+              </marker>
+              <marker id="b7-mk-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-red"/>
+              </marker>
+            </defs>
+
+            <!-- Background -->
+            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
+            <rect x="0" y="0" width="1440" height="980" fill="url(#b7-grid)"/>
+
+            <!-- Header -->
+            <text x="32" y="36" class="title-text">Blueprint 7 — Semantic Web, Isolated SPARQL Runner &amp; AI-Fetchable Share Feeds</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.0  •  Content Negotiation, Query-Free AI JSON-LD Pages, Streaming Exports &amp; Hardened SPARQL Perimeter</text>
+            <rect x="1164" y="16" width="244" height="32" rx="8" class="header-pill-bg"/>
+            <text x="1286" y="36" text-anchor="middle" class="header-pill-text">Security Boundary &amp; Protocol Flow</text>
+
+            <!-- ==================== COLUMN 1: 5 CONSUMERS ==================== -->
+            <rect x="32" y="78" width="368" height="828" rx="14" class="zone-parchment"/>
+            <rect x="46" y="90" width="76" height="20" rx="5" class="badge-indigo"/>
+            <text x="84" y="104" text-anchor="middle" class="badge-text">CONSUMERS</text>
+            <text x="130" y="105" class="zone-title">5 Semantic &amp; AI Archetypes</text>
+
+            <!-- C1: Search Engines -->
+            <rect x="48" y="122" width="336" height="122" rx="9" class="card" filter="url(#b7-shadow)"/>
+            <rect x="60" y="132" width="26" height="18" rx="4" class="badge-indigo"/>
+            <text x="73" y="145" text-anchor="middle" class="badge-text">1</text>
+            <text x="94" y="146" class="node-title">Search Engines &amp; Crawlers</text>
+            <text x="60" y="168" class="node-mono">GET /api/public/sitemap.xml</text>
+            <text x="60" y="185" class="node-mono">GET /api/public/feed.xml</text>
+            <text x="60" y="202" class="node-mono">GET /work/* • /share/&lt;token&gt;</text>
+            <text x="60" y="226" class="node-body">Ingests Schema.org JSON-LD &amp; RSS 2.0</text>
+
+            <!-- C2: Linked Data Clients -->
+            <rect x="48" y="260" width="336" height="132" rx="9" class="card-teal" filter="url(#b7-shadow)"/>
+            <rect x="60" y="270" width="26" height="18" rx="4" class="badge-teal"/>
+            <text x="73" y="283" text-anchor="middle" class="badge-text">2</text>
+            <text x="94" y="284" class="node-title">Linked Data (CLI / RDFlib / MCP)</text>
+            <text x="60" y="306" class="node-teal">Accept: application/ld+json | text/turtle</text>
+            <text x="60" y="324" class="node-mono">GET /api/public/{works,items,...}/&lt;id&gt;</text>
+            <text x="60" y="341" class="node-mono">GET /share/&lt;token&gt;/catalog.jsonld</text>
+            <text x="60" y="358" class="node-mono">GET /api/public/rdf/share/&lt;token&gt;</text>
+            <text x="60" y="378" class="node-body">Follows dereferenceable FRBR IRIs</text>
+
+            <!-- C3: Headerless Consumer AI Browsers -->
+            <rect x="48" y="408" width="336" height="136" rx="9" class="card-clay" filter="url(#b7-shadow)"/>
+            <rect x="60" y="418" width="26" height="18" rx="4" class="badge-clay"/>
+            <text x="73" y="431" text-anchor="middle" class="badge-text">3</text>
+            <text x="94" y="432" class="node-title">Headerless AI Browsers</text>
+            <text x="60" y="454" class="node-body">Gemini App, ChatGPT Web, Claude Web</text>
+            <text x="60" y="474" class="node-mono">GET /share/&lt;token&gt;</text>
+            <text x="60" y="492" class="node-clay">Discovers &lt;nav aria-label="AI JSON-LD</text>
+            <text x="60" y="507" class="node-clay">pages"&gt; → /share/&lt;token&gt;/jsonld/1..N</text>
+            <text x="60" y="528" class="node-body">Zero custom Accept headers or ? queries</text>
+
+            <!-- C4: Authenticated Collector Export -->
+            <rect x="48" y="560" width="336" height="118" rx="9" class="card" filter="url(#b7-shadow)"/>
+            <rect x="60" y="570" width="26" height="18" rx="4" class="badge-indigo"/>
+            <text x="73" y="583" text-anchor="middle" class="badge-text">4</text>
+            <text x="94" y="584" class="node-title">Authenticated Collector Export</text>
+            <text x="60" y="608" class="node-mono">GET /api/items/export</text>
+            <text x="60" y="626" class="node-mono">  ?format=json-ld|turtle|nt|json</text>
+            <text x="60" y="652" class="node-body">Data Sovereignty — full WEMI library dump</text>
+
+            <!-- C5: Authenticated SPARQL 1.1 Client -->
+            <rect x="48" y="694" width="336" height="134" rx="9" class="card-clay" filter="url(#b7-shadow)"/>
+            <rect x="60" y="704" width="26" height="18" rx="4" class="badge-clay"/>
+            <text x="73" y="717" text-anchor="middle" class="badge-text">5</text>
+            <text x="94" y="718" class="node-title">Authenticated SPARQL 1.1 Client</text>
+            <text x="60" y="742" class="node-mono">GET / POST /api/sparql</text>
+            <text x="60" y="762" class="node-clay">Auth: JWT Bearer + read:metadata</text>
+            <text x="60" y="782" class="node-body">• SELECT / ASK → SPARQL JSON / XML / CSV</text>
+            <text x="60" y="800" class="node-body">• CONSTRUCT / DESCRIBE → Turtle / RDF</text>
+            <text x="60" y="818" class="node-mono">Rate Limit: 10 req/min per user</text>
+
+            <!-- ==================== COLUMN 2: EDGE, NEGOTIATION & RDF PIPELINE ==================== -->
+            <rect x="444" y="78" width="490" height="828" rx="14" class="zone-indigo"/>
+            <rect x="458" y="90" width="76" height="20" rx="5" class="badge-indigo"/>
+            <text x="496" y="104" text-anchor="middle" class="badge-text">PIPELINE</text>
+            <text x="542" y="105" class="zone-title">Edge, Negotiation &amp; RDF Serialization</text>
+
+            <!-- P1: Cloudflare & robots.txt -->
+            <rect x="460" y="122" width="458" height="114" rx="9" class="card-clay" filter="url(#b7-shadow)"/>
+            <text x="474" y="144" class="node-title">Cloudflare Edge &amp; robots.txt Gate</text>
+            <rect x="782" y="130" width="124" height="18" rx="4" class="pill-clay"/>
+            <text x="844" y="142" text-anchor="middle" class="pill-clay-text">WAF Skip Semantic</text>
+            <text x="474" y="166" class="node-body">• WAF Skip on /share/, /work/, /manifestation/, /.well-known/, /api/public/</text>
+            <text x="474" y="185" class="node-body">• AI Crawl Control unblocked so Google/AI bots read /robots.txt cleanly</text>
+            <text x="474" y="204" class="node-mono">• robots.txt: Disallow /api/  |  Allow /share/* &amp; /share/*/catalog.jsonld</text>
+            <text x="474" y="222" class="node-teal">• Enforces item visibility &amp; SharedCollection.visibility_scope</text>
+
+            <!-- P2: Content Negotiation -->
+            <rect x="460" y="252" width="458" height="128" rx="9" class="card-teal" filter="url(#b7-shadow)"/>
+            <text x="474" y="274" class="node-title">Content Negotiation — _negotiate_rdf_format()</text>
+            <rect x="816" y="260" width="90" height="18" rx="4" class="pill-teal"/>
+            <text x="861" y="272" text-anchor="middle" class="pill-teal-text">CORS: *</text>
+            <text x="474" y="296" class="node-mono">Accept / ?format= → json-ld | turtle | nt | rdf+xml</text>
+            <text x="474" y="316" class="node-body">• Browser (Accept: text/html) → HTTP 303 Redirect to Next.js UI page</text>
+            <text x="474" y="335" class="node-body">• Default public format: application/ld+json (clamped limit 1..1000/2000)</text>
+            <text x="474" y="358" class="node-teal">• Open Access-Control-Allow-Origin: * for browser &amp; sandbox AI agents</text>
+
+            <!-- P3: Query-Free AI Share Pages -->
+            <rect x="460" y="396" width="458" height="126" rx="9" class="card-clay" filter="url(#b7-shadow)"/>
+            <text x="474" y="418" class="node-title">Query-Free AI Share Mini-Pages</text>
+            <rect x="794" y="404" width="112" height="18" rx="4" class="pill-clay"/>
+            <text x="850" y="416" text-anchor="middle" class="pill-clay-text">60 items / page</text>
+            <text x="474" y="440" class="node-mono">GET /share/&lt;token&gt;/jsonld/1..N</text>
+            <text x="474" y="460" class="node-body">• Embeds compact JSON-LD inside &lt;pre id="jsonld-payload"&gt;</text>
+            <text x="474" y="479" class="node-mono">• Short context aliases: t, a, f, l, c, y, g</text>
+            <text x="474" y="502" class="node-teal">• Ready-to-use Gem skills in docs/gems/* (HiFi, Reading, Games, Cinema)</text>
+
+            <!-- P4: Streaming Export -->
+            <rect x="460" y="538" width="458" height="114" rx="9" class="card" filter="url(#b7-shadow)"/>
+            <text x="474" y="560" class="node-title">Streaming Export — ExportService</text>
+            <text x="474" y="582" class="node-mono">ExportService.stream_user_collection()</text>
+            <text x="474" y="602" class="node-body">• Chunked batch serialization via Flask stream_with_context()</text>
+            <text x="474" y="621" class="node-mono">• Response Header: X-Accel-Buffering: no (Nginx unbuffered stream)</text>
+            <text x="474" y="640" class="node-body">• Handles 10,000+ item collections without memory pressure</text>
+
+            <!-- P5: RDF Serialization & IRI Minting -->
+            <rect x="460" y="668" width="458" height="222" rx="10" class="card-indigo" filter="url(#b7-shadow)"/>
+            <text x="474" y="690" class="node-title">RDF Serialization Pipeline &amp; IRI Minting</text>
+            <text x="474" y="710" class="node-mono">app/core/frbr_service.py  +  app/core/iri.py</text>
+
+            <rect x="474" y="722" width="430" height="58" rx="7" class="card-sub"/>
+            <text x="484" y="740" class="node-mono">IRI Minting (BASE_URL fallback → https://iqoqo.cc):</text>
+            <text x="484" y="758" class="node-teal">{BASE_URL}/{works,expressions,manifestations,items}/{id}</text>
+            <text x="484" y="772" class="node-body">Canonical dereferenceable subject URIs across all RDF graphs</text>
+
+            <text x="474" y="800" class="node-mono">Namespaces: frbr: • frbrer: • schema: • dc: • iqoqo:</text>
+            <text x="474" y="820" class="node-body">• Schema.org Types: Book, Audiobook, MusicAlbum/MusicRelease,</text>
+            <text x="474" y="836" class="node-body">  Movie, Game, Product, MusicEvent, Periodical, PublicationIssue</text>
+            <text x="474" y="856" class="node-body">• Audio Matrix Runout + FRBRoo F18 Serials + OpenCollections owl:sameAs</text>
+            <text x="474" y="876" class="node-clay">• Builds caller-scoped RDF graph snapshots for SPARQL Runner →</text>
+
+            <!-- ==================== COLUMN 3: HARDENED SPARQL PERIMETER ==================== -->
+            <rect x="978" y="78" width="430" height="828" rx="14" class="zone-clay"/>
+            <rect x="992" y="90" width="76" height="20" rx="5" class="badge-clay"/>
+            <text x="1030" y="104" text-anchor="middle" class="badge-text">SPARQL 1.1</text>
+            <text x="1076" y="105" class="zone-title">Isolated Execution Boundary</text>
+
+            <!-- Flask PEP -->
+            <rect x="994" y="122" width="398" height="222" rx="10" class="card-indigo" filter="url(#b7-shadow)"/>
+            <rect x="1006" y="133" width="40" height="18" rx="4" class="badge-indigo"/>
+            <text x="1026" y="146" text-anchor="middle" class="badge-text">PEP</text>
+            <text x="1054" y="147" class="node-title">Flask Policy Enforcement Point</text>
+            <text x="1006" y="169" class="node-mono">web:5000  •  /api/sparql (sparql_service.py)</text>
+            <text x="1006" y="191" class="node-body">1. Validates JWT + read:metadata + 10/min limit</text>
+            <text x="1006" y="209" class="node-body">2. Builds caller-scoped RDF snapshot:</text>
+            <text x="1006" y="226" class="node-mono">   &lt;= 5,000 items • &lt;= 100,000 triples</text>
+            <text x="1006" y="246" class="node-clay">3. ZERO credentials/JWTs/DB URLs forwarded</text>
+            <rect x="1006" y="260" width="374" height="70" rx="7" class="pill-clay"/>
+            <text x="1016" y="278" class="pill-clay-text">Signs HMAC-SHA256 Scope Envelope</text>
+            <text x="1016" y="295" class="node-mono">Secret: SPARQL_SERVICE_SECRET</text>
+            <text x="1016" y="311" class="node-body">protocol_v1 | job_id | tenant_id | expires_at |</text>
+            <text x="1016" y="324" class="node-body">query_digest | snapshot_digest | nonce cache</text>
+
+            <!-- Hardened Security Perimeter Box -->
+            <rect x="994" y="398" width="398" height="492" rx="12" class="zone-perimeter"/>
+            <rect x="1008" y="410" width="146" height="20" rx="5" class="badge-red"/>
+            <text x="1081" y="424" text-anchor="middle" class="badge-text">HARDENED PERIMETER</text>
+            <text x="1162" y="425" class="zone-title-red">Internal Network Only</text>
+
+            <!-- sparql-runner container -->
+            <rect x="1010" y="444" width="366" height="214" rx="9" class="card-red" filter="url(#b7-shadow)"/>
+            <text x="1024" y="466" class="node-title">sparql-runner:5050/execute</text>
+            <rect x="1294" y="452" width="70" height="18" rx="4" class="pill-red"/>
+            <text x="1329" y="464" text-anchor="middle" class="pill-red-text">UID 10002</text>
+            <text x="1024" y="488" class="node-red">• Fail-closed: verifies HMAC, expiry, replay nonce</text>
+            <text x="1024" y="508" class="node-body">• Read-only rootfs • /tmp 64M noexec • cap_drop: ALL</text>
+            <text x="1024" y="527" class="node-body">• cgroup ceilings: 1.0 CPU • 512 MB RAM • 64 PIDs</text>
+            <text x="1024" y="546" class="node-mono">• Concurrency: 4  |  Max Queue: 16 (503 Retry-After)</text>
+            <text x="1024" y="566" class="node-red">• Rejects INSERT / DELETE / UPDATE → HTTP 400</text>
+            <text x="1024" y="586" class="node-body">• Query size cap: 10 KB  |  Snapshot cap: 10 MB</text>
+            <rect x="1024" y="602" width="338" height="42" rx="6" class="card-sub"/>
+            <text x="1034" y="619" class="node-mono">Probes: /healthz • /readyz • /metrics</text>
+            <text x="1034" y="635" class="node-body">Kill-switch: SPARQL_SERVICE_ENABLED=false → 503</text>
+
+            <!-- Killable Child Process -->
+            <rect x="1010" y="714" width="366" height="158" rx="9" class="card-clay" filter="url(#b7-shadow)"/>
+            <text x="1024" y="736" class="node-title">Killable Child Process (Worker)</text>
+            <rect x="1282" y="722" width="82" height="18" rx="4" class="pill-clay"/>
+            <text x="1323" y="734" text-anchor="middle" class="pill-clay-text">Linux rlimit</text>
+            <text x="1024" y="758" class="node-body">• Isolated forked process per query execution</text>
+            <text x="1024" y="777" class="node-mono">• rlimits: CPU, 512MB Address Space, Core=0</text>
+            <text x="1024" y="796" class="node-red">• Deadline: 15s timeout → SIGTERM / SIGKILL (504)</text>
+            <text x="1024" y="816" class="node-mono">• Result caps: 1,000 rows | 50k triples | 10MB</text>
+            <text x="1024" y="844" class="node-teal">Retained over Apache Fuseki (lean 60MB idle RAM)</text>
+
+            <!-- ==================== DIRECTED EDGES ==================== -->
+            <!-- C1 -> P1 -->
+            <path d="M 384 180 L 458 180" class="edge-primary" marker-end="url(#b7-mk-primary)"/>
+            <!-- C2 -> P2 -->
+            <path d="M 384 320 L 458 320" class="edge-teal" marker-end="url(#b7-mk-teal)"/>
+            <!-- C3 -> P3 -->
+            <path d="M 384 468 L 458 468" class="edge-sec" marker-end="url(#b7-mk-sec)"/>
+            <!-- C4 -> P4 -->
+            <path d="M 384 612 L 458 612" class="edge-primary" marker-end="url(#b7-mk-primary)"/>
+
+            <!-- C5 -> Flask PEP (routed cleanly at bottom of Col 1/2 up channel x=956) -->
+            <path d="M 384 812 L 420 812 L 420 898 L 956 898 L 956 206 L 992 206" class="edge-sec" marker-end="url(#b7-mk-sec)"/>
+            <rect x="614" y="888" width="166" height="18" rx="4" class="edge-pill-sec"/>
+            <text x="697" y="900" text-anchor="middle" class="edge-pill-sec-text">JWT + /api/sparql Query</text>
+
+            <!-- P5 (RDF Pipeline) -> Flask PEP (Scoped Snapshot) -->
+            <path d="M 918 776 L 944 776 L 944 266 L 992 266" class="edge-teal" marker-end="url(#b7-mk-teal)"/>
+
+            <!-- Flask PEP -> sparql-runner (HMAC Envelope) -->
+            <path d="M 1193 344 L 1193 442" class="edge-red" marker-end="url(#b7-mk-red)"/>
+            <rect x="1084" y="362" width="218" height="20" rx="5" class="edge-pill-red"/>
+            <text x="1193" y="375" text-anchor="middle" class="edge-pill-red-text">Signed HMAC-SHA256 Envelope</text>
+
+            <!-- sparql-runner -> Child Process (IPC Pipe) -->
+            <path d="M 1193 658 L 1193 712" class="edge-red" marker-end="url(#b7-mk-red)"/>
+            <rect x="1126" y="674" width="134" height="20" rx="5" class="edge-pill-sec"/>
+            <text x="1193" y="687" text-anchor="middle" class="edge-pill-sec-text">One-way IPC Pipe</text>
+
+            <!-- Legend -->
+            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
+            <text x="50" y="947" class="legend-heading">LEGEND:</text>
+            <line x1="128" y1="943" x2="174" y2="943" class="edge-primary" marker-end="url(#b7-mk-primary)"/>
+            <text x="184" y="947" class="legend-text">Crawler / Export HTTP Flow</text>
+            <line x1="390" y1="943" x2="436" y2="943" class="edge-teal" marker-end="url(#b7-mk-teal)"/>
+            <text x="446" y="947" class="legend-text">RDF / Linked Data Negotiation</text>
+            <line x1="674" y1="943" x2="720" y2="943" class="edge-sec" marker-end="url(#b7-mk-sec)"/>
+            <text x="730" y="947" class="legend-text">AI Share / Auth SPARQL Gate</text>
+            <line x1="948" y1="943" x2="994" y2="943" class="edge-red" marker-end="url(#b7-mk-red)"/>
+            <text x="1004" y="947" class="legend-text">HMAC Envelope / Killable IPC</text>
+            <rect x="1220" y="933" width="18" height="18" rx="4" class="badge-red"/>
+            <text x="1246" y="947" class="legend-text">Hardened Container</text>
+          </svg>

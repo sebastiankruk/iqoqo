@@ -343,6 +343,33 @@ def test_update_changelog(tmp_path: Path) -> None:
     assert content.count("## [0.7.12] - TBD") == 1
 
 
+def test_write_architecture_svg_versions(tmp_path: Path) -> None:
+    """write_architecture_svg_versions rewrites embedded iqoqo vX.Y.Z banners across SVG dirs."""
+    from scripts.sync_version import write_architecture_svg_versions
+
+    docs_dir = tmp_path / "docs" / "images" / "architecture"
+    help_dir = tmp_path / "frontend" / "public" / "images" / "help"
+    missing_dir = tmp_path / ".context" / "notes" / "docs" / "architecture"
+    docs_dir.mkdir(parents=True)
+    help_dir.mkdir(parents=True)
+
+    svg_a = docs_dir / "01-topology.svg"
+    svg_b = help_dir / "02-frbr.svg"
+    svg_a.write_text("<svg><title>iqoqo v1.1.0</title><text>iqoqo v1.1.0</text></svg>", encoding="utf-8")
+    svg_b.write_text("<svg><desc>Model for iqoqo v1.1.0</desc></svg>", encoding="utf-8")
+
+    with (
+        patch("scripts.sync_version.REPO_ROOT", tmp_path),
+        patch("scripts.sync_version.SVG_VERSION_DIRS", [docs_dir, help_dir, missing_dir]),
+    ):
+        updated = write_architecture_svg_versions("1.2.0")
+
+    assert "docs/images/architecture/01-topology.svg" in updated
+    assert "frontend/public/images/help/02-frbr.svg" in updated
+    assert svg_a.read_text(encoding="utf-8") == "<svg><title>iqoqo v1.2.0</title><text>iqoqo v1.2.0</text></svg>"
+    assert svg_b.read_text(encoding="utf-8") == "<svg><desc>Model for iqoqo v1.2.0</desc></svg>"
+
+
 # ── sync_version CLI mode tests ───────────────────────────────────────────
 
 

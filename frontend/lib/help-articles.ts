@@ -102,6 +102,9 @@ In iqoqo, our ontology adapts dynamically across your entire cultural life:
 | **Puzzles** | Artwork / Illustration | 1000-Piece Cut Layout, Panoramic Cut | Ravensburger 2022 Retail Box | Your box (missing 1 piece!) |
 | **LEGO & Construction Sets** | Set Design & Theme (\`F16_Container_Work\`) | Building Instruction Specification | Retail Box (\`10318-1\`), Piece & Minifig Count, EAN | Your box (\`sealed\`, \`built\`, \`incomplete\`, or \`parted_out\`) |
 | **Cartographic Maps & Atlases** | Geographic Survey / Fantasy World Map | Cartographic Scale, Projection & Layer Edition | Folded Topographic Sheet, Bound Atlas, Cloth Map Insert | Your copy (with \`map_insert_present\` verified & high-res pan/zoom viewer) |
+| **Magazines & Academic Journals** | Periodical Brand (\`F18_Serial_Work\`, ISSN) | Language / Regional Editorial Edition (\`serial\`) | Single Published Issue (\`issue_number\`, \`volume\`, GS1 \`977\` + EAN-2/5) | Your specific issue copy on the shelf or in reading backlog |
+
+![FRBR and FRBRoo Four-Tier Domain Ontology Blueprint](/images/help/02-frbr-domain-ontology.svg)
 
 ---
 
@@ -110,9 +113,12 @@ In iqoqo, our ontology adapts dynamically across your entire cultural life:
 You don't need a degree in library science to use iqoqo—when you scan a barcode, the system builds this four-layer tree for you automatically in milliseconds. Here is what that structure gives you every day:
 
 1. **Zero Clutter, Maximum Detail:** When you browse your Collection, you can see all your editions grouped cleanly under a single Work, or pivot to view every individual physical copy you own.
-2. **Smarter Wishlists:** When you add something to your Wishlist, you can choose *how* specific you want to be. Just want to read *Dune* in any format? Wishlist the **Work**. Hunting specifically for the 1965 Chilton Books first-edition hardcover? Wishlist that exact **Manifestation**.
+2. **Smarter Wishlists:** When you add something to your Wishlist, you can choose *how* specific you want to be. Just want to read *Dune* in any format? Wishlist the **Work**. Hunting specifically for the 1965 Chilton Books first-edition hardcover? Wishlist that exact **Manifestation**. And the moment you acquire a matching physical Item, iqoqo automatically marks that Work-level wishlist intent as **fulfilled**!
 3. **Flexible Reading & Playing Roadmaps:** In your **Roadmaps** (accessible right from your Collection view), you can plan your next reading or gaming marathon by targeting abstract Works, specific translations, or even a specific physical Item you borrowed from a friend and need to return by Friday.
 4. **Targeted Ratings & Reviews:** Leave a 5-star review on a **Work** because the story or game mechanics are brilliant, while leaving a 2-star warning on a specific **Manifestation** because the publisher used thin, flimsy cardstock in that particular printing.
+5. **User-Scoped Work Reading Status Rollup:** Own the paperback in English and also read the Polish hardcover or audiobook? On Works Shelves, Work pages, and Manifestation views, iqoqo computes a personal **Work Rollup Badge** (\`Read\`, \`Currently Reading\`, \`Planned\`, \`Did Not Finish\`) across all editions you own—marking the Work completed as soon as *any* owned copy is finished, while letting you filter by \`Completed\`, \`In Progress\`, or \`Unread\`!
+6. **Interactive FRBR Visual Relation Graph (\`/graph\`):** Click **Explore Graph** on any Work, Expression, Manifestation, or Item page to visually traverse 1-hop or 2-hop connections across the WEMI hierarchy, multi-series memberships, sub-parts, board game expansions, contributors, attached maps, and external Linked Open Data (Wikidata, DBpedia, GeoNames) authorities—all strictly filtered by your visibility permissions.
+7. **Reading Sessions & Edition Duration Insights:** Track focused reading sessions (\`Log Session\`) directly on your physical Item to record minutes read, pages covered, private session notes, and elapsed reading days—while contributing anonymously to edition-level average reading times on public Manifestations.
 `,
       pl: `Większość aplikacji do katalogowania powstała na prostym, płaskim założeniu: jeden kod kreskowy to jeden wiersz w bazie danych. Jeśli zeskanujesz wydanie kieszonkowe *Diuny* Franka Herberta, dostajesz wiersz w tabeli. Jeśli kupisz jubileuszowe wydanie w twardej oprawie, otrzymujesz drugi, całkowicie odrębny wpis. A gdy posiadasz jeszcze audiobook, film na Blu-ray z 2021 roku oraz grę planszową *Dune: Imperium*, tradycyjna aplikacja traktuje je jako pięć obcych sobie pozycji zaśmiecających wirtualną półkę.
 
@@ -182,6 +188,9 @@ W iqoqo ontologia dopasowuje się naturalnie do całego Twojego życia kulturaln
 | **Puzzle** | Grafika / Ilustracja | Układ 1000 elementów, Wersja panoramiczna | Pudełko Ravensburger 2022 | Twoje pudełko (z brakującym 1 elementem!) |
 | **Zestawy LEGO i konstrukcyjne** | Projekt zestawu i seria (\`F16_Container_Work\`) | Specyfikacja instrukcji budowy | Pudełko sklepowe (\`10318-1\`), liczba klocków i minifigurek, EAN | Twój egzemplarz (\`zaplombowany\`, \`zbudowany\`, \`niekompletny\`) |
 | **Mapy kartograficzne i atlasy** | Opracowanie kartograficzne / Mapa świata fantasy | Skala, odwzorowanie i wersja warstw | Arkusz topograficzny, Atlas, Płócienna mapa w grze/książce | Twój egzemplarz (z kontrolą obecności wkładki i podglądem zoom/obrót) |
+| **Czasopisma, magazyny i periodyki** | Tytuł czasopisma (\`F18_Serial_Work\`, ISSN) | Edycja językowa lub wydanie regionalne (\`serial\`) | Konkretny numer wydania (\`issue_number\`, \`volume\`, GS1 \`977\` + dodatek EAN-2/5) | Twój fizyczny egzemplarz numeru na półce |
+
+![Schemat ontologii domenowej FRBR i FRBRoo w iqoqo](/images/help/02-frbr-domain-ontology.svg)
 
 ---
 
@@ -190,9 +199,12 @@ W iqoqo ontologia dopasowuje się naturalnie do całego Twojego życia kulturaln
 Nie musisz mieć doktoratu z bibliotekoznawstwa, aby korzystać z iqoqo — podczas skanowania kodu kreskowego system buduje to czteropoziomowe drzewo automatycznie w ułamku sekundy. Oto co zyskujesz na co dzień:
 
 1. **Przejrzystość i maksymalny detal:** W widoku Kolekcji możesz zobaczyć wszystkie wydania zgrupowane elegancko pod jednym Dziełem lub przełączyć się, by sprawdzić każdy posiadany fizyczny egzemplarz.
-2. **Sprytniejsza Lista Życzeń:** Dodając pozycję do Listy Życzeń, decydujesz o poziomie szczegółowości. Chcesz po prostu przeczytać *Diunę* w dowolnym wydaniu? Dodaj do listy **Dzieło**. Polujesz na konkretne pierwsze wydanie w twardej oprawie z 1965 roku? Dodaj dokładną **Manifestację**.
+2. **Sprytniejsza Lista Życzeń:** Dodając pozycję do Listy Życzeń, decydujesz o poziomie szczegółowości. Chcesz po prostu przeczytać *Diunę* w dowolnym wydaniu? Dodaj do listy **Dzieło**. Polujesz na konkretne pierwsze wydanie w twardej oprawie z 1965 roku? Dodaj dokładną **Manifestację**. Gdy zdobędziesz pasujący fizyczny egzemplarz, iqoqo automatycznie oznaczy życzenie na poziomie Dzieła jako **zrealizowane**!
 3. **Elastyczne Plany (Roadmaps):** W Planach czytania i grania możesz układać maratony, celując w abstrakcyjne Dzieła, konkretne przekłady, a nawet w konkretny Egzemplarz pożyczony od znajomego, który musisz oddać do piątku.
 4. **Precyzyjne oceny i recenzje:** Przyznaj 5 gwiazdek **Dziełu**, bo historia lub mechanika gry są genialne, a jednocześnie wystaw 2 gwiazdki konkretnej **Manifestacji**, gdyż wydawca użył cienkiego papieru i kiepskiego kleju.
+5. **Zbiorczy status czytania Dzieła (Work Rollup):** Masz polskie wydanie kieszonkowe oraz angielskiego audiobooka? Na półce Dzieł oraz stronach Dzieła i Manifestacji iqoqo wyświetla osobistą odznakę **Zbiorczego statusu Dzieła** (\`Przeczytano\`, \`W trakcie czytania\`, \`Planowane\`, \`Porzucono\`) — oznaczając Dzieło jako ukończone, gdy przeczytasz *którykolwiek* z posiadanych egzemplarzy, oraz umożliwiając filtrowanie półki według postępu dzieła!
+6. **Interaktywny Graf Relacji FRBR (\`/graph\`):** Kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji lub Egzemplarza, aby wizualnie badać powiązania (1 lub 2 skoki) między poziomami WEMI, seriami, częściami, dodatkami do gier, twórcami, załącznikami mapowymi oraz zatwierdzonymi powiązaniami LOD (Wikidane, DBpedia, GeoNames) — zawsze zgodnie z uprawnieniami widoczności.
+7. **Sesje czytania i średni czas lektury:** Rejestruj sesje czytania bezpośrednio na karcie fizycznego Egzemplarza (czas trwania, przeczytane strony, prywatne notatki oraz liczba dni czytania), automatycznie budując anonimową średnią czasu lektury widoczną na stronie Manifestacji.
 `,
     },
   },
@@ -214,47 +226,63 @@ Here is the complete guide to how scanning works under the hood, how to handle e
 
 ---
 
-## 1. The Anatomy of a Scan: Mode vs. Intent
+## 1. The Anatomy of a Scan: Compact Controls & Two-Tab Sheet
 
-When you open the Scanner, you will notice two controls in the top bar before you even point your camera. Understanding how they work together will save you dozens of clicks:
+When you open the Scanner, you will see a compact single-line control bar at the top, a **100%-width unified lookup bar** (accepting ISBNs, ISSNs, GS1 \`977\` magazine barcodes, LEGO set numbers, local QR/inventory tags, or title/author searches), and a streamlined **two-tab Bottom Sheet** (**Barcode** vs. **Snap Cover**). Understanding how they work together will save you dozens of clicks:
 
 ![Scanner Mode, Intent, and Ingestion Flow](/images/help/scanner-workflow.jpg)
 
 ### Single vs. Batch Mode
 
-
 * **Single Mode:** Best when you just bought one new book or game. You scan the barcode, review the rich success card, and jump straight to the new item's page.
 
-* **Batch Mode:** Built for cataloging an entire bookshelf at once. Keep your phone in one hand and pull books off the shelf with the other—every time iqoqo recognizes a barcode, it chimes, shows a non-blocking toast card at the bottom of the screen, and **keeps the camera viewfinder active** so you can scan the next item immediately. In the native Android and iOS apps, batch mode uses the hardware camera bridge, flashlight toggle, and tactile haptic pulses to make continuous shelf scanning effortless.
+* **Batch Mode (\`Batch ON/OFF\`):** Built for cataloging an entire bookshelf at once. The top-bar toggle displays an explicit \`ON\`/\`OFF\` badge and status announcement. Keep your phone in one hand and pull books off the shelf with the other—every time iqoqo recognizes a barcode, it chimes, shows a non-blocking toast card at the bottom of the screen, and **keeps the camera viewfinder active** so you can scan the next item immediately. In the native Android and iOS apps, batch mode uses the hardware camera bridge, flashlight toggle, and tactile haptic pulses to make continuous shelf scanning effortless.
 
-### Policy / Intent: Collection vs. Wishlist
+### Save Target (\`Save to\`): Shelf, Wishlist, or Catalog Only
 
+* **Shelf (\`OWNED\`):** Creates a physical **Item (F4)** in your inventory and links it to the Manifestation. If you previously had a Wishlist intent for that Work, acquiring the physical item automatically marks the wishlist entry as **fulfilled**!
 
-* **Add to Collection (OWNED):** Creates a physical **Item (F4)** in your inventory and links it to the Manifestation.
+* **Wishlist (\`WISHLIST\`):** Bypasses physical Item creation and records your intent to acquire that **Manifestation (F3)** or **Work (F1)** in your Wishlist—perfect for when you are browsing a brick-and-mortar bookstore or board game shop!
 
-* **Add to Wishlist (WISHLIST):** Bypasses physical Item creation and records your intent to acquire that **Manifestation (F3)** or **Work (F1)** in your Wishlist—perfect for when you are browsing a brick-and-mortar bookstore or board game shop!
+* **Catalog Only:** Populates the bibliographic **Manifestation (F3)** in the shared catalog without adding a physical exemplar to your personal shelf.
 
 ---
 
-## 2. When a Barcode Isn't Enough: Disambiguation & Manual Entry
+## 2. When a Barcode Isn't Enough: Disambiguation, Periodicals & Manual Entry
 
-Barcodes can be messy. Sometimes a publisher reuses an EAN barcode across three different board game printings, or an old book simply predates the invention of ISBNs in 1970.
+Barcodes can be messy. Sometimes a publisher reuses an EAN barcode across three different board game printings, an old book predates ISBNs (introduced around 1970), or every monthly issue of a magazine shares the exact same GS1 \`977\` base barcode!
 
 ### Step A: The Disambiguation Sheet
 
-If your scan or title search returns multiple plausible matches across our upstream providers (OpenLibrary, Google Books, Biblioteka Narodowa, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo slides up the **Disambiguation Sheet**.
+If your scan or title search returns multiple plausible matches across our upstream providers (OpenLibrary, Google Books, Biblioteka Narodowa, OpenCollections.org, Crossref, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo slides up the **Disambiguation Sheet**.
 
-* Compare cover thumbnails, publication years, publishers, and media badges (\`Book\`, \`Board Game\`, \`LEGO\`, \`Vinyl\`, \`Video Game\`).
+* Compare cover thumbnails, publication years, publishers, and media badges (\`Book\`, \`Magazine\`, \`Board Game\`, \`LEGO\`, \`Vinyl\`, \`Video Game\`).
 
 * Tap the exact edition you hold in your hands to bind it to your catalog.
 
-* **Pro-Tip for LEGO Collectors:** When the **LEGO** icon is selected in the scanner top bar, you can scan standard European/Polish retail EAN-13 barcodes (\`570201...\`) or type the 4–6 digit LEGO Set Number (e.g., \`10318\` or \`77256\`) directly into the quick-lookup bar. iqoqo queries **Rebrickable** and automatically falls back to the **Allegro** retail catalog to extract the set number, piece count, minifigures, and theme!
+* **Pro-Tip for LEGO Collectors:** When **LEGO** is selected in the \`[Format ▾]\` selector, you can scan standard European/Polish retail EAN-13 barcodes (\`570201...\`) or type the 4–6 digit LEGO Set Number (e.g., \`10318\` or \`77256\`) directly into the unified lookup bar. iqoqo queries **Rebrickable** and automatically falls back to the **Allegro** retail catalog to extract the set number, piece count, minifigures, and theme!
 
-### Step B: Going All the Way to Manual Entry
+### Step B: Scanning Magazines, Zines & Academic Journals (ISSN & GS1 \`977\`)
 
-If an item is completely unknown to global databases—such as a local indie zine, a self-published chapbook, a bootleg concert recording, a vintage map, or a custom MOC / puzzle—click **Add Manually** in the scanner bottom sheet:
-1. **Select the Media Kind:** Choose whether you are adding a \`Book\`, \`Audio\`, \`Video\`, \`Board Game\`, \`Video Game\`, \`Puzzle\`, \`LEGO Set\`, or \`Cartographic Map / Atlas\`. The form dynamically adjusts its fields to match your medium!
-2. **Enter Core Bibliographic Details:** Provide the Title, Creator/Author, Publisher, Publication Year, and Language (plus format-specific details like LEGO piece count or cartographic scale/projection).
+Most magazines and journals use either a 13-digit GS1 \`977\` retail barcode (derived from their 8-character Modulo-11 **ISSN**), an extended 15/18-digit barcode with a 2-digit or 5-digit **EAN add-on** encoding the issue number, or a standalone printed **ISSN** (\`XXXX-XXXX\`).
+
+* When you select **Magazine** (or scan a \`977\` barcode or ISSN), iqoqo validates the Modulo-11 check digit, queries **Biblioteka Narodowa**, **Crossref**, **OpenLibrary**, and **Allegro** to resolve the parent serial (\`F18_Serial_Work\`), and checks whether any issues already exist locally.
+* **With a 2/5-digit Add-On (or exact issue barcode):** If your scanner captures the full 15- or 18-digit barcode, iqoqo pre-fills the issue number directly.
+* **Shared 13-digit \`977\` Barcode (\`SerialDisambiguationModal\`):** Because publishers reuse the same 13-digit \`977\` prefix across issues, iqoqo opens the **Select or Add Magazine Issue** modal displaying already cataloged issues. Pick an existing issue, click **Add New Issue** to enter \`Issue Number\`, \`Volume\`, \`Publication Year\`, and \`Cover Headline\`, or click **Snap Cover to Auto-Fill Issue** to run offline/AI magazine cover OCR!
+
+![Barcode, ISSN/977 Periodical, and Multi-Provider Ingestion Pipeline](/images/help/04-barcode-serial-ingestion.svg)
+
+### Step C: Snap Cover & Automatic 50MP Image Downscaling
+
+When an item has no usable barcode, switch to the **Snap Cover** tab in the bottom sheet (or upload a cover photo from your gallery):
+
+* Modern 48MP–50MP smartphone camera photos are automatically downscaled directly on your device before upload (up to \`3840px\` JPEG for crisp Vision/OCR barcode & masthead glyphs; \`1280px\` for persisted cover photos), preventing \`413 Payload Too Large\` errors and slow uploads while preserving full clarity under the backend's 100MP safety limit.
+
+### Step D: Going All the Way to Manual Entry
+
+If an item is completely unknown to global databases—such as a local indie zine, a self-published chapbook, a bootleg concert recording, a vintage map, or a custom MOC / puzzle—click **Enter Manually** in the scanner bottom sheet:
+1. **Select the Media Kind:** Choose whether you are adding a \`Book\`, \`Magazine\`, \`Audio\`, \`Video\`, \`Board Game\`, \`Video Game\`, \`Puzzle\`, \`LEGO Set\`, or \`Cartographic Map / Atlas\`. The form dynamically adjusts its fields to match your medium!
+2. **Enter Core Bibliographic Details:** Provide the Title, Creator/Author, Publisher, Publication Year, and Language (plus format-specific details like ISSN / Issue Number / Volume, LEGO piece count, or cartographic scale/projection).
 3. **Dual-Source Cover Picker:** You don't have to leave your manual entry with a blank placeholder! Use the Cover Upload Picker right inside the form to either snap a live photo with your camera or pick an existing image file from your device.
 4. **Save & Construct WEMI:** When you submit the form, iqoqo automatically constructs the full 4-tier FRBR hierarchy (Work -> Expression -> Manifestation -> Item) and applies your cover art.
 
@@ -293,13 +321,17 @@ On any Item, Manifestation, Expression, or Work page, click the **Request Curato
 
 If you are an **Instance Administrator**, you can supercharge both the Scanner and the Cover Art Editor by enabling optional AI integrations in Instance Settings (or via your \`.env\` configuration).
 
-### 🔍 1. AI Vision Cover Scanning (Metadata Extraction)
+### 🔍 1. Three-Tier AI Vision & Offline Magazine OCR Waterfall
 
-When a user scans an antique book or a vinyl sleeve that has no barcode, they can snap a photo of the front cover in the Scanner.
+When a user photographs an antique book, a vinyl sleeve, or a magazine cover without a usable barcode, **Snap Cover** (\`POST /api/vision/extract\`) executes a resilient 3-tier waterfall (\`app/utils/vision.py\`):
 
-* **How it works:** If AI Vision is enabled, iqoqo sends the cover image to your configured vision model—supporting **Local AI (Ollama / LLaVA)** for 100% offline privacy, **Google Gemini**, or **OpenAI**.
+1. **Google Gemini Vision (\`gemini-2.0-flash\`):** Used when \`ALLOW_LLM=true\`, \`GEMINI_API_KEY\` is set, and the caller holds \`LLM_GENERATE_CLOUD\` permission.
+2. **Local Vision LLM via Ollama (\`llava\` / \`llama3.2-vision\`):** Used when \`ALLOW_LLM=true\` and a validated \`OLLAMA_URL\` responds within \`OLLAMA_VISION_TIMEOUT\`.
+3. **Offline Multi-Zone Tesseract OCR (\`eng+pol\`):** Works even when \`ALLOW_LLM=false\` with zero cloud or GPU dependency! Crops the masthead and top/bottom corners alongside the full cover, running Polish and English OCR to extract Title, Authors, ISSN, Indeks, issue numbers (\`Nr 12/2026\`, \`Vol. 4\`), Polish/English publication months, and cover headlines.
 
-* **The Result:** The vision model reads the typography and layout on the cover, automatically extracting the Title, Author/Artist, Publisher, and Edition clues, pre-filling the manual entry pipeline.
+* **Audit & Telemetry:** Every execution across \`gemini\`, \`ollama\`, and \`tesseract\` is recorded in \`llm_telemetry\`. Operators can verify which backend actually handled requests using \`python scripts/llm_usage_report.py --docker preview --hours 24\`.
+
+![50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall, and 7-Tier Cover Pipeline](/images/help/05-vision-ocr-cover-pipeline.svg)
 
 ### 🎨 2. AI Bespoke Cover Generation
 
@@ -315,47 +347,63 @@ Oto kompletny przewodnik po działaniu skanowania, obsłudze nietypowych wydań 
 
 ---
 
-## 1. Anatomia skanowania: Tryb a Intencja
+## 1. Anatomia skanowania: Kompaktowy pasek i dwie zakładki
 
-Gdy otwierasz Skaner, na górnym pasku zobaczysz dwa przełączniki jeszcze przed skierowaniem kamery na kod. Zrozumienie ich działania zaoszczędzi Ci dziesiątki kliknięć:
+Gdy otwierasz Skaner, na samej górze zobaczysz kompaktowy jednowierszowy pasek sterowania (\`[Format ▾]\`, \`[Zapisz do ▾]\`, \`[Tryb seryjny ON/OFF]\`), poniżej **pełnoszerokościowy pasek szybkiego wyszukiwania** (obsługujący kody ISBN, ISSN, kody czasopism GS1 \`977\`, numery zestawów LEGO, lokalne kody QR oraz wyszukiwanie po tytule i autorze), a na dole **panel z dwiema zakładkami** (**Kod kreskowy** oraz **Zrób zdjęcie okładki**). Zrozumienie ich działania zaoszczędzi Ci dziesiątki kliknięć:
 
 ![Przebieg skanowania, wybór trybu i obsługa wyników](/images/help/scanner-workflow.jpg)
 
 ### Tryb pojedynczy a Tryb seryjny (Batch)
 
-
 * **Tryb pojedynczy:** Idealny, gdy kupujesz jedną nową książkę lub grę. Skanujesz kod, oglądasz kartę sukcesu i przechodzisz od razu do strony nowego egzemplarza.
 
-* **Tryb seryjny (Batch):** Stworzony do katalogowania całego regału naraz. Trzymaj telefon w jednej ręce i zdejmuj książki z półki drugą — za każdym razem, gdy iqoqo rozpozna kod, wyda dźwięk potwierdzenia, wyświetli dyskretne powiadomienie na dole ekranu i **pozostawi aktywny podgląd kamery**, by od razu skanować kolejną pozycję. W natywnej aplikacji na Androida i iOS tryb seryjny wykorzystuje sprzętowy aparat, latarkę i wibracje haptyczne, ułatwiając szybkie skanowanie.
+* **Tryb seryjny (Batch):** Stworzony do katalogowania całego regału naraz. Przełącznik na górnym pasku wyświetla wyraźną plakietkę \`ON\` / \`OFF\`. Trzymaj telefon w jednej ręce i zdejmuj książki z półki drugą — za każdym razem, gdy iqoqo rozpozna kod, wyda dźwięk potwierdzenia, wyświetli dyskretne powiadomienie na dole ekranu i **pozostawi aktywny podgląd kamery**, by od razu skanować kolejną pozycję. W natywnej aplikacji na Androida i iOS tryb seryjny wykorzystuje sprzętowy aparat, latarkę i wibracje haptyczne, ułatwiając szybkie skanowanie.
 
-### Intencja dodania: Półka czy Lista Życzeń
+### Cel zapisu (\`Zapisz do\`): Półka, Lista życzeń czy Tylko katalog
 
+* **Półka (\`OWNED\`):** Tworzy fizyczny **Egzemplarz (F4)** w Twoim inwentarzu i łączy go z wybraną Manifestacją. Jeśli miałeś wcześniej to Dzieło na Liście Życzeń, system automatycznie oznaczy życzenie jako **zrealizowane**!
 
-* **Dodaj do kolekcji (Na półkę):** Tworzy fizyczny **Egzemplarz (F4)** w Twoim inwentarzu i łączy go z wybraną Manifestacją.
+* **Lista życzeń (\`WISHLIST\`):** Pomija tworzenie fizycznego przedmiotu i rejestruje chęć nabycia danej **Manifestacji (F3)** lub **Dzieła (F1)** na Twojej Liście Życzeń — idealne rozwiązanie, gdy przeglądasz półki w księgarni stacjonarnej!
 
-* **Dodaj do Listy Życzeń:** Pomija tworzenie fizycznego przedmiotu i rejestruje chęć nabycia danej **Manifestacji (F3)** lub **Dzieła (F1)** na Twojej Liście Życzeń — idealne rozwiązanie, gdy przeglądasz półki w księgarni stacjonarnej!
+* **Tylko katalog:** Zapisuje rekord bibliograficzny (**Manifestację F3**) we wspólnym katalogu instancji bez dodawania fizycznego egzemplarza na Twoją półkę.
 
 ---
 
-## 2. Gdy kod kreskowy nie wystarcza: Ujednoznacznianie i formularz ręczny
+## 2. Gdy kod kreskowy nie wystarcza: Ujednoznacznianie, Czasopisma i Formularz ręczny
 
-Kody kreskowe bywają niejednoznaczne. Czasami wydawca używa tego samego kodu EAN dla trzech różnych dodruków gry planszowej, a starsze książki wydano przed wprowadzeniem systemu ISBN w 1970 roku.
+Kody kreskowe bywają niejednoznaczne. Czasami wydawca używa tego samego kodu EAN dla trzech różnych dodruków gry planszowej, starsze książki wydano przed wprowadzeniem systemu ISBN w 1970 roku, a kolejne numery tego samego czasopisma współdzielą ten sam podstawowy kod GS1 \`977\`!
 
 ### Krok A: Arkusz ujednoznaczniania (Disambiguation Sheet)
 
-Jeśli skanowanie lub wyszukiwanie po tytule zwróci kilka prawdopodobnych dopasowań z zewnętrznych źródeł (OpenLibrary, Google Books, Biblioteka Narodowa, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo wysunie **Arkusz ujednoznaczniania**.
+Jeśli skanowanie lub wyszukiwanie po tytule zwróci kilka prawdopodobnych dopasowań z zewnętrznych źródeł (OpenLibrary, Google Books, Biblioteka Narodowa, OpenCollections.org, Crossref, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, TMDB), iqoqo wysunie **Arkusz ujednoznaczniania**.
 
-* Porównaj miniatury okładek, lata wydania, wydawców i etykiety mediów (\`Książka\`, \`Gra planszowa\`, \`LEGO\`, \`Winyl\`, \`Gra wideo\`).
+* Porównaj miniatury okładek, lata wydania, wydawców i etykiety mediów (\`Książka\`, \`Czasopismo\`, \`Gra planszowa\`, \`LEGO\`, \`Winyl\`, \`Gra wideo\`).
 
 * Dotknij dokładnie tego wydania, które trzymasz w dłoni, aby dołączyć je do swojej kolekcji.
 
-* **Wskazówka dla kolekcjonerów LEGO:** Gdy na górnym pasku skanera wybierzesz ikonę **LEGO**, możesz zeskanować europejski kod EAN-13 z pudełka (\`570201...\`) lub wpisać 4–6-cyfrowy numer zestawu (np. \`10318\` lub \`77256\`) w pasku szybkiego wyszukiwania. iqoqo odpyta bazę **Rebrickable**, a w razie braku dopasowania automatycznie sięgnie do katalogu **Allegro**, pobierając numer zestawu, liczbę klocków, serię i zdjęcie pudełka!
+* **Wskazówka dla kolekcjonerów LEGO:** Gdy na górnym pasku wybierzesz format **LEGO**, możesz zeskanować europejski kod EAN-13 z pudełka (\`570201...\`) lub wpisać 4–6-cyfrowy numer zestawu (np. \`10318\` lub \`77256\`) w pasku szybkiego wyszukiwania. iqoqo odpyta bazę **Rebrickable**, a w razie braku dopasowania automatycznie sięgnie do katalogu **Allegro**, pobierając numer zestawu, liczbę klocków, serię i zdjęcie pudełka!
 
-### Krok B: Ręczne wprowadzanie danych
+### Krok B: Skanowanie czasopism, zinów i periodyków (ISSN i GS1 \`977\`)
+
+Czasopisma i dzienniki naukowe wykorzystują 13-cyfrowe kody handlowe GS1 \`977\` (oparte na 8-znakowym kodzie **ISSN** z sumą kontrolną Modulo-11), rozszerzone kody 15/18-cyfrowe z 2- lub 5-cyfrowym **dodatkiem EAN** oznaczającym numer wydania albo sam numer **ISSN** (\`XXXX-XXXX\`).
+
+* Po wybraniu formatu **Czasopismo** (lub zeskanowaniu kodu \`977\` / ISSN) iqoqo weryfikuje sumę kontrolną Modulo-11, odpytuje **Bibliotekę Narodową**, **Crossref**, **OpenLibrary** oraz **Allegro**, identyfikując tytuł nadrzędny (\`F18_Serial_Work\`).
+* **Kod z dodatkiem EAN-2/5:** Jeśli czytnik zeskanuje pełny 15- lub 18-cyfrowy kod z okładki, iqoqo od razu uzupełni numer wydania.
+* **Wspólny 13-cyfrowy kod \`977\`:** Ponieważ wiele numerów jednego pisma ma ten sam bazowy kod \`977\`, iqoqo otworzy okno **Wybierz lub dodaj numer czasopisma**, prezentując listę już skatalogowanych numerów. Możesz wybrać istniejący numer, kliknąć **Dodaj nowy numer** lub użyć **Zrób zdjęcie okładki, aby uzupełnić**, aby OCR automatycznie odczytał numerację i datę z okładki!
+
+![Potok rozpoznawania kodów kreskowych, czasopism ISSN/977 i wielu dostawców metadanych](/images/help/04-barcode-serial-ingestion.svg)
+
+### Krok C: Skan okładki i automatyczne skalowanie zdjęć 50 MP
+
+Gdy przedmiot nie ma czytelnego kodu kreskowego, przejdź do zakładki **Zrób zdjęcie okładki** (lub wgraj zdjęcie z galerii):
+
+* Zdjęcia ze współczesnych smartfonów (48–50 MP) są automatycznie zmniejszane w przeglądarce przed wysłaniem (do \`3840 px\` JPEG dla precyzyjnego OCR winiet i ISSN, oraz \`1280 px\` dla zapisywanych okładek), co zapobiega błędom \`413 Payload Too Large\` przy zachowaniu pełnej ostrości detali i ochronie serwera limitem 100 MP.
+
+### Krok D: Ręczne wprowadzanie danych
 
 Jeśli pozycja jest zupełnie nieznana globalnym bazom — jak lokalny zin, tomik poezji wydany własnym sumptem, mapa turystyczna czy unikatowe puzzle — kliknij **Wprowadź ręcznie** w dolnym panelu skanera:
-1. **Wybierz rodzaj nośnika:** Określ, czy dodajesz \`Książkę\`, \`Muzykę\`, \`Wideo\`, \`Grę planszową\`, \`Grę wideo\`, \`Puzzle\`, \`Zestaw LEGO\` czy \`Mapę kartograficzną / Atlas\`. Formularz dynamicznie dopasuje pola do Twojego wyboru!
-2. **Wprowadź podstawowe dane bibliograficzne:** Podaj tytuł, autora/twórcę, wydawcę, rok wydania i język (oraz pola specyficzne dla formatu, np. liczbę klocków LEGO lub skalę mapy).
+1. **Wybierz rodzaj nośnika:** Określ, czy dodajesz \`Książkę\`, \`Czasopismo\`, \`Muzykę\`, \`Wideo\`, \`Grę planszową\`, \`Grę wideo\`, \`Puzzle\`, \`Zestaw LEGO\` czy \`Mapę kartograficzną / Atlas\`. Formularz dynamicznie dopasuje pola do Twojego wyboru!
+2. **Wprowadź podstawowe dane bibliograficzne:** Podaj tytuł, autora/twórcę, wydawcę, rok wydania i język (oraz pola specyficzne dla formatu, np. ISSN / numer wydania / tom czasopisma, liczbę klocków LEGO lub skalę mapy).
 3. **Dodaj okładkę:** Nie musisz zostawiać pustego szarego pola! Skorzystaj z przełącznika źródła okładki, aby zrobić zdjęcie aparatem lub wybrać plik graficzny z pamięci urządzenia.
 4. **Zapisz i zbuduj drzewo WEMI:** Po zatwierdzeniu formularza iqoqo automatycznie zbuduje pełną hierarchię FRBR (Dzieło -> Ekspresja -> Manifestacja -> Egzemplarz) wraz z okładką.
 
@@ -394,13 +442,17 @@ Na stronie dowolnego Egzemplarza, Manifestacji, Ekspresji lub Dzieła kliknij pr
 
 Jako **Administrator instancji** możesz wzbogacić Skaner oraz Edytor okładek o opcjonalne integracje sztucznej inteligencji w Ustawieniach instancji.
 
-### 🔍 1. Skanowanie okładek za pomocą AI Vision
+### 🔍 1. Trzywarstwowy potok AI Vision i lokalny OCR okładek czasopism
 
-Gdy użytkownik skanuje starodruk lub płytę winylową bez kodu kreskowego, może zrobić zdjęcie samej okładki.
+Gdy użytkownik fotografuje starodruk, kopertę płyty winylowej lub okładkę magazynu bez kodu kreskowego, **Zrób zdjęcie okładki** (\`POST /api/vision/extract\`) uruchamia trójstopniowy mechanizm awaryjny (\`app/utils/vision.py\`):
 
-* **Jak to działa:** Jeśli AI Vision jest włączone, iqoqo przesyła obraz do skonfigurowanego modelu wizyjnego — obsługując **Lokalne AI (Ollama / LLaVA)** z gwarancją 100% prywatności offline, **Google Gemini** lub **OpenAI**.
+1. **Google Gemini Vision (\`gemini-2.0-flash\`):** Używany, gdy \`ALLOW_LLM=true\`, klucz \`GEMINI_API_KEY\` jest ustawiony, a użytkownik ma uprawnienie \`LLM_GENERATE_CLOUD\`.
+2. **Lokalny model LLM przez Ollama (\`llava\` / \`llama3.2-vision\`):** Używany, gdy \`ALLOW_LLM=true\` i zweryfikowany serwer \`OLLAMA_URL\` odpowiada w limicie \`OLLAMA_VISION_TIMEOUT\`.
+3. **Lokalny wielostrefowy OCR Tesseract (\`eng+pol\`):** Działa całkowicie offline bez GPU nawet przy \`ALLOW_LLM=false\`! Przycina winietę i narożniki okładki wraz z pełnym kadrem, rozpoznając po polsku i angielsku tytuł, autorów, ISSN, numer Indeksu, numer wydania (\`Nr 12/2026\`, \`Vol. 4\`), miesiąc publikacji oraz nagłówek z okładki.
 
-* **Efekt:** Model odczytuje typografię z okładki, automatycznie wyodrębniając tytuł, autora, wydawcę oraz wskazówki dotyczące wydania, oszczędzając ręcznego wpisywania.
+* **Audyt wykonania:** Każde uruchomienie dostawców \`gemini\`, \`ollama\` i \`tesseract\` jest rejestrowane w tabeli \`llm_telemetry\`. Administratorzy mogą sprawdzić realnie użyty silnik poleceniem \`python scripts/llm_usage_report.py --docker preview --hours 24\`.
+
+![Skalowanie zdjęć 50 MP, trójwarstwowy potok AI Vision/OCR i 7-poziomowy potok okładek](/images/help/05-vision-ocr-cover-pipeline.svg)
 
 ### 🎨 2. Generowanie dedykowanych okładek AI
 
@@ -441,29 +493,38 @@ In iqoqo, visibility is never an all-or-nothing switch. We separate **who you ar
 
 ![Three-Tier Privacy and Cascading Visibility Gate](/images/help/privacy-cascading-model.jpg)
 
-### 💡 Non-Obvious Detail: Default vs. Per-Item Overrides
+### 💡 Non-Obvious Detail: Default vs. Per-Item Overrides & Bulk Visibility
 
 In your Profile Settings, you set your **Default Item Visibility** (which defaults to \`PRIVATE\`). Every time you scan a batch of books in the Scanner, they inherit this default.
 
 * **The Hidden Gem:** What if your collection is mostly \`PUBLIC\`, but you just bought a rare, expensive first-edition comic—or a guilty-pleasure book—that you don't want anyone to see? Or what if your collection is \`PRIVATE\`, but you want to show off *one specific* board game to your friends?
 
-* **How to do it:** Open that specific Item's detail page, click **Edit Item**, and change its individual **Visibility** dropdown. Per-item visibility always overrides your account default!
+* **Per-Item Override:** Open that specific Item's detail page, click **Edit Item**, and change its individual **Visibility** dropdown. Per-item visibility always overrides your account default!
+
+* **Filtering by Visibility & Bulk Actions (\`/collection\`):** In the **Collection** sidebar, expand the **Visibility** section to filter your shelf by \`Public\`, \`Friends Only\`, or \`Private / Hidden\`. When browsing **My Items**, select up to \`100\` physical items using card selection checkboxes and click **Set visibility** in the floating **Bulk Visibility Toolbar** (\`PATCH /api/items/bulk-visibility\`) to move an entire shelf batch between tiers in one step.
+
+![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](/images/help/06-privacy-bulk-share-matrix.svg)
 
 ---
 
-## 2. Sharing Filtered Collection Views (Tokenized Share Links)
+## 2. Sharing Filtered Collection Views (Tokenized Share Links & AI Feeds)
 
-You don't have to make your entire profile public just to show a friend which board games you can bring to game night!
+You don't have to make your entire profile public just to show a friend—or an AI assistant—which board games or records match a specific slice of your shelf!
 
 ### How Snapshot / Filter Sharing Works
 
 When you are browsing your Collection, every filter you apply in the sidebar—such as \`Media: Board Games\`, \`Players: 4\`, \`Tag: Co-op\`, and \`On Shelf: Yes\`—is synchronized in real time with the page URL.
 
-If you click the **Share Collection** button in the top toolbar:
+If you click the **Share View** button in the top toolbar:
 1. **Secret Token Generation:** iqoqo generates a cryptographically random, unguessable share link (\`/share/[token]\`).
-2. **Scoped Visibility:** Anyone with that link can view **only** the items that match the exact filter combination you had active when you created the link—even if your profile is otherwise private!
-3. **Clean Guest UI:** Visitors opening a share link see a streamlined, read-only gallery. Personal management buttons, acquisition prices, and private notes are automatically stripped out.
+2. **Configurable Visibility Scope (\`visibility_scope\`):** Choose exactly what this link reveals before clicking **Generate Link**:
+   * **Public only (Recommended) + Friend Bonus:** Anonymous visitors see \`PUBLIC\` items only. **Signed-in accepted friends** opening the same share link automatically unlock your \`FRIENDS_ONLY\` items that match the filter!
+   * **Friends & Public:** Anyone holding the token can view both \`PUBLIC\` and \`FRIENDS_ONLY\` matching items (\`PRIVATE\` items stay hidden).
+   * **All items (including Private/Hidden):** Anyone holding the token (including external AI assistants) can read all matching items, including \`PRIVATE\` copies. An explicit warning banner reminds you before generating the link.
+3. **Clean Guest UI & Machine-Readable AI Feeds:** Visitors opening \`/share/[token]\` see a streamlined, read-only gallery with prices and private notes stripped out. Meanwhile, a compact **W3C RDF / JSON-LD** button links to \`/share/[token]/catalog.jsonld\`, \`/share/[token]/feed.xml\`, and query-free paginated mini-pages (\`/share/[token]/jsonld/1\`, \`/2\`, ... at \`60\` items per page) built specifically for Gemini Gems, ChatGPT Custom GPTs, Claude Projects, and CLI tools (ready-to-use templates live in \`docs/gems/\`).
 4. **Instant Revocation:** Changed your mind? You can revoke active share tokens at any time from your sharing settings, immediately invalidating the URL.
+
+![Semantic Web Layer, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](/images/help/07-semantic-web-sparql-feeds.svg)
 
 ---
 
@@ -478,11 +539,12 @@ When you rate or review a **Work**, **Expression**, or **Manifestation**:
 
 * **Non-Obvious Nuance:** Rate the **Work** to judge the author's story or the game designer's rules. Rate the **Expression** to judge the translator or audiobook narrator. Rate the **Manifestation** to judge the physical build quality (e.g., *"The binding on this 2021 hardcover falls apart!"*).
 
-### 📝 Private & Social Notes
+### 📝 Private & Social Notes + Reading Session Privacy
 
 Every FRBR page features a dedicated **Notes** section. Unlike public reviews, Notes are designed for your personal marginalia—reading quotes, house rules for a board game, or reminders about who recommended a record to you.
 
 * You can toggle individual notes between **Private** (strictly for your eyes only) and **Shared**, allowing you to keep personal study notes right alongside public discussions without mixing them up.
+* On any owned physical **Item**, **Reading Session** notes (\`reading_sessions\`) are strictly private to you as the owner and are automatically redacted for all other viewers, while your logged reading minutes contribute anonymously to edition-wide average reading durations on the Manifestation page.
 
 ---
 
@@ -524,29 +586,38 @@ W iqoqo widoczność nigdy nie jest prostym przełącznikiem „wszystko albo ni
 
 ![Trójstopniowy model prywatności i kaskadowa bramka uprawnień](/images/help/privacy-cascading-model.jpg)
 
-### 💡 Nieoczywisty detal: Domyślna widoczność a nadpisywanie dla pojedynczego egzemplarza
+### 💡 Nieoczywisty detal: Domyślna widoczność, filtry i masowe zmiany
 
 W Ustawieniach profilu określasz **Domyślną widoczność egzemplarzy** (domyślnie: \`PRYWATNY\`). Każda nowo zeskanowana partia książek w Skanerze dziedziczy to ustawienie.
 
 * **Ukryta perełka:** Co jeśli Twoja kolekcja jest w większości publiczna, ale kupiłeś właśnie rzadki, drogi komiks lub książkę, którą wolisz zachować tylko dla siebie? Albo Twoja kolekcja jest prywatna, lecz chcesz pochwalić się znajomym *tą jedną konkretną* grą planszową?
 
-* **Jak to zrobić:** Otwórz stronę danego Egzemplarza, kliknij **Edytuj egzemplarz** i zmień pole **Widoczność**. Ustawienie konkretnego egzemplarza zawsze ma pierwszeństwo przed domyślnym ustawieniem konta!
+* **Nadpisywanie dla pojedynczego egzemplarza:** Otwórz stronę danego Egzemplarza, kliknij **Edytuj egzemplarz** i zmień pole **Widoczność**. Ustawienie konkretnego egzemplarza zawsze ma pierwszeństwo przed domyślnym ustawieniem konta!
+
+* **Filtrowanie po widoczności i zmiana zbiorcza (\`/collection\`):** W panelu bocznym Kolekcji otwórz sekcję **Widoczność**, aby filtrować półkę według pozycji \`Publiczne\`, \`Tylko dla znajomych\` oraz \`Prywatne / Ukryte\`. W widoku **Moje egzemplarze** zaznacz do \`100\` egzemplarzy i użyj przycisku **Ustaw widoczność** na pływającym pasku narzędzi, aby jednym kliknięciem zmienić widoczność całej półki.
+
+![Trójstopniowa bramka prywatności, pasek zbiorczej widoczności i macierz dostępu do udostępnień](/images/help/06-privacy-bulk-share-matrix.svg)
 
 ---
 
-## 2. Udostępnianie przefiltrowanych widoków (Tokenizowane linki)
+## 2. Udostępnianie przefiltrowanych widoków (Tokenizowane linki i kanały AI)
 
-Nie musisz upubliczniać całego profilu tylko po to, by pokazać znajomym, jakie gry planszowe możesz zabrać na piątkowe spotkanie!
+Nie musisz upubliczniać całego profilu tylko po to, by pokazać znajomym — albo asystentowi AI — jakie gry planszowe lub płyty winylowe masz w wybranym wycinku półki!
 
 ### Jak działa udostępnianie przefiltrowanych widoków
 
 Gdy przeglądasz Kolekcję, każdy filtr zastosowany w panelu bocznym — np. \`Media: Gry planszowe\`, \`Liczba graczy: 4\`, \`Tag: Kooperacja\`, \`Na półce: Tak\` — synchronizuje się w czasie rzeczywistym z adresem URL.
 
-Klikając przycisk **Udostępnij kolekcję** na górnym pasku:
+Klikając przycisk **Udostępnij widok** na górnym pasku:
 1. **Generowanie unikalnego tokenu:** iqoqo tworzy bezpieczny, kryptograficzny odnośnik (\`/share/[token]\`).
-2. **Ściśle ograniczony zasięg:** Każdy, kto otworzy ten link, zobaczy **wyłącznie** pozycje spełniające dokładnie te kryteria, które były aktywne w chwili generowania linku — nawet jeśli Twój profil jest w pełni prywatny!
-3. **Czysty interfejs gościa:** Osoba odwiedzająca widzi przejrzystą galerię tylko do odczytu. Przyciski zarządzania, ceny zakupu i prywatne notatki są automatycznie ukrywane.
+2. **Konfigurowalny zakres widoczności (\`visibility_scope\`):** Przed wygenerowaniem linku wybierz, kto ma dostęp do niepublicznych pozycji:
+   * **Tylko publiczne (Zalecane) + Bonus dla Znajomych:** Anonimowi goście widzą wyłącznie pozycje publiczne, natomiast **zalogowani zaakceptowani znajomi** otwierający ten sam link automatycznie widzą także Twoje pozycje oznaczone jako \`Tylko dla znajomych\`!
+   * **Znajomi i publiczne:** Każdy posiadacz linku zobaczy pozycje \`Publiczne\` oraz \`Tylko dla znajomych\` spełniające kryteria (\`Prywatne\` pozostają ukryte).
+   * **Wszystkie egzemplarze (w tym prywatne/ukryte):** Każdy posiadacz linku (łącznie z zewnętrznymi asystentami AI) odczyta wszystkie pasujące pozycje, także prywatne — okno dialogowe wyświetla wyraźne ostrzeżenie przed utworzeniem takiego linku.
+3. **Czysty interfejs gościa i kanały dla asystentów AI:** Osoba odwiedzająca \`/share/[token]\` widzi przejrzystą galerię tylko do odczytu bez cen zakupu i prywatnych notatek. Jednocześnie ikona **W3C RDF / JSON-LD** prowadzi do bezparametrowych podstron \`/share/[token]/jsonld/1\`, \`/2\`, … (\`60\` pozycji na stronę) oraz \`/share/[token]/catalog.jsonld\` i \`/feed.xml\`, z których korzystają gotowe szablony Gemów Gemini, Custom GPT i Claude w \`docs/gems/\`.
 4. **Natychmiastowe unieważnienie:** Zmieniłeś zdanie? W każdej chwili możesz cofnąć aktywny token w ustawieniach udostępniania, natychmiast wyłączając dostęp.
+
+![Warstwa Semantic Web, izolowana usługa SPARQL i kanały JSON-LD dla asystentów AI](/images/help/07-semantic-web-sparql-feeds.svg)
 
 ---
 
@@ -561,11 +632,12 @@ Gdy oceniasz lub recenzujesz **Dzieło**, **Ekspresję** lub **Manifestację**:
 
 * **Ważny niuans:** Oceń **Dzieło**, by docenić kunszt pisarza lub mechanikę projektanta gry. Oceń **Ekspresję**, by ocenić pracę tłumacza lub lektora audiobooka. Oceń **Manifestację**, by ocenić jakość wydania (np. *„W tym wydaniu z 2021 roku klej w grzbiecie puszcza po tygodniu!”*).
 
-### 📝 Notatki prywatne i współdzielone
+### 📝 Notatki prywatne i współdzielone + prywatność sesji czytania
 
 Każda strona w modelu FRBR posiada dedykowaną sekcję **Notatki**. W przeciwieństwie do publicznych recenzji, notatki służą do zapisywania Twoich osobistych zapisków na marginesie — cytatów, zasad domowych w grze czy informacji, kto polecił Ci daną płytę.
 
 * Możesz oznaczać notatki jako **Prywatne** (tylko dla Ciebie) lub **Współdzielone**, co pozwala trzymać osobiste zapiski obok dyskusji bez ich przypadkowego wymieszania.
+* Na karcie fizycznego **Egzemplarza** notatki z **sesji czytania** (\`reading_sessions\`) są ściśle prywatne i automatycznie ukrywane przed innymi użytkownikami, podczas gdy sam czas trwania anonimowo zasila średni czas czytania danej Manifestacji.
 
 ---
 
@@ -657,6 +729,10 @@ Not sure which instances are out there? Visit the [Federation Directory](/federa
 
 * To participate in cross-instance social features or lending, you must explicitly opt in via your Profile Settings (**Federation Consent**). You can revoke this consent at any time.
 
+### 6. Read-Only Federation Showcase Hub Mode
+
+Communities, clubs, and aggregators can run a dedicated read-only **Federation Showcase Hub** by enabling \`FEDERATION_HEAD_MODE\` (the \`federation_head\` installer profile). Showcase hubs display explicit read-only badges and disable personal shelf uploads and physical item creation while allowing visitors and members to explore federated catalogs, create wishlists, and follow peer libraries.
+
 ---
 
 ## Part 2: Under the Hood (Technical Architecture)
@@ -664,6 +740,8 @@ Not sure which instances are out there? Visit the [Federation Directory](/federa
 For system administrators, self-hosters, and curious developers, iqoqo's federation is built on open W3C Semantic Web standards rather than proprietary APIs. It combines **ActivityPub (Server-to-Server)**, **WebFinger**, **HTTP Signatures**, **JSON-LD / RDF**, and **Federated SPARQL**.
 
 ![ActivityPub S2S Discovery and Cryptographic Loan Handshake](/images/help/federation-s2s-handshake.jpg)
+
+![ActivityPub S2S Federation, 3-Tier Trust Matrix, and Cross-Instance Lending Pipeline](/images/help/09-activitypub-federation-lending.svg)
 
 ### 1. Actor Discovery & WebFinger
 
@@ -685,7 +763,7 @@ Every Server-to-Server (S2S) POST request sent to a remote inbox is cryptographi
 ### 3. Asynchronous Inbox / Outbox Pipeline
 
 Federation network traffic never blocks the main web application:
-* Outbound activities (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) are queued to **Celery workers** backed by Redis with exponential backoff retries.
+* Outbound activities (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) are queued to **Celery workers** backed by **Valkey 8** (Redis-compatible \`redis://\` broker and LRU cache) with exponential backoff retries.
 
 * Incoming activities hit \`/api/federation/inbox\`, where signatures and trust policies are verified before dispatching to domain handlers.
 
@@ -778,6 +856,10 @@ Nie wiesz, jakie biblioteki działają w sieci? Odwiedź [Katalog połączonych 
 
 * Aby uczestniczyć w wymianie czy wypożyczeniach między instancjami, musisz świadomie wyrazić zgodę w Ustawieniach profilu (**Zgoda na federację**). Możesz ją wycofać w dowolnej chwili.
 
+### 6. Tryb katalogu pokazowego Federacji (Federation Showcase Hub)
+
+Społeczności, kluby i agregatory mogą uruchomić serwer w trybie tylko do odczytu (\`FEDERATION_HEAD_MODE\` / profil \`federation_head\`). Taki węzeł wyświetla oznaczenia trybu tylko do odczytu i blokuje dodawanie fizycznych egzemplarzy na lokalne półki, umożliwiając jednak swobodne przeszukiwanie połączonego katalogu federacyjnego i budowanie list życzeń.
+
 ---
 
 ## Część 2: Pod maską (Architektura techniczna)
@@ -785,6 +867,8 @@ Nie wiesz, jakie biblioteki działają w sieci? Odwiedź [Katalog połączonych 
 Dla administratorów i ciekawskich programistów: federacja w iqoqo opiera się na otwartych standardach W3C Semantic Web: **ActivityPub (Server-to-Server)**, **WebFinger**, **HTTP Signatures**, **JSON-LD / RDF** oraz **Federated SPARQL**.
 
 ![Odkrywanie aktorów ActivityPub i kryptograficzny uścisk dłoni przy wypożyczeniu](/images/help/federation-s2s-handshake.jpg)
+
+![Architektura federacji ActivityPub S2S, trójstopniowego zaufania i wypożyczeń między serwerami](/images/help/09-activitypub-federation-lending.svg)
 
 ### 1. Odkrywanie tożsamości (WebFinger)
 
@@ -806,7 +890,7 @@ Każde zapytanie POST przesyłane między serwerami (S2S) jest podpisywane krypt
 ### 3. Asynchroniczny potok Inbox / Outbox
 
 Ruch sieciowy federacji nigdy nie blokuje głównej aplikacji internetowej:
-* Wychodzące aktywności (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) trafiają do **kolejki Celery** opartej na Redis z automatycznym ponawianiem prób.
+* Wychodzące aktywności (\`Follow\`, \`Accept\`, \`Reject\`, \`Offer\`, \`Return\`, \`Create\`, \`Update\`, \`Delete\`) trafiają do **kolejki Celery** opartej na **Valkey 8** (kompatybilnym z Redis) z automatycznym ponawianiem prób.
 
 * Przychodzące komunikaty trafiają na endpoint \`/api/federation/inbox\`, gdzie po weryfikacji podpisu są przekazywane do odpowiednich procesorów domenowych.
 
@@ -970,11 +1054,11 @@ Navigate to the Duplicate Reviewer to inspect system-flagged candidates across a
 
 ### Multi-Provider Metadata Gap-Filling
 
-If a Manifestation has a valid ISBN/Barcode but is missing cover art, page counts, or descriptions, open it in the Content Editor and trigger **Provider Merge / Refetch**. iqoqo will query multiple upstream providers in parallel, allowing you to cherry-pick the best cover from one provider and the richest synopsis from another without overwriting your manual curatorial fixes.
+If a Manifestation has a valid ISBN/Barcode but is missing cover art, page counts, or descriptions, open it in the Content Editor and trigger **Provider Merge / Refetch**. iqoqo will query multiple upstream providers in parallel (including **OpenCollections.org**, OpenLibrary, Google Books, Biblioteka Narodowa, Crossref, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB, and TMDB), allowing you to cherry-pick the best cover from one provider and the richest synopsis from another without overwriting your manual curatorial fixes.
 
 ### Linked Open Data (LOD) Reconciliation
 
-Finally, visit the LOD Reconciliation Dashboard to link local Works and Contributors to global Semantic Web authorities (**Wikidata**, **VIAF**, **MusicBrainz**, **GeoNames**). Establishing an \`owl:sameAs\` link at the Work level allows iqoqo to automatically federated-match your catalog with other iqoqo instances around the world!
+Finally, visit the LOD Reconciliation Dashboard to link local Works and Contributors to global Semantic Web authorities (**Wikidata**, **VIAF**, **DBpedia**, **MusicBrainz**, **GeoNames**, **OpenCollections.org**, and **WordNet**). Establishing an \`owl:sameAs\` or \`schema:sameAs\` link at the Work level allows iqoqo to automatically federated-match your catalog with other iqoqo instances around the world!
 
 ---
 
@@ -1006,6 +1090,28 @@ When a collector submits a **Request New Media Type / Format (\`NEW_MEDIA_TYPE\`
 * Review the proposed **Category**, **Format**, **Parent FRBRoo Class** (\`F1_Work\`, \`F16_Container_Work\`, \`F3_Manifestation_Product_Type\`), **Sample Identifier**, and **Collector Rationale**.
 * If the medium can already be represented using an existing category and format alias, resolve the ticket with curatorial guidance explaining which format to pick.
 * If the proposal represents a genuine gap in the instance taxonomy, approve the escalation and include the structured specification in the next ontology update (\`shared/format_mappings.yaml\` and \`docs/ontology/taxonomy.ttl\`).
+
+---
+
+## 8. Modeling Periodicals, Magazines & Academic Serials (\`F18_Serial_Work\`)
+
+Release \`1.1.0\` introduces dedicated **FRBRoo \`F18_Serial_Work\`** support so recurring magazines, zines, and academic journals do not fracture into dozens of disconnected Works:
+
+* **One Serial Work (\`F18_Serial_Work\`):** Model the recurring publication itself as a single \`Work\` with \`work_kind = "serial"\` and its canonical Modulo-11 **ISSN** (\`XXXX-XXXX\`), optional eISSN, frequency, and publisher.
+* **Expression (\`F2\`):** Group regional or language editions of the periodical (\`content_type = "serial"\`).
+* **Individual Issues as Manifestations (\`F3 / PublicationIssue\`):** Each published issue lives as its own \`Manifestation\` storing \`issue_number\`, optional \`cumulative_issue_number\` (e.g., \`12(342)\`), \`volume\`, \`publication_year\`, \`publication_month\`, \`ean_addon\`, \`full_barcode\`, and \`cover_headline\`.
+* **Never Contaminate Serial Titles:** Keep \`Work.title\` clean (e.g., *National Geographic Polska* — never *National Geographic Polska #12/2025*); issue-specific numbers and cover headlines belong on the **Manifestation** so the **"Issues in this Serial"** chronological browser on \`/work/[id]\` stays neatly grouped by year!
+
+---
+
+## 9. Auditing Graph Topology with the Visual Relation Graph (\`/graph\`)
+
+Before merging complex Works or untangling Series and Expansion links, click **Explore Graph** on any Work, Expression, Manifestation, or Item page to open the **FRBR Relation Graph** (\`/graph?type=<tier>&id=<id>\`, backed by \`GET /api/catalog/graph\`):
+
+* **1-Hop or 2-Hop Traversal:** Toggle between 1-hop and 2-hop neighborhood expansion (bounded at \`150\` nodes) and filter edge categories across **FRBR Hierarchy**, **Series**, **Parts & Expansions**, **Contributors**, **Maps**, and **LOD** authorities.
+* **Recenter & Verify:** Highlight nodes by label, click any node to inspect metadata or **Recenter Graph on This Node**, and verify that expansions (\`is_expansion_of\`), multi-volume parts (\`WorkPart\`), and accepted \`SemanticLink\`s point to the intended FRBR tier.
+
+![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](/images/help/08-frbr-visual-relation-graph.svg)
 `,
       pl: `Witaj w zespole Kustoszy! Choć automatyczny potok pobierania danych w iqoqo bez trudu radzi sobie z 90% codziennych skanów kodów kreskowych, odpytując OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB i TMDB, prawdziwa siła katalogu semantycznego tkwi w modelowaniu **nietrywialnych 10%**.
 
@@ -1119,11 +1225,11 @@ Przejdź do Modułu Deduplikacji, aby przejrzeć kandydatów na wszystkich trzec
 
 ### Uzupełnianie braków z wielu źródeł
 
-Jeśli Manifestacja posiada poprawny kod kreskowy, ale brakuje jej okładki lub opisu, otwórz ją w Edytorze Treści i uruchom funkcję **Wzbogać od dostawców**. iqoqo odpyta równolegle wiele serwisów, pozwalając Ci wybrać najlepszą okładkę z jednego źródła i bogaty opis z drugiego.
+Jeśli Manifestacja posiada poprawny kod kreskowy, ale brakuje jej okładki lub opisu, otwórz ją w Edytorze Treści i uruchom funkcję **Wzbogać od dostawców**. iqoqo odpyta równolegle wiele serwisów (**OpenCollections.org**, OpenLibrary, Google Books, Biblioteka Narodowa, Crossref, Allegro, BGG, Rebrickable, Discogs, MusicBrainz, IGDB i TMDB), pozwalając Ci wybrać najlepszą okładkę z jednego źródła i bogaty opis z drugiego.
 
 ### Uzgadnianie z Otwartymi Danymi Powiązanymi (LOD)
 
-Wreszcie odwiedź Panel Uzgadniania LOD, aby powiązać lokalne Dzieła i Twórców z globalnymi autorytetami Semantic Web (**Wikidane**, **VIAF**, **MusicBrainz**, **GeoNames**). Relacja \`owl:sameAs\` pozwala iqoqo na automatyczne dopasowywanie zbiorów z innymi bibliotekami na całym świecie!
+Wreszcie odwiedź Panel Uzgadniania LOD, aby powiązać lokalne Dzieła i Twórców z globalnymi autorytetami Semantic Web (**Wikidane**, **VIAF**, **DBpedia**, **MusicBrainz**, **GeoNames**, **OpenCollections.org** i **WordNet**). Relacja \`owl:sameAs\` lub \`schema:sameAs\` pozwala iqoqo na automatyczne dopasowywanie zbiorów z innymi bibliotekami na całym świecie!
 
 ---
 
@@ -1155,6 +1261,28 @@ Gdy kolekcjoner prześle zgłoszenie **Zaproponuj nowy typ mediów (\`NEW_MEDIA_
 * Przejrzyj proponowaną **Kategorię**, **Format**, **Nadrzędną klasę FRBRoo** (\`F1_Work\`, \`F16_Container_Work\`, \`F3_Manifestation_Product_Type\`), **Przykładowy identyfikator** oraz **Uzasadnienie kolekcjonera**.
 * Jeśli dany nośnik mieści się już w istniejącej taksonomii jako alias formatu, zamknij zgłoszenie z instrukcją dla użytkownika.
 * Jeśli propozycja wskazuje na rzeczywistą lukę w taksonomii, zatwierdź zgłoszenie, aby uwzględnić nowy format w słowniku \`shared/format_mappings.yaml\` oraz \`docs/ontology/taxonomy.ttl\`.
+
+---
+
+## 8. Modelowanie czasopism, magazynów i periodyków naukowych (\`F18_Serial_Work\`)
+
+Wydanie \`1.1.0\` wprowadza natywną obsługę klasy **FRBRoo \`F18_Serial_Work\`**, dzięki której kolejne numery magazynów i czasopism nie rozpadają się na osobne, niepowiązane Dzieła:
+
+* **Jedno Dzieło ciągłe (\`F18_Serial_Work\`):** Tytuł czasopisma jako całość to jedno \`Dzieło\` z polem \`work_kind = "serial"\`, zwalidowanym kodem **ISSN** Modulo-11 (\`XXXX-XXXX\`), opcjonalnym eISSN oraz wydawcą.
+* **Ekspresja (\`F2\`):** Odzwierciedla mutację językową lub regionalną (\`content_type = "serial"\`).
+* **Poszczególne numery jako Manifestacje (\`F3 / PublicationIssue\`):** Każdy numer to osobna \`Manifestacja\` przechowująca \`issue_number\`, numerację ciągłą \`cumulative_issue_number\` (np. \`12(342)\`), \`volume\`, rok i miesiąc wydania, \`ean_addon\`, \`full_barcode\` oraz nagłówek okładki (\`cover_headline\`).
+* **Czysty tytuł Dzieła:** W \`Work.title\` wpisuj wyłącznie tytuł pisma (np. *National Geographic Polska* — bez dopisków \`#12/2025\`), dzięki czemu sekcja **„Numery w tym czasopiśmie”** na stronie Dzieła grupuje wszystkie wydania chronologicznie według lat!
+
+---
+
+## 9. Audyt topologii grafu w Grafie Relacji FRBR (\`/graph\`)
+
+Przed scalaniem złożonych Dzieł lub porządkowaniem relacji serii i dodatków kliknij **Eksploruj graf** na stronie dowolnego Dzieła, Ekspresji, Manifestacji lub Egzemplarza (\`/graph?type=<poziom>&id=<id>\`, zasilane przez \`GET /api/catalog/graph\`):
+
+* **Trawersowanie 1 lub 2 skoków:** Przełączaj głębokość (\`1 skok\` / \`2 skoki\`, limit \`150\` węzłów) i filtruj kategorie krawędzi: **Hierarchia FRBR**, **Serie**, **Części i rozszerzenia**, **Twórcy**, **Mapy** oraz **LOD**.
+* **Wyśrodkowanie i weryfikacja:** Wyróżniaj węzły po nazwie, przełączaj centrum grafu na wybrany węzeł i sprawdzaj poprawność powiązań zanim zatwierdzisz scalenie lub edycję.
+
+![Interaktywny Graf Relacji FRBR (/graph): silnik trawersowania BFS i kontrola widoczności](/images/help/08-frbr-visual-relation-graph.svg)
 `,
     },
   },

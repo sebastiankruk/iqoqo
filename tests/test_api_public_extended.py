@@ -20,6 +20,7 @@ import json
 import pytest
 
 from app.api.auth import generate_internal_jwt
+from app.db.auth import UserFriendship
 from app.db.contributions import Contributor, WorkContribution
 from app.db.models import Expression, Item, Manifestation, SharedCollection, User, UserWorkIntent, Work, db
 
@@ -600,3 +601,347 @@ def test_shared_collection_escapes_sql_wildcards(client, app, test_user):
     data = res.json
     assert res.status_code == 200
     assert len(data["data"]["items"]) == 0
+
+
+def test_create_shared_collection_visibility_scope_validation(client, app):
+    """POST /api/sharing validates visibility_scope, defaults to public_only, and rejects invalid values."""
+    headers = _make_share_headers(app)
+
+    default_resp = client.post("/api/sharing", json={"name": "Default Scope"}, headers=headers)
+    assert default_resp.status_code == 200
+    default_data = default_resp.json["data"]
+    assert default_data["filters"]["visibility_scope"] == "public_only"
+    assert default_data["visibility_scope"] == "public_only"
+
+    friends_resp = client.post(
+        "/api/sharing",
+        json={"name": "Friends Scope", "visibility_scope": "friends_and_public"},
+        headers=headers,
+    )
+    assert friends_resp.status_code == 200
+    assert friends_resp.json["data"]["filters"]["visibility_scope"] == "friends_and_public"
+    assert friends_resp.json["data"]["visibility_scope"] == "friends_and_public"
+
+    nested_all_resp = client.post(
+        "/api/sharing",
+        json={"name": "All Scope", "filters": {"visibility_scope": "all", "status": "read"}},
+        headers=headers,
+    )
+    assert nested_all_resp.status_code == 200
+    assert nested_all_resp.json["data"]["filters"]["visibility_scope"] == "all"
+    assert nested_all_resp.json["data"]["visibility_scope"] == "all"
+
+    bad_top_resp = client.post(
+        "/api/sharing",
+        json={"name": "Invalid Top Scope", "visibility_scope": "everything_secret"},
+        headers=headers,
+    )
+    assert bad_top_resp.status_code == 400
+
+    bad_nested_resp = client.post(
+        "/api/sharing",
+        json={"name": "Invalid Nested Scope", "filters": {"visibility_scope": "secret_only"}},
+        headers=headers,
+    )
+    assert bad_nested_resp.status_code == 400
+
+
+def _seed_scoped_share_fixture(app) -> dict[str, object]:
+    """Create owner, accepted friend, stranger, and public/friends_only/private items."""
+    with app.app_context():
+        owner = User(email="scope_owner@iqoqo.local", public_username="scopeowner", visibility="public")
+        friend = User(email="scope_friend@iqoqo.local", public_username="scopefriend", visibility="public")
+        stranger = User(email="scope_stranger@iqoqo.local", public_username="scopestranger", visibility="public")
+        db.session.add_all([owner, friend, stranger])
+        db.session.flush()
+
+        db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+        titles: list[tuple[str, str, bool]] = [
+            ("Scope Book Public", "public", False),
+            ("Scope Book Friends", "friends_only", False),
+            ("Scope Book Private", "private", True),
+        ]
+        for title, vis, hidden in titles:
+            work = Work(title=title, meta={"authors": ["Author X"]})
+            db.session.add(work)
+            db.session.flush()
+            expr = Expression(work_id=work.id, content_type="text")
+            db.session.add(expr)
+            db.session.flush()
+            mani = Manifestation(expression_id=expr.id, meta={"title": title})
+            db.session.add(mani)
+            db.session.flush()
+            db.session.add(
+                Item(
+                    owner_id=owner.id,
+                    manifestation_id=mani.id,
+                    status="read",
+                    visibility=vis,
+                    is_hidden=hidden,
+                )
+            )
+
+        share_pub = SharedCollection(
+            user_id=owner.id, name="Scope Public", filters={"visibility_scope": "public_only", "query": "Scope Book"}
+        )
+        share_fr = SharedCollection(
+            user_id=owner.id, name="Scope Friends", filters={"visibility_scope": "friends_and_public", "query": "Scope Book"}
+        )
+        share_all = SharedCollection(user_id=owner.id, name="Scope All", filters={"visibility_scope": "all", "query": "Scope Book"})
+        db.session.add_all([share_pub, share_fr, share_all])
+        db.session.commit()
+
+        return {
+            "owner_headers": {"Authorization": f"Bearer {generate_internal_jwt(owner)}"},
+            "friend_headers": {"Authorization": f"Bearer {generate_internal_jwt(friend)}"},
+            "stranger_headers": {"Authorization": f"Bearer {generate_internal_jwt(stranger)}"},
+            "pub_token": share_pub.share_token,
+            "friends_token": share_fr.share_token,
+            "all_token": share_all.share_token,
+        }
+
+
+def test_shared_collection_token_scope_and_friend_bonus(client, app):
+    """Verify public_only (+ friend bonus), friends_and_public, and all scopes with cache headers."""
+    ctx = _seed_scoped_share_fixture(app)
+    pub_token = ctx["pub_token"]
+    friends_token = ctx["friends_token"]
+    all_token = ctx["all_token"]
+
+    # 1. Anonymous caller on public_only -> only public + public cacheable
+    anon_pub = client.get(f"/api/public/share/{pub_token}")
+    assert anon_pub.status_code == 200
+    assert {i["title"] for i in anon_pub.json["data"]["items"]} == {"Scope Book Public"}
+    assert "public" in anon_pub.headers.get("Cache-Control", "")
+
+    # 2. Stranger authenticated user on public_only -> still only public
+    stranger_pub = client.get(f"/api/public/share/{pub_token}", headers=ctx["stranger_headers"])
+    assert stranger_pub.status_code == 200
+    assert {i["title"] for i in stranger_pub.json["data"]["items"]} == {"Scope Book Public"}
+    assert "public" in stranger_pub.headers.get("Cache-Control", "")
+
+    # 3. Accepted friend on public_only -> Friend Bonus (public + friends_only, no private) + private, no-store
+    friend_pub = client.get(f"/api/public/share/{pub_token}", headers=ctx["friend_headers"])
+    assert friend_pub.status_code == 200
+    assert {i["title"] for i in friend_pub.json["data"]["items"]} == {"Scope Book Public", "Scope Book Friends"}
+    assert friend_pub.headers.get("Cache-Control") == "private, no-store"
+    assert "Authorization" in friend_pub.headers.get("Vary", "")
+
+    # 4. Owner on public_only -> Friend Bonus applies too
+    owner_pub = client.get(f"/api/public/share/{pub_token}", headers=ctx["owner_headers"])
+    assert owner_pub.status_code == 200
+    assert {i["title"] for i in owner_pub.json["data"]["items"]} == {"Scope Book Public", "Scope Book Friends"}
+    assert owner_pub.headers.get("Cache-Control") == "private, no-store"
+
+    # 5. Anonymous token holder on friends_and_public -> public + friends_only (private excluded)
+    anon_fr = client.get(f"/api/public/share/{friends_token}")
+    assert anon_fr.status_code == 200
+    assert {i["title"] for i in anon_fr.json["data"]["items"]} == {"Scope Book Public", "Scope Book Friends"}
+    assert anon_fr.headers.get("Cache-Control") == "private, no-store"
+
+    # 6. Anonymous token holder on all -> public + friends_only + private
+    anon_all = client.get(f"/api/public/share/{all_token}")
+    assert anon_all.status_code == 200
+    assert {i["title"] for i in anon_all.json["data"]["items"]} == {
+        "Scope Book Public",
+        "Scope Book Friends",
+        "Scope Book Private",
+    }
+    assert anon_all.headers.get("Cache-Control") == "private, no-store"
+
+    # 7. RSS feed obeys scopes and cache headers too
+    rss_pub = client.get(f"/api/public/share/{pub_token}/feed.xml")
+    assert rss_pub.status_code == 200
+    assert b"Scope Book Public" in rss_pub.data
+    assert b"Scope Book Friends" not in rss_pub.data
+    assert b"Scope Book Private" not in rss_pub.data
+    assert "public" in rss_pub.headers.get("Cache-Control", "")
+
+    rss_friend = client.get(f"/api/public/share/{pub_token}/feed.xml", headers=ctx["friend_headers"])
+    assert rss_friend.status_code == 200
+    assert b"Scope Book Public" in rss_friend.data
+    assert b"Scope Book Friends" in rss_friend.data
+    assert b"Scope Book Private" not in rss_friend.data
+    assert rss_friend.headers.get("Cache-Control") == "private, no-store"
+
+    rss_all = client.get(f"/api/public/share/{all_token}/feed.xml")
+    assert rss_all.status_code == 200
+    assert b"Scope Book Private" in rss_all.data
+    assert rss_all.headers.get("Cache-Control") == "private, no-store"
+    assert "Authorization" in rss_pub.headers.get("Vary", "")
+    assert "Cookie" in rss_pub.headers.get("Vary", "")
+
+
+def test_shared_collection_includes_friends_only_is_hidden_true_and_sets_vary(client, app):
+    """C136: friends_only items (is_hidden=True) appear on friends_and_public/Friend Bonus, and public cache sets Vary."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.auth import UserFriendship
+
+    with app.app_context():
+        owner = User(email="c136owner@example.com")
+        owner.set_password("StrongPass123!")
+        friend = User(email="c136friend@example.com")
+        friend.set_password("StrongPass123!")
+        db.session.add_all([owner, friend])
+        db.session.flush()
+        db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+        w = Work(title="C136 Hidden Friend Book")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id)
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id)
+        db.session.add(m)
+        db.session.flush()
+
+        it_pub = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_pub.set_visibility("public")
+        it_fr = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_fr.set_visibility("friends_only")
+        assert it_fr.is_hidden is True
+        db.session.add_all([it_pub, it_fr])
+
+        sc_pub = SharedCollection(user_id=owner.id, name="Pub Share", filters={"visibility_scope": "public_only"})
+        sc_fr = SharedCollection(user_id=owner.id, name="Friends Share", filters={"visibility_scope": "friends_and_public"})
+        db.session.add_all([sc_pub, sc_fr])
+        db.session.commit()
+
+        pub_tok = sc_pub.share_token
+        fr_tok = sc_fr.share_token
+        friend_headers = {"Authorization": f"Bearer {generate_internal_jwt(friend)}"}
+
+    anon_pub = client.get(f"/api/public/share/{pub_tok}")
+    assert anon_pub.status_code == 200
+    assert anon_pub.headers.get("Cache-Control") == "public, max-age=300"
+    assert "Authorization" in anon_pub.headers.get("Vary", "")
+    assert "Cookie" in anon_pub.headers.get("Vary", "")
+    assert len(anon_pub.json["data"]["items"]) == 1
+
+    friend_bonus = client.get(f"/api/public/share/{pub_tok}", headers=friend_headers)
+    assert friend_bonus.status_code == 200
+    assert len(friend_bonus.json["data"]["items"]) == 2
+
+    anon_fr = client.get(f"/api/public/share/{fr_tok}")
+    assert anon_fr.status_code == 200
+    assert len(anon_fr.json["data"]["items"]) == 2
+
+
+def test_search_service_include_hidden_false_excludes_private_and_friends_only(app):
+    """SearchService.search_items(owner_only=True, include_hidden=False) must never return hidden/private/friends_only items."""
+    from app.core.search_service import SearchService
+
+    with app.app_context():
+        owner = User(email="searchhide@example.com")
+        owner.set_password("StrongPass123!")
+        db.session.add(owner)
+        db.session.flush()
+
+        w = Work(title="SearchPrivacyChronicle")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id)
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id)
+        db.session.add(m)
+        db.session.flush()
+
+        it_pub = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_pub.set_visibility("public")
+        it_fr = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_fr.set_visibility("friends_only")
+        it_priv = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_priv.set_visibility("private")
+        it_hidden_pub = Item(owner_id=owner.id, manifestation_id=m.id, visibility="public", is_hidden=True)
+        db.session.add_all([it_pub, it_fr, it_priv, it_hidden_pub])
+        db.session.commit()
+
+        total_hidden_false, rows_hidden_false = SearchService.search_items(
+            q="SearchPrivacyChronicle",
+            user_id=owner.id,
+            limit=20,
+            offset=0,
+            owner_only=True,
+            include_hidden=False,
+        )
+        assert total_hidden_false == 1
+        assert [r["item_id"] for r in rows_hidden_false] == [it_pub.id]
+
+        total_mixed_vis, rows_mixed_vis = SearchService.search_items(
+            q="SearchPrivacyChronicle",
+            user_id=owner.id,
+            limit=20,
+            offset=0,
+            owner_only=True,
+            include_hidden=True,
+            visibility=["public", "friends_only", "shared"],
+        )
+        assert total_mixed_vis == 2
+        assert {r["item_id"] for r in rows_mixed_vis} == {it_pub.id, it_fr.id}
+
+
+def test_shared_collection_query_filter_includes_friends_only_and_excludes_hidden_public(client, app):
+    """Query-filtered shares with friends_and_public/Friend Bonus must include friends_only and exclude private/hidden-public."""
+    from app.api.auth import generate_internal_jwt
+    from app.db.auth import UserFriendship
+
+    with app.app_context():
+        owner = User(email="qshareowner@example.com")
+        owner.set_password("StrongPass123!")
+        friend = User(email="qsharefriend@example.com")
+        friend.set_password("StrongPass123!")
+        db.session.add_all([owner, friend])
+        db.session.flush()
+        db.session.add(UserFriendship(requester_id=owner.id, addressee_id=friend.id, status="accepted"))
+
+        w = Work(title="QueryScopeGalaxy")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id)
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id)
+        db.session.add(m)
+        db.session.flush()
+
+        it_pub = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_pub.set_visibility("public")
+        it_fr = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_fr.set_visibility("friends_only")
+        it_priv = Item(owner_id=owner.id, manifestation_id=m.id)
+        it_priv.set_visibility("private")
+        it_hidden_pub = Item(owner_id=owner.id, manifestation_id=m.id, visibility="public", is_hidden=True)
+        db.session.add_all([it_pub, it_fr, it_priv, it_hidden_pub])
+
+        sc_pub = SharedCollection(
+            user_id=owner.id,
+            name="Query Pub",
+            filters={"query": "QueryScopeGalaxy", "visibility_scope": "public_only"},
+        )
+        sc_fr = SharedCollection(
+            user_id=owner.id,
+            name="Query Friends",
+            filters={"query": "QueryScopeGalaxy", "visibility_scope": "friends_and_public"},
+        )
+        db.session.add_all([sc_pub, sc_fr])
+        db.session.commit()
+
+        pub_tok = sc_pub.share_token
+        fr_tok = sc_fr.share_token
+        friend_headers = {"Authorization": f"Bearer {generate_internal_jwt(friend)}"}
+        pub_id, fr_id = it_pub.id, it_fr.id
+
+    anon_pub = client.get(f"/api/public/share/{pub_tok}")
+    assert anon_pub.status_code == 200
+    assert [i["id"] for i in anon_pub.json["data"]["items"]] == [pub_id]
+
+    friend_bonus = client.get(f"/api/public/share/{pub_tok}", headers=friend_headers)
+    assert friend_bonus.status_code == 200
+    assert {i["id"] for i in friend_bonus.json["data"]["items"]} == {pub_id, fr_id}
+
+    anon_fr = client.get(f"/api/public/share/{fr_tok}")
+    assert anon_fr.status_code == 200
+    assert {i["id"] for i in anon_fr.json["data"]["items"]} == {pub_id, fr_id}

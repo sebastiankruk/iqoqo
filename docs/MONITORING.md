@@ -7,6 +7,8 @@ the same OTLP endpoint.
 
 ## Architecture Overview
 
+![8-Layer OpenTelemetry and OpenObserve Observability Pipeline](images/architecture/11-otel-openobserve-8-layer.svg)
+
 ```mermaid
 graph TD
     B["🌐 Browser (Web Vitals)<br/>Layer 5"]
@@ -95,7 +97,9 @@ make status STACK=prod
 
 - OpenObserve health at `${OPENOBSERVE_HOST_PORT:-5080}/healthz`
 - OTel Collector readiness at `:8888`
-- Coherence between configured `OTEL_*_EXPORTER` flags and OTel Collector reachability
+- Coherence between configured `OTEL_*_EXPORTER` flags, `OTEL_EXPORTER_OTLP_PROTOCOL` (`http/protobuf` for `:4318`), and OTel Collector export logs (surfacing sustained collector export/protocol errors past `OTEL_EXPORT_GRACE_SECONDS`)
+- Valkey 8 cache/broker health via `valkey-cli ping`
+- Authoritative LLM/Vision execution attribution via `python scripts/llm_usage_report.py --docker <dev|preview|prod> --hours 24`
 
 ---
 
@@ -103,16 +107,20 @@ make status STACK=prod
 
 All 8 platform layers are instrumented via OpenTelemetry auto-instrumentation and custom span hooks:
 
-| # | Layer                            | Mechanism                                            | Signal                        |
-| - | -------------------------------- | ---------------------------------------------------- | ----------------------------- |
-| 1 | **Frontend SSR (Next.js)**       | `@vercel/otel` via `frontend/instrumentation.ts`     | Traces, Metrics               |
-| 2 | **Flask Backend (Gunicorn)**     | `opentelemetry-instrument gunicorn` + `request_hook` | Traces, Metrics, Logs         |
-| 3 | **Celery Workers**               | `opentelemetry-instrument celery` + `request_hook`   | Traces, Metrics, Logs         |
-| 4 | **Outbound HTTP (requests)**     | `opentelemetry-instrumentation-requests`             | Traces                        |
-| 5 | **Browser Web Vitals**           | `BrowserTelemetry` React component + OTel Web SDK    | Traces                        |
-| 6 | **Nginx Edge Proxy**             | `ngx_otel_module.so` (via `deploy/Dockerfile.nginx`) | Traces                        |
-| 7 | **OpenAI LLM**                   | `opentelemetry-instrumentation-openai`               | Traces (token usage, prompts) |
-| 8 | **PostgreSQL & Redis Internals** | OTel Collector `postgresql` + `redis` receivers      | Metrics                       |
+| # | Layer                                     | Mechanism                                            | Signal                        |
+| - | ----------------------------------------- | ---------------------------------------------------- | ----------------------------- |
+| 1 | **Frontend SSR (Next.js)**                | `@vercel/otel` via `frontend/instrumentation.ts`     | Traces, Metrics               |
+| 2 | **Flask Backend (Gunicorn)**              | `opentelemetry-instrument gunicorn` + `request_hook` | Traces, Metrics, Logs         |
+| 3 | **Celery Workers**                        | `opentelemetry-instrument celery` + `request_hook`   | Traces, Metrics, Logs         |
+| 4 | **Outbound HTTP (requests)**              | `opentelemetry-instrumentation-requests`             | Traces                        |
+| 5 | **Browser Web Vitals**                    | `BrowserTelemetry` React component + OTel Web SDK    | Traces                        |
+| 6 | **Nginx Edge Proxy**                      | `ngx_otel_module.so` (via `deploy/Dockerfile.nginx`) | Traces                        |
+| 7 | **OpenAI LLM**                            | `opentelemetry-instrumentation-openai`               | Traces (token usage, prompts) |
+| 8 | **PostgreSQL & Valkey (Redis) Internals** | OTel Collector `postgresql` + `redis` receivers      | Metrics                       |
+
+### OTLP Protocol Configuration (`v1.1.0+`)
+
+Backend Flask (`iqoqo-api`), Celery workers (`iqoqo-celery-worker`), `sparql-runner` (`iqoqo-sparql-service`), and Next.js SSR (`iqoqo-frontend`) export telemetry to `http://otel-collector:4318` using `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`. Wait-free HTTP protobuf export prevents binary gRPC wire mismatches against port `:4318` while leaving Nginx (`ngx_otel_module`) exporting over OTLP gRPC (`:4317`).
 
 ---
 

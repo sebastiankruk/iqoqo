@@ -400,4 +400,33 @@ describe("SidebarFilters — unauthenticated users", () => {
     expect(screen.queryByText("Ownership")).not.toBeInTheDocument();
     expect(screen.queryByText("Not Owned")).not.toBeInTheDocument();
   });
+
+  it("renders Visibility facet in items view when logged in and toggles visibility filters", () => {
+    const mockToggle = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={mockToggle} isLoggedIn={true} viewMode="items" />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText("Visibility")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Friends Only"));
+    expect(mockToggle).toHaveBeenCalledWith({ type: "visibility", value: "friends_only" });
+  });
+
+  it("hides Visibility facet when logged out or outside items view", () => {
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={false} viewMode="items" />
+      </QueryClientProvider>
+    );
+    expect(screen.queryByText("Visibility")).not.toBeInTheDocument();
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <SidebarFilters activeFilters={[]} onToggleFilter={vi.fn()} isLoggedIn={true} viewMode="works" />
+      </QueryClientProvider>
+    );
+    expect(screen.queryByText("Visibility")).not.toBeInTheDocument();
+  });
 });

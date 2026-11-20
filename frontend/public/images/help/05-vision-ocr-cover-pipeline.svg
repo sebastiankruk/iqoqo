@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright (C) 2026 Sebastian Ryszard Kruk (dev@kruk.me)
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU Affero General Public License as published
+ by the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU Affero General Public License for more details.
+
+ You should have received a copy of the GNU Affero General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>
+-->
+<svg id="svg-bp5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp5-title bp5-desc">
+            <title id="bp5-title">Blueprint 5 — 50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall &amp; 7-Tier Cover Pipeline</title>
+            <desc id="bp5-desc">Two-band architecture diagram for iqoqo v1.1.0 showing Sub-Pipeline A (client 50MP downscaling, 100MP pixel bomb guard, 3-tier Gemini/Ollama/Tesseract waterfall, LLMTelemetry audit) and Sub-Pipeline B (7-tier manifestation cover acquisition and perceptual hash junk rejection).</desc>
+            <style>
+              .canvas-bg { fill: #FDFBF7; }
+              .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
+              .subtitle-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 12.5px; font-weight: 500; fill: #475569; }
+              .header-pill-bg { fill: #EFE9DD; stroke: #D6CFC2; stroke-width: 1.2; }
+              .header-pill-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #2B3D4F; }
+
+              .zone-indigo { fill: #EEF2F6; stroke: #8FA3B8; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-parchment { fill: #F4EFE6; stroke: #C9BFA9; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-teal { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1.5; stroke-dasharray: 6 4; }
+              .zone-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1.5; stroke-dasharray: 6 4; }
+
+              .zone-title { font-family: 'Merriweather', Georgia, serif; font-size: 12.5px; font-weight: 700; fill: #2B3D4F; }
+              .zone-meta { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 600; fill: #64748B; }
+
+              .badge-indigo { fill: #2B3D4F; }
+              .badge-clay { fill: #D15400; }
+              .badge-teal { fill: #0F766E; }
+              .badge-slate { fill: #475569; }
+              .badge-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #FFFFFF; }
+
+              .card { fill: #FFFFFF; stroke: #D6CFC2; stroke-width: 1.5; }
+              .card-indigo { fill: #FFFFFF; stroke: #2B3D4F; stroke-width: 1.6; }
+              .card-clay { fill: #FFFFFF; stroke: #D15400; stroke-width: 1.8; }
+              .card-teal { fill: #FFFFFF; stroke: #0F766E; stroke-width: 1.6; }
+              .card-sub { fill: #FAF7F2; stroke: #D6CFC2; stroke-width: 1.1; }
+
+              .node-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: 700; fill: #1E293B; }
+              .tier-title { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11.8px; font-weight: 700; fill: #1E293B; }
+              .node-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10.8px; font-weight: 400; fill: #475569; }
+              .tier-body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 10px; font-weight: 400; fill: #475569; }
+              .node-mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 500; fill: #2B3D4F; }
+              .node-clay { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #B84700; }
+              .node-teal { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.8px; font-weight: 600; fill: #0F766E; }
+
+              .pill-indigo { fill: #EEF2F6; stroke: #CBD5E1; stroke-width: 1; }
+              .pill-indigo-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #2B3D4F; }
+              .pill-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
+              .pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #B84700; }
+              .pill-teal { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1; }
+              .pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.2px; font-weight: 600; fill: #0F766E; }
+
+              .edge-primary { fill: none; stroke: #2B3D4F; stroke-width: 2; stroke-linejoin: round; }
+              .edge-fallback { fill: none; stroke: #D15400; stroke-width: 1.9; stroke-linejoin: round; }
+              .edge-telemetry { fill: none; stroke: #0F766E; stroke-width: 1.8; stroke-dasharray: 6 4; stroke-linejoin: round; }
+              .mk-primary { fill: #2B3D4F; }
+              .mk-fallback { fill: #D15400; }
+              .mk-telemetry { fill: #0F766E; }
+
+              .edge-pill-bg { fill: #FDFBF7; stroke: #CBD5E1; stroke-width: 1; }
+              .edge-pill-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #2B3D4F; }
+              .edge-pill-clay { fill: #FEF3EB; stroke: #E5A073; stroke-width: 1; }
+              .edge-pill-clay-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #B84700; }
+              .edge-pill-teal { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1; }
+              .edge-pill-teal-text { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; font-weight: 600; fill: #0F766E; }
+
+              .legend-bg { fill: #F4EFE6; stroke: #D6CFC2; stroke-width: 1.25; }
+              .legend-heading { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; fill: #2B3D4F; }
+              .legend-text { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 500; fill: #334155; }
+            </style>
+            <defs>
+              <pattern id="b5-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#E4DCCE" stroke-width="0.6" opacity="0.45"/>
+              </pattern>
+              <filter id="b5-shadow" x="-6%" y="-6%" width="112%" height="118%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+              </filter>
+              <marker id="b5-mk-primary" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-primary"/>
+              </marker>
+              <marker id="b5-mk-fallback" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-fallback"/>
+              </marker>
+              <marker id="b5-mk-telemetry" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 1.2 L 9.5 5 L 0 8.8 z" class="mk-telemetry"/>
+              </marker>
+            </defs>
+
+            <!-- Background -->
+            <rect x="0" y="0" width="1440" height="980" class="canvas-bg"/>
+            <rect x="0" y="0" width="1440" height="980" fill="url(#b5-grid)"/>
+
+            <!-- Header -->
+            <text x="32" y="36" class="title-text">Blueprint 5 — 50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall &amp; 7-Tier Cover Pipeline</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.0  •  Client Pre-Resize, Pixel Bomb Guard, Multimodal Extraction, LLMTelemetry &amp; Perceptual Hash Filtering</text>
+            <rect x="1184" y="16" width="224" height="32" rx="8" class="header-pill-bg"/>
+            <text x="1296" y="36" text-anchor="middle" class="header-pill-text">Multi-Stage Fallback Pipeline</text>
+
+            <!-- ==================== BAND A: SUB-PIPELINE A ==================== -->
+            <rect x="32" y="76" width="1376" height="474" rx="14" class="zone-indigo"/>
+            <rect x="46" y="88" width="96" height="20" rx="5" class="badge-indigo"/>
+            <text x="94" y="102" text-anchor="middle" class="badge-text">SUB-PIPELINE A</text>
+            <text x="152" y="103" class="zone-title">Cover Capture &amp; Vision Extraction</text>
+            <rect x="412" y="88" width="166" height="20" rx="5" class="pill-indigo"/>
+            <text x="495" y="101" text-anchor="middle" class="pill-indigo-text">POST /api/vision/extract</text>
+            <text x="1392" y="102" text-anchor="end" class="zone-meta">ASYNC CELERY + TELEMETRY AUDIT</text>
+
+            <!-- Stage 1: Client Pre-Resize -->
+            <g id="bp5-s1">
+              <rect x="48" y="122" width="286" height="184" rx="10" class="card-indigo" filter="url(#b5-shadow)"/>
+              <rect x="60" y="134" width="54" height="19" rx="5" class="badge-indigo"/>
+              <text x="87" y="147" text-anchor="middle" class="badge-text">STAGE 1</text>
+              <text x="122" y="148" class="node-title">Client Pre-Resize</text>
+              <text x="60" y="170" class="node-mono">frontend/lib/image-resize.ts</text>
+              <text x="60" y="185" class="node-mono">resizeImageFile()</text>
+              <rect x="60" y="198" width="262" height="42" rx="6" class="card-sub"/>
+              <text x="70" y="214" class="node-body">• Vision/OCR: 3840px (0.9 JPEG, ~11MP)</text>
+              <text x="70" y="231" class="node-body">• Saved Covers: 1280px (0.88 JPEG)</text>
+              <text x="60" y="260" class="node-body">Downscales 48–50MP phone photos</text>
+              <text x="60" y="276" class="node-body">client-side via createImageBitmap/Canvas</text>
+              <text x="60" y="295" class="node-clay">Prevents HTTP 413 Payload Too Large</text>
+            </g>
+
+            <!-- Stage 2: Upload & Pixel Bomb Guard -->
+            <g id="bp5-s2">
+              <rect x="48" y="348" width="286" height="184" rx="10" class="card-clay" filter="url(#b5-shadow)"/>
+              <rect x="60" y="360" width="54" height="19" rx="5" class="badge-clay"/>
+              <text x="87" y="373" text-anchor="middle" class="badge-text">STAGE 2</text>
+              <text x="122" y="374" class="node-title">Upload &amp; Bomb Guard</text>
+              <text x="60" y="396" class="node-mono">app/api/scanner.py + utils/images.py</text>
+              <text x="60" y="418" class="node-body">• Allowed: {jpg, jpeg, png, webp}</text>
+              <text x="60" y="436" class="node-clay">• MAX_IMAGE_PIXELS = 100,000,000</text>
+              <text x="60" y="454" class="node-body">• Bounded stream read + Pillow verify()</text>
+              <rect x="60" y="470" width="262" height="48" rx="6" class="pill-teal"/>
+              <text x="70" y="488" class="pill-teal-text">Enqueues Celery Vision Task</text>
+              <text x="70" y="505" class="node-body">Returns HTTP 202 Accepted + task_id</text>
+            </g>
+
+            <!-- Stage 1 -> Stage 2 Arrow -->
+            <path d="M 191 306 L 191 346" class="edge-primary" marker-end="url(#b5-mk-primary)"/>
+            <rect x="131" y="316" width="120" height="18" rx="4" class="edge-pill-bg"/>
+            <text x="191" y="328" text-anchor="middle" class="edge-pill-text">Compact JPEG POST</text>
+
+            <!-- Stage 3: 3-Tier Vision/OCR Waterfall Zone -->
+            <g id="bp5-s3">
+              <rect x="380" y="122" width="634" height="410" rx="12" class="zone-parchment"/>
+              <rect x="394" y="132" width="54" height="19" rx="5" class="badge-indigo"/>
+              <text x="421" y="145" text-anchor="middle" class="badge-text">STAGE 3</text>
+              <text x="456" y="146" class="zone-title">3-Tier Vision / OCR Waterfall</text>
+              <text x="998" y="145" text-anchor="end" class="zone-meta">app/utils/vision.py</text>
+
+              <!-- Tier 1: Gemini -->
+              <rect x="396" y="162" width="602" height="106" rx="9" class="card-clay" filter="url(#b5-shadow)"/>
+              <rect x="408" y="172" width="48" height="18" rx="4" class="badge-clay"/>
+              <text x="432" y="185" text-anchor="middle" class="badge-text">TIER 1</text>
+              <text x="464" y="186" class="node-title">Cloud LLM Vision — _extract_via_gemini()</text>
+              <rect x="854" y="172" width="132" height="18" rx="4" class="pill-clay"/>
+              <text x="920" y="184" text-anchor="middle" class="pill-clay-text">gemini-2.0-flash</text>
+              <text x="408" y="207" class="node-mono">Requires: ALLOW_LLM=true + GEMINI_API_KEY + LLM_GENERATE_CLOUD</text>
+              <text x="408" y="226" class="node-body">• Normalizes EXIF/RGB (&lt;=2000px) → Structured Book &amp; Serial JSON:</text>
+              <text x="408" y="244" class="node-mono">  Title, Authors, ISSN, Indeks, IssueNumber, Volume, CoverHeadline</text>
+
+              <!-- Tier 2: Ollama -->
+              <rect x="396" y="294" width="602" height="96" rx="9" class="card-indigo" filter="url(#b5-shadow)"/>
+              <rect x="408" y="304" width="48" height="18" rx="4" class="badge-indigo"/>
+              <text x="432" y="317" text-anchor="middle" class="badge-text">TIER 2</text>
+              <text x="464" y="318" class="node-title">Local Vision — _extract_via_ollama()</text>
+              <rect x="862" y="304" width="124" height="18" rx="4" class="pill-indigo"/>
+              <text x="924" y="316" text-anchor="middle" class="pill-indigo-text">llava / Local LLM</text>
+              <text x="408" y="339" class="node-mono">Requires: ALLOW_LLM=true + SSRF-validated OLLAMA_URL</text>
+              <text x="408" y="358" class="node-body">• Zero-cloud local inference fallback with configurable OLLAMA_VISION_TIMEOUT</text>
+              <text x="408" y="376" class="node-body">• Auto-probes localhost:11434 vs host.docker.internal:11434 in Docker</text>
+
+              <!-- Tier 3: Tesseract -->
+              <rect x="396" y="416" width="602" height="104" rx="9" class="card-teal" filter="url(#b5-shadow)"/>
+              <rect x="408" y="426" width="48" height="18" rx="4" class="badge-teal"/>
+              <text x="432" y="439" text-anchor="middle" class="badge-text">TIER 3</text>
+              <text x="464" y="440" class="node-title">Offline Multi-Zone OCR — _extract_via_tesseract()</text>
+              <rect x="838" y="426" width="148" height="18" rx="4" class="pill-teal"/>
+              <text x="912" y="438" text-anchor="middle" class="pill-teal-text">eng+pol • &lt;=2200px</text>
+              <text x="408" y="461" class="node-teal">Always Available: Executes even when ALLOW_LLM=false (Zero Cloud/GPU)</text>
+              <text x="408" y="480" class="node-body">• Crops full cover + masthead/top-corners + barcode strip via Pillow</text>
+              <text x="408" y="498" class="node-mono">• Regex parses: ISSN, Indeks, Nr X(Y), /YYYY, PL/EN months &amp; 977 OCR</text>
+
+              <!-- Fallback arrows inside Stage 3 -->
+              <path d="M 697 268 L 697 292" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+              <rect x="598" y="270" width="198" height="17" rx="4" class="edge-pill-clay"/>
+              <text x="697" y="282" text-anchor="middle" class="edge-pill-clay-text">Fallback: No Key / Perm / Error</text>
+
+              <path d="M 697 390 L 697 414" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+              <rect x="594" y="392" width="206" height="17" rx="4" class="edge-pill-clay"/>
+              <text x="697" y="404" text-anchor="middle" class="edge-pill-clay-text">Fallback: Unreachable / ALLOW_LLM=0</text>
+            </g>
+
+            <!-- Stage 2 -> Stage 3 Arrow -->
+            <path d="M 334 440 L 356 440 L 356 215 L 394 215" class="edge-primary" marker-end="url(#b5-mk-primary)"/>
+            <rect x="334" y="308" width="44" height="32" rx="4" class="edge-pill-bg"/>
+            <text x="356" y="321" text-anchor="middle" class="edge-pill-text">Celery</text>
+            <text x="356" y="333" text-anchor="middle" class="edge-pill-text">Queue</text>
+
+            <!-- Stage 4: Shared Telemetry & Audit (Right) -->
+            <g id="bp5-s4">
+              <rect x="1058" y="122" width="334" height="410" rx="12" class="zone-teal"/>
+              <rect x="1072" y="132" width="54" height="19" rx="5" class="badge-teal"/>
+              <text x="1099" y="145" text-anchor="middle" class="badge-text">STAGE 4</text>
+              <text x="1134" y="146" class="zone-title">Execution Telemetry &amp; Audit</text>
+
+              <rect x="1072" y="162" width="306" height="184" rx="9" class="card-teal" filter="url(#b5-shadow)"/>
+              <text x="1084" y="184" class="node-title">inventory.llm_telemetry</text>
+              <text x="1084" y="202" class="node-mono">Model: LLMTelemetry (PostgreSQL)</text>
+              <text x="1084" y="224" class="node-body">Records every Vision/OCR &amp; AI Cover run:</text>
+              <text x="1084" y="244" class="node-mono">• provider (gemini|ollama|tesseract|...)</text>
+              <text x="1084" y="262" class="node-mono">• operation_type (metadata_extraction)</text>
+              <text x="1084" y="280" class="node-mono">• status &amp; total_duration_seconds</text>
+              <text x="1084" y="298" class="node-mono">• estimated_cost_usd &amp; error_message</text>
+              <text x="1084" y="328" class="node-teal">Proves which engine actually executed</text>
+
+              <rect x="1072" y="362" width="306" height="156" rx="9" class="card" filter="url(#b5-shadow)"/>
+              <text x="1084" y="384" class="node-title">Operator CLI Audit Report</text>
+              <rect x="1084" y="396" width="282" height="36" rx="6" class="pill-indigo"/>
+              <text x="1092" y="411" class="pill-indigo-text">python scripts/llm_usage_report.py</text>
+              <text x="1092" y="425" class="pill-indigo-text">  --docker &lt;dev|preview|prod&gt; --hours 24</text>
+              <text x="1084" y="454" class="node-body">• Filter by --operation metadata_extraction</text>
+              <text x="1084" y="472" class="node-body">• Integrated into make status diagnostics</text>
+              <text x="1084" y="496" class="node-mono">Exit: 0=OK | 1=Empty | 2=DB Unavailable</text>
+            </g>
+
+            <!-- Stage 3 -> Stage 4 Telemetry Arrow -->
+            <path d="M 1014 254 L 1070 254" class="edge-telemetry" marker-end="url(#b5-mk-telemetry)"/>
+            <rect x="1014" y="232" width="54" height="18" rx="4" class="edge-pill-teal"/>
+            <text x="1041" y="244" text-anchor="middle" class="edge-pill-teal-text">Log Run</text>
+
+            <!-- ==================== BAND B: SUB-PIPELINE B (7-TIER COVERS) ==================== -->
+            <rect x="32" y="574" width="1376" height="332" rx="14" class="zone-parchment"/>
+            <rect x="46" y="586" width="96" height="20" rx="5" class="badge-clay"/>
+            <text x="94" y="600" text-anchor="middle" class="badge-text">SUB-PIPELINE B</text>
+            <text x="152" y="601" class="zone-title">7-Tier Manifestation Cover Acquisition &amp; Junk Rejection</text>
+            <text x="1392" y="600" text-anchor="end" class="zone-meta">SYNC FAST LOOKUP → ASYNC CELERY → PIL FALLBACK</text>
+
+            <!-- 7 Horizontal Tier Cards (w=176, h=256, gap=19, x = 48 + i*195) -->
+            <!-- T1: user_photo -->
+            <g id="bp5-t1">
+              <rect x="48" y="624" width="176" height="264" rx="9" class="card-indigo" filter="url(#b5-shadow)"/>
+              <rect x="58" y="634" width="32" height="18" rx="4" class="badge-indigo"/>
+              <text x="74" y="646" text-anchor="middle" class="badge-text">T1</text>
+              <text x="96" y="647" class="tier-title">user_photo</text>
+              <text x="58" y="670" class="tier-body">Direct upload or Manual</text>
+              <text x="58" y="684" class="tier-body">Entry camera/gallery.</text>
+              <text x="58" y="708" class="node-mono">exif_transpose()</text>
+              <text x="58" y="724" class="node-mono">RGB 1024×1024</text>
+              <text x="58" y="740" class="node-mono">JPEG quality=85</text>
+              <rect x="58" y="762" width="156" height="44" rx="6" class="pill-indigo"/>
+              <text x="66" y="778" class="pill-indigo-text">cover_provenance</text>
+              <text x="66" y="794" class="tier-body">Corner user badge</text>
+              <text x="58" y="836" class="node-teal">Highest Priority</text>
+              <text x="58" y="852" class="tier-body">Never overwritten by</text>
+              <text x="58" y="866" class="tier-body">automated cover jobs</text>
+            </g>
+
+            <!-- T2: api_direct_download -->
+            <g id="bp5-t2">
+              <rect x="243" y="624" width="176" height="264" rx="9" class="card" filter="url(#b5-shadow)"/>
+              <rect x="253" y="634" width="32" height="18" rx="4" class="badge-indigo"/>
+              <text x="269" y="646" text-anchor="middle" class="badge-text">T2</text>
+              <text x="291" y="647" class="tier-title">api_direct</text>
+              <text x="253" y="670" class="tier-body">Discogs, MusicBrainz,</text>
+              <text x="253" y="684" class="tier-body">BGG, TMDB, Allegro,</text>
+              <text x="253" y="698" class="tier-body">Rebrickable hotlinks.</text>
+              <text x="253" y="724" class="node-mono">safe_get (SSRF)</text>
+              <text x="253" y="740" class="node-mono">MAX_COVER = 5MB</text>
+              <text x="253" y="756" class="node-mono">Pillow verify()</text>
+              <rect x="253" y="776" width="156" height="54" rx="6" class="pill-clay"/>
+              <text x="261" y="792" class="pill-clay-text">pHash Junk Guard</text>
+              <text x="261" y="807" class="tier-body">IQOQO_KNOWN_</text>
+              <text x="261" y="820" class="tier-body">JUNK_PHASHES</text>
+              <text x="253" y="858" class="tier-body">Rejects hotlink stubs</text>
+            </g>
+
+            <!-- T3: api_openlibrary -->
+            <g id="bp5-t3">
+              <rect x="438" y="624" width="176" height="264" rx="9" class="card" filter="url(#b5-shadow)"/>
+              <rect x="448" y="634" width="32" height="18" rx="4" class="badge-indigo"/>
+              <text x="464" y="646" text-anchor="middle" class="badge-text">T3</text>
+              <text x="486" y="647" class="tier-title">openlibrary</text>
+              <text x="448" y="670" class="tier-body">OpenLibrary Covers</text>
+              <text x="448" y="684" class="tier-body">API queried by ISBN.</text>
+              <text x="448" y="712" class="node-mono">app/utils/phash.py</text>
+              <rect x="448" y="732" width="156" height="62" rx="6" class="pill-clay"/>
+              <text x="456" y="749" class="pill-clay-text">Placeholder Filter</text>
+              <text x="456" y="766" class="tier-body">• Rejects 1×1 pixels</text>
+              <text x="456" y="782" class="tier-body">• Rejects blank pHash</text>
+              <text x="448" y="824" class="tier-body">Synchronous fast path</text>
+              <text x="448" y="840" class="tier-body">during initial scan</text>
+            </g>
+
+            <!-- T4: api_google_books -->
+            <g id="bp5-t4">
+              <rect x="633" y="624" width="176" height="264" rx="9" class="card" filter="url(#b5-shadow)"/>
+              <rect x="643" y="634" width="32" height="18" rx="4" class="badge-indigo"/>
+              <text x="659" y="646" text-anchor="middle" class="badge-text">T4</text>
+              <text x="681" y="647" class="tier-title">google_books</text>
+              <text x="643" y="670" class="tier-body">Google Books volume</text>
+              <text x="643" y="684" class="tier-body">thumbnail fallback.</text>
+              <rect x="643" y="714" width="156" height="54" rx="6" class="pill-clay"/>
+              <text x="651" y="731" class="pill-clay-text">pHash Filter</text>
+              <text x="651" y="748" class="tier-body">Drops "Image Not</text>
+              <text x="651" y="761" class="tier-body">Available" cards</text>
+              <text x="643" y="802" class="node-mono">If T2–T4 fail:</text>
+              <text x="643" y="818" class="node-clay">cover_status=</text>
+              <text x="643" y="833" class="node-clay">"pending"</text>
+              <text x="643" y="858" class="tier-body">Hands off to Celery</text>
+            </g>
+
+            <!-- T5: llm_local_stable_diffusion -->
+            <g id="bp5-t5">
+              <rect x="828" y="624" width="176" height="264" rx="9" class="card-clay" filter="url(#b5-shadow)"/>
+              <rect x="838" y="634" width="32" height="18" rx="4" class="badge-clay"/>
+              <text x="854" y="646" text-anchor="middle" class="badge-text">T5</text>
+              <text x="876" y="647" class="tier-title">local_sd</text>
+              <text x="838" y="670" class="tier-body">Local Automatic1111</text>
+              <text x="838" y="684" class="tier-body">Stable Diffusion GPU.</text>
+              <text x="838" y="710" class="node-mono">LOCAL_SD_URL</text>
+              <text x="838" y="726" class="node-mono">ALLOW_LLM=true</text>
+              <rect x="838" y="746" width="156" height="66" rx="6" class="pill-clay"/>
+              <text x="846" y="762" class="pill-clay-text">Circuit Breaker</text>
+              <text x="846" y="778" class="tier-body">Skips after &gt;= 3</text>
+              <text x="846" y="792" class="tier-body">failed_llm_attempts</text>
+              <text x="846" y="805" class="tier-body">unless --force-retry</text>
+              <text x="838" y="844" class="tier-body">Converted to 1024px</text>
+              <text x="838" y="858" class="tier-body">85% JPEG on disk</text>
+            </g>
+
+            <!-- T6: llm_gemini / llm_openai -->
+            <g id="bp5-t6">
+              <rect x="1023" y="624" width="176" height="264" rx="9" class="card-clay" filter="url(#b5-shadow)"/>
+              <rect x="1033" y="634" width="32" height="18" rx="4" class="badge-clay"/>
+              <text x="1049" y="646" text-anchor="middle" class="badge-text">T6</text>
+              <text x="1071" y="647" class="tier-title">cloud_llm</text>
+              <text x="1033" y="670" class="tier-body">Cloud Imagen 3 or</text>
+              <text x="1033" y="684" class="tier-body">OpenAI DALL-E 3.</text>
+              <text x="1033" y="710" class="node-mono">llm_gemini</text>
+              <text x="1033" y="726" class="node-mono">llm_openai</text>
+              <rect x="1033" y="746" width="156" height="50" rx="6" class="pill-indigo"/>
+              <text x="1041" y="763" class="pill-indigo-text">AI Watermark</text>
+              <text x="1041" y="780" class="tier-body">Corner iqoqo AI mark</text>
+              <text x="1033" y="824" class="node-teal">Writes Cost &amp; Latency</text>
+              <text x="1033" y="840" class="node-teal">→ llm_telemetry</text>
+              <text x="1033" y="864" class="tier-body">Daily orphan archive</text>
+            </g>
+
+            <!-- T7: fallback_pil -->
+            <g id="bp5-t7">
+              <rect x="1218" y="624" width="176" height="264" rx="9" class="card-teal" filter="url(#b5-shadow)"/>
+              <rect x="1228" y="634" width="32" height="18" rx="4" class="badge-teal"/>
+              <text x="1244" y="646" text-anchor="middle" class="badge-text">T7</text>
+              <text x="1266" y="647" class="tier-title">fallback_pil</text>
+              <text x="1228" y="670" class="tier-body">Deterministic Pillow</text>
+              <text x="1228" y="684" class="tier-body">typographic cover</text>
+              <text x="1228" y="698" class="tier-body">with Title &amp; Author.</text>
+              <rect x="1228" y="724" width="156" height="56" rx="6" class="pill-teal"/>
+              <text x="1236" y="741" class="pill-teal-text">Zero External Deps</text>
+              <text x="1236" y="758" class="tier-body">Guaranteed cover</text>
+              <text x="1236" y="771" class="tier-body">for offline/rare items</text>
+              <text x="1228" y="814" class="node-mono">APScheduler 5-min</text>
+              <text x="1228" y="830" class="tier-body">watchdog resets stuck</text>
+              <text x="1228" y="844" class="tier-body">pending cover tasks</text>
+            </g>
+
+            <!-- Horizontal Fallback Arrows T1 -> T7 -->
+            <path d="M 224 756 L 241 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <path d="M 419 756 L 436 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <path d="M 614 756 L 631 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <path d="M 809 756 L 826 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <path d="M 1004 756 L 1021 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <path d="M 1199 756 L 1216 756" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+
+            <!-- Telemetry Arrow from T6 up to Stage 4 -->
+            <path d="M 1111 624 L 1111 534" class="edge-telemetry" marker-end="url(#b5-mk-telemetry)"/>
+            <rect x="1044" y="553" width="134" height="18" rx="4" class="edge-pill-teal"/>
+            <text x="1111" y="565" text-anchor="middle" class="edge-pill-teal-text">Cost → llm_telemetry</text>
+
+            <!-- Legend -->
+            <rect x="32" y="922" width="1376" height="42" rx="10" class="legend-bg"/>
+            <text x="50" y="947" class="legend-heading">LEGEND:</text>
+            <line x1="128" y1="943" x2="174" y2="943" class="edge-primary" marker-end="url(#b5-mk-primary)"/>
+            <text x="184" y="947" class="legend-text">Primary Upload &amp; Queue Flow</text>
+            <line x1="406" y1="943" x2="452" y2="943" class="edge-fallback" marker-end="url(#b5-mk-fallback)"/>
+            <text x="462" y="947" class="legend-text">Waterfall Fallback / Rejection Cascade</text>
+            <line x1="744" y1="943" x2="790" y2="943" class="edge-telemetry" marker-end="url(#b5-mk-telemetry)"/>
+            <text x="800" y="947" class="legend-text">LLMTelemetry &amp; Cost Attribution</text>
+            <rect x="1062" y="933" width="18" height="18" rx="4" class="badge-clay"/>
+            <text x="1088" y="947" class="legend-text">Guard / Cloud LLM</text>
+            <rect x="1238" y="933" width="18" height="18" rx="4" class="badge-teal"/>
+            <text x="1264" y="947" class="legend-text">Offline / Zero-Dep</text>
+          </svg>

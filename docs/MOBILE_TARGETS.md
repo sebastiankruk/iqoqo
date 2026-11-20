@@ -15,6 +15,8 @@ This document defines the supported operating systems, hardware baselines, and n
 
 ## Native Architecture & SDK Configuration
 
+![Hybrid Web SSR and Capacitor 7 Native Mobile Architecture](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg)
+
 ### Android (`frontend/android/`)
 
 - **Compile SDK:** 35 (Android 15)

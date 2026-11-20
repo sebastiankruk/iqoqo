@@ -55,6 +55,17 @@ make status
 make migrate-secrets
 ```
 
+#### Upgrade Note (v1.1.0+): Redis to Valkey Cutover
+
+Starting with `v1.1.0`, the `redis` service runs `valkey/valkey:8-alpine` while preserving the `redis` service alias and `redis://` URI scheme in `.env` files. Cache and Celery queue data are ephemeral (PostgreSQL is the single source of truth). If your deployment mounts a custom persistent `redis_data` volume and Valkey fails to load an older RDB snapshot, stop the stack and remove or flush the volume before restarting:
+
+```bash
+docker compose -f docker-compose.prebuilt.yml --env-file .env.prod down
+# Optional if you added a custom redis_data volume:
+docker volume rm iqoqo_redis_data || true
+make prebuilt prod start
+```
+
 ### Guided CLI Setup (From Clone)
 
 For the fastest setup from a local git repository, use the interactive CLI installer wizard:

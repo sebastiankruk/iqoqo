@@ -53,6 +53,11 @@ PACKAGE_LOCK_JSON_PATHS: list[Path] = [
 TEST_INFRA_CONFIG_PATH = REPO_ROOT / "tests" / "test_infra_config.py"
 CHANGELOG_PATH = REPO_ROOT / "docs" / "CHANGELOG.md"
 GRAPHIFYIGNORE_PATH = REPO_ROOT / ".graphifyignore"
+SVG_VERSION_DIRS: list[Path] = [
+    REPO_ROOT / "docs" / "images" / "architecture",
+    REPO_ROOT / "frontend" / "public" / "images" / "help",
+    REPO_ROOT / ".context" / "notes" / "docs" / "architecture",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +143,31 @@ def write_test_infra_version(new_version: str) -> None:
     if count > 0:
         TEST_INFRA_CONFIG_PATH.write_text(updated, encoding="utf-8")
         print(f"  ✓ {TEST_INFRA_CONFIG_PATH.relative_to(REPO_ROOT)}")
+
+
+def write_architecture_svg_versions(new_version: str) -> list[str]:
+    """Update embedded 'iqoqo vX.Y.Z' version banners inside architecture SVG diagrams."""
+    updated_tracked: list[str] = []
+    for svg_dir in SVG_VERSION_DIRS:
+        if not svg_dir.exists():
+            continue
+        for svg_path in sorted(svg_dir.glob("*.svg")):
+            text = svg_path.read_text(encoding="utf-8")
+            updated, count = re.subn(
+                r"iqoqo v\d+\.\d+\.\d+",
+                f"iqoqo v{new_version}",
+                text,
+            )
+            if count > 0 and updated != text:
+                svg_path.write_text(updated, encoding="utf-8")
+                try:
+                    rel_str = str(svg_path.relative_to(REPO_ROOT))
+                    if not rel_str.startswith(".context/"):
+                        updated_tracked.append(rel_str)
+                except ValueError:
+                    rel_str = str(svg_path)
+                print(f"  ✓ {rel_str} ({count} ref(s))")
+    return updated_tracked
 
 
 def update_changelog(new_version: str) -> None:
@@ -249,6 +279,7 @@ def main() -> None:
             write_package_lock_json_version(lock_path, new_version)
     write_test_infra_version(new_version)
     update_changelog(new_version)
+    updated_svgs = write_architecture_svg_versions(new_version)
 
     if new_version != current:
         print("Syncing knowledge graph configs:")
@@ -267,6 +298,7 @@ def main() -> None:
             "docs/CHANGELOG.md",
             ".iqoqo-mempalace-scope.yaml",
             ".graphifyignore",
+            *updated_svgs,
         ]
         existing_files = [f for f in git_add_files if (REPO_ROOT / f).exists()]
         print(f"  git add {' '.join(existing_files)}")

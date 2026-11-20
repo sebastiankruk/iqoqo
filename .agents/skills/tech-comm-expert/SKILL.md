@@ -21,7 +21,7 @@ We are in the **v1.0.x stream (Native Mobile Ecosystem, Format Expansion & Feder
 ## Upcoming (v1.0.3 & Beyond)
 
 - **v1.0.3: Reading Duration, OpenCollections.org, AI-Fetchable Shares & Prebuilt Env Fix** (`C115`–`C125`): FRBR `Item`-scoped reading duration and session tracking (`POST /api/items/<id>/reading-sessions`, `<ReadingDurationCard />`, anonymized `Manifestation` average read time), SSRF-safe `opencollections.org` ingestion strategy & JSON-LD/RDF `owl:sameAs` bridge, `v1.0.2` review deferrals, AI-fetchable shared collections (audio pressing RDF, `?format=jsonld&limit=`, full SSR JSON-LD), prebuilt `ENV_FILE` propagation & secret-decryption guard (P0), and connected-server footer / batch-scan state indicator / `make status` hygiene.
-- **v1.1.0: Infrastructure & Catalog Breadth**: Redis-to-Valkey drop-in migration and serials/journals ISSN ontology design (serial `Work` vs. issue `Manifestation`).
+- **v1.1.0: Infrastructure, Visual Explorer, Serials & Architecture Blueprints** (`C126`–`C137`): Redis-to-Valkey 8 drop-in migration, serials/journals `F18_Serial_Work` ISSN/`977` ontology, `/graph` Visual Relation Graph, Work reading rollup, bulk visibility toolbar, shared visibility scopes, 50MP resize + 3-tier OCR/Vision telemetry, and 12 synced vector SVG architecture diagrams (`docs/images/architecture/` + `frontend/public/images/help/`).
 
 ## Core Responsibilities & Directives
 
@@ -44,3 +44,12 @@ We are in the **v1.0.x stream (Native Mobile Ecosystem, Format Expansion & Feder
 ### 4. Semantic & Ontology Documentation
 
 * Clearly document the FRBR event-based modeling (Work -> Expression -> Manifestation -> Item) so new developers understand the core domain constraints.
+
+### 5. Visual Architecture Diagrams Audit & Maintenance
+
+* Every time you are asked to review, check, or update project or in-product documentation, you MUST inspect all architecture SVG diagrams alongside the prose:
+  * **Canonical Tracked Diagrams (`docs/images/architecture/*.svg`)**: All 12 SVG blueprints (`01`–`12`), referenced in `docs/` (`ARCHITECTURE.md`, `FEDERATION.md`, `SEMANTIC_WEB.md`, `SPARQL_EXECUTION_SERVICE.md`, `COVERS_SETUP.md`, `MOBILE_TARGETS.md`, `MONITORING.md`, `DEPLOYMENT.md`, `BACKUPS.md`, `SECURITY.md`).
+  * **In-Product Help Copies (`frontend/public/images/help/*.svg`)**: Selected user-, curator-, and admin-facing diagrams embedded in `frontend/lib/help-articles.ts` (EN & PL).
+  * **Authoring Specs & Scratch Copies (`.context/notes/docs/docs-iqoqo-architecture-blueprints.md` & `.context/notes/docs/architecture/*.svg`)**: Local blueprint specifications and SVG copies when present on disk.
+* **Go Beyond Version Strings (Analyze & Prompt Human — Do Not Edit SVG Diagrams Yourself):** `make bump-version` (`scripts/sync_version.py`) automatically updates `iqoqo vX.Y.Z` banners across SVG directories, but version bumps alone do not catch architectural drift. On every documentation audit, compare SVG contents (container services, ports, schemas, endpoints, FRBRoo classes, security/SSRF/privacy guards, pipelines, and technology versions such as Valkey, PostgreSQL, OpenObserve, Capacitor) against the current codebase. Update the surrounding Markdown (`docs/`), EN/PL `/help` prose (`frontend/lib/help-articles.ts`), and textual blueprint specs (`.context/notes/docs/docs-iqoqo-architecture-blueprints.md`), **do NOT attempt to edit or redraw `.svg` diagram markup yourself**—instead, explicitly report each outdated diagram and exact deltas to the human and prompt them to regenerate/update those SVG files.
+* **Synchronization & License Rule (When Placing Human-Supplied SVGs):** Whenever the human provides new or updated SVGs in `.context/notes/docs/architecture/`, copy them so `docs/images/architecture/` and matching in-product copies in `frontend/public/images/help/` remain byte-identical, and ensure an AGPL XML license comment header is present right after `<?xml version="1.0" encoding="UTF-8"?>` so `./scripts/check_license.sh` and strict XML parsers stay green.

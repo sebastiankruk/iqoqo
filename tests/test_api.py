@@ -149,6 +149,7 @@ def test_system_status(client, normal_user_headers):
     assert "igdb" in data["data"]
     assert "twitch_igdb_status" in data["data"]
     assert "bgg" in data["data"]
+    assert "llm_vision" in data["data"]
     assert "version" in data["data"]
     assert data["error"] is None
 
@@ -506,6 +507,36 @@ def test_upload_cover(mock_start, client, sample_book, admin_headers):
     assert response.status_code == 202
     assert response.json["data"]["message"] == "Cover upload processing started"
     mock_start.assert_called_once()
+
+
+@patch("app.api.manifestations.start_cover_processing")
+def test_upload_cover_resizes_oversized_image(mock_start, client, sample_book, admin_headers, tmp_path, monkeypatch):
+    """POST /api/manifestations/<id>/cover downscales raw covers to <=1024px JPEG on disk."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    raw_dir = tmp_path / "raw_covers"
+    monkeypatch.setattr("app.api.manifestations.RAW_DIR", str(raw_dir))
+    mock_start.return_value = "resized-task-id"
+
+    img = Image.new("RGB", (2400, 3200), color=(30, 80, 140))
+    bio = BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+
+    response = client.post(
+        f"/api/manifestations/{sample_book.id}/cover",
+        headers=admin_headers,
+        data={"cover": (bio, "large_cover.png")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 202
+    mock_start.assert_called_once()
+
+    saved_path = mock_start.call_args.kwargs["user_image_path"]
+    with Image.open(saved_path) as saved_img:
+        assert max(saved_img.size) <= 1024
 
 
 def test_manifestation_user_owns_authenticated(client, sample_book):

@@ -147,4 +147,27 @@ describe("ItemCard", () => {
     expect(container.querySelector(".aspect-square")).toBeInTheDocument();
     expect(container.querySelector("svg.lucide-dices")).toBeInTheDocument();
   });
+
+  it("renders Magazine label and edition info instead of Unknown author or Book for serials", () => {
+    const magazineItem: Item = {
+      ...mockItem,
+      id: 202,
+      title: "National Geographic Polska",
+      authors: ["Unknown"],
+      format: "magazine",
+      issue_number: "11",
+      cumulative_issue_number: 50,
+      publication_year: 2003,
+      publication_month: 11,
+      manifestation_meta: { format: "magazine" },
+    };
+
+    render(<ItemCard item={magazineItem} />);
+
+    expect(screen.getByText("Magazine")).toBeInTheDocument();
+    expect(screen.getByText("#11 (50) · 11/2003")).toBeInTheDocument();
+    expect(screen.queryByText("Unknown author")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Book")).not.toBeInTheDocument();
+  });
 });

@@ -21,12 +21,13 @@ for Work, Expression, Manifestation, and Item entities.
 
 from typing import Any, cast
 
-from flask import Blueprint, Response, current_app, jsonify, redirect, request, stream_with_context, url_for
+from flask import Blueprint, Response, current_app, g, jsonify, redirect, request, stream_with_context, url_for
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, XSD
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.api.decorators import optional_auth
 from app.core.frbr_merge import get_entity_tombstone
 from app.core.frbr_service import serialize_collection_to_rdf, stream_collection_to_rdf
 from app.core.iri import canonical_frbr_iri, get_lod_base_url
@@ -807,11 +808,17 @@ def get_public_federation_instance_info() -> Response:
 
 
 @public_bp.route("/rdf/share/<string:token>", methods=["GET"])
+@optional_auth
 @limiter.limit("60 per minute")
 def get_shared_collection_rdf(token: str) -> Response | tuple[Response, int]:
     """Export a shared collection RDF graph via query-param or Accept negotiation."""
-    from app.api.public_items import fetch_shared_collection_by_token
+    from app.api.public_items import (
+        _apply_share_cache_headers,
+        fetch_shared_collection_by_token,
+        is_shared_collection_private_cache,
+    )
 
+    viewer_id = getattr(g, "user_id", None)
     format_arg = (request.args.get("format") or "").strip().lower()
     accept_header = request.headers.get("Accept", "")
 
@@ -844,16 +851,29 @@ def get_shared_collection_rdf(token: str) -> Response | tuple[Response, int]:
     is_stream = request.args.get("stream", "").lower() in ("true", "1")
     base_url = current_app.config.get("BASE_URL") or get_lod_base_url()
     collection_uri = f"{base_url}/share/{token}"
-    items = fetch_shared_collection_by_token(token=token, limit=limit_val, stream=is_stream)
+    cache_policy_box: dict[str, bool] = {}
+    items = fetch_shared_collection_by_token(
+        token=token,
+        limit=limit_val,
+        stream=is_stream,
+        viewer_id=viewer_id,
+        _cache_policy_out=cache_policy_box,
+    )
+    is_private_cache = (
+        cache_policy_box["is_private_cache"]
+        if "is_private_cache" in cache_policy_box
+        else is_shared_collection_private_cache(token, viewer_id=viewer_id)
+    )
+    rdf_headers = _apply_share_cache_headers({"Content-Type": f"{rdf_mimetype}; charset=utf-8"}, is_private_cache)
 
     if is_stream:
         return Response(
             stream_with_context(stream_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)),
             mimetype=rdf_mimetype,
-            headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"},
+            headers=rdf_headers,
         )
 
     if not isinstance(items, list):
         items = list(items)
     rdf_payload = serialize_collection_to_rdf(items, base_url, output_format=rdf_format, collection_uri=collection_uri)
-    return Response(rdf_payload, mimetype=rdf_mimetype, headers={"Content-Type": f"{rdf_mimetype}; charset=utf-8"})
+    return Response(rdf_payload, mimetype=rdf_mimetype, headers=rdf_headers)

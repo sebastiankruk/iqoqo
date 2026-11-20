@@ -34,9 +34,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.api.core import api_bp, invalid_json_payload_response
 from app.api.decorators import optional_auth, require_auth, require_permission, require_physical_item
 from app.api.federation_guard import reject_if_federation_head_item_write
-from app.api.filters import CatalogFilterBuilder, parse_csv_param
+from app.api.filters import CatalogFilterBuilder, normalize_visibility_filter, parse_csv_param
 from app.api.manifestations import persist_isbn_manifestation
 from app.api.schemas import (
+    BulkItemVisibilitySchema,
     ItemBulkCreateSchema,
     ItemCollectionLinkSchema,
     ItemCreateSchema,
@@ -79,13 +80,13 @@ def sync_tags(item_id: int, user_id, tags: list[str] | None):
     list. Unknown tags are created on demand."""
     if tags is None:
         return
-    existing_links = db.session.query(ItemTag).filter(ItemTag.item_id == item_id).all()
+    existing_links = db.session.execute(select(ItemTag).where(ItemTag.item_id == item_id)).scalars().all()
     existing_tag_ids = {link.tag_id: link for link in existing_links}
     desired_tag_names = {t.strip() for t in tags if t.strip()}
 
     db_tags = []
     for name in desired_tag_names:
-        tag = db.session.query(Tag).filter(Tag.name == name).first()
+        tag = db.session.execute(select(Tag).where(Tag.name == name)).scalars().first()
         if not tag:
             tag = Tag(name=name)
             db.session.add(tag)
@@ -284,6 +285,7 @@ def get_items():
     publishers_filter = request.args.get("publishers", None)
     lod_authority = (request.args.get("lod_authority") or "").strip().lower()
     lod_status = (request.args.get("lod_status") or "").strip().lower()
+    visibility_list = normalize_visibility_filter(parse_csv_param(request.args.get("visibility")))
 
     tags_list = parse_csv_param(tags_filter)
     collections_list = parse_csv_param(collections_filter)
@@ -329,6 +331,7 @@ def get_items():
             has_map=has_map,
             scope=scope,
             friend_ids=friend_ids_list,
+            visibility=visibility_list,
         )
 
         for row in results:
@@ -338,6 +341,8 @@ def get_items():
                     "owner_id": str(row["owner_id"]) if row["owner_id"] else None,
                     "status": row["status"],
                     "collection_status": row["collection_status"],
+                    "visibility": row.get("visibility"),
+                    "is_hidden": row.get("is_hidden"),
                     "local_barcode": row.get("local_barcode"),
                     "lent_to_user_id": row.get("lent_to_user_id"),
                     "lent_to_name": row.get("lent_to_name"),
@@ -364,27 +369,27 @@ def get_items():
                 }
             )
     else:
-        query = Item.query.options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
+        stmt = select(Item).options(selectinload(Item.manifestation).selectinload(Manifestation.expression).selectinload(Expression.work))
 
         if scope == "friends":
             from app.core.friend_service import get_friend_user_ids
 
             friend_ids = list(get_friend_user_ids(user_id))
             if friend_ids:
-                query = query.filter(
+                stmt = stmt.where(
                     Item.owner_id.in_(friend_ids),
                     db.or_(Item.is_hidden.is_(False), Item.visibility.in_(["public", "friends_only", "shared"])),
                 )
             else:
-                query = query.filter(db.false())
+                stmt = stmt.where(db.false())
         elif borrowed_only:
-            query = query.filter(Item.lent_to_user_id == user_id)
+            stmt = stmt.where(Item.lent_to_user_id == user_id)
         elif owner_only:
-            query = query.filter(Item.owner_id == user_id)
+            stmt = stmt.where(Item.owner_id == user_id)
         elif include_public:
             # Social lending catalogue: include own items, borrowed items, AND public
             # available items from other users so borrowers can discover lendable items.
-            query = query.filter(
+            stmt = stmt.where(
                 db.or_(
                     Item.owner_id == user_id,
                     Item.lent_to_user_id == user_id,
@@ -396,14 +401,33 @@ def get_items():
                 )
             )
         else:
-            query = query.filter(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+            stmt = stmt.where(db.or_(Item.owner_id == user_id, Item.lent_to_user_id == user_id))
+
+        if visibility_list:
+            if scope == "friends":
+                friend_vis = [v for v in visibility_list if v in ("public", "friends_only", "shared")]
+                stmt = stmt.where(Item.visibility.in_(friend_vis)) if friend_vis else stmt.where(db.false())
+            elif include_public:
+                stmt = stmt.where(
+                    db.or_(
+                        db.and_(Item.owner_id == user_id, Item.visibility.in_(visibility_list)),
+                        db.and_(
+                            Item.owner_id != user_id,
+                            Item.is_hidden.is_(False),
+                            Item.visibility == "public",
+                            Item.visibility.in_(visibility_list),
+                        ),
+                    )
+                )
+            else:
+                stmt = stmt.where(Item.visibility.in_(visibility_list))
 
         needs_mfn_join = bool(category_list or format_list or missing_cover or missing_id or has_map or lod_authority or lod_status)
         needs_work_join = bool(
             genres_list or publishers_list or sort_by in ("title", "title-desc", "author") or lod_authority or lod_status
         )
         builder = CatalogFilterBuilder(
-            query,
+            stmt,
             root=CatalogFilterBuilder.ROOT_ITEM,
             user_id=user_id,
             borrowed_only=borrowed_only,
@@ -413,9 +437,9 @@ def get_items():
         if needs_mfn_join or needs_work_join:
             # Sorting by work title requires the FRBR chain even when no
             # filter does, so the join is requested explicitly.
-            query = builder.ensure_frbr_joins()
+            stmt = builder.ensure_frbr_joins()
 
-        query = builder.apply(
+        stmt = builder.apply(
             category=category_list,
             fmt=format_list,
             tags=tags_list,
@@ -430,20 +454,23 @@ def get_items():
             has_map=has_map,
         )
 
-        total_physical = query.order_by(None).count()
+        filtered_subq = stmt.order_by(None).subquery()
+        total_physical = db.session.execute(
+            select(func.count(func.distinct(filtered_subq.c.id)))  # pylint: disable=not-callable
+        ).scalar_one()
 
         if sort_by == "title":
-            query = query.order_by(func.lower(Work.title).asc())
+            stmt = stmt.order_by(func.lower(Work.title).asc())
         elif sort_by == "title-desc":
-            query = query.order_by(func.lower(Work.title).desc())
+            stmt = stmt.order_by(func.lower(Work.title).desc())
         elif sort_by == "author":
-            query = query.order_by(func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc())
+            stmt = stmt.order_by(func.lower(db.cast(Work.meta["authors"], db.String)).asc(), func.lower(Work.title).asc())
         elif sort_by == "added":
-            query = query.order_by(Item.added_at.desc())
+            stmt = stmt.order_by(Item.added_at.desc())
         else:
-            query = query.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
+            stmt = stmt.order_by(func.coalesce(Item.updated_at, Item.added_at).desc())
 
-        physical_items = query.limit(limit).offset(offset).all()
+        physical_items = db.session.execute(stmt.limit(limit).offset(offset)).scalars().unique().all()
 
         for item in physical_items:
             manifestation = item.manifestation
@@ -455,9 +482,20 @@ def get_items():
                 work = manifestation.expression.work
                 phys_expr = manifestation.expression
                 work_title = work.title or ""
-                authors = work.meta.get("authors", []) if work.meta else []
+                authors = [
+                    a
+                    for a in (work.meta.get("authors", []) if work.meta else [])
+                    if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                ]
 
             phys_work_type, phys_medium_type = _extract_intent_media_info(work, phys_expr, manifestation)
+            resolved_publisher = (
+                manifestation.publisher
+                or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+                or (work.meta.get("publisher") if (work and work.meta) else None)
+                if manifestation
+                else None
+            )
 
             is_owner = str(item.owner_id) == str(g.user_id) if hasattr(g, "user_id") else False
             is_borrowed = bool(item.lent_to_user_id and str(item.lent_to_user_id) == str(g.user_id)) if hasattr(g, "user_id") else False
@@ -475,10 +513,19 @@ def get_items():
                     "manifestation_id": item.manifestation_id,
                     "work_id": work.id if work else None,
                     "work_title": work_title or (work.title if work else None),
+                    "work_kind": work.work_kind if work else None,
+                    "issn": work.issn if work else None,
                     "expression_id": phys_expr.id if phys_expr else None,
                     "isbn": manifestation.isbn13 if manifestation else None,
+                    "ean": manifestation.ean if manifestation else None,
+                    "issue_number": manifestation.issue_number if manifestation else None,
+                    "cumulative_issue_number": manifestation.cumulative_issue_number if manifestation else None,
+                    "volume": manifestation.volume if manifestation else None,
+                    "publication_year": manifestation.publication_year if manifestation else None,
+                    "publication_month": manifestation.publication_month if manifestation else None,
+                    "format": (manifestation.format_type or manifestation.format) if manifestation else None,
                     "title": work_title,
-                    "publisher": manifestation.publisher if manifestation else None,
+                    "publisher": resolved_publisher,
                     "cover_url": manifestation.cover_url
                     or (manifestation.meta.get("cover_url") if manifestation and manifestation.meta else None),
                     "cover_status": manifestation.meta.get("cover_status") if manifestation and manifestation.meta else None,
@@ -540,7 +587,11 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     manifestation = item.manifestation
     owner_count = (
-        db.session.query(db.func.count(Item.id)).filter(Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)).scalar()
+        db.session.execute(
+            select(func.count(Item.id)).where(  # pylint: disable=not-callable
+                Item.manifestation_id == item.manifestation_id, Item.is_hidden.is_(False)
+            )
+        ).scalar()
         or 0
     )
 
@@ -580,9 +631,28 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
 
     if manifestation:
         item_data["isbn"] = manifestation.isbn13
+        item_data["ean"] = manifestation.ean
+        item_data["ean_addon"] = manifestation.ean_addon
+        item_data["full_barcode"] = manifestation.full_barcode
+        item_data["issue_number"] = manifestation.issue_number
+        item_data["cumulative_issue_number"] = manifestation.cumulative_issue_number
+        item_data["volume"] = manifestation.volume
+        item_data["publication_year"] = manifestation.publication_year
+        item_data["publication_month"] = manifestation.publication_month
         item_data["manifestation_meta"] = manifestation.meta
         item_data["display"] = build_display_projection(manifestation.meta, item.meta)
-        item_data["publisher"] = manifestation.publisher
+        item_data["publisher"] = (
+            manifestation.publisher
+            or ((manifestation.meta.get("publisher") or manifestation.meta.get("Publisher")) if manifestation.meta else None)
+            or (
+                manifestation.expression.work.meta.get("publisher")
+                if (manifestation.expression.work and manifestation.expression.work.meta)
+                else None
+            )
+            if manifestation.expression
+            else manifestation.publisher
+        )
+        item_data["publication_date"] = manifestation.publication_date.isoformat() if manifestation.publication_date else None
         item_data["cover_url"] = manifestation.cover_url or (manifestation.meta.get("cover_url") if manifestation.meta else None)
         item_data["cover_status"] = manifestation.meta.get("cover_status") if manifestation.meta else None
 
@@ -601,7 +671,14 @@ def _get_physical_item_detail(item_id: int) -> tuple[Response, int] | Response:
                 item_data["work"] = {
                     "id": work.id,
                     "title": work.title,
-                    "authors": work.meta.get("authors", []) if work.meta else [],
+                    "issn": work.issn,
+                    "eissn": work.eissn,
+                    "work_kind": work.work_kind,
+                    "authors": [
+                        a
+                        for a in (work.meta.get("authors", []) if work.meta else [])
+                        if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+                    ],
                     "meta": work.meta,
                     "container_work_id": container_work_id,
                     "series_memberships": [
@@ -991,9 +1068,12 @@ def get_item_collections(item_id: int) -> Response | tuple[Response, int]:
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     links = (
-        db.session.query(UserCollection)
-        .join(UserCollectionItem, UserCollectionItem.collection_id == UserCollection.id)
-        .filter(UserCollectionItem.item_id == item_id)
+        db.session.execute(
+            select(UserCollection)
+            .join(UserCollectionItem, UserCollectionItem.collection_id == UserCollection.id)
+            .where(UserCollectionItem.item_id == item_id)
+        )
+        .scalars()
         .all()
     )
     collections_data = [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in links]
@@ -1022,22 +1102,26 @@ def _guard_add_item_to_collection(item_id: int) -> tuple[dict | None, tuple[Resp
         return None, (jsonify({"success": False, "error": "Forbidden"}), 403)
 
     collection = (
-        db.session.query(UserCollection)
-        .filter(
-            UserCollection.id == payload.collection_id,
-            UserCollection.owner_id == item.owner_id,
+        db.session.execute(
+            select(UserCollection).where(
+                UserCollection.id == payload.collection_id,
+                UserCollection.owner_id == item.owner_id,
+            )
         )
+        .scalars()
         .first()
     )
     if not collection:
         return None, (jsonify({"success": False, "error": "Collection not found"}), 404)
 
     existing = (
-        db.session.query(UserCollectionItem)
-        .filter(
-            UserCollectionItem.collection_id == payload.collection_id,
-            UserCollectionItem.item_id == item_id,
+        db.session.execute(
+            select(UserCollectionItem).where(
+                UserCollectionItem.collection_id == payload.collection_id,
+                UserCollectionItem.item_id == item_id,
+            )
         )
+        .scalars()
         .first()
     )
     if existing:
@@ -1097,11 +1181,13 @@ def remove_item_from_collection(item_id: int, collection_id: int) -> Response | 
         return jsonify({"success": False, "error": "Forbidden"}), 403
 
     link = (
-        db.session.query(UserCollectionItem)
-        .filter(
-            UserCollectionItem.collection_id == collection_id,
-            UserCollectionItem.item_id == item_id,
+        db.session.execute(
+            select(UserCollectionItem).where(
+                UserCollectionItem.collection_id == collection_id,
+                UserCollectionItem.item_id == item_id,
+            )
         )
+        .scalars()
         .first()
     )
     if not link:
@@ -1122,11 +1208,11 @@ def get_items_by_isbn(isbn: str) -> Response | tuple[Response, int]:
     """List every physical item of the manifestation with this ISBN.
 
     The endpoint a scanner uses to decide whether a code is already shelved."""
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == isbn)).scalars().first()
     if not manifestation:
         return jsonify({"error": f"Manifestation not found for ISBN = {isbn}"}), 404
 
-    items = Item.query.filter_by(manifestation_id=manifestation.id).filter(Item.is_hidden.is_(False)).all()
+    items = db.session.execute(select(Item).where(Item.manifestation_id == manifestation.id, Item.is_hidden.is_(False))).scalars().all()
     if not items:
         return jsonify({"error": f"No items found for ISBN = {isbn}"}), 404
 
@@ -1202,7 +1288,7 @@ def add_item(isbn: str) -> Response | tuple[Response, int]:
     if not user_id:
         return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
 
-    manifestation = Manifestation.query.filter_by(isbn13=isbn).first()
+    manifestation = db.session.execute(select(Manifestation).where(Manifestation.isbn13 == isbn)).scalars().first()
 
     if not manifestation:
         # Explicit ingestion. `GET /api/isbn/<isbn>` is read-only by design, so
@@ -1588,9 +1674,14 @@ def add_item_manual() -> Response | tuple[Response, int]:
             return guard_err
 
     title = payload.Title
-    authors = payload.Authors
-    if isinstance(authors, str):
-        authors = [authors]
+    raw_authors = payload.Authors
+    if isinstance(raw_authors, str):
+        raw_authors = [raw_authors]
+    authors = [
+        str(a).strip()
+        for a in (raw_authors or [])
+        if isinstance(a, str) and a.strip() and a.strip().lower() not in {"unknown", "n/a", "none"}
+    ]
     content_type = payload.Format
     isbn = payload.ISBN
     pub_date_str = payload.PublicationDate
@@ -1613,38 +1704,85 @@ def add_item_manual() -> Response | tuple[Response, int]:
         default_status = statuses[0]
 
     try:
+        from app.utils.issn import is_977_periodical_barcode, is_valid_issn
+
+        item_only_keys = {
+            "collection_status",
+            "status",
+            "local_barcode",
+            "lent_to_user_id",
+            "lent_to_name",
+            "visibility",
+            "is_hidden",
+            "tags",
+        }
+        extra_dump = {k: v for k, v in payload.model_dump().items() if k not in item_only_keys and v is not None}
+        if "Publisher" in extra_dump and not extra_dump.get("publisher"):
+            extra_dump["publisher"] = extra_dump["Publisher"]
+        extra_dump["Authors"] = authors
+        is_serial_manual = (
+            _fmt_lower in ("magazine", "journal", "periodical", "serial")
+            or extra_dump.get("work_kind") == "serial"
+            or bool(extra_dump.get("issn"))
+            or is_977_periodical_barcode(isbn)
+            or is_valid_issn(isbn)
+        )
+
         # --- Try to reuse an existing manifestation when ISBN clashes (retry scenario) ---
         existing_manifestation: Manifestation | None = None
         normalised_isbn: str | None = None
-        if isbn:
-            normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
-            existing_manifestation = Manifestation.query.filter_by(isbn13=normalised_isbn).first()
+        if is_serial_manual:
+            from app.core.ingest import IngestService
 
-        if existing_manifestation:
-            # Manifestation already exists — just create a new Item linked to it
-            manifestation = existing_manifestation
+            serial_meta = dict(extra_dump)
+            serial_meta.setdefault("title", title)
+            serial_meta["authors"] = authors
+            if isbn:
+                if is_valid_issn(isbn) and not serial_meta.get("issn"):
+                    serial_meta["issn"] = isbn
+                else:
+                    serial_meta.setdefault("barcode", isbn)
+            if pub_date_str and not serial_meta.get("publication_year"):
+                year_part = str(pub_date_str).split("-")[0]
+                if year_part.isdigit():
+                    serial_meta["publication_year"] = int(year_part)
+            try:
+                manifestation = IngestService.ingest_serial_from_meta(serial_meta, commit=False)
+            except ValueError as exc:
+                db.session.rollback()
+                return jsonify({"error": str(exc), "code": 400}), 400
         else:
-            work = Work(title=title, meta={"authors": authors, "description": payload.Description})
-            db.session.add(work)
-            db.session.flush()
+            if isbn:
+                normalised_isbn = str(isbn).replace("-", "").replace(" ", "").strip()
+                existing_manifestation = (
+                    db.session.execute(select(Manifestation).where(Manifestation.isbn13 == normalised_isbn)).scalars().first()
+                )
 
-            expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
-            db.session.add(expression)
-            db.session.flush()
+            if existing_manifestation:
+                # Manifestation already exists — just create a new Item linked to it
+                manifestation = existing_manifestation
+            else:
+                work = Work(title=title, meta={"authors": authors, "description": payload.Description})
+                db.session.add(work)
+                db.session.flush()
 
-            # Store all extra fields in meta
-            manifestation = Manifestation(expression_id=expression.id, meta=payload.model_dump())
-            if normalised_isbn:
-                manifestation.isbn13 = normalised_isbn
-            if pub_date_str:
-                from datetime import date
+                expression = Expression(work_id=work.id, content_type=content_type, language="en", meta={})
+                db.session.add(expression)
+                db.session.flush()
 
-                try:
-                    manifestation.publication_date = date.fromisoformat(pub_date_str)
-                except (ValueError, TypeError):
-                    pass
-            db.session.add(manifestation)
-            db.session.flush()
+                # Store all extra fields in meta
+                manifestation = Manifestation(expression_id=expression.id, meta=extra_dump)
+                if normalised_isbn:
+                    manifestation.isbn13 = normalised_isbn
+                if pub_date_str:
+                    from datetime import date
+
+                    try:
+                        manifestation.publication_date = date.fromisoformat(pub_date_str)
+                    except (ValueError, TypeError):
+                        pass
+                db.session.add(manifestation)
+                db.session.flush()
 
         if payload.collection_status == "wish_list":
             return _add_wishlist_by_manifestation(user_id, manifestation, payload)
@@ -1652,6 +1790,7 @@ def add_item_manual() -> Response | tuple[Response, int]:
         if payload.collection_status == "lent":
             lent_to_name = payload.lent_to_name
             if not payload.lent_to_user_id and not (lent_to_name and lent_to_name.strip()):
+                db.session.rollback()
                 return jsonify({"error": "Lent items require either a borrower user ID or a name.", "code": 400}), 400
 
         visibility, is_hidden = _resolve_item_visibility_and_hidden(
@@ -1820,9 +1959,10 @@ def get_item_logs(item_id: int) -> Response | tuple[Response, int]:
     from app.core.taxonomy import PROGRESS_STATUSES
 
     logs = (
-        db.session.query(ItemStatusLog)
-        .filter(ItemStatusLog.item_id == item_id)
-        .order_by(ItemStatusLog.changed_at.desc(), ItemStatusLog.id.desc())
+        db.session.execute(
+            select(ItemStatusLog).where(ItemStatusLog.item_id == item_id).order_by(ItemStatusLog.changed_at.desc(), ItemStatusLog.id.desc())
+        )
+        .scalars()
         .all()
     )
 
@@ -1896,6 +2036,77 @@ def toggle_item_visibility(item_id: int):
             "message": f"Item visibility updated to {'hidden' if item.is_hidden else 'public'}.",
             "is_hidden": item.is_hidden,
         }
+    )
+
+
+@api_bp.route("/items/bulk-visibility", methods=["PATCH"])
+@limiter.limit("30 per minute", override_defaults=True)
+@require_auth
+@require_permission(PermissionName.WRITE_ITEM)
+def bulk_update_item_visibility() -> Response | tuple[Response, int]:
+    """Update visibility across a bounded batch of owned physical items."""
+    user_id = getattr(g, "user_id", None)
+    if not user_id:
+        return jsonify({"success": False, "data": None, "error": "Unauthorized"}), 401
+
+    hub_guard = reject_if_federation_head_item_write()
+    if hub_guard is not None:
+        return hub_guard
+
+    payload_json = request.get_json(silent=True)
+    if not isinstance(payload_json, dict):
+        return invalid_json_payload_response()
+
+    try:
+        payload = BulkItemVisibilitySchema(**payload_json)
+    except ValidationError as exc:
+        return jsonify({"success": False, "data": None, "error": "Invalid payload", "details": str(exc)}), 400
+
+    unique_ids = list(dict.fromkeys(payload.item_ids))
+    items = db.session.execute(select(Item).where(Item.id.in_(unique_ids), Item.owner_id == user_id)).scalars().all()
+    if len(items) != len(unique_ids):
+        return jsonify({"success": False, "data": None, "error": "One or more items not found"}), 404
+
+    previous_states = {item.id: (item.visibility, item.is_hidden) for item in items}
+    for item in items:
+        item.set_visibility(payload.visibility)
+
+    db.session.commit()
+    invalidate_facets_cache(user_id)
+
+    user_obj = db.session.get(User, user_id)
+    for item in items:
+        old_vis, old_hidden = previous_states[item.id]
+        if old_vis != payload.visibility or old_hidden != item.is_hidden:
+            enqueue_fts_reindex("item", item.id)
+            if user_obj:
+                try:
+                    from app.core.federation_dispatch import dispatch_collection_update
+
+                    dispatch_collection_update(user_obj, item, action="Update" if not item.is_hidden else "Delete")
+                except (RuntimeError, ValueError, OSError) as fed_exc:
+                    current_app.logger.warning("Federation collection visibility dispatch failed: %s", fed_exc)
+        publish_transition_event(
+            "item_visibility_updated",
+            {
+                "item_id": item.id,
+                "visibility": payload.visibility,
+                "user_id": str(user_id),
+            },
+        )
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "updated_count": len(items),
+                    "visibility": payload.visibility,
+                    "item_ids": unique_ids,
+                },
+            }
+        ),
+        200,
     )
 
 

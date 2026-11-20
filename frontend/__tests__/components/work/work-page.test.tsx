@@ -170,6 +170,66 @@ describe("WorkPage & ExpressionPage Semantic Web Validation", () => {
     expect(container.textContent).toContain("#3");
   });
 
+  it("should render F18_Serial_Work issues grouped chronologically with ISSN badge, WorkRollupBadge, and graph link", async () => {
+    const serialWork = {
+      id: 1993,
+      title: "National Geographic Polska",
+      work_kind: "serial",
+      issn: "1507-5966",
+      work_reading_status: "read",
+      authors: [],
+      meta: {},
+      expressions: [
+        {
+          id: 2100,
+          work_id: 1993,
+          content_type: "serial",
+          language: "pl",
+          kind: null,
+          is_live_performance: false,
+          manifestations: [
+            {
+              id: 3001,
+              expression_id: 2100,
+              work_id: 1993,
+              title: "National Geographic Polska",
+              format: "magazine",
+              format_type: "magazine",
+              issue_number: "12",
+              cumulative_issue_number: 315,
+              publication_year: 2025,
+              publication_month: 12,
+              full_barcode: "977150759650812",
+              user_owns: true,
+              meta: { cover_headline: "Sekrety oceanów" },
+            },
+          ],
+        },
+      ],
+    };
+
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url.includes("/works/1993")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, data: serialWork }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    const page = await WorkPage({ params: Promise.resolve({ id: "1993" }) });
+    const { container } = renderWithQueryClient(page);
+
+    expect(container.textContent).toContain("F18 Serial Work");
+    expect(container.textContent).toContain("1507-5966");
+    expect(container.textContent).toContain("Sekrety oceanów");
+    expect(container.textContent).toContain("2025");
+    expect(container.querySelector('[data-testid="serial-issues-section"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="work-rollup-badge"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/graph?type=work&id=1993"]')).toBeInTheDocument();
+  });
+
   it("should generate SEO metadata for WorkPage pointing to public JSON-LD endpoint", async () => {
     const metadata = await generateWorkMetadata({ params: Promise.resolve({ id: "1993" }) });
     expect(metadata.title).toBe("The Singles 1992 - 2003 - iqoqo");

@@ -64,6 +64,7 @@ FROM python:3.14-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
+    tesseract-ocr-pol \
     libpq5 \
     libjpeg62-turbo \
     zlib1g \

@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-20
+
+### Added
+
+- **Serial Ontology, ISSN Lookup & Magazine OCR (C131, C132)**:
+  - Added FRBR F18 serial Work & issue Manifestation modeling (`migrations/versions/v1_1_0_serial_issn_issues.py`), ISSN validation/formatting (`app/utils/issn.py`), serial metadata strategies (`app/strategies/serials.py`), EAN-13/977 add-on disambiguation (`serial-disambiguation-modal.tsx`), and RDF serial triples.
+- **FRBR Visual Relation Graph Explorer (C133)**:
+  - Added visibility-scoped graph API (`app/core/graph_service.py`) and `/graph` interactive explorer (`frontend/app/graph/page.tsx`, `frbr-relation-graph.tsx`).
+- **Work Reading Rollup & Collection Visibility Controls (C128, C129, C130)**:
+  - Added collection visibility filtering and bulk item visibility updates (`bulk-item-visibility-toolbar.tsx`), configurable visibility scope and friend bonus on shared collections (`app/api/sharing.py`), and user-scoped Work-level reading status rollup (`work-rollup-badge.tsx`).
+- **Vision Backend Execution Audit Report (C135)**:
+  - Added `scripts/llm_usage_report.py` (`--docker dev|preview|prod`) to report executed LLM/vision providers from `llm_telemetry`.
+
+### Changed
+
+- **Scanner UX Declutter (C134)**:
+  - Streamlined `/scan` TopBar into a single-line layout, full-width lookup bar, and 2-tab `BottomSheet`.
+- **SQLAlchemy 2.0 Migration & UI Cleanup (C127)**:
+  - Removed the Federation Coming Soon tab and migrated `app/api/items.py` queries to SQLAlchemy 2.0 `select()`.
+- **Redis → Valkey 8 Drop-In Migration (C126)**:
+  - Replaced `redis:8-alpine` with `valkey/valkey:8-alpine` (`BSD-3-Clause`) in `docker-compose.yml` using `valkey-server --maxmemory 256mb --maxmemory-policy allkeys-lru` and `valkey-cli ping` healthchecks, while preserving the `redis` Docker service name, `redis:6379` network alias, and `redis://` URI scheme.
+  - Updated `scripts/iqoqo-status.sh` and `tests/bash/iqoqo_status.bats` to probe via `valkey-cli`.
+  - **Upgrade note:** Cache and Celery broker state in Valkey is ephemeral; if you use a custom persistent `redis_data` volume overlay, recreate or flush it (`docker compose exec redis valkey-cli FLUSHALL`) when upgrading from Redis 8.
+- **Security Dependency Updates (#442)**:
+  - Updated `next` (`16.4.6`), `eslint-config-next` (`^16.4.6`), `hono` (`>=4.13.16`), and `@hono/node-server` (`>=2.1.6`) in `frontend/package.json`.
+- **v1.1.0 Documentation, In-Product Help & Architecture Blueprints**:
+  - Updated all 5 bilingual (`en`/`pl`) help guides in `frontend/lib/help-articles.ts` and `.context/notes/docs/docs-iqoqo-*.md`, expanded `README.md` and `docs/{ARCHITECTURE,API,BACKUPS,COVERS_SETUP,DEPLOYMENT,FEDERATION,MOBILE_TARGETS,MONITORING,OPERATIONS,SECURITY,SEMANTIC_WEB,SPARQL_EXECUTION_SERVICE}.md` with 12 vector SVG architecture diagrams under `docs/images/architecture/` and selected in-product diagrams under `frontend/public/images/help/`, wired `scripts/sync_version.py` to keep `iqoqo vX.Y.Z` SVG banners synced on `make bump-version`, and added 12 diagram-ready textual architecture blueprints in `.context/notes/docs/docs-iqoqo-architecture-blueprints.md`.
+
+### Fixed
+
+- **Serial Lookup, Cover Processing, Vision Telemetry & OTel Status (C135)**:
+  - Fixed Biblioteka Narodowa ISSN lookup, resized large/50MP cover uploads (`frontend/lib/image-resize.ts`, `app/utils/images.py`), preserved serial edition metadata and stripped placeholder `"Unknown"` author labels, passed `unoptimized` on Work/Expression covers, recorded telemetry across `gemini`/`ollama`/`tesseract` in `app/utils/vision.py`, set `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` for `:4318` endpoints in `docker-compose.yml`, and surfaced OTLP export/protocol errors in `scripts/iqoqo-status.sh`.
+
 ## [1.0.3] - 2026-11-18
 
 ### Added

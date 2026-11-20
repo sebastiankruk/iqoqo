@@ -47,8 +47,9 @@ from app.core.scheduler import init_scheduler
 from .config import Config
 from .db import db
 
-# Protect against decompression bombs globally
-Image.MAX_IMAGE_PIXELS = 25_000_000
+# Protect against decompression bombs globally (100MP allows modern 50MP+ cameras
+# before Pillow's 2x/200MP error ceiling, while uploads are resized for storage).
+Image.MAX_IMAGE_PIXELS = 100_000_000
 
 
 def _coerce_bool(value, default=False):

@@ -37,6 +37,8 @@ import { CollectionGrid } from "@/components/collection/collection-grid";
 import { MobileFilterDrawer } from "@/components/collection/mobile-filter-drawer";
 import { ShareCollectionDialog } from "@/components/collection/share-collection-dialog";
 import { BulkAddToolbar } from "@/components/collection/bulk-add-toolbar";
+import { WorkRollupBadge } from "@/components/work/work-rollup-badge";
+import { BulkItemVisibilityToolbar } from "@/components/collection/bulk-item-visibility-toolbar";
 import {
   useInfiniteItems,
   useInfiniteManifestations,
@@ -139,6 +141,8 @@ function CollectionContent() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   /** Manifestations selected for bulk-add (id → CatalogEntry) in Global Library view. */
   const [selectedManifestations, setSelectedManifestations] = useState<Map<number, CatalogEntry>>(new Map());
+  /** Owned physical item IDs selected for bulk visibility updates in My Items view. */
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
@@ -284,6 +288,10 @@ function CollectionContent() {
   }, [sortBy, activeFilters, appliedQuery, viewMode, missingCoverOnly, missingIdOnly, pathname, router]);
 
   const physicalStatusFilters = useMemo(() => statusFilters.filter(status => status !== "wish_list"), [statusFilters]);
+  const visibilityFilters = useMemo(
+    () => activeFilters.filter(f => f.type === "visibility").map(f => f.value),
+    [activeFilters]
+  );
   const hasMapActive = useMemo(() => activeFilters.some(f => f.type === "has_map"), [activeFilters]);
 
   const {
@@ -312,7 +320,8 @@ function CollectionContent() {
     lodAuthorityFilter,
     lodStatusFilter,
     currentScope,
-    hasMapActive
+    hasMapActive,
+    visibilityFilters.length > 0 ? visibilityFilters : undefined
   );
 
   const {
@@ -389,6 +398,7 @@ function CollectionContent() {
     if (publisherFilters.length > 0) f.publishers = publisherFilters.join(",");
     if (ownershipFilters.length > 0) f.ownership = ownershipFilters.join(",");
     if (statusFilters.length > 0) f.statuses = statusFilters.join(",");
+    if (visibilityFilters.length > 0) f.visibility = visibilityFilters.join(",");
     if (lodAuthorityFilter) f.lod_authority = lodAuthorityFilter;
     if (lodStatusFilter) f.lod_status = lodStatusFilter;
     if (isBorrowedFilterActive) f.borrowed = "true";
@@ -413,6 +423,7 @@ function CollectionContent() {
     publisherFilters,
     ownershipFilters,
     statusFilters,
+    visibilityFilters,
     lodAuthorityFilter,
     lodStatusFilter,
     isBorrowedFilterActive,
@@ -550,6 +561,38 @@ function CollectionContent() {
   const clearManifestationSelection = useCallback(() => {
     setSelectedManifestations(new Map());
   }, []);
+
+  /** Clears all selected owned physical items. */
+  const clearItemSelection = useCallback(() => {
+    setSelectedItemIds(new Set());
+  }, []);
+
+  const selectionContextKey = `${currentScope}|${viewMode}|${appliedQuery}|${JSON.stringify(activeFilters)}`;
+  const [lastSelectionContextKey, setLastSelectionContextKey] = useState(selectionContextKey);
+  if (selectionContextKey !== lastSelectionContextKey) {
+    setLastSelectionContextKey(selectionContextKey);
+    if (selectedItemIds.size > 0) {
+      setSelectedItemIds(new Set());
+    }
+  }
+
+  /** Toggles selection of a single owned physical item in My Items view. */
+  const toggleItemSelection = useCallback(
+    (id: number) => {
+      const entry = allItems.find(item => item.id === id) as Item | undefined;
+      if (entry && entry.is_owner === false) return;
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else if (entry) {
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [allItems]
+  );
 
   /** Toggles selection of a single manifestation, storing the full CatalogEntry. */
   const toggleManifestationSelection = useCallback(
@@ -1076,9 +1119,12 @@ function CollectionContent() {
                       </div>
                       {/* Content */}
                       <div className="flex flex-1 flex-col p-4">
-                        <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
-                          {work.title}
-                        </h3>
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-serif font-bold text-base leading-snug text-foreground truncate group-hover:text-primary transition-colors">
+                            {work.title}
+                          </h3>
+                          <WorkRollupBadge status={work.work_reading_status} />
+                        </div>
                         {work.creators.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {work.creators.map(c => (
@@ -1303,8 +1349,20 @@ function CollectionContent() {
                   if (viewMode === "items" && hasMoreItems) fetchNextItems();
                   if (viewMode === "manifestations" && hasMoreManifestations) fetchNextManifestations();
                 }}
-                selectedIds={viewMode === "manifestations" ? new Set(selectedManifestations.keys()) : undefined}
-                onToggleSelect={viewMode === "manifestations" && isLoggedIn ? toggleManifestationSelection : undefined}
+                selectedIds={
+                  viewMode === "manifestations"
+                    ? new Set(selectedManifestations.keys())
+                    : viewMode === "items" && isLoggedIn && currentScope === "personal" && !effectiveOffline
+                      ? selectedItemIds
+                      : undefined
+                }
+                onToggleSelect={
+                  viewMode === "manifestations" && isLoggedIn
+                    ? toggleManifestationSelection
+                    : viewMode === "items" && isLoggedIn && currentScope === "personal" && !effectiveOffline
+                      ? toggleItemSelection
+                      : undefined
+                }
               />
             )}
           </div>
@@ -1337,6 +1395,14 @@ function CollectionContent() {
           selectedItems={Array.from(selectedManifestations.values())}
           onClearSelection={clearManifestationSelection}
           onSuccess={clearManifestationSelection}
+        />
+      )}
+      {/* Bulk-visibility toolbar – floats above footer when owned items are selected */}
+      {showClientContent && viewMode === "items" && currentScope === "personal" && !effectiveOffline && (
+        <BulkItemVisibilityToolbar
+          selectedItemIds={Array.from(selectedItemIds)}
+          onClearSelection={clearItemSelection}
+          onSuccess={clearItemSelection}
         />
       )}
       <MobileFilterDrawer

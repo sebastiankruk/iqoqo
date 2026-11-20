@@ -120,3 +120,12 @@ Both `GET /api/system/status` and `make status` (`scripts/iqoqo-status.sh`) SHAL
 
 - **WHEN** an authenticated client queries `GET /api/system/status` while provider keys (`BGG_API_TOKEN`, `DISCOGS_*`, `TMDB_*`, `GOOGLE_BOOKS_API_KEY`, `UPC_*`) are stored in `InstanceSettings`
 - **THEN** the response reports `configured: true` and `"source": "db"` for each DB-configured provider
+
+### Requirement: Valkey CLI Cache and Queue Diagnostics
+The `scripts/iqoqo-status.sh` diagnostic utility SHALL inspect the cache and Celery broker container using `valkey-cli` (rather than `redis-cli`) to verify connectivity (`PING`), Celery queue length (`LLEN celery`), and memory usage (`INFO memory`).
+
+#### Scenario: Running `make status` against a Valkey-backed stack
+
+- **GIVEN** a running stack whose `redis` container runs `valkey/valkey:8-alpine`
+- **WHEN** an operator runs `make status` or `scripts/iqoqo-status.sh`
+- **THEN** the status probe MUST execute `valkey-cli` inside the container, report `PING` connectivity as passing, display Celery queue depth and Valkey memory usage, and emit zero `redis-cli: not found` errors.

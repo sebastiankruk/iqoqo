@@ -400,6 +400,27 @@ def test_admin_settings_federation_keys_returned_and_fail_closed(client, admin_h
     assert bad_trust.status_code == 400
 
 
+def test_admin_settings_allow_llm_and_ollama_keys(client, app, admin_headers):
+    """Admins can toggle ALLOW_LLM and configure OLLAMA_URL / OLLAMA_VISION_MODEL in InstanceSettings."""
+    res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "ALLOW_LLM": True,
+            "OLLAMA_URL": "http://host.docker.internal:11434",
+            "OLLAMA_VISION_MODEL": "llava",
+        },
+        headers=admin_headers,
+    )
+    assert res.status_code == 200
+    assert res.json["data"]["ALLOW_LLM"] == "true"
+
+    get_res = client.get("/api/v1/admin/settings?category=external_apis", headers=admin_headers)
+    assert get_res.status_code == 200
+    assert get_res.json["data"]["ALLOW_LLM"]["value"] == "true"
+    assert get_res.json["data"]["OLLAMA_URL"]["value"] == "http://host.docker.internal:11434"
+    assert get_res.json["data"]["OLLAMA_VISION_MODEL"]["value"] == "llava"
+
+
 def test_admin_settings_atomic_rollback_on_partial_failure(app, client, admin_headers):
     """PUT /api/v1/admin/settings must roll back atomically if any key fails validation."""
     with app.app_context():
@@ -418,3 +439,14 @@ def test_admin_settings_atomic_rollback_on_partial_failure(app, client, admin_he
     with app.app_context():
         # FEDERATION_ENABLED must NOT have been changed to true
         assert InstanceSettings.get_value("FEDERATION_ENABLED") == "false"
+
+
+def test_admin_settings_rejects_ssrf_ollama_url(client, admin_headers):
+    """PUT /api/v1/admin/settings rejects link-local/metadata OLLAMA_URL and unsafe schemes."""
+    for bad_url in (
+        "http://169.254.169.254/latest/meta-data",
+        "ftp://ollama.local:11434",
+        "http://user:pass@localhost:11434",
+    ):
+        res = client.put("/api/v1/admin/settings", json={"OLLAMA_URL": bad_url}, headers=admin_headers)
+        assert res.status_code == 400

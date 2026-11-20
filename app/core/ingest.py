@@ -31,6 +31,7 @@ from app.utils.bgg import fetch_bgg_metadata
 from app.utils.covers import start_cover_processing
 from app.utils.discogs import fetch_discogs_metadata
 from app.utils.isbn import fetch_isbn_metadata
+from app.utils.issn import is_977_periodical_barcode, normalize_issn, parse_issn_or_977
 from app.utils.musicbrainz import fetch_audio_metadata
 from app.utils.tmdb import clean_video_title, fetch_video_metadata
 from app.utils.upc import resolve_physical_media
@@ -199,6 +200,15 @@ class IngestService:
             candidate_barcode if candidate_barcode and len(str(candidate_barcode)) == 12 and str(candidate_barcode).isdigit() else None
         )
         candidate_set_num = meta.get("set_number") or meta.get("set_num")
+
+        is_serial = (
+            raw_format in ("magazine", "journal", "periodical", "serial")
+            or meta.get("work_kind") == "serial"
+            or bool(meta.get("issn"))
+            or is_977_periodical_barcode(str(candidate_ean or candidate_barcode or ""))
+        )
+        if is_serial:
+            return IngestService.ingest_serial_from_meta(meta)
 
         # Deduplicate existing manifestation
         conditions = []
@@ -759,3 +769,273 @@ class IngestService:
 
         start_cover_processing(manifestation_id=manifestation.id, identifier=query, title=title, author=author_name or "")
         return manifestation
+
+    @staticmethod
+    def ingest_serial_from_meta(meta: dict, *, commit: bool = True) -> Manifestation:
+        """Persist or match an individual periodical issue Manifestation under an F18 Serial Work.
+
+        Unlike books/albums, GS1 977 EAN-13 barcodes repeat across issues within a year/price variant,
+        so deduplication NEVER matches on ``Manifestation.ean`` alone; instead it matches on exact
+        ``full_barcode`` (15/18-digit) or ``(work_id, issue_number, publication_year)``.
+        """
+        raw_code = str(meta.get("full_barcode") or meta.get("barcode") or meta.get("ean") or meta.get("issn") or "").strip()
+        parsed = parse_issn_or_977(raw_code) if raw_code else None
+        if not parsed and meta.get("issn"):
+            parsed = parse_issn_or_977(str(meta["issn"]))
+
+        issn = normalize_issn(str(meta["issn"])) if meta.get("issn") else (parsed["issn"] if parsed else None)
+        eissn = normalize_issn(str(meta["eissn"])) if meta.get("eissn") else None
+        ean = meta.get("ean") or (parsed["ean"] if parsed else None)
+        ean_addon = meta.get("ean_addon") or (parsed["ean_addon"] if parsed else None)
+        if ean_addon is not None:
+            ean_addon = str(ean_addon).strip() or None
+        full_barcode = meta.get("full_barcode") or (parsed["full_barcode"] if parsed else None)
+        if not full_barcode and ean and ean_addon:
+            full_barcode = f"{ean}{ean_addon}"
+
+        issue_number_raw = meta.get("issue_number")
+        issue_number = str(issue_number_raw).strip() if issue_number_raw not in (None, "") else None
+        if issue_number is None and parsed and parsed.get("addon_issue_hint") is not None:
+            issue_number = str(parsed["addon_issue_hint"])
+
+        cum_issue_raw = meta.get("cumulative_issue_number")
+        cum_issue = int(cum_issue_raw) if cum_issue_raw not in (None, "") else None
+        pub_year_raw = meta.get("publication_year") or meta.get("year")
+        pub_year = int(pub_year_raw) if pub_year_raw not in (None, "") and str(pub_year_raw).strip().isdigit() else None
+        pub_month_raw = meta.get("publication_month")
+        pub_month = int(pub_month_raw) if pub_month_raw not in (None, "") and str(pub_month_raw).strip().isdigit() else None
+        volume = str(meta["volume"]).strip() if meta.get("volume") not in (None, "") else None
+
+        raw_pub = meta.get("publisher") or meta.get("Publisher") or meta.get("label") or meta.get("Label")
+        publisher_val = (
+            str(raw_pub).strip()
+            if isinstance(raw_pub, str) and raw_pub.strip() and raw_pub.strip().lower() not in {"unknown", "n/a", "none"}
+            else None
+        )
+        raw_pub_date = meta.get("publication_date") or meta.get("PublicationDate")
+        pub_date_obj = None
+        if isinstance(raw_pub_date, str) and raw_pub_date.strip():
+            from datetime import date
+
+            try:
+                pub_date_obj = date.fromisoformat(raw_pub_date.strip()[:10])
+            except (ValueError, TypeError):
+                pub_date_obj = None
+
+        # 1. Exact full_barcode lookup first (unambiguous 15/18-digit barcode)
+        if full_barcode:
+            existing_full = db.session.execute(select(Manifestation).where(Manifestation.full_barcode == full_barcode)).scalars().first()
+            if existing_full is not None:
+                return existing_full
+
+        # 2. Resolve or create parent F18 Serial Work
+        from app.core.frbr_service import derive_sort_title
+
+        title = (meta.get("title") or meta.get("Title") or (f"ISSN {issn}" if issn else "Unknown Periodical")).strip()
+        work: Work | None = None
+        if issn:
+            work = db.session.execute(select(Work).where(Work.issn == issn)).scalars().first()
+        if work is None and ean:
+            work = (
+                db.session.execute(
+                    select(Work)
+                    .join(Expression, Expression.work_id == Work.id)
+                    .join(Manifestation, Manifestation.expression_id == Expression.id)
+                    .where(Manifestation.ean == str(ean), Work.work_kind == "serial")
+                )
+                .scalars()
+                .first()
+            )
+        if work is None:
+            work_meta = dict(meta.get("work_meta") or {})
+            if meta.get("indeks"):
+                work_meta["indeks"] = meta["indeks"]
+            if publisher_val:
+                work_meta["publisher"] = publisher_val
+            work = Work(
+                title=title,
+                sort_title=derive_sort_title(title),
+                issn=issn,
+                eissn=eissn,
+                work_kind="serial",
+                meta=work_meta,
+                raw_payload=meta.get("raw_payload") or meta,
+            )
+            db.session.add(work)
+            db.session.flush()
+        else:
+            if issn and not work.issn:
+                work.issn = issn
+            if eissn and not work.eissn:
+                work.eissn = eissn
+            if not work.work_kind:
+                work.work_kind = "serial"
+            if publisher_val and isinstance(work.meta, dict) and not work.meta.get("publisher"):
+                work.meta = {**work.meta, "publisher": publisher_val}
+
+        # 3. Resolve or create Expression for language under serial Work
+        lang = str(meta.get("language") or "en").strip().lower()[:10] or "en"
+        expression = (
+            db.session.execute(
+                select(Expression).where(
+                    Expression.work_id == work.id,
+                    Expression.content_type == MediaCategory.TEXT,
+                    Expression.language == lang,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if expression is None:
+            expression = Expression(
+                work=work,
+                language=lang,
+                content_type=MediaCategory.TEXT,
+                raw_payload=meta.get("raw_payload") or meta,
+            )
+            db.session.add(expression)
+            db.session.flush()
+
+        # 4. Issue-scoped deduplication under this parent Expression (never by bare EAN alone)
+        if issue_number and pub_year is not None:
+            existing_issue = (
+                db.session.execute(
+                    select(Manifestation).where(
+                        Manifestation.expression_id == expression.id,
+                        Manifestation.issue_number == issue_number,
+                        Manifestation.publication_year == pub_year,
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if existing_issue is not None:
+                return existing_issue
+
+        # Guard against bare 977 collision when no distinguishing issue attribute was provided at all
+        cover_headline = str(meta.get("cover_headline") or "").strip()
+        has_issue_specifier = any(
+            [
+                full_barcode,
+                ean_addon,
+                issue_number,
+                cum_issue is not None,
+                pub_year is not None,
+                pub_month is not None,
+                bool(cover_headline),
+            ]
+        )
+        if is_977_periodical_barcode(str(ean or "")) and not has_issue_specifier:
+            existing_for_ean = db.session.execute(select(Manifestation.id).where(Manifestation.ean == str(ean))).scalars().first()
+            if existing_for_ean is not None:
+                raise ValueError("Ambiguous bare 977 periodical barcode requires an EAN-2 add-on, issue number, date, or headline.")
+
+        # 5. Create new issue Manifestation
+        cover_url = meta.get("cover_url") or meta.get("thumb") or meta.get("cover")
+        _item_only_keys = {
+            "collection_status",
+            "status",
+            "local_barcode",
+            "lent_to_user_id",
+            "lent_to_name",
+            "visibility",
+            "is_hidden",
+            "tags",
+        }
+        man_meta = {k: v for k, v in meta.items() if k not in _item_only_keys and v is not None}
+        man_meta.update(
+            {
+                "title": title,
+                "format": MediaFormat.MAGAZINE,
+                "work_kind": "serial",
+            }
+        )
+        if publisher_val:
+            man_meta["publisher"] = publisher_val
+            man_meta.pop("Publisher", None)
+        if "authors" in man_meta and isinstance(man_meta["authors"], list):
+            man_meta["authors"] = [
+                a for a in man_meta["authors"] if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+            ]
+        if "Authors" in man_meta and isinstance(man_meta["Authors"], list):
+            man_meta["Authors"] = [
+                a for a in man_meta["Authors"] if isinstance(a, str) and a.strip().lower() not in {"unknown", "n/a", "none", ""}
+            ]
+        if issn:
+            man_meta["issn"] = issn
+        if issue_number:
+            man_meta["issue_number"] = issue_number
+        if cum_issue is not None:
+            man_meta["cumulative_issue_number"] = cum_issue
+        if pub_year is not None:
+            man_meta["publication_year"] = pub_year
+        if pub_month is not None:
+            man_meta["publication_month"] = pub_month
+        if ean_addon:
+            man_meta["ean_addon"] = ean_addon
+        if full_barcode:
+            man_meta["full_barcode"] = full_barcode
+
+        manifestation = Manifestation(
+            expression=expression,
+            format=MediaFormat.MAGAZINE,
+            format_type=MediaFormat.MAGAZINE,
+            publisher=publisher_val,
+            label=publisher_val,
+            publication_date=pub_date_obj,
+            barcode=full_barcode or ean or meta.get("barcode"),
+            ean=ean,
+            cover_url=cover_url,
+            issue_number=issue_number,
+            cumulative_issue_number=cum_issue,
+            volume=volume,
+            publication_year=pub_year,
+            publication_month=pub_month,
+            ean_addon=ean_addon,
+            full_barcode=full_barcode,
+            meta=man_meta,
+            raw_payload=meta.get("raw_payload") or meta,
+        )
+        db.session.add(manifestation)
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
+        return manifestation
+
+    @staticmethod
+    def ingest_serial_issue(barcode: str, meta: dict | None = None) -> Manifestation:
+        """Ingest a periodical issue by ISSN or GS1 977 barcode using SerialLookupStrategy."""
+        from app.strategies.serials import SerialLookupStrategy
+
+        merged_meta = dict(meta or {})
+        parsed = parse_issn_or_977(barcode)
+        if not parsed:
+            raise ValueError(f"Invalid ISSN or 977 periodical barcode: {barcode}")
+
+        # Prevent silent collision when bare 13-digit 977 or plain ISSN lacks issue identification
+        has_issue_spec = bool(
+            parsed.get("full_barcode") or merged_meta.get("full_barcode") or merged_meta.get("issue_number") or merged_meta.get("ean_addon")
+        )
+        if not has_issue_spec:
+            raise ValueError("Ambiguous bare 977 periodical barcode requires an EAN-2 add-on or issue number.")
+
+        if "title" not in merged_meta and "Title" not in merged_meta:
+            strategy = SerialLookupStrategy()
+            fetched_meta, _provider = strategy.lookup(barcode)
+            if fetched_meta:
+                for k, v in fetched_meta.items():
+                    merged_meta.setdefault(k, v)
+
+        if parsed.get("issn"):
+            merged_meta.setdefault("issn", parsed["issn"])
+        if parsed.get("ean"):
+            merged_meta.setdefault("ean", parsed["ean"])
+        if parsed.get("ean_addon"):
+            merged_meta.setdefault("ean_addon", parsed["ean_addon"])
+        if parsed.get("full_barcode"):
+            merged_meta.setdefault("full_barcode", parsed["full_barcode"])
+        if parsed.get("addon_issue_hint") is not None:
+            merged_meta.setdefault("issue_number", str(parsed["addon_issue_hint"]))
+
+        return IngestService.ingest_serial_from_meta(merged_meta)

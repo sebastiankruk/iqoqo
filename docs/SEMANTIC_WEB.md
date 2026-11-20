@@ -2,6 +2,8 @@
 
 iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms your personal library into a queryable, interoperable Linked Data source. This guide covers SPARQL querying, public Linked Data endpoints, data export, Schema.org SEO, IRI minting, and content negotiation.
 
+![Semantic Web, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
+
 ## SPARQL Query Endpoint
 
 The SPARQL endpoint provides read-only access to your collection using the standard [SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/).
@@ -293,15 +295,23 @@ iqoqo automatically embeds Schema.org structured data in RDF serializations, ena
 
 ### Type Mappings
 
-| Content Type | Schema.org Type     |
-| ------------ | ------------------- |
-| `text`       | `schema:Book`       |
-| `audiobook`  | `schema:Audiobook`  |
-| `music`      | `schema:MusicAlbum` |
-| `movie`      | `schema:Movie`      |
-| `board_game` | `schema:Game`       |
-| `puzzle`     | `schema:Product`    |
-| `concert`    | `schema:MusicEvent` |
+| Content Type | Schema.org Type                                 |
+| ------------ | ----------------------------------------------- |
+| `text`       | `schema:Book` (or `schema:Map` for maps)        |
+| `serial`     | `schema:Periodical` + `schema:PublicationIssue` |
+| `audiobook`  | `schema:Audiobook`                              |
+| `music`      | `schema:MusicAlbum` + `schema:MusicRelease`     |
+| `movie`      | `schema:Movie`                                  |
+| `board_game` | `schema:Game`                                   |
+| `puzzle`     | `schema:Product`                                |
+| `lego`       | `schema:Product`                                |
+| `concert`    | `schema:MusicEvent`                             |
+
+### Audio Pressing & Serial Issue Extensions (`v1.0.3`–`v1.1.0`)
+
+- **Audio Pressing RDF Triples (`_emit_audio_rdf_triples()`):** Audio Manifestations emit paired `schema:MusicAlbum` / `schema:MusicRelease` descriptions carrying `schema:recordLabel`, `schema:catalogNumber`, `schema:gtin13`, `iqoqo:matrixRunout` (wax matrix etching), and `owl:sameAs` links to Discogs / MusicBrainz.
+- **FRBRoo Serials (`F18_Serial_Work` & `PublicationIssue`):** Serial Works (`work_kind = "serial"`) emit `frbroo:F18_Serial_Work` and `schema:Periodical` alongside `schema:issn`, while each issue Manifestation emits `schema:PublicationIssue`, `schema:issueNumber`, `schema:volumeNumber`, and `schema:datePublished`.
+- **OpenCollections.org LOD Bridge:** `OpenCollectionsLookupStrategy` reconciles records and emits `owl:sameAs`, `schema:sameAs`, and `rdfs:seeAlso` triples referencing canonical OpenCollections URIs.
 
 ### Properties Mapped
 
@@ -474,13 +484,18 @@ WHERE {
 
 All public endpoints include `Access-Control-Allow-Origin: *` headers, allowing AI agents running in browsers or sandboxed environments to access Linked Data without proxy configuration.
 
-### Privacy & Access Control Scoping
+### Privacy, Access Control & Shared Visibility Scopes
 
-Starting in **v0.9.2**, all SPARQL query execution snapshots and public RDF exports strictly enforce item-level and user-level access rights:
+All SPARQL query execution snapshots and public RDF exports strictly enforce item-level, user-level, and share-link access rights:
 
-- **Private items (`is_hidden: true` or owner `default_item_visibility: 'private'`)** are strictly excluded from anonymous queries and public RDF serializations.
-- **Federation Consent**: If an owner has opted out of public federation collection sharing (`federated_collection: false`), their items are automatically omitted from public graph builds.
-- **Authenticated Access**: Logged-in users can query their own items alongside public items, as well as items from accepted federated friends.
+- **Private items (`visibility='private'` or `is_hidden: true`)** are excluded from anonymous queries and default public RDF serializations.
+- **Friends-Only (`visibility='friends_only'`)** items are exposed only to authenticated accepted local/federated friends, or via shared links configured to allow them.
+- **Shared Collection `visibility_scope` & Friend Bonus:** Public RDF/JSON-LD shares (`/share/<token>`, `/share/<token>/catalog.jsonld`, `/share/<token>/jsonld/1..N`, `/api/public/rdf/share/<token>`) evaluate the token's stored `visibility_scope`:
+  - `public_only` (default): anonymous visitors see `public` items only; signed-in accepted friends receive the **Friend Bonus** unlocking matching `friends_only` items.
+  - `friends_and_public`: any token holder sees matching `public` and `friends_only` items (`private` stays hidden).
+  - `all`: any token holder sees all matching items including `private` copies.
+- **Federation Consent:** If an owner has opted out of public federation collection sharing (`federated_collection: false`), their items are omitted from public federated graph builds.
+- **Authenticated Access:** Logged-in users can query their own items alongside public items, as well as items from accepted federated friends.
 
 ### Streaming for Large Collections
 

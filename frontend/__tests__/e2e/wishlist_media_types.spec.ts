@@ -164,10 +164,9 @@ test.describe("Wishlist Media Disambiguation (Vinyl, Audio, Games)", () => {
       });
     });
 
-    // 4. Navigate to scanner and add to wishlist
+    // 4. Navigate to scanner and add to wishlist via unified lookup bar
     await page.goto("/scan");
-    await page.getByRole("button", { name: "Manual Search" }).click();
-    const barcodeInput = page.getByPlaceholder("ISBN, UPC, Discogs ID, or Artist – Title…");
+    const barcodeInput = page.getByTestId("unified-lookup-input");
     await barcodeInput.fill(testBarcode);
     await barcodeInput.press("Enter");
 

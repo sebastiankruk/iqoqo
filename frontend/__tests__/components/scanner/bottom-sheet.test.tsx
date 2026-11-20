@@ -14,10 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 /**
- * Tests for BottomSheet scanner component.
- *
- * Verifies tab rendering, tab switching, manual search, barcode camera,
- * error display, and manual entry fallback.
+ * Tests for streamlined 2-tab BottomSheet scanner component (C134).
  */
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,45 +26,35 @@ import plMessages from "@/messages/pl.json";
 const bottomSheetKeys = [
   "barcodeTab",
   "snapCoverTab",
-  "manualSearchTab",
   "searchingCatalog",
   "lookingUpBarcode",
   "skipAndEnterManually",
   "enterManually",
+  "enterManuallyLink",
   "startCamera",
   "scanning",
   "tapToStartCamera",
   "uploadFromGallery",
-  "manualSearchPlaceholder",
-  "lookingUp",
-  "manualSearchHint",
-  "manualEntryForm",
   "invalidBarcode",
   "lookupTimedOut",
   "lookupFailed",
   "cameraUnavailable",
 ] as const;
 
-// Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string, values?: { barcode?: string }) =>
     ({
       "bottomSheet.barcodeTab": "Barcode",
       "bottomSheet.snapCoverTab": "Snap Cover",
-      "bottomSheet.manualSearchTab": "Manual Search",
       "bottomSheet.searchingCatalog": "Searching catalog...",
       "bottomSheet.lookingUpBarcode": `Looking up barcode ${values?.barcode ?? ""}`,
       "bottomSheet.skipAndEnterManually": "Skip and enter manually",
       "bottomSheet.enterManually": "Enter Manually",
+      "bottomSheet.enterManuallyLink": "Can't scan? Enter details manually",
       "bottomSheet.startCamera": "Start camera",
       "bottomSheet.scanning": "Scanning – point at barcode",
       "bottomSheet.tapToStartCamera": "Tap to start camera",
-      "bottomSheet.snapCover": "Snap Cover",
       "bottomSheet.uploadFromGallery": "Upload from Gallery",
-      "bottomSheet.manualSearchPlaceholder": "ISBN, UPC, Discogs ID, or Artist – Title…",
-      "bottomSheet.lookingUp": "Looking up…",
-      "bottomSheet.manualSearchHint": "Enter barcode, Discogs Release ID, or Artist – Title",
-      "bottomSheet.manualEntryForm": "Manual Entry Form",
       "bottomSheet.invalidBarcode": "Please enter a valid barcode (8-13 characters).",
       "bottomSheet.lookupTimedOut": "Lookup timed out. Switching to manual entry.",
       "bottomSheet.lookupFailed": "Could not look up this item. Please try again.",
@@ -75,12 +62,10 @@ vi.mock("next-intl", () => ({
     })[key] ?? key,
 }));
 
-// Mock CameraCapture component
 vi.mock("@/components/scanner/camera-capture", () => ({
   CameraCapture: ({ label }: { label: string }) => <button data-testid="camera-capture">{label}</button>,
 }));
 
-// Mock the api client for lookup
 vi.mock("@/lib/api/client", () => ({
   apiFetch: vi.fn(),
   apiClient: {
@@ -107,104 +92,34 @@ describe("BottomSheet", () => {
     }
   });
 
-  it("renders all three tabs: barcode, snap cover, manual search", () => {
+  it("renders two capture tabs (barcode, snap cover) and omits duplicate manual search tab", () => {
     render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
 
     expect(screen.getByTestId("scanner-tab-barcode")).toBeInTheDocument();
     expect(screen.getByTestId("scanner-tab-cover")).toBeInTheDocument();
-    expect(screen.getByTestId("scanner-tab-manual")).toBeInTheDocument();
+    expect(screen.queryByTestId("scanner-tab-manual")).not.toBeInTheDocument();
   });
 
   it("switches active content when tabs are clicked", () => {
     render(<BottomSheet videoRef={videoRef} onFound={onFound} onTabChange={onTabChange} />);
 
-    // Click "Snap Cover" tab
     fireEvent.click(screen.getByTestId("scanner-tab-cover"));
     expect(onTabChange).toHaveBeenCalledWith("cover");
 
-    // CameraCapture should be rendered (as "Snap Cover" and "Upload from Gallery" buttons)
     const cameraCaptures = screen.getAllByTestId("camera-capture");
     expect(cameraCaptures.length).toBe(2);
   });
 
-  it("manual search tab shows text input and search button", () => {
-    render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
+  it("barcode tab renders camera viewfinder controls and secondary enter-manually link", () => {
+    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
 
-    // Switch to manual tab
-    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
-
-    // Should show a text input
-    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
-    expect(input).toBeInTheDocument();
-
-    // Should show manual entry fallback button
-    expect(screen.getByText("Manual Entry Form")).toBeInTheDocument();
-  });
-
-  it("barcode tab renders camera viewfinder controls", () => {
-    render(<BottomSheet videoRef={videoRef} onFound={onFound} />);
-
-    // Should be on barcode tab by default
     expect(screen.getByTestId("start-camera-button")).toBeInTheDocument();
     expect(screen.getByText(/Tap to start camera/i)).toBeInTheDocument();
-  });
 
-  it("shows manual entry fallback button", () => {
-    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
-
-    // Switch to manual tab
-    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
-
-    const manualEntryBtn = screen.getByText("Manual Entry Form");
-    fireEvent.click(manualEntryBtn);
-    expect(onShowManualForm).toHaveBeenCalled();
-  });
-
-  it("automatically calls onShowManualForm when manual search lookup fails", async () => {
-    const { apiFetch } = await import("@/lib/api/client");
-    vi.mocked(apiFetch).mockRejectedValueOnce(new Error("Lookup failed"));
-
-    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
-
-    // Switch to manual tab
-    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
-
-    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
-    fireEvent.change(input, { target: { value: "9781234567890" } });
-
-    const form = input.closest("form");
-    if (form) {
-      fireEvent.submit(form);
-    }
-
-    await screen.findByText("Lookup failed");
-    expect(onShowManualForm).toHaveBeenCalledWith("9781234567890");
-  });
-
-  it("renders skip button in searching overlay and invokes onShowManualForm on click", async () => {
-    const { apiFetch } = await import("@/lib/api/client");
-    vi.mocked(apiFetch).mockReturnValueOnce(new Promise(() => {}));
-
-    render(<BottomSheet videoRef={videoRef} onFound={onFound} onShowManualForm={onShowManualForm} />);
-
-    // Switch to manual tab and submit search
-    fireEvent.click(screen.getByTestId("scanner-tab-manual"));
-    const input = screen.getByPlaceholderText("ISBN, UPC, Discogs ID, or Artist – Title…");
-    fireEvent.change(input, { target: { value: "9780140449136" } });
-    const form = input.closest("form");
-    if (form) {
-      fireEvent.submit(form);
-    }
-
-    // Searching overlay should be visible
-    expect(screen.getByTestId("scanner-searching-overlay")).toBeInTheDocument();
-    const skipBtn = screen.getByTestId("scanner-skip-manual-button");
-    expect(skipBtn).toBeInTheDocument();
-    expect(skipBtn).toHaveTextContent("Skip and enter manually");
-
-    // Clicking skip should trigger onShowManualForm with the searched barcode
-    fireEvent.click(skipBtn);
-    expect(onShowManualForm).toHaveBeenCalledWith("9780140449136");
+    const manualLink = screen.getByTestId("enter-manually-link");
+    expect(manualLink).toBeInTheDocument();
+    fireEvent.click(manualLink);
+    expect(onShowManualForm).toHaveBeenCalledWith("");
   });
 
   it("autoStart prop triggers camera stream acquisition on mount", async () => {

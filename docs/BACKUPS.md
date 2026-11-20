@@ -8,6 +8,8 @@ Starting in **v0.7.14** and extended in **v0.7.16**, iQoQo supports a multi-tier
 
 ## Two Storage Backends
 
+![Source-Free Deployment Contract, Mount Guards, and Multi-Tier Backup Pipeline](images/architecture/12-deployment-contract-backup-dr.svg)
+
 Since **v0.8.2** iqoqo has two remote-storage backends, and which one is in use
 is a single variable:
 
