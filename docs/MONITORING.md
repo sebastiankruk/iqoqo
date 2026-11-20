@@ -7,6 +7,8 @@ the same OTLP endpoint.
 
 ## Architecture Overview
 
+![8-Layer OpenTelemetry and OpenObserve Observability Pipeline](images/architecture/11-otel-openobserve-8-layer.svg)
+
 ```mermaid
 graph TD
     B["🌐 Browser (Web Vitals)<br/>Layer 5"]

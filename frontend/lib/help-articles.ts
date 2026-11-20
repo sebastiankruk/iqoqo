@@ -104,6 +104,8 @@ In iqoqo, our ontology adapts dynamically across your entire cultural life:
 | **Cartographic Maps & Atlases** | Geographic Survey / Fantasy World Map | Cartographic Scale, Projection & Layer Edition | Folded Topographic Sheet, Bound Atlas, Cloth Map Insert | Your copy (with \`map_insert_present\` verified & high-res pan/zoom viewer) |
 | **Magazines & Academic Journals** | Periodical Brand (\`F18_Serial_Work\`, ISSN) | Language / Regional Editorial Edition (\`serial\`) | Single Published Issue (\`issue_number\`, \`volume\`, GS1 \`977\` + EAN-2/5) | Your specific issue copy on the shelf or in reading backlog |
 
+![FRBR and FRBRoo Four-Tier Domain Ontology Blueprint](/images/help/02-frbr-domain-ontology.svg)
+
 ---
 
 ## Everyday Superpowers Unlocked by FRBR
@@ -188,6 +190,8 @@ W iqoqo ontologia dopasowuje się naturalnie do całego Twojego życia kulturaln
 | **Mapy kartograficzne i atlasy** | Opracowanie kartograficzne / Mapa świata fantasy | Skala, odwzorowanie i wersja warstw | Arkusz topograficzny, Atlas, Płócienna mapa w grze/książce | Twój egzemplarz (z kontrolą obecności wkładki i podglądem zoom/obrót) |
 | **Czasopisma, magazyny i periodyki** | Tytuł czasopisma (\`F18_Serial_Work\`, ISSN) | Edycja językowa lub wydanie regionalne (\`serial\`) | Konkretny numer wydania (\`issue_number\`, \`volume\`, GS1 \`977\` + dodatek EAN-2/5) | Twój fizyczny egzemplarz numeru na półce |
 
+![Schemat ontologii domenowej FRBR i FRBRoo w iqoqo](/images/help/02-frbr-domain-ontology.svg)
+
 ---
 
 ## Codzienne supermoce dzięki modelowi FRBR
@@ -266,6 +270,8 @@ Most magazines and journals use either a 13-digit GS1 \`977\` retail barcode (de
 * **With a 2/5-digit Add-On (or exact issue barcode):** If your scanner captures the full 15- or 18-digit barcode, iqoqo pre-fills the issue number directly.
 * **Shared 13-digit \`977\` Barcode (\`SerialDisambiguationModal\`):** Because publishers reuse the same 13-digit \`977\` prefix across issues, iqoqo opens the **Select or Add Magazine Issue** modal displaying already cataloged issues. Pick an existing issue, click **Add New Issue** to enter \`Issue Number\`, \`Volume\`, \`Publication Year\`, and \`Cover Headline\`, or click **Snap Cover to Auto-Fill Issue** to run offline/AI magazine cover OCR!
 
+![Barcode, ISSN/977 Periodical, and Multi-Provider Ingestion Pipeline](/images/help/04-barcode-serial-ingestion.svg)
+
 ### Step C: Snap Cover & Automatic 50MP Image Downscaling
 
 When an item has no usable barcode, switch to the **Snap Cover** tab in the bottom sheet (or upload a cover photo from your gallery):
@@ -325,6 +331,8 @@ When a user photographs an antique book, a vinyl sleeve, or a magazine cover wit
 
 * **Audit & Telemetry:** Every execution across \`gemini\`, \`ollama\`, and \`tesseract\` is recorded in \`llm_telemetry\`. Operators can verify which backend actually handled requests using \`python scripts/llm_usage_report.py --docker preview --hours 24\`.
 
+![50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall, and 7-Tier Cover Pipeline](/images/help/05-vision-ocr-cover-pipeline.svg)
+
 ### 🎨 2. AI Bespoke Cover Generation
 
 What about Works that have *never* had a cover—like a digital-only fan translation or a classical symphony recording?
@@ -382,6 +390,8 @@ Czasopisma i dzienniki naukowe wykorzystują 13-cyfrowe kody handlowe GS1 \`977\
 * Po wybraniu formatu **Czasopismo** (lub zeskanowaniu kodu \`977\` / ISSN) iqoqo weryfikuje sumę kontrolną Modulo-11, odpytuje **Bibliotekę Narodową**, **Crossref**, **OpenLibrary** oraz **Allegro**, identyfikując tytuł nadrzędny (\`F18_Serial_Work\`).
 * **Kod z dodatkiem EAN-2/5:** Jeśli czytnik zeskanuje pełny 15- lub 18-cyfrowy kod z okładki, iqoqo od razu uzupełni numer wydania.
 * **Wspólny 13-cyfrowy kod \`977\`:** Ponieważ wiele numerów jednego pisma ma ten sam bazowy kod \`977\`, iqoqo otworzy okno **Wybierz lub dodaj numer czasopisma**, prezentując listę już skatalogowanych numerów. Możesz wybrać istniejący numer, kliknąć **Dodaj nowy numer** lub użyć **Zrób zdjęcie okładki, aby uzupełnić**, aby OCR automatycznie odczytał numerację i datę z okładki!
+
+![Potok rozpoznawania kodów kreskowych, czasopism ISSN/977 i wielu dostawców metadanych](/images/help/04-barcode-serial-ingestion.svg)
 
 ### Krok C: Skan okładki i automatyczne skalowanie zdjęć 50 MP
 
@@ -442,6 +452,8 @@ Gdy użytkownik fotografuje starodruk, kopertę płyty winylowej lub okładkę m
 
 * **Audyt wykonania:** Każde uruchomienie dostawców \`gemini\`, \`ollama\` i \`tesseract\` jest rejestrowane w tabeli \`llm_telemetry\`. Administratorzy mogą sprawdzić realnie użyty silnik poleceniem \`python scripts/llm_usage_report.py --docker preview --hours 24\`.
 
+![Skalowanie zdjęć 50 MP, trójwarstwowy potok AI Vision/OCR i 7-poziomowy potok okładek](/images/help/05-vision-ocr-cover-pipeline.svg)
+
 ### 🎨 2. Generowanie dedykowanych okładek AI
 
 A co z dziełami, które nigdy nie miały fizycznej okładki — jak cyfrowe tłumaczenia fanowskie czy nagrania archiwalne?
@@ -491,6 +503,8 @@ In your Profile Settings, you set your **Default Item Visibility** (which defaul
 
 * **Filtering by Visibility & Bulk Actions (\`/collection\`):** In the **Collection** sidebar, expand the **Visibility** section to filter your shelf by \`Public\`, \`Friends Only\`, or \`Private / Hidden\`. When browsing **My Items**, select up to \`100\` physical items using card selection checkboxes and click **Set visibility** in the floating **Bulk Visibility Toolbar** (\`PATCH /api/items/bulk-visibility\`) to move an entire shelf batch between tiers in one step.
 
+![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](/images/help/06-privacy-bulk-share-matrix.svg)
+
 ---
 
 ## 2. Sharing Filtered Collection Views (Tokenized Share Links & AI Feeds)
@@ -509,6 +523,8 @@ If you click the **Share View** button in the top toolbar:
    * **All items (including Private/Hidden):** Anyone holding the token (including external AI assistants) can read all matching items, including \`PRIVATE\` copies. An explicit warning banner reminds you before generating the link.
 3. **Clean Guest UI & Machine-Readable AI Feeds:** Visitors opening \`/share/[token]\` see a streamlined, read-only gallery with prices and private notes stripped out. Meanwhile, a compact **W3C RDF / JSON-LD** button links to \`/share/[token]/catalog.jsonld\`, \`/share/[token]/feed.xml\`, and query-free paginated mini-pages (\`/share/[token]/jsonld/1\`, \`/2\`, ... at \`60\` items per page) built specifically for Gemini Gems, ChatGPT Custom GPTs, Claude Projects, and CLI tools (ready-to-use templates live in \`docs/gems/\`).
 4. **Instant Revocation:** Changed your mind? You can revoke active share tokens at any time from your sharing settings, immediately invalidating the URL.
+
+![Semantic Web Layer, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](/images/help/07-semantic-web-sparql-feeds.svg)
 
 ---
 
@@ -580,6 +596,8 @@ W Ustawieniach profilu określasz **Domyślną widoczność egzemplarzy** (domy�
 
 * **Filtrowanie po widoczności i zmiana zbiorcza (\`/collection\`):** W panelu bocznym Kolekcji otwórz sekcję **Widoczność**, aby filtrować półkę według pozycji \`Publiczne\`, \`Tylko dla znajomych\` oraz \`Prywatne / Ukryte\`. W widoku **Moje egzemplarze** zaznacz do \`100\` egzemplarzy i użyj przycisku **Ustaw widoczność** na pływającym pasku narzędzi, aby jednym kliknięciem zmienić widoczność całej półki.
 
+![Trójstopniowa bramka prywatności, pasek zbiorczej widoczności i macierz dostępu do udostępnień](/images/help/06-privacy-bulk-share-matrix.svg)
+
 ---
 
 ## 2. Udostępnianie przefiltrowanych widoków (Tokenizowane linki i kanały AI)
@@ -598,6 +616,8 @@ Klikając przycisk **Udostępnij widok** na górnym pasku:
    * **Wszystkie egzemplarze (w tym prywatne/ukryte):** Każdy posiadacz linku (łącznie z zewnętrznymi asystentami AI) odczyta wszystkie pasujące pozycje, także prywatne — okno dialogowe wyświetla wyraźne ostrzeżenie przed utworzeniem takiego linku.
 3. **Czysty interfejs gościa i kanały dla asystentów AI:** Osoba odwiedzająca \`/share/[token]\` widzi przejrzystą galerię tylko do odczytu bez cen zakupu i prywatnych notatek. Jednocześnie ikona **W3C RDF / JSON-LD** prowadzi do bezparametrowych podstron \`/share/[token]/jsonld/1\`, \`/2\`, … (\`60\` pozycji na stronę) oraz \`/share/[token]/catalog.jsonld\` i \`/feed.xml\`, z których korzystają gotowe szablony Gemów Gemini, Custom GPT i Claude w \`docs/gems/\`.
 4. **Natychmiastowe unieważnienie:** Zmieniłeś zdanie? W każdej chwili możesz cofnąć aktywny token w ustawieniach udostępniania, natychmiast wyłączając dostęp.
+
+![Warstwa Semantic Web, izolowana usługa SPARQL i kanały JSON-LD dla asystentów AI](/images/help/07-semantic-web-sparql-feeds.svg)
 
 ---
 
@@ -720,6 +740,8 @@ Communities, clubs, and aggregators can run a dedicated read-only **Federation S
 For system administrators, self-hosters, and curious developers, iqoqo's federation is built on open W3C Semantic Web standards rather than proprietary APIs. It combines **ActivityPub (Server-to-Server)**, **WebFinger**, **HTTP Signatures**, **JSON-LD / RDF**, and **Federated SPARQL**.
 
 ![ActivityPub S2S Discovery and Cryptographic Loan Handshake](/images/help/federation-s2s-handshake.jpg)
+
+![ActivityPub S2S Federation, 3-Tier Trust Matrix, and Cross-Instance Lending Pipeline](/images/help/09-activitypub-federation-lending.svg)
 
 ### 1. Actor Discovery & WebFinger
 
@@ -845,6 +867,8 @@ Społeczności, kluby i agregatory mogą uruchomić serwer w trybie tylko do odc
 Dla administratorów i ciekawskich programistów: federacja w iqoqo opiera się na otwartych standardach W3C Semantic Web: **ActivityPub (Server-to-Server)**, **WebFinger**, **HTTP Signatures**, **JSON-LD / RDF** oraz **Federated SPARQL**.
 
 ![Odkrywanie aktorów ActivityPub i kryptograficzny uścisk dłoni przy wypożyczeniu](/images/help/federation-s2s-handshake.jpg)
+
+![Architektura federacji ActivityPub S2S, trójstopniowego zaufania i wypożyczeń między serwerami](/images/help/09-activitypub-federation-lending.svg)
 
 ### 1. Odkrywanie tożsamości (WebFinger)
 
@@ -1086,6 +1110,8 @@ Before merging complex Works or untangling Series and Expansion links, click **E
 
 * **1-Hop or 2-Hop Traversal:** Toggle between 1-hop and 2-hop neighborhood expansion (bounded at \`150\` nodes) and filter edge categories across **FRBR Hierarchy**, **Series**, **Parts & Expansions**, **Contributors**, **Maps**, and **LOD** authorities.
 * **Recenter & Verify:** Highlight nodes by label, click any node to inspect metadata or **Recenter Graph on This Node**, and verify that expansions (\`is_expansion_of\`), multi-volume parts (\`WorkPart\`), and accepted \`SemanticLink\`s point to the intended FRBR tier.
+
+![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](/images/help/08-frbr-visual-relation-graph.svg)
 `,
       pl: `Witaj w zespole Kustoszy! Choć automatyczny potok pobierania danych w iqoqo bez trudu radzi sobie z 90% codziennych skanów kodów kreskowych, odpytując OpenLibrary, Google Books, Discogs, MusicBrainz, BoardGameGeek (BGG), IGDB i TMDB, prawdziwa siła katalogu semantycznego tkwi w modelowaniu **nietrywialnych 10%**.
 
@@ -1255,6 +1281,8 @@ Przed scalaniem złożonych Dzieł lub porządkowaniem relacji serii i dodatków
 
 * **Trawersowanie 1 lub 2 skoków:** Przełączaj głębokość (\`1 skok\` / \`2 skoki\`, limit \`150\` węzłów) i filtruj kategorie krawędzi: **Hierarchia FRBR**, **Serie**, **Części i rozszerzenia**, **Twórcy**, **Mapy** oraz **LOD**.
 * **Wyśrodkowanie i weryfikacja:** Wyróżniaj węzły po nazwie, przełączaj centrum grafu na wybrany węzeł i sprawdzaj poprawność powiązań zanim zatwierdzisz scalenie lub edycję.
+
+![Interaktywny Graf Relacji FRBR (/graph): silnik trawersowania BFS i kontrola widoczności](/images/help/08-frbr-visual-relation-graph.svg)
 `,
     },
   },

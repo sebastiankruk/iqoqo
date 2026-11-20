@@ -8,6 +8,8 @@ The service runs as a dedicated, least-privileged, internal-only container (`spa
 
 ## Security Boundary & Threat Model
 
+![Semantic Web, Isolated SPARQL Runner, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
+
 ```mermaid
 flowchart LR
     Client["Client / Explorer"] -->|JWT / Cookie| WebAPI["iqoqo Web API (/api/sparql)"]

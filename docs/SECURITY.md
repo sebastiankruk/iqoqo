@@ -18,6 +18,10 @@ If you discover a security vulnerability in this project, please email the maint
 
 ### Hardening Across Visual Graph, Bulk Visibility, Serial Ingestion & Share Scopes (Releases 1.0.x – 1.1.0 - November 2026)
 
+![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](images/architecture/06-privacy-bulk-share-matrix.svg)
+
+![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](images/architecture/08-frbr-visual-relation-graph.svg)
+
 - **Visibility-Scoped Visual Relation Graph (`GET /api/catalog/graph`):** Rejects hidden/unauthorized anchor `Item` nodes (`404 Not Found`), filters every traversed 1-hop/2-hop neighbor `Item` through `is_item_visible_to_viewer()` (three-tier owner/friend/public rules), and caps traversal depth at `2` and node count at `150`.
 - **Owner-Scoped Bulk Visibility Mutations (`PATCH /api/items/bulk-visibility`):** Enforces `@require_auth`, `PermissionName.WRITE_ITEM`, `FEDERATION_HEAD_MODE` read-only hub guards, Pydantic `max_length=100` batch bounds, and atomic owner ownership verification (`404 Not Found` if any item does not belong to the caller).
 - **Configurable Shared Collection `visibility_scope` & Private Cache Headers:** Enforces explicit `public_only` (with authenticated **Friend Bonus**), `friends_and_public`, and `all` filters across HTML, JSON, RSS, RDF, and `/share/<token>/jsonld/1..N` routes, emits private cache headers for non-public responses, and strips acquisition prices and private `reading_sessions` notes.

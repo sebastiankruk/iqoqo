@@ -51,7 +51,7 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 
 - **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions, CLI wizard, and Redis-to-Valkey upgrade notes
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Self-contained deployment directory contract, mount guards, and Cloudflare WAF checklist
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - System topology, FRBRoo ontology, ingestion pipelines, privacy matrix, and 12 diagram blueprints
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - System topology, FRBRoo ontology, ingestion pipelines, privacy matrix, and 12 SVG architecture diagrams
 - **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** - SPARQL, Linked Data, Serials/Audio RDF triples, OpenCollections, and Schema.org
 - **[Isolated SPARQL Service](docs/SPARQL_EXECUTION_SERVICE.md)** - Hardened `sparql-runner` protocol and HMAC-SHA256 boundary
 - **[Federation Architecture](docs/FEDERATION.md)** - ActivityPub S2S, 3-tier trust model, and cross-instance lending
@@ -68,6 +68,8 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 - **[Cover & Vision Setup](docs/COVERS_SETUP.md)** - 50MP resize, 3-tier OCR/Vision waterfall, AI cover generation, and `pHash` filtering
 - **[Changelog](docs/CHANGELOG.md)** - Recent updates and version history
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
+
+![iqoqo System and Container Topology](docs/images/architecture/01-system-container-topology.svg)
 
 ## 🚀 Quick Start
 

@@ -87,6 +87,8 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 ## 2a. Vision-based Metadata Extraction & Offline Magazine OCR
 
+![50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall, and 7-Tier Cover Pipeline](images/architecture/05-vision-ocr-cover-pipeline.svg)
+
 iqoqo can extract metadata directly from a cover photo using the **Snap Cover** tab on `/scan` or the **Snap Cover to Auto-Fill Issue** action inside the serial disambiguation modal. Starting in `v1.1.0`, uploaded smartphone camera images (up to 50MP) are downscaled cleanly client-side (`frontend/lib/image-resize.ts` — `VISION_MAX_DIMENSION=3840` at JPEG quality `0.9` for crisp Vision/OCR glyphs; `COVER_MAX_DIMENSION=1280` for saved covers) and protected server-side (`Image.MAX_IMAGE_PIXELS = 100_000_000` in `app/utils/images.py`, normalized to `2000px` for Vision LLMs and `2200px` for OCR).
 
 This feature uses a progressive 3-tier waterfall (`app/utils/vision.py`) to guarantee resilient extraction across books, vinyl sleeves, and periodicals:

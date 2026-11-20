@@ -97,6 +97,8 @@ make ensure-mount-perms
 
 ## 4. Deploy Paths & Shared Guards
 
+![Source-Free Deployment Contract, Mount Guards, and Multi-Tier Backup Pipeline](images/architecture/12-deployment-contract-backup-dr.svg)
+
 iQoQo supports two deployment workflows:
 
 1. **Host Checkout Dev / Direct Path (`./run.sh dev|prod`)**:

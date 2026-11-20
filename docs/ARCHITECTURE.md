@@ -15,6 +15,8 @@ Work (Concept)
           └── Item (Physical/Digital Copy)
 ```
 
+![iqoqo FRBR and FRBRoo Four-Tier Domain Ontology](images/architecture/02-frbr-domain-ontology.svg)
+
 ### 1. Work - The Abstract Concept
 
 **Database**: `works` table
@@ -744,6 +746,8 @@ enforced by `tests/test_ontology.py`.
 
 ### Database Schema Layout
 
+![PostgreSQL 18 Multi-Schema Physical Database and FRBR Merge Integrity](images/architecture/03-postgresql-multi-schema.svg)
+
 Tables are split across PostgreSQL schemas:
 
 | Schema      | Tables                                                                    |
@@ -850,6 +854,8 @@ See [docs/INSTALL.md](INSTALL.md) for full setup instructions.
 iqoqo v0.8.0 introduces a comprehensive Semantic Web layer that transforms the FRBR-modeled collection into a queryable, interoperable Linked Data source.
 
 ### Architecture Overview
+
+![Semantic Web Layer, Isolated SPARQL Execution Service, and AI-Fetchable Share Feeds](images/architecture/07-semantic-web-sparql-feeds.svg)
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -1111,6 +1117,8 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ### 1. System & Container Topology
 
+![iqoqo System and Container Topology](images/architecture/01-system-container-topology.svg)
+
 | Container / Service | Port Binding | Engine & Role | Key Constraints & Boundaries |
 | :--- | :--- | :--- | :--- |
 | `nginx` (`deploy/Dockerfile.nginx`) | `${NGINX_PORT:-8000}:80` | Reverse proxy with `ngx_otel_module` (Layer 6 gRPC OTLP to `:4317`) | Serves static `/covers/` and `/gallery/` RO volumes; routes `/api/*` + `/.well-known/*` to `web:5000`, `/rum/*` to `openobserve:5080`, rest to `frontend:3000`; blocks `/metrics` (`404`) |
@@ -1142,10 +1150,16 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ### 4. Interactive FRBR Visual Relation Graph (`/graph`)
 
+![Interactive FRBR Visual Relation Graph Traversal and Visibility Engine](images/architecture/08-frbr-visual-relation-graph.svg)
+
 - `GraphService.build_neighborhood()` (`app/core/graph_service.py`) executes a bounded BFS traversal (`depth` `1..2`, `max_nodes` `1..150`) centered at any `work`, `expression`, `manifestation`, or `item` anchor across six edge categories (`frbr`, `series`, `parts_expansions`, `contributors`, `maps`, `lod`).
 - Every encountered `Item` node is filtered through `is_item_visible_to_viewer()` (public, viewer-owned, or accepted friend's `friends_only` item), and unauthorized `Item` anchor requests fail closed with `404`. Rendered interactively on `/graph` by `FRBRRelationGraph`.
 
 ### 5. Scanner UX, Periodical Disambiguation & 3-Tier Vision/OCR Waterfall
+
+![Barcode, ISSN/977 Periodical, and Multi-Provider Ingestion Pipeline](images/architecture/04-barcode-serial-ingestion.svg)
+
+![50MP Image Downscaling, 3-Tier AI Vision/OCR Waterfall, and 7-Tier Cover Pipeline](images/architecture/05-vision-ocr-cover-pipeline.svg)
 
 - **Streamlined `/scan` UX:** Single-line `TopBar` (`[Format ▾]`, `[Save to ▾]`, explicit `ON`/`OFF` `BatchScanToggle`), 100%-width unified quick-lookup input, and 2-tab `BottomSheet` (`Barcode` vs. `Snap Cover`).
 - **GS1 `977` Serial Disambiguation:** `app/utils/issn.py` validates Modulo-11 ISSNs and parses 13/15/18-digit GS1 `977` barcodes (`+ EAN-2/EAN-5` add-ons). `SerialLookupStrategy` queries Biblioteka Narodowa (`data.bn.org.pl`), Crossref (`/journals/{issn}`), OpenLibrary, and Allegro. Bare 13-digit `977` scans open `SerialDisambiguationModal` to select an existing issue, add a new issue, or invoke **Snap Cover to Auto-Fill Issue**.
@@ -1153,29 +1167,33 @@ Phase 1 of v0.7.0 introduces opt-in social features while maintaining strict use
 
 ### 6. Bulk Visibility Toolbar & Shared Collection Visibility Scopes
 
+![Three-Tier Privacy Gate, Bulk Visibility Toolbar, and Shared Collection Access Matrix](images/architecture/06-privacy-bulk-share-matrix.svg)
+
 - **Bulk Visibility (`PATCH /api/items/bulk-visibility`):** `BulkItemVisibilityToolbar` lets collectors filter **My Items** by visibility (`public`, `friends_only`, `private`), select up to `100` owned items, and transition visibility atomically across PostgreSQL, FTS workers, facet caches, SSE channels, and ActivityPub outboxes.
 - **Granular Share Scopes & AI Feeds:** `SharedCollectionCreateSchema` persists `visibility_scope` (`public_only`, `friends_and_public`, `all`) on share tokens. Under `public_only`, logged-in accepted friends automatically receive the **Friend Bonus** unlocking matching `friends_only` items. Every share token also exposes query-free `/share/<token>/jsonld/1..N` (`60` items/page) mini-pages, `/share/<token>/catalog.jsonld`, and `/feed.xml` for AI Gems (`docs/gems/`).
 
 ### 7. Native Capacitor 7 Dual-Build & Federation Showcase Hub
+
+![Hybrid Web SSR and Capacitor 7 Native Mobile Architecture](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg)
 
 - **Dual Build Routing:** Native Android (`MainActivity.java` `RouteProcessor`) and iOS (`AppDelegate.swift` `NextJSRouter`) apps run the `CAPACITOR_BUILD=true` static export, rewriting dynamic FRBR entity routes and Flight `.txt` requests onto `_placeholder` shells while keeping exact parity across the 5 static `/help/*` slugs, authenticating via single-use `OAuthExchangeCode` + `iqoqo://auth-exchange` and maintaining `offline-cache.ts` snapshots.
 - **Read-Only Federation Showcase Hub (`FEDERATION_HEAD_MODE`):** Enables community showcase hubs that expose federated catalogs and allow wishlists while rejecting physical `Item` writes at the API layer.
 
 ### 8. Diagram Blueprints Reference Catalog
 
-Detailed node inventories, directed edge tables (protocols, ports, payloads, guards), swimlane boundaries, and sequence specifications for authoring architecture diagrams in future sessions are maintained across these 12 blueprints in `.context/notes/docs/docs-iqoqo-architecture-blueprints.md`:
+All 12 interactive SVG architecture diagrams live under [`docs/images/architecture/`](images/architecture/), synchronized automatically on every version bump by `scripts/sync_version.py`, with detailed node inventories, directed edge tables (protocols, ports, payloads, guards), swimlane boundaries, and sequence specifications maintained in `.context/notes/docs/docs-iqoqo-architecture-blueprints.md`:
 
-| # | Blueprint Scope | Key Architecture Focus |
-| :--- | :--- | :--- |
-| **1** | System & Container Topology | Cloudflare edge, Nginx (`:8000`), Next.js (`:3000`), Flask (`:5000`), Celery, `sparql-runner:5050`, PostgreSQL 18, Valkey 8 (`:6379`), OTel + OpenObserve (`:5080`) |
-| **2** | FRBR & FRBRoo Domain Ontology | WEMI core, `F18_Serial_Work`, `F16_Container_Work`, `WorkExpansionLink`, `WorkPart`, `MapAttachment`, `UserWorkIntent`, `Work` Reading Rollup |
-| **3** | PostgreSQL 18 Multi-Schema Physical DB | `auth`, `catalog`, `inventory`, `social`, `public` schemas, GIN FTS indexes, and `frbr_merge.py` consolidation map |
-| **4** | Barcode, `977` Serial & Ingestion Pipeline | `/scan` TopBar/BottomSheet, GS1 prefix router, multi-provider strategy waterfalls, and `SerialDisambiguationModal` |
-| **5** | 50MP Image Resize, 3-Tier Vision & Cover Pipeline | Client `3840px`/`1280px` resize, `100MP` guard, Gemini -> Ollama -> Multi-zone Tesseract `eng+pol`, `LLMTelemetry`, and 7-tier Cover pipeline |
-| **6** | Privacy Gate, Bulk Visibility & Share Matrix | Per-item overrides, `PATCH /api/items/bulk-visibility` (`1..100`), and `visibility_scope` (`public_only` + Friend Bonus / `friends_and_public` / `all`) |
-| **7** | Semantic Web, Isolated SPARQL & AI Feeds | Content negotiation, `sparql-runner` HMAC boundary, `/share/<token>/jsonld/1..N` (`60`/page), and `ExportService` streaming |
-| **8** | Interactive Visual Relation Graph (`/graph`) | `GET /api/catalog/graph` bounded BFS (`1..2` hops, `<= 150` nodes), visibility pruning, and edge categories |
-| **9** | ActivityPub S2S Federation & Lending | WebFinger, NodeInfo 2.1, RSA-2048 HTTP Signatures, Valkey `federation` queue, 3-tier trust matrix, and `FEDERATION_HEAD_MODE` |
-| **10** | Hybrid Web SSR & Capacitor 7 Mobile | Node.js `proxy.ts` vs. `_placeholder` static export routing, native `OAuthExchangeCode` deep links, and `offline-cache.ts` |
-| **11** | 8-Layer OpenTelemetry & OpenObserve Stack | Nginx gRPC (`:4317`), App/Worker/SSR `http/protobuf` (`:4318`), `Authorization` redaction, RUM `/rum/*`, and `make status` diagnostics |
-| **12** | Source-Free Deployment & Multi-Tier Backup | `DEPLOY_DIR` contract, UID `10001`/`10002` mount guards, Fernet `InstanceSettings`, `cloud_backup.sh` rclone + S3 Glacier |
+| # | Blueprint Scope | SVG Diagram | Key Architecture Focus |
+| :--- | :--- | :--- | :--- |
+| **1** | System & Container Topology | [01-system-container-topology.svg](images/architecture/01-system-container-topology.svg) | Cloudflare edge, Nginx (`:8000`), Next.js (`:3000`), Flask (`:5000`), Celery, `sparql-runner:5050`, PostgreSQL 18, Valkey 8 (`:6379`), OTel + OpenObserve (`:5080`) |
+| **2** | FRBR & FRBRoo Domain Ontology | [02-frbr-domain-ontology.svg](images/architecture/02-frbr-domain-ontology.svg) | WEMI core, `F18_Serial_Work`, `F16_Container_Work`, `WorkExpansionLink`, `WorkPart`, `MapAttachment`, `UserWorkIntent`, `Work` Reading Rollup |
+| **3** | PostgreSQL 18 Multi-Schema Physical DB | [03-postgresql-multi-schema.svg](images/architecture/03-postgresql-multi-schema.svg) | `auth`, `catalog`, `inventory`, `social`, `public` schemas, GIN FTS indexes, and `frbr_merge.py` consolidation map |
+| **4** | Barcode, `977` Serial & Ingestion Pipeline | [04-barcode-serial-ingestion.svg](images/architecture/04-barcode-serial-ingestion.svg) | `/scan` TopBar/BottomSheet, GS1 prefix router, multi-provider strategy waterfalls, and `SerialDisambiguationModal` |
+| **5** | 50MP Image Resize, 3-Tier Vision & Cover Pipeline | [05-vision-ocr-cover-pipeline.svg](images/architecture/05-vision-ocr-cover-pipeline.svg) | Client `3840px`/`1280px` resize, `100MP` guard, Gemini -> Ollama -> Multi-zone Tesseract `eng+pol`, `LLMTelemetry`, and 7-tier Cover pipeline |
+| **6** | Privacy Gate, Bulk Visibility & Share Matrix | [06-privacy-bulk-share-matrix.svg](images/architecture/06-privacy-bulk-share-matrix.svg) | Per-item overrides, `PATCH /api/items/bulk-visibility` (`1..100`), and `visibility_scope` (`public_only` + Friend Bonus / `friends_and_public` / `all`) |
+| **7** | Semantic Web, Isolated SPARQL & AI Feeds | [07-semantic-web-sparql-feeds.svg](images/architecture/07-semantic-web-sparql-feeds.svg) | Content negotiation, `sparql-runner` HMAC boundary, `/share/<token>/jsonld/1..N` (`60`/page), and `ExportService` streaming |
+| **8** | Interactive Visual Relation Graph (`/graph`) | [08-frbr-visual-relation-graph.svg](images/architecture/08-frbr-visual-relation-graph.svg) | `GET /api/catalog/graph` bounded BFS (`1..2` hops, `<= 150` nodes), visibility pruning, and edge categories |
+| **9** | ActivityPub S2S Federation & Lending | [09-activitypub-federation-lending.svg](images/architecture/09-activitypub-federation-lending.svg) | WebFinger, NodeInfo 2.1, RSA-2048 HTTP Signatures, Valkey `federation` queue, 3-tier trust matrix, and `FEDERATION_HEAD_MODE` |
+| **10** | Hybrid Web SSR & Capacitor 7 Mobile | [10-hybrid-web-ssr-capacitor-mobile.svg](images/architecture/10-hybrid-web-ssr-capacitor-mobile.svg) | Node.js `proxy.ts` vs. `_placeholder` static export routing, native `OAuthExchangeCode` deep links, and `offline-cache.ts` |
+| **11** | 8-Layer OpenTelemetry & OpenObserve Stack | [11-otel-openobserve-8-layer.svg](images/architecture/11-otel-openobserve-8-layer.svg) | Nginx gRPC (`:4317`), App/Worker/SSR `http/protobuf` (`:4318`), `Authorization` redaction, RUM `/rum/*`, and `make status` diagnostics |
+| **12** | Source-Free Deployment & Multi-Tier Backup | [12-deployment-contract-backup-dr.svg](images/architecture/12-deployment-contract-backup-dr.svg) | `DEPLOY_DIR` contract, UID `10001`/`10002` mount guards, Fernet `InstanceSettings`, `cloud_backup.sh` rclone + S3 Glacier |

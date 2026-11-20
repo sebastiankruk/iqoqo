@@ -14,6 +14,8 @@ Key properties:
 - **Asynchronous Delivery**: Inbound and outbound activities are queued and dispatched via Celery (`federation` queue) backed by Redis.
 - **Cryptographic Verification**: Inbound activities are verified using `draft-cavage-http-signatures-12` against public keys fetched via WebFinger and Actor dereferencing.
 
+![ActivityPub S2S Federation, 3-Tier Trust, and Cross-Instance Lending Architecture](images/architecture/09-activitypub-federation-lending.svg)
+
 ---
 
 ## 2. The 3-Tier Trust Model
