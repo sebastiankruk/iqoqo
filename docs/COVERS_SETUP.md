@@ -9,7 +9,7 @@ iqoqo utilizes a multi-tiered fallback system to ensure every item in your distr
 * [2. Cloud AI Generation (Paid)](#2-cloud-ai-generation-paid)
   * [OpenAI (DALL-E 3)](#openai-dall-e-3)
   * [Google Gemini (Imagen 3)](#google-gemini-imagen-3)
-* [2a. Vision-based Metadata Extraction](#2a-vision-based-metadata-extraction)
+* [2a. Vision-based Metadata Extraction & Offline Magazine OCR](#2a-vision-based-metadata-extraction--offline-magazine-ocr)
 * [3. Local AI Generation (Free)](#3-local-ai-generation-free)
   * [Step 1: Install Prerequisites](#step-1-install-prerequisites)
   * [Step 2: Clone the Repository](#step-2-clone-the-repository)
@@ -85,36 +85,44 @@ To enable high-quality AI cover generation, obtain an API key from OpenAI or Goo
 
 *Note: Telemetry for estimated costs is tracked in the `llm_telemetry` database table.*
 
-## 2a. Vision-based Metadata Extraction
+## 2a. Vision-based Metadata Extraction & Offline Magazine OCR
 
-iqoqo can extract a book's **Title** and **Authors** directly from a photo of its cover. This powers the **"Snap Cover"** button on the scan page — users can photograph a book and have its metadata filled in automatically.
+iqoqo can extract metadata directly from a cover photo using the **Snap Cover** tab on `/scan` or the **Snap Cover to Auto-Fill Issue** action inside the serial disambiguation modal. Starting in `v1.1.0`, uploaded smartphone camera images (up to 50MP) are downscaled cleanly client-side (`frontend/lib/image-resize.ts` — `VISION_MAX_DIMENSION=3840` at JPEG quality `0.9` for crisp Vision/OCR glyphs; `COVER_MAX_DIMENSION=1280` for saved covers) and protected server-side (`Image.MAX_IMAGE_PIXELS = 100_000_000` in `app/utils/images.py`, normalized to `2000px` for Vision LLMs and `2200px` for OCR).
 
-This feature uses a progressive fallback waterfall to ensure extraction:
+This feature uses a progressive 3-tier waterfall (`app/utils/vision.py`) to guarantee resilient extraction across books, vinyl sleeves, and periodicals:
 
-1. **Gemini API (Primary)**: High quality extraction.
-   * **Required:** The `GEMINI_API_KEY` environment variable. Uses the `gemini-2.0-flash` multimodal model.
-2. **Local Vision LLM via Ollama (Free local fallback)**: Used if Gemini is unavailable or fails. The `llava` model is highly recommended.
-   * **Required:** An Ollama instance. Set `OLLAMA_URL` (default: `http://localhost:11434`) and `OLLAMA_VISION_MODEL` (default: `llava`).
+1. **Gemini Vision API (Tier 1 — Cloud LLM):** High quality extraction (`gemini-2.0-flash`).
+   * **Required:** `ALLOW_LLM=true`, `GEMINI_API_KEY`, and caller permission `LLM_GENERATE_CLOUD`.
+2. **Local Vision LLM via Ollama (Tier 2 — Private Local AI):** Used when Gemini is unconfigured, forbidden, or fails.
+   * **Required:** `ALLOW_LLM=true`, validated `OLLAMA_URL` (default: `http://localhost:11434`, with Docker `host.docker.internal` fallback), `OLLAMA_VISION_MODEL` (default: `llava`), and `OLLAMA_VISION_TIMEOUT`.
    * **Setup:** `ollama pull llava`
-3. **Tesseract OCR (Basic offline fallback)**: Used when LLMs fail or aren't configured.
-   * **Required:** The `tesseract-ocr` host package and `pytesseract` Python dependency.
-   * **Setup (macOS):** `brew install tesseract`
-   * **Setup (Ubuntu/Docker):** `apt-get install tesseract-ocr` (included in the default Dockerfile)
+3. **Offline Multi-Zone Tesseract OCR (`eng+pol`, Tier 3 — Always Available):** Used when LLMs are disabled (`ALLOW_LLM=false`) or fail.
+   * **Required:** `tesseract-ocr` (plus `tesseract-ocr-pol` for Polish periodicals, included in the Docker image) and `pytesseract`.
+   * **Multi-Zone Magazine Pipeline:** Scans both the full cover and cropped masthead/corner zones to extract `Title`, `Authors`, `ISSN` (`XXXX-XXXX`), `Indeks`, `IssueNumber`, `CumulativeIssueNumber` (e.g., `12(342)`), `Volume`, `PublicationMonth` / `PublicationYear` (English & Polish month inflection support), `CoverHeadline`, and `977` OCR barcodes.
+   * **Setup (macOS):** `brew install tesseract tesseract-lang`
 
-**API endpoint:** `POST /api/vision/extract` (requires authentication)
+**Execution Telemetry & Audit (`v1.1.0+`):** Every vision run across `gemini`, `ollama`, and `tesseract` writes a row to `llm_telemetry` (`operation_type="metadata_extraction"`). Operators can inspect which backend actually handled requests using:
 
-| Field   | Type   | Description                                               |
-|---------|--------|-----------------------------------------------------------|
-| `cover` | `file` | The book cover photo (JPEG, PNG, or WebP, max **10 MB**). |
+```bash
+python scripts/llm_usage_report.py --docker preview --hours 24
+```
 
-**Successful response (HTTP 200):**
+**API endpoints:**
+
+* `POST /api/vision/extract` — Submit cover photo (`cover` multipart field: JPEG, PNG, or WebP) and return `202 Accepted` with `task_id`.
+* `GET /api/vision/extract/<task_id>` — Poll extraction completion and retrieve extracted book/serial fields.
+
+**Successful response (HTTP 200 on poll):**
 
 ```json
 {
   "success": true,
   "data": {
-    "Title": "Dune",
-    "Authors": ["Frank Herbert"]
+    "Title": "National Geographic Polska",
+    "ISSN": "1507-5966",
+    "IssueNumber": "12",
+    "PublicationYear": "2025",
+    "PublicationMonth": "12"
   },
   "error": null
 }
@@ -126,11 +134,11 @@ This feature uses a progressive fallback waterfall to ensure extraction:
 {
   "success": false,
   "data": null,
-  "error": "Vision extraction failed. All fallback methods (Gemini, Ollama, Tesseract) were either unconfigured or failed. Please check the server logs."
+  "error": "Vision extraction failed. Fallback methods unconfigured or failed."
 }
 ```
 
-> **Note:** The endpoint validates file type and size before contacting the Vision API. Only JPEG, PNG, and WebP uploads ≤ 10 MB are accepted.
+> **Note:** The endpoint enforces `Image.MAX_IMAGE_PIXELS = 100_000_000` (decompression-bomb protection) and bounded multipart size validation (`413 Payload Too Large` on oversized uploads). Only JPEG, PNG, and WebP images are accepted.
 
 ## 3. Local AI Generation (Free)
 

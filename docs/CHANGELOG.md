@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Upgrade note:** Cache and Celery broker state in Valkey is ephemeral; if you use a custom persistent `redis_data` volume overlay, recreate or flush it (`docker compose exec redis valkey-cli FLUSHALL`) when upgrading from Redis 8.
 - **Security Dependency Updates (#442)**:
   - Updated `next` (`16.4.6`), `eslint-config-next` (`^16.4.6`), `hono` (`>=4.13.16`), and `@hono/node-server` (`>=2.1.6`) in `frontend/package.json`.
+- **v1.1.0 Documentation, In-Product Help & Architecture Blueprints**:
+  - Updated all 5 bilingual (`en`/`pl`) help guides in `frontend/lib/help-articles.ts` and `.context/notes/docs/docs-iqoqo-*.md`, expanded `README.md` and `docs/{ARCHITECTURE,API,COVERS_SETUP,OPERATIONS,MONITORING,SEMANTIC_WEB,SECURITY}.md` to cover all `v1.0.x`–`v1.1.0` capabilities, and added 12 diagram-ready textual architecture blueprints in `.context/notes/docs/docs-iqoqo-architecture-blueprints.md`.
 
 ### Fixed
 

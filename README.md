@@ -12,12 +12,12 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask Version](https://img.shields.io/badge/Flask-3.1-black.svg?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
-[![Next.js Version](https://img.shields.io/badge/Next.js-16.3-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js Version](https://img.shields.io/badge/Next.js-16.4-black.svg?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React Version](https://img.shields.io/badge/React-19.2-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
 [![Tailwind CSS Version](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![TypeScript Version](https://img.shields.io/badge/TypeScript-5%2B-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PostgreSQL Version](https://img.shields.io/badge/PostgreSQL-18-336791.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Redis Version](https://img.shields.io/badge/Redis-8-DC382D.svg?logo=redis&logoColor=white)](https://redis.io/)
+[![Valkey Version](https://img.shields.io/badge/Valkey-8_(Redis_Compatible)-4E56A6.svg)](https://valkey.io/)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Enabled-742299.svg?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 
@@ -29,37 +29,44 @@ Unlike "flat" catalogs, iqoqo is built on the **[FRBR (Functional Requirements f
 
 ## 🚀 Key Features
 
-- **Semantic Core:** Deep metadata support via **[FRBRoo](https://www.cidoc-crm.org/frbroo/home-0)** and **[JSON-LD](https://json-ld.org/)**.
-- **Federated Discovery:** Search your own collection or the wider iqoqo network while maintaining data sovereignty.
-- **Barcode & Cover Scanning:** Rapidly add items via ISBN/EAN integration.
-- **API-First:** Built with a Flask REST API, ready for Web, Android, and iOS.
-- **Linked Open Data:** Every item is a URI, ready for the **[Semantic Web](https://www.w3.org/standards/semanticweb/)**.
-- **Privacy First:** You own your data; you decide what to share with the "cloud."
+- **FRBR & FRBRoo Domain Core:** Full `Work -> Expression -> Manifestation -> Item` hierarchy spanning Books, Magazines & Academic Serials (`F18_Serial_Work` with Modulo-11 ISSN & GS1 `977`), Vinyl/CD/Audio Pressings, Video, Board Games & LEGO Sets (`F16_Container_Work`), Puzzles, and Cartographic Maps & Supplements (`MapViewerModal`).
+- **Interactive FRBR Visual Relation Graph (`/graph`):** Explore 1–2 hop neighborhoods across WEMI tiers, Series, Parts/Expansions, Contributors, Maps, and accepted Linked Open Data (`SemanticLink`) authorities with strict visibility enforcement.
+- **Smart Scanner, Batch Mode & Cover Vision:** Streamlined `/scan` UX supporting ISBN/EAN/UPC, `977` periodical + EAN-2/5 add-on disambiguation, LEGO set lookup, 50MP client/server image downscaling, and a 3-tier AI Vision & offline Polish/English Tesseract magazine cover OCR waterfall.
+- **Privacy, Bulk Controls & AI-Readable Sharing:** Three-tier visibility (`public`, `friends_only`, `private`), collection visibility filtering & bulk toolbar (`PATCH /api/items/bulk-visibility`), tokenized filtered share views (`/share/<token>`) with configurable visibility scopes + Friend Bonus, and query-free `/share/<token>/jsonld/1..N` mini-pages paired with ready-to-use AI Gem templates (`docs/gems/`).
+- **Reading Rollups, Sessions & Auto-Fulfilled Wishlists:** User-scoped Work reading progress badges (`<WorkRollupBadge />`), personal reading session logs (`POST /api/items/<id>/reading-sessions`), and Work/Manifestation wishlists (`UserWorkIntent`) that auto-fulfill on acquisition.
+- **Federated Discovery & Native Mobile:** ActivityPub Server-to-Server federation, cross-instance lending, Read-Only Federation Showcase Hub mode (`FEDERATION_HEAD_MODE`), plus native Android & iOS Capacitor 7 apps with offline collection cache and hardware barcode scanning.
+- **Linked Open Data & Isolated SPARQL:** Open CORS JSON-LD/Turtle/N-Triples, Schema.org SEO, OpenCollections.org & Wikidata/DBpedia/GeoNames reconciliation, and a hardened `sparql-runner` execution service.
 
 ## 🛠 Tech Stack
 
-- **Frontend:** React, Next.js (App Router), TypeScript, Tailwind CSS, Capacitor 7 (iOS & Android)
-- **Backend:** Python 3.14+ / Flask, Celery
-- **Database & Cache:** PostgreSQL (Full-Text Search & JSONB), Redis 8
-- **Observability:** OpenTelemetry & OpenObserve
-- **Ontology:** RDFLib / FRBR
-- **Computer Vision:** OpenCV / NumPy (Optional/Experimental)
-- **Deployment:** Docker & Docker Compose
-- **Networking:** Cloudflare Tunnel (for dev-server sharing)
+- **Frontend:** React 19, Next.js 16.4 (App Router + static Capacitor 7 export for iOS & Android), TypeScript 5, Tailwind CSS v4, shadcn/ui
+- **Backend:** Python 3.14+, Flask 3.1, SQLAlchemy 2.0, Celery, Pydantic v2
+- **Database & Broker/Cache:** PostgreSQL 18 (Full-Text Search & JSONB), Valkey 8 (`valkey/valkey:8-alpine`, Redis-compatible)
+- **Observability:** 8-layer OpenTelemetry (`http/protobuf` OTLP) & OpenObserve
+- **Ontology:** RDFLib, FRBRoo, SHACL, Schema.org, Isolated Python SPARQL Execution Service (`sparql-runner`)
+- **Vision & OCR:** Google Gemini Vision, Local Ollama (`llava`), Multi-zone Pillow + Tesseract OCR (`eng+pol`)
+- **Deployment:** Docker & Docker Compose, Source-free `DEPLOY_DIR` contract, Cloudflare WAF rules
 
 ## 📖 Documentation
 
-- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions including data migration
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Self-contained deployment directory contract and commands
-- **[Architecture Guide](docs/ARCHITECTURE.md)** - FRBR hierarchy explained with code examples
-- **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** - SPARQL, Linked Data, exports, and Schema.org
-- **[API Reference](docs/API.md)** - Complete REST API documentation
-- **[Operations Runbook](docs/OPERATIONS.md)** - FRBR ETL, ontology sync, and maintenance
+- **[Installation Guide](docs/INSTALL.md)** - Complete setup instructions, CLI wizard, and Redis-to-Valkey upgrade notes
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Self-contained deployment directory contract, mount guards, and Cloudflare WAF checklist
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - System topology, FRBRoo ontology, ingestion pipelines, privacy matrix, and 12 diagram blueprints
+- **[Semantic Web Guide](docs/SEMANTIC_WEB.md)** - SPARQL, Linked Data, Serials/Audio RDF triples, OpenCollections, and Schema.org
+- **[Isolated SPARQL Service](docs/SPARQL_EXECUTION_SERVICE.md)** - Hardened `sparql-runner` protocol and HMAC-SHA256 boundary
+- **[Federation Architecture](docs/FEDERATION.md)** - ActivityPub S2S, 3-tier trust model, and cross-instance lending
+- **[AI Agent & Gem Templates](docs/gems/iqoqo-librarian-gem.md)** - Hardware-agnostic Markdown skills for Gemini, ChatGPT, and Claude
+- **[API Reference](docs/API.md)** - Complete REST, Semantic Web, Graph, Bulk Visibility, and Scanner API docs
+- **[Operations Runbook](docs/OPERATIONS.md)** - FRBR ETL, ontology sync, LLM telemetry audits (`llm_usage_report.py`), and `make status`
+- **[Monitoring & Observability](docs/MONITORING.md)** - 8-layer OpenTelemetry, OpenObserve SQL queries, and Browser RUM
+- **[Backups & Recovery](docs/BACKUPS.md)** - Multi-tier daily rclone sync and S3 Glacier cold archiving
+- **[Security Policy](docs/SECURITY.md)** - Cryptographic standards, SSRF/BOLA hardening, and release advisories
 - **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow and coding standards
 - **[Mobile Sideloading Guide](docs/MOBILE_SIDELOAD.md)** - Android & iOS sideload and build instructions
 - **[Mobile Platform Targets](docs/MOBILE_TARGETS.md)** - Operating systems baseline & native capabilities
+- **[App Store & Play Store Guide](docs/STORE_SUBMISSION.md)** - Privacy manifests and store review questionnaires
+- **[Cover & Vision Setup](docs/COVERS_SETUP.md)** - 50MP resize, 3-tier OCR/Vision waterfall, AI cover generation, and `pHash` filtering
 - **[Changelog](docs/CHANGELOG.md)** - Recent updates and version history
-- **[Cover Setup](docs/COVERS_SETUP.md)** - AI cover generation and vision extraction setup
 - **[FRBR Ontology](docs/ontology/iqoqo.ttl)** - The semantic model powering iqoqo
 
 ## 🚀 Quick Start

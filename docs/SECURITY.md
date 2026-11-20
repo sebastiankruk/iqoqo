@@ -4,6 +4,8 @@
 
 | Version | Supported          |
 |---------|--------------------|
+| 1.1.x   | :white_check_mark: |
+| 1.0.x   | :white_check_mark: |
 | 0.9.x   | :white_check_mark: |
 | 0.8.x   | :white_check_mark: |
 | 0.7.x   | :white_check_mark: |
@@ -13,6 +15,16 @@
 If you discover a security vulnerability in this project, please email the maintainer or create a private security advisory on GitHub.
 
 ## Recent Security Updates
+
+### Hardening Across Visual Graph, Bulk Visibility, Serial Ingestion & Share Scopes (Releases 1.0.x – 1.1.0 - November 2026)
+
+- **Visibility-Scoped Visual Relation Graph (`GET /api/catalog/graph`):** Rejects hidden/unauthorized anchor `Item` nodes (`404 Not Found`), filters every traversed 1-hop/2-hop neighbor `Item` through `is_item_visible_to_viewer()` (three-tier owner/friend/public rules), and caps traversal depth at `2` and node count at `150`.
+- **Owner-Scoped Bulk Visibility Mutations (`PATCH /api/items/bulk-visibility`):** Enforces `@require_auth`, `PermissionName.WRITE_ITEM`, `FEDERATION_HEAD_MODE` read-only hub guards, Pydantic `max_length=100` batch bounds, and atomic owner ownership verification (`404 Not Found` if any item does not belong to the caller).
+- **Configurable Shared Collection `visibility_scope` & Private Cache Headers:** Enforces explicit `public_only` (with authenticated **Friend Bonus**), `friends_and_public`, and `all` filters across HTML, JSON, RSS, RDF, and `/share/<token>/jsonld/1..N` routes, emits private cache headers for non-public responses, and strips acquisition prices and private `reading_sessions` notes.
+- **Reading Session Authorization & Note Redaction:** Gates `POST /api/items/<id>/reading-sessions` with `PermissionName.WRITE_ITEM`, item ownership check, and `FEDERATION_HEAD_MODE` guard, and redacts private `reading_sessions` notes from non-owner `GET /api/items/<id>` payloads.
+- **100MP Decompression Bomb & SSRF Hardening on Cover Vision/OCR:** Enforces `Image.MAX_IMAGE_PIXELS = 100_000_000` (`app/utils/images.py`, `app/utils/vision.py`) before Pillow decoding, bounded upload sizes (`413`), and strict `validate_ollama_url()` scheme/credential/cloud-metadata validation on `OLLAMA_URL`.
+- **Mobile OAuth Single-Use Exchange Codes & JWKS Verification:** Verifies native Apple `id_token` signatures against Apple JWKS, replaces mobile JWT URL redirects with short-lived single-use `OAuthExchangeCode` (`?code=...`), sets `withCredentials = false` on Capacitor native origins, and prevents `FEDERATION_HEAD_MODE` item creation bypasses.
+- **Supply Chain Dependency Updates (`#442`):** Upgraded `next` to `16.4.6`, `hono` to `>=4.13.16`, and `@hono/node-server` to `>=2.1.6` in `frontend/package.json`.
 
 ### Simplified 3-Tier Federation Trust & User-Level Follow Consent (Release 0.9.4 - October 2026)
 

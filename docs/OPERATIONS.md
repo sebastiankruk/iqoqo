@@ -563,15 +563,37 @@ In Next.js 16+, the Edge Runtime is deprecated for middleware and route executio
 
 ---
 
+## LLM & Vision Execution Telemetry Audit (`v1.1.0+`)
+
+Because iqoqo's vision extraction (`gemini` -> `ollama` -> `tesseract`) and AI cover generation pipelines automatically fall through on missing permissions, `ALLOW_LLM=false`, or backend errors, checking `.env` configuration does not prove which engine actually ran.
+
+Query the authoritative `inventory.llm_telemetry` table via `scripts/llm_usage_report.py`:
+
+```bash
+# Inside a local dev venv or running container (last 24 hours)
+python scripts/llm_usage_report.py --hours 24
+
+# Directly from host against a deployed Docker stack (dev, preview, or prod)
+python scripts/llm_usage_report.py --docker preview --hours 24
+
+# Filter to cover vision extraction only and show last 50 executions
+python scripts/llm_usage_report.py --docker prod --operation metadata_extraction --limit 50
+```
+
+Exit codes: `0` report printed, `1` no rows in window, `2` database/container unavailable.
+
+---
+
 ## Status Check & Environment Classification (`make status`)
 
 `scripts/iqoqo-status.sh` classifies every variable in `.env.example` using `.env.status-classes`. By default, `make status` surfaces only `Configured` counts and `Missing (required)` warnings; pass `--all-env` / `--verbose` (or `make status ARGS=--all-env`) to expand `Defaulted`, `Optional`, `Internal`, and `Empty` lists:
 
 - **`Missing (required)` (warning):** Core database credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`), security/auth keys (`SECRET_KEY`, `JWT_SECRET_KEY`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SPARQL_SERVICE_SECRET`), `REDIS_URL`, and the single canonical instance origin (`BASE_URL`) that must be configured in `.env` or `InstanceSettings`.
-- **`Defaulted` (info, `--all-env` only):** Variables that have safe defaults in application code or `docker-compose.yml` (`DATABASE_URL` derived from `POSTGRES_*`, `NEXT_PUBLIC_FRONTEND_URL` and `PUBLIC_APP_URL` derived from `BASE_URL`, `APP_PORT`, `BACKUP_*`, `S3_*`, `FEDERATION_HEAD_MODE`, etc.).
+- **`Defaulted` (info, `--all-env` only):** Variables that have safe defaults in application code or `docker-compose.yml` (`DATABASE_URL` derived from `POSTGRES_*`, `NEXT_PUBLIC_FRONTEND_URL` and `PUBLIC_APP_URL` derived from `BASE_URL`, `APP_PORT`, `BACKUP_*`, `S3_*`, `FEDERATION_HEAD_MODE`, `OTEL_EXPORTER_OTLP_PROTOCOL`, etc.).
 - **`Optional` (info, `--all-env` only):** Feature-specific integrations and OAuth providers (including optional AI cover/dedupe keys).
 - **`Internal` (info, `--all-env` only):** Dev/test flags (`TESTING`, `E2E_RESET_SECRET`, `IQOQO_AI_MODE`, `ALLOW_PROD_*`) and runtime-injected tokens (`OPENOBSERVE_RUM_CLIENT_TOKEN`, probed directly from the running `frontend` container under Observability Stack).
-- **OTel Collector Export:** Transient export errors during the first `OTEL_EXPORT_GRACE_SECONDS` (default `60s`) of collector startup are reported as `info`; sustained failures after the grace window fail the check.
+- **Valkey Broker & Cache:** `scripts/iqoqo-status.sh` probes the `redis` container via `valkey-cli ping` and reports active Valkey 8 health.
+- **OTel Collector Protocol & Export Health:** Verifies `OTEL_EXPORTER_OTLP_PROTOCOL` alignment (`http/protobuf` for `:4318`) and inspects collector logs; transient export errors during the first `OTEL_EXPORT_GRACE_SECONDS` (default `60s`) of collector startup are reported as `info`, while sustained failures or protocol mismatches after the grace window fail the check.
 - **Recent 5xx errors:** `0` passes, `1–10` reports `info` (below warn threshold), and `> 10` reports a warning.
 
 ---

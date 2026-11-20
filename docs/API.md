@@ -544,6 +544,104 @@ Update exemplar details of a physical item, including its local barcode and phys
 }
 ```
 
+### `PATCH /api/items/bulk-visibility`
+
+Atomically update the three-tier visibility level (`public`, `friends_only`, or `private` — alias `hidden` normalized to `private`) across a bounded batch of owned physical items.
+
+**Authentication:** Required (`write:item` permission; blocked on `FEDERATION_HEAD_MODE` instances).
+
+**Rate Limit:** 30 per minute.
+
+**Request Body (`BulkItemVisibilitySchema`):**
+
+- `item_ids` (`list[int]`, `1..100` positive item IDs owned by caller)
+- `visibility` (`"public" | "friends_only" | "private"`)
+
+```json
+{
+  "item_ids": [12, 19, 24],
+  "visibility": "friends_only"
+}
+```
+
+**Response (`200 OK`):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "updated_count": 3,
+    "visibility": "friends_only",
+    "item_ids": [12, 19, 24]
+  }
+}
+```
+
+Re-indexes FTS entries, invalidates facet counts, emits SSE `item_visibility_updated` events, and dispatches ActivityPub collection updates when visibility changes. Returns `404` if any requested ID is missing or not owned by the caller.
+
+### `GET /api/items` Visibility Filter & Reading Sessions (`POST /api/items/<id>/reading-sessions`)
+
+- **`GET /api/items?visibility=public,friends_only,private`:** Filters the returned inventory grid by three-tier visibility (scoped by caller ownership and `scope=personal|friends`).
+- **`POST /api/items/<id>/reading-sessions`:** Log an active reading session (`duration_minutes`: `1..1440`, optional `pages_read`, optional private `note`) on an owned physical item (`write:item` permission, `60 per hour`, max `200` stored sessions per item; blocked on `FEDERATION_HEAD_MODE`). Private session notes are automatically redacted from non-owner `GET /api/items/<id>` responses while durations contribute anonymously to edition averages.
+
+---
+
+## Work Shelf, Reading Rollup & Relation Graph Endpoints
+
+### `GET /api/works/shelf`
+
+Browse conceptual Works with aggregated user ownership, Work-level wishlist intents, and optional user-scoped Work reading progress filtering (`work_read_status`).
+
+**Authentication:** Optional (`work_read_status` and personal annotations active when authenticated).
+
+**Key Query Parameters:** `q`, `category`, `tags`, `collections`, `genres`, `publishers`, `statuses`, `formats`, `ownership` (`owned|not_owned`), `work_read_status` (`completed|in_progress|unread`), `limit` (`1..100`), `offset`.
+
+### `GET /api/catalog/graph`
+
+Return a bounded, visibility-safe 1-hop or 2-hop FRBR and semantic relation neighborhood centered at any anchor entity.
+
+**Authentication:** Optional (anonymous callers see `public` items only; authenticated callers also see own items and `friends_only` items from accepted friends).
+
+**Rate Limit:** 60 per minute.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `entity_type` | string | Required | `work`, `expression`, `manifestation`, or `item` |
+| `entity_id` | integer | Required | Positive database ID of anchor entity |
+| `depth` | integer | `1` | Traversal hops (clamped to `1..2`) |
+| `max_nodes` | integer | `150` | Maximum nodes before `meta.truncated = true` (clamped `1..150`) |
+| `edge_types` | CSV string | All | Filter edge categories: `frbr`, `series`, `parts_expansions`, `contributors`, `maps`, `lod` |
+
+Returns `404` if the anchor entity does not exist or is a restricted `Item`.
+
+---
+
+## Shared Collection Scopes & AI Feeds
+
+### `POST /api/sharing`
+
+Create a tokenized filtered collection view with configurable `visibility_scope` and optional TTL (`expires_in_days`: `1..365`, `30 per minute`).
+
+- `visibility_scope`:
+  - `"public_only"` (default): Anonymous visitors see `public` items only; authenticated accepted friends receive the **Friend Bonus** unlocking `friends_only` items.
+  - `"friends_and_public"`: Any token holder sees `public` and `friends_only` matching items (`private` stays hidden).
+  - `"all"`: Any token holder sees all matching items including `private` copies.
+
+### `GET /api/public/share/<token>` & AI Mini-Pages (`/share/<token>/jsonld/<page>`)
+
+- Supports standard JSON (`?page=1&per_page=48`), RDF content negotiation (`Accept: application/ld+json|text/turtle|application/rdf+xml|application/n-triples`), `GET /api/public/rdf/share/<token>?format=jsonld&limit=2000`, non-`/api/` `/share/<token>/catalog.jsonld` and `/share/<token>/feed.xml`, plus query-free paginated HTML/JSON-LD mini-pages `/share/<token>/jsonld/1..N` (`60` items/page) for headerless AI agents.
+
+---
+
+## Scanner Periodicals & Cover Vision OCR Endpoints
+
+### `GET /api/scanner/preview/<barcode>` & `POST /api/vision/extract`
+
+- **`GET /api/scanner/preview/<barcode>`:** Resolves books, audio, video, games, puzzles, LEGO sets (`570201...` / set IDs), and **Serials/Periodicals** (`977` GS1 13/15/18-digit barcodes with EAN-2/EAN-5 issue add-ons or Modulo-11 `XXXX-XXXX` ISSN) via Biblioteka Narodowa, Crossref, OpenLibrary, and Allegro. Returns existing issues for disambiguation when a bare 13-digit `977` prefix matches a cataloged periodical.
+- **`POST /api/vision/extract` (`202 Accepted`) & `GET /api/vision/extract/<task_id>`:** Enqueues cover photo extraction through the 3-tier waterfall (**Gemini 2.0 Flash** -> **Ollama Vision** -> **Offline Multi-Zone Tesseract `eng+pol` Magazine OCR**) protected by a `100_000_000`-pixel Pillow decompression bomb guard, returning extracted book and serial issue fields (`ISSN`, `Indeks`, `IssueNumber`, `Volume`, `PublicationYear`, `PublicationMonth`, `CoverHeadline`).
+
 ---
 
 ## Work Series Endpoints
