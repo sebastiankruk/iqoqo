@@ -17,7 +17,7 @@
 -->
 <svg id="svg-bp8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 980" width="1440" height="980" role="img" aria-labelledby="bp8-title bp8-desc">
             <title id="bp8-title">Blueprint 8 — Interactive FRBR Visual Relation Graph (/graph) Traversal &amp; Visibility Engine</title>
-            <desc id="bp8-desc">Graph traversal and data-flow diagram for iqoqo v1.1.0 showing UI anchor launch, GET /api/catalog/graph validation, Item visibility pruning, bounded 2-hop BFS traversal up to 150 nodes, 6 cross-schema edge categories, and interactive FRBRRelationGraph canvas.</desc>
+            <desc id="bp8-desc">Graph traversal and data-flow diagram for iqoqo v1.1.1 showing UI anchor launch, GET /api/catalog/graph validation, Item visibility pruning, bounded 2-hop BFS traversal up to 150 nodes, 6 cross-schema edge categories, and interactive FRBRRelationGraph canvas.</desc>
             <style>
               .canvas-bg { fill: #FDFBF7; }
               .title-text { font-family: 'Merriweather', Georgia, serif; font-size: 20px; font-weight: 700; fill: #2B3D4F; }
@@ -102,7 +102,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title-text">Blueprint 8 — Interactive FRBR Visual Relation Graph (/graph) Traversal &amp; Visibility Engine</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.0  •  Bounded 2-Hop BFS Neighborhood Expansion, Fail-Closed Item Visibility &amp; 6 Cross-Schema Edge Categories</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.1  •  Bounded 2-Hop BFS Neighborhood Expansion, Fail-Closed Item Visibility &amp; 6 Cross-Schema Edge Categories</text>
             <rect x="1168" y="16" width="240" height="32" rx="8" class="header-pill-bg"/>
             <text x="1288" y="36" text-anchor="middle" class="header-pill-text">Graph Traversal &amp; Data-Flow</text>
 

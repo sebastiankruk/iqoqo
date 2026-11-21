@@ -110,7 +110,7 @@
 
             <!-- Header -->
             <text x="32" y="36" class="title-text">Blueprint 7 — Semantic Web, Isolated SPARQL Runner &amp; AI-Fetchable Share Feeds</text>
-            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.0  •  Content Negotiation, Query-Free AI JSON-LD Pages, Streaming Exports &amp; Hardened SPARQL Perimeter</text>
+            <text x="32" y="57" class="subtitle-text">iqoqo v1.1.1  •  Content Negotiation, Query-Free AI JSON-LD Pages, Streaming Exports &amp; Hardened SPARQL Perimeter</text>
             <rect x="1164" y="16" width="244" height="32" rx="8" class="header-pill-bg"/>
             <text x="1286" y="36" text-anchor="middle" class="header-pill-text">Security Boundary &amp; Protocol Flow</text>
 
