@@ -470,6 +470,9 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 		cenv="$(COMPOSE_ENV_FILE)"; \
 	fi; \
 	echo "🔄 Resetting OpenObserve authentication state for $$cproject..."; \
+	if [ -f "$$cenv" ]; then \
+		python3 scripts/ensure_env_secrets.py --env-file "$$cenv" --enforce-openobserve-password-policy; \
+	fi; \
 	docker stop "$${cproject}-openobserve" 2>/dev/null || true; \
 	vol_name=$$(docker volume ls -q | grep -E "^$${cproject}_openobserve_data$$|^openobserve_data$$" | head -1 || echo ""); \
 	if [ -z "$$vol_name" ]; then \
@@ -484,9 +487,6 @@ monitoring-reset-auth: ## Reset OpenObserve /data/db auth store from .env while 
 		else \
 			echo "No existing /data/db found in volume."; \
 		fi'; \
-	if [ -f "$$cenv" ]; then \
-		python3 scripts/ensure_env_secrets.py --env-file "$$cenv"; \
-	fi; \
 	echo "🚀 Restarting OpenObserve and OTel Collector..."; \
 	docker start "$${cproject}-openobserve" 2>/dev/null || \
 		docker compose -p "$$cproject" -f "$$cfile" --env-file "$$cenv" up -d openobserve; \
