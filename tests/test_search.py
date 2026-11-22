@@ -376,11 +376,7 @@ def test_postgres_fts_matches_diacritics_without_ilike_fallback(app):
 
     ids = _seed_diacritic_catalog(app)
     with app.app_context():
-        user = User.query.filter_by(email="test_user@iqoqo.local").first()
-        if user is None:
-            user = User(email="test_user@iqoqo.local", public_username="test_user", visibility="public")
-            db.session.add(user)
-            db.session.flush()
+        user = User.query.filter_by(email="test_user@iqoqo.local").one()
         for query, key in (("milosc", "tag"), ("Mroz", "mroz"), ("Stanislaw Lem", "lem")):
             _, m_ids = SearchService._pg_manifestation_fts(query, limit=20, offset=0)
             assert ids[key][0] in m_ids, query
