@@ -757,20 +757,20 @@ test-fast: test-parallel
 test-streams: test-parallel
 
 test-backend-pg: .venv/bin/activate
-	@echo "Running PostgreSQL-dependent integration tests against iqoqo_test..."
-	@echo "Ensuring test database exists..."
+	$(AI_ECHO) "Running PostgreSQL-dependent integration tests against iqoqo_test..."
+	$(AI_ECHO) "Ensuring test database exists..."
 	@psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
 		-tc "SELECT 1 FROM pg_database WHERE datname='iqoqo_test'" 2>/dev/null \
 		| grep -q 1 \
-		&& echo "iqoqo_test already exists." \
+		&& ([ "$(IQOQO_AI_MODE)" = "1" ] || echo "iqoqo_test already exists.") \
 		|| (psql "postgresql://iqoqo:changeme_strong_password@localhost:5432/postgres" \
-			-c "CREATE DATABASE iqoqo_test" && echo "Created iqoqo_test.")
+			-c "CREATE DATABASE iqoqo_test" && ([ "$(IQOQO_AI_MODE)" = "1" ] || echo "Created iqoqo_test."))
 	ENABLE_FTS_TESTS=true \
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
 	$(MAKE) pg-create-schemas
 	ENABLE_FTS_TESTS=true \
 	DATABASE_URL=postgresql://iqoqo:changeme_strong_password@localhost:5432/iqoqo_test \
-	.venv/bin/pytest tests/integration/db/ -v
+	.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-v) tests/integration/db/
 
 test-frontend: lint-ts
 	$(AI_ECHO) "Running frontend unit tests (Vitest)..."
@@ -803,13 +803,13 @@ test-scripts-bash:
 
 test-scripts-python: .venv/bin/activate
 	$(AI_ECHO) "Running Python script logic tests..."
-	.venv/bin/pytest $(PYTEST_FLAGS) tests/test_scripts.py tests/test_script_utilities.py
+	.venv/bin/pytest $(PYTEST_FLAGS) tests/test_scripts.py tests/test_script_utilities.py tests/scripts/
 
 # Helper: ensure PostgreSQL schemas exist before db.create_all() runs.
 # Safe to call on SQLite (psql not installed; the app creates public only).
 pg-create-schemas:
 	@if command -v psql > /dev/null 2>&1 && echo "$$DATABASE_URL" | grep -q 'postgresql'; then \
-		echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Creating PostgreSQL schemas (auth, catalog, inventory, social, federation) if missing..."; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS auth;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS catalog;" 2>&1 | grep -v 'already exists' || true; \
 		psql "$$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS inventory;" 2>&1 | grep -v 'already exists' || true; \
@@ -828,7 +828,7 @@ export E2E_SELECTED_DATABASE_URL
 test-e2e-db-up: .venv/bin/activate
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
-		echo "Starting only the isolated E2E PostgreSQL service..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Starting only the isolated E2E PostgreSQL service..."; \
 		$(E2E_COMPOSE) up -d e2e-db; \
 		for i in $$(seq 1 45); do \
 			if $(E2E_COMPOSE) exec -T e2e-db pg_isready -U iqoqo_e2e -d iqoqo_e2e_test >/dev/null 2>&1; then break; fi; \
@@ -842,25 +842,29 @@ test-e2e: test-e2e-db-up
 
 test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite against paired containers
 	@set -euo pipefail; \
-	echo "🚀 Orchestrating live federation pair test run..."; \
+	[ "$(IQOQO_AI_MODE)" = "1" ] || echo "🚀 Orchestrating live federation pair test run..."; \
 	REPO_ROOT="$$(pwd)"; \
 	PREVIEW_STARTED=0; \
 	if ! docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
-		echo "Starting paired federation preview stack..."; \
-		if FEDERATION_PAIR=1 $(MAKE) preview-up; then \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Starting paired federation preview stack..."; \
+		if FEDERATION_PAIR=1 make preview-up; then \
 			PREVIEW_STARTED=1; \
-			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then $(MAKE) -C "$$REPO_ROOT" preview-down; fi' EXIT; \
+			trap 'if [ "$$PREVIEW_STARTED" -eq 1 ]; then make -C "$$REPO_ROOT" preview-down; fi' EXIT; \
 		else \
-			echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
+			[ "$(IQOQO_AI_MODE)" = "1" ] || echo "⚠️ Paired preview stack could not be launched; proceeding with local fallback verification."; \
 		fi; \
 	fi; \
 	if docker ps --format '{{.Names}}' | grep -q 'iqoqo-preview-peer-web-1'; then \
 		bash scripts/verify_federation_preview.sh; \
 		(cd frontend && FEDERATION_PAIR_LIVE=1 $(NPX) playwright test --project=chromium __tests__/e2e/federation_pair_live.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
 	else \
-		echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
-		npx bats tests/bash/verify_federation_preview.bats; \
-		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/help_hub_workflow.spec.ts $(args)); \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "⚠️ Paired preview containers could not be started in this environment; verifying preflight scripts and standalone test contracts."; \
+		if [ "$(IQOQO_AI_MODE)" = "1" ]; then \
+			npx bats --formatter tap tests/bash/verify_federation_preview.bats | .venv/bin/python scripts/format_bats_ai.py; \
+		else \
+			npx bats tests/bash/verify_federation_preview.bats; \
+		fi; \
+		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/federation_multi_instance.spec.ts __tests__/e2e/federated_friend_request.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
 	fi
 
 # FRBR merge integrity against a real PostgreSQL instance.
@@ -878,10 +882,10 @@ test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite agains
 test-merge-integrity-pg: .venv/bin/activate
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py preflight --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
-		$(MAKE) --no-print-directory test-e2e-db-up; \
+		make --no-print-directory test-e2e-db-up; \
 		admin="$${E2E_SELECTED_DATABASE_URL%/*}/postgres"; \
 		probe="$${E2E_SELECTED_DATABASE_URL%/*}/iqoqo_merge_integrity"; \
-		echo "Recreating throwaway merge-integrity database..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Recreating throwaway merge-integrity database..."; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'iqoqo_merge_integrity'" >/dev/null; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS iqoqo_merge_integrity' >/dev/null; \
 		psql "$$admin" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE iqoqo_merge_integrity' >/dev/null; \
@@ -892,20 +896,20 @@ test-merge-integrity-pg: .venv/bin/activate
 			-c 'CREATE SCHEMA IF NOT EXISTS inventory' \
 			-c 'CREATE SCHEMA IF NOT EXISTS social' \
 			-c 'CREATE SCHEMA IF NOT EXISTS config' >/dev/null; \
-		echo "Running FRBR merge integrity suite against PostgreSQL..."; \
-		echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
-		echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
-		echo " code path that rejected the unparenthesized pair-index DDL)"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running FRBR merge integrity suite against PostgreSQL..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "(ENABLE_FTS_TESTS=true stops conftest forcing sqlite:///:memory:; the"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " app fixture then runs db.create_all() against PostgreSQL, which is the"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " code path that rejected the unparenthesized pair-index DDL)"; \
 		ENABLE_FTS_TESTS=true DATABASE_URL="$$probe" \
 			SECRET_KEY="$$(.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')" \
-			.venv/bin/pytest tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
-				tests/test_duplicate_detection.py -q -p no:randomly; \
-		echo "Running the schema-qualified index-name regression suite..."; \
-		echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
-		echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
-		echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
+			.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-q) tests/test_frbr_merge_coverage.py tests/test_frbr_merge_integrity.py \
+				tests/test_duplicate_detection.py -p no:randomly; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running the schema-qualified index-name regression suite..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "(v0_8_2_fk_index_names exists because a schema-qualified index=True makes"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " SQLAlchemy generate a schema-prefixed name, which autogenerate could never"; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo " converge on -- invisible to the SQLite suite, so it needs PostgreSQL too)"; \
 		IQOQO_TEST_PG_ADMIN_URL="$${E2E_SELECTED_DATABASE_URL%/*}/" \
-			.venv/bin/pytest tests/test_migration_index_names.py -q -p no:randomly
+			.venv/bin/pytest $(if $(PYTEST_FLAGS),$(PYTEST_FLAGS),-q) tests/test_migration_index_names.py -p no:randomly
 
 # Internal: verify runtime identity immediately before reset and again before
 # Playwright startup. set -e makes every failed prepare step fail closed.
@@ -913,15 +917,15 @@ _test-e2e-run:
 	@set -euo pipefail; \
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		if [ -z '$(NO_RESET)' ]; then \
-			echo "Resetting the verified dedicated E2E database..."; \
+			[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Resetting the verified dedicated E2E database..."; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" psql "$$E2E_SELECTED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS auth' -c 'CREATE SCHEMA IF NOT EXISTS catalog' -c 'CREATE SCHEMA IF NOT EXISTS inventory' -c 'CREATE SCHEMA IF NOT EXISTS social' -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public'; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_db.py --seed-file data/seed_example.json --reset --force; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" SECRET_KEY=test-secret-key-not-for-production ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! PYTHONPATH=. .venv/bin/python scripts/init_auth.py; \
 			DATABASE_URL="$$E2E_SELECTED_DATABASE_URL" PYTHONPATH=. .venv/bin/python tests/e2e/scripts/seed_e2e.py; \
-		else echo "Skipping E2E database reset (NO_RESET=1); isolated target identity was still verified."; fi; \
+		else [ "$(IQOQO_AI_MODE)" = "1" ] || echo "Skipping E2E database reset (NO_RESET=1); isolated target identity was still verified."; fi; \
 		.venv/bin/python scripts/e2e_db_guard.py verify-running --database-url "$$E2E_SELECTED_DATABASE_URL" --compose-project iqoqo-e2e-test --compose-file docker-compose.e2e.yml; \
 		IQOQO_E2E_NEXT_DIST_DIR=".next-e2e-$${UID}-$$"; export IQOQO_E2E_NEXT_DIST_DIR; \
-		echo "Running Playwright against the verified isolated E2E database..."; \
+		[ "$(IQOQO_AI_MODE)" = "1" ] || echo "Running Playwright against the verified isolated E2E database..."; \
 		cd frontend; FEDERATION_ENABLED=true FEDERATION_ALLOW_LOOPBACK=true FLASK_API_URL=http://127.0.0.1:5002/api DATABASE_URL_TEST="$$E2E_SELECTED_DATABASE_URL" CI=true E2E_RESET_SECRET=e2e-reset-shared-secret ADMIN_EMAIL=ci-admin@iqoqo.cc ADMIN_PASSWORD=E2EBootstrapPassword123! SECRET_KEY=test-secret-key-not-for-production $(NPX) playwright test --project=chromium $(args)
 
 

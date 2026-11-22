@@ -309,7 +309,7 @@ def test_admin_lod_stats_rbac_and_data(client, normal_user_headers, admin_header
     assert "dbpedia" in data["by_authority"]
 
 
-def test_admin_lod_cleanup_endpoint(client, normal_user_headers, admin_headers, app):
+def test_admin_v1_lod_cleanup_endpoint(client, normal_user_headers, admin_headers, app):
     """Verify POST /api/v1/admin/lod/cleanup enforces RBAC and triggers cleanup task."""
     # 1. Unauthenticated -> 401
     assert client.post("/api/v1/admin/lod/cleanup").status_code == 401

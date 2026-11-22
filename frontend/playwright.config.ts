@@ -25,13 +25,15 @@ const __dirname = path.dirname(__filename);
 const hasLocalVenv = fs.existsSync(path.join(__dirname, "../.venv/bin/python"));
 const pythonExecutable = hasLocalVenv ? ".venv/bin/python" : "python";
 
+const isAiMode = process.env.IQOQO_AI_MODE === "1";
+
 export default defineConfig({
   testDir: "./__tests__/e2e",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: [["html", { open: "never" }]],
+  reporter: isAiMode ? [["dot"], ["html", { open: "never" }]] : [["html", { open: "never" }]],
   // Global per-test timeout: 60s
   timeout: 60000,
   use: {
