@@ -402,7 +402,9 @@ exit 0
         self.assertIn("otel_http_port", iqopretest)
         self.assertIn("exit 1", iqopretest)
         self.assertIn('DEPLOY_DIR="$DST_LOC" make status preview', iqopretest)
-        self.assertIn("reconcile_preview_settings.py", iqopretest)
+        self.assertIn("make preview-reconcile", iqopretest)
+        makefile_text = (self.repo_root / "Makefile").read_text()
+        self.assertIn("reconcile_preview_settings.py", makefile_text)
 
 
 if __name__ == "__main__":

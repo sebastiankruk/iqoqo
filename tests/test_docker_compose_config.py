@@ -176,3 +176,26 @@ def test_ensure_env_secrets_preserves_existing_openobserve_password(tmp_path: Pa
     resolved = ensure_secrets_in_env_file(env_file)
 
     assert resolved["OPENOBSERVE_ROOT_PASSWORD"] == existing_password
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose CLI is unavailable")
+def test_prebuilt_compose_keeps_ghcr_prefix_when_image_prefix_empty() -> None:
+    """An empty IMAGE_PREFIX= in .env must not strip ghcr.io/sebastiankruk/ in docker-compose.prebuilt.yml."""
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "ENV_FILE": "/dev/null",
+        "IMAGE_PREFIX": "",
+        "POSTGRES_PASSWORD": "compose-test-password-only",
+        "OPENOBSERVE_ROOT_PASSWORD": "Valid!Password123",
+        "OPENOBSERVE_BASIC_AUTH": base64.b64encode(b"admin@iqoqo.local:Valid!Password123").decode("utf-8"),
+    }
+    result = subprocess.run(
+        ["docker", "compose", "--env-file", "/dev/null", "-f", str(REPO_ROOT / "docker-compose.prebuilt.yml"), "config"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ghcr.io/sebastiankruk/iqoqo-backend:" in result.stdout

@@ -87,3 +87,76 @@ def test_reconcile_reencrypts_cloned_prod_secrets_and_pushes_dst_overrides(app):
         assert "TMDB" in summary["lookup_present"]
         assert "BoardGameGeek" in summary["lookup_missing"]
         assert not any("OpenAI" in item or "Gemini" in item for item in summary["lookup_missing"])
+
+
+def test_reconcile_preserves_undecryptable_when_src_secret_missing_unless_purged(app):
+    """Missing src_secret_key preserves undecryptable cloned rows unless purge_undecryptable=True."""
+    foreign_secret = secrets.token_hex(32)
+    with app.app_context():
+        db.session.add(InstanceSettings(key="DISCOGS_USER_TOKEN", value=_encrypt_with_secret(foreign_secret, "discogs-val")))
+        db.session.add(InstanceSettings(key="TMDB_API_KEY", value=_encrypt_with_secret(foreign_secret, "tmdb-val")))
+        db.session.commit()
+
+        preserved_summary = reconcile_preview_state(dst_env={}, src_secret_key="")
+        assert preserved_summary["cleared"] == 0
+        assert preserved_summary["preserved_undecryptable"] == ["DISCOGS_USER_TOKEN", "TMDB_API_KEY"]
+        assert db.session.execute(db.select(InstanceSettings).filter_by(key="DISCOGS_USER_TOKEN")).scalar_one_or_none() is not None
+
+        purged_summary = reconcile_preview_state(dst_env={}, src_secret_key="", purge_undecryptable=True)
+        assert purged_summary["cleared"] == 2
+        assert purged_summary["preserved_undecryptable"] == []
+        assert db.session.execute(db.select(InstanceSettings).filter_by(key="DISCOGS_USER_TOKEN")).scalar_one_or_none() is None
+
+
+def test_reconcile_dst_env_overrides_openobserve_and_excludes_blocklist(app):
+    """Authoritative dst_env overrides OPENOBSERVE_* while CONFIG_KEY_BLOCKLIST keys are never persisted."""
+    foreign_secret = secrets.token_hex(32)
+    with app.app_context():
+        db.session.add(InstanceSettings(key="OPENOBSERVE_BASIC_AUTH", value=_encrypt_with_secret(foreign_secret, "old-auth")))
+        db.session.commit()
+
+        summary = reconcile_preview_state(
+            dst_env={
+                "OPENOBSERVE_BASIC_AUTH": "bmV3OmF1dGg=",
+                "OPENOBSERVE_ROOT_PASSWORD": "Strong!Password123",
+                "SECRET_KEY": "should-never-be-written",
+                "DATABASE_URL": "postgresql://should-not-write",
+            },
+            src_secret_key=foreign_secret,
+        )
+        assert summary["overridden"] >= 1
+        assert InstanceSettings.get_value("OPENOBSERVE_BASIC_AUTH") == "bmV3OmF1dGg="
+        assert InstanceSettings.get_value("SECRET_KEY") is None
+        assert InstanceSettings.get_value("DATABASE_URL") is None
+
+        # Idempotent second pass
+        second = reconcile_preview_state(
+            dst_env={
+                "OPENOBSERVE_BASIC_AUTH": "bmV3OmF1dGg=",
+                "OPENOBSERVE_ROOT_PASSWORD": "Strong!Password123",
+            },
+            src_secret_key=foreign_secret,
+        )
+        assert second["reencrypted"] == 0
+        assert second["overridden"] == 0
+        assert second["cleared"] == 0
+
+
+def test_reconcile_main_stdin_never_leaks_secrets(app, monkeypatch, capsys):
+    """CLI main() reads JSON from stdin and never echoes secret values."""
+    import io
+
+    import scripts.reconcile_preview_settings as rps
+
+    secret_val = f"super-secret-discogs-{secrets.token_hex(6)}"
+    src_key = secrets.token_hex(32)
+    payload = json.dumps({"src_secret_key": src_key, "dst_env": {"DISCOGS_USER_TOKEN": secret_val}})
+    monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+    monkeypatch.setattr(rps, "create_app", lambda: app)
+
+    rc = rps.main([])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert secret_val not in captured.out
+    assert src_key not in captured.out
+    assert secret_val not in captured.err
