@@ -68,7 +68,8 @@ test.describe("FRBR Relation Graph Explorer E2E (C133)", () => {
     await expect(page.getByTestId(`graph-node-work:${workId}`)).toBeVisible();
     await expect(page.getByTestId(`graph-node-expression:${exprId}`)).toBeVisible();
 
-    // 2. Toggle FRBR filter off -> expression node disappears, then restore
+    // 2. Open filter popover and toggle FRBR filter off -> expression node disappears, then restore
+    await page.getByTestId("graph-filters-trigger").click();
     await page.getByTestId("graph-filter-frbr").click();
     await expect(page.getByTestId(`graph-node-expression:${exprId}`)).not.toBeVisible();
     await page.getByTestId("graph-filter-frbr").click();

@@ -593,6 +593,7 @@ def build_graph(
 
     Enforces resource limits on graph size to prevent memory exhaustion.
     """
+    from flask import has_app_context
     from sqlalchemy import and_, or_, select
     from sqlalchemy.orm import selectinload
 
@@ -601,6 +602,7 @@ def build_graph(
     from app.db.models import db
 
     viewer_uuid: Any = None
+    viewer_str = str(user_id) if user_id is not None else None
     if user_id is not None:
         try:
             import uuid as _uuid
@@ -609,10 +611,13 @@ def build_graph(
         except (ValueError, TypeError):
             viewer_uuid = None
 
-    friend_ids = get_friend_user_ids(viewer_uuid) if viewer_uuid is not None else set()
-    opted_out_ids = set(
-        db.session.execute(select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))).scalars().all()
-    )
+    in_app_ctx = has_app_context()
+    friend_ids = get_friend_user_ids(viewer_uuid) if (in_app_ctx and viewer_uuid is not None) else set()
+    opted_out_ids: set[Any] = set()
+    if in_app_ctx:
+        opted_out_ids = set(
+            db.session.execute(select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))).scalars().all()
+        )
 
     if items is None:
         from sqlalchemy import and_, or_, select
@@ -688,7 +693,11 @@ def build_graph(
                 except (ValueError, TypeError):
                     owner_uuid = owner
 
-            if owner_uuid is not None and viewer_uuid is not None and owner_uuid == viewer_uuid:
+            if (
+                owner is not None
+                and viewer_str is not None
+                and (str(owner) == viewer_str or (owner_uuid is not None and viewer_uuid is not None and owner_uuid == viewer_uuid))
+            ):
                 entities_to_serialize.append(it)
             elif owner_uuid is not None and owner_uuid in friend_ids and vis in ("public", "friends_only", "shared"):
                 entities_to_serialize.append(it)
