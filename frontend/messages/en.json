@@ -293,6 +293,7 @@
     "defaultNameAll": "My Shared Collection",
     "defaultNameStatus": "My {status} Items",
     "defaultNameCategory": "My {category} Collection",
+    "defaultNameFormat": "My {format} Collection",
     "defaultNameSearch": "Search results for \"{query}\""
   },
   "CollectionFilters": {

@@ -293,6 +293,7 @@
     "defaultNameAll": "Moja udostępniona kolekcja",
     "defaultNameStatus": "Moje pozycje ({status})",
     "defaultNameCategory": "Moja kolekcja: {category}",
+    "defaultNameFormat": "Moja kolekcja: {format}",
     "defaultNameSearch": "Wyniki wyszukiwania dla „{query}”"
   },
   "CollectionFilters": {

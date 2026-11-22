@@ -38,20 +38,18 @@ _BLURAY_AUDIO_FORMATS: frozenset[str] = frozenset(
 
 
 def _detect_media_format(release: dict) -> str:
-    """Return the canonical audio format for a MusicBrainz release.
+    """Return the canonical audio format for a MusicBrainz release."""
+    from app.core.format_normalizer import detect_audio_carrier_from_labels
 
-    Reads the release's ``media`` list and maps Blu-ray carriers to
-    ``bluray_audio``; otherwise falls back to the generic ``audio`` marker
-    (which the read-time normalizer resolves via ``shared/format_mappings.yaml``).
-    """
-    media = release.get("media") or []
-    for medium in media:
-        if not isinstance(medium, dict):
-            continue
-        fmt = medium.get("format")
-        if isinstance(fmt, str) and fmt.strip().lower() in _BLURAY_AUDIO_FORMATS:
-            return "bluray_audio"
-    return "audio"
+    labels: list[str] = []
+    for medium in release.get("media") or []:
+        if isinstance(medium, dict):
+            fmt = medium.get("format")
+            if isinstance(fmt, str) and fmt.strip():
+                if fmt.strip().lower() in _BLURAY_AUDIO_FORMATS:
+                    return "bluray_audio"
+                labels.append(fmt)
+    return detect_audio_carrier_from_labels(labels) or "unknown_audio"
 
 
 def fetch_audio_metadata(barcode: str) -> dict | None:

@@ -53,8 +53,11 @@ import yaml
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import func, literal, or_, select
+from sqlalchemy.orm.attributes import flag_modified
+
 from app import create_app  # noqa: E402
-from app.core.format_normalizer import _CANONICAL_FORMATS  # noqa: E402
+from app.core.format_normalizer import _CANONICAL_FORMATS, recover_carrier_from_raw_payload  # noqa: E402
 from app.core.taxonomy import FORMAT_TO_CATEGORY  # noqa: E402
 from app.db import db  # noqa: E402
 from app.db.core import Expression, Manifestation  # noqa: E402
@@ -72,58 +75,66 @@ MAPPINGS_FILE = ROOT_DIR / "shared" / "format_mappings.yaml"
 
 
 def get_non_canonical_rows(content_type: str | None = None, limit: int | None = None):
-    """Query manifestations with non-canonical or NULL format values.
-
-    Returns a list of dicts: ``{format_value, content_type, count, titles}``.
-    """
+    """Query manifestations with non-canonical or NULL format values using SQLAlchemy 2.0 select()."""
     canonical_list = list(_CANONICAL_FORMATS)
+    fmt_expr = func.coalesce(
+        Manifestation.format,
+        Manifestation.format_type,
+        Manifestation.meta["format"].as_string(),
+    )
 
     # Non-canonical (non-NULL) formats
-    q_nc = db.session.query(
-        Manifestation.meta["format"].as_string().label("format_value"),  # pylint: disable=not-callable
-        Expression.content_type.label("content_type"),
-        db.func.count(Manifestation.id).label("cnt"),  # pylint: disable=not-callable
+    q_nc = (
+        select(
+            fmt_expr.label("format_value"),
+            Expression.content_type.label("content_type"),
+            func.count(Manifestation.id).label("cnt"),  # pylint: disable=not-callable
+        )
+        .select_from(Manifestation)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(fmt_expr.isnot(None))
     )
-    q_nc = q_nc.join(Expression, Manifestation.expression_id == Expression.id)
-    q_nc = q_nc.filter(Manifestation.meta["format"].as_string().isnot(None))  # pylint: disable=not-callable
     if content_type:
-        q_nc = q_nc.filter(Expression.content_type == content_type)
+        q_nc = q_nc.where(Expression.content_type == content_type)
     if canonical_list:
-        q_nc = q_nc.filter(Manifestation.meta["format"].as_string().notin_(canonical_list))  # pylint: disable=not-callable
-    q_nc = q_nc.group_by(Manifestation.meta["format"].as_string(), Expression.content_type)  # pylint: disable=not-callable
+        q_nc = q_nc.where(func.lower(fmt_expr).notin_(canonical_list))
+    q_nc = q_nc.group_by(fmt_expr, Expression.content_type)
 
     # NULL formats
-    q_null = db.session.query(
-        db.literal(None).label("format_value"),
-        Expression.content_type.label("content_type"),
-        db.func.count(Manifestation.id).label("cnt"),  # pylint: disable=not-callable
+    q_null = (
+        select(
+            literal(None).label("format_value"),
+            Expression.content_type.label("content_type"),
+            func.count(Manifestation.id).label("cnt"),  # pylint: disable=not-callable
+        )
+        .select_from(Manifestation)
+        .join(Expression, Manifestation.expression_id == Expression.id)
+        .where(fmt_expr.is_(None))
     )
-    q_null = q_null.join(Expression, Manifestation.expression_id == Expression.id)
-    q_null = q_null.filter(Manifestation.meta["format"].as_string().is_(None))  # pylint: disable=not-callable
     if content_type:
-        q_null = q_null.filter(Expression.content_type == content_type)
+        q_null = q_null.where(Expression.content_type == content_type)
     q_null = q_null.group_by(Expression.content_type)
 
-    # Union
     q_union = q_nc.union_all(q_null)
     if limit:
         q_union = q_union.limit(limit)
-    rows = q_union.all()
+    rows = db.session.execute(q_union).all()
 
-    # Build table with example titles
     result = []
     for fmt_val, ct, cnt in rows:
-        # Get example titles for this (format_value, content_type) combo
         titles: list[str] = []
-        tq = db.session.query(Manifestation.id, Manifestation.meta["title"].as_string().label("title"))  # pylint: disable=not-callable
-        tq = tq.join(Expression, Manifestation.expression_id == Expression.id)
+        tq = (
+            select(Manifestation.id, Manifestation.meta["title"].as_string().label("title"))
+            .select_from(Manifestation)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+        )
         if ct:
-            tq = tq.filter(Expression.content_type == ct)
+            tq = tq.where(Expression.content_type == ct)
         if fmt_val is not None:
-            tq = tq.filter(Manifestation.meta["format"].as_string() == fmt_val)  # pylint: disable=not-callable
+            tq = tq.where(fmt_expr == fmt_val)
         else:
-            tq = tq.filter(Manifestation.meta["format"].as_string().is_(None))  # pylint: disable=not-callable
-        title_rows = tq.limit(3).all()
+            tq = tq.where(fmt_expr.is_(None))
+        title_rows = db.session.execute(tq.limit(3)).all()
         for _mid, title in title_rows:
             titles.append(title or "(no title)")
 
@@ -370,70 +381,78 @@ def interactive_mode(content_type: str | None = None, limit: int | None = None) 
 
 
 def _update_manifestation_format(raw_val: str, target: str) -> int:
-    """Update a single manifestation's meta['format'] in-place.
-
-    Uses PostgreSQL jsonb_set when available, falls back to SQLAlchemy
-    model-level update for SQLite (test environment).
-    """
-    is_pg = db.engine.dialect.name == "postgresql"
-
-    if is_pg:
-        update_sql = """
-            UPDATE catalog.manifestations
-            SET meta = CAST(jsonb_set(CAST(catalog.manifestations.meta AS jsonb), '{format}', to_jsonb(CAST(:target AS text)), true) AS json)
-            WHERE meta ->> 'format' = :raw_val
-        """
-        result = db.session.execute(db.text(update_sql), {"target": target, "raw_val": raw_val})
-        db.session.commit()
-        return getattr(result, "rowcount", 0)
-
-    # SQLite fallback: use SQLAlchemy model update
-    mfns = Manifestation.query.filter(Manifestation.meta["format"].as_string() == raw_val).all()  # pylint: disable=not-callable
+    """Update non-canonical format manifestations in keyset-batched chunks of 500."""
+    raw_lower = raw_val.strip().lower()
     count = 0
-    for m in mfns:
-        m.meta["format"] = target
-        from sqlalchemy.orm.attributes import flag_modified
-
-        flag_modified(m, "meta")
-        count += 1
-    db.session.commit()
+    last_id = 0
+    while True:
+        stmt = (
+            select(Manifestation)
+            .where(
+                Manifestation.id > last_id,
+                or_(
+                    func.lower(Manifestation.format) == raw_lower,
+                    func.lower(Manifestation.format_type) == raw_lower,
+                    func.lower(Manifestation.meta["format"].as_string()) == raw_lower,
+                ),
+            )
+            .order_by(Manifestation.id.asc())
+            .limit(500)
+        )
+        batch = list(db.session.execute(stmt).scalars().all())
+        if not batch:
+            break
+        for m in batch:
+            last_id = m.id
+            recovered = recover_carrier_from_raw_payload(m.raw_payload if isinstance(m.raw_payload, dict) else None)
+            final_fmt = recovered or target
+            m.format = final_fmt
+            m.format_type = final_fmt
+            meta_dict = dict(m.meta) if isinstance(m.meta, dict) else {}
+            meta_dict["format"] = final_fmt
+            m.meta = meta_dict
+            flag_modified(m, "meta")
+            count += 1
+        db.session.commit()
     return count
 
 
 def _update_null_format(ct: str, target: str) -> int:
-    """Update NULL format manifestations for a given content type."""
-    is_pg = db.engine.dialect.name == "postgresql"
-
-    if is_pg:
-        update_sql = """
-            UPDATE catalog.manifestations
-            SET meta = CAST(jsonb_set(CAST(catalog.manifestations.meta AS jsonb), '{format}', to_jsonb(CAST(:target AS text)), true) AS json)
-            FROM catalog.expressions
-            WHERE catalog.manifestations.expression_id = catalog.expressions.id
-              AND catalog.manifestations.meta ->> 'format' IS NULL
-              AND catalog.expressions.content_type = :ct
-        """
-        result = db.session.execute(db.text(update_sql), {"target": target, "ct": ct})
-        db.session.commit()
-        return getattr(result, "rowcount", 0)
-
-    # SQLite fallback
-    mfns = (
-        Manifestation.query.join(Expression, Manifestation.expression_id == Expression.id)
-        .filter(Manifestation.meta["format"].as_string().is_(None))  # pylint: disable=not-callable
-        .filter(Expression.content_type == ct)
-        .all()
-    )
+    """Update NULL format manifestations for a given content type in keyset batches."""
     count = 0
-    for m in mfns:
-        if m.meta is None:
-            m.meta = {}
-        m.meta["format"] = target
-        from sqlalchemy.orm.attributes import flag_modified
-
-        flag_modified(m, "meta")
-        count += 1
-    db.session.commit()
+    last_id = 0
+    while True:
+        stmt = (
+            select(Manifestation)
+            .join(Expression, Manifestation.expression_id == Expression.id)
+            .where(
+                Manifestation.id > last_id,
+                Manifestation.format.is_(None),
+                Manifestation.format_type.is_(None),
+                Manifestation.meta["format"].as_string().is_(None),
+                Expression.content_type == ct,
+            )
+            .order_by(Manifestation.id.asc())
+            .limit(500)
+        )
+        batch = list(db.session.execute(stmt).scalars().all())
+        if not batch:
+            break
+        for m in batch:
+            last_id = m.id
+            recovered = recover_carrier_from_raw_payload(
+                m.raw_payload if isinstance(m.raw_payload, dict) else None,
+                content_type=ct,
+            )
+            final_fmt = recovered or target
+            m.format = final_fmt
+            m.format_type = final_fmt
+            meta_dict = dict(m.meta) if isinstance(m.meta, dict) else {}
+            meta_dict["format"] = final_fmt
+            m.meta = meta_dict
+            flag_modified(m, "meta")
+            count += 1
+        db.session.commit()
     return count
 
 
@@ -481,11 +500,15 @@ def apply_mode(dry_run: bool = False) -> int:
         if not _validate_target(target):
             continue
 
-        # Count
-        count_q = db.session.query(db.func.count(Manifestation.id)).filter(
-            Manifestation.meta["format"].as_string() == raw_val
-        )  # pylint: disable=not-callable,line-too-long
-        affected = count_q.scalar() or 0
+        raw_lower = str(raw_val).strip().lower()
+        count_q = select(func.count(Manifestation.id)).where(  # pylint: disable=not-callable
+            or_(
+                func.lower(Manifestation.format) == raw_lower,
+                func.lower(Manifestation.format_type) == raw_lower,
+                func.lower(Manifestation.meta["format"].as_string()) == raw_lower,
+            )
+        )
+        affected = db.session.execute(count_q).scalar_one() or 0
 
         if affected == 0:
             print(f"  (no rows match '{raw_val}')")
@@ -509,14 +532,18 @@ def apply_mode(dry_run: bool = False) -> int:
             if not _validate_target(target):
                 continue
 
-            # Count
             count_q = (
-                db.session.query(db.func.count(Manifestation.id))  # pylint: disable=not-callable
+                select(func.count(Manifestation.id))  # pylint: disable=not-callable
+                .select_from(Manifestation)
                 .join(Expression, Manifestation.expression_id == Expression.id)
-                .filter(Manifestation.meta["format"].as_string().is_(None))  # pylint: disable=not-callable
-                .filter(Expression.content_type == ct)
+                .where(
+                    Manifestation.format.is_(None),
+                    Manifestation.format_type.is_(None),
+                    Manifestation.meta["format"].as_string().is_(None),
+                    Expression.content_type == ct,
+                )
             )
-            affected = count_q.scalar() or 0
+            affected = db.session.execute(count_q).scalar_one() or 0
 
             if affected == 0:
                 print(f"  (no NULL rows match content_type='{ct}')")

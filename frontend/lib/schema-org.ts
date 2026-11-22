@@ -79,6 +79,18 @@ export function resolveSchemaType(
   if (normFormat === "video_game") {
     return "VideoGame";
   }
+  if (
+    normFormat === "dvd" ||
+    normFormat === "bluray" ||
+    normFormat === "vhs" ||
+    normFormat === "4k_uhd" ||
+    normFormat === "laserdisc"
+  ) {
+    return "Movie";
+  }
+  if (normFormat === "magazine") {
+    return "Periodical";
+  }
 
   // Check content type
   if (normType && SCHEMA_TYPE_MAP[normType]) {

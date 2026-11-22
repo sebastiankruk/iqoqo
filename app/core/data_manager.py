@@ -190,7 +190,11 @@ def _build_format_facet_query(target_clause: Any, from_clause: Any, filter_colum
     the selected expression. Reusing this SQLAlchemy expression ensures both
     occurrences compile with the same JSON path bind parameter.
     """
-    format_expression = Manifestation.meta["format"].as_string()
+    format_expression = func.coalesce(
+        Manifestation.format,
+        Manifestation.format_type,
+        Manifestation.meta["format"].as_string(),
+    )
     return (
         select(
             format_expression,

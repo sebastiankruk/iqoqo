@@ -369,8 +369,11 @@ class SearchService:
             params["category"] = tuple(category)
             extra_filters_sql += " AND e.content_type IN :category"
         if format_filter:
-            params["format_filter"] = tuple(format_filter)
-            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
+            from app.core.format_normalizer import expand_format_filter
+
+            expanded_fmt = expand_format_filter(format_filter) or format_filter
+            params["format_filter"] = tuple(expanded_fmt)
+            extra_filters_sql += " AND COALESCE(m.format, m.format_type, m.meta ->> 'format') IN :format_filter"
         if missing_cover:
             extra_filters_sql += (
                 " AND (m.cover_url IS NULL OR m.cover_url = '') AND (m.meta ->> 'cover_url' IS NULL OR m.meta ->> 'cover_url' = '')"
@@ -538,9 +541,11 @@ class SearchService:
             extra_filters_sql += " AND e.content_type IN :category"
 
         if format_filter:
-            params["format_filter"] = tuple(format_filter)
-            # exact match using JSONB ->> operator in raw SQL
-            extra_filters_sql += " AND m.meta ->> 'format' IN :format_filter"
+            from app.core.format_normalizer import expand_format_filter
+
+            expanded_fmt = expand_format_filter(format_filter) or format_filter
+            params["format_filter"] = tuple(expanded_fmt)
+            extra_filters_sql += " AND COALESCE(m.format, m.format_type, m.meta ->> 'format') IN :format_filter"
 
         if missing_cover:
             extra_filters_sql += (

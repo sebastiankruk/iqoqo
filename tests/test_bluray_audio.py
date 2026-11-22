@@ -196,7 +196,7 @@ class TestDiscogsBlurayAudio:
         # A Blu-ray video release (no audio descriptions) must NOT be
         # classified as bluray_audio by the Discogs audio fetcher.
         release = self._release([{"name": "Blu-ray", "descriptions": ["1080p"]}])
-        assert _normalize_release_data(release)["format"] == "audio"
+        assert _normalize_release_data(release)["format"] == "unknown_audio"
 
 
 # ---------------------------------------------------------------------------
@@ -213,13 +213,13 @@ class TestMusicBrainzBlurayAudio:
         release = {"media": [{"format": "Blu-ray Audio"}]}
         assert _detect_media_format(release) == "bluray_audio"
 
-    def test_cd_medium_falls_back_to_generic_audio(self):
+    def test_cd_medium_maps_to_cd(self):
         release = {"media": [{"format": "CD"}]}
-        assert _detect_media_format(release) == "audio"
+        assert _detect_media_format(release) == "cd"
 
-    def test_missing_media_falls_back_to_generic_audio(self):
-        assert _detect_media_format({}) == "audio"
-        assert _detect_media_format({"media": []}) == "audio"
+    def test_missing_media_falls_back_to_unknown_audio(self):
+        assert _detect_media_format({}) == "unknown_audio"
+        assert _detect_media_format({"media": []}) == "unknown_audio"
 
     def test_multi_disc_with_bd_detected(self):
         release = {"media": [{"format": "CD"}, {"format": "Blu-ray"}]}

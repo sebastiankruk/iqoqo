@@ -2980,7 +2980,7 @@ def _enrich_graph_from_db(
         pass
 
 
-_AUDIO_CONTENT_TYPES = {"music", "audio"}
+_AUDIO_CONTENT_TYPES = {"music", "audio", "sound"}
 _AUDIO_RELEASE_FORMATS = {
     "vinyl",
     "cd",
@@ -2994,6 +2994,9 @@ _AUDIO_RELEASE_FORMATS = {
     "reel_to_reel",
     "tape",
     "8_track",
+    "bluray_audio",
+    "cd_dvd_combo",
+    "unknown_audio",
 }
 
 
@@ -3005,15 +3008,23 @@ def _emit_audio_rdf_triples(
     content_type: str | None = None,
 ) -> None:
     """Emit Schema.org MusicAlbum/MusicRelease and pressing triples for audio manifestations."""
+    from app.core.taxonomy import FORMAT_TO_CATEGORY
+
     meta_dict = meta if isinstance(meta, dict) else {}
     raw_format = (
         meta_dict.get("music_release_format")
         or meta_dict.get("format")
         or (getattr(m_elem, "format", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
+        or (getattr(m_elem, "format_type", None) if m_elem is not None and not isinstance(m_elem, dict) else None)
         or (m_elem.get("format") if isinstance(m_elem, dict) else None)
     )
     norm_ct = (content_type or "").strip().lower()
     norm_fmt = str(raw_format or "").strip().lower()
+
+    # Never emit audio pressing triples if the resolved carrier format belongs to a non-music category (e.g. movie DVD)
+    mapped_cat = FORMAT_TO_CATEGORY.get(norm_fmt)
+    if mapped_cat is not None and mapped_cat != "music":
+        return
 
     has_audio_hint = any(meta_dict.get(k) for k in ("catalog_number", "catno", "record_label", "matrix_runout", "music_release_format"))
     if norm_ct not in _AUDIO_CONTENT_TYPES and norm_fmt not in _AUDIO_RELEASE_FORMATS and not has_audio_hint:
