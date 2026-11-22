@@ -41,6 +41,7 @@ vi.mock("@/components/dashboard/footer", () => ({
 }));
 
 const mockUseCatalogGraph = vi.fn();
+const mockUseCatalogLibraryGraph = vi.fn();
 
 vi.mock("@/lib/api/hooks/catalog", async importOriginal => {
   const actual = await importOriginal<typeof import("@/lib/api/hooks/catalog")>();
@@ -48,6 +49,8 @@ vi.mock("@/lib/api/hooks/catalog", async importOriginal => {
     ...actual,
     useCatalogGraph: (entityType: string, entityId: number, depth: number, enabled: boolean) =>
       mockUseCatalogGraph(entityType, entityId, depth, enabled),
+    useCatalogLibraryGraph: (entityTypes?: string, edgeTypes?: string, enabled?: boolean) =>
+      mockUseCatalogLibraryGraph(entityTypes, edgeTypes, enabled),
   };
 });
 
@@ -183,14 +186,21 @@ describe("FRBR Relation Graph Explorer (/graph) & Entry Buttons (C133)", () => {
     mockSearchParams.set("type", "work");
     mockSearchParams.set("id", "42");
     mockSearchParams.set("depth", "2");
+    mockSearchParams.delete("mode");
+    mockSearchParams.delete("entities");
     mockUseCatalogGraph.mockReturnValue({
       data: SAMPLE_GRAPH,
       isLoading: false,
       isError: false,
     });
+    mockUseCatalogLibraryGraph.mockReturnValue({
+      data: { ...SAMPLE_GRAPH, anchor: null, mode: "library" },
+      isLoading: false,
+      isError: false,
+    });
   });
 
-  it("renders nodes, truncation banner, edge filters, and node inspection recenter action", () => {
+  it("renders nodes, truncation banner, edge filters, depth 1-4 controls, and node inspection recenter action", () => {
     render(<GraphPage />);
 
     expect(screen.getByTestId("frbr-relation-graph-svg")).toBeInTheDocument();
@@ -198,8 +208,11 @@ describe("FRBR Relation Graph Explorer (/graph) & Entry Buttons (C133)", () => {
     expect(screen.getByTestId("graph-node-work:42")).toBeInTheDocument();
     expect(screen.getByTestId("graph-node-manifestation:88")).toBeInTheDocument();
     expect(screen.getByTestId("graph-node-lod:9")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-depth-3")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-depth-4")).toBeInTheDocument();
 
-    // Toggle LOD filter off -> hides lod:9 node
+    // Open compact filter popover and toggle LOD filter off -> hides lod:9 node
+    fireEvent.click(screen.getByTestId("graph-filters-trigger"));
     fireEvent.click(screen.getByTestId("graph-filter-lod"));
     expect(screen.queryByTestId("graph-node-lod:9")).not.toBeInTheDocument();
 
@@ -211,15 +224,21 @@ describe("FRBR Relation Graph Explorer (/graph) & Entry Buttons (C133)", () => {
 
     fireEvent.click(screen.getByTestId("graph-recenter-button"));
     expect(mockPush).toHaveBeenCalledWith("/graph?type=manifestation&id=88&depth=2");
+
+    // Clicking depth 4 navigates to depth=4
+    fireEvent.click(screen.getByTestId("graph-depth-4"));
+    expect(mockPush).toHaveBeenCalledWith("/graph?type=work&id=42&depth=4");
   });
 
-  it("shows empty prompt when type/id params are absent", () => {
+  it("opens full-library concept explorer when type/id params are absent", () => {
     mockSearchParams.delete("type");
     mockSearchParams.delete("id");
-    mockUseCatalogGraph.mockReturnValue({ data: undefined, isLoading: false, isError: false });
 
     render(<GraphPage />);
-    expect(screen.getByText(/Select an Entity to Explore/i)).toBeInTheDocument();
+    expect(screen.getByTestId("frbr-relation-graph-svg")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-work")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-entity-contributor")).toBeInTheDocument();
+    expect(screen.getByTestId("graph-fit-view")).toBeInTheDocument();
   });
 
   it("renders Explore Graph links on Work, Expression, and Item views", () => {

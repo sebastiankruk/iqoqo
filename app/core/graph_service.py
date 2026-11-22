@@ -28,38 +28,60 @@ from sqlalchemy.orm import selectinload
 from app.core.friend_service import get_friend_user_ids
 from app.db.contributions import Contributor, ExpressionContribution, WorkContribution, WorkPart, WorkSeriesMembership
 from app.db.core import Expression, Item, Manifestation, SemanticLink, Work, WorkExpansionLink
+from app.db.federation import FederationConsent
 from app.db.games import ContainerAggregation
 from app.db.models import db
 from app.db.video import ManifestationContribution
 
 VALID_GRAPH_ENTITY_TYPES: tuple[str, ...] = ("work", "expression", "manifestation", "item")
+VALID_LIBRARY_ENTITY_TYPES: tuple[str, ...] = (
+    "work",
+    "series",
+    "contributor",
+    "expression",
+    "manifestation",
+    "item",
+    "map",
+    "lod",
+)
 VALID_EDGE_CATEGORIES: tuple[str, ...] = ("frbr", "series", "parts_expansions", "contributors", "maps", "lod")
-MAX_GRAPH_DEPTH = 2
+MAX_GRAPH_DEPTH = 4
 MAX_GRAPH_NODES = 150
+MAX_GRAPH_EDGES = 400
+MAX_GRAPH_EDGES_CEILING = 600
+
+
+def get_federation_opted_out_user_ids() -> set[uuid.UUID]:
+    """Return user UUIDs that have opted out of federated/public collection exposure."""
+    rows = db.session.execute(select(FederationConsent.user_id).where(FederationConsent.federated_collection.is_(False))).scalars().all()
+    return {uid for uid in rows if uid is not None}
 
 
 def is_item_visible_to_viewer(
     item: Item,
     viewer_user_id: uuid.UUID | str | None,
     viewer_friend_ids: set[uuid.UUID],
+    opted_out_user_ids: set[uuid.UUID] | None = None,
 ) -> bool:
-    """Return True if *item* satisfies three-tier visibility rules for *viewer_user_id*."""
+    """Return True if *item* satisfies three-tier visibility and FederationConsent rules."""
     effective_visibility = (item.visibility or ("private" if item.is_hidden else "public")).lower()
+
+    viewer_uuid: uuid.UUID | None = None
+    if viewer_user_id:
+        try:
+            viewer_uuid = uuid.UUID(str(viewer_user_id)) if not isinstance(viewer_user_id, uuid.UUID) else viewer_user_id
+        except (ValueError, TypeError):
+            viewer_uuid = None
+
+    if viewer_uuid is not None and item.owner_id == viewer_uuid:
+        return True
+
+    if viewer_uuid is not None and effective_visibility in ("friends_only", "shared") and item.owner_id in viewer_friend_ids:
+        return True
+
     if effective_visibility == "public" and not item.is_hidden:
-        return True
-
-    if not viewer_user_id:
-        return False
-
-    try:
-        viewer_uuid = uuid.UUID(str(viewer_user_id)) if not isinstance(viewer_user_id, uuid.UUID) else viewer_user_id
-    except (ValueError, TypeError):
-        return False
-
-    if item.owner_id == viewer_uuid:
-        return True
-
-    if effective_visibility in ("friends_only", "shared") and item.owner_id in viewer_friend_ids:
+        if opted_out_user_ids and item.owner_id in opted_out_user_ids:
+            return False
         return True
 
     return False
@@ -209,6 +231,7 @@ class GraphService:
         viewer_user_id: uuid.UUID | str | None = None,
         depth: int = 1,
         max_nodes: int = MAX_GRAPH_NODES,
+        max_edges: int = MAX_GRAPH_EDGES,
         edge_categories: set[str] | None = None,
     ) -> dict[str, Any] | None:
         """Build a bounded BFS neighborhood graph centered at ``(entity_type, entity_id)``.
@@ -223,18 +246,21 @@ class GraphService:
         requested_depth = depth
         effective_depth = max(1, min(int(depth), MAX_GRAPH_DEPTH))
         effective_max_nodes = max(1, min(int(max_nodes), MAX_GRAPH_NODES))
+        effective_max_edges = max(1, min(int(max_edges), MAX_GRAPH_EDGES_CEILING))
         allowed_categories = edge_categories & set(VALID_EDGE_CATEGORIES) if edge_categories is not None else set(VALID_EDGE_CATEGORIES)
 
         viewer_friend_ids = get_friend_user_ids(viewer_user_id) if viewer_user_id else set()
+        opted_out_user_ids = get_federation_opted_out_user_ids()
 
-        anchor_orm = GraphService._load_anchor(norm_type, entity_id, viewer_user_id, viewer_friend_ids)
+        anchor_orm = GraphService._load_anchor(norm_type, entity_id, viewer_user_id, viewer_friend_ids, opted_out_user_ids)
         if anchor_orm is None:
             return None
 
         nodes: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
         seen_edges: set[tuple[str, str, str]] = set()
-        truncated = False
+        node_truncated = False
+        edge_truncated = False
         queue: deque[tuple[str, Any, int]] = deque()
 
         root_key = _node_key(norm_type, entity_id)
@@ -242,20 +268,24 @@ class GraphService:
         queue.append((norm_type, anchor_orm, 0))
 
         def try_add_node(node_key: str, node_payload: dict[str, Any]) -> bool:
-            nonlocal truncated
+            nonlocal node_truncated
             if node_key in nodes:
                 return True
             if len(nodes) >= effective_max_nodes:
-                truncated = True
+                node_truncated = True
                 return False
             nodes[node_key] = node_payload
             return True
 
         def add_edge(source: str, target: str, relation: str, category: str, label: str | None = None) -> None:
+            nonlocal edge_truncated
             if source not in nodes or target not in nodes:
                 return
             edge_sig = (source, target, relation)
             if edge_sig in seen_edges:
+                return
+            if len(edges) >= effective_max_edges:
+                edge_truncated = True
                 return
             seen_edges.add(edge_sig)
             edges.append(
@@ -293,6 +323,7 @@ class GraphService:
                     allowed_categories,
                     viewer_user_id,
                     viewer_friend_ids,
+                    opted_out_user_ids,
                     enqueue_neighbor,
                     try_add_node,
                     add_edge,
@@ -315,6 +346,7 @@ class GraphService:
                     allowed_categories,
                     viewer_user_id,
                     viewer_friend_ids,
+                    opted_out_user_ids,
                     enqueue_neighbor,
                     try_add_node,
                     add_edge,
@@ -329,17 +361,245 @@ class GraphService:
                     add_edge,
                 )
 
+        truncated = node_truncated or edge_truncated
+        truncated_reason: str | None = None
+        if node_truncated and edge_truncated:
+            truncated_reason = "both"
+        elif node_truncated:
+            truncated_reason = "node_cap"
+        elif edge_truncated:
+            truncated_reason = "edge_cap"
+
         return {
             "anchor": {"entity_type": norm_type, "entity_id": entity_id, "node_id": root_key},
+            "mode": "neighborhood",
             "nodes": list(nodes.values()),
             "edges": edges,
             "meta": {
                 "depth": effective_depth,
                 "requested_depth": requested_depth,
                 "max_nodes": effective_max_nodes,
+                "max_edges": effective_max_edges,
                 "node_count": len(nodes),
                 "edge_count": len(edges),
                 "truncated": truncated,
+                "truncated_reason": truncated_reason,
+            },
+        }
+
+    @staticmethod
+    def build_library_graph(
+        *,
+        viewer_user_id: uuid.UUID | str | None = None,
+        entity_types: set[str] | None = None,
+        edge_categories: set[str] | None = None,
+        max_nodes: int = MAX_GRAPH_NODES,
+        max_edges: int = MAX_GRAPH_EDGES,
+    ) -> dict[str, Any]:
+        """Build a bounded, visibility-safe full-library concept graph (no single anchor)."""
+        effective_max_nodes = max(1, min(int(max_nodes), MAX_GRAPH_NODES))
+        effective_max_edges = max(1, min(int(max_edges), MAX_GRAPH_EDGES_CEILING))
+        allowed_entities = entity_types & set(VALID_LIBRARY_ENTITY_TYPES) if entity_types is not None else set(VALID_LIBRARY_ENTITY_TYPES)
+        allowed_categories = edge_categories & set(VALID_EDGE_CATEGORIES) if edge_categories is not None else set(VALID_EDGE_CATEGORIES)
+
+        viewer_friend_ids = get_friend_user_ids(viewer_user_id) if viewer_user_id else set()
+        opted_out_user_ids = get_federation_opted_out_user_ids()
+
+        viewer_uuid: uuid.UUID | None = None
+        if viewer_user_id:
+            try:
+                viewer_uuid = uuid.UUID(str(viewer_user_id)) if not isinstance(viewer_user_id, uuid.UUID) else viewer_user_id
+            except (ValueError, TypeError):
+                viewer_uuid = None
+
+        nodes: dict[str, dict[str, Any]] = {}
+        edges: list[dict[str, Any]] = []
+        seen_edges: set[tuple[str, str, str]] = set()
+        node_truncated = False
+        edge_truncated = False
+
+        def try_add_node(node_key: str, node_payload: dict[str, Any]) -> bool:
+            nonlocal node_truncated
+            if node_key in nodes:
+                return True
+            if len(nodes) >= effective_max_nodes:
+                node_truncated = True
+                return False
+            nodes[node_key] = node_payload
+            return True
+
+        def add_edge(source: str, target: str, relation: str, category: str, label: str | None = None) -> None:
+            nonlocal edge_truncated
+            if category not in allowed_categories:
+                return
+            if source not in nodes or target not in nodes:
+                return
+            edge_sig = (source, target, relation)
+            if edge_sig in seen_edges:
+                return
+            if len(edges) >= effective_max_edges:
+                edge_truncated = True
+                return
+            seen_edges.add(edge_sig)
+            edges.append(
+                {
+                    "id": f"{source}--{relation}--{target}",
+                    "source": source,
+                    "target": target,
+                    "relation": relation,
+                    "category": category,
+                    "label": label or relation.replace("_", " "),
+                }
+            )
+
+        # 1. Works & Series
+        want_work = "work" in allowed_entities
+        want_series = "series" in allowed_entities
+        if want_work or want_series:
+            work_stmt = select(Work).order_by(Work.id.asc()).limit(effective_max_nodes)
+            if want_series and not want_work:
+                work_stmt = work_stmt.where(Work.work_kind == "series")
+            for w in db.session.execute(work_stmt).scalars().all():
+                if w.work_kind == "series" and not want_series:
+                    continue
+                if w.work_kind != "series" and not want_work:
+                    continue
+                payload = _work_node_dict(w, hop=0, is_anchor=False)
+                if w.work_kind == "series" and want_series:
+                    payload["entity_type"] = "series"
+                try_add_node(payload["id"], payload)
+
+        # 2. Contributors
+        if "contributor" in allowed_entities and not node_truncated:
+            for c in db.session.execute(select(Contributor).order_by(Contributor.id.asc()).limit(effective_max_nodes)).scalars().all():
+                payload = _contributor_node_dict(c, hop=0)
+                if not try_add_node(payload["id"], payload):
+                    break
+
+        # 3. Expressions
+        if "expression" in allowed_entities and not node_truncated:
+            for e in (
+                db.session.execute(
+                    select(Expression).options(selectinload(Expression.work)).order_by(Expression.id.asc()).limit(effective_max_nodes)
+                )
+                .scalars()
+                .all()
+            ):
+                payload = _expression_node_dict(e, hop=0, is_anchor=False)
+                if not try_add_node(payload["id"], payload):
+                    break
+
+        # 4. Manifestations (& Maps)
+        want_man = "manifestation" in allowed_entities
+        want_map = "map" in allowed_entities
+        if (want_man or want_map) and not node_truncated:
+            for m in db.session.execute(select(Manifestation).order_by(Manifestation.id.asc()).limit(effective_max_nodes)).scalars().all():
+                if want_man:
+                    m_payload = _manifestation_node_dict(m, hop=0, is_anchor=False)
+                    try_add_node(m_payload["id"], m_payload)
+                if want_map and isinstance(m.meta, dict):
+                    atts = m.meta.get("map_attachments") or []
+                    if isinstance(atts, list):
+                        for idx, att in enumerate(atts):
+                            if isinstance(att, dict):
+                                map_payload = _map_node_dict(m.id, idx, att, hop=0)
+                                if try_add_node(map_payload["id"], map_payload) and want_man:
+                                    add_edge(
+                                        _node_key("manifestation", m.id),
+                                        map_payload["id"],
+                                        "has_map",
+                                        "maps",
+                                        str(att.get("type") or "map"),
+                                    )
+
+        # 5. Physical Items (3-tier visibility + FederationConsent; never UserWorkIntent)
+        if "item" in allowed_entities and not node_truncated:
+            pub_clause = and_(
+                Item.visibility == "public",
+                Item.is_hidden.is_(False),
+                ~Item.owner_id.in_(opted_out_user_ids) if opted_out_user_ids else True,
+            )
+            vis_clauses = [pub_clause]
+            if viewer_uuid is not None:
+                vis_clauses.append(Item.owner_id == viewer_uuid)
+                if viewer_friend_ids:
+                    vis_clauses.append(and_(Item.owner_id.in_(viewer_friend_ids), Item.visibility.in_(("friends_only", "shared"))))
+            for it in (
+                db.session.execute(select(Item).where(or_(*vis_clauses)).order_by(Item.id.asc()).limit(effective_max_nodes)).scalars().all()
+            ):
+                if is_item_visible_to_viewer(it, viewer_user_id, viewer_friend_ids, opted_out_user_ids):
+                    it_payload = _item_node_dict(it, hop=0, is_anchor=False)
+                    if not try_add_node(it_payload["id"], it_payload):
+                        break
+
+        # 6. Accepted LOD SemanticLinks
+        if "lod" in allowed_entities and not node_truncated:
+            for sl in (
+                db.session.execute(
+                    select(SemanticLink).where(SemanticLink.status == "accepted").order_by(SemanticLink.id.asc()).limit(effective_max_nodes)
+                )
+                .scalars()
+                .all()
+            ):
+                lod_payload = _lod_node_dict(sl, hop=0)
+                if try_add_node(lod_payload["id"], lod_payload):
+                    add_edge(_node_key(sl.entity_type, sl.entity_id), lod_payload["id"], "same_as", "lod", f"sameAs ({sl.authority})")
+
+        # 7. Connect edges between present nodes
+        present_work_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("work:")]
+        present_expr_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("expression:")]
+        present_man_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("manifestation:")]
+        present_item_ids = [int(k.split(":")[1]) for k in nodes if k.startswith("item:")]
+
+        if "frbr" in allowed_categories:
+            if present_expr_ids and present_work_ids:
+                for e in db.session.execute(select(Expression).where(Expression.id.in_(present_expr_ids))).scalars().all():
+                    add_edge(_node_key("expression", e.id), _node_key("work", e.work_id), "realizes", "frbr", "realizes")
+            if present_man_ids and present_expr_ids:
+                for m in db.session.execute(select(Manifestation).where(Manifestation.id.in_(present_man_ids))).scalars().all():
+                    add_edge(_node_key("manifestation", m.id), _node_key("expression", m.expression_id), "embodies", "frbr", "embodies")
+            if present_item_ids and present_man_ids:
+                for it in db.session.execute(select(Item).where(Item.id.in_(present_item_ids))).scalars().all():
+                    add_edge(
+                        _node_key("item", it.id), _node_key("manifestation", it.manifestation_id), "exemplifies", "frbr", "exemplifies"
+                    )
+
+        if "series" in allowed_categories and present_work_ids:
+            for sm in (
+                db.session.execute(select(WorkSeriesMembership).where(WorkSeriesMembership.work_id.in_(present_work_ids))).scalars().all()
+            ):
+                seq_lbl = f"in series (#{sm.sequence})" if sm.sequence else "in series"
+                add_edge(_node_key("work", sm.work_id), _node_key("work", sm.series_work_id), "in_series", "series", seq_lbl)
+
+        if "contributors" in allowed_categories and present_work_ids:
+            for wc in db.session.execute(select(WorkContribution).where(WorkContribution.work_id.in_(present_work_ids))).scalars().all():
+                add_edge(
+                    _node_key("work", wc.work_id), _node_key("contributor", wc.contributor_id), "contributed_by", "contributors", wc.role
+                )
+
+        truncated = node_truncated or edge_truncated
+        truncated_reason: str | None = None
+        if node_truncated and edge_truncated:
+            truncated_reason = "both"
+        elif node_truncated:
+            truncated_reason = "node_cap"
+        elif edge_truncated:
+            truncated_reason = "edge_cap"
+
+        return {
+            "anchor": None,
+            "mode": "library",
+            "nodes": list(nodes.values()),
+            "edges": edges,
+            "meta": {
+                "depth": 0,
+                "requested_depth": 0,
+                "max_nodes": effective_max_nodes,
+                "max_edges": effective_max_edges,
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+                "truncated": truncated,
+                "truncated_reason": truncated_reason,
             },
         }
 
@@ -349,6 +609,7 @@ class GraphService:
         entity_id: int,
         viewer_user_id: uuid.UUID | str | None,
         viewer_friend_ids: set[uuid.UUID],
+        opted_out_user_ids: set[uuid.UUID] | None = None,
     ) -> Any:
         if entity_type == "work":
             return db.session.get(Work, entity_id)
@@ -364,7 +625,7 @@ class GraphService:
             ).scalar_one_or_none()
         if entity_type == "item":
             item = db.session.get(Item, entity_id)
-            if item is None or not is_item_visible_to_viewer(item, viewer_user_id, viewer_friend_ids):
+            if item is None or not is_item_visible_to_viewer(item, viewer_user_id, viewer_friend_ids, opted_out_user_ids):
                 return None
             return item
         return None
@@ -414,6 +675,7 @@ class GraphService:
         allowed_categories: set[str],
         viewer_user_id: uuid.UUID | str | None,
         viewer_friend_ids: set[uuid.UUID],
+        opted_out_user_ids: set[uuid.UUID],
         enqueue_neighbor: Any,
         try_add_node: Any,
         add_edge: Any,
@@ -643,6 +905,7 @@ class GraphService:
         allowed_categories: set[str],
         viewer_user_id: uuid.UUID | str | None,
         viewer_friend_ids: set[uuid.UUID],
+        opted_out_user_ids: set[uuid.UUID],
         enqueue_neighbor: Any,
         try_add_node: Any,
         add_edge: Any,
@@ -677,7 +940,7 @@ class GraphService:
                 .all()
             )
             for item in items:
-                if is_item_visible_to_viewer(item, viewer_user_id, viewer_friend_ids):
+                if is_item_visible_to_viewer(item, viewer_user_id, viewer_friend_ids, opted_out_user_ids):
                     i_key = enqueue_neighbor("item", item, next_hop)
                     if i_key:
                         add_edge(i_key, man_key, "exemplifies", "frbr", "exemplifies")

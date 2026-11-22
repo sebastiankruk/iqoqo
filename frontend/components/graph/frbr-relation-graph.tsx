@@ -21,8 +21,10 @@ import { useTranslations } from "next-intl";
 import {
   Compass,
   ExternalLink,
+  Filter,
   GitBranch,
   MapPin,
+  Maximize2,
   RotateCcw,
   Search,
   Sparkles,
@@ -61,6 +63,12 @@ const NODE_STYLE_MAP: Record<
     stroke: "#4f46e5",
     badgeClass: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30",
     Icon: BookOpen,
+  },
+  series: {
+    fill: "#fef3c7",
+    stroke: "#d97706",
+    badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    Icon: Layers,
   },
   expression: {
     fill: "#e0f2fe",
@@ -117,7 +125,7 @@ function truncateLabel(text: string, maxLen = 22): string {
   return `${text.slice(0, maxLen - 1)}…`;
 }
 
-/** Compute deterministic concentric radial coordinates around the anchor node. */
+/** Compute deterministic concentric radial coordinates around the anchor node (supports hop 0..4+). */
 function computeRadialLayout(nodes: GraphNode[]): Record<string, Point> {
   const positions: Record<string, Point> = {};
   const byHop = new Map<number, GraphNode[]>();
@@ -132,26 +140,56 @@ function computeRadialLayout(nodes: GraphNode[]): Record<string, Point> {
     positions[node.id] = { x: 0, y: 0 };
   }
 
-  const hop1 = byHop.get(1) ?? [];
-  hop1.forEach((node, idx) => {
-    const angle = (2 * Math.PI * idx) / Math.max(hop1.length, 1) - Math.PI / 2;
-    const radius = hop1.length > 12 ? (idx % 2 === 0 ? 210 : 295) : 235;
+  const ringSpec: Record<
+    number,
+    { base: number; staggerLow: number; staggerHigh: number; threshold: number; offset: number }
+  > = {
+    1: { base: 235, staggerLow: 210, staggerHigh: 295, threshold: 12, offset: -Math.PI / 2 },
+    2: { base: 445, staggerLow: 415, staggerHigh: 510, threshold: 18, offset: -Math.PI / 3 },
+    3: { base: 670, staggerLow: 640, staggerHigh: 740, threshold: 24, offset: -Math.PI / 4 },
+    4: { base: 910, staggerLow: 880, staggerHigh: 980, threshold: 30, offset: -Math.PI / 5 },
+  };
+
+  for (const [hop, bucket] of byHop.entries()) {
+    if (hop === 0) continue;
+    const spec = ringSpec[hop] ?? {
+      base: 235 + (hop - 1) * 230,
+      staggerLow: 210 + (hop - 1) * 230,
+      staggerHigh: 295 + (hop - 1) * 230,
+      threshold: 24,
+      offset: -Math.PI / 4,
+    };
+    bucket.forEach((node, idx) => {
+      const angle = (2 * Math.PI * idx) / Math.max(bucket.length, 1) + spec.offset;
+      const radius = bucket.length > spec.threshold ? (idx % 2 === 0 ? spec.staggerLow : spec.staggerHigh) : spec.base;
+      positions[node.id] = {
+        x: Math.round(Math.cos(angle) * radius),
+        y: Math.round(Math.sin(angle) * radius),
+      };
+    });
+  }
+
+  return positions;
+}
+
+/** Deterministic grid packing for unanchored multi-component library graphs. */
+function computeComponentGridLayout(nodes: GraphNode[]): Record<string, Point> {
+  const positions: Record<string, Point> = {};
+  if (nodes.length === 0) return positions;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
+  const spacingX = 190;
+  const spacingY = 120;
+  const rows = Math.ceil(nodes.length / cols);
+  const offsetX = ((cols - 1) * spacingX) / 2;
+  const offsetY = ((rows - 1) * spacingY) / 2;
+  nodes.forEach((node, idx) => {
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
     positions[node.id] = {
-      x: Math.round(Math.cos(angle) * radius),
-      y: Math.round(Math.sin(angle) * radius),
+      x: Math.round(col * spacingX - offsetX),
+      y: Math.round(row * spacingY - offsetY),
     };
   });
-
-  const hop2 = byHop.get(2) ?? [];
-  hop2.forEach((node, idx) => {
-    const angle = (2 * Math.PI * idx) / Math.max(hop2.length, 1) - Math.PI / 3;
-    const radius = hop2.length > 18 ? (idx % 2 === 0 ? 415 : 510) : 445;
-    positions[node.id] = {
-      x: Math.round(Math.cos(angle) * radius),
-      y: Math.round(Math.sin(angle) * radius),
-    };
-  });
-
   return positions;
 }
 
@@ -171,7 +209,8 @@ export function FRBRRelationGraph({ graph, onRecenter }: FRBRRelationGraphProps)
     () => new Set(ALL_EDGE_CATEGORIES)
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedNodeId, setSelectedNodeId] = useState<string>(graph.anchor.node_id);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>(graph.anchor?.node_id ?? graph.nodes[0]?.id ?? "");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [draggedPositions, setDraggedPositions] = useState<Record<string, Point>>({});
@@ -192,15 +231,21 @@ export function FRBRRelationGraph({ graph, onRecenter }: FRBRRelationGraphProps)
   );
 
   const visibleNodes = useMemo(() => {
+    if (!graph.anchor) {
+      return graph.nodes;
+    }
     const connectedIds = new Set<string>([graph.anchor.node_id]);
     for (const edge of visibleEdges) {
       connectedIds.add(edge.source);
       connectedIds.add(edge.target);
     }
     return graph.nodes.filter(node => connectedIds.has(node.id));
-  }, [graph.nodes, graph.anchor.node_id, visibleEdges]);
+  }, [graph.nodes, graph.anchor, visibleEdges]);
 
-  const basePositions = useMemo(() => computeRadialLayout(visibleNodes), [visibleNodes]);
+  const basePositions = useMemo(
+    () => (graph.anchor ? computeRadialLayout(visibleNodes) : computeComponentGridLayout(visibleNodes)),
+    [graph.anchor, visibleNodes]
+  );
 
   const getNodePosition = (nodeId: string): Point =>
     draggedPositions[nodeId] ?? basePositions[nodeId] ?? { x: 0, y: 0 };
@@ -241,6 +286,31 @@ export function FRBRRelationGraph({ graph, onRecenter }: FRBRRelationGraphProps)
       }
       return next;
     });
+  };
+
+  const fitToView = () => {
+    if (visibleNodes.length === 0) {
+      resetViewport();
+      return;
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const node of visibleNodes) {
+      const p = draggedPositions[node.id] ?? basePositions[node.id] ?? { x: 0, y: 0 };
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const spanX = Math.max(300, maxX - minX + 240);
+    const spanY = Math.max(240, maxY - minY + 180);
+    const nextZoom = Number(Math.min(1.5, Math.max(0.35, Math.min(1160 / spanX, 640 / spanY))).toFixed(2));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    setZoom(nextZoom);
+    setPan({ x: Math.round(-centerX * nextZoom), y: Math.round(-centerY * nextZoom) });
   };
 
   const resetViewport = () => {
@@ -294,26 +364,49 @@ export function FRBRRelationGraph({ graph, onRecenter }: FRBRRelationGraphProps)
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         {/* Filter Bar & Viewport Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Edge category filters">
-            {ALL_EDGE_CATEGORIES.map(cat => {
-              const active = enabledCategories.has(cat);
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  data-testid={`graph-filter-${cat}`}
-                  aria-pressed={active}
-                  onClick={() => toggleCategory(cat)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                    active
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-                  }`}
-                >
-                  {t(`categories.${cat}`)}
-                </button>
-              );
-            })}
+          <div className="relative">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              data-testid="graph-filters-trigger"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen(prev => !prev)}
+            >
+              <Filter className="h-3.5 w-3.5" />
+              <span>{t("filtersLabel")}</span>
+              <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+                {enabledCategories.size}/{ALL_EDGE_CATEGORIES.length}
+              </Badge>
+            </Button>
+            {filtersOpen && (
+              <div
+                className="absolute left-0 top-10 z-20 flex w-72 flex-wrap gap-1.5 rounded-lg border border-border bg-popover p-3 shadow-lg"
+                role="group"
+                aria-label="Edge category filters"
+              >
+                {ALL_EDGE_CATEGORIES.map(cat => {
+                  const active = enabledCategories.has(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      data-testid={`graph-filter-${cat}`}
+                      aria-pressed={active}
+                      onClick={() => toggleCategory(cat)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      {t(`categories.${cat}`)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -349,6 +442,17 @@ export function FRBRRelationGraph({ graph, onRecenter }: FRBRRelationGraphProps)
                 aria-label={t("zoomOut")}
               >
                 <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs"
+                data-testid="graph-fit-view"
+                onClick={fitToView}
+              >
+                <Maximize2 className="h-3 w-3" />
+                <span>{t("fitToView")}</span>
               </Button>
               <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={resetViewport}>
                 <RotateCcw className="h-3 w-3" />

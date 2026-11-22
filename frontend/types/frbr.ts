@@ -704,7 +704,7 @@ export interface SemanticLinksData {
 
 export type GraphAnchorEntityType = "work" | "expression" | "manifestation" | "item";
 
-export type GraphNodeEntityType = GraphAnchorEntityType | "contributor" | "map" | "lod";
+export type GraphNodeEntityType = GraphAnchorEntityType | "series" | "contributor" | "map" | "lod";
 
 export type GraphEdgeCategory = "frbr" | "series" | "parts_expansions" | "contributors" | "maps" | "lod";
 
@@ -733,20 +733,25 @@ export interface GraphEdge {
   label: string;
 }
 
+export interface GraphAnchor {
+  entity_type: GraphAnchorEntityType;
+  entity_id: number;
+  node_id: string;
+}
+
 export interface CatalogGraphData {
-  anchor: {
-    entity_type: GraphAnchorEntityType;
-    entity_id: number;
-    node_id: string;
-  };
+  anchor: GraphAnchor | null;
+  mode?: "neighborhood" | "library";
   nodes: GraphNode[];
   edges: GraphEdge[];
   meta: {
     depth: number;
     requested_depth: number;
     max_nodes: number;
+    max_edges?: number;
     node_count: number;
     edge_count: number;
     truncated: boolean;
+    truncated_reason?: "node_cap" | "edge_cap" | "both" | null;
   };
 }

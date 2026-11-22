@@ -949,13 +949,73 @@ def get_expression_detail(expression_id: int) -> tuple[Response, int]:
 @limiter.limit("60 per minute")
 @optional_auth
 def get_catalog_graph() -> tuple[Response, int]:
-    """Return a bounded, visibility-safe neighborhood graph around a FRBR entity."""
+    """Return a bounded, visibility-safe neighborhood or full-library FRBR concept graph."""
     from app.core.graph_service import (
+        MAX_GRAPH_EDGES,
         MAX_GRAPH_NODES,
         VALID_EDGE_CATEGORIES,
         VALID_GRAPH_ENTITY_TYPES,
+        VALID_LIBRARY_ENTITY_TYPES,
         GraphService,
     )
+
+    mode = (request.args.get("mode") or "neighborhood").strip().lower()
+    if mode not in ("neighborhood", "library"):
+        return (
+            jsonify({"success": False, "data": None, "error": "Invalid mode. Expected 'neighborhood' or 'library'."}),
+            400,
+        )
+
+    max_nodes_arg = request.args.get("max_nodes", default=MAX_GRAPH_NODES, type=int)
+    max_edges_arg = request.args.get("max_edges", default=MAX_GRAPH_EDGES, type=int)
+
+    raw_edge_types = request.args.get("edge_types")
+    edge_categories: set[str] | None = None
+    if raw_edge_types is not None:
+        parsed_cats = {part.strip().lower() for part in raw_edge_types.split(",") if part.strip()}
+        invalid = parsed_cats - set(VALID_EDGE_CATEGORIES)
+        if invalid:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "data": None,
+                        "error": f"Invalid edge_types: {', '.join(sorted(invalid))}",
+                    }
+                ),
+                400,
+            )
+        edge_categories = parsed_cats
+
+    viewer_user_id = getattr(g, "user_id", None)
+
+    if mode == "library":
+        raw_entity_types = request.args.get("entity_types")
+        entity_types: set[str] | None = None
+        if raw_entity_types is not None:
+            parsed_ents = {part.strip().lower() for part in raw_entity_types.split(",") if part.strip()}
+            invalid_ents = parsed_ents - set(VALID_LIBRARY_ENTITY_TYPES)
+            if invalid_ents:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "data": None,
+                            "error": f"Invalid entity_types: {', '.join(sorted(invalid_ents))}",
+                        }
+                    ),
+                    400,
+                )
+            entity_types = parsed_ents
+
+        graph = GraphService.build_library_graph(
+            viewer_user_id=viewer_user_id,
+            entity_types=entity_types,
+            edge_categories=edge_categories,
+            max_nodes=max_nodes_arg if max_nodes_arg is not None else MAX_GRAPH_NODES,
+            max_edges=max_edges_arg if max_edges_arg is not None else MAX_GRAPH_EDGES,
+        )
+        return jsonify({"success": True, "data": graph, "error": None}), 200
 
     entity_type = (request.args.get("entity_type") or "").strip().lower()
     if entity_type not in VALID_GRAPH_ENTITY_TYPES:
@@ -978,33 +1038,14 @@ def get_catalog_graph() -> tuple[Response, int]:
         )
 
     depth_arg = request.args.get("depth", default=1, type=int)
-    max_nodes_arg = request.args.get("max_nodes", default=MAX_GRAPH_NODES, type=int)
 
-    raw_edge_types = request.args.get("edge_types")
-    edge_categories: set[str] | None = None
-    if raw_edge_types is not None:
-        parsed_cats = {part.strip().lower() for part in raw_edge_types.split(",") if part.strip()}
-        invalid = parsed_cats - set(VALID_EDGE_CATEGORIES)
-        if invalid:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "data": None,
-                        "error": f"Invalid edge_types: {', '.join(sorted(invalid))}",
-                    }
-                ),
-                400,
-            )
-        edge_categories = parsed_cats
-
-    viewer_user_id = getattr(g, "user_id", None)
     graph = GraphService.build_neighborhood(
         entity_type=entity_type,
         entity_id=entity_id,
         viewer_user_id=viewer_user_id,
         depth=depth_arg if depth_arg is not None else 1,
         max_nodes=max_nodes_arg if max_nodes_arg is not None else MAX_GRAPH_NODES,
+        max_edges=max_edges_arg if max_edges_arg is not None else MAX_GRAPH_EDGES,
         edge_categories=edge_categories,
     )
     if graph is None:

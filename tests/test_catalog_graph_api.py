@@ -208,13 +208,14 @@ def test_catalog_graph_clamping_filtering_and_validation(app, client):
         db.session.commit()
         work_id = work.id
 
-    # Clamped depth=99 -> 2 and max_nodes=4 triggers truncated=True
+    # Clamped depth=99 -> 4 and max_nodes=4 triggers truncated=True
     res = client.get(f"/api/catalog/graph?entity_type=work&entity_id={work_id}&depth=99&max_nodes=4")
     assert res.status_code == 200
     data = res.get_json()["data"]
-    assert data["meta"]["depth"] == 2
+    assert data["meta"]["depth"] == 4
     assert len(data["nodes"]) == 4
     assert data["meta"]["truncated"] is True
+    assert data["meta"]["truncated_reason"] in ("node_cap", "both")
 
     # edge_types=contributors returns only anchor + contributor
     contrib_res = client.get(f"/api/catalog/graph?entity_type=work&entity_id={work_id}&depth=2&edge_types=contributors")
@@ -248,3 +249,72 @@ def test_catalog_graph_encodes_contributor_urls(client, app):
     contrib_nodes = [n for n in res.get_json()["data"]["nodes"] if n["entity_type"] == "contributor"]
     assert len(contrib_nodes) == 1
     assert contrib_nodes[0]["url"] == "/collection?q=Simon+%26+Schuster+%2B+Co"
+
+
+def test_catalog_graph_depth_4_and_max_edges_cap(client, app):
+    """Depth 3..4 traverses multi-hop FRBR chains and enforces max_edges truncation metadata."""
+    with app.app_context():
+        u = User(email="g4-owner@example.com", display_name="G4 Owner", is_active=True)
+        u.set_password("StrongPass123!")
+        db.session.add(u)
+        db.session.flush()
+        w = Work(title="Depth 4 Root")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="text", language="en")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, format="hardcover", meta={"title": "Depth 4 Ed"})
+        db.session.add(m)
+        db.session.flush()
+        db.session.add(Item(manifestation_id=m.id, owner_id=u.id, visibility="public", is_hidden=False))
+        db.session.commit()
+        w_id = w.id
+
+    res = client.get(f"/api/catalog/graph?entity_type=work&entity_id={w_id}&depth=4&max_edges=2")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+    assert data["meta"]["depth"] == 4
+    assert data["meta"]["max_edges"] == 2
+    assert len(data["edges"]) <= 2
+    assert data["meta"]["truncated"] is True
+    assert data["meta"]["truncated_reason"] in ("edge_cap", "both")
+
+
+def test_catalog_graph_library_mode_and_federation_consent(client, app):
+    """Library mode returns anchor=None, honors entity_types, and excludes non-consented public items."""
+    from app.db.federation import FederationConsent
+
+    with app.app_context():
+        consented = User(email="consented@example.com", display_name="Consented", is_active=True)
+        consented.set_password("StrongPass123!")
+        opted_out = User(email="optedout@example.com", display_name="OptedOut", is_active=True)
+        opted_out.set_password("StrongPass123!")
+        db.session.add_all([consented, opted_out])
+        db.session.flush()
+        db.session.add(FederationConsent(user_id=opted_out.id, federated_collection=False))
+
+        w = Work(title="Library Explorer Work")
+        db.session.add(w)
+        db.session.flush()
+        e = Expression(work_id=w.id, content_type="text", language="en")
+        db.session.add(e)
+        db.session.flush()
+        m = Manifestation(expression_id=e.id, format="paperback", meta={"title": "Library Ed"})
+        db.session.add(m)
+        db.session.flush()
+        it_ok = Item(manifestation_id=m.id, owner_id=consented.id, visibility="public", is_hidden=False)
+        it_no = Item(manifestation_id=m.id, owner_id=opted_out.id, visibility="public", is_hidden=False)
+        db.session.add_all([it_ok, it_no])
+        db.session.commit()
+        ok_id, no_id = it_ok.id, it_no.id
+
+    res = client.get("/api/catalog/graph?mode=library&entity_types=work,item")
+    assert res.status_code == 200
+    data = res.get_json()["data"]
+    assert data["anchor"] is None
+    assert data["mode"] == "library"
+    node_ids = {n["id"] for n in data["nodes"]}
+    assert f"item:{ok_id}" in node_ids
+    assert f"item:{no_id}" not in node_ids
+    assert all(n["entity_type"] in ("work", "item") for n in data["nodes"])

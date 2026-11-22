@@ -1065,4 +1065,24 @@ export function useCatalogGraph(
   });
 }
 
+/**
+ * Custom hook to fetch the bounded, visibility-safe full-library concept graph.
+ */
+export function useCatalogLibraryGraph(entityTypes?: string, edgeTypes?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.catalogLibraryGraph(entityTypes, edgeTypes),
+    queryFn: async () => {
+      const params: Record<string, string> = { mode: "library" };
+      if (entityTypes) params.entity_types = entityTypes;
+      if (edgeTypes) params.edge_types = edgeTypes;
+      const res = await apiClient.get<ApiResponse<CatalogGraphData>>("/catalog/graph", {
+        params,
+      });
+      return res.data.data;
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export { queryKeys } from "./query-keys";
