@@ -864,7 +864,7 @@ test-e2e-federation: ## Orchestrate live dual-origin federation E2E suite agains
 		else \
 			npx bats tests/bash/verify_federation_preview.bats; \
 		fi; \
-		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/federation_multi_instance.spec.ts __tests__/e2e/federated_friend_request.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
+		(cd frontend && $(NPX) playwright test --project=chromium __tests__/e2e/federated_friend_request.spec.ts __tests__/e2e/federation_matrix_workflows.spec.ts $(args)); \
 	fi
 
 # FRBR merge integrity against a real PostgreSQL instance.

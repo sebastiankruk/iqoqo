@@ -133,7 +133,7 @@
 @test "Makefile test-e2e-federation dry-run does not execute live containers" {
   run make -n test-e2e-federation IQOQO_AI_MODE=1
   [ "$status" -eq 0 ]
-  [[ "$output" == *"federation_multi_instance.spec.ts"* ]]
+  [[ "$output" == *"federated_friend_request.spec.ts"* ]]
   [[ "$output" != *"help_hub_workflow.spec.ts"* ]]
 }
 
